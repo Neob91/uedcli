@@ -49,6 +49,14 @@ def main() -> int:
     ap.add_argument("--out", required=True)
     ap.add_argument("--game", default="deusex")
     ap.add_argument("--overwrite", action="store_true")
+    ap.add_argument("--import-verb", default="MAP IMPORT",
+                    help="editor ingest verb: `MAP IMPORT` (replace level) or `MAP IMPORTADD` "
+                         "(add to the MAP NEW level).")
+    ap.add_argument("--map-new-first", action="store_true",
+                    help="run `MAP NEW` before the ingest verb, so its default builder brush occupies "
+                         "the sacrificial Actors[1] slot UED22 excludes from CSG. REQUIRED with "
+                         "`MAP IMPORTADD` to avoid losing the first real brush (else its CSG is "
+                         "dropped; see board/ued22-world-bsp-differs-per-ingest-verb-paste).")
     ap.add_argument("--rebuild-cmd", default="MAP REBUILD",
                     help="';'-separated rebuild verbs (default bare `MAP REBUILD`).")
     ap.add_argument("--no-light", action="store_true", help="skip LIGHT APPLY")
@@ -94,8 +102,11 @@ def main() -> int:
         print(f"editor up: {container}", flush=True)
         ensure_load(ed, ref_pkgs, search_dirs=host_search_dirs, mounts=mounts)
         _wait_idle(ed, label="obj-load")
+        if args.map_new_first:
+            ed.map_new()
+            _wait_idle(ed, label="map-new")
         t3d_path = ed.write_work_file(emit_map(actors), ext="t3d")
-        ed.exec(f"MAP IMPORT FILE={to_z_path(t3d_path)}")
+        ed.exec(f"{args.import_verb} FILE={to_z_path(t3d_path)}")
         _wait_idle(ed, label="map-import", timeout=args.timeout, quiet_reads=args.quiet_reads)
         for i, cmd in enumerate(c.strip() for c in args.rebuild_cmd.split(";") if c.strip()):
             print(f"  REBUILD[{i}]: {cmd} ...", flush=True)

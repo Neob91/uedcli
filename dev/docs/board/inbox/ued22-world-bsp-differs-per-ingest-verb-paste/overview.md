@@ -2,37 +2,62 @@
 kind: finding
 ---
 
-# UED22 world BSP differs per ingest verb; retail tree is unreproducible; native ≡ paste
+# Why UED22's world BSP differs by ingest verb — ROOT CAUSE: the Actors[1] builder-brush slot
 
 Measured on `03_NYC_UNATCOHQ` (734 non-mover world brushes, identical coordinates on every path).
-World `Model` counts (nodes / surfs / leaves):
 
-| build                                   | nodes | surfs | leaves | verts | note |
-|-----------------------------------------|-------|-------|--------|-------|------|
-| SHIPPED retail `.dx`                    | 5188  | 3589  | 2266   | 82487 | GUI-optimal over authoring history |
-| MAP NEW + IMPORTADD/PASTE + MAP REBUILD | 6314  | 3616  | 762    | 76488 | native reproduces this EXACTLY |
-| MAP IMPORT (whole T3D) + MAP REBUILD    | 6270  | 3611  | 770    | 74934 | 892-plane node-multiset diff vs paste |
-| MAP LOAD + MAP REBUILD                  | 6254  | 3705  | 776    | —     | (prior campaign measurement) |
-| native `build_geometry_bspcsg`          | 6314  | 3616  | 762    | 76494 | node-plane multiset == paste, diff 0 |
+## The observation
 
-Findings:
-- **Retail is a fourth, different tree and is NOT reproducible from the extracted trunk** by any single
-  rebuild (5188 nodes / 2266 leaves = full `OPTIMAL OPTGEOM ZONES` GUI rebuild accreted over the
-  designers' incremental authoring). Confirms the campaign rule: compare against a SELF-BUILT golden,
-  never the shipped map. So "parity with retail bytes" is impossible by construction — the parity
-  target is a self-built rebuild, a convention.
-- **The editor carves a different world BSP per ingest verb** (paste 6314 / import 6270 / load 6254)
-  from the identical brushes and identical coordinates (no ±32uu shift — point ranges equal).
-- **native's node-plane multiset == the PASTE tree exactly (symmetric diff 0);** it is 892 planes from
-  the import tree. So native firmly targets paste, not import/load.
-- **Root of paste-vs-import: a localized CSG *carve* difference, not just partition.** Surf multisets
-  differ by exactly 5 — paste keeps a ~4×16×2 sliver at ≈(450,55,415), one face `PolyFlags=32`
-  (PF_Semisolid), that import drops/merges. That 5-surf carve difference cascades through the
-  order-sensitive BSP into the 892-plane / 44-node gap.
+Same brushes, different world `Model` (nodes / surfs / leaves) depending on how they enter the editor:
 
-Implication for full-binary parity (owner wants movers + serialization + geometry, no carveouts):
-only **MAP IMPORT** can be a full-package reference (imports movers with models; native's tables
-already match it closely — imports 305=305). PASTE matches native's geometry but excludes movers and
-uses a different table order. So the reference should be MAP IMPORT built, and native's geometry must
-be re-targeted paste→import — starting from the semisolid sliver carve difference above (likely a
-paste artifact native currently mirrors). Owner decision pending. [[incremental-actor-parity]]
+| build                                        | nodes | surfs | leaves | Actors[1] |
+|----------------------------------------------|-------|-------|--------|-----------|
+| MAP NEW + EDIT PASTE + MAP REBUILD (paste)   | 6314  | 3616  | 762    | MAP NEW builder brush (sacrificial) |
+| native `build_geometry_bspcsg`               | 6314  | 3616  | 762    | synthesized `DefaultBrush` (sacrificial) |
+| MAP IMPORT / MAP IMPORTADD FILE= + REBUILD   | 6270  | 3611  | 770    | **`Brush74` — the first REAL world brush** |
+| SHIPPED retail `.dx`                          | 5188  | 3589  | 2266   | (GUI-optimal over authoring history — unreproducible) |
+
+## Root cause (confirmed, static + known rule)
+
+**UED22 excludes `Actors[1]` from CSG at every rebuild** — it adopts that slot as its red builder
+brush (owner ruling 2026-09-03; commits `a098cbe`/`3d2176f`; `uedcli/native/unbuilt.py:328`, which
+synthesizes a sacrificial builder there for exactly this reason: "even the editor's OWN import-save
+loses its first content brush's geometry at any later MAP REBUILD").
+
+- **paste** (via `MAP NEW`) and **native** (via synthesis) both place a throwaway builder brush in
+  `Actors[1]`, so excluding it costs nothing and all 734 real brushes are CSG'd → 6314.
+- **whole-file MAP IMPORT/IMPORTADD** as previously run had **no builder brush**, so the first real
+  brush `Brush74` occupied `Actors[1]` and was silently dropped from CSG. Static proof (two cached
+  goldens, byte-compared): `Brush74` and `Brush132` brush models are byte-identical across paste and
+  import (ingest does NOT alter geometry); `Brush74` owns 4 surfs in paste and **0 in import** — the
+  only brush in the level that vanishes. Its loss also removes `Brush132`'s abutting semisolid sliver
+  (collateral), giving the 5-surf difference and the 44-node / 892-plane cascade through the
+  order-sensitive BSP.
+
+So the 6270 "import tree" is a **defective build missing its first content brush**, not a legitimate
+alternative partition. The earlier "semisolid Brush132" framing was a symptom; the cause is the
+missing builder-brush slot.
+
+## Confirmation — minimal repro (live editor)
+
+`Actors[1]` exclusion is by POSITION, independent of the brush there or the ingest verb:
+
+| build                                            | Actors[1]          | world surfs |
+|--------------------------------------------------|--------------------|-------------|
+| native CSG `{Brush74,Brush132}`                  | (native excludes nothing) | 7 (both kept) |
+| editor IMPORTADD `{Brush74,Brush132}`            | Brush74 (only solid) | **0** (excluded ⇒ empty) |
+| editor IMPORTADD `{Brush663,Brush74,Brush132}`   | Brush663 (sacrificed) | 8 (Brush74 kept) |
+
+## Fix / implication
+
+The whole-file ingest golden needs an **explicit** sacrificial builder brush emitted as `Actors[1]`
+(the throwaway native's `assemble_unbuilt` already synthesizes — `DefaultBrush`/`Brush`/`Polys4`).
+`MAP NEW` before `MAP IMPORTADD` does NOT work: `MAP IMPORTADD FILE=` discards MAP NEW's builder
+(measured — the golden had 734 brush actors, not paste's 735, and still built 6270). So the reference
+builder must PREPEND a builder-brush actor to the imported T3D. Full-build validation of that
+(expect 6314/3616/762) is the next step, teed up for the parity-ladder phase.
+
+Net: **MAP IMPORTADD of a T3D whose first brush is a sacrificial builder** yields native's geometry
+(6314) AND carries movers with their models AND matches native's serialization — a single valid
+full-binary reference. Retail (5188) stays unreproducible and is not a byte target.
+[[incremental-actor-parity]]

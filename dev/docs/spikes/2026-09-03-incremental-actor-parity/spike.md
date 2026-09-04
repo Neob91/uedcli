@@ -37,3 +37,16 @@ equal. Order-independent: surf multiset identical; node-plane multiset differs b
 native node at plane (0,0,1,240) — an extra Z=240 repartition split triggered by Brush85's presence
 in the candidate soup, not Brush85's own plane. A `bspRepartition` split-selection divergence
 (same class as the Vandenberg residual). Board: `board/inbox/unatco-first-divergent-brush-137-brush85-glass`.
+
+## Why the ingest verbs carve different trees — ROOT CAUSE (confirmed 2026-09-04)
+
+Not a semisolid subtlety. **UED22 excludes whatever sits in `Actors[1]` from CSG at every rebuild**
+(established rule; `native/unbuilt.py:328` synthesizes a sacrificial builder there for exactly this
+reason). EDIT PASTE (via MAP NEW) and native keep a throwaway builder in `Actors[1]` → all real
+brushes CSG'd → 6314. Whole-file MAP IMPORT/IMPORTADD had no builder → the first real brush (Brush74)
+landed in `Actors[1]` and was dropped → the defective 6270 tree. Minimal repro: editor IMPORTADD
+`{Brush74,Brush132}` → 0 surfs (Brush74=Actors[1] excluded ⇒ empty); `{Brush663,Brush74,Brush132}` →
+8 surfs (Brush663 sacrificed, Brush74 kept); native keeps all (7 / 14). Brushes byte-identical across
+ingests (ingest does not alter geometry). Fix: reference golden must emit an explicit sacrificial
+builder as `Actors[1]` (MAP NEW's builder is discarded by IMPORTADD FILE=). Full detail + fix status:
+`board/inbox/ued22-world-bsp-differs-per-ingest-verb-paste`.
