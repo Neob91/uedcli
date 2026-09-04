@@ -93,3 +93,19 @@ Correct fix = make native's CSG-phase `bspAddPoint` reproduce UED22's `FindNeare
 dedup (so the x=448 base stays a distinct pre-repartition point while Z=240 still snaps). This touches
 every dedup call site and needs the `Model+0x5c` index build/update timing pinned by a live spike first
 — a different, larger approach than the one recorded above. Owner direction needed before porting.
+
+## Spike overturns the spatial-index framing (2026-09-04, `spikes/2026-09-04-bspaddpoint-dedup-base-provenance`)
+
+The spatial-index dedup was decoded in full (`bspAddPoint 0x35430` → `FindNearestVertex 0x1adeb0`, a
+STALE BSP descent over `Model->Nodes` +0x5c gated to MISS on empty; `AddThing 0x31ae0`'s linear box
+fallback runs only when `!GFastRebuild`, and `csgRebuild 0x4a650` holds `GFastRebuild` (Editor+0x10c
+bit0) set for the whole rebuild). BUT a native-vs-ref N8 build diff proves the divergence is **not**
+dedup: `Points`(76) and every `Surf.pBase` are BYTE-IDENTICAL — `bspAddPoint` returns the SAME index
+both sides; there is no distinct `447.99985` point in either table. The ONLY diff is `Node[29/30].plane.W`:
+editor = raw `Base·N` (`-447.99985`), native = `Points[pBase]·N` (`-448.00006`). Loss site =
+`bsp_node_to_fpoly` (`bspcsg.rs:1017 base = points[s.p_base]`): native's repartition rebuilds planes
+from the snapped `pBase`; the editor keeps the raw base. So the fix is raw-base PROVENANCE (node plane +
+`Polys` soup), not porting the spatial index. Open owner decision (see spike Part C): is the editor's
+plane raw-base UNIFORM (then a correctly-scoped fix touches only 29/30, no regression) or SURVIVOR-ONLY
+(then a blanket raw-base regresses rebuilt nodes, as the earlier attempt saw)? Decode `bspRepartition`
+plane provenance or A/B-measure before porting.
