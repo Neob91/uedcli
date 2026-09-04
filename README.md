@@ -15,10 +15,14 @@ build artifact. Deus Ex is the first supported game.
 > stable: verbs, flags and output change without notice. It's **mostly AI-built**, and some
 > docs are still being cleaned up. No support.
 
-![A room built from composable brush verbs, rendered by actor diagram](docs/images/readme/hero-room-wire.png)
+![Composing a colonnade hall from text verbs and rendering it — no editor](docs/images/readme/hall-cast.svg)
 
-*A subtracted room (gold) with additive pillars and a staircase (blue), built by piping
-`brush build` generators into `actor diagram` and rendered offline — no editor open.*
+The pipeline above builds a colonnade hall from `brush build` generators and renders it offline —
+no editor, no GUI. It produces:
+
+![hall.png — the rendered wireframe](docs/images/readme/hall-iso.png)
+
+*`hall.png`: gold = the subtracted room volume, blue = the additive columns and staircase.*
 
 - **Author geometry as text** — parametric `brush build` generators (`cube`, `staircase`, `spiral`, `revolve`, …) emit T3D you can pipe anywhere.
 - **Query & edit by name** — `find` / `show` / `clip` / `replace` compose over stdin; no GUI selection.
@@ -36,8 +40,6 @@ editor is the final `level materialize` build (BSP + lighting) — being brought
 
 ## See it work
 
-![Piping brush build into actor diagram, live](docs/images/readme/compose-cast.svg)
-
 **Build geometry from stateless generators and render it — no game files, no editor:**
 
 ```bash
@@ -49,7 +51,7 @@ The `brush build` verbs — `cube`, `cylinder`, `cone`, `sheet`, `staircase`, `s
 `extrude`, `revolve` — print T3D to stdout; `actor diagram` renders any T3D, as a labeled
 wireframe or a CSG-solved view textured from your project's textures — both offline:
 
-![The same room, CSG-solved and textured offline](docs/images/readme/room-textured.png)
+![The hall, CSG-solved and textured offline](docs/images/readme/hall-textured.png)
 
 **Verbs compose over stdin.** Query verbs print one name per line; mutating verbs read that set
 from `-`. Clip a placed brush in place with show → clip → replace:
