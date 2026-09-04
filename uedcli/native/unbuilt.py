@@ -709,6 +709,10 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
                                            _camera_props(li_name, *c[1:]),
                                            rank_for, warnings)))
 
+    _levelsummary_desc = ("LevelSummary", "Engine.LevelSummary", _FLAGS_SUMMARY,
+                          lambda: AW.write_props(asm.name_index,
+                                                 [Prop("Title", AW.PT_STR, "Untitled")]))
+
     # The creation STREAM: points, brush actors, then per-brush (Model, Polys) pairs -- the editor
     # builds the shape models in a post pass -- with LevelSummary created just before the last
     # Polys. Brush i's Polys is counter-named `Polys(6+2i)` (2 ticks per brush; 3..5 consumed at
@@ -735,11 +739,14 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
                            ASM._FLAGS_LOAD if _is_mover(b.name) else ASM._FLAGS_BRUSH,
                            (lambda pn=polys_name, p=polys: _shape_model_body(pn, p))))
         if i == len(brush_actors) - 1:
-            stream.append(("LevelSummary", "Engine.LevelSummary", _FLAGS_SUMMARY,
-                           lambda: AW.write_props(asm.name_index,
-                                                  [Prop("Title", AW.PT_STR, "Untitled")])))
+            stream.append(_levelsummary_desc)
         stream.append((polys_name, "Engine.Polys", ASM._FLAGS_BRUSH_POLYS,
                        (lambda p=polys: AW.write_upolys_body(asm.name_index, p))))
+    if not brush_actors:
+        # A brushless subset (LevelInfo-only or point-only -- the lockstep ladder's early N) has no
+        # per-brush loop to splice LevelSummary into, yet the LevelInfo body still refs it. Append it
+        # so the export exists; its exact position vs the editor is a later ladder step.
+        stream.append(_levelsummary_desc)
 
     def _level_body():
         # Actors[1] is a SYNTHESIZED simple builder brush (owner ruling, 2026-09-03): UED22

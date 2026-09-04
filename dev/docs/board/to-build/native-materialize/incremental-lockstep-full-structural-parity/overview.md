@@ -1,6 +1,6 @@
 +++
 priority = "p1"
-kind = "process"
+kind = "docs"
 summary = "Owner-ruled process (2026-09-04): drive UNATCO+WanChai+NYC_Bar in lockstep to FULL structural/package-byte parity, one actor at a time, fixing all three exact before advancing."
 +++
 
