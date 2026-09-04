@@ -187,6 +187,29 @@ def test_native_world_model_ships_in_the_package_with_real_refs():
     assert all(s.texture_ref < 0 for s in saved.surfs), "a surf did not resolve a texture import"
 
 
+def test_built_path_tables_are_savepackage_count_descending():
+    """The BUILT path (`world_model` given) runs the SAME two-pass as the unbuilt path, so its
+    import table comes out in the editor's `SavePackage` count-DESCENDING order (the `appQsort`
+    pass), not insertion order. Regression: the built branch used to emit insertion-order tables,
+    diverging from every editor `MAP SAVE`. Verified by recomputing the tag-pass ref counts off the
+    saved package and asserting the on-disk import order is non-increasing by count."""
+    pytest.importorskip("uedcli_native")
+    from uedcli.native import saveorder
+    from uedcli.native.materialize import build_world_model, resolve_zone_actors
+    from uedcli.upackage import _parse_package
+
+    level = _synthesize_level()
+    built, csg_brushes = build_world_model(level, index=_index())
+    pkg_dirs = [str(_UED22)]
+    dx_bytes, _w = assemble_unbuilt(
+        level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=built,
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built))
+    p = _parse_package(dx_bytes, "built.dx", None)
+    totals = saveorder.import_totals(p, saveorder.collect(p))
+    assert totals == sorted(totals, reverse=True), \
+        f"built-path import table is not count-descending: {totals}"
+
+
 def test_brushless_level_builds_empty_world_and_valid_package(tmp_path):
     """A brushless subset (LevelInfo-only -- the lockstep ladder's N=1) builds instead of raising.
     `build_world_model` returns an EMPTY world Model (0 nodes/surfs, NumSharedSides=4) and
