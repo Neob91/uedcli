@@ -33,3 +33,10 @@ soup from the final surfs rather than freezing it at `bsp_build`.
 Evidence pin: the unsplit-box case is covered by
 `bspcsg::tests::world_build_retains_the_csg_soup_with_ed_processed_set` (identity permutation, so
 green) — that test does NOT exercise a permuted-surf or optgeom-count-change case.
+
+## Resolved 2026-09-04
+
+Fixed in `3298150`: `reorder_surfs_canonical` now renumbers `model.polys[*].i_link` to the canon
+surf rank (nodes keep the dense on-disk index). Surfaced at N=4 (first non-identity surf permutation);
+UNATCO + WanChai N=4 pass. Review clean. Zone-split fragments never materialised (poly counts matched);
+not needed.
