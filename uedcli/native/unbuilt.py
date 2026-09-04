@@ -166,7 +166,12 @@ def _fpolys(brush, texture_ref=None, *, actor: str = "?") -> list[FPoly]:
     actor's Location/Rotation/scale at build time, exactly as it does for a brush it built).
 
     `texture_ref(name) -> int` resolves a poly's stored `Package.Name` texture to an import ref.
-    Without it every poly comes out untextured."""
+    Without it every poly comes out untextured.
+
+    A static content brush's saved `Model_Brush<n>.Polys` keep `iLink=-1` on every poly (byte-
+    verified against UED22's `MAP IMPORT` of UNATCO/WanChai at N=2): the editor does NOT run the
+    bspValidateBrush LINK phase on an imported content brush's own shape model, unlike the live
+    builder brush (`_builder_cube_polys`, which does link). So no `_assign_ilinks` here."""
     for i, p in enumerate(brush.polys):
         # The T3D importer drops a <3-vertex face without a word -- the level then ships with a hole
         # (measured: surfs 10 -> 9, nothing in the log). Catch it here, where we can name it.
@@ -183,7 +188,6 @@ def _fpolys(brush, texture_ref=None, *, actor: str = "?") -> list[FPoly]:
                  # rather than let struct.pack reject them.
                  pan_u=(p.pan or (0, 0))[0] & 0xFFFF, pan_v=(p.pan or (0, 0))[1] & 0xFFFF)
            for p in brush.polys]
-    _assign_ilinks(out)
     return out
 
 
