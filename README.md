@@ -17,8 +17,8 @@ build artifact. Deus Ex is the first supported game.
 
 ![Building a room from text verbs — terminal on the left, the CSG diagram rendering in sync on the right](docs/images/readme/build-synced.svg)
 
-*Left: the commands. Right: `actor diagram` re-rendering as each brush is added — a room, a
-carved doorway (gold = subtracted), two columns (blue = added). All offline, no editor.*
+*Left: the commands. Right: `actor diagram` re-rendering after each step — a room, then a solid
+block clipped down into a platform. Gold = subtracted, blue = added. All offline, no editor.*
 
 - **Author geometry as text** — parametric `brush build` generators (`cube`, `staircase`, `spiral`, `revolve`, …) emit T3D you can pipe anywhere.
 - **Query & edit by name** — `find` / `show` / `clip` / `replace` compose over stdin; no GUI selection.
