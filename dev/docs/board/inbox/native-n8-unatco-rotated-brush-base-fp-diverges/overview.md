@@ -57,3 +57,39 @@ deduplicated `Surf.pBase` after repartition. This is an architectural change (ra
 lost when the repartition reconstructs polys from nodes via `bsp_node_to_fpoly`) and needs the exact
 UED22 bspAddNode / bspBuildFPolys base-provenance confirmed before porting — not a self-authorizable
 clamp/snap. Owner decision needed on approach.
+
+## Base-provenance confirmed by disassembly + the "raw base" fix DISPROVEN (2026-09-04)
+
+The provenance the recommendation asked for, decoded from `UED22/Editor.dll` + `Engine.dll`:
+
+- `bspNodeToFPoly` (`0x365b0`): `EdPoly->Base` (offset 0x0) `= Model->Points(Surf.pBase)`. The editor's
+  reconstruction reads the DEDUPED base point, same as native. It does NOT keep a separate raw base.
+- `bspAddNode` (`0x34e80`): `Surf.pBase = bspAddPoint(&EdPoly->Base, Exact=1)` and `Node.Plane =
+  FPlane(EdPoly->Base, Normal)` → `W = Base·Normal`. So the node plane W AND the soup base BOTH derive
+  from the SAME `EdPoly->Base = Points[pBase]`, uniformly. There is no "pBase is texture-only, plane
+  uses a separate raw base" split — that premise is wrong.
+
+So the editor keeps the raw base for x=448 ONLY because its pre-repartition `pBase` for that face is a
+DISTINCT un-snapped point (447.9998); native's is the snapped corner (448.0001). The divergence is a
+CSG-phase `bspAddPoint` dedup difference, NOT a reconstruction bug:
+
+- CSG trace (`UEDCLI_PT_TRACE`, world pool): a NEIGHBOUR face's base `(448.000061,64,3e-5)` is added at
+  a point idx via its own `pBase` (tol 0.002); the x=448 face's base `(447.999847,64,0)` then MATCHES it
+  at d=2.16e-4 < 0.002 → snaps. Two genuinely-distinct authored face bases 2.16e-4 apart get merged.
+- The editor keeps them distinct. `bspAddPoint` (`0x35430`) dedups via `UModel::FindNearestVertex`
+  (`Engine.dll 0x1adeb0`), a SPATIAL index at `Model+0x5c` that returns -1.0 ("not found") when the
+  index misses the query — then `bspAddPoint` ADDS a new point (no snap). Native dedups with a LINEAR
+  scan over ALL points, so it never misses and always snaps. Two points 2.16e-4 apart CANNOT both stay
+  distinct under native's linear scan at any add order, yet the editor keeps both — so the cause is a
+  spatial-index MISS (index build/update lag), not point order or the L2-vs-box metric (both ≤ 2.18e-4).
+
+The prescribed "thread the raw base through reconstruction" fix was implemented and measured: it fixes
+x=448 (nodes 29/30, polys 14/33, and the Brush74 Region flip) but REGRESSES three sibling Brush74 faces
+where UED22 legitimately snapped — Z=240 (node 33, poly 35) and z=416 (polys 37/38): UED's base there IS
+`Points[27]`/etc (snapped), while raw base is the un-snapped transform. Net gate still FAIL, residual
+merely relocated. Reverted. Clean baseline reconfirmed = the 3 residuals above, x=448 only.
+
+Correct fix = make native's CSG-phase `bspAddPoint` reproduce UED22's `FindNearestVertex` spatial-index
+dedup (so the x=448 base stays a distinct pre-repartition point while Z=240 still snaps). This touches
+every dedup call site and needs the `Model+0x5c` index build/update timing pinned by a live spike first
+— a different, larger approach than the one recorded above. Owner direction needed before porting.
