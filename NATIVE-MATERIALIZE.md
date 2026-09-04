@@ -46,6 +46,11 @@ match; the surviving (non-`None`) `Actors` set AND order must match (Actors orde
   inconsequential, 2026-09-04): object auto-counter **names** (`Polys4` vs `Polys6`), Level `Actors`
   array **`None`-holes**, export-table **order** / freed-slot reuse. Shipped retail maps normally
   carry `None`-holes (29–329) and export-order≠actor-order, and the game plays them.
+- Orphan-vert **`iVertex`** — a `Model` `FVert` whose slot is in no live BSP node's
+  `[iVertPool, iVertPool+NumVertices)` ring (two opus reviews + owner, 2026-09-04). Nothing
+  dereferences it: UED22's own build stores an out-of-range orphan `iVertex` and its maps ship/play.
+  Masked with **dynamic per-build liveness** (only verts outside every live ring; `iSide` and all
+  live verts stay compared) — divergent liveness changes the node rings, which are still compared.
 
 Any NEW candidate exclusion needs an opus review confirming inconsequence + the owner's explicit yes
 before it counts. No content carveouts (Movers included — native must build their private models).

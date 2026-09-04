@@ -48,3 +48,13 @@ change: A rewrites a shared float path used by every scaled brush; B needs a ver
 Each warrants its own focused CSG-core spike with editor goldens, not a blind edit under the N=2
 push. Reproduce: `_scratch/dump_model.py` + `_scratch/dump_soup.py` (harness scratch) vs the cached
 `_scratch/actor-parity/06_hongkong_wanchai_market/{native_N2,ref_N2}.dx`.
+
+## Resolved 2026-09-04
+
+- **Residual A (1-ULP texture-V):** FIXED in `04c0c4a` — texture axes now go through the editor's
+  single `VectorXform = (L⁻¹)ᵀ` (same map the face normal uses) instead of the `(LᵀL)⁻¹`+forward-`L`
+  pre-cancel. `Model2` Vectors[8] = `0xbc124925` = `f32(-1/112)`, byte-exact.
+- **Residual B (orphan-vert iVertex):** EXCLUDED in the gate (`e3364c9`) — two opus reviews + owner
+  ruled it never-dereferenced GC bookkeeping; recorded in `NATIVE-MATERIALIZE.md`.
+
+WanChai N=2 now PASSES the gate. All three ladder levels PASS at N=1 and N=2.
