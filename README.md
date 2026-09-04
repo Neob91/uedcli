@@ -21,7 +21,7 @@ supported game.
 - **Query & edit by name** — `find` / `show` / `clip` / `replace` compose over stdin (pipe one command's output into the next).
 - **Decode retail maps** — `level import` turns a compiled `.dx`/`.unr` into a queryable, diffable T3D tree, natively.
 - **Render offline** — labeled wireframes and CSG-solved textured views, without the editor.
-- **Faithful build** — unbuilt T3D output already matches UnrealEd byte-for-byte; the full `level materialize` build — compiling the trunk to a playable map (BSP + lighting) — is being driven to the same parity, verified incrementally.
+- **Faithful build** — unbuilt T3D output already matches UnrealEd byte-for-byte; the full `level materialize` build — compiling the trunk to a playable map (BSP + lighting) — is being driven to the same parity.
 - **Git-native** — levels are per-actor T3D files that diff and merge like code.
 
 ## What it is
