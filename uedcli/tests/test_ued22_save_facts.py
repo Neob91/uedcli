@@ -208,3 +208,21 @@ def test_computed_tables_are_count_descending():
 
     ic = [path_count[_path(j)] for j in range(len(spec.imports))]
     assert all(ic[i] >= ic[i + 1] for i in range(len(ic) - 1))
+
+
+def test_zoneinfo_serialization_order_comes_from_the_ued22_substrate():
+    # The editor MAP SAVE writes each actor's tagged props in its UED22 class field order. The
+    # game's own v68 Engine.u disagrees: `Engine.Actor.AmbientSound` ranks AFTER SoundVolume there,
+    # but right after `Tag` (before Region/Location/SoundVolume) in UED22 -- the order the golden
+    # carries (02_NYC_Bar ZoneInfo5). So the native rank MUST resolve against the UED22 substrate.
+    from pathlib import Path
+
+    from uedcli import tool_assets
+    from uedcli.uprops.uclass import class_serialization_order
+
+    ued22 = tool_assets.uned_dir() / "UED22"
+    paths = {f.stem.casefold(): str(f) for f in ued22.glob("*.u")}
+    rank = class_serialization_order("Engine.ZoneInfo",
+                                     resolver=lambda p: paths.get(p.casefold()))
+    r = lambda n: rank[n.casefold()]
+    assert r("Tag") < r("AmbientSound") < r("Region") < r("Location") < r("SoundVolume")
