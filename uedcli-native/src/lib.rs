@@ -59,7 +59,46 @@ impl Built {
     fn num_points(&self) -> usize {
         self.model.points.len()
     }
+
+    /// The post-`bspBuild` FPoly soup the editor keeps in `Model.Polys`. One tuple per poly:
+    /// `(verts_flat, base, normal, texture_u, texture_v, poly_flags, i_actor, i_brush_poly, i_link,
+    /// pan)`. `i_actor`/`i_brush_poly` let Python resolve the owner-brush export + texture import the
+    /// same way it patches the surfs; texture is NOT passed (resolved Python-side from those two).
+    fn world_soup(&self) -> Vec<SoupPoly> {
+        self.model
+            .polys
+            .iter()
+            .map(|p| {
+                (
+                    p.verts.iter().flat_map(|v| [v.x, v.y, v.z]).collect(),
+                    [p.base.x, p.base.y, p.base.z],
+                    [p.normal.x, p.normal.y, p.normal.z],
+                    [p.texture_u.x, p.texture_u.y, p.texture_u.z],
+                    [p.texture_v.x, p.texture_v.y, p.texture_v.z],
+                    p.poly_flags,
+                    p.actor,
+                    p.i_brush_poly,
+                    p.i_link,
+                    p.pan,
+                )
+            })
+            .collect()
+    }
 }
+
+/// One world-soup FPoly marshalled to Python (see `Built::world_soup`).
+type SoupPoly = (
+    Vec<f32>,
+    [f32; 3],
+    [f32; 3],
+    [f32; 3],
+    [f32; 3],
+    u32,
+    i32,
+    i32,
+    i32,
+    [i32; 2],
+);
 
 /// One brush, marshalled as FLAT buffers (§8.1 — never nested PyO3 objects per op):
 /// `(verts_flat, poly_sizes, normals_flat, oper, poly_flags, location, rot3x3, prepivot,

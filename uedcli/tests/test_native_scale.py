@@ -48,11 +48,10 @@ def test_unscaled_brush_is_untouched_by_the_scale_path():
 
 
 # ── §92 §34: texture axes are COVECTORS — covariant `(L⁻¹)ᵀ`, not forward-`L` ──────────────────
-# The Rust core transforms a poly's TextureU/TextureV by the SAME forward map `L` it applies to
-# verts, but texture axes must transform by the inverse-transpose `(L⁻¹)ᵀ`.  Under scale, forward-`L`
-# SQUARED the scale into the axis magnitude and over-produced 146 UNATCO Vectors (native 745 vs
-# golden 599).  `_build_brush_input` now PRE-CANCELS with `P = (LᵀL)⁻¹` so the core's forward-`L`
-# comes out covariant.  These pin the fix (silently coupled to Rust applying forward-`L`).
+# Texture axes must transform by the inverse-transpose `(L⁻¹)ᵀ`, not the forward map `L` applied to
+# verts.  `_build_brush_input` emits the RAW authored axes; the Rust core maps them by the SAME
+# `vec_xform = (L⁻¹)ᵀ` it applies to the face normal — one map, matching the editor's single
+# `FPoly::Transform` VectorXform.  These pin that contract.
 
 def _one_add_brush_level(name, brush, *, post_scale=None, main_scale=None):
     """A single-ADD-brush trunk `Level` (add so the build emits the brush's 6 faces as surfs)."""
@@ -67,61 +66,33 @@ def _one_add_brush_level(name, brush, *, post_scale=None, main_scale=None):
     return lvl
 
 
-def test_tex_cov_pre_cancel_reproduces_inverse_transpose():
-    """The algebraic identity behind the fix: with `P = (LᵀL)⁻¹`, applying the forward map `L` to
-    `P·v` reproduces the covariant `(L⁻¹)ᵀ·v` for ANY invertible L (here scale + rotation).  This is
-    what makes the Rust core's unconditional forward-`L` on texture axes come out covariant."""
-    from uedcli import rotation as ROT
-    a = make_brush_actor("X", cube(8, 8, 8))
-    a.main_scale = FScale(scale=(2, 1, 4))
-    a.post_scale = FScale(scale=(1, 3, 1))
-    a.props.append(("Rotation", "(Yaw=8192)"))
-    L = ROT.actor_linear(a)
-    Linv = ROT.inverse(L)
-    P = ROT.matmul(Linv, ROT.transpose(Linv))          # (LᵀL)⁻¹ — the pre-cancel matrix
-    NT = ROT.transpose(Linv)                            # (L⁻¹)ᵀ — the editor's covariant map
-    for v in [(1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.3, -0.7, 0.2)]:
-        got = ROT.matvec(L, ROT.matvec(P, v))          # core's forward-L on the pre-cancelled axis
-        want = ROT.matvec(NT, v)                        # editor's covariant axis
-        assert all(abs(float(got[i]) - float(want[i])) < 1e-6 for i in range(3)), (v, got, want)
-
-
 def test_unscaled_brush_texture_axes_pass_through_unchanged():
-    """The gate on the covariant pre-cancel: an UNSCALED brush (`tex_cov` stays None) must emit its
-    authored TextureU byte-unchanged — this is what keeps the castle (0 scaled brushes) byte-identical
-    after §92 §34.  The emitted `tex_u_flat` must equal the actor's authored per-poly TextureU."""
+    """An UNSCALED brush must emit its authored TextureU byte-unchanged — this keeps the castle (0
+    scaled brushes) byte-identical.  The emitted `tex_u_flat` must equal the authored per-poly TextureU."""
     lvl = _one_add_brush_level("Box", cube(64, 64, 32))
     tup = brush_marshal._build_brush_input("Box", lvl.actors["Box"])
     tex_u_flat = tup[10]                                # (…, poly_flags_flat, tex_u_flat, (tex_v,orig))
     authored = [float(c) for poly in lvl.actors["Box"].brush.polys for c in poly.texture_u]
-    assert tex_u_flat == authored, \
-        "unscaled brush texture axes were altered — the covariant pre-cancel must gate on `scaled`"
+    assert tex_u_flat == authored, "unscaled brush texture axes were altered — must emit authored raw"
 
 
-def test_scaled_brush_emitted_texture_u_is_covariant_precancel():
-    """A `cube` face carries a UNIT in-plane authored TextureU (`builders._tex_basis`).  Under a uniform
-    PostScale s=2 `_build_brush_input` must PRE-CANCEL each axis with `tex_cov = (LᵀL)⁻¹` so the Rust
-    core's later forward-`L` comes out covariant `(L⁻¹)ᵀ`.  Pin the EMITTED value (tuple index 10,
-    `tex_u_flat`) directly: the pre-cancel shrinks the unit axis to 1/s²=0.25 (which forward-`L` scales
-    back to the editor's 1/s), so every emitted magnitude is 1/s² — and NONE is the authored 1.0 (the
-    forward-L bug leaves the axis un-cancelled, which Rust then squares to s) nor s itself.  Unit-level
-    rewrite of the deleted end-to-end §92 §34 covariance regression; pins current f32 behavior."""
+def test_scaled_brush_emits_raw_texture_axes_covariance_is_rust_side():
+    """A `cube` face carries a UNIT in-plane authored TextureU (`builders._tex_basis`).  `_build_brush_input`
+    emits the RAW authored axes even under scale — the covariant `(L⁻¹)ᵀ` map now happens Rust-side via
+    `vec_xform` (the SAME map applied to the face normal, matching the editor's single VectorXform).  Pin
+    both: emitted `tex_u_flat` (tuple index 10) equals the authored axes (unit, NOT pre-shrunk), and the
+    brush carries the 9-float covariant VectorXform that does the mapping."""
     import math
-    s = 2.0
     a = make_brush_actor("Box", cube(64, 64, 32), csg="add")
     a.post_scale = FScale(scale=(2, 2, 2))
-    tex_u_flat = brush_marshal._build_brush_input("Box", a)[10]     # index 10 == tex_u_flat
+    tup = brush_marshal._build_brush_input("Box", a)
+    tex_u_flat = tup[10]
+    authored = [float(c) for poly in a.brush.polys for c in poly.texture_u]
+    assert tex_u_flat == authored, "scaled brush must emit RAW authored texture axes (covariance is Rust-side)"
     mags = {round(math.sqrt(sum(c * c for c in tex_u_flat[i:i + 3])), 6)
             for i in range(0, len(tex_u_flat), 3)}
-    assert mags, "no texture axes emitted"
-    assert all(abs(mag - 1.0 / (s * s)) < 1e-6 for mag in mags), (
-        f"emitted tex_u magnitudes {sorted(mags)} are not the covariant pre-cancel 1/s²={1.0/(s*s)}; "
-        "the forward-L bug leaves the authored axis un-cancelled — §92 §34 regression")
-    assert all(abs(mag - 1.0) > 1e-3 for mag in mags), (
-        f"an emitted tex_u magnitude is the un-cancelled authored 1.0 in {sorted(mags)} — the covariant "
-        "pre-cancel was not applied (forward-L then squares it into s)")
-    assert all(abs(mag - s) > 1e-3 for mag in mags), \
-        f"an emitted tex_u magnitude equals the forward-L value s={s} in {sorted(mags)}"
+    assert mags == {1.0}, f"authored cube TextureU is unit; emitted mags {sorted(mags)} — must not be pre-cancelled"
+    assert len(tup[11][2]) == 9, "the scaled brush must carry the 9-float covariant VectorXform (Rust applies it)"
 
 
 def test_mirror_scaled_brush_signals_orientation_and_keeps_rings_unreversed():

@@ -27,7 +27,8 @@ from uedcli.native import umodel as UM
 from uedcli.native.actor_write import FPoly, Prop
 from uedcli.native.props import ImportRef
 from uedcli.native.level_write import URL, write_level_body
-from uedcli.native.materialize import _trunk_to_actorspecs, _pointregion_prop
+from uedcli.native.materialize import (_trunk_to_actorspecs, _pointregion_prop,
+                                        _model_point_region)
 
 
 def substrate_schema(*pkg_dirs: str | None):
@@ -166,7 +167,12 @@ def _fpolys(brush, texture_ref=None, *, actor: str = "?") -> list[FPoly]:
     actor's Location/Rotation/scale at build time, exactly as it does for a brush it built).
 
     `texture_ref(name) -> int` resolves a poly's stored `Package.Name` texture to an import ref.
-    Without it every poly comes out untextured."""
+    Without it every poly comes out untextured.
+
+    A static content brush's saved `Model_Brush<n>.Polys` keep `iLink=-1` on every poly (byte-
+    verified against UED22's `MAP IMPORT` of UNATCO/WanChai at N=2): the editor does NOT run the
+    bspValidateBrush LINK phase on an imported content brush's own shape model, unlike the live
+    builder brush (`_builder_cube_polys`, which does link). So no `_assign_ilinks` here."""
     for i, p in enumerate(brush.polys):
         # The T3D importer drops a <3-vertex face without a word -- the level then ships with a hole
         # (measured: surfs 10 -> 9, nothing in the log). Catch it here, where we can name it.
@@ -183,7 +189,6 @@ def _fpolys(brush, texture_ref=None, *, actor: str = "?") -> list[FPoly]:
                  # rather than let struct.pack reject them.
                  pan_u=(p.pan or (0, 0))[0] & 0xFFFF, pan_v=(p.pan or (0, 0))[1] & 0xFFFF)
            for p in brush.polys]
-    _assign_ilinks(out)
     return out
 
 
@@ -312,6 +317,30 @@ def build_mover_shape_model(polys: list[FPoly]) -> tuple[UM.Model, list[int]]:
         m.bbox_min, m.bbox_max, m.sphere = b[0], b[1], b[2]
         m.bbox_valid = 1
     return m, links
+
+
+def _world_soup_fpolys(asm, world_model, csg_brushes, tex_ref) -> list:
+    """The world Model's `Polys` soup (`Model.Polys`): one `FPoly` per post-CSG world poly the
+    native core retained (`umodel.Model.world_soup`). Resolves each poly's owner-brush export ref and
+    texture import the SAME way `_patch_native_surf_refs` does for the surfs; the editor tags every
+    world-soup poly `Item=OUTSIDE`. An out-of-range `i_actor` leaves the poly ownerless/untextured
+    (never raises), mirroring the surf patch."""
+    from itertools import batched
+    out = []
+    for verts_flat, base, normal, tu, tv, pflags, i_actor, i_brush_poly, i_link, pan in \
+            getattr(world_model, "world_soup", ()):
+        actor_ref, texture_ref = 0, 0
+        if 0 <= i_actor < len(csg_brushes):
+            name, polys = csg_brushes[i_actor]
+            actor_ref = asm.eref(name)
+            if 0 <= i_brush_poly < len(polys) and polys[i_brush_poly].texture:
+                texture_ref = tex_ref(polys[i_brush_poly].texture)
+        out.append(FPoly(
+            verts=[tuple(v) for v in batched(verts_flat, 3)],
+            base=tuple(base), normal=tuple(normal), texture_u=tuple(tu), texture_v=tuple(tv),
+            poly_flags=pflags, actor_ref=actor_ref, texture_ref=texture_ref, item="OUTSIDE",
+            i_link=i_link, i_brush_poly=i_brush_poly, pan_u=pan[0], pan_v=pan[1]))
+    return out
 
 
 def _patch_native_surf_refs(asm, model, csg_brushes, tex_ref) -> None:
@@ -524,7 +553,8 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
     """One assembly pass (`level` already `rewrite_self_package_refs`-normalised). With
     `table_oracle` (a golden `Package` or a `saveorder.TableSpec`) the name/import tables
     come pre-seeded; without it they are insertion-order."""
-    actors, brush_actors, warnings = _trunk_to_actorspecs(level, schema or (lambda fqcn: {}))
+    actors, brush_actors, warnings = _trunk_to_actorspecs(level, schema or (lambda fqcn: {}),
+                                                          world_model=world_model)
     present = {a.name for a in actors + brush_actors}
     for spec in actors + brush_actors:
         spec.props = [_internal_ref(pr, present, spec.name, warnings) for pr in spec.props]
@@ -787,6 +817,11 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
     # Camera11 in its stream position, then Camera8..10 + the ULevel last -- with the ruled
     # always-present builder brush triple (`Polys4`/`Brush`/`DefaultBrush`, the editor's own
     # counter names) spliced in right after the LevelInfo.
+    # The synthesized builder sits at the origin; its Region resolves the same way (built world ->
+    # descend at (0,0,0); unbuilt -> solid).
+    builder_leaf, builder_zone = (
+        _model_point_region(world_model, (0.0, 0.0, 0.0))
+        if world_model is not None and getattr(world_model, "nodes", None) else (-1, 0))
     builder = [
         ("Polys4", "Engine.Polys", ASM._FLAGS_LOAD,
          lambda: AW.write_upolys_body(asm.name_index, _builder_cube_polys())),
@@ -802,7 +837,8 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
          lambda: _actor_body(asm, _BUILDER, "Engine.Brush",
                              [Prop("Level", AW.PT_OBJECT, ASM.ObjRef(li_name)),
                               Prop("Tag", AW.PT_NAME, "Brush"),      # Engine.Brush class-default Tag
-                              _pointregion_prop("Region", zone=li_name),
+                              _pointregion_prop("Region", zone=li_name,
+                                                i_leaf=builder_leaf, zone_number=builder_zone),
                               Prop("Brush", AW.PT_OBJECT, ASM.ObjRef(_BUILDER_SHAPE))],
                              rank_for, warnings)),
     ]
@@ -812,9 +848,15 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
                              for i, d in enumerate(stream)]
     else:                                            # empty level: nothing to hoist
         mid = list(stream) + [_cam_desc(_CAMERAS[5])]
+    # The world Model's Polys = the post-CSG soup the native core retained (empty for a brushless
+    # world / the unbuilt empty-Model path).
+    def _world_polys_body():
+        soup = (_world_soup_fpolys(asm, world_model, csg_brushes or [], tex_ref)
+                if world_model is not None else [])
+        return AW.write_upolys_body(asm.name_index, soup)
+
     ordered = (builder
-               + [(wm_polys, "Engine.Polys", ASM._FLAGS_LOAD,
-                   lambda: AW.write_upolys_body(asm.name_index, [])),
+               + [(wm_polys, "Engine.Polys", ASM._FLAGS_LOAD, _world_polys_body),
                   _cam_desc(_CAMERAS[0]), _cam_desc(_CAMERAS[1]),
                   (wm_name, "Engine.Model", ASM._FLAGS_LOAD, _world_model_body)]
                + mid

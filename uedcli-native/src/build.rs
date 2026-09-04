@@ -1036,6 +1036,7 @@ pub fn carved_box(size: f32, height: f32) -> Model {
         verts,
         num_shared_sides: 0,
         zones: Vec::new(),
+        polys: Vec::new(),
         field_0x54: 0,
         bounds: Vec::new(),
         leaf_hulls: Vec::new(),

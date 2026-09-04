@@ -61,20 +61,26 @@ def default_class_packages():
     return build_class_package_index(packages.schema_search_dirs(project, user_config))
 
 
-def _pointregion_prop(name: str, *, zone: str) -> Prop:
-    """The editor's stamp for a placed actor's `PointRegion` in an UNBUILT world:
-    Zone=<the LevelInfo>, iLeaf=-1, ZoneNumber=0 (UNATCO import golden, 2026-09-02). The Zone
-    late-binds to the LevelInfo export via `ObjRef` (raw bytes cannot carry a forward ref)."""
+def _pointregion_prop(name: str, *, zone: str, i_leaf: int = -1, zone_number: int = 0) -> Prop:
+    """The editor's stamp for a placed actor's `PointRegion`. Into an UNBUILT world every point
+    resolves to `iLeaf=-1, ZoneNumber=0` (solid); with a BUILT world model the editor's `SetActorZone`
+    descends the BSP at the actor's point, so a point in a carved air leaf takes that leaf's index and
+    zone (`_model_point_region`). The Zone late-binds to the zone actor (here the LevelInfo) via
+    `ObjRef` (raw bytes cannot carry a forward ref)."""
     return Prop(name, PT_STRUCT, StructValue("PointRegion", [
         Prop("Zone", PT_OBJECT, ASM.ObjRef(zone)),
-        Prop("iLeaf", PT_INT, -1),
-        Prop("ZoneNumber", PT_BYTE, 0)]), struct_name="PointRegion")
+        Prop("iLeaf", PT_INT, i_leaf),
+        Prop("ZoneNumber", PT_BYTE, zone_number)]), struct_name="PointRegion")
 
 
-def _trunk_to_actorspecs(level, schema):
+def _trunk_to_actorspecs(level, schema, world_model=None):
     """Convert trunk Actors to `ActorSpec`s carrying TYPED `FPropertyTag`s: each raw T3D
     `(key,value)` prop is typed via `props.convert_actor_props` against `schema` (an `ImportSchema`
     or a bare `schema_lookup` callback); `Location` is routed from the actor's typed field.
+
+    `world_model` (the BUILT world Model) recomputes each placed actor's `Region` from the BSP the
+    editor's `SetActorZone` descends after a rebuild; without it (unbuilt world) Region stays solid
+    `(iLeaf=-1, ZoneNumber=0)`.
     Returns `(point_actors, brush_actors, warnings)`."""
     actors, brush_actors, warnings = [], [], []
     li_name = next((n for n, a in level.actors.items()
@@ -99,7 +105,12 @@ def _trunk_to_actorspecs(level, schema):
         # via an ObjRef member (raw bytes cannot carry a forward ref). Skip when the trunk authors
         # `Region` itself (then the typed path serializes the authored value).
         if not any(k.casefold() == "region" for k, _v in a.props):
-            props.append(_pointregion_prop("Region", zone=li_name))
+            i_leaf, zone_number = (-1, 0)
+            if world_model is not None and getattr(world_model, "nodes", None):
+                loc = tuple(float(c) for c in (a.location or (0.0, 0.0, 0.0)))
+                i_leaf, zone_number = _model_point_region(world_model, loc)
+            props.append(_pointregion_prop("Region", zone=li_name,
+                                           i_leaf=i_leaf, zone_number=zone_number))
         # The editor RESETS these nav-runtime fields when a level is imported (they end up equal
         # to the class default and are omitted from the save -- UNATCO import golden, 2026-09-02);
         # `PATHS BUILD` regenerates them. Serializing a trunk-carried value would diverge from any
@@ -111,7 +122,11 @@ def _trunk_to_actorspecs(level, schema):
             # DROP the trunk's `Brush=Model'MyLevel.<shape>'` string prop: `assemble._brush_body`
             # re-synthesizes the shape link as a LOCAL export ref. Left in, `convert_prop` would
             # resolve `MyLevel.<shape>` to a bogus package import that collides with the ULevel export.
-            raw_props = [(k, v) for (k, v) in raw_props if k != "Brush"]
+            # Also DROP `bDynamicLight`: the editor resets it to the class default (False) on a brush
+            # at MAP IMPORT and omits it from the save, so a trunk-authored `bDynamicLight=True`
+            # diverges from any editor build (byte-verified, UNATCO Brush74 at N=2).
+            raw_props = [(k, v) for (k, v) in raw_props
+                         if k != "Brush" and k.split("(")[0].casefold() != "bdynamiclight"]
         # MainScale/PostScale are typed model fields now, not props -- re-inject them as T3D strings
         # so they still serialize into the object's FPropertyTags (a Scale struct via convert_prop).
         from ..transform import emit_fscale
@@ -289,15 +304,21 @@ def build_world_model(level, *, index, lights=()):
         built = uedcli_native.build_geometry_bspcsg(brushes)
         uedcli_native.bake_lighting(built, [(loc, radius, special) for _n, loc, radius, special in lights])
         body = uedcli_native.serialize_model(built)
+        soup = built.world_soup()
     except uedcli_native.BuildError as e:
         raise NativeBuildError(f"native CSG build failed: {e}") from e
-    return UM.parse_model_body(body, 0, len(body)), csg_brushes
+    model = UM.parse_model_body(body, 0, len(body))
+    # The editor keeps the CSG world soup in Model.Polys; carry it on the model for assembly to emit.
+    model.world_soup = soup
+    return model, csg_brushes
 
 
-def _model_point_zone(model, p) -> int:
-    """PointRegion descent on a built `umodel.Model`: the zone number at point `p` (0 = solid)."""
+def _model_point_region(model, p) -> tuple[int, int]:
+    """PointRegion descent on a built `umodel.Model`: `(iLeaf, zone)` at point `p`. A point in solid
+    space (no leaf on the terminating side) is `(-1, 0)`; a point in a carved leaf takes that leaf's
+    index and zone number. Mirrors the engine's `Model::PointRegion` used by `SetActorZone`."""
     if not model.nodes:
-        return 0
+        return (-1, 0)
     ni = 0
     while True:
         n = model.nodes[ni]
@@ -307,8 +328,15 @@ def _model_point_zone(model, p) -> int:
         child = n.i_back if side == 1 else n.i_front
         if child == -1:
             lf = n.i_leaf[side]
-            return model.leaves[lf].i_zone if 0 <= lf < len(model.leaves) else 0
+            if 0 <= lf < len(model.leaves):
+                return (lf, model.leaves[lf].i_zone)
+            return (-1, 0)
         ni = child
+
+
+def _model_point_zone(model, p) -> int:
+    """The zone number at point `p` on a built model (0 = solid). See `_model_point_region`."""
+    return _model_point_region(model, p)[1]
 
 
 def resolve_zone_actors(level, model) -> dict:

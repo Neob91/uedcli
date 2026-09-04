@@ -494,3 +494,39 @@ def test_unbuilt_world_model_is_empty_without_the_native_build(tmp_path):
     from uedcli.bsp.builtmodel import load_model_from_dx
     dx, _warns = _write_and_decode(_synthesize_level(), tmp_path)
     assert load_model_from_dx(dx.read_bytes()).nodes == []
+
+
+def test_content_brush_shape_polys_keep_ilink_minus_one():
+    """A static content brush's own `Model_Brush<n>.Polys` keep `iLink=-1` on every poly: the
+    editor does NOT run the bspValidateBrush LINK phase on an imported content brush's shape model
+    (byte-verified against UED22's `MAP IMPORT` of UNATCO Brush74 / WanChai Brush3675 at N=2). Two
+    coplanar same-texture faces WOULD link under the old `_assign_ilinks` call -- the regression is
+    native writing 0,1,2,... instead of the editor's all -1."""
+    from uedcli.model import Brush, Polygon
+    from uedcli.native.unbuilt import _builder_cube_polys, _fpolys
+    quad = lambda z: Polygon(texture="Pkg.Tex", item="OUTSIDE", flags=0,
+                             origin=(0.0, 0.0, z), normal=(0.0, 0.0, 1.0),
+                             texture_u=(1.0, 0.0, 0.0), texture_v=(0.0, 1.0, 0.0),
+                             vertices=[(0.0, 0.0, z), (8.0, 0.0, z), (8.0, 8.0, z), (0.0, 8.0, z)])
+    brush = Brush(model_name="Model_B", polys=[quad(0.0), quad(0.0)])  # coplanar + same texture
+    assert [fp.i_link for fp in _fpolys(brush, actor="B")] == [-1, -1]
+    # The synthesized builder cube DOES link (its Polys keep the assigned surf index), unchanged.
+    assert all(fp.i_link != -1 for fp in _builder_cube_polys())
+
+
+def test_brush_bdynamiclight_is_dropped(tmp_path):
+    """The editor resets `bDynamicLight` to the class default on a brush at MAP IMPORT and omits it
+    from the save; a trunk-authored `bDynamicLight=True` on a brush must not reach the built map
+    (byte-verified, UNATCO Brush74 at N=2)."""
+    t3d = ("Begin Map\n"
+           "Begin Actor Class=Engine.LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
+           + _brush("B1", "Model_B1", "CSG_Add", _quad("LUM_CoreTex.Tile.grey_stone_tile"),
+                    extra="    bDynamicLight=True\n")
+           + "End Map\n")
+    level = model.parse_t3d(t3d)
+    level.order = level_order(level)
+    normalize_level(level)
+    dx, warnings = _write_and_decode(level, tmp_path)
+    got = decode_dx_level_offline(str(dx), index=_index(),
+                                  schema=mapimport.ImportSchema(resolver=_resolver))
+    assert "bDynamicLight" not in dict(got.actors["B1"].props)

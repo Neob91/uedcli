@@ -46,6 +46,11 @@ match; the surviving (non-`None`) `Actors` set AND order must match (Actors orde
   inconsequential, 2026-09-04): object auto-counter **names** (`Polys4` vs `Polys6`), Level `Actors`
   array **`None`-holes**, export-table **order** / freed-slot reuse. Shipped retail maps normally
   carry `None`-holes (29–329) and export-order≠actor-order, and the game plays them.
+- Orphan-vert **`iVertex`** — a `Model` `FVert` whose slot is in no live BSP node's
+  `[iVertPool, iVertPool+NumVertices)` ring (two opus reviews + owner, 2026-09-04). Nothing
+  dereferences it: UED22's own build stores an out-of-range orphan `iVertex` and its maps ship/play.
+  Masked with **dynamic per-build liveness** (only verts outside every live ring; `iSide` and all
+  live verts stay compared) — divergent liveness changes the node rings, which are still compared.
 
 Any NEW candidate exclusion needs an opus review confirming inconsequence + the owner's explicit yes
 before it counts. No content carveouts (Movers included — native must build their private models).
@@ -71,6 +76,24 @@ a full-level editor rebuild is ~24 min, so grow N, don't jump.
 canonical parity-comparison entry point. It encodes the exact bar above (identity/permutation-based,
 the exclusion set, the surviving-Actors assertion) and gives a PASS/FAIL. Use it; do not write a new
 comparison from scratch. `actor_parity.py` (same dir) drives the first-N-actors subset build + gate.
+
+## Testing (project rule, owner 2026-09-04)
+
+Tests must NOT block the parity work. For this project specifically:
+
+- **Run only the FEW tests relevant to the change — never the whole `pytest` suite.** This applies to
+  subagents AND the main session. The full suite is slow and crashes on the shared `/tmp` (512 MB,
+  other sessions churn it). Relevant files are typically `uedcli/tests/test_native_roundtrip.py`,
+  `test_materialize_defaultbrush.py`, `test_materialize_verb.py`, `test_normalize.py`, and
+  `test_board.py` (only when board items changed).
+- **Always in a STABLE repo dir**, never the shared `/tmp`: `TMPDIR=$PWD/_scratch/pttmp` and
+  `pytest -p no:cacheprovider -o cache_dir=_scratch/pttmp/pc`. Never pipe `bin/test`/`pytest` through
+  `tail` (it masks the exit code).
+- **Run tests in PARALLEL with the build/fix work, not as a gate** — they don't hold up a build or a
+  merge. **Bake any needed test fix into the same subagent change** that touches the code.
+- `cargo test` (the native core goldens) is fast and runs via the build image; keep it green, but it
+  is not the bottleneck — pytest is.
+- Pre-existing reds on master unrelated to this work: `test_doc_links`, `test_native_lit_room_ships_light_export_refs`.
 
 ## Where the detail lives
 

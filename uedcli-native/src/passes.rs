@@ -193,11 +193,11 @@ pub fn bsp_merge_coplanars(polys: Vec<FPoly>) -> Vec<FPoly> {
 /// `bspRefresh` (§7.3): array compaction after a build — drop unreferenced surfs and renumber
 /// the nodes' `iSurf`, then re-pack the vert pool so each node's verts are contiguous in build
 /// order (renumbering `iVertPool`).  Pure array GC + reindex; no geometry decisions.  (Points/
-/// Vectors are left as-is HERE — the Points/Vectors compaction + canonical re-ORDER is a dedicated
-/// post-build pass in `bspcsg.rs`: `reorder_surfs_canonical`/`rebuild_vector_pool` make the Surfs +
-/// Vectors pools byte-exact in ORDER, and `reorder_points_canonical` drops unreferenced points and
-/// lays them out bases-then-rings (structural parity — the Points intra-block sub-order is not yet
-/// byte-exact; spike §10.19-§10.20).  An unreferenced pool entry is otherwise harmless.)
+/// Vectors are left as-is HERE — the Vectors canonical re-ORDER is a dedicated post-build pass in
+/// `bspcsg.rs` (`reorder_surfs_canonical`/`rebuild_vector_pool` make the Surfs + Vectors pools
+/// byte-exact in ORDER), and the Points pool is GC'd incrementally at the editor's real `bspRefresh`
+/// call sites via `bsp_refresh_points_vectors[_stale_orphans]` below.  An unreferenced pool entry is
+/// otherwise harmless.)
 pub fn bsp_refresh(model: &mut Model) {
     // 1. Drop unreferenced surfs; renumber node.i_surf.
     let mut used = vec![false; model.surfs.len()];
@@ -239,21 +239,18 @@ pub fn bsp_refresh(model: &mut Model) {
 /// (see its own doc comment). Fresh disassembly (2026-08-30, `Editor.dll` `0x10036fb0`-`0x10037166`,
 /// the real `bspRefresh` continuing past the Nodes/Surfs/Verts work `bsp_refresh` already ports)
 /// shows the real editor DOES drop unreferenced Points AND Vectors on every single `bspRefresh`
-/// call (world-level AND every subtree repartition), not just once at the very end the way native's
-/// `reorder_points_canonical`/`rebuild_vector_pool` currently do. Confirms and supersedes the
+/// call (world-level AND every subtree repartition). Confirms and supersedes the
 /// `native-materialize-findings.md` "`bspRefresh` does NOT correspondingly compact Verts/Points"
 /// entry for POINTS specifically — that entry is correct for VERTS only (no verts remap exists in
 /// the disassembled range) but wrong for Points/Vectors, which this ports.
 ///
 /// Reachability, read directly off the disassembly: a Point is used iff some surf's `p_base`
-/// (`+0x8`) OR some (already node-compacted) node's own vert-pool range names it via `vert.i_vertex`
-/// (matches `reorder_points_canonical`'s already-documented rule, just applied here per-call instead
-/// of once at the end). A Vector is used iff some surf's `v_normal`/`v_texture_u`/`v_texture_v`
+/// (`+0x8`) OR some (already node-compacted) node's own vert-pool range names it via `vert.i_vertex`.
+/// A Vector is used iff some surf's `v_normal`/`v_texture_u`/`v_texture_v`
 /// (`+0xc`/`+0x10`/`+0x14`) names it — Vectors have no vert-side reference class.
 ///
-/// NOT wired into the default build path yet — called only under `UEDCLI_BSPCSG_WORLD_KEEP_POINTS`
-/// (`bspcsg.rs`), where it is the missing mechanism that bounds the kept CSG-phase Points pool the
-/// real `EmptyModel(0,0)` leaves untouched. See `wanchai-verts-points-residual-independently`.
+/// Wired into the world-level rebuild checkpoint (`bspcsg.rs`), where it bounds the kept CSG-phase
+/// Points pool the real `EmptyModel(0,0)` leaves untouched. See `wanchai-verts-points-residual-independently`.
 pub fn bsp_refresh_points_vectors(model: &mut Model) {
     let mut pt_used = vec![false; model.points.len()];
     let mut vec_used = vec![false; model.vectors.len()];

@@ -404,7 +404,7 @@ enum Emit {
 ///     threshold (`THRESH_POINTS_ARE_NEAR` 0.015, `bspAddNode 0x352fd push 0` — the same NEAR
 ///     pooling every other `bspAddNode` call ships), CREATING a real pool point when nothing is
 ///     near.  A point created for a killed landing ends up referenced only by orphan verts and
-///     is dropped by the end-of-build GC (`reorder_points_canonical`, editor rule) — reproducing
+///     is dropped by the incremental points GC (`bsp_refresh_points_vectors_stale_orphans`, editor rule) — reproducing
 ///     the editor's own transient-then-GC'd Pass-D points, whose stale orphan `iVertex` dangle
 ///     past the compacted pool end in every golden (spike `2026-09-03-verts-points-residual`).
 ///     The old 0.002-pool + snap-to-nearest orphan hack predates that GC and is gone.

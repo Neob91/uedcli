@@ -160,6 +160,10 @@ class Model:
     # brush shape models (UNATCO import golden, 2026-09-02).
     root_outside: int = 0
     linked: int = 0
+    # The post-CSG world FPoly soup the editor keeps in Model.Polys, as marshalled by the native
+    # core (`Built.world_soup`): a list of raw tuples assembly turns into `Polys` FPolys. Empty
+    # except on a native world build. Not serialized in the model BODY (Polys is its own export).
+    world_soup: list = field(default_factory=list)
 
 
 # --- writer (Python oracle) ------------------------------------------------
