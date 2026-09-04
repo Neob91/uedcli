@@ -6,7 +6,7 @@ never writes the trunk or a committed map.
 
 ```
 level photo SHOT… --out-dir DIR [--game | --native] [--size WxH] [--fov DEG]
-              [--map PATH] [--rebuild] [--keep-alive]
+              [--faces wire|textured] [--map PATH] [--rebuild] [--keep-alive]
 level photo --list-actors Package.Class [--sample N] [--game --map PATH]   # discovery mode
 ```
 
@@ -49,12 +49,19 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
     fully qualified and its package present on the search paths. An unresolvable class exits 2 naming
     the actor, before anything is built.
 - **`--native`** — the opt-in offline draft. **No container at all**: the native CSG core carves the
-  trunk in-process and a software rasterizer renders **textured, flat-shaded** perspective stills in
-  seconds. Movers render at base pose; point actors, meshes, sky, lighting, and translucency do NOT
-  render (translucent/masked faces render opaque). Scaled, mirrored, and sheared brushes render (the
-  transform is baked into the geometry, and the texture frame follows it too — texels stretch/shear
-  with the surface). `--fov DEG` (default 75) applies here; `--map` /
-  `--rebuild` / `--keep-alive` are rejected with `--native`.
+  trunk in-process and a software rasterizer renders perspective stills in seconds. `--fov DEG`
+  (default 75) applies here; `--map` / `--rebuild` / `--keep-alive` are rejected with `--native`.
+  - **`--faces textured` (the default)** — solid **textured, flat-shaded** faces. Movers render at
+    base pose; point actors, meshes, sky, lighting, and translucency do NOT render
+    (translucent/masked faces render opaque). Scaled, mirrored, and sheared brushes render (the
+    transform is baked into the geometry, and the texture frame follows it too — texels stretch/shear
+    with the surface).
+  - **`--faces wire`** — a content-free **brush wireframe** from the same posed camera: every brush
+    edge drawn (see-through, no hidden-line removal), coloured by CSG op — **add** blue, **subtract**
+    gold, **semisolid** coral, **nonsolid** green, **mover** magenta. Point actors draw as their
+    sprites (or a marker when the sprite is unavailable). No CSG solve and no textures on the brushes,
+    so it renders the raw authored geometry fast — useful for reading structure and CSG intent from
+    any vantage. `--faces` is `--native` only; passing it with `--game` exits 2.
 
 **Shared:** `--out-dir DIR` (required unless `--list-actors`; created if absent), `--size WxH`
 (default 1280×960).

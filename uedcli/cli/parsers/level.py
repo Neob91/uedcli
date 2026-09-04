@@ -131,6 +131,13 @@ def register(sub) -> None:
                             "the game's first-person default, Engine.PlayerPawn DesiredFOV). "
                             "Native renders true straight-up/down; --game renders at the game's "
                             "own FOV and clamps pitch host-side to ±89.9°")
+    lprev.add_argument("--faces", choices=("wire", "textured"), default=None,
+                       help="--native only: 'textured' (the native default) software-rasterizes "
+                            "solid textured faces; 'wire' draws a content-free brush WIREFRAME from "
+                            "the same posed camera — brushes coloured by CSG op (add=blue, "
+                            "subtract=gold, semisolid=coral, nonsolid=green, mover=magenta), point "
+                            "actors as sprites/markers, every edge drawn (see-through). wire needs "
+                            "no CSG solve and no native extension. Rejected with --game")
     lprev.add_argument("--map", default=None, metavar="PATH",
                        help="--game only: shoot a prebuilt map file (.dx/.unr) instead of the "
                             "$UEDCLI_LEVEL trunk (skips the materialize cache). Actor-relative shots "

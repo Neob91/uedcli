@@ -445,8 +445,16 @@ BG = 64    # #404040 — owner ruling 2026-08-30, superseding the 2026-08-02 pur
            # `_fade_dimmed`'s fade toward BG now darkens toward this mid-dark grey, not black.
 
 
-def _new_buf(size: int) -> bytearray:
-    return bytearray(bytes((BG, BG, BG)) * (size * size))
+def _dims(size: int | tuple[int, int]) -> tuple[int, int]:
+    """Frame `(width, height)`. An int is a square canvas (the ortho `actor diagram` path); a
+    `(w, h)` tuple is a rectangular one (the perspective `preview_wire` path). Every buffer-indexing
+    primitive below normalises through this, so the int callers stay byte-identical."""
+    return size if isinstance(size, tuple) else (size, size)
+
+
+def _new_buf(size: int | tuple[int, int]) -> bytearray:
+    w, h = _dims(size)
+    return bytearray(bytes((BG, BG, BG)) * (w * h))
 
 
 def _alloc_buffers(size: int, *, depth: bool):
@@ -489,8 +497,9 @@ def _alloc_dim_mask(size: int) -> bytearray:
 def _px(buf, size, x, y, rgb) -> bool:
     """Plot one pixel, clipped to the frame. Returns whether it LANDED, which `_line` sums so a caller can
     tell "I drew this" from "this was clipped away entirely"."""
-    if 0 <= x < size and 0 <= y < size:
-        i = (y * size + x) * 3
+    w, h = _dims(size)
+    if 0 <= x < w and 0 <= y < h:
+        i = (y * w + x) * 3
         buf[i], buf[i + 1], buf[i + 2] = rgb
         return True
     return False
@@ -922,8 +931,9 @@ def _draw_text(buf, size, cx, cy, text, scale, rgb) -> None:
         x0 += gw + scale
 
 
-def _ppm(buf: bytearray, size: int) -> bytes:
-    return f"P6\n{size} {size}\n255\n".encode() + bytes(buf)
+def _ppm(buf: bytearray, size: int | tuple[int, int]) -> bytes:
+    w, h = _dims(size)
+    return f"P6\n{w} {h}\n255\n".encode() + bytes(buf)
 
 
 def _clamp(v: int, lo: int, hi: int) -> int:
@@ -1438,8 +1448,9 @@ def _blend_px(buf, size, x, y, rgb, alpha: float = 0.5) -> bool:
     """Alpha-blend `rgb` OVER the pixel already in the buffer, i.e.
     `new = round(alpha*rgb + (1-alpha)*existing)`. Lets an on-face digit read as a TRANSLUCENT overlay —
     the surface/wireframe under it shows through, like a real decal — instead of an opaque knockout."""
-    if 0 <= x < size and 0 <= y < size:
-        i = (y * size + x) * 3
+    w, h = _dims(size)
+    if 0 <= x < w and 0 <= y < h:
+        i = (y * w + x) * 3
         beta = 1.0 - alpha
         buf[i] = round(alpha * rgb[0] + beta * buf[i])
         buf[i + 1] = round(alpha * rgb[1] + beta * buf[i + 1])
