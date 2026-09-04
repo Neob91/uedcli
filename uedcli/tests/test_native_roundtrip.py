@@ -187,6 +187,64 @@ def test_native_world_model_ships_in_the_package_with_real_refs():
     assert all(s.texture_ref < 0 for s in saved.surfs), "a surf did not resolve a texture import"
 
 
+def test_built_path_tables_are_savepackage_count_descending():
+    """The BUILT path (`world_model` given) runs the SAME two-pass as the unbuilt path, so its
+    import table comes out in the editor's `SavePackage` count-DESCENDING order (the `appQsort`
+    pass), not insertion order. Regression: the built branch used to emit insertion-order tables,
+    diverging from every editor `MAP SAVE`. Verified by recomputing the tag-pass ref counts off the
+    saved package and asserting the on-disk import order is non-increasing by count."""
+    pytest.importorskip("uedcli_native")
+    from uedcli.native import saveorder
+    from uedcli.native.materialize import build_world_model, resolve_zone_actors
+    from uedcli.upackage import _parse_package
+
+    level = _synthesize_level()
+    built, csg_brushes = build_world_model(level, index=_index())
+    pkg_dirs = [str(_UED22)]
+    dx_bytes, _w = assemble_unbuilt(
+        level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=built,
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built))
+    p = _parse_package(dx_bytes, "built.dx", None)
+    totals = saveorder.import_totals(p, saveorder.collect(p))
+    assert totals == sorted(totals, reverse=True), \
+        f"built-path import table is not count-descending: {totals}"
+
+
+def test_brushless_level_builds_empty_world_and_valid_package(tmp_path):
+    """A brushless subset (LevelInfo-only -- the lockstep ladder's N=1) builds instead of raising.
+    `build_world_model` returns an EMPTY world Model (0 nodes/surfs, NumSharedSides=4) and
+    `assemble_unbuilt` ships a valid package that still reserves LevelSummary (the LevelInfo body
+    refs it) -- not a `NativeBuildError` or a KeyError."""
+    pytest.importorskip("uedcli_native")
+    from uedcli.bsp.builtmodel import load_model_from_dx
+    from uedcli.native.materialize import build_world_model, resolve_zone_actors
+    from uedcli.native.pkg_write import parse_package
+
+    t3d = ("Begin Map\n"
+           "Begin Actor Class=Engine.LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
+           "End Map\n")
+    level = model.parse_t3d(t3d)
+    level.order = level_order(level)
+    normalize_level(level)
+
+    built, csg_brushes = build_world_model(level, index=_index())
+    assert csg_brushes == []
+    assert not built.nodes and not built.surfs and not built.verts
+    assert built.num_shared_sides == 4
+    # The editor's empty MAP REBUILD leaves the zones array EMPTY (UNATCO N=1, Model2 = 70 bytes).
+    # `build_geometry_bspcsg([])` would instead synthesize one default zone -- a native artifact we
+    # must not ship; the empty world Model is a bare model, not the CSG core's output.
+    assert built.zones == [] and not built.root_outside and not built.linked
+
+    pkg_dirs = [str(_UED22)]
+    dx_bytes, _warnings = assemble_unbuilt(
+        level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=built,
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built))
+    p = parse_package(dx_bytes)
+    assert "LevelSummary" in {p.names[e["nm"]] for e in p.exports}
+    assert load_model_from_dx(dx_bytes).nodes == []
+
+
 def _room_t3d(half=(256, 256, 128)) -> str:
     """A closed subtracted box with a Light at its centre — the smallest level whose bake produces
     LIT records, so the whole lighting chain (gather -> bake -> `Model.Lights` export refs) is

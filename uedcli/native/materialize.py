@@ -246,10 +246,9 @@ def build_world_model(level, *, index, lights=()):
     is what the editor writes for a level with no lights (§2) and what the game's mesh-actor lighting
     path needs to exist at all.
 
-    Movers and the transient builder brush stay out of world CSG, exactly as `csgRebuild` keeps them
-    out; `index` is the `classindex.ClassIndex` that decides mover-ness against the real class
-    hierarchy. Raises `NativeBuildError` on any failure -- never a partial model."""
-    from ..normalize import is_builder_brush
+    Movers stay out of world CSG, exactly as `csgRebuild` keeps them out; `index` is the
+    `classindex.ClassIndex` that decides mover-ness against the real class hierarchy. Raises
+    `NativeBuildError` on any failure -- never a partial model."""
     from . import umodel as UM
     from .brush_marshal import BuildError, _build_brush_input, _in_world_csg
     try:
@@ -263,7 +262,12 @@ def build_world_model(level, *, index, lights=()):
         actor = level.actors.get(name)
         if actor is None or actor.brush is None:
             continue
-        if is_builder_brush(actor) or not _in_world_csg(actor, index):
+        # No is_builder_brush skip: UED22 excludes Actors[1] by POSITION, and native's synthesized
+        # dummy builder (unbuilt.py `_BUILDER`) already occupies that slot and is never a CSG input.
+        # Content trunks carry no builder brush (0 is_builder_brush hits on UNATCO), so the heuristic
+        # was dead here -- dropping it keeps the two builds symmetric (board:
+        # ued22-world-bsp-differs-per-ingest-verb-paste).
+        if not _in_world_csg(actor, index):
             continue
         try:
             brushes.append(_build_brush_input(name, actor))
@@ -271,7 +275,16 @@ def build_world_model(level, *, index, lights=()):
             raise NativeBuildError(str(e)) from e
         csg_brushes.append((name, actor.brush.polys))
     if not brushes:
-        raise NativeBuildError("the trunk has no world-CSG brush actors -- nothing to build")
+        # A brushless subset (e.g. an early actor-prefix that is all point actors -- the lockstep
+        # ladder starts at N=1 = LevelInfo only) builds an EMPTY world Model instead of raising.
+        # It is the editor's own empty-rebuild output: NumSharedSides=4, RootOutside=Linked=0, and
+        # crucially an EMPTY zones array -- `MAP REBUILD` with only the excluded Actors[1] builder
+        # brush leaves zones untouched (live-measured on UNATCO N=1, Model2 = 70 bytes, zones=0).
+        # NB `build_geometry_bspcsg([])` does NOT match: its finalize synthesizes one default zone
+        # (zones=1, +17 bytes), a native artifact the editor never writes for an empty world.
+        empty = UM.Model()
+        empty.num_shared_sides = 4
+        return empty, csg_brushes
     try:
         built = uedcli_native.build_geometry_bspcsg(brushes)
         uedcli_native.bake_lighting(built, [(loc, radius, special) for _n, loc, radius, special in lights])
