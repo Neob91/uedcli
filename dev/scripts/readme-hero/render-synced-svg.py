@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Assemble the synced README hero SVG from rendered frames + the pipeline's names.
 
-Usage: render-synced-svg.py FRAMEDIR ROOM COL1 COL2 BEND OUT.svg
-Called by build-hero.sh. FRAMEDIR holds x1.png..x12.png (one per pipeline step);
-ROOM/COL1/COL2/BEND are the actor names the pipeline assigned, echoed into the
+Usage: render-synced-svg.py FRAMEDIR ROOM CORR CORR2 OUT.svg
+Called by build-hero.sh. FRAMEDIR holds x1.png..x11.png (one per pipeline step);
+ROOM/CORR/CORR2 are the actor names the pipeline assigned, echoed into the
 shown commands so the terminal text matches what was actually run.
 
 Left panel: a terminal revealing each command. Right panel: the level's
@@ -12,7 +12,7 @@ timeline, so they stay in sync. The corner-clip phase is compressed 2.5x.
 """
 import base64, sys, html
 
-FRAMES, ROOM, COL1, COL2, BEND, OUT = sys.argv[1:7]
+FRAMES, ROOM, CORR, CORR2, OUT = sys.argv[1:6]
 DUR = 36  # seconds, looping
 
 def b64(name):
@@ -20,36 +20,36 @@ def b64(name):
         return base64.b64encode(f.read()).decode()
 
 # (appear%, frame)  — clip steps (x2..x5) compressed 2.5x; later steps shifted earlier
-frames = [(6,"x1"),(12,"x2"),(14.4,"x3"),(16.8,"x4"),(19.2,"x5"),(27,"x6"),(35,"x7"),(43,"x8"),(51,"x9"),(59,"x10"),(67,"x11"),(75,"x12")]
+frames = [(6,"x1"),(12,"x2"),(14.4,"x3"),(16.8,"x4"),(19.2,"x5"),(27,"x6"),(35,"x7"),(43,"x8"),(51,"x9"),(59,"x10"),(67,"x11")]
 frames = [(p, b64(n)) for p, n in frames]
 
 # (appear%, kind, text). Keep these in lockstep with build-hero.sh's commands.
 rows = [
-    (2,   "comment", "# two rooms + a corridor, columns turned 45° — built from commands"),
+    (2,   "comment", "# a room, a corridor, a 90° arch, another room"),
     (6,   "cmd",  "uedcli brush build cube --width 640 --breadth 640 --height 320 --csg subtract --at 0,0,160 \\"),
     (6,   "cont", "| uedcli actor add -                          # a room"),
-    (12,  "cmd",  f"uedcli actor show {ROOM} | uedcli brush clip - --plane 160,320,160 1,1,0 --keep below \\"),
-    (12,  "cont", f"| uedcli brush replace {ROOM} -          # slice corner 1 at 45°"),
+    (12,  "cmd",  f"uedcli actor show {ROOM} | uedcli brush clip - --plane 240,320,160 1,1,0 --keep below \\"),
+    (12,  "cont", f"| uedcli brush replace {ROOM} -          # corner 1, clipped a little"),
     (14.4,"cmd",  f"uedcli actor show {ROOM} | uedcli brush clip - --plane -160,320,160 -1,1,0 --keep below \\"),
     (14.4,"cont", f"| uedcli brush replace {ROOM} -          # corner 2"),
-    (16.8,"cmd",  f"uedcli actor show {ROOM} | uedcli brush clip - --plane 160,-320,160 1,-1,0 --keep below \\"),
-    (16.8,"cont", f"| uedcli brush replace {ROOM} -          # corner 3"),
+    (16.8,"cmd",  f"uedcli actor show {ROOM} | uedcli brush clip - --plane 240,-320,160 1,-1,0 --keep below \\"),
+    (16.8,"cont", f"| uedcli brush replace {ROOM} -          # corner 3, clipped a little"),
     (19.2,"cmd",  f"uedcli actor show {ROOM} | uedcli brush clip - --plane -160,-320,160 -1,-1,0 --keep below \\"),
     (19.2,"cont", f"| uedcli brush replace {ROOM} -          # corner 4"),
-    (27,  "cmd",  "uedcli brush build cube --width 640 --breadth 200 --height 320 --csg subtract --at 640,0,160 \\"),
-    (27,  "cont", "| uedcli actor add -                          # corridor, same height"),
-    (35,  "cmd",  f"uedcli actor duplicate {ROOM} --by 1280,0,0   # duplicate room, far end"),
-    (43,  "cmd",  "uedcli brush build cube --width 120 --breadth 120 --height 320 --solidity semisolid --at 0,0,160 \\"),
-    (43,  "cont", "| uedcli actor add -                          # column, room 1"),
-    (51,  "cmd",  "uedcli brush build cube --width 120 --breadth 120 --height 320 --solidity semisolid --at 1280,0,160 \\"),
-    (51,  "cont", "| uedcli actor add -                          # column, room 2"),
-    (59,  "cmd",  f"uedcli actor prop set {COL1} Rotation.Yaw=8192   # turn column 1 in place (45°)"),
-    (67,  "cmd",  f"uedcli actor prop set {COL2} Rotation.Yaw=8192   # column 2"),
-    (73,  "cmd",  "uedcli brush build revolve --point 200,0 --point 400,0 --point 400,320 --point 200,320 \\"),
-    (73,  "cont", "--angle 8192 --axis x --at 1600,-300,0 \\"),
-    (73,  "cont", "| uedcli actor add -                          # corridor bend, swept 45°"),
-    (85,  "cmd",  "uedcli actor diagram --view iso --out level.png"),
-    (90,  "out",  "wrote level.png"),
+    (27,  "cmd",  "uedcli brush build cube --width 320 --breadth 200 --height 320 --csg subtract --at 480,0,160 \\"),
+    (27,  "cont", "| uedcli actor add -                          # corridor, flush with the wall"),
+    (35,  "cmd",  "uedcli brush build revolve --point 200,0 --point 400,0 --point 400,320 --point 200,320 \\"),
+    (35,  "cont", "--angle 16384 --axis x --at 640,-300,0 \\"),
+    (35,  "cont", "| uedcli actor add -                          # a 90° arch, swept"),
+    (43,  "cmd",  f"uedcli actor duplicate {CORR} --by 460,-460,0   # a second corridor, out of the arch"),
+    (43,  "cmd",  f"uedcli actor prop set {CORR2} Rotation.Yaw=-16384   # turned to keep going straight"),
+    (51,  "cmd",  f"uedcli actor duplicate {ROOM} --by 940,-940,0   # the second room, at the arch's far end"),
+    (59,  "cmd",  "uedcli brush build cube --width 120 --breadth 120 --height 320 --solidity semisolid --at 0,0,160 \\"),
+    (59,  "cont", "| uedcli actor add -                          # column, room 1"),
+    (67,  "cmd",  "uedcli brush build cube --width 120 --breadth 120 --height 320 --solidity semisolid --at 940,-940,160 \\"),
+    (67,  "cont", "| uedcli actor add -                          # column, room 2"),
+    (76,  "cmd",  "uedcli actor diagram --view iso --out level.png"),
+    (81,  "out",  "wrote level.png"),
 ]
 
 FONT = 11; LH = 18
@@ -59,7 +59,7 @@ W, H = IX + IS + 16, 632
 CONT_INDENT = 22
 GREEN = "#7ee787"; FG = "#cdd3de"; DIM = "#6b7280"; WHITE = "#ffffff"
 prompt = "❯"
-CUR_P = 90
+CUR_P = 81
 
 def esc(s): return html.escape(s, quote=True)
 def kn(p): return "a" + str(p).replace('.', '_')     # CSS-safe keyframe/class name
