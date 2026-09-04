@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Assemble the synced README hero SVG from rendered frames + the pipeline's names.
 
-Usage: render-synced-svg.py FRAMEDIR ROOM COL1 COL2 OUT.svg
-Called by build-hero.sh. FRAMEDIR holds x1.png..x11.png (one per pipeline step);
-ROOM/COL1/COL2 are the actor names the pipeline assigned, echoed into the shown
-commands so the terminal text matches what was actually run.
+Usage: render-synced-svg.py FRAMEDIR ROOM COL1 COL2 BEND OUT.svg
+Called by build-hero.sh. FRAMEDIR holds x1.png..x12.png (one per pipeline step);
+ROOM/COL1/COL2/BEND are the actor names the pipeline assigned, echoed into the
+shown commands so the terminal text matches what was actually run.
 
 Left panel: a terminal revealing each command. Right panel: the level's
 `actor diagram` render after that command. Both are driven off one looping
@@ -12,7 +12,7 @@ timeline, so they stay in sync. The corner-clip phase is compressed 2.5x.
 """
 import base64, sys, html
 
-FRAMES, ROOM, COL1, COL2, OUT = sys.argv[1:6]
+FRAMES, ROOM, COL1, COL2, BEND, OUT = sys.argv[1:7]
 DUR = 36  # seconds, looping
 
 def b64(name):
@@ -20,7 +20,7 @@ def b64(name):
         return base64.b64encode(f.read()).decode()
 
 # (appear%, frame)  — clip steps (x2..x5) compressed 2.5x; later steps shifted earlier
-frames = [(6,"x1"),(12,"x2"),(14.4,"x3"),(16.8,"x4"),(19.2,"x5"),(27,"x6"),(35,"x7"),(43,"x8"),(51,"x9"),(59,"x10"),(67,"x11")]
+frames = [(6,"x1"),(12,"x2"),(14.4,"x3"),(16.8,"x4"),(19.2,"x5"),(27,"x6"),(35,"x7"),(43,"x8"),(51,"x9"),(59,"x10"),(67,"x11"),(75,"x12")]
 frames = [(p, b64(n)) for p, n in frames]
 
 # (appear%, kind, text). Keep these in lockstep with build-hero.sh's commands.
@@ -45,8 +45,11 @@ rows = [
     (51,  "cont", "| uedcli actor add -                          # column, room 2"),
     (59,  "cmd",  f"uedcli actor prop set {COL1} Rotation.Yaw=8192   # turn column 1 in place (45°)"),
     (67,  "cmd",  f"uedcli actor prop set {COL2} Rotation.Yaw=8192   # column 2"),
-    (76,  "cmd",  "uedcli actor diagram --view iso --out level.png"),
-    (81,  "out",  "wrote level.png"),
+    (73,  "cmd",  "uedcli brush build revolve --point 200,0 --point 400,0 --point 400,320 --point 200,320 \\"),
+    (73,  "cont", "--angle 8192 --axis x --at 1600,-300,0 \\"),
+    (73,  "cont", "| uedcli actor add -                          # corridor bend, swept 45°"),
+    (85,  "cmd",  "uedcli actor diagram --view iso --out level.png"),
+    (90,  "out",  "wrote level.png"),
 ]
 
 FONT = 11; LH = 18
@@ -56,7 +59,7 @@ W, H = IX + IS + 16, 632
 CONT_INDENT = 22
 GREEN = "#7ee787"; FG = "#cdd3de"; DIM = "#6b7280"; WHITE = "#ffffff"
 prompt = "❯"
-CUR_P = 81
+CUR_P = 90
 
 def esc(s): return html.escape(s, quote=True)
 def kn(p): return "a" + str(p).replace('.', '_')     # CSS-safe keyframe/class name

@@ -14,7 +14,7 @@ REPO="$(cd "$HERE/../../.." && pwd)"
 UED="$REPO/bin/uedcli"
 P=(--project "$REPO/dev/games")
 L=readme_hero_scratch
-FR="-380,-360,-40,1660,360,360"
+FR="-380,-360,-40,1950,360,360"
 FRAMES="$(mktemp -d)"
 OUT="${1:-$REPO/docs/images/readme/build-synced.svg}"
 trap 'rm -rf "$FRAMES" "$REPO/dev/games/trunks/$L"' EXIT
@@ -57,5 +57,9 @@ render "$FRAMES/x9.png"
 "$UED" "${P[@]}" actor prop set "$COL1" Rotation.Yaw=8192 >/dev/null 2>&1; render "$FRAMES/x10.png"
 "$UED" "${P[@]}" actor prop set "$COL2" Rotation.Yaw=8192 >/dev/null 2>&1; render "$FRAMES/x11.png"
 
-python3 "$HERE/render-synced-svg.py" "$FRAMES" "$ROOM" "$COL1" "$COL2" "$OUT"
+# 12) a corridor bend off the far room's outer wall, swept 45 degrees with revolve
+BEND=$("$UED" "${P[@]}" brush build revolve --point 200,0 --point 400,0 --point 400,320 --point 200,320 --angle 8192 --segments 6 --axis x --csg subtract --at 1600,-300,0 --base-name Bend 2>/dev/null | "$UED" "${P[@]}" actor add - 2>/dev/null | tail -1)
+render "$FRAMES/x12.png"
+
+python3 "$HERE/render-synced-svg.py" "$FRAMES" "$ROOM" "$COL1" "$COL2" "$BEND" "$OUT"
 echo "wrote $OUT"
