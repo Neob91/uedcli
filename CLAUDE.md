@@ -164,7 +164,8 @@ Two rules bind every session:
 
 ## Read-on-demand docs — the router
 
-Only `direction/README.md` (the topic index) is auto-loaded. Every doc below is not in your context;
+`direction/README.md` (the topic index) and the root `NATIVE-MATERIALIZE.md` (the native-materialize
+→ UED22 byte-parity campaign) are auto-loaded. Every other doc below is not in your context;
 read the relevant one before the action it names. These one-liners are a router, not a substitute: do
 not answer a question about UnrealEd behavior, the T3D format, uedcli internals, or a process rule
 from this summary or from training memory — the editor is undocumented and crash-prone, and these
@@ -177,6 +178,7 @@ before acting, by path. A subagent that has not read `unrealed/t3d.md` will flag
 as a bug; one that has not read this file will flag deliberate conventions as defects.
 
 - @dev/docs/direction/README.md — *(auto-loaded)* the index of what we want. Read the topic doc itself before any design question, spec, or plan — the index is a router, not the content.
+- @NATIVE-MATERIALIZE.md — *(auto-loaded)* the native-materialize → UED22 full-byte-parity campaign: the goal, the UED22 reference recipe (MAP IMPORT + sacrificial dummy builder), the exact parity bar and its opus-confirmed exclusions, the lockstep-ladder method, and the ONE canonical parity script (`parity_gate.py`). Read and obey it before ANY native-materialize or parity work — do not re-derive it.
 - `dev/docs/architecture.md` — read before any uedcli code change or design question: the layer/module map, the model-side write pattern, invariants D1–D8, the session-store shape.
 - `dev/docs/unrealed/commands.md` — read before driving the editor console: the exec-verb reference (what to type).
 - `dev/docs/unrealed/t3d.md` — read before authoring/parsing T3D or editing surfaces/geometry: block nesting, property forms, winding, authored-vs-computed taxonomy.
