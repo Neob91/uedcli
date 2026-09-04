@@ -4,10 +4,11 @@
 ![Python 3.12](https://img.shields.io/badge/python-3.12-blue)
 ![built with Claude](https://img.shields.io/badge/built%20with-Claude-8A5CF6)
 
-**A text-only control layer for UnrealEd 2.2 (Unreal Engine 1).** Query, edit, build and
-render classic UE1 levels — Deus Ex to start — through composable commands, no GUI. The T3D
-level model (Unreal's text scene format) is the source of truth; the `.dx` map is a build
-artifact; UnrealEd is the compiler and renderer.
+**uedcli reimplements UnrealEd's level-editing capability as a CLI for agents.** Query, author,
+build and render classic Unreal Engine 1 levels — Deus Ex to start — through composable text
+commands. No GUI, and no editor in the loop: brush geometry, CSG, T3D authoring, map decoding
+and rendering all run natively, in-process. The git-tracked T3D model (Unreal's text scene
+format) is the source of truth; the `.dx`/`.unr` map is a build artifact.
 
 > **Pre-alpha — expect breaking changes.** Published to get it out there, not because it's
 > stable: verbs, flags and output change without notice. It's **mostly AI-built**, and some
@@ -20,11 +21,13 @@ artifact; UnrealEd is the compiler and renderer.
 
 ## What it is
 
-UnrealEd is a crash-prone, GUI-only, largely undocumented editor from 1998. uedcli wraps a
-headless UnrealEd-2.2-under-wine and turns level design into scriptable text: small
-single-purpose **verbs that pipe together** (`find` → `clip` → `replace`), the T3D files kept
-in git as the model, and offline renderers. Because it's all text, an LLM can drive it end to
-end.
+UnrealEd is a crash-prone, GUI-only, largely undocumented editor from 1998. Rather than drive
+it, uedcli **reimplements what it does** — brush geometry and CSG, T3D level authoring, decoding
+compiled maps, offline rendering — as small **verbs that pipe together** (`find` → `clip` →
+`replace`). Reads and edits are native compute against the T3D files in git; the editor is never
+in the read/edit loop. The one step still delegated to the original editor is the final
+`level materialize` build (BSP + lighting bake) — and that's being brought native too. Because
+it's all text, an LLM can drive it end to end.
 
 ## See it work
 
@@ -37,7 +40,7 @@ uedcli brush build cube --width 768 --breadth 512 --height 288 --csg subtract --
 
 The `brush build` verbs — `cube`, `cylinder`, `cone`, `sheet`, `staircase`, `spiral`,
 `extrude`, `revolve` — print T3D to stdout; `actor diagram` renders any T3D, as a labeled
-wireframe or a textured, CSG-solved view (all offline):
+wireframe or a CSG-solved view textured from your project's textures (both offline, no editor):
 
 ![The same room, CSG-solved and textured offline](docs/images/readme/room-textured.png)
 
@@ -59,9 +62,10 @@ fast offline draft (`level photo --native`). See
 
 ## Quickstart
 
-uedcli is host-native Python **3.12** with one dependency (`Pillow`). The `bin/uedcli` launcher
-creates a dev venv on first run; the host just needs `python3.12` on `PATH`. Docker is only
-needed for the editor/build containers uedcli drives.
+uedcli is a Python **3.12** CLI plus a small Rust core (the CSG/geometry engine), with one
+Python dependency (`Pillow`). The `bin/uedcli` launcher builds both into a local venv on first
+run (the Rust build uses Docker; `UEDCLI_SKIP_NATIVE=1` skips it, disabling the native
+render/import paths). Releases will ship as standalone binaries.
 
 ```bash
 export PATH="$PWD/bin:$PATH"     # or symlink bin/uedcli into ~/.local/bin/
