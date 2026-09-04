@@ -105,11 +105,8 @@ pub fn bsp_opt_geom(model: &mut Model) {
     // the ShrinkModel-style near-merge and BEFORE the T-junction weld (`Editor.dll 0x100368f4`,
     // live-confirmed to land exactly on the final golden Points count on UNATCO+Wanchai — board
     // item `wanchai-verts-points-residual-independently`, round 4). It is what drops the
-    // near-merge's abandoned duplicate points. Gated with the incremental-points experiment; the
-    // default path's end-of-build `reorder_points_canonical` subsumes it there.
-    if crate::bspcsg::incremental_points_enabled() {
-        crate::passes::bsp_refresh_points_vectors_stale_orphans(model);
-    }
+    // near-merge's abandoned duplicate points.
+    crate::passes::bsp_refresh_points_vectors_stale_orphans(model);
     eliminate_tjunctions(model);
     build_side_links(model);
 }

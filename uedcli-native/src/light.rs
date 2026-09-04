@@ -337,7 +337,7 @@ fn validate_indices(model: &Model) -> Result<(), BuildError> {
     }
     // Validate only NODE-RANGE verts' iVertex — the only verts the bake reads. Orphan verts
     // legitimately carry stale, possibly out-of-range indices after the points GC (the editor's
-    // own built maps ship such danglers; see `reorder_points_canonical`).
+    // own built maps ship such danglers; see `bsp_refresh_points_vectors_stale_orphans`).
     for n in &model.nodes {
         for k in 0..n.num_vertices {
             ck(model.verts[(n.i_vert_pool + k) as usize].i_vertex, npts, "vert iVertex")?;

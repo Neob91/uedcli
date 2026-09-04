@@ -111,8 +111,7 @@ def _build_brush_input(name, actor):
     scaled = not (ROT.actor_main_scale(actor).is_identity()
                   and ROT.actor_post_scale(actor).is_identity())
     mirror = False
-    tex_cov = None
-    vec_xform_flat: list[float] = []                     # scaled: (L⁻¹)ᵀ VectorXform for the normal
+    vec_xform_flat: list[float] = []                     # scaled: (L⁻¹)ᵀ VectorXform for the normal + tex axes
     if scaled:
         # The vertex transform is `L = PostScale·R·MainScale`, passed as the Rust `rot`:
         # `FPoly::transform` yields `world = L·(v−PrePivot)+Loc`, and `scale` stays identity so the
@@ -130,12 +129,11 @@ def _build_brush_input(name, actor):
             reject_degenerate(L, name)
         except DegenerateTransformError as e:
             raise BuildError(str(e)) from e
-        _Linv = ROT.inverse(L)
-        tex_cov = ROT.matmul(_Linv, ROT.transpose(_Linv))  # (LᵀL)⁻¹ — pre-cancels Rust's forward L
-        # Covariant pre-cancel for texture axes (§92 §34): the Rust core applies the SAME forward `L` to
-        # a poly's TextureU/TextureV as to its verts, but axes are COVECTORS mapping by `(L⁻¹)ᵀ`.  We
-        # pass `(LᵀL)⁻¹·texUV` so the core's forward `L·((LᵀL)⁻¹·texUV) = (L⁻¹)ᵀ·texUV` — the editor's
-        # covariant axis.  Gated on `scaled`: an unscaled brush (`tex_cov` None) passes axes unchanged.
+        # Texture axes are passed RAW (local) — the Rust core maps them by the SAME `vec_xform` VectorXform
+        # as the face normal (§92 §34), matching the editor's `FPoly::Transform`, which maps Normal AND
+        # TextureU/V by the single `Uncoords.VectorXform = (L⁻¹)ᵀ`.  The former path pre-multiplied by
+        # `(LᵀL)⁻¹` (Python f32) and let the core apply forward `L` (f32): two f32 steps rounded 1 ULP
+        # below the editor's single division (WanChai Vectors[8] = f32(-1/112)).
         # MIRROR (`det L < 0`): the linear map inverts winding.  The Rust core reverses each ring
         # AFTER the vertex map, exactly as the editor's `FPoly::Transform` does on Orientation<0
         # (spike 2026-06-25) — signalled via the `orientation` tuple field below.  The rings are
@@ -212,10 +210,9 @@ def _build_brush_input(name, actor):
     def _axis(a):
         if a is None:
             return [0.0, 0.0, 0.0]                        # no authored axis -> Rust synthesizes default
-        v = (float(a[0]), float(a[1]), float(a[2]))
-        if tex_cov is not None:                           # scaled brush: covariant pre-cancel (§92 §34)
-            v = ROT.matvec(tex_cov, v)
-        return [float(v[0]), float(v[1]), float(v[2])]
+        # RAW local axis: the Rust core maps it by `vec_xform` (the same VectorXform as the normal) for
+        # a scaled brush, or by `rot` for an unscaled one — see the covariant note above.
+        return [float(a[0]), float(a[1]), float(a[2])]
 
     for poly in actor.brush.polys:
         poly_sizes.append(len(poly.vertices))
