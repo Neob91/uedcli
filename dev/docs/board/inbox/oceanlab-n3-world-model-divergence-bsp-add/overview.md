@@ -91,3 +91,26 @@ before advancing.
 Decode via `uedcli.native.umodel.parse_model_body` on the cached
 `_scratch/actor-parity/14_oceanlab_lab/{native,ref}_N3.dx`; source TU from the trunk brush (Yaw=16384
 => world TU = (-local.y, local.x, 0)). Gate: `parity_gate.py` reports the two body residuals.
+
+## Update 2026-09-05 — fix APPLIED + corpus-validated; N3 still NO (two FURTHER residuals)
+
+Applied: `bsp_add_vector` `exact=false` tol `0.001` -> `THRESH_VECTORS_ARE_NEAR = 4.0e-4` (`bspcsg.rs`,
+sole vector-pool dedup for the native materialize path — world CSG + mover models). Regression test at
+the 4e-4 keep/merge boundary; `cargo test` 112 passed. Single-path change, no env flag.
+
+A/B rebuild (0.001 vs 4e-4) on OceanLab N3 confirms the fix's effect: `Model2.Vectors` 364 -> 366, now
+byte-identical to UED22; `Model2.Polys` tu/tv now byte-identical. The DIAGNOSED bug is fixed.
+
+Corpus sweep (native+ref+gate, this fix): originals UNATCO/WanChai/NYC_Bar N=1..16 and Island N=1..8
+STAY byte-exact — NO regression from the global threshold. So the change is safe to ship.
+
+But N3 still gates NO: this finding UNDER-counted the residuals. TWO further, PRE-EXISTING divergences
+(present at 0.001, unchanged by the fix) remain in `Model2` and are NOT the vector dedup:
+1. `oceanlab-n3-model2-orphan-vert-overcount-shifts` — native emits +85 orphan FVerts, shifting live
+   `iVertPool`. The "absorbed by orphan-iVertex exclusion" claim above is WRONG: the gate masks orphan
+   `iVertex` VALUES, not the array-length/`iVertPool` shift.
+2. `oceanlab-n3-model2-polys-itemname-outside-vs` — native writes Polys `ItemName`=`outside` for all
+   174 soup polys; UED22 writes `none` for 168.
+
+Kept in inbox (not moved to done): the texture-axis dedup is fixed, but N3 byte-exactness is blocked by
+the two spun-off items.
