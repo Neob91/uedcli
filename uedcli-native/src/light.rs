@@ -104,6 +104,12 @@ struct SurfBake {
     rec: LightMapIndex, // data_offset / i_light_actors filled during serial concat
     light_indices: Vec<i32>,
     bits: Vec<u8>,
+    /// True iff >=1 participating light passed the editor gather-pass predicate for this surf
+    /// (special_lit partition + backface + `GetVisibleSurfs` + `WorldLightRadius >= |PlaneDot|`) —
+    /// see `bake_surf`. Drives the EMPTY-RUN vs DARK distinction in `emit_record`: a listed surf
+    /// whose every lumel then fails the per-lumel radius/LOS test gets an empty run, not a `-1` dark
+    /// record.
+    visible_to_any_light: bool,
 }
 
 /// Grid-sizing (§4, editor rule pinned in spike §20 §22).  Returns `(size, scale, pan)` for one
@@ -452,11 +458,30 @@ pub fn bake(model: &mut Model, lights: &[LightInput]) -> Result<(), BuildError> 
 
 /// Append one baked surf's record + its shadow bits + its light run to the Model, and link the surf.
 /// Records are pushed in the caller's chosen order; `surf.i_light_map` is set to the pushed index.
+///
+/// Three record shapes, matching the editor (§2):
+/// - **Populated run** (`light_indices` non-empty): real bit-planes + a `-1`-terminated light run.
+/// - **Empty run** (`light_indices` empty but `visible_to_any_light`): a surf listed by the gather
+///   pass whose every listed light lit no lumel; slot allocated with a lone `-1` terminator, 0 bytes.
+/// - **Dark** (empty and not visible to any light): `DataOffset=0`, `iLightActors=-1`, no run.
 fn emit_record(model: &mut Model, b: SurfBake) {
     let mut rec = b.rec;
     if b.light_indices.is_empty() {
-        rec.data_offset = 0;
-        rec.i_light_actors = -1; // dark record (§2)
+        if b.visible_to_any_light {
+            // Empty run: the surf is in >=1 light's gather set but every such light lit no lumel
+            // (out of radius). The editor's gather pass allocates the run slot from surf visibility
+            // (radius-independent); the raytrace then prunes every light, leaving just the run's
+            // `-1` terminator and 0 shadow bytes. `data_offset` = current `LightBits` length (no
+            // bytes appended); `i_light_actors` = the run's start offset in `Lights`. Confirmed vs
+            // UED22 WanChai N=8 world Model rec 11 (DataOffset=16, iLightActors=30, one trailing
+            // `-1`). See `emit_record`'s doc comment and spike §20 §2.
+            rec.data_offset = model.light_bits.len() as i32;
+            rec.i_light_actors = model.lights.len() as i32;
+            model.lights.push(-1);
+        } else {
+            rec.data_offset = 0;
+            rec.i_light_actors = -1; // dark record (§2)
+        }
     } else {
         rec.data_offset = model.light_bits.len() as i32;
         model.light_bits.extend_from_slice(&b.bits);
@@ -597,11 +622,37 @@ fn bake_surf(
     let mut bits: Vec<u8> = Vec::new();
 
     let surf_special = s.poly_flags & PF_SPECIAL_LIT != 0;
+
+    // Editor gather-pass (`Editor 0x100a4ba0`) slot-allocation predicate: a surf earns a lightmap
+    // RUN (empty or populated) iff >=1 participating light passes ALL of the gather's own per-surf
+    // filters. Decoded 2026-09-05 from `0x100a4e60`-`0x100a4f10`:
+    //   1. special_lit partition (`0x100a4ea0`: `test [light+0x1a8],1` then `surf.PolyFlags &
+    //      0x100000`) — same as the loop's 663.
+    //   2. `GetVisibleSurfs` membership (the loop this decode sits in iterates its output) + backface
+    //      (inside `GetVisibleSurfs`, `light_in_front`) — same as 668/674.
+    //   3. `WorldLightRadius >= |PlaneDot(light)|` (`0x100a4e87` builds `FPlane(Base,Normal)`,
+    //      `0x100a4ec6` `FPlane::PlaneDot(light.Location)`, `andps` abs, `0x100a4ef7`
+    //      `comiss WorldLightRadius,|d| / jb skip`): the PERPENDICULAR distance from the light to the
+    //      surf's infinite plane, NOT a distance-to-surf and NOT the per-lumel radius test below.
+    // A light that lists the surf but lights no lumel (its per-lumel radius/LOS prunes every lumel)
+    // is dropped from the run by the raytrace, leaving an EMPTY run (a lone `-1` terminator, 0 bits) —
+    // NOT a `-1` dark record (`emit_record`). Confirmed vs UED22 WanChai N=8: this predicate keeps
+    // rec 11 (empty run) and correctly leaves rec 6/9 dark, where native's imperfect
+    // `GetVisibleSurfs` over-includes and both the plane test (broader) and native's own grid-corner
+    // coarse cull (641, narrower/different geometry) mis-slot at least one of the three.
+    let visible_to_any_light = lights.iter().enumerate().any(|(li, l)| {
+        l.special_lit == surf_special
+            && light_in_front(&normal, &base, &l.location, s.poly_flags)
+            && visible_per_light[li].contains(&(si as i32))
+            && l.location.sub(&base).dot(&normal).abs() <= l.world_radius()
+    });
+
     let Some((u_dir, v_dir)) = axes else {
-        // No basis, no grid to walk: the surface still gets its (dark) record.
+        // No basis, no grid to walk: the surface still gets its record (empty run if any light
+        // lists it, else dark).
         return Some(SurfBake { surf_index: si, rec: descriptor(u_size, v_size, u_scale, v_scale,
                                                               pan_x, pan_y),
-                               light_indices, bits });
+                               light_indices, bits, visible_to_any_light });
     };
 
     // Reach for the coarse per-light cull, measured from the GRID's four corners, not the surface's
@@ -698,6 +749,7 @@ fn bake_surf(
         rec,
         light_indices,
         bits,
+        visible_to_any_light,
     })
 }
 
@@ -863,6 +915,56 @@ mod tests {
         );
         // At least one lumel is actually lit (non-black).
         assert!(m.light_bits.iter().any(|&b| b != 0), "some lumel is lit");
+    }
+
+    #[test]
+    fn emit_record_populated_empty_and_dark_encodings() {
+        // Pins the WanChai N=8 fix's on-disk encoding directly on `emit_record`, independent of the
+        // (imperfect) visibility gather. Three record shapes, concatenated in one Model:
+        //   populated run (light_indices non-empty)  -> real bits + `[idx.., -1]` run
+        //   EMPTY run   (empty but visible_to_any)   -> DataOffset = current LightBits len (0 bytes
+        //                                               added), iLightActors = current Lights len,
+        //                                               a lone trailing `-1`  (the rec-11 shape)
+        //   dark        (empty and not visible)      -> DataOffset 0, iLightActors -1, no run
+        let mut m = build_geometry_from_brushes(&[box_brush(
+            256.0, 256.0, 128.0, Vec3::new(0.0, 0.0, 0.0), CsgOper::Subtract,
+        )])
+        .unwrap();
+        // Start from clean lightmap arrays (bake() would; here we drive emit_record directly).
+        m.light_map.clear();
+        m.light_bits.clear();
+        m.lights.clear();
+        for s in m.surfs.iter_mut() {
+            s.i_light_map = -1;
+        }
+        let rec = || descriptor(8, 8, 1.0, 1.0, 0.0, 0.0);
+        emit_record(&mut m, SurfBake { surf_index: 0, rec: rec(), light_indices: vec![0],
+                                       bits: vec![0xff; 8], visible_to_any_light: true });
+        emit_record(&mut m, SurfBake { surf_index: 1, rec: rec(), light_indices: vec![],
+                                       bits: vec![], visible_to_any_light: true });
+        emit_record(&mut m, SurfBake { surf_index: 2, rec: rec(), light_indices: vec![],
+                                       bits: vec![], visible_to_any_light: false });
+
+        // Populated: run at Lights[0] = [0, -1]; 8 bytes at DataOffset 0.
+        assert_eq!(m.light_map[0].data_offset, 0);
+        assert_eq!(m.light_map[0].i_light_actors, 0);
+        assert_eq!(&m.lights[0..2], &[0, -1]);
+        // Empty run: DataOffset = LightBits len so far (8), iLightActors = Lights len so far (2), a
+        // lone `-1` terminator appended, ZERO shadow bytes added -- the rec-11 shape.
+        assert_eq!(m.light_map[1].data_offset, 8);
+        assert_eq!(m.light_map[1].i_light_actors, 2);
+        assert_eq!(m.lights[2], -1);
+        // Dark: no slot into Lights, no bytes.
+        assert_eq!(m.light_map[2].data_offset, 0);
+        assert_eq!(m.light_map[2].i_light_actors, -1);
+        // Totals: Lights = [0,-1,-1] (empty run added exactly one entry), LightBits = the 8 populated
+        // bytes and nothing more.
+        assert_eq!(m.lights, vec![0, -1, -1]);
+        assert_eq!(m.light_bits.len(), 8);
+        // surf links point at their pushed record index.
+        assert_eq!(m.surfs[0].i_light_map, 0);
+        assert_eq!(m.surfs[1].i_light_map, 1);
+        assert_eq!(m.surfs[2].i_light_map, 2);
     }
 
     #[test]
@@ -1109,15 +1211,22 @@ mod tests {
     }
 
     #[test]
-    fn out_of_room_light_is_never_listed() {
-        // Room ±256/±256/±128 with a light placed FAR outside the box. No surface may list it:
-        // every record must be DARK (iLightActors == -1). NOTE: this is an out-of-range/occlusion
-        // invariant, NOT an isolated backface-cull test — the coarse radius cull alone already
-        // excludes a light this far away. The backface cull cannot be isolated at the bake() level
-        // in watertight geometry (clear LOS to a front face from behind its plane is geometrically
-        // impossible, so backface and LOS coincide there); the plane-side predicate itself is
-        // guarded directly by `light_in_front_matches_plane_side`, and the real-world effect by the
-        // in-game A/B in section 20 §17. The cull matters only against our leaky non-portalized LOS.
+    fn out_of_room_light_illuminates_nothing() {
+        // Room ±256/±256/±128 with a light placed FAR outside the box. An out-of-range light must
+        // ILLUMINATE nothing: zero lit lumels, and no wall gets a POPULATED light run. NOTE: this is
+        // an out-of-range guarantee, NOT an isolated backface-cull test — the coarse radius cull
+        // already excludes a light this far away. The plane-side predicate itself is guarded by
+        // `light_in_front_matches_plane_side`, and the real-world effect by the in-game A/B in
+        // section 20 §17.
+        //
+        // It no longer asserts "every record DARK (iLightActors == -1)": a surf VISIBLE to the light
+        // (radius-independent gather predicate) now gets an EMPTY run, not a dark record. This
+        // fixture is a single Subtract into pure void (`root_outside=true`, non-watertight BSP), so
+        // `GetVisibleSurfs` leaks — the far light's front-facing wall is "seen" and gets an empty-run
+        // slot. In a real WATERTIGHT level the far light is occluded and those surfs stay dark; the
+        // empty-run slot here is a fixture artifact of the non-enclosing BSP, harmless (0 bits) and
+        // orthogonal to the out-of-range guarantee this test pins. Whole-level parity is covered by
+        // the incremental gate, not this fixture.
         let mut m = build_geometry_from_brushes(&[box_brush(
             256.0,
             256.0,
@@ -1136,13 +1245,17 @@ mod tests {
         )
         .unwrap();
         assert_eq!(m.light_map.len(), 6);
-        for rec in &m.light_map {
-            assert_eq!(
-                rec.i_light_actors, -1,
-                "an out-of-room light must not appear in any wall's list"
-            );
-        }
         assert!(m.light_bits.is_empty(), "no lit bits for an unreachable light");
+        // No wall carries a real light in its run: every record is either dark (-1) or an empty run
+        // (starts on its `-1` terminator). Neither illuminates anything.
+        for rec in &m.light_map {
+            if rec.i_light_actors >= 0 {
+                assert_eq!(
+                    m.lights[rec.i_light_actors as usize], -1,
+                    "an out-of-range light must not populate any wall's run"
+                );
+            }
+        }
     }
 
     #[test]

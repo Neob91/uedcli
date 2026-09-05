@@ -46,3 +46,17 @@ GC/per-save artifact, NOT excludable. (The trailing `Lights` None on its own wou
 it is a symptom of the same missing lightmap record, not an independent artifact.) Fix native's bake so
 rec-11's surf gets the same light assignment / lightmap slot as the editor. Root cause in `light.rs` needs
 finishing before a port; owner decision on approach.
+
+## RESOLVED (2026-09-05)
+
+Fixed in `light.rs`. The editor's gather pass (`Editor 0x100a4ba0`, decoded `0x100a4e60`-`0x100a4f10`)
+allocates a lightmap RUN for a surf iff a light passes: special_lit partition + `GetVisibleSurfs` +
+backface + `WorldLightRadius >= |PlaneDot(light)|` (the PERPENDICULAR light-to-surf-plane distance,
+`FPlane::PlaneDot` at `0x100a4ec6` / `comiss ... jb` at `0x100a4ef7`) — NOT the per-lumel radius. A surf
+so listed but whose every lumel then fails the per-lumel radius/LOS gets an EMPTY run (a lone `-1`
+terminator, 0 bytes), not a `-1` dark record. Native folded the per-lumel radius into the slot decision;
+now it emits the empty run when `visible_to_any_light`. The plane-distance term is essential: a pure
+`GetVisibleSurfs`-membership predicate spuriously slots rec 6/9 (native's `GetVisibleSurfs` over-includes
+them, but they fail the plane test). WanChai N=8 now `PARITY: YES`; the other 23 lockstep cells
+(UNATCO/WanChai/NYC_Bar × N=1..8) are byte-structurally unchanged (no regression). Regression pinned by
+`emit_record_populated_empty_and_dark_encodings` in `light.rs`.
