@@ -73,14 +73,15 @@ def _pointregion_prop(name: str, *, zone: str, i_leaf: int = -1, zone_number: in
         Prop("ZoneNumber", PT_BYTE, zone_number)]), struct_name="PointRegion")
 
 
-def _trunk_to_actorspecs(level, schema, world_model=None):
+def _trunk_to_actorspecs(level, schema, world_model=None, zone_actors=None):
     """Convert trunk Actors to `ActorSpec`s carrying TYPED `FPropertyTag`s: each raw T3D
     `(key,value)` prop is typed via `props.convert_actor_props` against `schema` (an `ImportSchema`
     or a bare `schema_lookup` callback); `Location` is routed from the actor's typed field.
 
     `world_model` (the BUILT world Model) recomputes each placed actor's `Region` from the BSP the
     editor's `SetActorZone` descends after a rebuild; without it (unbuilt world) Region stays solid
-    `(iLeaf=-1, ZoneNumber=0)`.
+    `(iLeaf=-1, ZoneNumber=0)`. `zone_actors` (`{zone_number: actor_name}`, the same map that fills
+    `Model.Zones[].ZoneActor`) supplies the Region's Zone ref.
     Returns `(point_actors, brush_actors, warnings)`."""
     actors, brush_actors, warnings = [], [], []
     li_name = next((n for n, a in level.actors.items()
@@ -113,7 +114,11 @@ def _trunk_to_actorspecs(level, schema, world_model=None):
             if world_model is not None and getattr(world_model, "nodes", None) and short != "LevelInfo":
                 loc = tuple(float(c) for c in (a.location or (0.0, 0.0, 0.0)))
                 i_leaf, zone_number = _model_point_region(world_model, loc)
-            props.append(_pointregion_prop("Region", zone=li_name,
+            # `UModel::PointRegion` (`Engine 0x101aee60`) returns `Zones[iZone].ZoneActor` and falls
+            # back to the LevelInfo only when that slot is NULL (`0x101aef3e`-`0x101aef4a`), so an
+            # actor standing in a ZoneInfo's zone carries THAT actor, not the LevelInfo. Same
+            # `{zone: actor}` map `_patch_zone_refs` writes into `Model.Zones[].ZoneActor`.
+            props.append(_pointregion_prop("Region", zone=(zone_actors or {}).get(zone_number, li_name),
                                            i_leaf=i_leaf, zone_number=zone_number))
         # The editor RESETS these nav-runtime fields when a level is imported (they end up equal
         # to the class default and are omitted from the save -- UNATCO import golden, 2026-09-02);

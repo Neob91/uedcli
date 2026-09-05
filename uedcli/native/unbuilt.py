@@ -623,7 +623,8 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
     `table_oracle` (a golden `Package` or a `saveorder.TableSpec`) the name/import tables
     come pre-seeded; without it they are insertion-order."""
     actors, brush_actors, warnings = _trunk_to_actorspecs(level, schema or (lambda fqcn: {}),
-                                                          world_model=world_model)
+                                                          world_model=world_model,
+                                                          zone_actors=zone_actors)
     present = {a.name for a in actors + brush_actors}
     for spec in actors + brush_actors:
         spec.props = [p for pr in spec.props
@@ -907,7 +908,8 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
          lambda: _actor_body(asm, _BUILDER, "Engine.Brush",
                              [Prop("Level", AW.PT_OBJECT, ASM.ObjRef(li_name)),
                               Prop("Tag", AW.PT_NAME, "Brush"),      # Engine.Brush class-default Tag
-                              _pointregion_prop("Region", zone=li_name,
+                              _pointregion_prop("Region",
+                                                zone=(zone_actors or {}).get(builder_zone, li_name),
                                                 i_leaf=builder_leaf, zone_number=builder_zone),
                               Prop("Brush", AW.PT_OBJECT, ASM.ObjRef(_BUILDER_SHAPE))],
                              rank_for, warnings)),

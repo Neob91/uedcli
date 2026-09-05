@@ -147,6 +147,14 @@ def _canon_value(idt: Ident, t) -> object:
         nidx, rest = read_compact_index(t.raw, 0)
         name = _cf(p.names[nidx]) if 0 <= nidx < len(p.names) else nidx
         return ("ia", name, t.raw[rest:].hex())
+    if t.ptype == PT_STRUCT and t.struct_name in ("InventoryItem", "InventoryItemCarcass"):
+        # {class<Inventory> Inventory; int Count}. The leading field is an OBJECT ref and the two
+        # builds order their import tables differently (import ORDER is not asserted, only content),
+        # so the same class serializes under a different index on each side. Resolve it; the 4-byte
+        # Count tail stays byte-compared, so a wrong class or a wrong count still FAILS. (NYC_Bar
+        # N=25 `Jock0.InitialInventory`.)
+        ref, rest = read_compact_index(t.raw, 0)
+        return ("inv", idt.ref_identity(ref), t.raw[rest:].hex())
     # Any other struct/array/primitive: byte-faithful. A nested object ref inside such a value would
     # compare as raw bytes (its ref index may differ across export orders) -> a conservative FALSE
     # FAIL, never a false pass. No such case in the ladder's actors yet; extend if one appears.
