@@ -557,6 +557,10 @@ def _level_preview(args) -> int:
         print("--fov requires --native (the in-game tier renders at the game's own FOV)",
               file=sys.stderr)
         return 2
+    if use_game and args.faces is not None:
+        print("--faces requires --native (the in-game tier renders solid lit faces, "
+              "not a wireframe)", file=sys.stderr)
+        return 2
     if not use_game:
         for value, flag in ((args.map, "--map"), (args.rebuild, "--rebuild"),
                             (args.keep_alive, "--keep-alive")):
@@ -659,6 +663,24 @@ def _level_preview(args) -> int:
         alt_hint="use `stash diagram` / `prefab diagram` to render a captured set")
     src = level_sources.TrunkLevelSource(maps_dir / name)
     level = src.load()
+
+    if (args.faces or "textured") == "wire":
+        # wire is a content-free schematic: no CSG solve, no class hierarchy (mover-ness is
+        # name-guessed), no native extension. Point-actor render data is resolved HERE (dispatch owns
+        # schema/texture resolution) and passed down, keeping preview_wire resolver-free.
+        from .. import rendering
+        from ... import preview_wire
+        points = rendering._preview_point_data(list(level.actors.values()), args, set())
+        try:
+            n = preview_wire.render_shots(
+                level=level, shots=shots, out_dir=Path(args.out_dir), points=points, size=size,
+                fov=args.fov if args.fov is not None else DEFAULT_FOV)
+        except NativePreviewError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        print(f"wrote {n} shot(s) to {args.out_dir}")
+        return 0
+
     search_files = config.composed_search_files(project, user_config)
     try:
         n = render_shots(level=level, shots=shots, out_dir=Path(args.out_dir), size=size,

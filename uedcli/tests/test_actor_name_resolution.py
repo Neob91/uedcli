@@ -63,7 +63,7 @@ def _fake_src(level):
 
 def test_it_actor_move_resolves_case_insensitively(tmp_path, monkeypatch, capsys):
     args = SimpleNamespace(
-        cmd="actor", sub="move", name="brush1",
+        cmd="actor", sub="move", names=["brush1"],
         to=None, by=(Decimal(0), Decimal(0), Decimal(10)),
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
@@ -74,7 +74,7 @@ def test_it_actor_move_resolves_case_insensitively(tmp_path, monkeypatch, capsys
 
 def test_it_actor_move_errors_on_missing(tmp_path, monkeypatch, capsys):
     args = SimpleNamespace(
-        cmd="actor", sub="move", name="NoSuch",
+        cmd="actor", sub="move", names=["NoSuch"],
         to=None, by=(Decimal(0), Decimal(0), Decimal(10)),
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
@@ -82,20 +82,20 @@ def test_it_actor_move_errors_on_missing(tmp_path, monkeypatch, capsys):
         rc = dispatch_mod._dispatch(args)
     assert rc == 2
     err = capsys.readouterr().err
-    assert "Actor not found: NoSuch" in err
+    assert "Actors not found: NoSuch" in err
     assert "Traceback" not in err
 
 
 def test_it_actor_move_records_canonical_name(tmp_path, monkeypatch):
     args = SimpleNamespace(
-        cmd="actor", sub="move", name="brush1",
+        cmd="actor", sub="move", names=["brush1"],
         to=None, by=(Decimal(0), Decimal(0), Decimal(10)),
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
     with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         dispatch_mod._dispatch(args)
     saved = src.save.call_args.kwargs
-    assert saved["args"]["name"] == "Brush1"
+    assert saved["args"]["names"] == ["Brush1"]
     # Canonical names are the level's dict keys — the raw-case name is never a key.
     assert "Brush1" in saved["level"].actors
     assert "brush1" not in saved["level"].actors
@@ -104,14 +104,14 @@ def test_it_actor_move_records_canonical_name(tmp_path, monkeypatch):
 def test_it_actor_move_records_canonical_name_in_touched(tmp_path, monkeypatch):
     """The write must record the canonical name, not the user-typed name."""
     args = SimpleNamespace(
-        cmd="actor", sub="move", name="brush1",
+        cmd="actor", sub="move", names=["brush1"],
         to=None, by=(Decimal(0), Decimal(0), Decimal(10)),
         container="dx-lum-uned")
     src = _fake_src(_fixture_level())
     with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         dispatch_mod._dispatch(args)
     saved = src.save.call_args.kwargs
-    assert saved["args"]["name"] == "Brush1"
+    assert saved["args"]["names"] == ["Brush1"]
     assert saved["touched"] == ["Brush1"]
     assert "Brush1" in saved["level"].actors
     assert "brush1" not in saved["level"].actors

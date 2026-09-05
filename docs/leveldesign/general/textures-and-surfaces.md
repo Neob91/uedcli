@@ -9,18 +9,19 @@ uedcli edits surfaces model-side. Find faces, then set them:
 
 ```
 brush poly find Wall1                               # print ALL faces of brush Wall1 (positional name)
-brush poly find Wall1 --facing +Z                   # or filter by facing: +Z floor / -Z ceiling / +X,±Y wall
+brush poly find Wall1 --facing floor                # or filter by facing: floor / ceiling / wall presets
 brush poly find Wall1 | brush poly set - --texture CoreTexMetal.ClenGrayMetal_A
-brush poly find Wall1 --facing +X | brush poly set - --add-flag Masked --remove-flag Unlit
+brush poly find Wall1 --facing nx:1 | brush poly set - --add-flag Masked --remove-flag Unlit
 brush poly find Sign | brush poly pan - --by 0,32                      # nudge alignment (whole texels)
 brush poly find Sign | brush poly rotate - --by 16384                   # turn the texture a quarter turn
 brush poly find Sign | brush poly scale - --by 2,2                      # make the texture look twice as big
-brush poly find Floor1 --facing +Z | brush poly align - --floor        # auto-align (the `-` reads the piped faces)
+brush poly find Floor1 --facing floor | brush poly align - --floor     # auto-align (the `-` reads the piped faces)
 ```
 
-- `brush poly find <BrushName>` prints matching `BRUSH:idx` faces for another verb to consume. The
-  brush name is positional; narrow the set with `--facing +X|-X|+Y|-Y|+Z|-Z|slant` (floor `+Z`,
-  ceiling `-Z`, wall `+X` or `±Y`), `--item NAME`, or `--texture REF`.
+- `brush poly find <BrushName…>` prints matching `BRUSH:idx` faces for another verb to consume. The
+  brush name is positional (one or more, or `-` for a piped set); narrow with `--facing SPEC` —
+  presets `floor`/`ceiling`/`flat`/`wall`/`ramp`, or a predicate on the visible normal
+  (`nx:1`, `nz:-1,1`, `wall;ny:0.7..1`) — `--item NAME`, or `--texture REF`.
 - `brush poly set` assigns a face's stored attributes — texture and surface flags.
 - `brush poly pan|rotate|scale` transform the texture frame on stdin faces: where the pattern sits,
   which way up it runs, how big it is.

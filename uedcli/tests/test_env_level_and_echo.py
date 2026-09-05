@@ -29,7 +29,7 @@ def _project(tmp_path, monkeypatch, name="lvl", *, env=True):
 
 
 def _move(proj, **over):
-    kw = dict(cmd="actor", sub="move", name="Wall", to=(Decimal(9), Decimal(0), Decimal(0)),
+    kw = dict(cmd="actor", sub="move", names=["Wall"], to=(Decimal(9), Decimal(0), Decimal(0)),
               by=None, project=str(proj))
     kw.update(over)
     return _ns(**kw)

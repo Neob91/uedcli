@@ -12,7 +12,9 @@
     "namespace": {
       "by": null,
       "cmd": "actor",
-      "name": "L1",
+      "names": [
+        "L1"
+      ],
       "project": null,
       "sub": "move",
       "to": [
@@ -136,16 +138,18 @@
       "find",
       "B1",
       "--facing",
-      "-Z"
+      "floor"
     ],
     "outcome": "parsed",
     "exit_code": null,
     "namespace": {
       "cmd": "brush",
-      "facing": "-Z",
+      "facing": "floor",
       "item": null,
       "json": false,
-      "name": "B1",
+      "names": [
+        "B1"
+      ],
       "polysub": "find",
       "project": null,
       "sub": "poly",
@@ -162,16 +166,18 @@
       "find",
       "B1",
       "--facing",
-      "-X"
+      "nz:-1,1"
     ],
     "outcome": "parsed",
     "exit_code": null,
     "namespace": {
       "cmd": "brush",
-      "facing": "-X",
+      "facing": "nz:-1,1",
       "item": null,
       "json": false,
-      "name": "B1",
+      "names": [
+        "B1"
+      ],
       "polysub": "find",
       "project": null,
       "sub": "poly",
@@ -187,17 +193,21 @@
       "poly",
       "find",
       "B1",
+      "B2",
       "--facing",
-      "+Y"
+      "wall;ny:0.7..1"
     ],
     "outcome": "parsed",
     "exit_code": null,
     "namespace": {
       "cmd": "brush",
-      "facing": "+Y",
+      "facing": "wall;ny:0.7..1",
       "item": null,
       "json": false,
-      "name": "B1",
+      "names": [
+        "B1",
+        "B2"
+      ],
       "polysub": "find",
       "project": null,
       "sub": "poly",
@@ -387,7 +397,7 @@
     "exit_code": 2,
     "namespace": null,
     "stdout": "",
-    "stderr": "usage: uedcli level photo [-h] [--out-dir DIR] [--list-actors Package.Class]\n                          [--sample N] [--native | --game] [--size WxH]\n                          [--fov DEG] [--map PATH] [--rebuild] [--keep-alive]\n                          [--tree level/NAME]\n                          [SHOT ...]\nuedcli level photo: error: argument --game: not allowed with argument --native\n"
+    "stderr": "usage: uedcli level photo [-h] [--out-dir DIR] [--list-actors Package.Class]\n                          [--sample N] [--native | --game] [--size WxH]\n                          [--fov DEG] [--faces {wire,textured}] [--map PATH]\n                          [--rebuild] [--keep-alive] [--tree level/NAME]\n                          [SHOT ...]\nuedcli level photo: error: argument --game: not allowed with argument --native\n"
   },
   {
     "argv": [
@@ -453,7 +463,7 @@
     "outcome": "exit",
     "exit_code": 0,
     "namespace": null,
-    "stdout": "usage: uedcli actor [-h]\n                    {find,show,duplicate,folder,label,build,add,order,delete,bbox,move,prop,rotate,diagram}\n                    ...\n\npositional arguments:\n  {find,show,duplicate,folder,label,build,add,order,delete,bbox,move,prop,rotate,diagram}\n    find                print names of matching actors (one per line) for\n                        piping into name-taking verbs; with no filters, prints\n                        every actor\n    show                print named actors' full T3D blocks\n    duplicate           copy one or more actors (sugar for `actor show <names>\n                        | actor add -`): each copy gets a fresh Name, is\n                        appended last in CSG order, INHERITS its source's\n                        labels, and additionally gets one fresh `dup-<rand>`\n                        batch label (so the whole copied batch is re-\n                        addressable via `actor find --label dup-<rand>`). A\n                        placement is REQUIRED (--by or --at) so copies never\n                        silently overlap their originals. Prints the allocated\n                        Names to stdout (one per line); the count + batch\n                        label go to stderr\n    folder              manage an actor's uedcli-side FOLDER: a hierarchical\n                        dotted organization path (castle.tower.roof) stored in\n                        a trunk sidecar — NOT the T3D Group prop, never\n                        emitted to the built map. Sub-verbs: set / unset / get\n                        / rename\n    label               manage an actor's uedcli-side LABELS: a flat, multi-\n                        valued set of classification tokens (lighting,\n                        flammable, dup-a1f) stored in a trunk sidecar —\n                        orthogonal to the FOLDER path, the T3D Group prop, and\n                        the T3D Tag prop, never emitted to the built map. Sub-\n                        verbs: add / remove / clear / get. Level-only (rejects\n                        --tree stash|prefab)\n    build               build a point actor T3D and write to stdout\n                        (stateless; no level needed)\n    add                 add actors from a T3D file (or - for stdin) to the\n                        $UEDCLI_LEVEL's trunk\n    order               reorder EXISTING actors' CSG precedence by minting new\n                        order_values (no geometry change). CSG order is the\n                        (order_value, name) sort; --first makes an actor\n                        carve/add BEFORE everything else. Multiple actors move\n                        as a block preserving their relative order\n    delete              delete one or more actors from $UEDCLI_LEVEL\n    bbox                print the world axis-aligned bounding box\n                        (min/max/size/center) enclosing the given actors — ONE\n                        box over the whole set (a single actor prints its own\n                        box; the multi-actor case IS the union, so there is no\n                        --union flag: `actor find --folder castle.* | actor\n                        bbox -` gives the union). Honours each actor's\n                        rotation/scale/location; a point actor contributes a\n                        zero-size box at its Location\n    move                move a single actor to/by a world coordinate\n    prop                read, set, or clear an actor's properties model-side,\n                        validated against the actor's class schema (no\n                        editor). Sub-verbs: set / unset / get\n    rotate              rotate a group of actors around a pivot\n                        (PITCH,YAW,ROLL in unreal rotation units, 16384 = 90°)\n    diagram             self-rendered orthographic wireframe of actors from\n                        $UEDCLI_LEVEL (brushes coloured by CSG op; point\n                        actors as sprites/markers). Model-side, host-only — no\n                        editor\n\noptions:\n  -h, --help            show this help message and exit\n",
+    "stdout": "usage: uedcli actor [-h]\n                    {find,show,duplicate,folder,label,build,add,order,delete,bbox,move,prop,rotate,diagram}\n                    ...\n\npositional arguments:\n  {find,show,duplicate,folder,label,build,add,order,delete,bbox,move,prop,rotate,diagram}\n    find                print names of matching actors (one per line) for\n                        piping into name-taking verbs; with no filters, prints\n                        every actor\n    show                print named actors' full T3D blocks\n    duplicate           copy one or more actors (sugar for `actor show <names>\n                        | actor add -`): each copy gets a fresh Name, is\n                        appended last in CSG order, INHERITS its source's\n                        labels, and additionally gets one fresh `dup-<rand>`\n                        batch label (so the whole copied batch is re-\n                        addressable via `actor find --label dup-<rand>`). A\n                        placement is REQUIRED (--by or --at) so copies never\n                        silently overlap their originals. Prints the allocated\n                        Names to stdout (one per line); the count + batch\n                        label go to stderr\n    folder              manage an actor's uedcli-side FOLDER: a hierarchical\n                        dotted organization path (castle.tower.roof) stored in\n                        a trunk sidecar — NOT the T3D Group prop, never\n                        emitted to the built map. Sub-verbs: set / unset / get\n                        / rename\n    label               manage an actor's uedcli-side LABELS: a flat, multi-\n                        valued set of classification tokens (lighting,\n                        flammable, dup-a1f) stored in a trunk sidecar —\n                        orthogonal to the FOLDER path, the T3D Group prop, and\n                        the T3D Tag prop, never emitted to the built map. Sub-\n                        verbs: add / remove / clear / get. Level-only (rejects\n                        --tree stash|prefab)\n    build               build a point actor T3D and write to stdout\n                        (stateless; no level needed)\n    add                 add actors from a T3D file (or - for stdin) to the\n                        $UEDCLI_LEVEL's trunk\n    order               reorder EXISTING actors' CSG precedence by minting new\n                        order_values (no geometry change). CSG order is the\n                        (order_value, name) sort; --first makes an actor\n                        carve/add BEFORE everything else. Multiple actors move\n                        as a block preserving their relative order\n    delete              delete one or more actors from $UEDCLI_LEVEL\n    bbox                print the world axis-aligned bounding box\n                        (min/max/size/center) enclosing the given actors — ONE\n                        box over the whole set (a single actor prints its own\n                        box; the multi-actor case IS the union, so there is no\n                        --union flag: `actor find --folder castle.* | actor\n                        bbox -` gives the union). Honours each actor's\n                        rotation/scale/location; a point actor contributes a\n                        zero-size box at its Location\n    move                move actor(s) by a world delta (--by, any count) or\n                        one actor to an absolute point (--to)\n    prop                read, set, or clear an actor's properties model-side,\n                        validated against the actor's class schema (no\n                        editor). Sub-verbs: set / unset / get\n    rotate              rotate a group of actors around a pivot\n                        (PITCH,YAW,ROLL in unreal rotation units, 16384 = 90°)\n    diagram             self-rendered orthographic wireframe of actors from\n                        $UEDCLI_LEVEL (brushes coloured by CSG op; point\n                        actors as sprites/markers). Model-side, host-only — no\n                        editor\n\noptions:\n  -h, --help            show this help message and exit\n",
     "stderr": ""
   }
 ]

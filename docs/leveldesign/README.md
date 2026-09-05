@@ -46,7 +46,7 @@ The four verb families you compose:
 | ---------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- | --- |
 | `brush build <shape>`                                            | *generator* — prints a T3D actor (a CSG brush or a mover)                                                           | `brush build cylinder --height 256 --radius 128 --sides 8` |
 | `actor build <Class>` / `actor add -`                            | *generator* / *writer* — build a point actor; write any snippet into the trunk                                      | `actor build Engine.Light --prop … \| actor add -` |
-| `brush poly find` / `set` / `pan` / `rotate` / `scale` / `align` | per-surface edits: pick the faces, set their texture + flags, then move / turn / resize / align the texture on them | `brush poly find Room1 --facing +Z \| brush poly set - --texture …` |
+| `brush poly find` / `set` / `pan` / `rotate` / `scale` / `align` | per-surface edits: pick the faces, set their texture + flags, then move / turn / resize / align the texture on them | `brush poly find Room1 --facing floor \| brush poly set - --texture …` |
 | `actor prop set` / `actor order` / `mover key`                   | per-actor property, CSG-order, and mover-keyframe edits                                                             | `actor prop set Door1 MoveTime=1.5` (`bLocked` etc. are DX `DeusExMover` props — see deusex/) |
 
 How it builds. The T3D trunk is the source of truth (committed to git). `level materialize` drives

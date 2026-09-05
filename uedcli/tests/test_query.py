@@ -259,13 +259,17 @@ def test_list_polys_cube_metadata():
     a = parse_t3d(read_fixture("brush_subtract.t3d")).actors["Brush938"]
     rows = list_polys(a)
     assert len(rows) == len(a.brush.polys)
-    facings = {r["facing"] for r in rows}
-    assert facings & {"+X", "-X", "+Y", "-Y", "+Z", "-Z"}     # axis-aligned faces named
+    orientations = {r["orientation"] for r in rows}
+    assert orientations == {"flat", "wall"}                    # 2 caps + 4 sides on this brush
+    # SUBTRACT brush: the top cap (local +Z) is VISIBLE as the ceiling, the bottom as the floor.
+    assert {r["role"] for r in rows} == {"floor", "ceiling", None}
     r0 = rows[0]
-    assert set(r0) == {"idx", "facing", "texture", "flags", "pan", "centroid", "area", "nverts"}
-    assert r0["area"] > 0 and r0["nverts"] >= 3
+    assert set(r0) == {"idx", "normal", "orientation", "role", "texture", "flags", "pan",
+                       "centroid", "area", "nverts"}
+    assert len(r0["normal"]) == 3 and r0["area"] > 0 and r0["nverts"] >= 3
     table = format_polys(a, "Brush938")
-    assert "Brush938:" in table and "facing" in table
+    assert "Brush938:" in table and "facing" in table         # column header kept; values are orient
+    assert "flat" in table and "wall" in table
     assert r0["pan"] is None       # unset on this fixture; format_polys prints '-'
     assert " - " in table
 
@@ -324,9 +328,10 @@ def _yawed_brush_t3d(name="B"):
 
 def test_list_polys_applies_actor_rotation_to_facing_and_centroid():
     # The single -Y-facing poly, yawed 90° about Z, faces +X in world space (-Y → +X under
-    # (x,y)->(-y,x)). Its local centroid (32,0,8) orbits to world (0,32,8).
+    # (x,y)->(-y,x)). Its local centroid (32,0,8) orbits to world (0,32,8). CSG_Add → no flip.
     rows = list_polys(_yawed_brush_t3d())
-    assert rows[0]["facing"] == "+X"
+    assert rows[0]["normal"] == [1.0, 0.0, 0.0]      # rotation applied to the visible normal
+    assert rows[0]["orientation"] == "wall"
     assert rows[0]["centroid"] == (0, 32, 8)
 
 
@@ -334,9 +339,13 @@ def test_list_polys_unrotated_brush_is_unchanged():
     a = make_brush_actor("B1", cube(64, 64, 64),
                          location=(Decimal(100), Decimal(200), Decimal(300)))
     rows = list_polys(a)
-    # cube centered on origin → world centroids at Location ± 32 on each face axis
-    facings = sorted(r["facing"] for r in rows)
-    assert facings == ["+X", "+Y", "+Z", "-X", "-Y", "-Z"]
+    # cube centered on origin → the 6 visible normals are the 6 unit axes (CSG_Add → no flip)
+    normals = sorted(tuple(r["normal"]) for r in rows)
+    assert normals == [(-1.0, 0.0, 0.0), (0.0, -1.0, 0.0), (0.0, 0.0, -1.0),
+                       (0.0, 0.0, 1.0), (0.0, 1.0, 0.0), (1.0, 0.0, 0.0)]
+    from collections import Counter
+    assert Counter(r["orientation"] for r in rows) == {"wall": 4, "flat": 2}
+    assert {r["role"] for r in rows} == {"floor", "ceiling", None}
 
 
 def test_list_vertices_applies_rotation_and_keeps_decimal_for_unrotated():

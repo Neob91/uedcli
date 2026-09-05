@@ -556,20 +556,31 @@ def register(sub) -> None:
     # `poly find`: a stateless PRODUCER — prints matching `BRUSH:idx` selectors (one per line) that
     # `brush poly align -` / `brush poly set` consume. Narrows a brush's faces by intrinsic labels.
     pfind = psub.add_parser(
-        "find", help="print a brush's matching faces as BRUSH:idx selectors (feed to poly align/set)")
-    pfind.add_argument("name", help="brush actor Name to search the polys of (case-insensitive)")
+        "find", help="print matching faces of one or more brushes as BRUSH:idx selectors (feed to "
+                     "poly align/set)")
+    pfind.add_argument("names", nargs="+", metavar="NAME",
+                       help="brush actor Name(s) to search (case-insensitive), or the single token "
+                            "- to read the set from stdin (bare names, or the BRUSH:idx lines a "
+                            "prior find/per-face verb prints — the :idx is stripped to the brush). "
+                            "- is the sole source, not mixable; empty stdin is a clean no-op. A "
+                            "non-brush actor is warned and skipped; an unknown name is an error")
     pfind.add_argument("--item", default=None, metavar="NAME",
                        help="keep only faces whose builder ItemName equals NAME (case-insensitive; "
                             "e.g. Side to drop a cylinder's Cap faces)")
-    pfind.add_argument("--facing", default=None, metavar="DIR",
-                       help="keep only faces snapping to this outward facing: "
-                            "+X|-X|+Y|-Y|+Z|-Z|slant")
+    pfind.add_argument("--facing", default=None, metavar="SPEC",
+                       help="keep only faces whose VISIBLE normal matches SPEC (';'=AND, ','=OR on "
+                            "one axis, '..'=range). Presets: flat|wall|ramp (orientation) and "
+                            "floor|ceiling (up/down role). Or AXIS:SPEC on nx|ny|nz components in "
+                            "[-1,1], e.g. 'floor', 'wall;ny:0.7..1', 'nz:-1,1' (flat), 'nx:1'. "
+                            "Polarity is resolved for subtract brushes, so 'floor' is the walkable "
+                            "surface even in a carved room")
     pfind.add_argument("--texture", default=None, metavar="REF",
                        help="keep only faces textured with REF (case-insensitive; exact ref or its "
                             "last dot-component)")
     pfind.add_argument("--json", action="store_true",
-                       help="emit the matches as a JSON array of {brush,poly,item,facing,texture} "
-                            "objects instead of BRUSH:idx lines")
+                       help="emit the matches as a JSON array of "
+                            "{brush,poly,item,normal,orientation,role,texture} objects instead of "
+                            "BRUSH:idx lines")
     _tree_flag(pfind)
 
     # `poly align`: make a texture flow continuously across a face set (model-side). Exactly one

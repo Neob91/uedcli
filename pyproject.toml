@@ -7,6 +7,7 @@ name = "uedcli"
 version = "0.1.0"
 description = "Editor-automation CLI for UnrealEngine-1 games (Deus Ex substrate) — queryable, scriptable, auditable level design as text"
 requires-python = ">=3.12"
+license = { text = "MIT" }
 # Pillow is the ONLY third-party runtime dependency (texture-catalog decode); everything else
 # uedcli imports is stdlib. Pinned to a floor for the deterministic NEAREST-resample color
 # derivation (dev/docs/direction/asset-catalog.md, 2026-06-22).

@@ -18,17 +18,10 @@ from ...preview import DEFAULT_ANNOTATIONS
 # without the awkward --at=-32,-32,32 equals form.
 _COORD_TOKEN = re.compile(r"^[-+]?[0-9.]+(,[-+]?[0-9.]+)*$")
 
-# The negative-facing VALUES for `--facing` (`brush poly find/align`): `-X`/`-Y`/`-Z`. argparse would
-# otherwise read a leading-dash token as an option, forcing the `--facing=-Z` equals form. No
-# single-dash option of these spellings exists in the CLI (only `-h`), so treating them as values is
-# unambiguous. (Uppercase only — `-h` stays help.)
-_FACING_NEG = re.compile(r"^-[XYZ]$")
-
-
 class _CoordArgumentParser(argparse.ArgumentParser):
     def _parse_optional(self, arg_string):
-        if _COORD_TOKEN.match(arg_string) or _FACING_NEG.match(arg_string):
-            return None                  # a bare coord token (`-512,0,256`) or a `-X/-Y/-Z` facing is a value
+        if _COORD_TOKEN.match(arg_string):
+            return None                  # a bare coord token (`-512,0,256`) is a value, not an option
         return super()._parse_optional(arg_string)   # VALUE for --at-style verbs, not an option
 
 

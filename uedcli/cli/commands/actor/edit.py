@@ -46,26 +46,38 @@ def run(args) -> int:
 
 
 def _move(args, src) -> int:
-    """`actor move <name> (--to|--by)` — set or shift one actor's Location. PRODUCER: the moved name
-    to stdout."""
+    """`actor move <names…|-> (--to|--by)` — translate a set by a world delta (--by, any count) or
+    set one actor's Location to an absolute point (--to). PRODUCER: moved names to stdout."""
+    raw = target_names.resolve_target_names(args.names)          # `-` → names from stdin
+    if not raw:
+        return 0                                      # empty stdin: no-op, exit 0
     level = src.load()
     try:
-        canonical = query.resolve_actor_name(level, args.name)
-    except KeyError as e:
+        resolved = query.resolve_actor_names(level, raw)
+    except KeyError as e:                            # unknown actor → exit 2 (all-or-nothing)
         print(e.args[0], file=sys.stderr)
         return 2
-    a = level.actors[canonical]
-    loc = a.location or (Decimal(0), Decimal(0), Decimal(0))
-    record_args = {"name": canonical}
+    # Dedupe on CANONICAL names (order-preserving): a repeated name is the SAME actor object, and
+    # `--by` applied twice would double-move it. The `--to` arity gate runs AFTER this, so a name
+    # piped twice dedupes to one and succeeds.
+    names = list(dict.fromkeys(resolved))
     if args.to is not None:
-        a.location = tuple(args.to)
-        record_args["to"] = [str(c) for c in args.to]
-    elif args.by is not None:
-        a.location = tuple(loc[i] + args.by[i] for i in range(3))
-        record_args["by"] = [str(c) for c in args.by]
-    src.save(verb="move", args=record_args, level=level, touched=[canonical])
-    print(canonical)                                 # PRODUCER: moved name → stdout (feed `| verb -`)
-    print(f"moved {canonical}", file=sys.stderr)
+        if len(names) > 1:
+            print(f"actor move --to moves ONE actor to an absolute point; got {len(names)} "
+                  f"(use --by for a set, or move one at a time)", file=sys.stderr)
+            return 2
+        level.actors[names[0]].location = tuple(args.to)
+        record_args = {"names": names, "to": [str(c) for c in args.to]}
+    else:                                             # --by: rigid translation of every target
+        for name in names:
+            a = level.actors[name]
+            loc = a.location or (Decimal(0), Decimal(0), Decimal(0))
+            a.location = tuple(loc[i] + args.by[i] for i in range(3))
+        record_args = {"names": names, "by": [str(c) for c in args.by]}
+    src.save(verb="move", args=record_args, level=level, touched=names)
+    for name in names:                               # PRODUCER: moved names to stdout (feed `| verb -`)
+        print(name)
+    print(f"moved {len(names)} actor(s)", file=sys.stderr)
     return 0
 
 

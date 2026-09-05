@@ -436,7 +436,7 @@ def test_move_prints_moved_name_to_stdout(tmp_path, monkeypatch, capsys):
     _point_project(tmp_path, monkeypatch, ["A_1"])
     assert _run(["actor", "move", "A_1", "--by", "0,0,64"]) == 0
     cap = capsys.readouterr()
-    assert cap.out == "A_1\n" and "moved A_1" in cap.err
+    assert cap.out == "A_1\n" and "moved 1 actor(s)" in cap.err
 
 
 def test_poly_set_prints_the_touched_faces_as_selectors_to_stdout(tmp_path, monkeypatch, capsys):

@@ -96,6 +96,10 @@ def _rotate_args(names):
                            pivot=None, pivot_actor=None, container="x")
 
 
+def _move_args(names, *, by=(Decimal(0), Decimal(0), Decimal(10)), to=None):
+    return SimpleNamespace(cmd="actor", sub="move", names=list(names), by=by, to=to, container="x")
+
+
 def _prop_args(propsub, name, tokens=(), *, kv=False):
     return SimpleNamespace(cmd="actor", sub="prop", propsub=propsub, name=name,
                            tokens=list(tokens), kv=kv)
@@ -193,6 +197,114 @@ def test_rotate_dash_unknown_piped_name_exit2(capsys):
     assert rc == 2
     assert "Actors not found: Nope" in capsys.readouterr().err
     src.save.assert_not_called()
+
+
+# ── move - (set --by, single --to) ──────────────────────────────────────────────────
+
+def _lv3():
+    lv = Level()
+    for n in ("A", "B", "C"):
+        lv.actors[n] = _actor(n, location=(0, 0, 0))
+    lv.order = ["A", "B", "C"]
+    return lv
+
+
+def test_move_dash_by_translates_every_piped_actor():
+    lv = _lv3()
+    rc, src = _drive(_move_args(["-"]), lv, stdin="A\nB\nC\n")
+    assert rc == 0
+    saved = src.save.call_args.kwargs
+    assert saved["args"]["names"] == ["A", "B", "C"]        # output/order preserved
+    d10 = (Decimal(0), Decimal(0), Decimal(10))
+    assert all(saved["level"].actors[n].location == d10 for n in ("A", "B", "C"))
+
+
+def test_move_dash_by_negative_delta_lands_correctly():
+    lv = _lv3()
+    rc, src = _drive(_move_args(["-"], by=(Decimal(0), Decimal(0), Decimal(-64))),
+                     lv, stdin="A\n")
+    assert rc == 0
+    assert src.save.call_args.kwargs["level"].actors["A"].location \
+        == (Decimal(0), Decimal(0), Decimal(-64))
+
+
+def test_move_dash_by_dedupes_so_a_repeat_moves_once():
+    # `--by` twice would DOUBLE-move — the motivating dedupe hazard (unlike delete's re-pop).
+    lv = _lv3()
+    rc, src = _drive(_move_args(["-"]), lv, stdin="A\na\nA\n")
+    assert rc == 0
+    saved = src.save.call_args.kwargs
+    assert saved["args"]["names"] == ["A"]
+    assert saved["level"].actors["A"].location == (Decimal(0), Decimal(0), Decimal(10))  # once
+
+
+def test_move_dash_by_unset_location_becomes_the_delta():
+    lv = Level()
+    lv.actors["A"] = _actor("A", location=None)            # no stored Location → treat as origin
+    lv.order = ["A"]
+    rc, src = _drive(_move_args(["-"]), lv, stdin="A\n")
+    assert rc == 0
+    assert src.save.call_args.kwargs["level"].actors["A"].location \
+        == (Decimal(0), Decimal(0), Decimal(10))
+
+
+def test_move_dash_to_single_piped_name_works():
+    lv = _lv3()
+    rc, src = _drive(_move_args(["-"], by=None, to=(Decimal(1), Decimal(2), Decimal(3))),
+                     lv, stdin="A\n")
+    assert rc == 0
+    assert src.save.call_args.kwargs["level"].actors["A"].location \
+        == (Decimal(1), Decimal(2), Decimal(3))
+
+
+def test_move_dash_to_name_piped_twice_dedupes_and_succeeds():
+    # Gate-after-dedupe (spec §3 step 3): one name piped twice is ONE actor → --to succeeds.
+    lv = _lv3()
+    rc, src = _drive(_move_args(["-"], by=None, to=(Decimal(1), Decimal(2), Decimal(3))),
+                     lv, stdin="A\nA\n")
+    assert rc == 0
+    assert src.save.call_args.kwargs["args"]["names"] == ["A"]
+
+
+def test_move_to_two_named_actors_exit2(capsys):
+    lv = _lv3()
+    rc, src = _drive(_move_args(["A", "B"], by=None, to=(Decimal(1), Decimal(2), Decimal(3))), lv)
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "got 2" in err and "--by" in err
+    src.save.assert_not_called()
+
+
+def test_move_dash_to_two_name_set_exit2(capsys):
+    lv = _lv3()
+    rc, src = _drive(_move_args(["-"], by=None, to=(Decimal(1), Decimal(2), Decimal(3))),
+                     lv, stdin="A\nB\n")
+    assert rc == 2
+    assert "got 2" in capsys.readouterr().err
+    src.save.assert_not_called()
+
+
+def test_move_dash_empty_stdin_is_noop_exit0(capsys):
+    lv = _lv3()
+    rc, src = _drive(_move_args(["-"]), lv, stdin="")
+    assert rc == 0
+    src.save.assert_not_called()
+    assert capsys.readouterr().out == ""
+
+
+def test_move_dash_unknown_piped_name_exit2(capsys):
+    lv = _lv3()
+    rc, src = _drive(_move_args(["-"]), lv, stdin="Nope\n")
+    assert rc == 2
+    assert "Actors not found: Nope" in capsys.readouterr().err
+    src.save.assert_not_called()
+
+
+def test_move_single_named_summary_is_the_count_form(capsys):
+    lv = _lv3()
+    rc, _src = _drive(_move_args(["A"]), lv)
+    assert rc == 0
+    assert "moved 1 actor(s)" in capsys.readouterr().err   # NOT the old `moved A` string
 
 
 # ── prop set - (multi-actor, two-phase atomic) ──────────────────────────────────────
@@ -391,18 +503,6 @@ def test_duplicate_folder_override_stamps_the_copy(capsys):
     assert rc == 0
     new = capsys.readouterr().out.strip()
     assert lv.actors[new].folder == "deco.lamps"
-
-
-# ── move does NOT accept - ───────────────────────────────────────────────────────────
-
-def test_move_dash_is_treated_as_an_unknown_actor_not_stdin(capsys):
-    lv = _two_actor_level()
-    args = SimpleNamespace(cmd="actor", sub="move", name="-",
-                           to=(Decimal(1), Decimal(2), Decimal(3)), by=None, container="x")
-    rc, src = _drive(args, lv, stdin="Wall1\n")
-    assert rc == 2
-    assert "Actor not found: -" in capsys.readouterr().err
-    src.save.assert_not_called()
 
 
 # ── end-to-end: build | add - | prop set - ──────────────────────────────────────────

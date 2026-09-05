@@ -33,20 +33,33 @@ def decode_flags(flags: int) -> list[str]:
     return names or ["none"]
 
 
-def _poly_facing(verts3d) -> str:
-    """Snap a face's outward normal to ±X/±Y/±Z, or 'slant' if not near an axis."""
-    n = newell(verts3d)
-    m = math.sqrt(sum(c * c for c in n)) or 1.0
-    u = [c / m for c in n]
-    axes = [("+X", (1, 0, 0)), ("-X", (-1, 0, 0)), ("+Y", (0, 1, 0)),
-            ("-Y", (0, -1, 0)), ("+Z", (0, 0, 1)), ("-Z", (0, 0, -1))]
-    name, axis = max(axes, key=lambda a: sum(u[i] * a[1][i] for i in range(3)))
-    return name if sum(u[i] * axis[i] for i in range(3)) > 0.98 else "slant"
+def visible_normal(actor: Actor, poly) -> tuple[float, float, float]:
+    """A poly's VISIBLE outward unit normal in world space: the LOCAL Newell normal mapped by the
+    actor's covariant transform `(L⁻¹)ᵀ` (correct under rotation, non-uniform scale, shear, AND
+    reflection — unlike Newell recomputed on world verts), then NEGATED for a subtract brush, whose
+    playable surfaces face OPPOSITE the geometric outward normal. Returns (0,0,0) for a degenerate
+    (zero-area) face. `L=None` (unrotated+unscaled) skips the matrix, keeping the fast path."""
+    from .rotation import actor_linear, matvec
+    n = newell([(float(v[0]), float(v[1]), float(v[2])) for v in poly.vertices])
+    L = actor_linear(actor)
+    if L is not None:
+        from .transform import DegenerateTransformError, covariant_axes, reject_degenerate
+        try:
+            reject_degenerate(L, getattr(actor, "name", "?"))
+        except DegenerateTransformError:
+            return (0.0, 0.0, 0.0)     # collapsed scale axis → normal undefined ("?" in list, no match)
+        n = matvec(covariant_axes(L), n)
+    m = math.sqrt(sum(c * c for c in n))
+    if m < 1e-9:
+        return (0.0, 0.0, 0.0)
+    u = (n[0] / m, n[1] / m, n[2] / m)
+    return (-u[0], -u[1], -u[2]) if csg_is_subtract(actor) else u
 
 
 def list_polys(actor: Actor) -> list[dict]:
-    """Per-poly metadata for surface identification: index, facing, texture, flags
-    (decoded), world centroid, area, vertex count."""
+    """Per-poly metadata for surface identification: index, visible normal + orientation/role,
+    texture, flags (decoded), world centroid, area, vertex count."""
+    from .facing_spec import orientation, role
     from .rotation import actor_linear, actor_prepivot, local_offset
 
     rows: list[dict] = []
@@ -56,13 +69,18 @@ def list_polys(actor: Actor) -> list[dict]:
     R = actor_linear(actor)        # full L (rotation+scale); None for identity → v unchanged
     prepivot = actor_prepivot(actor)
     for idx, poly in enumerate(actor.brush.polys):
-        # honour the Rotation field + PrePivot (world geometry); to float for normal/area math.
+        # honour the Rotation field + PrePivot (world geometry); to float for centroid/area math.
         wv = [local_offset(R, prepivot, v) for v in poly.vertices]
         v3 = [(float(loc[0] + w[0]), float(loc[1] + w[1]), float(loc[2] + w[2])) for w in wv]
         nv = len(v3)
         cen = tuple(round(sum(p[i] for p in v3) / nv) for i in range(3)) if nv else (0, 0, 0)
         area = round(0.5 * math.sqrt(sum(c * c for c in newell(v3)))) if nv >= 3 else 0
-        rows.append({"idx": idx, "facing": _poly_facing(v3) if nv >= 3 else "?",
+        vn = visible_normal(actor, poly) if nv >= 3 else (0.0, 0.0, 0.0)
+        live = any(vn)
+        rows.append({"idx": idx,
+                     "normal": [round(c, 4) for c in vn] if live else None,
+                     "orientation": orientation(vn) if live else "?",
+                     "role": role(vn) if live else None,
                      "texture": poly.texture or "-", "flags": decode_flags(poly.flags),
                      "pan": poly.pan, "centroid": cen, "area": area, "nverts": nv})
     return rows
@@ -78,7 +96,7 @@ def format_polys(actor: Actor, name: str) -> str:
     for r in rows:
         c = r["centroid"]
         pan = f"{r['pan'][0]},{r['pan'][1]}" if r["pan"] is not None else "-"
-        out.append(f"{r['idx']:>3}  {r['facing']:<6} {r['texture']:<18} "
+        out.append(f"{r['idx']:>3}  {r['orientation']:<6} {r['texture']:<18} "
                    f"{f'({c[0]},{c[1]},{c[2]})':<24} {r['area']:>8}  {pan:<8} "
                    f"{','.join(r['flags'])}")
     return "\n".join(out)
@@ -282,6 +300,14 @@ def _csg_oper(actor) -> str:
         if k.casefold() == "csgoper":
             return v
     return "CSG_Add"
+
+
+def csg_is_subtract(actor) -> bool:
+    """True iff the brush's CsgOper is CSG_Subtract (value matched case-insensitively — an imported
+    map may spell it `csg_subtract`). Add/Intersect/Deintersect and non-CSG actors → False."""
+    return _csg_oper(actor).casefold() == "csg_subtract"
+
+
 def resolve_actor_names(level: Level, names: Sequence[str]) -> list[str]:
     """Resolve every name in `names` to its canonical stored form, all-or-nothing.
 

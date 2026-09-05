@@ -29,8 +29,9 @@ from decimal import Decimal
 
 from . import rotation
 from .builders import _tex_basis
+from .facing_spec import FacingSpec, match_facing
 from .model import Actor, Level
-from .query import _poly_facing, resolve_actor_name
+from .query import resolve_actor_name, visible_normal
 from .surface import parse_poly_selector, resolve_polys
 from .texframe import newell, world_uv_frame
 
@@ -211,12 +212,12 @@ def resolve_align_targets(level: Level, tokens: list[str]) -> list[tuple[str, in
 # --------------------------------------------------------------------- brush poly find
 
 def find_faces(actor: Actor, name: str, *, item: str | None = None,
-               facing: str | None = None, texture: str | None = None) -> list[int]:
+               facing: FacingSpec | None = None, texture: str | None = None) -> list[int]:
     """Poly indices of `actor` matching every supplied filter (AND across filters). `item` matches
-    the builder ItemName (case-insensitive; e.g. `Side`); `facing` matches the snapped face facing
-    (`+X`/`-X`/`+Y`/`-Y`/`+Z`/`-Z`/`slant`); `texture` matches the poly's texture ref
-    (case-insensitive, exact or last-dot-component). Raises `PolyAlignError` naming `name` if it is
-    not a brush."""
+    the builder ItemName (case-insensitive; e.g. `Side`); `facing` (a parsed `FacingSpec`) matches
+    the face's VISIBLE unit normal (`query.visible_normal` — polarity-resolved for subtract brushes);
+    `texture` matches the poly's texture ref (case-insensitive, exact or last-dot-component). Raises
+    `PolyAlignError` naming `name` if it is not a brush."""
     if actor.brush is None:
         raise PolyAlignError(f"{name!r} is not a brush")
     want_item = item.casefold() if item else None
@@ -226,8 +227,7 @@ def find_faces(actor: Actor, name: str, *, item: str | None = None,
         if want_item is not None and (poly.item or "").casefold() != want_item:
             continue
         if facing is not None:
-            wv = _world_verts(actor, poly)
-            if len(wv) < 3 or _poly_facing(wv) != facing:
+            if len(poly.vertices) < 3 or not match_facing(visible_normal(actor, poly), facing):
                 continue
         if want_tex is not None:
             tex = (poly.texture or "").casefold()
