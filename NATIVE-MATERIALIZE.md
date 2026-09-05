@@ -67,13 +67,17 @@ match; the surviving (non-`None`) `Actors` set AND order must match (Actors orde
   a rotated brush's face base lands between two REAL, distinct `Model.Points` entries `2.16e-4` apart
   (≈7 f32 ULP at x=448); the editor's incremental pool keeps the un-snapped point, native's
   linear-scan dedup snaps to the sibling — so native's `W`/soup-base carry the snapped point's value.
-  Game-inconsequential: `2.16e-4` is 4.6× below the engine's ±0.001 zero-extent line-trace band and
-  orders below the box-collision band; a `Brush`'s persisted `Region` is discarded at load (LoadMap
-  `SetActorZone(actor,1,1)` recomputes+overwrites it, Engine.dll `0x158930`/`0x161e10`). Faithful fix
-  = a multi-week incremental-CSG-core rewrite (owner-ruled out). Masked NARROWLY (identity-anchored):
-  the node **normal** stays byte-compared, and a `W`/base diff masks ONLY when both values equal real
-  byte-identical-table-point projections within the point-dedup tolerance — a wrong plane still FAILS.
-  Non-`Brush` actors' `Region` stays compared. Negative tests: `test_n8_dedup_tie_mask.py`.
+  What the mask hides is BOUNDED to be inconsequential (not proven identity-exact): a `W`/base diff
+  masks ONLY when `|dW| ≤ 5e-4` — sub-band, below the engine's ±0.001 zero-extent line-trace band and
+  far below the box-collision band, so no trace/point-check/zoning result can change — AND both values
+  sit within `1e-4` of a real byte-identical-table-point projection (a plausibility bound, not an
+  anchor: a fabricated sub-band value near a real projection would also mask, but is still sub-band).
+  A plane SWAP (wrong face) still FAILS: the node **normal** is byte-compared and a wrong-face `W` is
+  orders above the band. The one downstream `Brush` `Region` flip is masked separately, resting on the
+  disasm that EVERY brush's `Region` is discarded at load (LoadMap `SetActorZone(actor,1,1)`
+  recomputes+overwrites it, Engine.dll `0x158930`/`0x161e10`), not on the tie; non-`Brush` `Region`
+  stays compared. Faithful fix = a multi-week incremental-CSG-core rewrite (owner-ruled out). Negative
+  tests: `test_n8_dedup_tie_mask.py`.
 
 Any NEW candidate exclusion needs an opus review confirming inconsequence + the owner's explicit yes
 before it counts. No content carveouts (Movers included — native must build their private models).

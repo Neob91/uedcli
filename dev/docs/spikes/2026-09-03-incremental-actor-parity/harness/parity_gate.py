@@ -52,20 +52,30 @@ _LI_MASKED_PROPS = {"timeseconds", "aiprofile"}
 # (Engine.dll 0x158930) calls ULevel::SetActorZone(actor,1,1) (0x161e10, vtable slot 43) per actor,
 # which recomputes the region from Location and OVERWRITES actor+0x88/+0x90 (iLeaf default -1); an
 # actor gated out of that pass (flag 0x10000@0x11c) skips all init and never consults Region. Either
-# way a brush's saved Region is discarded/unused (board native-n8-unatco-rotated-brush-base-fp-diverges).
+# way EVERY brush's saved Region is discarded/unused, so class=="Brush" Region is masked
+# unconditionally (board native-n8-unatco-rotated-brush-base-fp-diverges). Non-Brush Region stays
+# compared -- their Region can matter (a moving actor's zone).
 _BRUSH_MASKED_PROPS = {"region"}
-# BSP node-plane W dedup-tie mask (same board finding). A rotated brush's x=448 face base sits at a
-# genuine point-dedup near-tie: two REAL, distinct entries in the byte-identical Model.Points table
+# BSP node-plane W / CSG-soup FPoly.Base dedup near-tie mask (same board finding). A rotated brush's
+# x=448 face base sits between two REAL, distinct entries in the byte-identical Model.Points table
 # (448.00006 and 447.99985, 2.16e-4 apart ~= 7 f32 ULP). The editor's incremental pool keeps the
-# un-snapped point for this face so its node plane W = raw Base.N; native's linear-scan dedup snaps
-# to the sibling point, so W = Points[snapped].N -- a 2.16e-4 W offset on nodes 29/30. It is
-# game-inconsequential: 4.6x below the engine's +/-0.001 zero-extent line-trace band (linecheck.rs:33)
-# and orders below the box-collision plane band; only an exact-split PointRegion sample could flip,
-# and that feeds the (inert) brush Region above. A faithful fix is a multi-week incremental-CSG-core
-# rewrite (owner-ruled out). Masked NARROWLY: see _bodies_equal / _node_w_tie / _poly_base_tie.
-NODE_W_DEDUP_TOL = 0.002     # point-dedup tolerance: max |Wn - Wu| for a near-tie
-NODE_W_POINT_TOL = 1.5e-4    # a masked W must equal a real table-point projection (< the 2.16e-4
-#                              real-point spacing, so a between-points corruption cannot match)
+# un-snapped point so its node plane W = raw Base.N; native's linear-scan dedup snaps to the sibling
+# point, so W = Points[snapped].N -- a 2.16e-4 offset on nodes 29/30 (and the same on the soup base).
+# What the mask hides is BOUNDED to be game-inconsequential, NOT proven identity-exact:
+#   - |dW| <= NODE_W_DEDUP_TOL = 5e-4, comfortably BELOW the engine's +/-0.001 zero-extent line-trace
+#     band (linecheck.rs:33) and far below the box-collision plane band -- so any masked deviation is
+#     sub-band: no line-trace / point-check / zoning result it feeds can change (its only exact-split
+#     consumer is the brush Region above, which is itself discarded at load).
+#   - AND both W's are within NODE_W_POINT_TOL of a real byte-identical-table-point projection, i.e.
+#     the deviation looks like a point-dedup near-tie, not free drift. This is a plausibility bound,
+#     not an anchor: a fabricated W within 5e-4 that also happens to sit within POINT_TOL of a real
+#     projection would mask -- but it is still sub-band and thus inconsequential.
+# A plane SWAP (wrong face) still FAILS: the node NORMAL is byte-compared, and a wrong-face plane
+# offset is orders above 5e-4. A faithful fix is a multi-week incremental-CSG-core rewrite
+# (owner-ruled out). See _bodies_equal / _node_w_tie / _poly_base_tie.
+NODE_W_DEDUP_TOL = 5e-4      # max |Wn - Wu| masked: below the +/-0.001 inconsequence band it invokes
+NODE_W_POINT_TOL = 1e-4      # a masked W must sit within this of a real table-point projection
+#                              (< the 2.16e-4/2 half-spacing, so a midpoint matches NEITHER point)
 
 
 def _cf(s: str) -> str:
@@ -87,18 +97,19 @@ class Ident:
         model_polys = _model_polys_map(p)                      # {model name -> polys name}
         polys_to_model = {v: k for k, v in model_polys.items()}
         self.polys_owner: dict[int, str] = {}
+        self.polys_model_name: dict[int, str] = {}       # polys export idx -> owning Model name
         for i, e in enumerate(p.exports):
             nm = p.names[e["nm"]]
             if (p.object_class_name(i + 1) or "") == "Polys" and nm in polys_to_model:
                 mn = polys_to_model[nm]
                 self.polys_owner[i] = f"Model {mn}"
-        self._model_pts: frozenset | None = None
+                self.polys_model_name[i] = mn
+        self._model_pts_by_name: dict[str, frozenset] | None = None
 
-    def model_points(self) -> frozenset:
-        """Union of every UModel's Points table (x,y,z tuples). A CSG-soup poly base that snapped
-        under point-dedup equals one of these; used to bound the node-W / poly-base tie masks."""
-        if self._model_pts is None:
-            p, buf, pts = self.p, self.buf, set()
+    def _model_points_by_name(self) -> dict[str, frozenset]:
+        """Each UModel's own Points table (x,y,z tuples), keyed by the Model export's name."""
+        if self._model_pts_by_name is None:
+            p, buf, out = self.p, self.buf, {}
             for i, e in enumerate(p.exports):
                 if (p.object_class_name(i + 1) or "") != "Model":
                     continue
@@ -109,9 +120,16 @@ class Ident:
                 pos += 25 + 16                              # FBox(+valid) + FSphere
                 n, pos = read_compact_index(buf, pos); pos += 12 * n   # Vectors (skip)
                 n, pos = read_compact_index(buf, pos)                  # Points
-                pts.update(struct.unpack_from("<3f", buf, pos + 12 * k) for k in range(n))
-            self._model_pts = frozenset(pts)
-        return self._model_pts
+                out[p.names[e["nm"]]] = frozenset(
+                    struct.unpack_from("<3f", buf, pos + 12 * k) for k in range(n))
+            self._model_pts_by_name = out
+        return self._model_pts_by_name
+
+    def polys_local_points(self, i0: int) -> frozenset:
+        """Points of the Model that owns Polys export i0 (empty if the owner is unknown -> no PB
+        masking). A soup base is masked only against ITS OWN model's points, never a sibling Model's."""
+        mn = self.polys_model_name.get(i0)
+        return self._model_points_by_name().get(mn, frozenset()) if mn is not None else frozenset()
 
     def export_identity(self, i0: int) -> str:
         p = self.p
@@ -306,7 +324,7 @@ def _model_tail(idt: Ident, pos: int, end: int) -> list:
     return toks
 
 
-def _polys_tail(idt: Ident, pos: int, end: int) -> list:
+def _polys_tail(idt: Ident, pos: int, end: int, model_pts: frozenset) -> list:
     buf = idt.buf
     toks: list = []
     start = [pos]
@@ -323,7 +341,6 @@ def _polys_tail(idt: Ident, pos: int, end: int) -> list:
         start[0] = npos
         return npos
 
-    model_pts = idt.model_points()
     num = struct.unpack_from("<i", buf, pos)[0]; pos += 8
     for _ in range(num):
         nv, pos = read_compact_index(buf, pos)
@@ -423,7 +440,7 @@ def canon_body(idt: Ident, i0: int):
         return ("model", sf, _model_tail(idt, pos, end))
     if cls == "Polys":
         pos = read_property_tags(p, pos, end)[1]
-        return ("polys", sf, _polys_tail(idt, pos, end))
+        return ("polys", sf, _polys_tail(idt, pos, end, idt.polys_local_points(i0)))
     if cls == "Level":
         pos = read_property_tags(p, pos, end)[1]
         return ("level", sf, _level_tail(idt, pos, end))
@@ -433,10 +450,12 @@ def canon_body(idt: Ident, i0: int):
 
 
 def _node_w_tie(xa, xb) -> bool:
-    """Two ('NW', W, proj) node-plane-W tokens: equal, or a masked point-dedup near-tie. The normals
-    are compared literally elsewhere; here only W. A near-tie masks iff BOTH sides' W equal a real
-    projection of a byte-identical table point AND the two Ws are within the dedup tolerance -- so a
-    plane bug whose W lands on no table point (or too far to be a tie) still FAILS."""
+    """Two ('NW', W, proj) node-plane-W tokens: equal, or a masked point-dedup near-tie. The normal
+    is byte-compared elsewhere; here only W. Masks iff |dW| is within the sub-band dedup tolerance
+    AND both W's sit within POINT_TOL of a real byte-identical-table-point projection. This BOUNDS
+    what is hidden to sub-band, near-a-real-point deviations (inconsequential, see the const block);
+    it is not an exact anchor. A wrong-face plane still FAILS -- the normal differs, and its W offset
+    is orders above the band."""
     wa, wb = xa[1], xb[1]
     if wa == wb:
         return True
@@ -447,11 +466,12 @@ def _node_w_tie(xa, xb) -> bool:
 
 
 def _poly_base_tie(xa, xb) -> bool:
-    """Two ('PB', base, is_table_point) FPoly-base tokens (xa native, xb ued): equal, or a masked
-    point-dedup near-tie. The soup base diverges when native's linear-scan dedup SNAPS the raw
-    transformed base onto a nearby Model.Points entry while the editor keeps the raw base. Masks iff
-    the two bases are within the dedup tolerance AND native's base is a real (snapped) table point --
-    so a base moved off-geometry, or beyond the tie band, still FAILS. Normal/tu/tv stay literal."""
+    """Two ('PB', base, is_local_table_point) FPoly-base tokens (xa native, xb ued): equal, or a
+    masked point-dedup near-tie. The soup base diverges when native's linear-scan dedup SNAPS the raw
+    transformed base onto a nearby OWN-Model.Points entry while the editor keeps the raw base. Masks
+    iff the two bases are within the sub-band dedup tolerance AND native's base is a real point of its
+    OWN model (the snapped value). A base moved off its model's geometry, or beyond the band, FAILS.
+    Normal/tu/tv stay byte-compared."""
     ba, bb = xa[1], xb[1]
     if ba == bb:
         return True
