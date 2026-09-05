@@ -44,4 +44,35 @@ literally compared.
 `verts-residual-on-structure-exact-levels`. Fixing needs native's CSG to stop minting 85 spurious
 orphan FVerts (or to match UED22's orphan-vert count/placement). Out of scope for the texture-axis
 dedup fix. Repro: cached `_scratch/actor-parity/14_oceanlab_lab/{native,ref}_N3.dx`.
+
+## Diagnosis 2026-09-05 (localized; DEEP class, not a bounded fix)
+
+Gap-walk of both `Model2` bodies (`_scratch/gapwalk.py`, decode via `umodel.parse_model_body`):
+
+- All 271 nodes are in IDENTICAL `iVertPool` order; the delta is 0 up to rank 214 then jumps to
+  +85 at ONE gap (rank 215) and stays a constant +85 to the end. So the surplus is a SINGLE
+  contiguous orphan block, not many small degenerate-triangle gaps.
+- The block is the orphan run between live ring `[944..947)` (node 269) and the next live ring:
+  native fills slots `[947..2551)` = **1604** orphan slots, editor `[947..2466)` = **1519** = +85.
+  Every slot in the run is orphan (`iSide == -1`, 0 non-orphan native-side), and the run PREFIX is
+  byte-identical (slots 947-954 iVertex 174/352/166/198/... match), so native over-emits 85 orphans
+  within/at the tail of this one repartition region.
+
+Cause: this is the known repartition / point-pool-history difference — native retains ~85 discarded
+reconstruction verts in one repartition orphan region (trigger Brush779, the 258-tri rotated
+tessellated subtract) that UED22's build compacts/frees. Same phenomenon as the already-pinned
+`WanChai +84` in `verts-residual-on-structure-exact-levels`, and the same mechanism as
+`native-materialize/pass-d-orphan-ivertex-stale-index-parity`: the editor's no-clear repartition +
+deferred surf compaction vs native's `bspcsg.rs` pool CLEAR at repartition (§10.16) +
+`reorder_points_canonical` final renumber (§10.20). NOTE this is the orphan COUNT half (array length
++ live `iVertPool` shift, both compared), distinct from the orphan `iVertex` VALUE half that the
+gate masks and those items also track.
+
+NOT a clean bounded fix: matching the editor's orphan-vert count needs reproducing its whole
+point-pool construction/GC history at repartition (no-clear repartition + deferred surf compaction
+in `bspcsg.rs`), entangled with `surf.pBase`/`vert.iVertex` pool indices and the load-bearing
+Points-section byte-parity guard -> high tree-regression risk, and per
+`verts-residual-on-structure-exact-levels` offline diffing is exhausted (needs live gdb `bspAddNode`
+ring capture). Size: multi-day RE + `bspcsg.rs` repartition rework, not in the `zones.rs`/`passes.rs`
+lane. Deferred per owner "deep vert-pool-history port -> don't self-authorize" (task 2026-09-05).
 </content>
