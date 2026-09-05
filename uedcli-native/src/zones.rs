@@ -398,13 +398,30 @@ enum Emit {
     },
 }
 
+impl Emit {
+    /// The chain node this landing came from. Emissions are pushed per chain node, so a change of
+    /// owner is a Pass-D group boundary.
+    fn owner(&self) -> i32 {
+        match self {
+            Emit::Orphan(o, _) | Emit::Frag { owner: o, .. } | Emit::OriginalRing { owner: o, .. } => {
+                *o as i32
+            }
+        }
+    }
+}
+
 /// `bspAddNode`'s ring FILL, applied to one Pass-D landing — every landing goes through
 /// `bspAddNode` in the editor (`passD-assignzones-7400.md §4/§5`), so the fill is
 /// landing-type-agnostic:
-///   * each world point resolves through the REAL Points pool at the ring `bspAddPoint`
-///     threshold (`THRESH_POINTS_ARE_NEAR` 0.015, `bspAddNode 0x352fd push 0` — the same NEAR
-///     pooling every other `bspAddNode` call ships), CREATING a real pool point when nothing is
-///     near.  A point created for a killed landing ends up referenced only by orphan verts and
+///   * each world point resolves through `FindNearestVertex` at the ring `bspAddPoint`
+///     threshold (`THRESH_POINTS_ARE_NEAR` 0.015, `bspAddNode 0x352fd push 0`), CREATING a real
+///     pool point when the descent reaches nothing near.  `live` carries what the editor's
+///     already-linked fragment nodes expose: every point this fill has resolved so far, plus every
+///     ring the same chain node's earlier landings left behind — `bspAddNode` links its node
+///     (`0x100352c5`), zeroes `NumVertices` (`0x100352d4`) and re-increments it INSIDE the fill loop
+///     (`0x10035348`), and the AllSame/split branch only zeroes the fragments at the END of the
+///     chain node's body (decode §1).  The caller resets `live` per chain node.
+///     A point created for a killed landing ends up referenced only by orphan verts and
 ///     is dropped by the incremental points GC (`bsp_refresh_points_vectors_stale_orphans`, editor rule) — reproducing
 ///     the editor's own transient-then-GC'd Pass-D points, whose stale orphan `iVertex` dangle
 ///     past the compacted pool end in every golden (spike `2026-09-03-verts-points-residual`).
@@ -416,24 +433,37 @@ enum Emit {
 ///   * a count under 3 reports 0 ("Infinitesimal polygon"), slots kept.
 /// Returns `(base vert-pool index, reported NumVertices)`; an `Orphan` caller ignores the count
 /// (no node reads it).
-fn fill_ring_verts(model: &mut Model, verts: &[[f32; 3]]) -> (i32, i32) {
+fn fill_ring_verts(
+    model: &mut Model,
+    verts: &[[f32; 3]],
+    owner: i32,
+    live: &mut Vec<i32>,
+) -> (i32, i32) {
     let vp = model.verts.len() as i32;
+    let group_base = live.len();
     let mut first_iv = -1i32;
     let mut last_iv = -1i32;
     let mut nv = 0i32;
+    let dump = std::env::var_os("UEDCLI_PASSD_DUMP").is_some();
     for v in verts {
         let pt = crate::model::Vec3::new(v[0], v[1], v[2]);
-        // First existing point within the ring threshold (count-invariant vs nearest), else append.
-        let mut pi = -1i32;
-        for (idx, p) in model.points.iter().enumerate() {
-            if pt.sub(p).size() < crate::build::RING_POINT_TOL {
-                pi = idx as i32;
-                break;
-            }
-        }
+        // `bspAddPoint(v, 0)` — the editor's radius-pruned `FindNearestVertex` descent at the NEAR
+        // threshold, NOT a scan of the whole pool. The difference is not cosmetic: the descent only
+        // sees a surf `pBase` or a vert inside a REACHED node's live ring, so a point left behind by
+        // a killed Pass-D landing is invisible and the next landing mints a fresh one — which is why
+        // UED22's surviving Pass-D points come out in a different order than a pool scan's.
+        // (Island N5+, board `island-n5-n12-pre-existing-model2-orphan-vert-4`.)
+        let ring = crate::bspcsg::PendingChainRing { owner, points: live };
+        let mut pi = crate::bspcsg::find_nearest_vertex_pending(
+            model, pt, crate::build::RING_POINT_TOL, Some(&ring),
+        )
+        .map_or(-1i32, |i| i as i32);
         if pi < 0 {
             pi = model.points.len() as i32;
             model.points.push(pt);
+            if dump {
+                eprintln!("PASSD_PT new={} q=({:.6},{:.6},{:.6})", pi, pt.x, pt.y, pt.z);
+            }
         }
         if pi == last_iv {
             continue;
@@ -442,6 +472,9 @@ fn fill_ring_verts(model: &mut Model, verts: &[[f32; 3]]) -> (i32, i32) {
             i_vertex: pi,
             i_side: -1,
         });
+        // Visible from here on: the slot is written, and `bspAddNode` bumps `NumVertices` right
+        // after writing it (`0x10035348`), so the running ring is exactly the slots pushed so far.
+        live.push(pi);
         if nv == 0 {
             first_iv = pi;
         }
@@ -454,6 +487,10 @@ fn fill_ring_verts(model: &mut Model, verts: &[[f32; 3]]) -> (i32, i32) {
     if nv < 3 {
         nv = 0;
     }
+    // The ring the editor leaves behind is `[iVertPool, iVertPool+NumVertices)`, so the wrap trim
+    // (`0x100353a1`) and the `<3 -> 0` kill (`0x100353bb-0x100353eb`) take slots back OUT of it. A
+    // later landing of the same chain node must not pool onto a slot that fell outside the ring.
+    live.truncate(group_base + nv as usize);
     (vp, nv)
 }
 
@@ -495,6 +532,27 @@ fn fix_ring(verts: &[[f32; 3]]) -> Vec<[f32; 3]> {
     out
 }
 
+/// `bspNodeToFPoly` (`Editor.dll 0x365b0`): the node's ring as an `FPoly` carrying the SURF's POOLED
+/// `Base`/`Normal` (`0x36636-0x36683` reads `Points[surf.pBase]` / `Vectors[surf.vNormal]`, the same
+/// pair `SplitWithNode` splits on), followed by `FPoly::RemoveColinears` (`0x10036804`, IAT
+/// `0x100cee2c` = `?RemoveColinears@FPoly@@QAEHXZ`). The count the caller gates on is read AFTER that
+/// call (`0x1003680a`), so a poly the merge rejects or shrinks below 3 verts yields NO landing —
+/// `AssignAllZones` skips it (`0x100a7534`).
+///
+/// Not cosmetic: dropping a colinear vertex B from A-B-C changes which SEGMENT a deeper filter plane
+/// cuts (A→C instead of A→B), and `FLinePlaneIntersection` gives the geometrically-same point a few
+/// ULP apart from a different `P1` and direction.
+///
+/// Pass D only. Pass B' keeps its own `clip_poly` filter (see `collect_zone_barriers`), which reads
+/// leaf pairs, not vertices, and is leaf-pair-validated against four editor goldens.
+fn bsp_node_to_fpoly(model: &Model, ni: usize) -> Option<FPoly> {
+    let mut poly = node_filter_poly(model, node_poly(model, ni));
+    let (base, normal) = filter_plane(model, ni as i32);
+    poly.base = base;
+    poly.normal = normal;
+    (poly.remove_colinears() >= 3).then_some(poly)
+}
+
 /// Rebuild a node's stored polygon (world points) from its vertex pool.
 fn node_poly(model: &Model, ni: usize) -> Vec<[f32; 3]> {
     let n = &model.nodes[ni];
@@ -509,13 +567,37 @@ fn node_poly(model: &Model, ni: usize) -> Vec<[f32; 3]> {
         .collect()
 }
 
-/// A filter node's plane as `(base, normal)` for `FPoly::split_with_plane`
-/// (`base·normal == plane.w`, so `(v−base)·normal == v·normal − w`).
+/// A filter node's plane as `(base, normal)` for `FPoly::split_with_plane`, read the way
+/// `FPoly::SplitWithNode` reads it — off the node's SURF, not off the stored `FPlane`.
+/// `Engine.dll 0x101517e0` (export `?SplitWithNode@FPoly@@QBEHPBVUModel@@HPAV1@1H@Z`):
+///
+/// ```text
+/// eax = iNode<<6 + [Model+0x58]      ; &Nodes[iNode]   (stride 0x40)
+/// edx = [node+0x1c]<<6 + [Model+0x98]; &Surfs[iSurf]   (iSurf +0x1c)
+/// esi = [Model+0x78] + [surf+0x0c]*12; &Vectors[vNormal]   -> normal
+/// eax = [Model+0x88] + [surf+0x08]*12; &Points [pBase]     -> base
+/// push VeryPrecise, Back, Front, esi, eax / call 0x101518b0  ; SplitWithPlane
+/// ```
+///
+/// It matters to the last bits: the cut vertex is `p1 + (p2−p1)·((base−p1)·n / (p2−p1)·n)`, so a base
+/// a few ULP off the POOLED point moves it by a few ULP. The synthetic `plane.xyz * plane.w` fallback
+/// is only for native's own surfless synthetic solid-bound nodes, which the editor never builds and
+/// which have no pooled pair to read.
 fn filter_plane(model: &Model, ni: i32) -> (Vec3, Vec3) {
-    let pl = &model.nodes[ni as usize].plane;
-    let normal = Vec3::new(pl.x, pl.y, pl.z);
-    let base = Vec3::new(pl.x * pl.w, pl.y * pl.w, pl.z * pl.w);
-    (base, normal)
+    let n = &model.nodes[ni as usize];
+    if let Some(s) = usize::try_from(n.i_surf).ok().and_then(|i| model.surfs.get(i)) {
+        if let (Some(base), Some(normal)) = (
+            usize::try_from(s.p_base).ok().and_then(|i| model.points.get(i)),
+            usize::try_from(s.v_normal).ok().and_then(|i| model.vectors.get(i)),
+        ) {
+            return (*base, *normal);
+        }
+    }
+    let pl = &n.plane;
+    (
+        Vec3::new(pl.x * pl.w, pl.y * pl.w, pl.z * pl.w),
+        Vec3::new(pl.x, pl.y, pl.z),
+    )
 }
 
 /// Faithful port of `FilterThroughSubtree` (`Editor.dll 0xa9030`): descend `poly` through the subtree
@@ -597,7 +679,7 @@ fn node_filter_poly(model: &Model, verts: Vec<[f32; 3]>) -> FPoly {
 fn node_landings_precise(
     model: &Model,
     head: usize,
-    poly: Vec<[f32; 3]>,
+    poly: FPoly,
 ) -> Vec<(i32, i32, Vec<[f32; 3]>)> {
     let (hf, hb, hl0, hl1) = {
         let n = &model.nodes[head];
@@ -605,7 +687,7 @@ fn node_landings_precise(
     };
     // pass 0: BACK subtree (engine order: BACK child = i_front, BACK leaf = iLeaf[0]).
     let mut back: Vec<(i32, FPoly)> = Vec::new();
-    filter_through(model, hf, hl0, node_filter_poly(model, poly), &mut back);
+    filter_through(model, hf, hl0, poly, &mut back);
     let mut out = Vec::new();
     for (back_leaf, frag) in back {
         // pass 1: FRONT subtree (FRONT child = i_back, FRONT leaf = iLeaf[1]).
@@ -666,7 +748,9 @@ fn passd_process(
     if nv < 3 || base < 0 {
         return; // degenerate / no real face — leave iZone (0,0), like the editor's OldNum==Num skip
     }
-    let poly = node_poly(model, m);
+    let Some(poly) = bsp_node_to_fpoly(model, m) else {
+        return; // bspNodeToFPoly returned 0 verts -> AssignAllZones skips the node (0x100a7534)
+    };
     let landings = node_landings_precise(model, head, poly);
     if landings.is_empty() {
         return;
@@ -937,8 +1021,18 @@ fn consume_passd_emissions(model: &mut Model, emissions: Vec<Emit>) -> Vec<usize
     // its base ring (the editor would cull the node entirely; not representable without a node
     // delete, and not observed on the corpus).
     let mut pending_retarget: i32 = -1;
-    let dump_emit = std::env::var("UEDCLI_PASSD_DUMP").is_ok();
+    let dump_emit = std::env::var_os("UEDCLI_PASSD_DUMP").is_some();
+    // What the chain node currently being Pass-D'd has already put on its coplanar chain: every
+    // point its landings have resolved so far. The editor's fragments stay LIVE (ring intact,
+    // linked) until the AllSame/split branch zeroes `NumVertices` at the end of that node's body
+    // (decode §1), so a later landing of the same node pools onto them. A node's emissions are
+    // contiguous, so an owner change is the group boundary that kills them.
+    let (mut live_owner, mut live): (i32, Vec<i32>) = (-1, Vec::new());
     for e in emissions {
+        if e.owner() != live_owner {
+            live_owner = e.owner();
+            live.clear();
+        }
         match e {
             Emit::Orphan(owner, verts) => {
                 // `FPoly::Fix`-style coordinate collapse first (`fix_ring`, 0.002): a fragment
@@ -954,7 +1048,7 @@ fn consume_passd_emissions(model: &mut Model, emissions: Vec<Emit>) -> Vec<usize
                 if dump_emit {
                     eprintln!("EMIT type=Orphan owner={} isurf={} vp={} len={}", owner, model.nodes[owner].i_surf, vp, verts.len());
                 }
-                fill_ring_verts(model, &verts); // reported count unused — no node reads it
+                fill_ring_verts(model, &verts, owner as i32, &mut live); // count unused — no node reads it
             }
             Emit::OriginalRing { owner, verts } => {
                 let verts = fix_ring(&verts);
@@ -965,7 +1059,7 @@ fn consume_passd_emissions(model: &mut Model, emissions: Vec<Emit>) -> Vec<usize
                 // The editor's surviving zone fragments are live rings filled by `bspAddPoint`,
                 // which appends a genuinely-new corner when none is near (the editor's own Pass D
                 // adds ~+3 such points); castle-calibrated ZERO-delta (§70 §11).
-                let (vp, nv) = fill_ring_verts(model, &verts);
+                let (vp, nv) = fill_ring_verts(model, &verts, owner as i32, &mut live);
                 if nv == 0 {
                     pending_retarget = owner as i32; // ringless fill (slots stay) — see above
                     continue;
@@ -991,7 +1085,7 @@ fn consume_passd_emissions(model: &mut Model, emissions: Vec<Emit>) -> Vec<usize
                 if verts.len() < 3 {
                     continue;
                 }
-                let (vp, nv) = fill_ring_verts(model, &verts);
+                let (vp, nv) = fill_ring_verts(model, &verts, owner as i32, &mut live);
                 if nv == 0 {
                     // Ringless fill — the editor's fragment node is created with NumVertices=0 and
                     // the post-Pass-D `bspCleanup` culls it: net, NO node (slots stay).
@@ -1070,6 +1164,9 @@ fn consume_passd_emissions(model: &mut Model, emissions: Vec<Emit>) -> Vec<usize
 /// move exactly these to the tail (a pure, tree-preserving permutation) so the on-disk node ORDER
 /// matches `Test_Castle.dx` positionally; the legacy `build.rs` path ignores it.
 pub fn assign_leaves_and_zones(model: &mut Model) -> Vec<usize> {
+    // This pass reads the ENGINE child convention throughout (`assign_leaves`'s i_front == iChild[0]
+    // == BACK), so Pass D's `FindNearestVertex` ring lookups must descend that way too.
+    let _fnv_children = crate::bspcsg::FnvEngineChildrenGuard::enable();
     // reset
     model.leaves.clear();
     for n in model.nodes.iter_mut() {
@@ -1350,36 +1447,105 @@ mod tests {
     }
 
     /// `fill_ring_verts` = `bspAddNode`'s ring fill for a Pass-D landing (see its doc comment):
-    /// NEAR (0.015) pooling that CREATES real points, consecutive-index collapse (no slot),
-    /// wrap trim (slot kept, count down one), <3 -> reported 0.
+    /// NEAR (0.015) pooling through `FindNearestVertex`, which sees a point only via a live node's
+    /// surf base or vert ring — including the ring THIS fill is building, since `bspAddNode` links
+    /// its node and re-increments `NumVertices` inside the fill loop (`Editor.dll 0x10035348`);
+    /// otherwise it CREATES a real point. Then consecutive-index collapse (no slot), wrap trim
+    /// (slot kept, count down one), <3 -> reported 0.
     #[test]
     fn fill_ring_verts_pools_at_near_and_applies_the_fill_collapses() {
-        use crate::model::Vec3;
-        let mut m = crate::model::Model::default();
-        m.points = vec![Vec3::new(0.0, 0.0, 0.0)];
-        // v0 pools onto the existing point (0.01 < 0.015); v1 creates; v2 is a consecutive dup of
-        // v1 at 0.01 (same NEW index -> skipped, no slot); v3 creates.
+        use crate::model::{BspNode, BspVert, Plane, Vec3};
+        // One z=0 node wiring the seed points into its ring, so the descent can reach them (an
+        // unwired pool point is invisible to `bspAddPoint` — the whole reason Pass D pools this way).
+        let wired = |pts: Vec<Vec3>| {
+            let mut m = crate::model::Model::default();
+            m.points = pts;
+            m.verts = (0..m.points.len())
+                .map(|i| BspVert { i_vertex: i as i32, i_side: -1 })
+                .collect();
+            let n = m.verts.len() as i32;
+            m.nodes.push(BspNode::leaf(Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 }, -1, 0, n));
+            m
+        };
+
+        let mut m = wired(vec![Vec3::new(0.0, 0.0, 0.0)]);
+        let base_verts = m.verts.len() as i32;
+        // v0 pools onto the wired point (0.01 < 0.015); v1 creates; v2 is 0.01 from the point v1
+        // just created and pools onto it — a consecutive dup, so no slot; v3 creates.
         let ring = [
             [0.01, 0.0, 0.0],
             [10.0, 0.0, 0.0],
             [10.01, 0.0, 0.0],
             [10.0, 10.0, 0.0],
         ];
-        let (vp, nv) = fill_ring_verts(&mut m, &ring);
-        assert_eq!((vp, nv), (0, 3));
-        assert_eq!(m.points.len(), 3, "two new points created at NEAR pooling, dup pooled away");
-        assert_eq!(m.verts.len(), 3, "the consecutive dup allocates no slot");
+        let (vp, nv) = fill_ring_verts(&mut m, &ring, 0, &mut Vec::new());
+        assert_eq!((vp, nv), (base_verts, 3));
+        assert_eq!(m.points.len(), 3, "v2 pools onto the point v1 minted in this same fill");
         assert_eq!(
-            (m.verts[0].i_vertex, m.verts[1].i_vertex, m.verts[2].i_vertex),
-            (0, 1, 2)
+            (0..3).map(|k| m.verts[(vp + k) as usize].i_vertex).collect::<Vec<_>>(),
+            vec![0, 1, 2]
         );
 
-        // Wrap dup: [A, B, A] (all far apart except last == first) -> 3 slots, reported 2 -> 0.
-        let mut m2 = crate::model::Model::default();
+        // Wrap dup: [A, B, A] with A wired -> 3 slots, reported 2 -> 0.
+        let mut m2 = wired(vec![Vec3::new(0.0, 0.0, 0.0)]);
+        let vp2 = m2.verts.len() as i32;
         let wrap = [[0.0, 0.0, 0.0], [50.0, 0.0, 0.0], [0.001, 0.0, 0.0]];
-        let (_, nv2) = fill_ring_verts(&mut m2, &wrap);
+        let (_, nv2) = fill_ring_verts(&mut m2, &wrap, 0, &mut Vec::new());
         assert_eq!(nv2, 0, "wrap-closing dup undercounts to 2 -> infinitesimal -> 0");
-        assert_eq!(m2.verts.len(), 3, "the wrap slot itself is kept");
+        assert_eq!(m2.verts.len() as i32 - vp2, 3, "the wrap slot itself is kept");
+
+        // An UNWIRED pool point is invisible: no live node names it, so the fill mints its own.
+        let mut m4 = crate::model::Model::default();
+        m4.points = vec![Vec3::new(0.0, 0.0, 0.0)];
+        fill_ring_verts(&mut m4, &[[0.001, 0.0, 0.0], [9.0, 0.0, 0.0], [9.0, 9.0, 0.0]], 0, &mut Vec::new());
+        assert_eq!(m4.points.len(), 4, "the stale pool point pools nothing");
+    }
+
+    /// A landing pools onto the rings of EARLIER landings of the same chain node: the editor's
+    /// fragments stay live until `AssignAllZones` zeroes them at the end of that node's body
+    /// (`passD-assignzones-7400.md` §1). `live` carries them between calls — but only the slots
+    /// still inside `[iVertPool, iVertPool+NumVertices)`, so a landing the fill KILLS (`nv = 0`)
+    /// leaves nothing poolable behind.
+    #[test]
+    fn a_landing_pools_onto_earlier_landings_of_the_same_chain_node_but_not_killed_ones() {
+        use crate::model::{BspNode, BspVert, Plane, Vec3};
+        // A real one-node tree on z=0 so the descent, not the empty-tree carve-out, does the work.
+        let tree = || {
+            let mut m = crate::model::Model::default();
+            m.points = vec![Vec3::new(-500.0, -500.0, 0.0)];
+            m.verts = vec![BspVert { i_vertex: 0, i_side: -1 }];
+            m.nodes.push(BspNode::leaf(Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 }, -1, 0, 1));
+            m
+        };
+        let quad = [[0.0, 0.0, 0.0], [40.0, 0.0, 0.0], [40.0, 40.0, 0.0], [0.0, 40.0, 0.0]];
+        // A landing sharing two corners with `quad`, both inside the 0.015 NEAR radius.
+        let abut = [[0.0, 40.0, 0.0], [40.0, 40.004, 0.0], [40.0, 80.0, 0.0], [0.0, 80.0, 0.0]];
+
+        let mut m = tree();
+        let mut live = Vec::new();
+        assert_eq!(fill_ring_verts(&mut m, &quad, 0, &mut live).1, 4);
+        assert_eq!(m.points.len(), 5); // the wired seed + the quad's four corners
+        fill_ring_verts(&mut m, &abut, 0, &mut live);
+        assert_eq!(m.points.len(), 7, "the two shared corners pool onto the earlier landing's ring");
+
+        // Same pair, but the first landing is an infinitesimal strip the fill kills (nv -> 0): its
+        // slots leave the ring, so the second landing can see none of them (the `10_Paris_Club`
+        // shape — see `club_brush20_strip_landings_are_killed`).
+        let strip = [[0.0, 0.0, 0.0], [0.01, 40.0, 0.0], [0.0, 40.0, 0.0], [0.01, 0.0, 0.0]];
+        let mut m2 = tree();
+        let mut live2 = Vec::new();
+        assert_eq!(fill_ring_verts(&mut m2, &strip, 0, &mut live2).1, 0, "the strip is killed");
+        assert!(live2.is_empty(), "a killed landing leaves no poolable ring");
+        fill_ring_verts(&mut m2, &abut, 0, &mut live2);
+        assert_eq!(m2.points.len(), 7, "all four of the second landing's corners are minted fresh");
+
+        // A different chain node starts a fresh group: the previous node's fragments are zeroed.
+        let mut m3 = tree();
+        let mut live3 = Vec::new();
+        fill_ring_verts(&mut m3, &quad, 0, &mut live3);
+        live3.clear(); // what `consume_passd_emissions` does on an owner change
+        fill_ring_verts(&mut m3, &abut, 1, &mut live3);
+        assert_eq!(m3.points.len(), 9, "a new group sees none of the killed group's points");
     }
 
     /// Regression for `pass-d-zone-split-emits-degenerate-zero-area`: the exact `10_Paris_Club`
@@ -1424,7 +1590,7 @@ mod tests {
             [0.01, 0.0, 0.0],
         ];
         assert_eq!(fix_ring(&near_strip).len(), 4, "0.01-uu corners survive the 0.002 collapse");
-        let (_, nv) = fill_ring_verts(&mut m, &near_strip);
+        let (_, nv) = fill_ring_verts(&mut m, &near_strip, 0, &mut Vec::new());
         assert_eq!(nv, 0, "NEAR pooling collapses the strip to 2 indices -> infinitesimal -> 0");
     }
 

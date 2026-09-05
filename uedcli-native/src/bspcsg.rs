@@ -294,6 +294,20 @@ fn fnv_engine_children() -> bool {
     FNV_ENGINE_CHILDREN.with(|c| c.get())
 }
 
+/// RAII: run the descent in the ENGINE child convention for the current scope. The zone pass gets a
+/// tree `swap_node_children` has already put in that convention, unlike live incremental CSG.
+pub(crate) struct FnvEngineChildrenGuard(bool);
+impl FnvEngineChildrenGuard {
+    pub(crate) fn enable() -> Self {
+        FnvEngineChildrenGuard(FNV_ENGINE_CHILDREN.with(|c| c.replace(true)))
+    }
+}
+impl Drop for FnvEngineChildrenGuard {
+    fn drop(&mut self) {
+        FNV_ENGINE_CHILDREN.with(|c| c.set(self.0));
+    }
+}
+
 /// Test the point `p_idx` against the query, shrinking `(best_i, best_d=R)` if it is the new nearest
 /// within R. Editor summation order `(dy² + dx²) + dz²` (0x1adccb..0x1adccf); strict `d² < R²`.
 fn fnv_consider(model: &Model, v: &Vec3, p_idx: i32, best_i: &mut i32, best_d: &mut f32) {
@@ -309,10 +323,25 @@ fn fnv_consider(model: &Model, v: &Vec3, p_idx: i32, best_i: &mut i32, best_d: &
     }
 }
 
+/// Points a caller is in the middle of pooling onto nodes it has already linked to `owner`'s coplanar
+/// chain but that are not yet in `Model.Nodes` — Pass D's landing rings (see `find_nearest_vertex`).
+/// Considered at the END of `owner`'s chain walk, which is where `bspAddNode(NODE_Plane)` links them.
+pub(crate) struct PendingChainRing<'a> {
+    pub owner: i32,
+    pub points: &'a [i32],
+}
+
 /// The recursive descent (helper 0x1adb60): iBack recursed when `pd >= -R`; the node + its coplanar
 /// (iPlane) chain's surf-base + vert-pool tested when `-R < pd <= R`; iFront tail-looped when `pd <= R`.
 /// R (`best_d`) shrinks to the nearest hit so far, tightening the prune.
-fn fnv_recurse(model: &Model, v: &Vec3, i_node_start: i32, best_i: &mut i32, best_d: &mut f32) {
+fn fnv_recurse(
+    model: &Model,
+    v: &Vec3,
+    i_node_start: i32,
+    best_i: &mut i32,
+    best_d: &mut f32,
+    pending: Option<&PendingChainRing>,
+) {
     // Native's INCREMENTAL tree is in the CSG child convention (iFront/iBack swapped vs the engine's,
     // which `swap_node_children` converts at the end); the editor's FindNearestVertex walks the engine
     // convention. So during live CSG the descent's near/far children are swapped: recurse iFront when
@@ -327,14 +356,18 @@ fn fnv_recurse(model: &Model, v: &Vec3, i_node_start: i32, best_i: &mut i32, bes
             (n.i_front, n.i_back)
         };
         if pd >= -*best_d && near_back != -1 {
-            fnv_recurse(model, v, near_back, best_i, best_d);
+            fnv_recurse(model, v, near_back, best_i, best_d, pending);
         }
         if pd > -*best_d && pd <= *best_d {
             let mut c = i_node;
+            let mut chain_has_pending_owner = false;
             while c != -1 {
+                chain_has_pending_owner |= pending.is_some_and(|p| p.owner == c);
                 let cn = &model.nodes[c as usize];
-                if cn.i_surf >= 0 {
-                    fnv_consider(model, v, model.surfs[cn.i_surf as usize].p_base, best_i, best_d);
+                // Same defensive bound as the vert pool below: never fires on a well-formed tree,
+                // but a node whose iSurf outruns the surf array must not panic out of the CLI.
+                if let Some(s) = usize::try_from(cn.i_surf).ok().and_then(|i| model.surfs.get(i)) {
+                    fnv_consider(model, v, s.p_base, best_i, best_d);
                 }
                 // Vert-pool guarded by NumVertices only (disasm-faithful); the extra bounds guard
                 // never fires on a well-formed tree but avoids a panic -> CLI traceback on bad input.
@@ -349,6 +382,11 @@ fn fnv_recurse(model: &Model, v: &Vec3, i_node_start: i32, best_i: &mut i32, bes
                 }
                 c = cn.i_plane;
             }
+            if chain_has_pending_owner {
+                for &p_idx in pending.expect("owner matched").points {
+                    fnv_consider(model, v, p_idx, best_i, best_d);
+                }
+            }
         }
         i_node = if pd <= *best_d { far_front } else { -1 };
     }
@@ -356,13 +394,32 @@ fn fnv_recurse(model: &Model, v: &Vec3, i_node_start: i32, best_i: &mut i32, bes
 
 /// `UModel::FindNearestVertex` — nearest `Model.Points` index within `tol` reachable-and-unpruned from
 /// root 0, or `None` (empty tree, or nothing within the pruned descent's reach). See the module note.
-fn find_nearest_vertex(model: &Model, v: Vec3, tol: f32) -> Option<usize> {
-    if model.nodes.is_empty() {
-        return None; // 0x1adee3: Model->Nodes.Num == 0 -> immediate MISS
-    }
+pub(crate) fn find_nearest_vertex(model: &Model, v: Vec3, tol: f32) -> Option<usize> {
+    find_nearest_vertex_pending(model, v, tol, None)
+}
+
+/// `find_nearest_vertex` plus the caller's not-yet-materialised chain nodes (`PendingChainRing`).
+/// `bspAddNode` adds its node to `Model.Nodes`, links it (`Editor.dll 0x100352c5`), zeroes
+/// `NumVertices` (`0x100352d4`) and then increments it INSIDE the fill loop (`0x10035348`) right
+/// after writing each slot — so a point pooled earlier in the same fill, and every ring an earlier
+/// landing of the same chain node left behind, is already visible to the next `bspAddPoint`.
+pub(crate) fn find_nearest_vertex_pending(
+    model: &Model,
+    v: Vec3,
+    tol: f32,
+    pending: Option<&PendingChainRing>,
+) -> Option<usize> {
     let mut best_i: i32 = -1;
     let mut best_d: f32 = tol;
-    fnv_recurse(model, &v, 0, &mut best_i, &mut best_d);
+    if model.nodes.is_empty() {
+        // 0x1adee3: Model->Nodes.Num == 0 -> immediate MISS. A pending ring is a node `bspAddNode`
+        // has already added, so it still counts against that test and stays testable.
+        for &p_idx in pending.map_or(&[][..], |p| p.points) {
+            fnv_consider(model, &v, p_idx, &mut best_i, &mut best_d);
+        }
+        return (best_i >= 0).then_some(best_i as usize);
+    }
+    fnv_recurse(model, &v, 0, &mut best_i, &mut best_d, pending);
     if best_i >= 0 {
         Some(best_i as usize)
     } else {
