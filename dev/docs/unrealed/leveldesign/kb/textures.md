@@ -15,7 +15,7 @@ how a surface renders, never its geometry.
 
 **uedcli seat** ✅: `brush poly find` prints face selectors → `brush poly set - --texture … --add-flag …
 --remove-flag …` for stored attributes, and `brush poly pan - --to/--by U,V`, `brush poly rotate - --by
-UU`, `brush poly scale - --by FU,FV` for the texture frame; `brush poly align --wall|--floor|--ring`;
+UU`, `brush poly scale - --by FU,FV` for the texture frame; `brush poly align wall|floor|run`;
 `brush poly list` inspects. Flags are set by name (`--add-flag Masked`), never by bit value. Faces are
 targeted by `BRUSH:SELECTOR` (`Wall1:3,5` or `Wall2:all`).
 
@@ -66,8 +66,9 @@ Key distinctions:
 ## 2. Alignment & scrolling  🔬
 
 - **Auto-align:** Floor/Ceiling alignment vs Wall / Wall-Panning alignment (project the texture onto the
-  face by its dominant axis). uedcli: `brush poly align --floor|--wall|--ring` (`--ring` wraps a texture
-  around a cylinder's side faces).
+  face by its dominant axis). uedcli `brush poly align floor|wall` reproduce the editor's
+  `FLOOR`/`WALLX`/`WALLY` projection; `run` lays one texture continuously along a connected strip (a
+  cylinder wrap or a curved/flat bend), uedcli's own.
 - **Manual:** Pan / Rotate / Scale — one uedcli verb each. `brush poly pan - --to U,V` (absolute) /
   `--by dU,dV` (relative), in whole texels; `brush poly rotate - --by UU` (unreal rotation units,
   16384 = 90°, no `--to` — see `rationale/surface.md`); `brush poly scale - --by FU,FV` names the
@@ -246,7 +247,7 @@ resets to `SourceTexture`, then calls `NotifyActor.RenderTexture()` where script
 |---|---|
 | Texture faces | `brush poly find Wall1 \| brush poly set - --texture CoreTexMetal.ClenGrayMetal_A` |
 | Add/remove a flag | `brush poly set Wall1:all --add-flag Masked --remove-flag Unlit` |
-| Align | `brush poly align Wall1:all --wall` (or `--floor` / `--ring`) |
+| Align | `brush poly align wall Wall1:all` (or `floor` / `run`) |
 | Pan | `brush poly pan Floor1:all --to 64,0` (or `--by 8,0`) |
 | Rotate | `brush poly rotate Sign1:2 --by 16384` (a quarter turn) |
 | Scale | `brush poly scale Floor1:all --by 2,2` (texture looks twice as big) |

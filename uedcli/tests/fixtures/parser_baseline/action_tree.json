@@ -6390,7 +6390,7 @@
                 "scale": "resize a face's texture in place (no continuity across faces)",
                 "move": "translate whole faces: move every vertex of each face by a world delta",
                 "find": "print matching faces of one or more brushes as BRUSH:idx selectors (feed to poly align/set)",
-                "align": "align faces so a texture flows continuously across them (wall/floor/ring)"
+                "align": "align faces so a texture flows continuously across them: wall|floor|run"
               }
             }
           ],
@@ -7063,16 +7063,7 @@
             "align": {
               "class": "_CoordArgumentParser",
               "prog": "uedcli brush poly align",
-              "mutex_groups": [
-                {
-                  "required": true,
-                  "members": [
-                    "mode",
-                    "mode",
-                    "mode"
-                  ]
-                }
-              ],
+              "mutex_groups": [],
               "actions": [
                 {
                   "class": "_HelpAction",
@@ -7094,126 +7085,235 @@
                   "mutex_group": null
                 },
                 {
-                  "class": "_StoreConstAction",
-                  "option_strings": [
-                    "--wall"
-                  ],
-                  "dest": "mode",
-                  "nargs": 0,
-                  "const": "wall",
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "one shared texture frame across a set of strictly COPLANAR VERTICAL faces (brickwork does not reset at each brush edge)",
-                  "mutex_group": [
-                    0,
-                    0
-                  ]
-                },
-                {
-                  "class": "_StoreConstAction",
-                  "option_strings": [
-                    "--floor"
-                  ],
-                  "dest": "mode",
-                  "nargs": 0,
-                  "const": "floor",
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "one shared texture frame across a set of strictly COPLANAR HORIZONTAL faces (floor/ceiling)",
-                  "mutex_group": [
-                    0,
-                    1
-                  ]
-                },
-                {
-                  "class": "_StoreConstAction",
-                  "option_strings": [
-                    "--ring"
-                  ],
-                  "dest": "mode",
-                  "nargs": 0,
-                  "const": "ring",
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "wrap a texture around a cylinder's side faces: U advances by each facet's chord around the ring, V runs along the axis",
-                  "mutex_group": [
-                    0,
-                    2
-                  ]
-                },
-                {
-                  "class": "_StoreAction",
+                  "class": "_SubParsersAction",
                   "option_strings": [],
-                  "dest": "targets",
-                  "nargs": "*",
+                  "dest": "align_mode",
+                  "nargs": "A...",
                   "const": null,
                   "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "BRUSH:SELECTOR",
-                  "converter": null,
-                  "help": "faces to align: BRUSH:SELECTOR (SELECTOR = 'all' or comma indices) or a bare brush Name (= all its polys). Use `-` to read the set from stdin instead (bare names, or the BRUSH:idx lines `poly find` prints; empty stdin is a clean no-op). The first face is the seam/seed.",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreTrueAction",
-                  "option_strings": [
-                    "--fresh-frame"
-                  ],
-                  "dest": "fresh_frame",
-                  "nargs": 0,
-                  "const": true,
-                  "default": false,
-                  "required": false,
+                  "required": true,
                   "choices": null,
                   "metavar": null,
                   "converter": null,
-                  "help": "synthesize a canonical texture frame from the face normal instead of adopting the seed face's frame (default). Adopt means: --wall/--floor continue the seed's exact TextureU/V+Pan; --ring keeps the seed's texel SCALE+Pan but re-derives U along the ring tangent and V along the axis",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreTrueAction",
-                  "option_strings": [
-                    "--fit-perimeter"
+                  "help": null,
+                  "mutex_group": null,
+                  "subparser_choices": [
+                    "wall",
+                    "floor",
+                    "run"
                   ],
-                  "dest": "fit_perimeter",
-                  "nargs": 0,
-                  "const": true,
-                  "default": false,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "--ring only: snap the texture scale so an integer number of texels fits the perimeter (exact seam meet); default leaves the closing seam",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--tree"
-                  ],
-                  "dest": "tree",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "KIND/NAME",
-                  "converter": null,
-                  "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
-                  "mutex_group": null
+                  "subparser_help": {
+                    "wall": "stamp a world-projected frame on each VERTICAL face (brickwork does not reset at each brush edge)",
+                    "floor": "stamp a world-projected frame on each HORIZONTAL face (floor/ceiling)",
+                    "run": "lay one continuous texture along a connected RUN of faces: U follows the run, V across it, phase carried across every seam. Wraps a cylinder, walks a wall run or a curved/flat bend; derives its own walk order from geometry, so the order faces are passed in does not matter. Exclude a cylinder's caps"
+                  }
                 }
               ],
-              "subparsers": {}
+              "subparsers": {
+                "wall": {
+                  "class": "_CoordArgumentParser",
+                  "prog": "uedcli brush poly align wall",
+                  "mutex_groups": [],
+                  "actions": [
+                    {
+                      "class": "_HelpAction",
+                      "option_strings": [
+                        "-h",
+                        "--help"
+                      ],
+                      "dest": "help",
+                      "nargs": 0,
+                      "const": null,
+                      "default": {
+                        "__suppress__": true
+                      },
+                      "required": false,
+                      "choices": null,
+                      "metavar": null,
+                      "converter": null,
+                      "help": "show this help message and exit",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreAction",
+                      "option_strings": [],
+                      "dest": "targets",
+                      "nargs": "*",
+                      "const": null,
+                      "default": null,
+                      "required": false,
+                      "choices": null,
+                      "metavar": "BRUSH:SELECTOR",
+                      "converter": null,
+                      "help": "faces to align: BRUSH:SELECTOR (SELECTOR = 'all' or comma indices) or a bare brush Name (= all its polys). Use `-` to read the set from stdin instead (bare names, or the BRUSH:idx lines `poly find` prints; empty stdin is a clean no-op)",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreAction",
+                      "option_strings": [
+                        "--tree"
+                      ],
+                      "dest": "tree",
+                      "nargs": null,
+                      "const": null,
+                      "default": null,
+                      "required": false,
+                      "choices": null,
+                      "metavar": "KIND/NAME",
+                      "converter": null,
+                      "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+                      "mutex_group": null
+                    }
+                  ],
+                  "subparsers": {}
+                },
+                "floor": {
+                  "class": "_CoordArgumentParser",
+                  "prog": "uedcli brush poly align floor",
+                  "mutex_groups": [],
+                  "actions": [
+                    {
+                      "class": "_HelpAction",
+                      "option_strings": [
+                        "-h",
+                        "--help"
+                      ],
+                      "dest": "help",
+                      "nargs": 0,
+                      "const": null,
+                      "default": {
+                        "__suppress__": true
+                      },
+                      "required": false,
+                      "choices": null,
+                      "metavar": null,
+                      "converter": null,
+                      "help": "show this help message and exit",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreAction",
+                      "option_strings": [],
+                      "dest": "targets",
+                      "nargs": "*",
+                      "const": null,
+                      "default": null,
+                      "required": false,
+                      "choices": null,
+                      "metavar": "BRUSH:SELECTOR",
+                      "converter": null,
+                      "help": "faces to align: BRUSH:SELECTOR (SELECTOR = 'all' or comma indices) or a bare brush Name (= all its polys). Use `-` to read the set from stdin instead (bare names, or the BRUSH:idx lines `poly find` prints; empty stdin is a clean no-op)",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreAction",
+                      "option_strings": [
+                        "--tree"
+                      ],
+                      "dest": "tree",
+                      "nargs": null,
+                      "const": null,
+                      "default": null,
+                      "required": false,
+                      "choices": null,
+                      "metavar": "KIND/NAME",
+                      "converter": null,
+                      "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+                      "mutex_group": null
+                    }
+                  ],
+                  "subparsers": {}
+                },
+                "run": {
+                  "class": "_CoordArgumentParser",
+                  "prog": "uedcli brush poly align run",
+                  "mutex_groups": [],
+                  "actions": [
+                    {
+                      "class": "_HelpAction",
+                      "option_strings": [
+                        "-h",
+                        "--help"
+                      ],
+                      "dest": "help",
+                      "nargs": 0,
+                      "const": null,
+                      "default": {
+                        "__suppress__": true
+                      },
+                      "required": false,
+                      "choices": null,
+                      "metavar": null,
+                      "converter": null,
+                      "help": "show this help message and exit",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreAction",
+                      "option_strings": [],
+                      "dest": "targets",
+                      "nargs": "*",
+                      "const": null,
+                      "default": null,
+                      "required": false,
+                      "choices": null,
+                      "metavar": "BRUSH:SELECTOR",
+                      "converter": null,
+                      "help": "faces to align: BRUSH:SELECTOR (SELECTOR = 'all' or comma indices) or a bare brush Name (= all its polys). Use `-` to read the set from stdin instead (bare names, or the BRUSH:idx lines `poly find` prints; empty stdin is a clean no-op)",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreAction",
+                      "option_strings": [
+                        "--turn"
+                      ],
+                      "dest": "turn",
+                      "nargs": null,
+                      "const": null,
+                      "default": 0,
+                      "required": false,
+                      "choices": null,
+                      "metavar": "UU",
+                      "converter": "int",
+                      "help": "rotate the texture uniformly in each face's own run frame, in UNREAL ROTATION UNITS (16384 = 90 degrees), matching `brush build --rotate`. Any angle is allowed; on a flat bend a non-quarter turn shears both axes at the seams (the amount is reported to stderr), while a cylinder run stays exact at every angle",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreTrueAction",
+                      "option_strings": [
+                        "--fit-perimeter"
+                      ],
+                      "dest": "fit_perimeter",
+                      "nargs": 0,
+                      "const": true,
+                      "default": false,
+                      "required": false,
+                      "choices": null,
+                      "metavar": null,
+                      "converter": null,
+                      "help": "snap the texture scale so a whole number of TEXELS fits the perimeter (needs a CLOSED run and a quarter --turn, else exit 2). This still leaves ~a whole-texel residual at the closing seam (a texture repeats every T texels, not every texel); the whole-TILE fix that closes the seam needs the texture size and arrives with the catalog. Default leaves the closing seam",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreAction",
+                      "option_strings": [
+                        "--tree"
+                      ],
+                      "dest": "tree",
+                      "nargs": null,
+                      "const": null,
+                      "default": null,
+                      "required": false,
+                      "choices": null,
+                      "metavar": "KIND/NAME",
+                      "converter": null,
+                      "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+                      "mutex_group": null
+                    }
+                  ],
+                  "subparsers": {}
+                }
+              }
             }
           }
         },

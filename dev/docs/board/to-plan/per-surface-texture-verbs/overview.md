@@ -1,10 +1,19 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "Per-surface texture verbs — STEPS 2-5 (the `brush poly align` half)"
+summary = "Per-surface texture verbs — STEP 5 (catalog + one-tile + scale --to); steps 2-4 shipped"
 +++
 
-# Per-surface texture verbs — STEPS 2-5 (the `brush poly align` half)
+# Per-surface texture verbs — STEP 5 (steps 2-4 shipped)
+
+**STEPS 2-4 SHIPPED** (branch `worktree-poly-align-steps-2-4`, squash-merged): step 2 `align`
+flags→`wall|floor|run` subcommands + `--fresh-frame` deleted + BRUSH:idx stdout; step 3 `wall`/`floor`
+rewritten to the editor's `WALLX`/`WALLY`/`FLOOR` projection family (pinned against `measured.json`);
+step 4 `align run` general connected run + `--turn` + the `--fit-perimeter` guards. `rationale/polyalign.md`
+records the run algorithm's agent choices. **Only STEP 5 remains** — catalog plumbing, the
+`--fit-perimeter` whole-**tile** fix, `one-tile`, and `scale --to` (all need the texture catalog).
+Consider splitting `one-tile` out (its own frame math). See `align-flag-rename-left-dev-docs-refs-stale`
+for the stale dev-docs refs the rename left, awaiting the owner's yes.
 
 Spec: board item `the-per-surface-verb-split`.
 **Spec gate: PASSED** — at its ceiling; every round's findings are folded into the sections

@@ -102,7 +102,7 @@ _POSITIONAL = [
     ("brush-poly-pan", ["brush", "poly", "pan", f"{BAD}:all", "--by", "0,32"], ""),
     ("brush-poly-rotate", ["brush", "poly", "rotate", f"{BAD}:all", "--by", "16384"], ""),
     ("brush-poly-scale", ["brush", "poly", "scale", f"{BAD}:all", "--by", "2,2"], ""),
-    ("brush-poly-align", ["brush", "poly", "align", "--wall", f"{BAD}:0"], ""),
+    ("brush-poly-align", ["brush", "poly", "align", "wall", f"{BAD}:0"], ""),
     ("mover-key-list", ["mover", "key", "list", BAD], ""),
     ("mover-key-count", ["mover", "key", "count", BAD, "4"], ""),
     ("mover-key-move", ["mover", "key", "move", BAD, "1", "--by", "0,0,1"], ""),
@@ -131,7 +131,7 @@ _STDIN = [
     ("brush-poly-pan-stdin", ["brush", "poly", "pan", "-", "--by", "0,32"], f"{BAD}:all\n"),
     ("brush-poly-rotate-stdin", ["brush", "poly", "rotate", "-", "--by", "16384"], f"{BAD}:all\n"),
     ("brush-poly-scale-stdin", ["brush", "poly", "scale", "-", "--by", "2,2"], f"{BAD}:all\n"),
-    ("brush-poly-align-stdin", ["brush", "poly", "align", "--floor", "-"], f"{BAD}:0\n"),
+    ("brush-poly-align-stdin", ["brush", "poly", "align", "floor", "-"], f"{BAD}:0\n"),
 ]
 
 _PARSER = build_parser()
