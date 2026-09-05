@@ -6,7 +6,16 @@ summary = "WanChai N40 rotated-brush FPoly.Base is 5.6e-3 off UED22"
 
 # WanChai N40 rotated-brush FPoly.Base is 5.6e-3 off UED22
 
-The lockstep ladder's next stop after WanChai N=39. Blocks N>=40 on that level.
+FIXED 2026-09-05 (`Remap FBspSurf.pBase in MergeNearPoints, as the editor does`). The base value
+itself is NOT wrong — `bspOptGeom`'s `MergeNearPoints(Model, 0.25)` welds the two points, and its
+SECOND remap loop (`Editor.dll 0x33eee`-`0x33f27`, `Model->Surfs` stride 0x40, field `Surf+8`) puts
+every `FBspSurf.pBase` through the same table it puts `FVert.iVertex` through. Native ran only the
+vert half, so the merged-away point stayed alive under a `pBase` and survived the next `bspRefresh`.
+With the surf half in place native lands 628 points and `Surf[206].pBase = 134`, exactly UED22's.
+Pinned by `test_wanchai_ladder_facts.py::test_mergenearpoints_remaps_surf_pbase_too`.
+
+The analysis below is the diagnosis as it stood before the cause was found; it is kept because the
+ruled-out list is what pointed at `bspOptGeom`.
 
 ## What diverges
 
@@ -57,13 +66,11 @@ Chased and DISPROVEN, so the next session does not repeat it:
 - The `pBase` threshold is right: `bspAddNode`'s surf-alloc calls `bspAddPoint(Model, &Base, 1)`
   (`Editor.dll 0x10034f0b push 1`) = `THRESH_POINTS_ARE_SAME`, not the ring's 0.015.
 
-## Where to look
+## Where it was
 
-Something between the world-space transform and the surf allocation replaces or re-snaps this face's
-`Base` in UED22 and not in native. Candidates not yet chased: `bspOptGeom` (`Editor.dll 0x36870`)
-recomputing a merged surf's `pBase`, and whatever the incremental-CSG surf for this face carried
-before the structural repartition copied it into the soup (`make_ed_polys` takes
-`Points[Surf.pBase]`, so a divergence there propagates unchanged).
+The first of those candidates: `bspOptGeom` (`Editor.dll 0x36870`) -> `MergeNearPoints` — not a
+recompute but a REMAP, at a radius (0.25) two orders above `bspAddPoint`'s 0.002, which is why a gap
+this size survives the add and dies at optgeom.
 
 ## Reproduce
 

@@ -117,10 +117,11 @@ pub fn bsp_opt_geom(model: &mut Model) {
 /// Faithful to the disassembly: for each point `i`, `remap[i]` = the **lowest** earlier index `j < i`
 /// whose **Euclidean** distance to `i` is `< 0.25` (`comiss radius², dist²; jbe` skips when
 /// `radius² <= dist²`), else `i`; then every `FVert.iVertex` is replaced by `remap[iVertex]` (a single
-/// indirection, `0x33ee5`, not a transitive closure).  We deliberately do NOT also remap `FBspSurf.pBase`
-/// (`0x33eee`) — that would perturb the surf pool, which is kept byte-exact upstream.  On an already-
-/// deduped model (the editor golden, closest pair 0.76 uu) this is a no-op.  The Points array is left
-/// intact; only vertex references collapse — the observable effect pass 1/2 depend on.
+/// indirection, `0x33ee5`, not a transitive closure) and, in the SAME way, every `FBspSurf.pBase`
+/// (`0x33eee`-`0x33f27`: stride-0x40 walk of `Model->Surfs` reading `Surf+8`, both guarded on
+/// `0 <= pBase < Points.Num`).  On an already-deduped model (the editor golden, closest pair 0.76 uu)
+/// both are a no-op.  The Points array is left intact; only the references collapse, and the
+/// now-unreferenced points fall out at the next `bspRefresh`.
 fn merge_near_points(model: &mut Model) {
     let n = model.points.len();
     if n == 0 {
@@ -179,6 +180,15 @@ fn merge_near_points(model: &mut Model) {
         for v in &mut model.verts {
             if let Some(&r) = remap.get(v.i_vertex as usize) {
                 v.i_vertex = r;
+            }
+        }
+        // The surf-base loop the editor runs straight after the vert one (`0x33eee`). Skipping it
+        // left a merged-away point still named by a `pBase`, so `bspRefresh` kept it alive: WanChai
+        // N40's `Brush3674` poly 4 has a far-away authored `Origin` whose transform lands 5.6e-3
+        // from `Brush282` poly 5's — too far for `bspAddPoint`'s 0.002, well inside this 0.25 merge.
+        for s in &mut model.surfs {
+            if let Some(&r) = remap.get(s.p_base as usize) {
+                s.p_base = r;
             }
         }
     }
