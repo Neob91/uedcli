@@ -38,7 +38,9 @@ from uedcli.container_assets import resource_mounts                 # noqa: E402
 from uedcli.driver import Driver, to_z_path                         # noqa: E402
 from uedcli.editor import ensure_editor, stop_editor                # noqa: E402
 from uedcli.emit import emit_map                                    # noqa: E402
+from uedcli.classindex import ClassIndex                            # noqa: E402
 from uedcli.materialize import levelinfo_first_order, _short_class  # noqa: E402
+from uedcli.movers import set_base_pose                             # noqa: E402
 from uedcli.packages import editor_search_dirs, ensure_load         # noqa: E402
 from uedcli.uuid7 import uuid7                                      # noqa: E402
 
@@ -116,6 +118,17 @@ def main() -> int:
     host_search_dirs = editor_search_dirs(search_dirs)
 
     lvl, _ranks = trunk.read_level(trunk_dir)
+    # Author each mover's key-0 base pose into the IMPORT T3D (this build's input only -- never the
+    # committed trunk, which strips BasePos/BaseRot as engine-managed). `MAP IMPORTADD`/`EDIT PASTE`
+    # derive them from Location/Rotation, but the ruled `MAP IMPORT` ingest verb does NOT, so without
+    # this the mover keeps BasePos=0 and `LIGHT APPLY`'s `Location = BasePos` normalisation drops it
+    # at the origin. Retail confirms the derivation is what a real map stores: every mover in the
+    # shipped `02_NYC_Bar.dx` has BasePos == Location and BaseRot == Rotation. Same derivation
+    # `movers.set_base_pose` applies on the native side (owner ruling 2026-09-05).
+    class_idx = ClassIndex.from_files([(f.stem, str(f)) for d in host_search_dirs
+                                       for f in sorted(Path(d).glob("*.u"))])
+    for name in lvl.order:
+        set_base_pose(lvl.actors[name], class_idx)
     classes = {n: lvl.actors[n].cls for n in lvl.order}
     has_brush = {n: lvl.actors[n].brush is not None for n in lvl.order}
     imp_order = levelinfo_first_order(lvl.order, classes, has_brush)

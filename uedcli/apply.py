@@ -384,7 +384,8 @@ def _materialize_native(*, result: dict[str, str], materialized_order: list[str]
         dx_bytes, warnings = assemble_unbuilt(
             level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=world_model,
             csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, world_model),
-            light_names=[n for n, *_rest in lights])
+            light_names=[n for n, *_rest in lights],
+            class_defaults=defaults or ClassDefaults(schema_resolver))
         for w in warnings:
             print(f"warning: {w}", file=sys.stderr)
         if path_pass is not None:

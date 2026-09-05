@@ -1,6 +1,6 @@
 +++
 priority = "p3"
-kind = "bug"
+kind = "debug"
 summary = "native/saveorder.py counts the class ref inside InventoryItem but not InventoryItemCarcass, so that ref is missing from native's name/import order model."
 +++
 

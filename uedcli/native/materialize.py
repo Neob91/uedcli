@@ -73,7 +73,37 @@ def _pointregion_prop(name: str, *, zone: str, i_leaf: int = -1, zone_number: in
         Prop("ZoneNumber", PT_BYTE, zone_number)]), struct_name="PointRegion")
 
 
-def _trunk_to_actorspecs(level, schema, world_model=None, zone_actors=None):
+def _pawn_region_offsets(cls: str, props, class_defaults):
+    """`(foot_drop, head_rise)` for a Pawn actor, or `None` when the class is not a Pawn.
+
+    `ULevel::SetActorZone` (`Engine 0x10161e10`) recomputes, for an actor that IsA `APawn`,
+    `FootRegion` at `Location - (0,0,*(float*)(pawn+0x194))` and `HeadRegion` at
+    `Location + (0,0,*(float*)(pawn+0x2ec))`. Live capture over 20+ pawns at `0x1782008`: `+0x194`
+    reads 39 / 43 / 47.5, each class's `CollisionHeight` default (Jock 47.5, SandraRenton 43); the
+    editor holds whatever the actor carries, so an AUTHORED `CollisionHeight` wins over the default.
+    `+0x2ec` read 0.0 on every pawn, which is the runtime `EyeHeight` (those classes declare
+    `BaseEyeHeight` 36/38/40 and `EyeHeight` 0) -- an editor-placed pawn has never ticked, so it
+    still holds its class default.
+    """
+    if class_defaults is None:
+        return None
+    info = class_defaults.for_class(cls)
+    if not any(o.casefold() == "engine.pawn" for o in info.owners.values()):
+        return None
+
+    def effective(field: str) -> float:
+        for k, v in props:
+            if k.split("(")[0].casefold() == field:
+                try:
+                    return float(v)
+                except ValueError:
+                    break
+        return float(info.typed_default((field, 0)) or 0.0)
+
+    return effective("collisionheight"), effective("eyeheight")
+
+
+def _trunk_to_actorspecs(level, schema, world_model=None, zone_actors=None, class_defaults=None):
     """Convert trunk Actors to `ActorSpec`s carrying TYPED `FPropertyTag`s: each raw T3D
     `(key,value)` prop is typed via `props.convert_actor_props` against `schema` (an `ImportSchema`
     or a bare `schema_lookup` callback); `Location` is routed from the actor's typed field.
@@ -120,13 +150,30 @@ def _trunk_to_actorspecs(level, schema, world_model=None, zone_actors=None):
             # `{zone: actor}` map `_patch_zone_refs` writes into `Model.Zones[].ZoneActor`.
             props.append(_pointregion_prop("Region", zone=(zone_actors or {}).get(zone_number, li_name),
                                            i_leaf=i_leaf, zone_number=zone_number))
+        # A Pawn's `FootRegion`/`HeadRegion` are recomputed by the same `SetActorZone` pass, from the
+        # points below and above its collision cylinder (`_pawn_region_offsets`). The trunk carries
+        # the source level's values, whose Zone refs a subset cannot resolve; the editor OVERWRITES
+        # them, so drop the authored pair and stamp the descent. Only with a BUILT world: with no
+        # nodes the rebuild's zoning pass does not run and the imported values stand (NYC_Bar N=58,
+        # where UED22 leaves both unresolved).
+        pawn_regions = None
+        if world_model is not None and getattr(world_model, "nodes", None) and short != "LevelInfo":
+            pawn_regions = _pawn_region_offsets(cls, a.props, class_defaults)
+        if pawn_regions is not None:
+            foot_drop, head_rise = pawn_regions
+            x, y, z = (float(c) for c in (a.location or (0.0, 0.0, 0.0)))
+            for pname, pz in (("FootRegion", z - foot_drop), ("HeadRegion", z + head_rise)):
+                leaf, zone = _model_point_region(world_model, (x, y, pz))
+                props.append(_pointregion_prop(pname, zone=(zone_actors or {}).get(zone, li_name),
+                                               i_leaf=leaf, zone_number=zone))
         # The editor RESETS these nav-runtime fields when a level is imported (they end up equal
         # to the class default and are omitted from the save -- UNATCO import golden, 2026-09-02);
         # `PATHS BUILD` regenerates them. Serializing a trunk-carried value would diverge from any
         # editor-made map.
-        raw_props = [(k, v) for (k, v) in a.props
-                     if k.split("(")[0].casefold() not in
-                     ("previouspath", "visnoreachpaths", "nextordered", "prevordered")]
+        dropped = {"previouspath", "visnoreachpaths", "nextordered", "prevordered"}
+        if pawn_regions is not None:
+            dropped |= {"footregion", "headregion"}      # stamped above from the BSP descent
+        raw_props = [(k, v) for (k, v) in a.props if k.split("(")[0].casefold() not in dropped]
         if a.brush is not None:
             # DROP the trunk's `Brush=Model'MyLevel.<shape>'` string prop: `assemble._brush_body`
             # re-synthesizes the shape link as a LOCAL export ref. Left in, `convert_prop` would

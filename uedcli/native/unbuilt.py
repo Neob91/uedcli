@@ -560,7 +560,7 @@ def _map_import_t3d(level) -> str:
 
 def assemble_unbuilt(level, *, version: int = 69, level_name: str = "MyLevel",
                      schema=None, pkg_dirs=None, world_model=None, csg_brushes=None,
-                     zone_actors=None, light_names=None, table_oracle=None):
+                     zone_actors=None, light_names=None, table_oracle=None, class_defaults=None):
     """`assemble_level` with an EMPTY world Model and REAL per-brush polys.
 
     `schema` is the `ImportSchema` (or bare `schema_lookup` callback) that types every actor prop
@@ -603,28 +603,32 @@ def assemble_unbuilt(level, *, version: int = 69, level_name: str = "MyLevel",
         pass1, _w1 = _assemble_once(
             level, version=version, level_name=level_name, schema=schema, pkg_dirs=pkg_dirs,
             world_model=copy.deepcopy(world_model), csg_brushes=csg_brushes,
-            zone_actors=zone_actors, light_names=light_names, table_oracle=None)
+            zone_actors=zone_actors, light_names=light_names, table_oracle=None,
+            class_defaults=class_defaults)
         spec = compute_tables(pass1, load_files,
                               map_name_sequence(pass1, _map_import_t3d(level)))
         return _assemble_once(
             level, version=version, level_name=level_name, schema=schema, pkg_dirs=pkg_dirs,
             world_model=copy.deepcopy(world_model), csg_brushes=csg_brushes,
-            zone_actors=zone_actors, light_names=light_names, table_oracle=spec)
+            zone_actors=zone_actors, light_names=light_names, table_oracle=spec,
+            class_defaults=class_defaults)
     return _assemble_once(
         level, version=version, level_name=level_name, schema=schema, pkg_dirs=pkg_dirs,
         world_model=world_model, csg_brushes=csg_brushes, zone_actors=zone_actors,
+        class_defaults=class_defaults,
         light_names=light_names, table_oracle=table_oracle)
 
 
 def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
                    schema=None, pkg_dirs=None, world_model=None, csg_brushes=None,
-                   zone_actors=None, light_names=None, table_oracle=None):
+                   zone_actors=None, light_names=None, table_oracle=None, class_defaults=None):
     """One assembly pass (`level` already `rewrite_self_package_refs`-normalised). With
     `table_oracle` (a golden `Package` or a `saveorder.TableSpec`) the name/import tables
     come pre-seeded; without it they are insertion-order."""
     actors, brush_actors, warnings = _trunk_to_actorspecs(level, schema or (lambda fqcn: {}),
                                                           world_model=world_model,
-                                                          zone_actors=zone_actors)
+                                                          zone_actors=zone_actors,
+                                                          class_defaults=class_defaults)
     present = {a.name for a in actors + brush_actors}
     for spec in actors + brush_actors:
         spec.props = [p for pr in spec.props
