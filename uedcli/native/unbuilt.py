@@ -102,14 +102,27 @@ def rewrite_self_package_refs(level) -> None:
 
 
 def _internal_ref(prop, present: set[str], owner: str, warnings: list):
-    """Rewrite an intra-level object ref into an EXPORT ref, not a package import.
+    """Rewrite an intra-level object ref into an EXPORT ref, not a package import; return the prop, or
+    None to DROP it (a top-level object ref whose target this build omits -> reset to class default).
 
     A `MAP EXPORT` writes links between actors as `LevelInfo'MyLevel.LevelInfo0'`, `Base=`,
     `Target=` ... Left as-is, the assembler resolves `MyLevel.X` as an import of a package called
     `MyLevel`, and the engine refuses the load: `Can't import private object`. The target is in this
     very package, so it is an `ObjRef` -- resolved by name at body-build time. Recurses into a
     struct/array value so an internal ref INSIDE one (e.g. a struct member pointing at another actor)
-    is rewritten too -- else it leaks a bogus `MyLevel` package import that silently empties the load."""
+    is rewritten too -- else it leaks a bogus `MyLevel` package import that silently empties the load.
+
+    When a TOP-LEVEL object prop's target is absent from this build (e.g. `Base=LevelInfo0` on a
+    subset that synthesizes the LevelInfo rather than carrying it as an actor), the editor's import
+    resets the property to its class default and, that default being None for an object ref, does not
+    serialize it. So DROP the whole prop rather than emit `Base=None`: emitting a default-valued tag
+    the editor omits is a byte divergence (Island N=10..12, ThugMale5.Base)."""
+    if (isinstance(prop.value, ImportRef) and prop.ptype == AW.PT_OBJECT
+            and prop.value.qualified.casefold().startswith("mylevel.")
+            and prop.value.qualified.split(".", 1)[1] not in present):
+        warnings.append(f"{owner}.{prop.name}: refers to {prop.value.qualified}, which this build "
+                        f"does not contain -- dropped (reset to class default)")
+        return None
     prop.value = _rewrite_internal(prop.value, present, owner, prop.name, warnings)
     return prop
 
@@ -588,7 +601,8 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
                                                           world_model=world_model)
     present = {a.name for a in actors + brush_actors}
     for spec in actors + brush_actors:
-        spec.props = [_internal_ref(pr, present, spec.name, warnings) for pr in spec.props]
+        spec.props = [p for pr in spec.props
+                      if (p := _internal_ref(pr, present, spec.name, warnings)) is not None]
 
     class_packages, texture_groups, texture_kinds = {}, {}, {}
     if pkg_dirs:

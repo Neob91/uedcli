@@ -183,6 +183,16 @@ def _canon_value(idt: Ident, t) -> object:
         ileaf = struct.unpack_from("<i", t.raw, pos)[0]
         zn = t.raw[pos + 4]
         return ("region", idt.ref_identity(ref), ileaf, zn)
+    if t.ptype == PT_STRUCT and t.struct_name == "InitialAllianceInfo":
+        # {Name AllianceName; float AllianceLevel; byte bPermanent}. AllianceName is a name-table
+        # INDEX; the two builds' name-table ORDER differs (owner-excluded qsort tie), so the index
+        # differs while the string is equal. Resolve it to its (casefolded) string and keep the
+        # float+byte tail byte-compared -- a wrong alliance (different string) still FAILS. The
+        # generic struct fallback below raw-compares the index -> a false FAIL (gate's own note:
+        # "extend if one appears"); this is that extension (Island ThugMale5.InitialAlliances).
+        nidx, rest = read_compact_index(t.raw, 0)
+        name = _cf(p.names[nidx]) if 0 <= nidx < len(p.names) else nidx
+        return ("ia", name, t.raw[rest:].hex())
     # Any other struct/array/primitive: byte-faithful. A nested object ref inside such a value would
     # compare as raw bytes (its ref index may differ across export orders) -> a conservative FALSE
     # FAIL, never a false pass. No such case in the ladder's actors yet; extend if one appears.
@@ -194,7 +204,11 @@ def _canon_props(idt: Ident, pos: int, end: int, *, mask_props: set[str] = froze
     out = []
     for t in tags:
         val = ("MASKED",) if t.name.casefold() in mask_props else _canon_value(idt, t)
-        out.append((t.name, t.array_index, t.struct_name, val))
+        # Prop-tag names are FNames: case-insensitive, case-preserving. The editor writes the class's
+        # script-declared case (`MaxRange`); native is faithful to the trunk (`maxRange`). Fold the key
+        # case so the owner-ruled FName-case exclusion applies here too -- consistent with the name-
+        # table CONTENT check, which already casefolds. A genuinely different name still differs.
+        out.append((_cf(t.name), t.array_index, t.struct_name, val))
     return out
 
 
