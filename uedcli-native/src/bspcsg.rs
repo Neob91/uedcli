@@ -25,6 +25,10 @@ const THRESH_POINTS_ARE_SAME: f32 = 0.002;
 /// same SAME-vs-NEAR dichotomy `build.rs` uses for point pooling.
 const THRESH_POINTS_ARE_NEAR: f32 = 0.015;
 const THRESH_NORMALS_ARE_SAME: f32 = 2.0e-5;
+/// `bspAddVector` texture-axis dedup tolerance (DISASM `Editor.dll 0x35530`, spec §3.10). The editor
+/// keeps near-parallel texture axes distinct below this; native previously used 0.001 and pooled
+/// axes the editor keeps (OceanLab N3 Brush779 rotated-tessellated subtract).
+const THRESH_VECTORS_ARE_NEAR: f32 = 4.0e-4;
 
 // ENodePlace
 const NODE_BACK: i32 = 0;
@@ -143,7 +147,7 @@ fn bsp_add_vector(model: &mut Model, v: Vec3, exact: bool) -> i32 {
     let tol = if exact {
         THRESH_NORMALS_ARE_SAME
     } else {
-        0.001
+        THRESH_VECTORS_ARE_NEAR
     };
     if point_nearest_enabled() {
         if let Some((i, dist)) = nearest(&model.vectors, &v) {
@@ -3595,6 +3599,29 @@ fn rebuild_vector_pool(model: &mut Model) {
 mod tests {
     use super::*;
     use crate::csg::CsgOper;
+
+    #[test]
+    fn bsp_add_vector_keeps_axes_5e4_apart_merges_below_4e4() {
+        // `bspAddVector` texture-axis dedup at `THRESH_VECTORS_ARE_NEAR` = 4e-4 (DISASM 0x35530).
+        // Two axes 5e-4 apart stay distinct (OceanLab N3 pooled these at the old 0.001); two <4e-4
+        // apart merge to the first. `exact=false` = texture axis.
+        let mut model = Model::default();
+        let base = Vec3::new(-0.863011, 0.505185, 0.0);
+        let i0 = bsp_add_vector(&mut model, base, false);
+        assert_eq!(i0, 0);
+
+        // 5e-4 away (Euclidean) -> above 4e-4 -> kept distinct.
+        let far = Vec3::new(base.x, base.y + 5.0e-4, 0.0);
+        let i_far = bsp_add_vector(&mut model, far, false);
+        assert_eq!(i_far, 1, "axes 5e-4 apart must stay distinct at the 4e-4 threshold");
+        assert_eq!(model.vectors.len(), 2);
+
+        // 3e-4 away -> below 4e-4 -> merges to the first-within-threshold entry (base, idx0).
+        let near = Vec3::new(base.x, base.y + 3.0e-4, 0.0);
+        let i_near = bsp_add_vector(&mut model, near, false);
+        assert_eq!(i_near, 0, "axes <4e-4 apart must merge to the first within threshold");
+        assert_eq!(model.vectors.len(), 2, "no new vector pushed for a sub-threshold axis");
+    }
 
     /// Decode one mover-build fixture (`dev/docs/spikes/2026-09-02-unbuilt-structure-parity/harness/extract_mover_fixtures.py` format):
     /// `(none_index, field_0x54, polys, saved_links)` — `saved_links` is the golden `Polys`
