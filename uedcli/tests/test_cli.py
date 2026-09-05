@@ -143,15 +143,14 @@ def test_parser_brush_vertex_list():
     assert ns.cmd == "brush" and ns.sub == "vertex" and ns.vsub == "list" and ns.name == "B1"
 
 
-def test_parser_facing_accepts_leading_dash_space_form():
-    # usability nit (2026-07-19): `--facing -Z` (space form) must parse — argparse would otherwise
-    # read the leading-dash token as an option. The `+` facings never had the problem.
+def test_parser_facing_takes_the_grammar_string_and_a_brush_set():
+    # The old `-X/-Y/-Z` axis tokens are gone; `--facing` is a grammar string (negatives live inside
+    # a quoted value, e.g. `nz:-1,1`), and `find` takes one or more brushes (nargs="+") or `-`.
     p = build_parser()
-    for val in ("-X", "-Y", "-Z"):
-        ns = p.parse_args(["brush", "poly", "find", "B1", "--facing", val])
-        assert ns.facing == val
-    ns = p.parse_args(["brush", "poly", "find", "B1", "--facing", "+Z"])
-    assert ns.facing == "+Z"
+    ns = p.parse_args(["brush", "poly", "find", "B1", "B2", "--facing", "nz:-1,1"])
+    assert ns.names == ["B1", "B2"] and ns.facing == "nz:-1,1"
+    ns = p.parse_args(["brush", "poly", "find", "-", "--facing", "floor"])
+    assert ns.names == ["-"] and ns.facing == "floor"
 
 
 def test_parser_brush_vertex_move_multiple_at_with_delta():

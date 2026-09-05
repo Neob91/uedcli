@@ -138,16 +138,18 @@
       "find",
       "B1",
       "--facing",
-      "-Z"
+      "floor"
     ],
     "outcome": "parsed",
     "exit_code": null,
     "namespace": {
       "cmd": "brush",
-      "facing": "-Z",
+      "facing": "floor",
       "item": null,
       "json": false,
-      "name": "B1",
+      "names": [
+        "B1"
+      ],
       "polysub": "find",
       "project": null,
       "sub": "poly",
@@ -164,16 +166,18 @@
       "find",
       "B1",
       "--facing",
-      "-X"
+      "nz:-1,1"
     ],
     "outcome": "parsed",
     "exit_code": null,
     "namespace": {
       "cmd": "brush",
-      "facing": "-X",
+      "facing": "nz:-1,1",
       "item": null,
       "json": false,
-      "name": "B1",
+      "names": [
+        "B1"
+      ],
       "polysub": "find",
       "project": null,
       "sub": "poly",
@@ -189,17 +193,21 @@
       "poly",
       "find",
       "B1",
+      "B2",
       "--facing",
-      "+Y"
+      "wall;ny:0.7..1"
     ],
     "outcome": "parsed",
     "exit_code": null,
     "namespace": {
       "cmd": "brush",
-      "facing": "+Y",
+      "facing": "wall;ny:0.7..1",
       "item": null,
       "json": false,
-      "name": "B1",
+      "names": [
+        "B1",
+        "B2"
+      ],
       "polysub": "find",
       "project": null,
       "sub": "poly",

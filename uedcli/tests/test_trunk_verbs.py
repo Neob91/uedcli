@@ -69,8 +69,8 @@ def test_poly_list_json(tmp_path, capsys, monkeypatch):
     doc = json.loads(capsys.readouterr().out)
     assert doc["actor"] == "Box_1"
     assert len(doc["polys"]) == 6
-    assert set(doc["polys"][0]) >= {"idx", "facing", "texture", "flags", "pan", "centroid",
-                                    "area", "nverts"}
+    assert set(doc["polys"][0]) >= {"idx", "normal", "orientation", "role", "texture", "flags",
+                                    "pan", "centroid", "area", "nverts"}
 
 
 def test_poly_list_default_text_unchanged(tmp_path, capsys, monkeypatch):

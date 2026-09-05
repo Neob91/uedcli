@@ -182,40 +182,63 @@ def _move(args, src) -> int:
 
 
 def _find(args, src) -> int:
-    from .... import polyalign
-    facing = getattr(args, "facing", None)
-    valid_facing = {"+X", "-X", "+Y", "-Y", "+Z", "-Z", "slant"}
-    if facing is not None and facing not in valid_facing:
-        print(f"brush poly find --facing: invalid value {facing!r} "
-              f"(expected one of {', '.join(sorted(valid_facing))})", file=sys.stderr)
-        return 2
-    level = src.load()
+    from .... import facing_spec, polyalign
     try:
-        canonical = query.resolve_actor_name(level, args.name)
-    except KeyError as e:
-        print(e.args[0], file=sys.stderr)
-        return 2
-    actor = level.actors[canonical]
-    try:
-        idxs = polyalign.find_faces(actor, canonical, item=args.item,
-                                    facing=facing, texture=args.texture)
+        spec = facing_spec.parse_facing_spec(args.facing) if args.facing is not None else None
     except ValueError as e:
-        print(str(e), file=sys.stderr)
+        print(str(e), file=sys.stderr)                # malformed --facing → clean exit 2, naming it
         return 2
-    if getattr(args, "json", False):
-        import json
-        rows = []
+    raw = target_names.resolve_target_names(args.names)   # `-` → stdin (bare names or BRUSH:idx lines)
+    if not raw:
+        return 0                                      # empty stdin / no targets: clean no-op
+    level = src.load()
+    brushes: list[str] = []
+    seen: set[str] = set()
+    for tok in raw:
+        bname = tok.split(":", 1)[0]                  # accept a BRUSH:idx line — the :idx is irrelevant here
+        try:
+            canonical = query.resolve_actor_name(level, bname)
+        except KeyError as e:
+            print(e.args[0], file=sys.stderr)         # unknown name → hard error (a typo must not pass)
+            return 2
+        if canonical not in seen:                     # dedup on canonical, first-seen order
+            seen.add(canonical)
+            brushes.append(canonical)
+    use_json = getattr(args, "json", False)
+    rows: list[dict] = []
+    lines: list[str] = []
+    matched = 0
+    for canonical in brushes:
+        actor = level.actors[canonical]
+        if actor.brush is None:                       # non-brush: WARN and skip, don't fail the run
+            print(f"skipping non-brush actor: {canonical}", file=sys.stderr)
+            continue
+        try:
+            idxs = polyalign.find_faces(actor, canonical, item=args.item,
+                                        facing=spec, texture=args.texture)
+        except ValueError as e:
+            print(str(e), file=sys.stderr)
+            return 2
+        matched += len(idxs)
         for i in idxs:
-            p = actor.brush.polys[i]
-            wv = polyalign._world_verts(actor, p)
-            rows.append({"brush": canonical, "poly": i, "item": p.item,
-                         "facing": query._poly_facing(wv) if len(wv) >= 3 else None,
-                         "texture": p.texture})
+            if use_json:
+                p = actor.brush.polys[i]
+                vn = query.visible_normal(actor, p)
+                live = any(vn)
+                rows.append({"brush": canonical, "poly": i, "item": p.item,
+                             "normal": [round(c, 4) for c in vn] if live else None,
+                             "orientation": facing_spec.orientation(vn) if live else None,
+                             "role": facing_spec.role(vn) if live else None,
+                             "texture": p.texture})
+            else:
+                lines.append(f"{canonical}:{i}")
+    if use_json:
+        import json
         print(json.dumps(rows, indent=2))
     else:
-        for i in idxs:
-            print(f"{canonical}:{i}")
-    print(f"{len(idxs)} face(s) matched", file=sys.stderr)
+        for ln in lines:
+            print(ln)
+    print(f"{matched} face(s) matched", file=sys.stderr)
     return 0
 
 

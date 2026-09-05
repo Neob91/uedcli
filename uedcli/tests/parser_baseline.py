@@ -163,10 +163,10 @@ ARGV_CORPUS = [
     ["brush", "vertex", "move", "B1", "--at", "-32,-32,32", "--by", "0,0,-16"],
     ["actor", "build", "Engine.Light", "--at", "-16,-16,-16"],
     ["brush", "build", "cube", "--at", "-128,-64,-32"],
-    # -X/-Y/-Z facing values
-    ["brush", "poly", "find", "B1", "--facing", "-Z"],
-    ["brush", "poly", "find", "B1", "--facing", "-X"],
-    ["brush", "poly", "find", "B1", "--facing", "+Y"],
+    # --facing grammar (presets, ranges, negatives inside a value) + a multi-brush set
+    ["brush", "poly", "find", "B1", "--facing", "floor"],
+    ["brush", "poly", "find", "B1", "--facing", "nz:-1,1"],
+    ["brush", "poly", "find", "B1", "B2", "--facing", "wall;ny:0.7..1"],
     # prefix abbreviation (argparse allow_abbrev default True)
     ["actor", "find", "--exact", "Light"],
     ["actor", "find", "--subclass", "Engine.Light"],

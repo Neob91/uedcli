@@ -188,8 +188,8 @@ def test_cli_poly_find_piped_into_move_raises_the_top_face_end_to_end(capsys):
     lvl = _cube_level("B1")
     src = mock.Mock()
     src.load.return_value = lvl
-    # `brush poly find --facing +Z` prints the top face as a BRUSH:idx selector on stdout.
-    rc = _dispatch(["brush", "poly", "find", "B1", "--facing", "+Z"], src)
+    # `brush poly find --facing floor` prints the top (up-facing) face as a BRUSH:idx selector.
+    rc = _dispatch(["brush", "poly", "find", "B1", "--facing", "floor"], src)
     found = capsys.readouterr().out
     assert rc == 0 and found.strip() == "B1:4"
     # feed that stdout into `brush poly move -` and confirm the top rose and the selector echoed.

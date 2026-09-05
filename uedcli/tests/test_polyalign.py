@@ -14,9 +14,10 @@ from unittest import mock
 
 import pytest
 
-from uedcli import polyalign
+from uedcli import polyalign, query
 from uedcli.builders import cube, cylinder, make_brush_actor
 from uedcli.cli.dispatch import dispatch
+from uedcli.facing_spec import parse_facing_spec as _fs
 from uedcli.model import Level
 
 
@@ -64,8 +65,8 @@ def test_wall_two_brushes_uv_continuous_across_seam():
     a1 = _brush("W1", cube(64, 8, 128), loc=(32, 0, 0))
     a2 = _brush("W2", cube(64, 8, 128), loc=(96, 0, 0))
     lv = _level(a1, a2)
-    f1 = polyalign.find_faces(a1, "W1", facing="+Y")[0]
-    f2 = polyalign.find_faces(a2, "W2", facing="+Y")[0]
+    f1 = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
+    f2 = polyalign.find_faces(a2, "W2", facing=_fs("ny:1"))[0]
     touched = polyalign.align(lv, [f"W1:{f1}", f"W2:{f2}"], "wall")
     assert touched == ["W1", "W2"]
     _assert_seam_continuous(a1, a1.brush.polys[f1], a2, a2.brush.polys[f2])
@@ -79,8 +80,8 @@ def test_wall_continuous_when_second_brush_is_rotated():
     # stacked directly above so the two +Y faces are coplanar (y=4) and share the z=64 edge.
     a2 = _brush("W2", cube(64, 8, 128), loc=(0, 0, 128), rot=(32768, 0, 0))
     lv = _level(a1, a2)
-    f1 = polyalign.find_faces(a1, "W1", facing="+Y")[0]
-    f2 = polyalign.find_faces(a2, "W2", facing="+Y")[0]
+    f1 = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
+    f2 = polyalign.find_faces(a2, "W2", facing=_fs("ny:1"))[0]
     polyalign.align(lv, [f"W1:{f1}", f"W2:{f2}"], "wall")
     # rotated brush ⇒ stored TextureU differs from W1's, but world mapping matches
     assert a2.brush.polys[f2].texture_u != a1.brush.polys[f1].texture_u
@@ -91,8 +92,8 @@ def test_wall_adopt_seed_preserves_seed_pan():
     a1 = _brush("W1", cube(64, 8, 128), loc=(32, 0, 0))
     a2 = _brush("W2", cube(64, 8, 128), loc=(96, 0, 0))
     lv = _level(a1, a2)
-    f1 = polyalign.find_faces(a1, "W1", facing="+Y")[0]
-    f2 = polyalign.find_faces(a2, "W2", facing="+Y")[0]
+    f1 = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
+    f2 = polyalign.find_faces(a2, "W2", facing=_fs("ny:1"))[0]
     a1.brush.polys[f1].pan = (7, 3)                       # seed already dialled in
     polyalign.align(lv, [f"W1:{f1}", f"W2:{f2}"], "wall")
     # adopt-seed carries the seed's integer pan to every face
@@ -102,7 +103,7 @@ def test_wall_adopt_seed_preserves_seed_pan():
 def test_wall_fresh_frame_zeroes_pan_and_uses_unit_axes():
     a1 = _brush("W1", cube(64, 8, 128), loc=(32, 0, 0))
     lv = _level(a1)
-    f1 = polyalign.find_faces(a1, "W1", facing="+Y")[0]
+    f1 = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
     a1.brush.polys[f1].pan = (7, 3)
     polyalign.align(lv, [f"W1:{f1}"], "wall", fresh_frame=True)
     p = a1.brush.polys[f1]
@@ -113,7 +114,7 @@ def test_wall_fresh_frame_zeroes_pan_and_uses_unit_axes():
 def test_wall_rejects_horizontal_face():
     a1 = _brush("W1", cube(64, 64, 8), loc=(0, 0, 0))
     lv = _level(a1)
-    f = polyalign.find_faces(a1, "W1", facing="+Z")[0]
+    f = polyalign.find_faces(a1, "W1", facing=_fs("nz:1"))[0]
     with pytest.raises(polyalign.PolyAlignError, match="horizontal"):
         polyalign.align(lv, [f"W1:{f}"], "wall")
 
@@ -121,7 +122,7 @@ def test_wall_rejects_horizontal_face():
 def test_floor_rejects_vertical_face():
     a1 = _brush("W1", cube(64, 8, 128), loc=(0, 0, 0))
     lv = _level(a1)
-    f = polyalign.find_faces(a1, "W1", facing="+Y")[0]
+    f = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
     with pytest.raises(polyalign.PolyAlignError, match="vertical"):
         polyalign.align(lv, [f"W1:{f}"], "floor")
 
@@ -129,8 +130,8 @@ def test_floor_rejects_vertical_face():
 def test_wall_rejects_non_coplanar_set():
     a1 = _brush("W1", cube(64, 64, 128), loc=(0, 0, 0))
     lv = _level(a1)
-    fpx = polyalign.find_faces(a1, "W1", facing="+X")[0]
-    fpy = polyalign.find_faces(a1, "W1", facing="+Y")[0]
+    fpx = polyalign.find_faces(a1, "W1", facing=_fs("nx:1"))[0]
+    fpy = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
     with pytest.raises(polyalign.PolyAlignError, match="not coplanar"):
         polyalign.align(lv, [f"W1:{fpx}", f"W1:{fpy}"], "wall")
 
@@ -141,8 +142,8 @@ def test_wall_rejects_coplanar_but_opposite_facing_faces():
     a1 = _brush("W1", cube(64, 8, 128), loc=(0, 0, 0))    # +Y face at y=4
     a2 = _brush("W2", cube(64, 8, 128), loc=(0, 8, 0))    # its -Y face at y=4 (same plane, opposite)
     lv = _level(a1, a2)
-    f1 = polyalign.find_faces(a1, "W1", facing="+Y")[0]
-    f2 = polyalign.find_faces(a2, "W2", facing="-Y")[0]
+    f1 = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
+    f2 = polyalign.find_faces(a2, "W2", facing=_fs("ny:-1"))[0]
     with pytest.raises(polyalign.PolyAlignError, match="different directions"):
         polyalign.align(lv, [f"W1:{f1}", f"W2:{f2}"], "wall")
 
@@ -307,9 +308,10 @@ def test_find_faces_item_filter_drops_caps():
 
 def test_find_faces_facing_filter():
     a = _brush("W1", cube(64, 64, 64), loc=(0, 0, 0))
-    got = polyalign.find_faces(a, "W1", facing="+Z")
+    got = polyalign.find_faces(a, "W1", facing=_fs("nz:1"))
     assert len(got) == 1
-    assert polyalign._poly_facing(polyalign._world_verts(a, a.brush.polys[got[0]])) == "+Z"
+    vn = query.visible_normal(a, a.brush.polys[got[0]])      # the matched face's visible normal ≈ +Z
+    assert vn[2] > 0.99 and abs(vn[0]) < 0.01 and abs(vn[1]) < 0.01
 
 
 def test_find_faces_texture_filter_last_component():
@@ -349,7 +351,7 @@ def _run(args, level, stdin=None):
 
 def test_dispatch_poly_find_prints_selectors(capsys):
     a = _brush("Tower", cylinder(256, 128, 6))
-    args = SimpleNamespace(cmd="brush", sub="poly", polysub="find", name="Tower",
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="find", names=["Tower"],
                            item="Side", facing=None, texture=None, json=False, container="c")
     rc, _ = _run(args, _level(a))
     out = capsys.readouterr()
@@ -360,7 +362,7 @@ def test_dispatch_poly_find_prints_selectors(capsys):
 
 def test_dispatch_poly_find_json(capsys):
     a = _brush("Tower", cylinder(256, 128, 6))
-    args = SimpleNamespace(cmd="brush", sub="poly", polysub="find", name="Tower",
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="find", names=["Tower"],
                            item="Cap", facing=None, texture=None, json=True, container="c")
     rc, _ = _run(args, _level(a))
     import json as _json
@@ -370,17 +372,75 @@ def test_dispatch_poly_find_json(capsys):
 
 def test_dispatch_poly_find_bad_facing_exit2(capsys):
     a = _brush("Tower", cylinder(256, 128, 6))
-    args = SimpleNamespace(cmd="brush", sub="poly", polysub="find", name="Tower",
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="find", names=["Tower"],
                            item=None, facing="up", texture=None, json=False, container="c")
     rc, _ = _run(args, _level(a))
-    assert rc == 2 and "invalid value" in capsys.readouterr().err
+    assert rc == 2 and "unknown preset 'up'" in capsys.readouterr().err
 
 
 def test_dispatch_poly_find_unknown_brush_exit2(capsys):
-    args = SimpleNamespace(cmd="brush", sub="poly", polysub="find", name="Nope",
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="find", names=["Nope"],
                            item=None, facing=None, texture=None, json=False, container="c")
     rc, _ = _run(args, _level(_brush("Tower", cube(8, 8, 8))))
     assert rc == 2 and "Actor not found: Nope" in capsys.readouterr().err
+
+
+def _find_args(names, **over):
+    kw = dict(cmd="brush", sub="poly", polysub="find", names=list(names),
+              item=None, facing=None, texture=None, json=False, container="c")
+    kw.update(over)
+    return SimpleNamespace(**kw)
+
+
+def test_dispatch_poly_find_multi_brush_set(capsys):
+    lv = _level(_brush("Wa", cube(8, 8, 8)), _brush("Wb", cube(8, 8, 8)))
+    rc, _ = _run(_find_args(["Wa", "Wb"]), lv)
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out.splitlines() == [f"Wa:{i}" for i in range(6)] + [f"Wb:{i}" for i in range(6)]
+    assert "12 face(s) matched" in out.err
+
+
+def test_dispatch_poly_find_dash_reads_stdin_and_strips_idx(capsys):
+    lv = _level(_brush("Tower", cube(8, 8, 8)))
+    rc, _ = _run(_find_args(["-"]), lv, stdin="Tower:2\n")   # a BRUSH:idx line → the brush, idx dropped
+    out = capsys.readouterr()
+    assert rc == 0 and out.out.splitlines() == [f"Tower:{i}" for i in range(6)]
+
+
+def test_dispatch_poly_find_dash_empty_stdin_is_noop_exit0(capsys):
+    lv = _level(_brush("Tower", cube(8, 8, 8)))
+    rc, src = _run(_find_args(["-"]), lv, stdin="")
+    assert rc == 0 and capsys.readouterr().out == ""
+
+
+def test_dispatch_poly_find_dedupes_a_repeated_brush(capsys):
+    lv = _level(_brush("Tower", cube(8, 8, 8)))
+    rc, _ = _run(_find_args(["Tower", "tower"]), lv)         # case-varied repeat → one brush
+    out = capsys.readouterr()
+    assert rc == 0 and out.out.splitlines() == [f"Tower:{i}" for i in range(6)]
+
+
+def test_dispatch_poly_find_warns_and_skips_non_brush(capsys):
+    from uedcli.model import Actor
+    lv = _level(_brush("Tower", cube(8, 8, 8)))
+    lv.actors["P"] = Actor(name="P", cls="Engine.PathNode")
+    lv.order.append("P")
+    rc, _ = _run(_find_args(["Tower", "P"]), lv)
+    out = capsys.readouterr()
+    assert rc == 0                                           # the run still succeeds for the brush
+    assert out.out.splitlines() == [f"Tower:{i}" for i in range(6)]
+    assert "skipping non-brush actor: P" in out.err
+
+
+def test_dispatch_poly_find_json_has_normal_orientation_role(capsys):
+    lv = _level(_brush("Tower", cube(8, 8, 8)))
+    rc, _ = _run(_find_args(["Tower"], facing="floor", json=True), lv)
+    import json as _json
+    rows = _json.loads(capsys.readouterr().out)
+    assert rc == 0 and len(rows) == 1                        # the one up-facing cap
+    assert rows[0]["role"] == "floor" and rows[0]["orientation"] == "flat"
+    assert rows[0]["normal"] == [0.0, 0.0, 1.0]
 
 
 def test_dispatch_poly_align_positional_saves(capsys):
@@ -510,7 +570,7 @@ def test_align_emits_no_zero_pan_so_materialize_can_verify_the_built_map():
     from uedcli.tests.conftest import StubDefaults
     a = _brush("Box", cube(256, 256, 256))
     lv = _level(a)
-    f = polyalign.find_faces(a, "Box", facing="+Z")[0]
+    f = polyalign.find_faces(a, "Box", facing=_fs("nz:1"))[0]
     assert a.brush.polys[f].pan is None                    # a built cube has no Pan anywhere
     polyalign.align(lv, [f"Box:{f}"], "floor")
     assert "Pan" not in canonical_actor_t3d(a)             # …and aligning must not invent one
@@ -525,8 +585,8 @@ def test_align_still_carries_a_non_zero_seed_pan_into_the_trunk():
     a1 = _brush("W1", cube(64, 8, 128), loc=(32, 0, 0))
     a2 = _brush("W2", cube(64, 8, 128), loc=(96, 0, 0))
     lv = _level(a1, a2)
-    f1 = polyalign.find_faces(a1, "W1", facing="+Y")[0]
-    f2 = polyalign.find_faces(a2, "W2", facing="+Y")[0]
+    f1 = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
+    f2 = polyalign.find_faces(a2, "W2", facing=_fs("ny:1"))[0]
     a1.brush.polys[f1].pan = (7, 3)
     polyalign.align(lv, [f"W1:{f1}", f"W2:{f2}"], "wall")
     assert "Pan      U=7 V=3" in canonical_actor_t3d(a2)

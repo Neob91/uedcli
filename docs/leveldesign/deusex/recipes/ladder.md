@@ -26,15 +26,15 @@ player can climb it.
 
 ```bash
 # Find the wall face(s) you want to make a ladder, then texture them.
-# The brush name is positional; --facing picks the specific face — here the wall face pointing
-# along +X into the room (use -X / +Y / -Y for a wall on another side).
-brush poly find ShaftWall --facing +X | brush poly set - --texture CoreTexMetal.ladder_a
+# The brush name is positional; --facing picks the specific face — here the wall whose visible
+# normal points +X into the room (nx:1); use ny:1 / ny:-1 / nx:-1 for a wall on another side.
+brush poly find ShaftWall --facing nx:1 | brush poly set - --texture CoreTexMetal.ladder_a
 
 # For rungs you modelled in 3D, texture the flat climb face in front of them instead:
-brush poly find LadderWell --facing +X | brush poly set - --texture CoreTexMetal.LadrBrwnMetal
+brush poly find LadderWell --facing nx:1 | brush poly set - --texture CoreTexMetal.LadrBrwnMetal
 
 # Align it upright and tiling on the wall:
-brush poly find ShaftWall --facing +X | brush poly align - --wall
+brush poly find ShaftWall --facing nx:1 | brush poly align - --wall
 ```
 
 ## Caveats and gotchas
