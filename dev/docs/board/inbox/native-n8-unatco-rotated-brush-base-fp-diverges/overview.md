@@ -109,3 +109,35 @@ from the snapped `pBase`; the editor keeps the raw base. So the fix is raw-base 
 plane raw-base UNIFORM (then a correctly-scoped fix touches only 29/30, no regression) or SURVIVOR-ONLY
 (then a blanket raw-base regresses rebuilt nodes, as the earlier attempt saw)? Decode `bspRepartition`
 plane provenance or A/B-measure before porting.
+
+## RESOLVED: provenance is UNIFORM point-dedup, not a scopeable raw-base carry (2026-09-04)
+
+Both open questions above answered. The scoped raw-base fix STEP 2 assumed does NOT exist; the real
+fix is the spatial-index dedup port. Evidence:
+
+- **Disasm (uniform, no survivor path).** `bspBuild 0x35ef0` → `SplitPolyList 0x34530` → `FindBestSplit
+  0x335d0` (ranks polys only, never sees `Model->Nodes`) → every splitter/coplanar becomes a node via
+  vtable `[eax+0x224]` = `bspAddNode 0x34e80`, which sets `Node.Plane = FPlane(EdPoly->Base, Normal)`
+  **unconditionally** (@0x351eb-0x35218). There is NO branch copying a pre-existing `FBspNode.Plane`.
+  So every final node's W = its soup-FPoly `Base·Normal`, and the soup `Base = Points[Surf.pBase]`
+  (`bspBuildFPolys 0x36090`→`bspNodeToFPoly 0x365b0` @0x36636). The "survivor-only raw plane"
+  hypothesis is refuted. Node-plane provenance is uniform: `W = Points[pBase]·N` for all nodes.
+- **Therefore the raw `-447.99985` can only be the VALUE `Points[pBase]` held at repartition** — i.e.
+  the editor's incremental pre-repartition pool kept a DISTINCT `447.99985` point (FindNearestVertex
+  MISS) for Brush74's x=448 face; `bspBuildFPolys` copied that value into the soup; `bspAddNode`
+  stamped it into the node plane; the final re-add re-deduped `Surf.pBase` back onto `448.00006` (so
+  the FINAL pool shows no `447.99985` — the spike Part B measured the final pool). Native's linear
+  scan HITS `448.00006` and snaps at the incremental add, losing the distinct point.
+- **Live A/B (confirms end-to-end).** Surgically keeping ONLY the x=448 base distinct in native's
+  incremental pool (env-gated coordinate match, reverted) → native_N8 `Node[29/30].plane.W` matches
+  the editor bit-for-bit, `Surf.pBase` matches, final point table 76/76 IDENTICAL, and
+  `parity_gate.py` → **PARITY: YES** (all 3 residuals incl. Brush74.Region resolve). Proves the fix
+  DIRECTION: keep the pre-repartition base point distinct, exactly as the editor's spatial index does.
+
+**The fix = port `FindNearestVertex` (spike Part A) as native's incremental `bsp_add_point` dedup**
+(stale BSP descent over `model.nodes`, wired points only, plane-side radius-pruned) replacing the
+linear scan, so x=448 MISSES (stays distinct) while Z=240 still HITS (snaps). This is the "different,
+larger approach" flagged above: it changes dedup at every incremental call site and must be
+corpus-re-verified, not just N=8. NOT a scoped node-plane change. **Owner direction needed before
+porting** — STEP 2's scoped raw-base carry is unsound (uniform provenance) and blanket-raw / blanket-
+distinct both regress the siblings the editor legitimately snaps.
