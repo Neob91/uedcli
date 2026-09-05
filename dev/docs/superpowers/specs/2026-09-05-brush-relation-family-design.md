@@ -64,8 +64,9 @@ Same report as today's `brush measure relation`, restricted from N bare brush na
   not just the two illustrated extremes.
 - Report format and `--top` are otherwise unchanged from today's verb; `format_report`'s `disjoint`
   line was already a single `disjoint: {A, B, C}` line for any N (`relation.py`'s `format_report`),
-  so this doesn't change shape at 2 selectors — just interpolates 0, 1, or 2 brush names instead of
-  a longer set.
+  so this doesn't change shape at 2 selectors — with only one pair possible, the count is 0 (the pair
+  related) or 2 (it didn't, so both names show — never exactly 1, since there's no third brush either
+  could relate to instead).
 - **Drops `-` (stdin) support.** Today's verb reads a newline-separated brush-name list from stdin for
   its N-ary `names` argument; the new grammar is exactly 2 fixed positional selectors, so there's no
   variable-length list left to read from stdin. Deliberate, not an oversight — flagged explicitly per
@@ -241,11 +242,13 @@ Moves `TARGET` into a target relationship with the fixed `REF`.
   A move target must be unambiguous; letting `set` accept "all polys" or several indices would need a
   rule for which one actually drives the translation math, which is exactly the ranking-and-picking
   job `find`/`measure` already do upstream. `set` assumes that work is done and takes the answer.
-- **`set`'s REF arrives as the `--relative-to REF:idx` flag rather than a second positional.** A
-  two-positional grammar can't compose with `-`: stdin is `set`'s sole source of targets and can't
-  mix with other names on the command line, so a piped target list left no channel for REF. Moving
-  REF onto the same flags `find` already defines keeps one anchor spelling across the pair and makes
-  `find`'s stdout a complete, pipeable `set` invocation (owner decision during design).
+- **`set`'s REF arrives as the `--relative-to REF:idx` flag rather than a second positional.** This
+  reverses the design phase's explicit pick of two positionals (`TARGET:idx REF:idx`) — flagged in
+  review as a real gap (a two-positional grammar can't compose with `-`: stdin is `set`'s sole source
+  of targets and can't mix with other names on the command line, so a piped target list left no
+  channel for REF) and confirmed by the owner afterward, not decided in the original design pass.
+  Moving REF onto the same flag `find` already defines keeps one anchor spelling across the pair and
+  makes `find`'s stdout a complete, pipeable `set` invocation.
 - **`--gap`/`--centroid-*`/`--edge-*` are independent, explicit-value flags rather than a single
   "align" mode.** A user might want to fix only the gap and leave in-plane position alone (or vice
   versa), or fix only one in-plane axis — the original ask ("gap, delta from centroid, or any poly
@@ -256,9 +259,9 @@ Moves `TARGET` into a target relationship with the fixed `REF`.
 - **Required precursor:** `uedcli/polyalign.py` no longer defines `_PARALLEL_EPS`/`_PLANE_EPS`
   (deleted by the poly-align rewrite in commit 252c4ad), yet `uedcli/relation.py:41,48` still
   dereference them, so `relation.compute()`/`plane_relationship` are currently red on master
-  (`AttributeError: module 'uedcli.polyalign' has no attribute '_PARALLEL_EPS'`; all 16 relation
-  tests fail). Restoring the two tolerance constants is step zero of any build — the existing
-  relation suite going green is the gate before any new verb lands.
+  (`AttributeError: module 'uedcli.polyalign' has no attribute '_PARALLEL_EPS'`; verified 2026-09-05:
+  12 of 27 tests in `test_relation.py` fail on this). Restoring the two tolerance constants is step
+  zero of any build — the existing relation suite going green is the gate before any new verb lands.
 - `uedcli/relation.py`: keep `plane_relationship`/`project_to_plane`/`classify_footprint_2d`/
   `compute_deltas`/`_candidate_sort_key` as-is; expose `_plane_basis`'s world U/V vectors for `set`'s
   translation math; add a small "both extents, not just the closer one" variant alongside
