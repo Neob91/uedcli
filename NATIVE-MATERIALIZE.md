@@ -116,6 +116,19 @@ ladder past the current NX while the N=1..NX back-verification runs in parallel,
 all further work on it finishing first. Only stop forward progress if the back-verification actually
 reports a bail — then treat that bail as a real regression and stop to fix it before going further.
 
+### Pushing NX forward: script until it bails, agent only to diagnose (owner ruling, 2026-09-05)
+
+Mechanically walking N, N+1, N+2, … forward when nothing is failing costs no judgment and should cost
+no agent tokens: run **`ladder_run.py`** as a plain background script (no LLM in the loop) to extend a
+level past its current NX. It builds, gates, and bails at the first non-parity N on its own.
+
+Dispatch a subagent ONLY once the script reports a bail — scoped to diagnosing and fixing that one
+divergence (root cause + faithful fix + re-verify from where it bailed), not to babysit the sweep.
+Never dispatch an agent whose job is "push N forward and see what happens" — that is exactly what the
+background script is for. An agent asked to push a range may find real failures and fix them in the
+same pass (good — do not stop it mid-diagnosis just because it also ran some sweeping); the ruling is
+about not STARTING an agent for the mechanical part, not about interrupting one that has found real work.
+
 ## THE parity script (do not reinvent)
 
 **`dev/docs/spikes/2026-09-03-incremental-actor-parity/harness/parity_gate.py`** is the single
