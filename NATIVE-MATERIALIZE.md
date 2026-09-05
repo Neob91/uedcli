@@ -129,6 +129,19 @@ background script is for. An agent asked to push a range may find real failures 
 same pass (good — do not stop it mid-diagnosis just because it also ran some sweeping); the ruling is
 about not STARTING an agent for the mechanical part, not about interrupting one that has found real work.
 
+### The Parity Ladder artifact — MUST be kept current (owner ruling, 2026-09-05)
+
+The campaign's live status — highest byte-exact N per level, and what blocks the next N — is published
+as a claude.ai Artifact: **"Parity Ladder"**, <https://claude.ai/code/artifact/f5662f6e-b17e-45f9-9451-818b0e3d0b34>
+(`db` capability, collection `levels` keyed by level slug: `unatco`, `wanchai`, `bar`, `island`, `oceanlab`).
+
+**Whenever a level's highest verified N changes, or its blocking divergence changes, update the
+artifact in the same pass** — `Artifact` tool, `action: "write_db"`, `collection: "levels"`, the
+level's slug as `doc_id`, fields `{name, codename, highest_n, total_actors, status
+("advancing"|"blocked"), blocker, board, updated}`. This is not optional bookkeeping: the artifact is
+how the owner reads ladder state without re-deriving it from board items or chat scrollback. Find its
+URL via `Artifact` `action: "list"` if it isn't already in context.
+
 ## THE parity script (do not reinvent)
 
 **`dev/docs/spikes/2026-09-03-incremental-actor-parity/harness/parity_gate.py`** is the single
