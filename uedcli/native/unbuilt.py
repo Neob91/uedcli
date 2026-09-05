@@ -346,15 +346,17 @@ def _world_soup_fpolys(asm, world_model, csg_brushes, tex_ref) -> list:
     native core retained (`umodel.Model.world_soup`). Resolves each poly's owner-brush export ref,
     texture import, and `Item=` name from its SOURCE brush poly (`i_actor`/`i_brush_poly`), the SAME
     provenance `_patch_native_surf_refs` uses for the surfs. The editor propagates the source poly's
-    authored `ItemName` onto every world fragment it carves; a brush's faces are typically authored
-    `Item=OUTSIDE` (hence the common name), but a named face (a staircase `Rise`/`Step`/`Side`)
-    keeps its label. An out-of-range `i_actor` leaves the poly ownerless/untextured and named
-    `OUTSIDE` (the world-root default), never raising -- mirroring the surf patch."""
+    authored `ItemName` onto every world fragment it carves: an authored face (cube `Item=OUTSIDE`, a
+    staircase `Rise`/`Step`/`Side`) keeps its label; a face with NO authored `Item` keeps the FPoly
+    default `NAME_None` (serialized as the `None` FName), NOT `OUTSIDE`. `OUTSIDE` is not a CSG-fabricated
+    default -- it is only ever an authored value (byte-measured on OceanLab N=3: ued's world soup has
+    6 `OUTSIDE`, all from a cube brush's authored faces, and 168 `None`). An out-of-range `i_actor`
+    leaves the poly ownerless/untextured and named `None`, never raising -- mirroring the surf patch."""
     from itertools import batched
     out = []
     for verts_flat, base, normal, tu, tv, pflags, i_actor, i_brush_poly, i_link, pan in \
             getattr(world_model, "world_soup", ()):
-        actor_ref, texture_ref, item = 0, 0, "OUTSIDE"
+        actor_ref, texture_ref, item = 0, 0, None
         if 0 <= i_actor < len(csg_brushes):
             name, polys = csg_brushes[i_actor]
             actor_ref = asm.eref(name)

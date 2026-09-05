@@ -609,3 +609,24 @@ def test_content_brush_ilink_link_phase_stores_editor_convention():
     ]
     _assign_content_ilinks(polys)
     assert [p.i_link for p in polys] == [0, -1, 0, -1]
+
+
+def test_world_soup_item_defaults_to_none_not_outside():
+    """A world-soup fragment inherits its SOURCE brush poly's `Item`: an authored `OUTSIDE`/`Rise`
+    keeps its label, but a source poly with NO authored item -> the `None` FName, NOT `OUTSIDE`.
+    Native's old hardcoded `OUTSIDE` default wrote 174x `OUTSIDE` on OceanLab N=3 where the editor
+    writes 168x `None` + 6x `OUTSIDE` (the 6 from a cube brush's authored faces)."""
+    from types import SimpleNamespace
+    from uedcli.native.unbuilt import _world_soup_fpolys
+
+    src = [SimpleNamespace(item="OUTSIDE", texture=None),   # authored
+           SimpleNamespace(item=None, texture=None)]        # unlabeled -> None
+    csg_brushes = [("Brush0", src)]
+
+    def entry(ibp):
+        return ([0.0] * 9, (0, 0, 0), (0, 0, 1), (1, 0, 0), (0, 1, 0), 0, 0, ibp, -1, (0, 0))
+
+    wm = SimpleNamespace(world_soup=[entry(0), entry(1), entry(99)])  # 99 = out-of-range src
+    asm = SimpleNamespace(eref=lambda name: 7)
+    out = _world_soup_fpolys(asm, wm, csg_brushes, lambda t: 0)
+    assert [fp.item for fp in out] == ["OUTSIDE", None, None]

@@ -34,4 +34,17 @@ Separate bug from the orphan-vert overcount (`oceanlab-n3-model2-orphan-vert-ove
 from the texture-axis dedup. Needs native's world-soup FPoly `ItemName` derivation checked against
 UED22. Repro: cached `_scratch/actor-parity/14_oceanlab_lab/{native,ref}_N3.dx`; decode via
 `parity_gate.canon_body` on the `Model2` `field_0x54` Polys export (native exp4, ued exp14).
-</content>
+
+## Resolved 2026-09-05
+
+`_world_soup_fpolys` (`uedcli/native/unbuilt.py`) hardcoded `item = "OUTSIDE"` as the default and
+only overrode it from the source poly. Fixed: default to `None` (serialized as the `None` FName),
+propagate `src.item` only when authored. Decode of ued's world soup confirmed `OUTSIDE` is never a
+CSG-fabricated default -- its 6 `OUTSIDE` polys all trace to a cube brush's AUTHORED `Item=OUTSIDE`
+faces, the other 168 are `None`. So the change is faithful, not a heuristic.
+
+- OceanLab N=3: the `polys@model model2` residual is CLEARED (only the orphan-vert `model model2`
+  residual remains, `oceanlab-n3-model2-orphan-vert-overcount-shifts`).
+- No regression: WanChai N=16 still PASS (its `OUTSIDE`/`Rise`/`Step` come from authored items, not
+  the default); UNATCO N6/N16, NYC_Bar N16, Island N8, OceanLab N1..8 all unchanged/PASS.
+- Pinned: `test_native_roundtrip.py::test_world_soup_item_defaults_to_none_not_outside`.
