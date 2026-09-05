@@ -141,3 +141,40 @@ larger approach" flagged above: it changes dedup at every incremental call site 
 corpus-re-verified, not just N=8. NOT a scoped node-plane change. **Owner direction needed before
 porting** — STEP 2's scoped raw-base carry is unsound (uniform provenance) and blanket-raw / blanket-
 distinct both regress the siblings the editor legitimately snaps.
+
+## The `FindNearestVertex` descent port was BUILT and REFUTED — insufficient AND a regression (2026-09-05)
+
+The port above was implemented (WIP `f046d97`) and measured. It does NOT fix N=8, and it regresses the
+point table. Reverted to the linear-scan baseline. Two decoded facts settle the approach:
+
+- **The descent is an EXACT nearest-within-R query — it cannot structurally miss a wired within-tol
+  point (refutes the "plane-side prune skips it" hypothesis).** Full disasm of the recursive helper
+  `Engine.dll 0x1adb60` (called by `FindNearestVertex 0x1adeb0`): at each node it descends the near
+  child, then tests the node's own surf-base + vert-pool, then the far child — pruning a child only
+  when the whole half-space is beyond the CURRENT radius (`|pd| > R`), and `R` only ever shrinks to a
+  real found distance (`0x1adc06-0x1adc1a`). So any point on the far side within `R` forces `|pd| <= R`
+  → never pruned. A wired point within `tol` of the query is ALWAYS found. Therefore an editor MISS on
+  the x=448 base means `448.00006` was NOT wired+reachable in the editor's incremental `Model->Nodes`
+  at that add — a tree-CONTENTS/ordering fact, not a descent-algorithm fact.
+
+- **Native's incremental tree ≠ the editor's, so descending it gives the wrong dedup both ways.**
+  Trace (`UEDCLI_FNV_TRACE`, N=8): when native adds the -X base `447.99985`, point `448.00006` (the
+  +Y face `ilink=32` base, nodes 48-50) IS wired as a reachable surf-base (`nodes=62`), so the exact
+  descent finds it and snaps — x=448 STILL diverges. And the descent over native's divergent tree
+  MISSES snaps the editor makes elsewhere: `diff_n8` with the port shows **points 81 vs 76** (5 spurious
+  distinct points) with shifted `pBase` across most surfs. The linear scan gives **76/76 byte-identical**
+  precisely because it dedups order-insensitively against all points; the final repartition re-dedup
+  then yields the editor's table. Its ONLY residual is the x=448 incremental over-snap.
+
+**Conclusion: porting `FindNearestVertex` is necessary-but-insufficient and cannot be verified in
+isolation.** FindNearestVertex is exact GIVEN a tree; reproducing the editor's dedup requires native's
+incremental world tree to be wired identically to the editor's at every `bspAddPoint` — which native's
+approximated `bspBrushCSG`/`bspCleanup` does not achieve (it over-snaps x=448 and under-snaps 5 others).
+The blocker is the incremental-tree WIRING divergence for Brush74's subtract, still unpinned. Pinning it
+needs a live editor spike: gdb on `bspAddPoint 0x35430` / `bspAddNode 0x34e80` through Brush74's CSG,
+capturing per-add `EdPoly->Base`, the returned `pBase`, and the reachable `Model->Nodes` surf-base/vert
+set — to learn WHY the editor's tree lacks `448.00006` when the -X base is added (face order? a cleanup
+splice?). Only then is the fix (match that wiring) implementable and corpus-verifiable. Owner direction
+still needed; this is a spike, not a code port. Disasm reproducer: extend
+`spikes/2026-09-04-bspaddpoint-dedup-base-provenance/harness/decode_dedup.py`; trace evidence in that
+spike's `harness/`.
