@@ -17,7 +17,7 @@ from uedcli.cli import resources
 from uedcli.builders import cube, make_brush_actor, sheet
 from uedcli.model import Actor, Brush, Polygon
 from uedcli.preview import (
-    BACK, BG, DEFAULT_ANNOTATIONS, DEFAULT_GREY, FRONT, _CSG_PALETTE, _FRAME_PAD, AnnotationSpec,
+    BACK, BG, DEFAULT_GREY, FRONT, _CSG_PALETTE, _FRAME_PAD, AnnotationSpec,
     FaceData, PointRender, PreviewAbort, PreviewData, TextureData, _decal_opacity, _fade, _framing,
     _occluder_count, _scene_geometry, assign_tints, render_brushes_pgm,
 )
@@ -44,9 +44,12 @@ GOLDEN_QUAD = FIXTURES / "preview_wire_golden_quad.png"
 
 def _preview_args(out, **kw):
     """A `actor diagram --from-t3d` arg namespace. `brush_colors=None` is what a run with no
-    `--brush-colors` flag now parses to, and `faces` is left ABSENT unless a test sets it."""
+    `--brush-colors` flag now parses to, and `faces` is left ABSENT unless a test sets it.
+    `annotate` is frozen to the golden's literal spec (not the live `DEFAULT_ANNOTATIONS`, which is
+    `none` since poly numbers became opt-in) so this file's wire golden stays decoupled from that
+    default."""
     base = dict(cmd="actor", sub="diagram", project=None, names=[], from_t3d=None,
-                view="iso", layout="single", annotate=DEFAULT_ANNOTATIONS, iso_angle=30.0,
+                view="iso", layout="single", annotate="poly:vis,poly:hi", iso_angle=30.0,
                 frame=None, frame_tightness=0.8, highlight=None, focus=None, show="", size=256,
                 out=str(out), brush_colors=None)
     base.update(kw)

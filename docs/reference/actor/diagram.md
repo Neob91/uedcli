@@ -127,10 +127,10 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   - Examples: `poly:vis` = every face (same as bare `poly`); `poly:hi` = highlighted faces only.
   - Whole-value keywords (stand alone): **`none`** = nothing; **`all`** = `poly`;
     **`highlighted`** = `poly:hi`.
-  - **Default:** `poly:vis,poly:hi` — face indices (painted on-face). (On-face
-    numbering is facing-blind, so `poly:vis` — now an inert alias of bare `poly` — numbers every face;
-    opacity, not presence, is the front/back cue. `vis` is kept only so pre-facing-blind specs still
-    parse.)
+  - **Default:** `none` — poly numbers are opt-in. Pass `--annotate all` (every face) or
+    `--annotate poly:hi` (highlighted faces only) to draw them. (On-face numbering is facing-blind, so
+    `poly:vis` — now an inert alias of bare `poly` — numbers every face once drawn; opacity, not
+    presence, is the front/back cue. `vis` is kept only so pre-facing-blind specs still parse.)
   - An invalid token is a clean exit 2 naming it (e.g. `--annotate: unknown filter 'foo' for kind 'poly'`).
 - **Point actors** render as their **DT_Sprite** billboard (footprint `DrawScale·USize × DrawScale·
   VSize`) or, for DT_Mesh/DT_None (or a sprite that does not decode), a small **marker** (a filled

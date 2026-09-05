@@ -234,9 +234,9 @@ def _preview_opts(pp):
                          "poly — on-face numbering is facing-blind), hi (highlighted faces only; "
                          "'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces "
                          "only; 'poly:vis' = every face index (same as bare poly). Keywords (stand "
-                         "alone): none, all (=poly), highlighted (=poly:hi). Default: all face "
-                         "indices. Actor names are never drawn — locate a brush by its locator cell "
-                         "(printed on stderr)")
+                         "alone): none, all (=poly), highlighted (=poly:hi). Default: none — pass "
+                         "'all' (or 'poly:hi') to draw poly numbers. Actor names are never drawn — "
+                         "locate a brush by its locator cell (printed on stderr)")
     pp.add_argument("--frame", default=None, metavar="TARGET",
                     help="frame a target to fill the view; frames ONLY, does NOT highlight. Two forms: "
                          "a SELECTOR — a bare BRUSH name frames that actor's whole AABB, or BRUSH:IDX "

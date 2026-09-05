@@ -2584,12 +2584,12 @@
               "dest": "annotate",
               "nargs": null,
               "const": null,
-              "default": "poly:vis,poly:hi",
+              "default": "none",
               "required": false,
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "comma-set of poly-index selectors (union). Bare 'poly' = every face index; colon FILTERs narrow; commas union. poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted faces only; 'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly), highlighted (=poly:hi). Default: all face indices. Actor names are never drawn — locate a brush by its locator cell (printed on stderr)",
+              "help": "comma-set of poly-index selectors (union). Bare 'poly' = every face index; colon FILTERs narrow; commas union. poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted faces only; 'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly), highlighted (=poly:hi). Default: none — pass 'all' (or 'poly:hi') to draw poly numbers. Actor names are never drawn — locate a brush by its locator cell (printed on stderr)",
               "mutex_group": null
             },
             {
@@ -11765,12 +11765,12 @@
               "dest": "annotate",
               "nargs": null,
               "const": null,
-              "default": "poly:vis,poly:hi",
+              "default": "none",
               "required": false,
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "comma-set of poly-index selectors (union). Bare 'poly' = every face index; colon FILTERs narrow; commas union. poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted faces only; 'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly), highlighted (=poly:hi). Default: all face indices. Actor names are never drawn — locate a brush by its locator cell (printed on stderr)",
+              "help": "comma-set of poly-index selectors (union). Bare 'poly' = every face index; colon FILTERs narrow; commas union. poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted faces only; 'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly), highlighted (=poly:hi). Default: none — pass 'all' (or 'poly:hi') to draw poly numbers. Actor names are never drawn — locate a brush by its locator cell (printed on stderr)",
               "mutex_group": null
             },
             {
@@ -12526,12 +12526,12 @@
               "dest": "annotate",
               "nargs": null,
               "const": null,
-              "default": "poly:vis,poly:hi",
+              "default": "none",
               "required": false,
               "choices": null,
               "metavar": null,
               "converter": null,
-              "help": "comma-set of poly-index selectors (union). Bare 'poly' = every face index; colon FILTERs narrow; commas union. poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted faces only; 'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly), highlighted (=poly:hi). Default: all face indices. Actor names are never drawn — locate a brush by its locator cell (printed on stderr)",
+              "help": "comma-set of poly-index selectors (union). Bare 'poly' = every face index; colon FILTERs narrow; commas union. poly filters: vis (inert alias of bare poly — on-face numbering is facing-blind), hi (highlighted faces only; 'highlighted' is an accepted synonym). e.g. 'poly:hi' = highlighted faces only; 'poly:vis' = every face index (same as bare poly). Keywords (stand alone): none, all (=poly), highlighted (=poly:hi). Default: none — pass 'all' (or 'poly:hi') to draw poly numbers. Actor names are never drawn — locate a brush by its locator cell (printed on stderr)",
               "mutex_group": null
             },
             {
