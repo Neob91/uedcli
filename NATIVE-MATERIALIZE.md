@@ -99,7 +99,11 @@ match; the surviving (non-`None`) `Actors` set AND order must match (Actors orde
   and widening the mask — including a decoupled poly-base tolerance for the WanChai N19 case (same dedup
   class) — is RULED OUT. A 2026-09-05 spike (`spikes/2026-09-05-faithful-dedup-fix-attempt/`) re-confirmed
   with fresh disasm that the fix requires re-deriving the incremental BSP core so `FindNearestVertex`
-  reachability is bit-exact.
+  reachability is bit-exact. A 2026-09-05 census MEASURED the scoped fix: porting the pruned descent alone
+  regresses 21/52 cells (0 fixed) — it perturbs the point-append ORDER the all-linear pipeline reproduces
+  for free — so the faithful fix is the whole-pipeline rework (editor incremental tree wiring + descent
+  through repartition), weeks/high-risk. **Owner reaffirmed 2026-09-05: "faithful above all else" — do the
+  rework, no mask; re-verify the ladder from N=1 once the core is reworked.** Mask holds only until then.
 
 Any NEW candidate exclusion needs an opus review confirming inconsequence + the owner's explicit yes
 before it counts. No content carveouts (Movers included — native must build their private models).
