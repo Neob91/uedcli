@@ -1,0 +1,8 @@
+1384:DevPath: Remove 889 old reachspecs
+1385:DevPath: Add WarpZone and Inventory markers
+1386:DevPath: Scout didn't fit
+1387:DevPath: Scout didn't fit
+1388:DevPath: Scout didn't fit
+1389:DevPath: Scout didn't fit
+1390:DevPath: Scout didn't fit
+1391:DevPath: Add reachspecs

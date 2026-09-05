@@ -1,0 +1,95 @@
+1387:DevPath: Remove 889 old reachspecs
+1388:DevPath: Add WarpZone and Inventory markers
+1389:DevPath: Scout didn't fit
+1390:DevPath: Scout didn't fit
+1391:DevPath: Scout didn't fit
+1392:DevPath: Scout didn't fit
+1393:DevPath: Scout didn't fit
+1394:DevPath: Add reachspecs
+1555:DevPath: Added 867 reachspecs
+1556:DevPath: Prune reachspecs
+1557:DevPath: Pruned 474 reachspecs
+1558:DevPath: All done
+1559:Log: ----------------------Starting From PlayerStart0
+1605:Log: Added new path PathNode3 at -314.862366 -580.884399
+1615:Log: Added new path PathNode23 at -800.428467 -699.312988
+1653:Log: Added new path PathNode47 at -697.460632 -365.395538
+1657:Log: Added new path PathNode48 at -806.483948 345.859558
+1666:Log: Added new path PathNode49 at -1286.521851 329.481079
+1672:Log: Added new path PathNode50 at -2742.522217 585.477295
+1686:Log: Added new path PathNode51 at -1664.447754 320.872284
+1700:Log: ----------------------Starting From InventorySpot0
+1701:DevPath: No valid start found
+1702:DevPath: No valid start found
+1703:Log: ----------------------Starting From InventorySpot1
+1704:DevPath: No valid start found
+1705:DevPath: No valid start found
+1706:Log: ----------------------Starting From InventorySpot2
+1707:DevPath: No valid start found
+1708:DevPath: No valid start found
+1709:Log: ----------------------Starting From InventorySpot3
+1710:DevPath: No valid start found
+1711:DevPath: No valid start found
+1712:Log: ----------------------Starting From InventorySpot4
+1713:DevPath: No valid start found
+1714:DevPath: No valid start found
+1715:Log: ----------------------Starting From InventorySpot5
+1716:DevPath: No valid start found
+1717:DevPath: No valid start found
+1718:Log: ----------------------Starting From InventorySpot6
+1719:DevPath: No valid start found
+1720:DevPath: No valid start found
+1721:Log: ----------------------Starting From InventorySpot7
+1722:DevPath: No valid start found
+1723:DevPath: No valid start found
+1724:Log: ----------------------Starting From InventorySpot8
+1725:DevPath: No valid start found
+1726:DevPath: No valid start found
+1727:Log: ----------------------Starting From InventorySpot9
+1728:DevPath: No valid start found
+1729:DevPath: No valid start found
+1730:Log: ----------------------Starting From InventorySpot10
+1731:DevPath: No valid start found
+1732:DevPath: No valid start found
+1733:Log: ----------------------Starting From InventorySpot11
+1734:DevPath: No valid start found
+1735:DevPath: No valid start found
+1736:Log: ----------------------Starting From InventorySpot12
+1737:DevPath: No valid start found
+1738:DevPath: No valid start found
+1739:Log: ----------------------Starting From InventorySpot13
+1740:DevPath: No valid start found
+1741:DevPath: No valid start found
+1742:Log: ----------------------Starting From InventorySpot14
+1743:DevPath: No valid start found
+1744:DevPath: No valid start found
+1745:Log: ----------------------Starting From InventorySpot15
+1746:DevPath: No valid start found
+1747:DevPath: No valid start found
+1748:Log: ----------------------Starting From InventorySpot16
+1749:DevPath: No valid start found
+1750:DevPath: No valid start found
+1751:Log: ----------------------Starting From InventorySpot17
+1752:DevPath: No valid start found
+1753:DevPath: No valid start found
+1754:Log: ----------------------Starting From InventorySpot18
+1755:DevPath: No valid start found
+1756:DevPath: No valid start found
+1757:Log: ----------------------Starting From InventorySpot19
+1758:DevPath: No valid start found
+1759:DevPath: No valid start found
+1760:Log: ----------------------Starting From InventorySpot20
+1761:DevPath: No valid start found
+1762:DevPath: No valid start found
+1763:Log: ----------------------Starting From InventorySpot21
+1764:DevPath: No valid start found
+1765:DevPath: No valid start found
+2034:Log: Added new path PathNode52 at -642.622986 -624.780273
+2469:DevPath: Remove 867 old reachspecs
+2470:DevPath: Add WarpZone and Inventory markers
+2471:DevPath: Scout didn't fit
+2472:DevPath: Scout didn't fit
+2473:DevPath: Scout didn't fit
+2474:DevPath: Scout didn't fit
+2475:DevPath: Scout didn't fit
+2476:DevPath: Add reachspecs
