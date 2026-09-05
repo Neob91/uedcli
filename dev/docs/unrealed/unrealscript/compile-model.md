@@ -18,13 +18,21 @@ import's Outer — why `Core` sorts first among imports).
 | imports | `ObjectIndices[obj.globalIndex]` | global `GObjObjects` creation order |
 | exports | `ObjectIndices[obj.globalIndex]` | `GObjObjects` = the package's own object PARSE order |
 
-**Status:** export order and **import order** reproduce byte-exact (global tie-break table in
-`global_index.py`, reconstructed from clean UCC compiles). **Name order** reproduces byte-exact for
-member-free classes; for member-bearing classes the member FNames interleave with stock names by
-UCC's compile-time `FName`-registration order (property-type + defaults dependent), which resisted
-reconstruction. Since name-table order is pure indexing (a permuted-name package loads/plays
-identically), it is proposed as a permutation exclusion (gate compares name CONTENT, canonicalises
-name refs) pending owner ratification — board question `name-table-order-exclusion`. Observed:
+**Status (2026-09-05, superseding the exclusion proposal below — owner ruling: reproduce, don't
+exclude):** export and import order reproduce byte-exact from the runtime-dumped `GObjNames`/
+`GObjObjects` tables (`global_index.py`, dumped from a booted `UCC.exe` under `winedbg`, an INT3
+planted at `SavePackage`) plus an instruction-exact port of `core.dll`'s CRT `qsort`. **Name order
+also reproduces byte-exact**, including member-bearing and multi-function classes (`UscHello`/
+`UscVars`/`UscBB`/`UscFn`/`UscW`, and real-world `FrameBuilder`/`RahnemBrushBuilders`): UCC's
+compile-time `FName`-registration is a per-object declaration walk, plus two extra rules for
+"value-only" names (a name that is never an object's own name): a **package self-reference** (spliced
+into `PackageImports`) registers at **class-header time**; a `defaultproperties` tag's **name-typed
+VALUE** (e.g. `GroupName="Landscape"`) registers **last**, after every member and function, since
+`defaultproperties` compiles last. Modeled in `ordering._gather_names` + `ObjInput.late_name_refs`.
+The former "permutation exclusion" proposal (gate masks name/import ORDER) is retired — see
+`parity.md` for the current, much narrower exclusion set (just the GUID, for the packages that fully
+reproduce). Open: an Enum's own value-list may carry its own un-RE'd sub-order (`DavesBrushBuilders`);
+`ExtendedBuilders` diverges on raw byte count, unrelated to ordering. Historical example orders:
 
 - `UscHello` names: `None, UscHello, Core, System, Class, TextBuffer, ScriptText, Package, Object`.
 - `UscVars` exports: `ScriptText, Alpha, Beta, Gamma, UscVars` (Children chain in decl order,

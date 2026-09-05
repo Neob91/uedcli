@@ -161,6 +161,9 @@ class _Decoder:
         return names, objs
 
     def _class_streams(self, pos: int, end: int) -> tuple[list[str], list[str]]:
+        """A non-`self.class_i` class export's ref stream (multi-class packages, e.g.
+        `ExtendedBuilders`) — `objinputs()` only special-cases `self.class_i` for the
+        `late_name_refs` split, so every OTHER class still routes through here via `streams()`."""
         (names, objs), (tnames, tobjs) = self._class_split_streams(pos, end)
         return names + tnames, objs + tobjs
 
