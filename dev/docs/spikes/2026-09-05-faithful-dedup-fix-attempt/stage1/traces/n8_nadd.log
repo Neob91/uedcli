@@ -1,0 +1,15 @@
+NADD phase=SUB node=48 parent=45 place=1 flags=0x20 ilink=32 actor=5 bpoly=3 nv=4 N=-0.00000,1.00000,-0.00000 B=448.00006,64.00011,0.00003 PP=-0.00000,-1.00000,-0.00000,-304.00012 pnv=4
+NADD phase=SUB node=49 parent=46 place=1 flags=0x20 ilink=32 actor=5 bpoly=3 nv=4 N=-0.00000,1.00000,-0.00000 B=448.00006,64.00011,0.00003 PP=-0.00000,-1.00000,-0.00000,-304.00012 pnv=4
+NADD phase=SUB node=50 parent=47 place=1 flags=0x20 ilink=32 actor=5 bpoly=3 nv=4 N=-0.00000,1.00000,-0.00000 B=448.00006,64.00011,0.00003 PP=-0.00000,-1.00000,-0.00000,-304.00012 pnv=4
+NADD phase=SUB node=51 parent=3 place=2 flags=0x20 ilink=33 actor=5 bpoly=4 nv=4 N=-1.00000,-0.00000,-0.00000 B=448.00006,304.00012,0.00003 PP=1.00000,-0.00000,-0.00000,448.00024 pnv=4
+NADD phase=SUB node=52 parent=49 place=1 flags=0x20 ilink=33 actor=5 bpoly=4 nv=4 N=-1.00000,-0.00000,-0.00000 B=448.00006,304.00012,0.00003 PP=-0.00000,1.00000,-0.00000,64.00011 pnv=4
+NADD phase=SUB node=53 parent=50 place=1 flags=0x20 ilink=33 actor=5 bpoly=4 nv=4 N=-1.00000,-0.00000,-0.00000 B=448.00006,304.00012,0.00003 PP=-0.00000,1.00000,-0.00000,64.00011 pnv=4
+NADD phase=SUB node=59 parent=48 place=0 flags=0x20 ilink=37 actor=6 bpoly=3 nv=4 N=-0.00000,1.00000,-0.00000 B=447.99985,-288.00015,0.00000 PP=-0.00000,1.00000,-0.00000,64.00011 pnv=4
+NADD phase=SUB node=60 parent=49 place=0 flags=0x20 ilink=37 actor=6 bpoly=3 nv=4 N=-0.00000,1.00000,-0.00000 B=447.99985,-288.00015,0.00000 PP=-0.00000,1.00000,-0.00000,64.00011 pnv=4
+NADD phase=SUB node=61 parent=50 place=0 flags=0x20 ilink=37 actor=6 bpoly=3 nv=4 N=-0.00000,1.00000,-0.00000 B=447.99985,-288.00015,0.00000 PP=-0.00000,1.00000,-0.00000,64.00011 pnv=4
+NADD phase=SUB node=62 parent=3 place=2 flags=0x20 ilink=38 actor=6 bpoly=4 nv=4 N=-1.00000,-0.00000,-0.00000 B=447.99985,64.00011,0.00000 PP=1.00000,-0.00000,-0.00000,448.00024 pnv=4
+NADD phase=SUB node=63 parent=60 place=1 flags=0x20 ilink=38 actor=6 bpoly=4 nv=4 N=-1.00000,-0.00000,-0.00000 B=447.99985,64.00011,0.00000 PP=-0.00000,1.00000,-0.00000,-288.00015 pnv=4
+NADD phase=SUB node=64 parent=61 place=1 flags=0x20 ilink=38 actor=6 bpoly=4 nv=4 N=-1.00000,-0.00000,-0.00000 B=447.99985,64.00011,0.00000 PP=-0.00000,1.00000,-0.00000,-288.00015 pnv=4
+NADD phase=FWTB node=68 parent=48 place=2 flags=0x20 ilink=32 actor=5 bpoly=3 nv=4 N=0.00000,1.00000,0.00000 B=448.00006,64.00011,0.00003 PP=-0.00000,1.00000,-0.00000,64.00011 pnv=4
+NADD phase=FWTB node=69 parent=49 place=2 flags=0x20 ilink=32 actor=5 bpoly=3 nv=4 N=0.00000,1.00000,0.00000 B=448.00006,64.00011,0.00003 PP=-0.00000,1.00000,-0.00000,64.00011 pnv=4
+NADD phase=FWTB node=70 parent=50 place=2 flags=0x20 ilink=32 actor=5 bpoly=3 nv=4 N=0.00000,1.00000,0.00000 B=448.00006,64.00011,0.00003 PP=-0.00000,1.00000,-0.00000,64.00011 pnv=4

@@ -1,0 +1,7 @@
+PT tol=0.002 q=(447.999847,64.000107,0.000000) SNAP target=86 tval=(448.000061,64.000107,0.000031) gnear=(idx=86,d=2.158e-4) reach=62/62 sb=[48, 49, 50] vp=[]
+   sbnode 48 N=(-0.00000,1.00000,-0.00000) W=64.00011 nv=4 flags=0x0 iSurf=32 iActor=5 iBrushPoly=3 iFront=54 iBack=59 iPlane=-1
+   sbnode 49 N=(-0.00000,1.00000,-0.00000) W=64.00011 nv=4 flags=0x0 iSurf=32 iActor=5 iBrushPoly=3 iFront=52 iBack=60 iPlane=-1
+   sbnode 50 N=(-0.00000,1.00000,-0.00000) W=64.00011 nv=4 flags=0x0 iSurf=32 iActor=5 iBrushPoly=3 iFront=53 iBack=61 iPlane=-1
+PT tol=0.002 q=(447.999847,64.000107,0.000000) ADD  target=7 tval=(447.999847,64.000107,239.999985) gnear=(idx=7,d=2.400e2) reach=4/4 sb=[] vp=[1, 2]
+PT tol=0.002 q=(448.000061,64.000107,0.000031) SNAP target=30 tval=(448.000061,64.000107,0.000031) gnear=(idx=30,d=0.000e0) reach=0/0 sb=[] vp=[]
+PT tol=0.002 q=(448.000061,64.000107,0.000031) SNAP target=30 tval=(448.000061,64.000107,0.000031) gnear=(idx=30,d=0.000e0) reach=0/0 sb=[] vp=[]

@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Run `parity_gate.py` with the x=448 point-dedup near-tie mask DISABLED (NODE_W_DEDUP_TOL=0).
+"""Thin passthrough to `parity_gate.py` — kept for callers that reference this path.
 
-Shows what the gate would report if the stopgap mask were removed -- used to confirm UNATCO N8 still
-FAILS without it (2 residuals: model node-plane W, polys soup base) and to check a candidate faithful
-fix actually closes them rather than the mask hiding them.
+Historically this disabled the x=448 point-dedup near-tie mask (`NODE_W_DEDUP_TOL=0`) to show what the
+gate reported without the stopgap. That mask is now GONE: the divergence is fixed faithfully (native
+dedups points with the editor's radius-pruned FindNearestVertex descent), so `parity_gate.py` is
+already strict — this just forwards to it.
 
 Run: `gate_nomask.py <native.dx> <ued.dx>`
 """
@@ -13,11 +14,9 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[5]
-GATE = ROOT / "dev/docs/spikes/2026-09-03-incremental-actor-parity/harness"
-sys.path.insert(0, str(GATE))
+sys.path.insert(0, str(ROOT / "dev/docs/spikes/2026-09-03-incremental-actor-parity/harness"))
 
 import parity_gate as g  # noqa: E402
 
-g.NODE_W_DEDUP_TOL = 0.0                       # disable the dedup-tie mask
 sys.argv = ["parity_gate.py"] + sys.argv[1:]
 sys.exit(g.main())

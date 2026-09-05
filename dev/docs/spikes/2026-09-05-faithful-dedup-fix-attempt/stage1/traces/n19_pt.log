@@ -1,0 +1,8 @@
+PT tol=0.002 q=(-0.000366,-3072.000244,-152.000000) SNAP target=774 tval=(0.000610,-3072.000000,-152.000000) gnear=(idx=774,d=1.007e-3) reach=262/293 sb=[271] vp=[]
+   sbnode 271 N=(0.00000,0.00000,1.00000) W=-152.00000 nv=4 flags=0x0 iSurf=140 iActor=15 iBrushPoly=1 iFront=272 iBack=282 iPlane=-1
+PT tol=0.002 q=(-0.000366,-3072.000244,-144.000000) SNAP target=780 tval=(0.000610,-3072.000000,-144.000000) gnear=(idx=780,d=1.007e-3) reach=264/295 sb=[273] vp=[]
+   sbnode 273 N=(0.00000,0.00000,1.00000) W=-144.00000 nv=4 flags=0x0 iSurf=142 iActor=15 iBrushPoly=3 iFront=274 iBack=284 iPlane=-1
+PT tol=0.002 q=(-0.000366,-3072.000244,-136.000000) SNAP target=786 tval=(0.000610,-3072.000000,-136.000000) gnear=(idx=786,d=1.007e-3) reach=266/297 sb=[275] vp=[]
+   sbnode 275 N=(0.00000,0.00000,1.00000) W=-136.00000 nv=4 flags=0x0 iSurf=144 iActor=15 iBrushPoly=5 iFront=276 iBack=285 iPlane=-1
+PT tol=0.002 q=(-0.000366,-3072.000244,-128.000000) SNAP target=792 tval=(0.000610,-3072.000000,-128.000000) gnear=(idx=792,d=1.007e-3) reach=268/299 sb=[277] vp=[]
+   sbnode 277 N=(0.00000,0.00000,1.00000) W=-128.00000 nv=4 flags=0x0 iSurf=146 iActor=15 iBrushPoly=7 iFront=-1 iBack=-1 iPlane=-1

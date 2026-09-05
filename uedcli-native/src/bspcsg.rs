@@ -106,6 +106,270 @@ fn point_nearest_enabled() -> bool {
     *FLAG.get_or_init(|| std::env::var("UEDCLI_BSPCSG_POINT_NEAREST").is_ok())
 }
 
+// --- STAGE-1 POINT-DEDUP TRACE (UEDCLI_BSPCSG_POINT_TRACE) — env-gated, default path byte-unchanged.
+// Faithful-dedup rewrite, Stage 1 (spike 2026-09-05-faithful-dedup-fix-attempt/stage1). Emits, per
+// `bsp_add_point_tol` call: the query, native's SNAP-vs-ADD decision + target idx/value, the global
+// nearest, and — the crux — whether that target point is REACHABLE in native's CURRENT incremental
+// tree (DFS from root over iFront/iBack/iPlane, testing each reachable node's surf-base at +0x1c and
+// its vert-pool, exactly what `UModel::FindNearestVertex` visits). This is the native-side half of
+// the divergence pin: at the divergent surf-base add native SNAPS to a reachably-wired point; the
+// editor's FNV MISS means its incremental tree does NOT reach that point at that moment.
+//   UEDCLI_BSPCSG_POINT_TRACE=1|all         emit every point add
+//   UEDCLI_BSPCSG_POINT_TRACE=x,y,z,r       emit only adds whose query is within r of (x,y,z)
+enum PtTrace {
+    Off,
+    All,
+    Near([f32; 3], f32),
+}
+
+fn pt_trace() -> &'static PtTrace {
+    static SPEC: std::sync::OnceLock<PtTrace> = std::sync::OnceLock::new();
+    SPEC.get_or_init(|| match std::env::var("UEDCLI_BSPCSG_POINT_TRACE") {
+        Err(_) => PtTrace::Off,
+        Ok(s) if s == "1" || s == "all" => PtTrace::All,
+        Ok(s) => {
+            let f: Vec<f32> = s.split(',').filter_map(|t| t.trim().parse().ok()).collect();
+            if f.len() == 4 {
+                PtTrace::Near([f[0], f[1], f[2]], f[3])
+            } else {
+                PtTrace::All
+            }
+        }
+    })
+}
+
+/// Nodes reachable from root (0) over iFront/iBack/iPlane — the descent `FindNearestVertex` walks.
+fn reachable_nodes(model: &Model) -> Vec<bool> {
+    let mut seen = vec![false; model.nodes.len()];
+    if model.nodes.is_empty() {
+        return seen;
+    }
+    let mut stack = vec![0i32];
+    while let Some(ni) = stack.pop() {
+        if ni < 0 {
+            continue;
+        }
+        let u = ni as usize;
+        if u >= seen.len() || seen[u] {
+            continue;
+        }
+        seen[u] = true;
+        let n = &model.nodes[u];
+        stack.push(n.i_front);
+        stack.push(n.i_back);
+        stack.push(n.i_plane);
+    }
+    seen
+}
+
+/// Among reachable nodes, which wire point `ti` as a surf-base (`Surf.pBase`) or a vert-pool entry
+/// (`BspVert.iVertex`) — the two places FNV's helper tests a point.
+fn point_wired(model: &Model, seen: &[bool], ti: i32) -> (Vec<i32>, Vec<i32>) {
+    let mut sb = vec![];
+    let mut vp = vec![];
+    for (i, n) in model.nodes.iter().enumerate() {
+        if !seen[i] {
+            continue;
+        }
+        if n.i_surf >= 0 && model.surfs[n.i_surf as usize].p_base == ti {
+            sb.push(i as i32);
+        }
+        if n.i_vert_pool >= 0 && n.num_vertices > 0 {
+            let (s, c) = (n.i_vert_pool as usize, n.num_vertices as usize);
+            if model.verts[s..(s + c).min(model.verts.len())]
+                .iter()
+                .any(|bv| bv.i_vertex == ti)
+            {
+                vp.push(i as i32);
+            }
+        }
+    }
+    (sb, vp)
+}
+
+fn trace_point_add(model: &Model, v: Vec3, tol: f32, hit: Option<i32>) {
+    if let PtTrace::Near(c, r) = pt_trace() {
+        let d = ((v.x - c[0]).powi(2) + (v.y - c[1]).powi(2) + (v.z - c[2]).powi(2)).sqrt();
+        if d > *r {
+            return;
+        }
+    }
+    let glob = nearest(&model.points, &v);
+    let (gi, gd) = glob.map(|(i, d)| (i as i32, d)).unwrap_or((-1, -1.0));
+    let target = hit.unwrap_or(gi);
+    let seen = reachable_nodes(model);
+    let reach = seen.iter().filter(|b| **b).count();
+    let (sb, vp) = if target >= 0 {
+        point_wired(model, &seen, target)
+    } else {
+        (vec![], vec![])
+    };
+    let tv = if target >= 0 {
+        model.points[target as usize]
+    } else {
+        Vec3::new(0.0, 0.0, 0.0)
+    };
+    eprintln!(
+        "PT tol={:.3} q=({:.6},{:.6},{:.6}) {} target={} tval=({:.6},{:.6},{:.6}) gnear=(idx={},d={:.3e}) reach={}/{} sb={:?} vp={:?}",
+        tol, v.x, v.y, v.z,
+        if hit.is_some() { "SNAP" } else { "ADD " },
+        target, tv.x, tv.y, tv.z, gi, gd, reach, model.nodes.len(), sb, vp
+    );
+    // Characterize the kept-reachable surf-base nodes: which face (normal / actor / brush-poly),
+    // alive?, flags — this is WHAT native keeps reachable that the editor's FNV must not.
+    for &ni in &sb {
+        let n = &model.nodes[ni as usize];
+        let (ia, ibp) = if n.i_surf >= 0 {
+            let s = &model.surfs[n.i_surf as usize];
+            (s.i_actor, s.i_brush_poly)
+        } else {
+            (-1, -1)
+        };
+        eprintln!(
+            "   sbnode {} N=({:.5},{:.5},{:.5}) W={:.5} nv={} flags={:#x} iSurf={} iActor={} iBrushPoly={} iFront={} iBack={} iPlane={}",
+            ni, n.plane.x, n.plane.y, n.plane.z, n.plane.w, n.num_vertices, n.node_flags,
+            n.i_surf, ia, ibp, n.i_front, n.i_back, n.i_plane
+        );
+    }
+    // Full reachable-from-root-0 tree dump (UEDCLI_BSPCSG_POINT_TRACE_TREE) — the structural target
+    // for the Stage-3 tree-wiring diff vs the editor's winedbg tree-dump at the same add.
+    if std::env::var("UEDCLI_BSPCSG_POINT_TRACE_TREE").is_ok() {
+        for (i, r) in seen.iter().enumerate() {
+            if !*r {
+                continue;
+            }
+            let n = &model.nodes[i];
+            let (pb, pt) = if n.i_surf >= 0 {
+                let p = model.surfs[n.i_surf as usize].p_base;
+                (p, model.points[p as usize])
+            } else {
+                (-1, Vec3::new(0.0, 0.0, 0.0))
+            };
+            let ia = if n.i_surf >= 0 { model.surfs[n.i_surf as usize].i_actor } else { -1 };
+            eprintln!(
+                "   RN {} N=({:.4},{:.4},{:.4}) W={:.4} iSurf={} pBase={} pt=({:.5},{:.5},{:.5}) iActor={} nv={} f={:#x} iF={} iB={} iP={}",
+                i, n.plane.x, n.plane.y, n.plane.z, n.plane.w, n.i_surf, pb, pt.x, pt.y, pt.z,
+                ia, n.num_vertices, n.node_flags, n.i_front, n.i_back, n.i_plane
+            );
+        }
+    }
+}
+
+// --- FindNearestVertex — the editor's radius-pruned point dedup (Engine.dll 0x1adeb0 / helper -----
+// 0x1adb60), used during INCREMENTAL brush CSG (see `fnv_dedup` flag). Faithful port decoded +
+// live-validated in spike 2026-09-05-faithful-dedup-fix-attempt (stages 2/2b): a BSP descent over the
+// LIVE `model.nodes` from root 0 that PRUNES a subtree when the query is beyond the current radius R
+// of the splitting plane — so a within-tol point behind a far plane is MISSED, exactly where native's
+// old linear scan wrongly SNAPPED (the x=448 / WanChai-step divergence class). `descent_sim.py` in the
+// spike reproduces this over the committed editor + native tree dumps; `test_fnv_*` pin it in Rust.
+
+/// True only for the duration of `bsp_brush_csg` (incremental CSG). Repartition (`bsp_build`) keeps the
+/// linear scan over the retained points pool — the editor's `EmptyModel(0,0)` keeps Points across the
+/// rebuild, and native's from-scratch re-add matches it by coordinate; a descent over the empty
+/// rebuilding tree would append duplicates.
+thread_local! {
+    static FNV_DEDUP: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// RAII: enable the FindNearestVertex dedup for the current scope, restoring the previous value on drop.
+struct FnvDedupGuard(bool);
+impl FnvDedupGuard {
+    fn enable() -> Self {
+        FnvDedupGuard(FNV_DEDUP.with(|c| c.replace(true)))
+    }
+}
+impl Drop for FnvDedupGuard {
+    fn drop(&mut self) {
+        FNV_DEDUP.with(|c| c.set(self.0));
+    }
+}
+
+/// Child convention for the descent: false (default) = native's live CSG tree has iFront/iBack SWAPPED
+/// vs the engine; true = engine convention (a static engine-convention tree, e.g. the editor dump in
+/// tests). Thread-local so a test can pick per-tree.
+thread_local! {
+    static FNV_ENGINE_CHILDREN: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+fn fnv_engine_children() -> bool {
+    FNV_ENGINE_CHILDREN.with(|c| c.get())
+}
+
+/// Test the point `p_idx` against the query, shrinking `(best_i, best_d=R)` if it is the new nearest
+/// within R. Editor summation order `(dy² + dx²) + dz²` (0x1adccb..0x1adccf); strict `d² < R²`.
+fn fnv_consider(model: &Model, v: &Vec3, p_idx: i32, best_i: &mut i32, best_d: &mut f32) {
+    if p_idx < 0 {
+        return;
+    }
+    let p = &model.points[p_idx as usize];
+    let (dx, dy, dz) = (v.x - p.x, v.y - p.y, v.z - p.z);
+    let d2 = (dy * dy + dx * dx) + dz * dz;
+    if d2 < *best_d * *best_d {
+        *best_d = d2.sqrt();
+        *best_i = p_idx;
+    }
+}
+
+/// The recursive descent (helper 0x1adb60): iBack recursed when `pd >= -R`; the node + its coplanar
+/// (iPlane) chain's surf-base + vert-pool tested when `-R < pd <= R`; iFront tail-looped when `pd <= R`.
+/// R (`best_d`) shrinks to the nearest hit so far, tightening the prune.
+fn fnv_recurse(model: &Model, v: &Vec3, i_node_start: i32, best_i: &mut i32, best_d: &mut f32) {
+    // Native's INCREMENTAL tree is in the CSG child convention (iFront/iBack swapped vs the engine's,
+    // which `swap_node_children` converts at the end); the editor's FindNearestVertex walks the engine
+    // convention. So during live CSG the descent's near/far children are swapped: recurse iFront when
+    // pd >= -R, tail iBack when pd <= R. (Static tree-dump tests use `fnv_engine_children`.)
+    let mut i_node = i_node_start;
+    while i_node != -1 {
+        let n = &model.nodes[i_node as usize];
+        let pd = n.plane.x * v.x + n.plane.y * v.y + n.plane.z * v.z - n.plane.w;
+        let (near_back, far_front) = if fnv_engine_children() {
+            (n.i_back, n.i_front)
+        } else {
+            (n.i_front, n.i_back)
+        };
+        if pd >= -*best_d && near_back != -1 {
+            fnv_recurse(model, v, near_back, best_i, best_d);
+        }
+        if pd > -*best_d && pd <= *best_d {
+            let mut c = i_node;
+            while c != -1 {
+                let cn = &model.nodes[c as usize];
+                if cn.i_surf >= 0 {
+                    fnv_consider(model, v, model.surfs[cn.i_surf as usize].p_base, best_i, best_d);
+                }
+                // Vert-pool guarded by NumVertices only (disasm-faithful); the extra bounds guard
+                // never fires on a well-formed tree but avoids a panic -> CLI traceback on bad input.
+                if cn.i_vert_pool >= 0 {
+                    for k in 0..cn.num_vertices {
+                        let vi = (cn.i_vert_pool + k) as usize;
+                        if vi >= model.verts.len() {
+                            break;
+                        }
+                        fnv_consider(model, v, model.verts[vi].i_vertex, best_i, best_d);
+                    }
+                }
+                c = cn.i_plane;
+            }
+        }
+        i_node = if pd <= *best_d { far_front } else { -1 };
+    }
+}
+
+/// `UModel::FindNearestVertex` — nearest `Model.Points` index within `tol` reachable-and-unpruned from
+/// root 0, or `None` (empty tree, or nothing within the pruned descent's reach). See the module note.
+fn find_nearest_vertex(model: &Model, v: Vec3, tol: f32) -> Option<usize> {
+    if model.nodes.is_empty() {
+        return None; // 0x1adee3: Model->Nodes.Num == 0 -> immediate MISS
+    }
+    let mut best_i: i32 = -1;
+    let mut best_d: f32 = tol;
+    fnv_recurse(model, &v, 0, &mut best_i, &mut best_d);
+    if best_i >= 0 {
+        Some(best_i as usize)
+    } else {
+        None
+    }
+}
+
 fn bsp_add_point(model: &mut Model, v: Vec3) -> i32 {
     // FindNearestVertex threshold 0.002 (fp-classification-sites §7).
     bsp_add_point_tol(model, v, THRESH_POINTS_ARE_SAME)
@@ -117,21 +381,32 @@ fn bsp_add_point(model: &mut Model, v: Vec3) -> i32 {
 /// (SAME)**, but the node vertex-RING add (`bspAddNode 0x352fd`, `push 0`) passes `0` → **0.015
 /// (NEAR)** (see `ring_point_tol` below, used by the ring loop in `bsp_add_node`).
 fn bsp_add_point_tol(model: &mut Model, v: Vec3, tol: f32) -> i32 {
-    if point_nearest_enabled() {
-        if let Some((i, dist)) = nearest(&model.points, &v) {
-            if dist < tol {
-                return i as i32;
-            }
+    // Incremental CSG uses the editor's radius-pruned FindNearestVertex descent; repartition and any
+    // other caller keeps the linear pool scan (see `FNV_DEDUP`).
+    let hit: Option<i32> = if FNV_DEDUP.with(|c| c.get()) && tol == THRESH_POINTS_ARE_SAME {
+        find_nearest_vertex(model, v, tol).map(|i| i as i32)
+    } else if point_nearest_enabled() {
+        match nearest(&model.points, &v) {
+            Some((i, dist)) if dist < tol => Some(i as i32),
+            _ => None,
         }
     } else {
-        for (i, p) in model.points.iter().enumerate() {
-            if v.sub(p).size() < tol {
-                return i as i32;
-            }
+        model
+            .points
+            .iter()
+            .position(|p| v.sub(p).size() < tol)
+            .map(|i| i as i32)
+    };
+    if !matches!(pt_trace(), PtTrace::Off) {
+        trace_point_add(model, v, tol, hit);
+    }
+    match hit {
+        Some(i) => i,
+        None => {
+            model.points.push(v);
+            (model.points.len() - 1) as i32
         }
     }
-    model.points.push(v);
-    (model.points.len() - 1) as i32
 }
 
 /// The node vertex-RING `bspAddPoint` threshold: 0.015 (NEAR), the real editor's value
@@ -267,8 +542,8 @@ fn trace_node_add(model: &Model, phase: &str, i_parent: i32, place: i32, node_fl
             (Plane { x: 0.0, y: 0.0, z: 0.0, w: 0.0 }, -1)
         };
         eprintln!(
-            "NADD phase={} node={} parent={} place={} flags={:#x} ilink={} nv={} N={:.5},{:.5},{:.5} B={:.5},{:.5},{:.5} PP={:.5},{:.5},{:.5},{:.5} pnv={}",
-            phase, i_node, i_parent, place, node_flags, edpoly.i_link, edpoly.verts.len(),
+            "NADD phase={} node={} parent={} place={} flags={:#x} ilink={} actor={} bpoly={} nv={} N={:.5},{:.5},{:.5} B={:.5},{:.5},{:.5} PP={:.5},{:.5},{:.5},{:.5} pnv={}",
+            phase, i_node, i_parent, place, node_flags, edpoly.i_link, edpoly.actor, edpoly.i_brush_poly, edpoly.verts.len(),
             n.x, n.y, n.z, b.x, b.y, b.z, pp.x, pp.y, pp.z, pp.w, pnv
         );
     }
@@ -2543,6 +2818,9 @@ fn brush_loop1(brush: &build::BrushInput, actor_index: i32, poly_flags: u32) -> 
 }
 
 fn bsp_brush_csg(model: &mut Model, brush: &build::BrushInput, actor_index: i32, poly_flags: u32) {
+    // Incremental CSG dedups points via the editor's radius-pruned FindNearestVertex (over the live
+    // world tree), not the linear pool scan. Restored on scope exit so repartition uses the scan.
+    let _fnv = FnvDedupGuard::enable();
     let oper = brush.oper;
     if oper == csg::CsgOper::Intersect || oper == csg::CsgOper::Deintersect {
         // Intersect/Deintersect never reach MAP REBUILD — they are the `BRUSH FROM INTERSECTION`/
@@ -3599,6 +3877,99 @@ fn rebuild_vector_pool(model: &mut Model) {
 mod tests {
     use super::*;
     use crate::csg::CsgOper;
+
+    // The two live-captured N8 trees at the divergent add (actor-6 -X surf-base), normalized to one
+    // node per line: `RN k N=(x,y,z) W=w pt=(px,py,pz) iF=.. iB=.. iP=..` where pt = the node's
+    // surf-base point. Spike 2026-09-05-faithful-dedup-fix-attempt/stage2b (`descent_sim.py`).
+    // (crate-local copies of the spike-dir dumps — the build container only mounts `uedcli-native/`.)
+    const EDITOR_TREE_RN: &str = include_str!("../testdata/n8_editor_tree_rn.txt");
+    const NATIVE_TREE_RN: &str = include_str!("../testdata/n8_native_tree_rn.txt");
+
+    /// Build a Model from an RN fixture: one node per line, its surf-base point = `pt` (num_vertices=0
+    /// so only surf-bases are tested — matching `descent_sim.py`).
+    fn model_from_rn(txt: &str) -> Model {
+        let mut m = Model::default();
+        let mut recs: Vec<(usize, [f32; 4], Vec3, i32, i32, i32)> = Vec::new();
+        for line in txt.lines() {
+            if !line.starts_with("RN ") {
+                continue;
+            }
+            let clean = line.replace(['=', '(', ')', ','], " ");
+            let t: Vec<&str> = clean.split_whitespace().collect();
+            // RN k N x y z W w pt px py pz iF a iB b iP c
+            let g = |i: usize| t[i].parse::<f32>().unwrap();
+            recs.push((
+                t[1].parse().unwrap(),
+                [g(3), g(4), g(5), g(7)],
+                Vec3::new(g(9), g(10), g(11)),
+                t[13].parse().unwrap(),
+                t[15].parse().unwrap(),
+                t[17].parse().unwrap(),
+            ));
+        }
+        recs.sort_by_key(|r| r.0);
+        for (k, pl, pt, _, _, _) in &recs {
+            m.points.push(*pt);
+            m.surfs.push(BspSurf {
+                texture_ref: -1,
+                poly_flags: 0,
+                p_base: *k as i32,
+                v_normal: 0,
+                v_texture_u: 0,
+                v_texture_v: 0,
+                i_actor: -1,
+                i_brush_poly: -1,
+                pan: [0, 0],
+                i_light_map: -1,
+            });
+            let mut n = BspNode::leaf(Plane { x: pl[0], y: pl[1], z: pl[2], w: pl[3] }, *k as i32, 0, 0);
+            n.i_front = recs[*k].3;
+            n.i_back = recs[*k].4;
+            n.i_plane = recs[*k].5;
+            m.nodes.push(n);
+        }
+        m
+    }
+
+    #[test]
+    fn fnv_misses_the_far_corner_the_linear_scan_snaps() {
+        // The x=448 divergence: at the actor-6 -X surf-base add the corner point (448.00006,64,~0) is
+        // a live, reachable surf-base in BOTH trees, but the radius-pruned descent MISSES it (pruned
+        // behind planes 416/4/1552uu from the query) -> keeps 447.99985 distinct, matching UED22. The
+        // old linear scan finds it (d=2.16e-4 < 0.002) and wrongly snaps.
+        let q = Vec3::new(447.999847, 64.000107, 0.0);
+        let tol = THRESH_POINTS_ARE_SAME;
+        // The editor dump is in the ENGINE child convention; the native dump was captured DURING
+        // incremental CSG, in native's SWAPPED convention (pre-`swap_node_children`).
+        for (name, txt, engine) in [("editor", EDITOR_TREE_RN, true), ("native", NATIVE_TREE_RN, false)] {
+            FNV_ENGINE_CHILDREN.with(|c| c.set(engine));
+            let m = model_from_rn(txt);
+            assert_eq!(m.nodes.len(), 62, "{name}: expected the 62-node N8 tree");
+            assert_eq!(
+                find_nearest_vertex(&m, q, tol), None,
+                "{name}: FindNearestVertex must MISS (radius-pruned) at the divergent add"
+            );
+            // The corner IS present within tol -> the old linear scan snapped (the bug).
+            let linear = m.points.iter().position(|p| q.sub(p).size() < tol);
+            assert!(linear.is_some(), "{name}: a within-tol point exists (the linear scan snapped it)");
+        }
+        FNV_ENGINE_CHILDREN.with(|c| c.set(false)); // restore the default (live CSG convention)
+    }
+
+    #[test]
+    fn fnv_hits_an_exact_point_and_empty_tree_misses() {
+        // Sanity: a query ON a reachable, unpruned node's surf-base HITS; an empty tree MISSES.
+        let mut m = Model::default();
+        assert_eq!(find_nearest_vertex(&m, Vec3::new(1.0, 2.0, 3.0), 0.002), None);
+        m.points.push(Vec3::new(10.0, 0.0, 0.0));
+        m.surfs.push(BspSurf {
+            texture_ref: -1, poly_flags: 0, p_base: 0, v_normal: 0, v_texture_u: 0,
+            v_texture_v: 0, i_actor: -1, i_brush_poly: -1, pan: [0, 0], i_light_map: -1,
+        });
+        // Root plane x=1 through the point; query on the point -> pd=0, within slab -> tested -> HIT.
+        m.nodes.push(BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 10.0 }, 0, 0, 0));
+        assert_eq!(find_nearest_vertex(&m, Vec3::new(10.0, 0.0, 0.0), 0.002), Some(0));
+    }
 
     #[test]
     fn bsp_add_vector_keeps_axes_5e4_apart_merges_below_4e4() {

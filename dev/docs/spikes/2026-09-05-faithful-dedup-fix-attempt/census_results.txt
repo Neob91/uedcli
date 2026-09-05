@@ -1,0 +1,58 @@
+03_nyc_unatcohq N1: off=PASS on=PASS
+03_nyc_unatcohq N2: off=PASS on=FAIL  <== REGRESS
+03_nyc_unatcohq N3: off=PASS on=FAIL  <== REGRESS
+03_nyc_unatcohq N4: off=PASS on=FAIL  <== REGRESS
+03_nyc_unatcohq N5: off=PASS on=FAIL  <== REGRESS
+03_nyc_unatcohq N6: off=PASS on=FAIL  <== REGRESS
+03_nyc_unatcohq N7: off=PASS on=FAIL  <== REGRESS
+03_nyc_unatcohq N8: off=FAIL on=FAIL
+03_nyc_unatcohq N9: off=FAIL on=FAIL
+03_nyc_unatcohq N10: off=FAIL on=FAIL
+03_nyc_unatcohq N11: off=FAIL on=FAIL
+03_nyc_unatcohq N12: off=FAIL on=FAIL
+03_nyc_unatcohq N13: off=FAIL on=FAIL
+03_nyc_unatcohq N14: off=FAIL on=FAIL
+03_nyc_unatcohq N15: off=FAIL on=FAIL
+03_nyc_unatcohq N16: off=FAIL on=FAIL
+02_nyc_bar N1: off=PASS on=PASS
+02_nyc_bar N2: off=PASS on=PASS
+02_nyc_bar N3: off=PASS on=PASS
+02_nyc_bar N4: off=PASS on=PASS
+02_nyc_bar N5: off=PASS on=PASS
+02_nyc_bar N6: off=PASS on=PASS
+02_nyc_bar N7: off=PASS on=PASS
+02_nyc_bar N8: off=PASS on=PASS
+02_nyc_bar N9: off=PASS on=PASS
+02_nyc_bar N10: off=PASS on=PASS
+02_nyc_bar N11: off=PASS on=PASS
+02_nyc_bar N12: off=PASS on=PASS
+02_nyc_bar N13: off=PASS on=PASS
+02_nyc_bar N14: off=PASS on=PASS
+02_nyc_bar N15: off=PASS on=PASS
+02_nyc_bar N16: off=PASS on=PASS
+06_hongkong_wanchai_market N1: off=PASS on=PASS
+06_hongkong_wanchai_market N2: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N3: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N4: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N5: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N6: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N7: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N8: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N9: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N10: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N11: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N12: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N13: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N14: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N15: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N16: off=PASS on=FAIL  <== REGRESS
+06_hongkong_wanchai_market N19: off=FAIL on=FAIL
+01_nyc_unatcoisland N8: off=PASS on=PASS
+01_nyc_unatcoisland N12: off=PASS on=PASS
+14_oceanlab_lab N3: off=PASS on=PASS
+
+=== SUMMARY ===
+cells censused: 52
+REGRESS (off PASS -> on FAIL): 21  ['03_nyc_unatcohq N2', '03_nyc_unatcohq N3', '03_nyc_unatcohq N4', '03_nyc_unatcohq N5', '03_nyc_unatcohq N6', '03_nyc_unatcohq N7', '06_hongkong_wanchai_market N2', '06_hongkong_wanchai_market N3', '06_hongkong_wanchai_market N4', '06_hongkong_wanchai_market N5', '06_hongkong_wanchai_market N6', '06_hongkong_wanchai_market N7', '06_hongkong_wanchai_market N8', '06_hongkong_wanchai_market N9', '06_hongkong_wanchai_market N10', '06_hongkong_wanchai_market N11', '06_hongkong_wanchai_market N12', '06_hongkong_wanchai_market N13', '06_hongkong_wanchai_market N14', '06_hongkong_wanchai_market N15', '06_hongkong_wanchai_market N16']
+FIX (off FAIL -> on PASS): 0  []
+both FAIL (nomask, pre-existing): 10  ['03_nyc_unatcohq N8', '03_nyc_unatcohq N9', '03_nyc_unatcohq N10', '03_nyc_unatcohq N11', '03_nyc_unatcohq N12', '03_nyc_unatcohq N13', '03_nyc_unatcohq N14', '03_nyc_unatcohq N15', '03_nyc_unatcohq N16', '06_hongkong_wanchai_market N19']

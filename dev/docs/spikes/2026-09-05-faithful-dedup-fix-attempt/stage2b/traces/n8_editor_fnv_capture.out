@@ -1,0 +1,88 @@
+Wine-dbg>0x7bc56491 ntdll+0x56491: ret	
+Wine-dbg>Breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0x4280000e
+Wine-dbg>0x43d00000
+Wine-dbg>0x3c75c28f
+Wine-dbg>0x39f0aa6e
+Wine-dbg>0
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0xc3900005
+Wine-dbg>0x43d00000
+Wine-dbg>0x3c75c28f
+Wine-dbg>0xbf800000
+Wine-dbg>0
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0xc3900005
+Wine-dbg>0x436fffff
+Wine-dbg>0x3c75c28f
+Wine-dbg>0xbf800000
+Wine-dbg>0x5946ca4
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0x4280000e
+Wine-dbg>0x436fffff
+Wine-dbg>0x3c75c28f
+Wine-dbg>0x39609219
+Wine-dbg>0x4a
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0xc3900005
+Wine-dbg>0
+Wine-dbg>0x3b03126f
+Wine-dbg>0xbf800000
+Wine-dbg>0x10031d5e
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0xc3900005
+Wine-dbg>0x43d00000
+Wine-dbg>0x3c75c28f
+Wine-dbg>0
+Wine-dbg>0x59
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0xc3900005
+Wine-dbg>0x43ceffff
+Wine-dbg>0x3c75c28f
+Wine-dbg>0xbf800000
+Wine-dbg>0x59
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0xc3900005
+Wine-dbg>0x43c00000
+Wine-dbg>0x3c75c28f
+Wine-dbg>0xbf800000
+Wine-dbg>0x5b
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0xc3900005
+Wine-dbg>0x436fffff
+Wine-dbg>0x3c75c28f
+Wine-dbg>0
+Wine-dbg>0x5c
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0xc3900005
+Wine-dbg>0x43ceffff
+Wine-dbg>0x3c75c28f
+Wine-dbg>0
+Wine-dbg>0x60
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0xc3900005
+Wine-dbg>0x43c00000
+Wine-dbg>0x3c75c28f
+Wine-dbg>0
+Wine-dbg>0x62
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>0x43dffffb
+Wine-dbg>0x4280000e
+Wine-dbg>0
+Wine-dbg>0x3b03126f
+Wine-dbg>0xbf800000
+Wine-dbg>0x10031d5e
+Wine-dbg>Stopped on breakpoint 1 at 0x100354a1 editor+0x354a1
+Wine-dbg>Wine-dbg>

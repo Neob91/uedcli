@@ -74,36 +74,15 @@ match; the surviving (non-`None`) `Actors` set AND order must match (Actors orde
   `URender::OccludeBsp` clears+recomputes them every frame from the camera, and `IsCsg` collision
   strips 0x10 before testing — no reader consumes the persisted bits. The gate masks `node_flags &
   ~0x18`; every other node-flag bit (NotCsg/NotVisBlocking/IsFront/…) stays compared.
-- **Point-dedup near-tie** on an axis-aligned node-plane `W`, its CSG-soup `FPoly.Base`, and the one
-  downstream `Brush` `Region` it flips (owner-directed + second opus review, 2026-09-05; board
-  `native-n8-unatco-rotated-brush-base-fp-diverges`). An editor incremental-dedup-staleness artifact:
-  a rotated brush's face base lands between two REAL, distinct `Model.Points` entries `2.16e-4` apart
-  (≈7 f32 ULP at x=448); the editor's incremental pool keeps the un-snapped point, native's
-  linear-scan dedup snaps to the sibling — so native's `W`/soup-base carry the snapped point's value.
-  What the mask hides is BOUNDED to be inconsequential (not proven identity-exact): a `W`/base diff
-  masks ONLY when `|dW| ≤ 5e-4` — sub-band, below the engine's ±0.001 zero-extent line-trace band and
-  far below the box-collision band, so no trace/point-check/zoning result can change — AND both values
-  sit within `1e-4` of a real byte-identical-table-point projection (a plausibility bound, not an
-  anchor: a fabricated sub-band value near a real projection would also mask, but is still sub-band).
-  A plane SWAP (wrong face) still FAILS: the node **normal** is byte-compared and a wrong-face `W` is
-  orders above the band. The one downstream `Brush` `Region` flip is masked separately, resting on the
-  disasm that EVERY brush's `Region` is discarded at load (LoadMap `SetActorZone(actor,1,1)`
-  recomputes+overwrites it, Engine.dll `0x158930`/`0x161e10`), not on the tie; non-`Brush` `Region`
-  stays compared. **STOPGAP, not a permanent exclusion** (prime directive): this is an algorithmic
-  divergence — native's linear-scan dedup vs the editor's incremental `FindNearestVertex`. The faithful
-  fix reproduces that incremental point-dedup (a large CSG-core change; a first port attempt `ba23319`
-  shifted the point table 76→81, so it must hold the corpus green). Until it lands, the mask holds N8;
-  it is owed the fix. Negative tests: `test_n8_dedup_tie_mask.py`. **Owner committed 2026-09-05 to the
-  faithful rewrite** ("honor literally"): a dedicated project (board
-  `native-materialize/faithful-incremental-bsp-dedup-rewrite`), the ladder HOLDS at N=18 until it lands,
-  and widening the mask — including a decoupled poly-base tolerance for the WanChai N19 case (same dedup
-  class) — is RULED OUT. A 2026-09-05 spike (`spikes/2026-09-05-faithful-dedup-fix-attempt/`) re-confirmed
-  with fresh disasm that the fix requires re-deriving the incremental BSP core so `FindNearestVertex`
-  reachability is bit-exact. A 2026-09-05 census MEASURED the scoped fix: porting the pruned descent alone
-  regresses 21/52 cells (0 fixed) — it perturbs the point-append ORDER the all-linear pipeline reproduces
-  for free — so the faithful fix is the whole-pipeline rework (editor incremental tree wiring + descent
-  through repartition), weeks/high-risk. **Owner reaffirmed 2026-09-05: "faithful above all else" — do the
-  rework, no mask; re-verify the ladder from N=1 once the core is reworked.** Mask holds only until then.
+*(The **point-dedup near-tie** — the UNATCO x=448 node-plane `W` / CSG-soup `FPoly.Base` / `Brush`
+`Region` divergence, and the same-class WanChai N19 case — was a STOPGAP mask and is now FIXED FAITHFULLY,
+not excluded. Native's incremental CSG dedups points with the editor's radius-pruned `FindNearestVertex`
+descent over the live world tree (`bspcsg.rs::find_nearest_vertex`), walked in native's live child
+convention; the missing piece was that native's incremental tree carries the CSG iFront/iBack convention
+(swapped vs the engine), so the descent must swap near/far. With that, UNATCO N8 and WanChai N19 gate
+byte-exact with NO mask — node `W`, soup base, and `Brush` `Region` all match. Spike
+`spikes/2026-09-05-faithful-dedup-fix-attempt/`; the gate's tie mask + `_BRUSH_MASKED_PROPS` Region entry
+are removed; regression `test_n8_dedup_faithful_fix.py`.)*
 
 Any NEW candidate exclusion needs an opus review confirming inconsequence + the owner's explicit yes
 before it counts. No content carveouts (Movers included — native must build their private models).
