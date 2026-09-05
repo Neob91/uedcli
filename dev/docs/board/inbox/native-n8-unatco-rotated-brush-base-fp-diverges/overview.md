@@ -178,3 +178,50 @@ splice?). Only then is the fix (match that wiring) implementable and corpus-veri
 still needed; this is a spike, not a code port. Disasm reproducer: extend
 `spikes/2026-09-04-bspaddpoint-dedup-base-provenance/harness/decode_dedup.py`; trace evidence in that
 spike's `harness/`.
+
+## Ordering pinned to two late brushes; NO scoped repartition fix exists; size = LARGE (2026-09-05)
+
+Traced native's incremental commit order (`UEDCLI_BSPCSG_TREE_DUMP` + `_BRUSH_STATE=COUNTS`, N8
+subset). Corrects the "Brush74's -Y face" attribution: the x=448 plane is contributed by **two
+different LATE brushes**, both meeting the corner `(448,64,~0)`:
+
+- **Brush420** (world-CSG idx `bi=5`, k=5, nodes 43-56) commits its faces at that corner with base
+  **`448.00006`** (ilink 32 `(0,1,0)` nodes 48-50; ilink 33 `(-1,0,0)` nodes 51-53) — FIRST.
+- **Brush418** (`bi=6`, k=6, nodes 57-70) then commits ITS coplanar faces with raw base
+  **`447.99985`** (ilink 37 `(0,1,0)` nodes 59-61; ilink 38 `(-1,0,0)` nodes 62-64) — SECOND.
+
+Brush order is trunk order (identical native/editor), so Brush420 wires `448.00006` before Brush418's
+add on BOTH sides — this is NOT a reorderable-face difference. Final surf 36 (nodes 29/30) is
+Brush418's `(-1,0,0)` face; the editor keeps its raw W (`-447.99985`), native loses it.
+
+**Where the value is lost (measured, not inferred).** Native's INCREMENTAL node plane W is *already
+correct*: `bsp_add_node` stamps `w = edpoly.base·normal` from the RAW base (`bspcsg.rs:357`), so
+native's node 62 gets W `-447.99985` — the trace shows `B=447.99985`. What snaps is only the SURF
+`pBase`: `alloc_surf`→`bsp_add_point(447.99985)` linear-scans and hits Brush420's existing
+`448.00006` point, so `surf.pBase → 448.00006`. At repartition `bsp_node_to_fpoly` sources the soup
+base from `Points[surf.pBase]` = `448.00006`, and `bsp_build`'s `bsp_add_node` recomputes the final
+W from THAT. The editor's pre-repartition `pBase` for this surf is a DISTINCT `447.99985` point (FNV
+miss), so its soup base — and thus final W — stays `-447.99985` (final `pBase` re-dedups to 29,
+`448.00006`, on both sides — hence the byte-identical 76-point table).
+
+**No scoped repartition-local fix (newly ruled out).** Tempting fix: preserve native's (correct)
+incremental node-plane W through repartition instead of recomputing from the snapped `pBase`. This
+REGRESSES the siblings the editor legitimately snaps (Z=240, z=416): native's incremental W is
+*always* raw (line 357), but the editor's FINAL W for those faces is the SNAPPED `Points[pBase]·N`
+(the editor's FNV HIT there). To keep raw-W for x=448 while keeping snapped-W for Z=240, native must
+know which faces the editor snapped incrementally — i.e. the FNV hit/miss — which IS the editor's
+incremental-tree reachability. Same requirement as the FNV port; same blocker. The earlier
+"raw-base carry" regression was this exact effect.
+
+**Size / risk (for the exclude-vs-rewrite call).** A faithful fix = FNV-descent dedup (built+reverted
+`ba23319`) OVER an incremental tree whose surf-base / vert-pool / live-dead / front-back reachability
+byte-matches the editor at every `bspAddPoint`. The FNV port alone already diverges the N8 point table
+(81 vs 76 — ~5 reachability mismatches at N=8 from FWTB fragment vert-pools + `bspCleanup` splice
+timing), and it's verifiable only end-to-end (no isolatable unit — FNV correctness is a whole-tree
+property). Reproducing that reachability is a re-derivation of native's incremental BSP core
+(`bspcsg.rs`, ~5.4k LOC) to editor-bit-exactness: multi-week, HIGH risk — it changes the point table
+on potentially every brush across every level, destabilising the currently-green N1-7 and the whole
+corpus, which the linear scan holds at 76/76 today. Pragmatic alternative for the owner + an opus
+review: EXCLUDE this residual — mask `|ΔW| < ~1e-3` on an axis-aligned node plane plus the one
+downstream `Region` flip — IF judged game-inconsequential (2.16e-4 ≈ 7 f32 ulp plane offset; one
+brush-actor `PointRegion`). Owner decision: exclude vs. core rewrite.
