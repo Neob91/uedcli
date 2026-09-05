@@ -3,7 +3,8 @@
 Timeboxed attempt at the FAITHFUL fix for the point-dedup divergence class that forces the x=448
 mask (UNATCO N8) and a hard fail (WanChai N19). Outcome: **no faithful fix; keep the stopgap.** The
 wall is exactly the one the board pinned (`native-n8-unatco-rotated-brush-base-fp-diverges`), now
-re-confirmed from fresh builds + disasm, with two board measurements corrected.
+re-confirmed from fresh builds + disasm, with one board index error corrected (the "two distinct
+points" framing is accurate — keep it).
 
 Prior full analysis: `dev/docs/board/done/native-n8-unatco-rotated-brush-base-fp-diverges/overview.md`
 and `dev/docs/spikes/2026-09-04-bspaddpoint-dedup-base-provenance/`.
@@ -34,28 +35,31 @@ Native rebuilt from this worktree's ext; refs: cached UNATCO `ref_N8`, freshly e
 
 Same mechanism as N8; N19 lands in the in-plane base components because the face normal is axis-Z.
 
-## Two board measurements corrected (fresh N8 diff — `2026-09-04-.../diff_n8.py`)
+## One board index error (fresh N8 diff — `2026-09-04-.../diff_n8.py`)
 
-The board's most-recent N8 section (the exclusion write-up) is INACCURATE about the final table:
+The board's "two REAL, distinct Model.Points entries 2.16e-4 apart" framing (and
+`NATIVE-MATERIALIZE.md`'s) is **accurate** — verified, do not touch it. The final `Points` table
+(76/76, byte-identical) holds real distinct entries at BOTH x-values: `Points[29]=(448.00006,
+64.0001, 3e-5)` and `Points[32]=(447.99985, -288.0002, 0)` (also `69/70/72`), `2.14e-4` apart. They
+are corners of the SAME face plane (Brush418's `x=447.99985` face): the `y=64` corner deduped to
+`448.00006` (Brush420 wired a `y=64` point there first); the `y=-288` corners kept the raw plane x
+`447.99985`.
 
-- It claims two distinct entries `Points[29]=448.00006` and `Points[32]=447.99985` `2.16e-4` apart,
-  with `surf35.pBase=32`. **Wrong.** Fresh diff of the cached packages: `Points` 76/76
-  byte-identical, `447.99985` is in NEITHER table, every `Surf.pBase` identical (the diverging
-  surf is `iSurf=36, pBase=29`, `Points[29]=(448.00006,64.00011,3e-5)` both sides).
-- The ONLY model diff is `Node[29/30].plane.W`: native `-448.00006` (`= -Points[pBase]·N`), editor
-  `-447.99985` (a RAW base derivable from no table point). The editor's earlier Part-B measurement
-  was right; the exclusion section's "two distinct points" is the drift.
+The board's ONLY genuine error is the pBase INDEX in its most-recent section: it says `surf.pBase=32`
+"consistent with its own pBase". Fresh diff shows the diverging surf is `iSurf=36` with `pBase=29`
+(= `448.00006`) on **both** sides. Every `Surf.pBase` is identical. The ONLY model diff is
+`Node[29/30].plane.W`: native `-448.00006` (`= -Points[pBase]·N`, its own snapped corner), editor
+`-447.99985` (`= -Points[32].x`, the plane's raw x — a real table point, but NOT this surf's pBase).
+So the editor's node W is NOT `Points[surf.pBase]·N`; it froze a base whose x survives in the table
+only at the face's `y=-288` corners.
 
-Impact: the `NATIVE-MATERIALIZE.md` exclusion prose ("two REAL, distinct Model.Points entries
-2.16e-4 apart") mis-describes the final table. The mask itself is unaffected — `_poly_base_tie`
-requires native's base be a real point of ITS OWN model (the snapped value), which holds. Flagged
-for the owner; not edited here.
-
-Reconciled mechanism: the editor's PRE-repartition incremental pool kept a distinct `447.99985`
-point (FNV miss) for this face; `bspBuildFPolys` copied that into the soup, `bspAddNode` stamped the
-node plane W from it; the FINAL repartition re-dedups the surf's `pBase` back onto `448.00006`
-(hence the identical 76-point table) but the node W froze the raw value. Native's linear scan snaps
-at the incremental add, so its soup base — and repartition-recomputed W — carry `448.00006`.
+Reconciled mechanism (matches the board's uniform-provenance disasm): the editor's PRE-repartition
+incremental pool kept a distinct `447.99985` base point for this surf (FNV miss); `bspBuildFPolys`
+copied it into the soup, `bspAddNode` stamped the node plane W from it; the FINAL repartition
+re-dedups the surf's `pBase` onto `448.00006` (identical 76-point table) but the node W froze the raw
+value. Native's linear scan snaps at the incremental add, so its pre-repartition soup base — and the
+repartition-recomputed W — carry `448.00006`. The mask is unaffected: `_node_w_tie` accepts the
+editor W because it equals a real table-point projection (`-Points[32].x`).
 
 ## New disasm: the coplanar-traversal escape is CLOSED
 
@@ -97,9 +101,12 @@ ruled EXCLUDE.
 Keep the stopgap mask; do NOT attempt the core rewrite under a timebox. The residual is
 game-inconsequential (N8: a 2.16e-4 ≈ 7-ULP node-plane W offset far below the ±0.001 trace band +
 one inert `Brush.Region`; N19: an in-plane soup-base offset in `Model->Polys`, editor CSG-working
-state, with the runtime Model byte-identical). When the ladder reaches N19, the mask needs either a
-wider `NODE_W_DEDUP_TOL` (to `>1.01e-3`, still sub-band) with a matching owner-reviewed bound, or the
-faithful fix — an owner call.
+state, with the runtime Model byte-identical). When the ladder reaches N19, do NOT just widen
+`NODE_W_DEDUP_TOL`: it is SHARED by `_node_w_tie` and `_poly_base_tie` (gate lines 476 & 493), so
+raising it to cover N19's `1.007e-3` soup-base tie would also admit node-plane-W diffs up to
+`1.007e-3` — ABOVE the ±0.001 line-trace band the `5e-4` bound was chosen to stay under. N19 is a
+soup-base-only diff (runtime Model byte-identical), so it wants a DECOUPLED poly-base tolerance,
+not a widened shared W tolerance — or the faithful fix. An owner call.
 
 ## Harness
 
