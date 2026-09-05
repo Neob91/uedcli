@@ -1,6 +1,6 @@
 +++
 priority = "p2"
-kind = "bug"
+kind = "debug"
 summary = "native N19 WanChai Step face soup-base snap exceeds 5e-4 PB-tie mask (dW=0)"
 +++
 
