@@ -75,4 +75,27 @@ Points-section byte-parity guard -> high tree-regression risk, and per
 `verts-residual-on-structure-exact-levels` offline diffing is exhausted (needs live gdb `bspAddNode`
 ring capture). Size: multi-day RE + `bspcsg.rs` repartition rework, not in the `zones.rs`/`passes.rs`
 lane. Deferred per owner "deep vert-pool-history port -> don't self-authorize" (task 2026-09-05).
+
+## RESOLVED 2026-09-05 (owner-authorized rework, branch `worktree-agent-a05dd19140b6194f5`, `e836e6d`)
+
+The prior "repartition vert-pool history" diagnosis was WRONG. Stage counts
+(`UEDCLI_BSPCSG_STAGE_COUNTS`) prove `repartition_frontier` adds ZERO verts on OceanLab N3
+(2551->2551); the whole +1601 growth — and the entire `[947..2551)` orphan run — is the ZONE PASS.
+`AssignAllZones` (Pass D) re-emits every node ring's verts via `bspAddNode` per landing.
+
+Native's `zones.rs::node_landings` filtered each node's poly through the tree with the crude
+`clip_poly` (Sutherland-Hodgman, 1e-4 band), NOT the editor's `FilterThroughSubtree`
+(`Editor.dll 0xa9030`, `re-raw-zones/passD-assignzones-7400.md` §3). The editor filters with
+`FPoly::SplitWithNode(VeryPrecise=1)`, which `clip_poly` fails to reproduce in one load-bearing way:
+the **r==0 COPLANAR-DROP** — a fragment coplanar with a deeper filter node is dropped with no
+landing, whereas `clip_poly` lets it land on BOTH sides, minting the 85 spurious orphan verts. (The
+`zones.rs` comment already flagged this: "unreachable on the calibration map ... port the real r==0
+classification if a future map shows fragment-count drift." OceanLab N3 is that map.)
+
+Fix: `filter_through`, a faithful `FilterThroughSubtree` port (>14 `SplitInHalf`; VeryPrecise
+`split_with_plane`; r==0 drop; r==1/2 whole-poly descent; r==3 cut), used by Pass D only via
+`node_landings_precise`. Pass B' barriers keep `clip_poly` (leaf-pairs only, no vert emit; already
+leaf-pair-validated incl. Catacombs). Result: OceanLab N3 verts 3074->2989 = editor exact, gate
+PASSES. No regression: 3 originals N1..16, Island N1..4, OceanLab N1..2 all gate-equal old vs new.
+Not yet merged to master (worktree branch).
 </content>
