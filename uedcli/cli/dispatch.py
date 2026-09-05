@@ -98,6 +98,11 @@ def _dispatch(args) -> int:
         from .commands import docs as docs_cmd
         return docs_cmd.run(args)
 
+    # --- uscript group: offline UnrealScript compile (no editor, no project, no level) ---
+    if args.cmd == "uscript":
+        from .commands import uscript as uscript_cmd
+        return uscript_cmd.run(args)
+
     # --- level group ---
     if args.cmd == "level":
         from .commands import level as level_cmd
