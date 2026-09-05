@@ -93,7 +93,13 @@ match; the surviving (non-`None`) `Actors` set AND order must match (Actors orde
   divergence — native's linear-scan dedup vs the editor's incremental `FindNearestVertex`. The faithful
   fix reproduces that incremental point-dedup (a large CSG-core change; a first port attempt `ba23319`
   shifted the point table 76→81, so it must hold the corpus green). Until it lands, the mask holds N8;
-  it is owed the fix. Negative tests: `test_n8_dedup_tie_mask.py`.
+  it is owed the fix. Negative tests: `test_n8_dedup_tie_mask.py`. **Owner committed 2026-09-05 to the
+  faithful rewrite** ("honor literally"): a dedicated project (board
+  `native-materialize/faithful-incremental-bsp-dedup-rewrite`), the ladder HOLDS at N=18 until it lands,
+  and widening the mask — including a decoupled poly-base tolerance for the WanChai N19 case (same dedup
+  class) — is RULED OUT. A 2026-09-05 spike (`spikes/2026-09-05-faithful-dedup-fix-attempt/`) re-confirmed
+  with fresh disasm that the fix requires re-deriving the incremental BSP core so `FindNearestVertex`
+  reachability is bit-exact.
 
 Any NEW candidate exclusion needs an opus review confirming inconsequence + the owner's explicit yes
 before it counts. No content carveouts (Movers included — native must build their private models).
