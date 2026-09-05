@@ -1,0 +1,179 @@
+141:Log: Execing Z:\work\uedcli_4d0163f5dc1e437cbffb48d7b754615d.txt
+227:DevPath: Remove 0 old reachspecs
+228:DevPath: Add WarpZone and Inventory markers
+229:DevPath: Add reachspecs
+270:DevPath: Added 281 reachspecs
+271:DevPath: Prune reachspecs
+272:DevPath: Pruned 184 reachspecs
+273:DevPath: All done
+276:DevPath: Remove 281 old reachspecs
+277:DevPath: Add WarpZone and Inventory markers
+278:DevPath: Add reachspecs
+319:DevPath: Added 281 reachspecs
+320:DevPath: Prune reachspecs
+321:DevPath: Pruned 184 reachspecs
+322:DevPath: All done
+323:Log: ----------------------Starting From D_Start
+324:Log: WALK WITH COLLISION SIZE 70.000000 40.000000
+325:Log: ----------------------Anchor D_N00
+326:Log: ----------------------Anchor D_N01
+327:Log: Total steps out of bounds
+328:Log: Num steps 2000
+329:Log: WALK WITH COLLISION SIZE 63.000000 40.000000
+330:Log: ----------------------Anchor D_N00
+331:Log: ----------------------Anchor D_N01
+332:Log: Total steps out of bounds
+333:Log: Num steps 2000
+334:Log: WALK WITH COLLISION SIZE 56.000000 40.000000
+335:Log: ----------------------Anchor D_N00
+336:Log: ----------------------Anchor D_N01
+337:Log: Total steps out of bounds
+338:Log: Num steps 2000
+339:Log: WALK WITH COLLISION SIZE 49.000000 40.000000
+340:Log: ----------------------Anchor D_N00
+341:Log: ----------------------Anchor D_N01
+342:Log: Total steps out of bounds
+343:Log: Num steps 2000
+344:Log: WALK WITH COLLISION SIZE 42.000000 40.000000
+345:Log: ----------------------Anchor D_N00
+346:Log: ----------------------Anchor D_N01
+347:Log: Total steps out of bounds
+348:Log: Num steps 2000
+349:Log: WALK WITH COLLISION SIZE 35.000000 40.000000
+350:Log: ----------------------Anchor D_N00
+351:Log: ----------------------Anchor D_N01
+352:Log: Total steps out of bounds
+353:Log: Num steps 2000
+354:Log: WALK WITH COLLISION SIZE 28.000000 40.000000
+355:Log: ----------------------Anchor D_N00
+356:Log: ----------------------Anchor D_N01
+357:Log: Total steps out of bounds
+358:Log: Num steps 2000
+458:Log: Added new path PathNode0 at -1450.000000 0.000000
+478:Log: Added new path PathNode1 at -700.000000 0.000000
+496:Log: Added new path PathNode2 at 150.000000 0.000000
+515:Log: Added new path PathNode3 at 1100.000000 0.000000
+535:Log: Added new path PathNode4 at 2150.000000 0.000000
+556:Log: Added new path PathNode5 at 3300.000000 0.000000
+564:Log: Added new path PathNode6 at 3000.000000 0.000000
+585:Log: Added new path PathNode7 at 3600.000000 0.000000
+1167:DevPath: Remove 281 old reachspecs
+1168:DevPath: Add WarpZone and Inventory markers
+1169:DevPath: Add reachspecs
+1218:DevPath: Added 329 reachspecs
+1219:DevPath: Prune reachspecs
+1220:DevPath: Pruned 210 reachspecs
+1221:DevPath: All done
+1222:Log: Total paths build time 24.139845 seconds
+1223:Log: Built Paths: 8
+1226:DevPath: Remove 329 old reachspecs
+1227:DevPath: Add WarpZone and Inventory markers
+1228:DevPath: Add reachspecs
+1269:DevPath: Added 281 reachspecs
+1270:DevPath: Prune reachspecs
+1271:DevPath: Pruned 184 reachspecs
+1272:DevPath: All done
+1273:Log: ----------------------Starting From D_Start
+1274:Log: WALK WITH COLLISION SIZE 70.000000 40.000000
+1275:Log: ----------------------Anchor D_N00
+1276:Log: ----------------------Anchor D_N01
+1277:Log: Total steps out of bounds
+1278:Log: Num steps 2000
+1279:Log: WALK WITH COLLISION SIZE 63.000000 40.000000
+1280:Log: ----------------------Anchor D_N00
+1281:Log: ----------------------Anchor D_N01
+1282:Log: Total steps out of bounds
+1283:Log: Num steps 2000
+1284:Log: WALK WITH COLLISION SIZE 56.000000 40.000000
+1285:Log: ----------------------Anchor D_N00
+1286:Log: ----------------------Anchor D_N01
+1287:Log: Total steps out of bounds
+1288:Log: Num steps 2000
+1289:Log: WALK WITH COLLISION SIZE 49.000000 40.000000
+1290:Log: ----------------------Anchor D_N00
+1291:Log: ----------------------Anchor D_N01
+1292:Log: Total steps out of bounds
+1293:Log: Num steps 2000
+1294:Log: WALK WITH COLLISION SIZE 42.000000 40.000000
+1295:Log: ----------------------Anchor D_N00
+1296:Log: ----------------------Anchor D_N01
+1297:Log: Total steps out of bounds
+1298:Log: Num steps 2000
+1299:Log: WALK WITH COLLISION SIZE 35.000000 40.000000
+1300:Log: ----------------------Anchor D_N00
+1301:Log: ----------------------Anchor D_N01
+1302:Log: Total steps out of bounds
+1303:Log: Num steps 2000
+1304:Log: WALK WITH COLLISION SIZE 28.000000 40.000000
+1305:Log: ----------------------Anchor D_N00
+1306:Log: ----------------------Anchor D_N01
+1307:Log: Total steps out of bounds
+1308:Log: Num steps 2000
+1408:Log: Added new path PathNode8 at -1450.000000 0.000000
+1428:Log: Added new path PathNode9 at -700.000000 0.000000
+1446:Log: Added new path PathNode10 at 150.000000 0.000000
+1465:Log: Added new path PathNode11 at 1100.000000 0.000000
+1485:Log: Added new path PathNode12 at 2150.000000 0.000000
+1506:Log: Added new path PathNode13 at 3300.000000 0.000000
+1514:Log: Added new path PathNode14 at 3000.000000 0.000000
+1535:Log: Added new path PathNode15 at 3600.000000 0.000000
+2117:DevPath: Remove 281 old reachspecs
+2118:DevPath: Add WarpZone and Inventory markers
+2119:DevPath: Add reachspecs
+2168:DevPath: Added 329 reachspecs
+2169:DevPath: Prune reachspecs
+2170:DevPath: Pruned 210 reachspecs
+2171:DevPath: All done
+2172:Log: Total paths build time 24.715080 seconds
+2173:Log: Built Paths: 8
+2176:DevPath: Remove 329 old reachspecs
+2177:DevPath: Add WarpZone and Inventory markers
+2178:DevPath: Add reachspecs
+2219:DevPath: Added 281 reachspecs
+2220:DevPath: Prune reachspecs
+2221:DevPath: Pruned 184 reachspecs
+2222:DevPath: All done
+2223:Log: ----------------------Starting From D_Start
+2224:Log: WALK WITH COLLISION SIZE 70.000000 40.000000
+2225:Log: ----------------------Anchor D_N00
+2226:Log: ----------------------Anchor D_N01
+2227:Log: Total steps out of bounds
+2228:Log: Num steps 2000
+2229:Log: WALK WITH COLLISION SIZE 63.000000 40.000000
+2230:Log: ----------------------Anchor D_N00
+2231:Log: ----------------------Anchor D_N01
+2232:Log: Total steps out of bounds
+2233:Log: Num steps 2000
+2234:Log: WALK WITH COLLISION SIZE 56.000000 40.000000
+2235:Log: ----------------------Anchor D_N00
+2236:Log: ----------------------Anchor D_N01
+2237:Log: Total steps out of bounds
+2238:Log: Num steps 2000
+2239:Log: WALK WITH COLLISION SIZE 49.000000 40.000000
+2240:Log: ----------------------Anchor D_N00
+2241:Log: ----------------------Anchor D_N01
+2242:Log: Total steps out of bounds
+2243:Log: Num steps 2000
+2244:Log: WALK WITH COLLISION SIZE 42.000000 40.000000
+2245:Log: ----------------------Anchor D_N00
+2246:Log: ----------------------Anchor D_N01
+2247:Log: Total steps out of bounds
+2248:Log: Num steps 2000
+2249:Log: WALK WITH COLLISION SIZE 35.000000 40.000000
+2250:Log: ----------------------Anchor D_N00
+2251:Log: ----------------------Anchor D_N01
+2252:Log: Total steps out of bounds
+2253:Log: Num steps 2000
+2254:Log: WALK WITH COLLISION SIZE 28.000000 40.000000
+2255:Log: ----------------------Anchor D_N00
+2256:Log: ----------------------Anchor D_N01
+2257:Log: Total steps out of bounds
+2258:Log: Num steps 2000
+2358:Log: Added new path PathNode16 at -1450.000000 0.000000
+2378:Log: Added new path PathNode17 at -700.000000 0.000000
+2396:Log: Added new path PathNode18 at 150.000000 0.000000
+2415:Log: Added new path PathNode19 at 1100.000000 0.000000
+2435:Log: Added new path PathNode20 at 2150.000000 0.000000
+2456:Log: Added new path PathNode21 at 3300.000000 0.000000
+2464:Log: Added new path PathNode22 at 3000.000000 0.000000
+2485:Log: Added new path PathNode23 at 3600.000000 0.000000

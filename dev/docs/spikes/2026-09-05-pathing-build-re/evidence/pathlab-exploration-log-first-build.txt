@@ -1,0 +1,278 @@
+Log: ----------------------Starting From D_Start
+Log: WALK WITH COLLISION SIZE 70.000000 40.000000
+Log: ----------------------Anchor D_N00
+Log: ----------------------Anchor D_N01
+Log: Total steps out of bounds
+Log: Num steps 2000
+Log: WALK WITH COLLISION SIZE 63.000000 40.000000
+Log: ----------------------Anchor D_N00
+Log: ----------------------Anchor D_N01
+Log: Total steps out of bounds
+Log: Num steps 2000
+Log: WALK WITH COLLISION SIZE 56.000000 40.000000
+Log: ----------------------Anchor D_N00
+Log: ----------------------Anchor D_N01
+Log: Total steps out of bounds
+Log: Num steps 2000
+Log: WALK WITH COLLISION SIZE 49.000000 40.000000
+Log: ----------------------Anchor D_N00
+Log: ----------------------Anchor D_N01
+Log: Total steps out of bounds
+Log: Num steps 2000
+Log: WALK WITH COLLISION SIZE 42.000000 40.000000
+Log: ----------------------Anchor D_N00
+Log: ----------------------Anchor D_N01
+Log: Total steps out of bounds
+Log: Num steps 2000
+Log: WALK WITH COLLISION SIZE 35.000000 40.000000
+Log: ----------------------Anchor D_N00
+Log: ----------------------Anchor D_N01
+Log: Total steps out of bounds
+Log: Num steps 2000
+Log: WALK WITH COLLISION SIZE 28.000000 40.000000
+Log: ----------------------Anchor D_N00
+Log: ----------------------Anchor D_N01
+Log: Total steps out of bounds
+Log: Num steps 2000
+Log: Found potential distant pair A_N00 (-3900.000000, 0.000000) and A_N04 (-2900.000000, 0.000000)
+Log: Try A_N01 Total 1000.000000 versus 100.000000 + 900.000000
+Log: Found A_N01 as intermediate
+Log: Found potential distant pair A_N00 (-3900.000000, 0.000000) and A_N05 (-2400.000000, 0.000000)
+Log: Try A_N01 Total 1500.000000 versus 100.000000 + 1400.000000
+Log: Found A_N01 as intermediate
+Log: Found potential distant pair A_N00 (-3900.000000, 0.000000) and A_N06 (-1800.000000, 0.000000)
+Log: Found potential distant pair A_N00 (-3900.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Found potential distant pair A_N00 (-3900.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Found potential distant pair A_N00 (-3900.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Found potential distant pair A_N00 (-3900.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Found potential distant pair A_N00 (-3900.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Found potential distant pair A_N00 (-3900.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Found potential distant pair A_N01 (-3800.000000, 0.000000) and A_N04 (-2900.000000, 0.000000)
+Log: Try A_N02 Total 900.000000 versus 200.000000 + 700.000000
+Log: Found A_N02 as intermediate
+Log: Found potential distant pair A_N01 (-3800.000000, 0.000000) and A_N05 (-2400.000000, 0.000000)
+Log: Try A_N02 Total 1400.000000 versus 200.000000 + 1200.000000
+Log: Found A_N02 as intermediate
+Log: Found potential distant pair A_N01 (-3800.000000, 0.000000) and A_N06 (-1800.000000, 0.000000)
+Log: Found potential distant pair A_N01 (-3800.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Found potential distant pair A_N01 (-3800.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Found potential distant pair A_N01 (-3800.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Found potential distant pair A_N01 (-3800.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Found potential distant pair A_N01 (-3800.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Found potential distant pair A_N01 (-3800.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Found potential distant pair A_N02 (-3600.000000, 0.000000) and A_N04 (-2900.000000, 0.000000)
+Log: Try A_N03 Total 700.000000 versus 300.000000 + 400.000000
+Log: Found A_N03 as intermediate
+Log: Found potential distant pair A_N02 (-3600.000000, 0.000000) and A_N05 (-2400.000000, 0.000000)
+Log: Try A_N03 Total 1200.000000 versus 300.000000 + 900.000000
+Log: Found A_N03 as intermediate
+Log: Found potential distant pair A_N02 (-3600.000000, 0.000000) and A_N06 (-1800.000000, 0.000000)
+Log: Found potential distant pair A_N02 (-3600.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Found potential distant pair A_N02 (-3600.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Found potential distant pair A_N02 (-3600.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Found potential distant pair A_N02 (-3600.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Found potential distant pair A_N02 (-3600.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Found potential distant pair A_N02 (-3600.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Found potential distant pair A_N03 (-3300.000000, 0.000000) and A_N05 (-2400.000000, 0.000000)
+Log: Try A_N04 Total 900.000000 versus 400.000000 + 500.000000
+Log: Found A_N04 as intermediate
+Log: Found potential distant pair A_N03 (-3300.000000, 0.000000) and A_N06 (-1800.000000, 0.000000)
+Log: Try A_N04 Total 1500.000000 versus 400.000000 + 1100.000000
+Log: Found A_N04 as intermediate
+Log: Found potential distant pair A_N03 (-3300.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Found potential distant pair A_N03 (-3300.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Found potential distant pair A_N03 (-3300.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Found potential distant pair A_N03 (-3300.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Found potential distant pair A_N03 (-3300.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Found potential distant pair A_N03 (-3300.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Found potential distant pair A_N04 (-2900.000000, 0.000000) and A_N00 (-3900.000000, 0.000000)
+Log: Try A_N01 Total 1000.000000 versus 900.000000 + 100.000000
+Log: Found A_N01 as intermediate
+Log: Found potential distant pair A_N04 (-2900.000000, 0.000000) and A_N01 (-3800.000000, 0.000000)
+Log: Try A_N02 Total 900.000000 versus 700.000000 + 200.000000
+Log: Found A_N02 as intermediate
+Log: Found potential distant pair A_N04 (-2900.000000, 0.000000) and A_N02 (-3600.000000, 0.000000)
+Log: Try A_N03 Total 700.000000 versus 400.000000 + 300.000000
+Log: Found A_N03 as intermediate
+Log: Found potential distant pair A_N04 (-2900.000000, 0.000000) and A_N06 (-1800.000000, 0.000000)
+Log: Try A_N05 Total 1100.000000 versus 500.000000 + 600.000000
+Log: Found A_N05 as intermediate
+Log: Found potential distant pair A_N04 (-2900.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Found potential distant pair A_N04 (-2900.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Found potential distant pair A_N04 (-2900.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Found potential distant pair A_N04 (-2900.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Found potential distant pair A_N04 (-2900.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Found potential distant pair A_N04 (-2900.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Found potential distant pair A_N05 (-2400.000000, 0.000000) and A_N00 (-3900.000000, 0.000000)
+Log: Try A_N01 Total 1500.000000 versus 1400.000000 + 100.000000
+Log: Found A_N01 as intermediate
+Log: Found potential distant pair A_N05 (-2400.000000, 0.000000) and A_N01 (-3800.000000, 0.000000)
+Log: Try A_N02 Total 1400.000000 versus 1200.000000 + 200.000000
+Log: Found A_N02 as intermediate
+Log: Found potential distant pair A_N05 (-2400.000000, 0.000000) and A_N02 (-3600.000000, 0.000000)
+Log: Try A_N03 Total 1200.000000 versus 900.000000 + 300.000000
+Log: Found A_N03 as intermediate
+Log: Found potential distant pair A_N05 (-2400.000000, 0.000000) and A_N03 (-3300.000000, 0.000000)
+Log: Try A_N04 Total 900.000000 versus 500.000000 + 400.000000
+Log: Found A_N04 as intermediate
+Log: Found potential distant pair A_N05 (-2400.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Try A_N06 Total 1300.000000 versus 600.000000 + 700.000000
+Log: Found A_N06 as intermediate
+Log: Found potential distant pair A_N05 (-2400.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Found potential distant pair A_N05 (-2400.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Found potential distant pair A_N05 (-2400.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Found potential distant pair A_N05 (-2400.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Found potential distant pair A_N05 (-2400.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Found potential distant pair A_N06 (-1800.000000, 0.000000) and A_N00 (-3900.000000, 0.000000)
+Log: Found potential distant pair A_N06 (-1800.000000, 0.000000) and A_N01 (-3800.000000, 0.000000)
+Log: Found potential distant pair A_N06 (-1800.000000, 0.000000) and A_N02 (-3600.000000, 0.000000)
+Log: Found potential distant pair A_N06 (-1800.000000, 0.000000) and A_N03 (-3300.000000, 0.000000)
+Log: Try A_N04 Total 1500.000000 versus 1100.000000 + 400.000000
+Log: Found A_N04 as intermediate
+Log: Found potential distant pair A_N06 (-1800.000000, 0.000000) and A_N04 (-2900.000000, 0.000000)
+Log: Try A_N05 Total 1100.000000 versus 600.000000 + 500.000000
+Log: Found A_N05 as intermediate
+Log: Found potential distant pair A_N06 (-1800.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Added new path PathNode0 at -1450.000000 0.000000
+Log: Found potential distant pair A_N06 (-1800.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Try A_N07 Total 1500.000000 versus 700.000000 + 800.000000
+Log: Found A_N07 as intermediate
+Log: Found potential distant pair A_N06 (-1800.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Found potential distant pair A_N06 (-1800.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Found potential distant pair A_N06 (-1800.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Found potential distant pair A_N06 (-1800.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N00 (-3900.000000, 0.000000)
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N01 (-3800.000000, 0.000000)
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N02 (-3600.000000, 0.000000)
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N03 (-3300.000000, 0.000000)
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N04 (-2900.000000, 0.000000)
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N05 (-2400.000000, 0.000000)
+Log: Try A_N06 Total 1300.000000 versus 700.000000 + 600.000000
+Log: Found A_N06 as intermediate
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N06 (-1800.000000, 0.000000)
+Log: Try PathNode0 Total 700.000000 versus 350.091431 + 350.091431
+Log: Found PathNode0 as intermediate
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Added new path PathNode1 at -700.000000 0.000000
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Found potential distant pair A_N07 (-1100.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N00 (-3900.000000, 0.000000)
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N01 (-3800.000000, 0.000000)
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N02 (-3600.000000, 0.000000)
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N03 (-3300.000000, 0.000000)
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N04 (-2900.000000, 0.000000)
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N05 (-2400.000000, 0.000000)
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N06 (-1800.000000, 0.000000)
+Log: Try A_N07 Total 1500.000000 versus 800.000000 + 700.000000
+Log: Found A_N07 as intermediate
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Try PathNode1 Total 800.000000 versus 400.079987 + 400.079987
+Log: Found PathNode1 as intermediate
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Added new path PathNode2 at 150.000000 0.000000
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Found potential distant pair A_N08 (-300.000000, 0.000000) and PathNode0 (-1450.000000, 0.000000)
+Log: Try A_N07 Total 1150.027832 versus 800.000000 + 350.091431
+Log: Found A_N07 as intermediate
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N00 (-3900.000000, 0.000000)
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N01 (-3800.000000, 0.000000)
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N02 (-3600.000000, 0.000000)
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N03 (-3300.000000, 0.000000)
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N04 (-2900.000000, 0.000000)
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N05 (-2400.000000, 0.000000)
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N06 (-1800.000000, 0.000000)
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Try PathNode2 Total 900.000000 versus 450.071106 + 450.071106
+Log: Found PathNode2 as intermediate
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Added new path PathNode3 at 1100.000000 0.000000
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and PathNode0 (-1450.000000, 0.000000)
+Log: Found potential distant pair A_N09 (600.000000, 0.000000) and PathNode1 (-700.000000, 0.000000)
+Log: Try A_N08 Total 1300.024658 versus 900.000000 + 400.079987
+Log: Found A_N08 as intermediate
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N00 (-3900.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N01 (-3800.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N02 (-3600.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N03 (-3300.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N04 (-2900.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N05 (-2400.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N06 (-1800.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Try PathNode3 Total 1000.000000 versus 500.063995 + 500.063995
+Log: Found PathNode3 as intermediate
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Added new path PathNode4 at 2150.000000 0.000000
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and PathNode0 (-1450.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and PathNode1 (-700.000000, 0.000000)
+Log: Found potential distant pair A_N10 (1600.000000, 0.000000) and PathNode2 (150.000000, 0.000000)
+Log: Try A_N09 Total 1450.022095 versus 1000.000000 + 450.071106
+Log: Found A_N09 as intermediate
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N00 (-3900.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N01 (-3800.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N02 (-3600.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N03 (-3300.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N04 (-2900.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N05 (-2400.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N06 (-1800.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Try PathNode4 Total 1100.000000 versus 550.058167 + 550.058167
+Log: Found PathNode4 as intermediate
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and A_N12 (3900.000000, 0.000000)
+Log: Added new path PathNode5 at 3300.000000 0.000000
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and PathNode0 (-1450.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and PathNode1 (-700.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and PathNode2 (150.000000, 0.000000)
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and PathNode3 (1100.000000, 0.000000)
+Log: Try A_N10 Total 1600.020020 versus 1100.000000 + 500.063995
+Log: Found A_N10 as intermediate
+Log: Found potential distant pair A_N11 (2700.000000, 0.000000) and PathNode5 (3300.000000, 0.000000)
+Log: Added new path PathNode6 at 3000.000000 0.000000
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N00 (-3900.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N01 (-3800.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N02 (-3600.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N03 (-3300.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N04 (-2900.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N05 (-2400.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N06 (-1800.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N07 (-1100.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N08 (-300.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N09 (600.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N10 (1600.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and A_N11 (2700.000000, 0.000000)
+Log: Try PathNode5 Total 1200.000000 versus 600.053345 + 600.053345
+Log: Found PathNode5 as intermediate
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and PathNode0 (-1450.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and PathNode1 (-700.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and PathNode2 (150.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and PathNode3 (1100.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and PathNode4 (2150.000000, 0.000000)
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and PathNode5 (3300.000000, 0.000000)
+Log: Added new path PathNode7 at 3600.000000 0.000000
+Log: Found potential distant pair A_N12 (3900.000000, 0.000000) and PathNode6 (3000.000000, 0.000000)
+Log: Try PathNode5 Total 900.080017 versus 600.053345 + 300.026672
+Log: Found PathNode5 as intermediate
+Log: Found potential distant pair B_Floor0 (-900.000000, 2048.000000) and B_F03 (-340.000000, 2288.000000)
+Log: Found potential distant pair B_Floor0 (-900.000000, 2048.000000) and B_N04 (-160.000000, 2048.000000)
+Log: Try B_N01 Total 741.555115 versus 200.638977 + 540.947327
+Log: Found B_N01 as intermediate
+Log: Found potential distant pair B_Floor0 (-900.000000, 2048.000000) and B_F04 (-160.000000, 2288.000000)
+Log: Found potential distant pair B_Floor0 (-900.000000, 2048.000000) and B_N05 (20.000000, 2048.000000)
+Log: Try B_N01 Total 921.702759 versus 200.638977 + 721.110229
+Log: Found B_N01 as intermediate
+Log: Found potential distant pair B_Floor0 (-900.000000, 2048.000000) and B_F05 (20.000000, 2288.000000)
+Log: Found potential distant pair B_Floor0 (-900.000000, 2048.000000) and B_N06 (200.000000, 2048.000000)
+Log: Try B_N01 Total 1101.860229 versus 200.638977 + 901.279114
+Log: Found B_N01 as intermediate

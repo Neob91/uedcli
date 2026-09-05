@@ -1,0 +1,22 @@
+141:Log: Execing Z:\work\uedcli_6d8ea737c25f4c42a65a7039a1a973b1.txt
+204:DevPath: Remove 0 old reachspecs
+205:DevPath: Add WarpZone and Inventory markers
+206:DevPath: Add reachspecs
+259:DevPath: Added 64 reachspecs
+260:DevPath: Prune reachspecs
+261:DevPath: Pruned 10 reachspecs
+262:DevPath: All done
+265:DevPath: Remove 64 old reachspecs
+266:DevPath: Add WarpZone and Inventory markers
+267:DevPath: Add reachspecs
+320:DevPath: Added 64 reachspecs
+321:DevPath: Prune reachspecs
+322:DevPath: Pruned 10 reachspecs
+323:DevPath: All done
+324:Log: ----------------------Starting From Start
+364:Log: ----------------------Starting From InventorySpot1
+365:DevPath: No valid start found
+366:DevPath: No valid start found
+421:DevPath: Remove 64 old reachspecs
+422:DevPath: Add WarpZone and Inventory markers
+423:DevPath: Add reachspecs
