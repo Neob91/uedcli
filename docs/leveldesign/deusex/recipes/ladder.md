@@ -34,7 +34,7 @@ brush poly find ShaftWall --facing nx:1 | brush poly set - --texture CoreTexMeta
 brush poly find LadderWell --facing nx:1 | brush poly set - --texture CoreTexMetal.LadrBrwnMetal
 
 # Align it upright and tiling on the wall:
-brush poly find ShaftWall --facing nx:1 | brush poly align - --wall
+brush poly find ShaftWall --facing nx:1 | brush poly align wall -
 ```
 
 ## Caveats and gotchas

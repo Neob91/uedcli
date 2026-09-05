@@ -15,7 +15,7 @@ brush poly find Wall1 --facing nx:1 | brush poly set - --add-flag Masked --remov
 brush poly find Sign | brush poly pan - --by 0,32                      # nudge alignment (whole texels)
 brush poly find Sign | brush poly rotate - --by 16384                   # turn the texture a quarter turn
 brush poly find Sign | brush poly scale - --by 2,2                      # make the texture look twice as big
-brush poly find Floor1 --facing floor | brush poly align - --floor     # auto-align (the `-` reads the piped faces)
+brush poly find Floor1 --facing floor | brush poly align floor -       # auto-align (the `-` reads the piped faces)
 ```
 
 - `brush poly find <BrushName…>` prints matching `BRUSH:idx` faces for another verb to consume. The
@@ -27,7 +27,7 @@ brush poly find Floor1 --facing floor | brush poly align - --floor     # auto-al
   which way up it runs, how big it is.
 - All four of `set|pan|rotate|scale` take `BRUSH:SELECTOR` (or `-`) only — unlike `align`, a bare
   brush name is not accepted, so "every face of this brush" must be typed `Wall1:all`.
-- `brush poly align --wall|--floor|--ring` auto-aligns (walls, floors/ceilings, or around a cylinder).
+- `brush poly align wall|floor|run` auto-aligns (walls, floors/ceilings, or around a cylinder).
 
 ## Surface flags
 
@@ -54,11 +54,13 @@ Combinations: `Fake Backdrop` + `Unlit` shows sky; `Mirror` + `Unlit`; a glass s
 
 ## Alignment & scrolling
 
-- Align with `brush poly align`. After any CSG change a rebuild can disturb texturing — re-align
-  after rebuilding. ⚠ `brush poly align` is uedcli's own alignment, not the editor's Floor /
-  Wall-Direction auto-align: measured against UnrealEd 2026-07-26, the two choose different in-plane
-  texture directions and pin the pattern's phase to different points, so the same face aligned each
-  way does not look the same. Use one or the other on a given surface, not both.
+- Align with `brush poly align wall|floor|run`. After any CSG change a rebuild can disturb
+  texturing — re-align after rebuilding. `wall`/`floor` reproduce UnrealEd's `WALLX`/`WALLY`/`FLOOR`
+  projection (world-axis-anchored, measured 2026-07-26), so a face aligned here matches the editor's
+  GUI; `run` (cylinder wrap) is uedcli's own. ⚠ `wall`/`floor` are **destructive on imported
+  content**: they replace a face's authored texel scale and pan with the projection's own — re-scale
+  with `brush poly scale` afterwards if you need a specific density. Two coplanar faces pointing
+  opposite ways come out **mirrored** on the back one (the editor's own polarity-blind behaviour).
 - Pan with `brush poly pan --to U,V` (absolute) or `--by dU,dV` (relative), in whole texels. Pan
   after aligning, never before — every align mode stamps `Pan` on the faces it touches, so a pan
   applied first is discarded. Pan the whole of an aligned run or none of it: panning a subset shifts
@@ -76,7 +78,7 @@ Combinations: `Fake Backdrop` + `Unlit` shows sky; `Mirror` + `Unlit`; a glass s
   as `CSG_Add`); any other value exits 2 naming it — a brush with no inside and outside gives the
   turn no direction to follow, so uedcli refuses rather than guessing.
 - Scale with `brush poly scale --by FU,FV`: `--by 2,2` makes the texture look twice as big. Scale
-  before `align --ring`, never after — a ring wrap computes its seam phases for the density it saw.
+  before `align run`, never after — a ring wrap computes its seam phases for the density it saw.
 - ⚠ `rotate` and `scale` give no continuity across faces: each pivots or grows about its own centre,
   so applying either across an aligned set breaks the seams. Use them for a one-off face — a sign, a
   monitor, a light panel.

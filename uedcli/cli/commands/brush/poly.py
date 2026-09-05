@@ -2,8 +2,8 @@
 Pure, model-side (no editor).
 
 The query verbs read the trunk level the route resolved; the mutators transform it and write it
-back. `set`/`pan`/`rotate`/`scale` print the faces they touched as `BRUSH:idx` selectors (stdout) so
-a per-face pipe stays exact. This module uses `cli.resources`/`cli.targets` and the model-side
+back. `set`/`pan`/`rotate`/`scale`/`align` print the faces they touched as `BRUSH:idx` selectors
+(stdout) so a per-face pipe stays exact. This module uses `cli.resources`/`cli.targets` and the model-side
 `surface`/`polyalign`/`query`/`utexture` services; it never imports another command family or the
 router.
 """
@@ -244,22 +244,30 @@ def _find(args, src) -> int:
 
 def _align(args, src) -> int:
     from .... import polyalign
+    mode = args.align_mode
     tokens = target_names.resolve_target_names(args.targets)     # `-` → stdin (bare names or BRUSH:idx lines)
     if not tokens:
         return 0                                      # empty stdin / no targets: clean no-op
     level = src.load()
+    fit_perimeter = getattr(args, "fit_perimeter", False)        # run-only; absent on wall/floor
+    turn = getattr(args, "turn", 0)                              # run-only
     try:
-        touched = polyalign.align(level, tokens, args.mode,
-                                  fresh_frame=args.fresh_frame,
-                                  fit_perimeter=args.fit_perimeter)
+        touched = polyalign.align(level, tokens, mode, turn=turn, fit_perimeter=fit_perimeter)
+        pairs = polyalign.resolve_align_targets(level, tokens)   # the exact aligned face set
     except ValueError as e:
         print(str(e), file=sys.stderr)
         return 2
     if not touched:
         return 0
-    for name in touched:
-        print(name)
-    print(f"aligned {len(tokens)} face target(s) across {len(touched)} brush(es) "
-          f"({args.mode})", file=sys.stderr)
-    src.save(verb="poly-align", args={"mode": args.mode}, level=level, touched=touched)
+    # Ruling 2: a per-face verb prints the BRUSH:idx selectors it acted on (stdout), not touched
+    # brush names — so `align` chains into another per-face verb without silently widening the set.
+    for brush_name, idx in pairs:
+        print(f"{brush_name}:{idx}")
+    print(f"aligned {len(pairs)} face(s) across {len(touched)} brush(es) ({mode})", file=sys.stderr)
+    rec_args: dict = {"mode": mode}
+    if turn:
+        rec_args["turn"] = turn
+    if fit_perimeter:
+        rec_args["fit_perimeter"] = True
+    src.save(verb="poly-align", args=rec_args, level=level, touched=touched)
     return 0

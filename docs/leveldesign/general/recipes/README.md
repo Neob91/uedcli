@@ -17,6 +17,7 @@ you run — the trunk is the source of truth; the editor only builds it via `lev
 | [mover-door.md](mover-door.md)     | A door — a `--mover-class` brush + `mover key move` + a trigger |
 | [lift.md](lift.md)                 | An elevator — a vertical mover + `StandOpenTimed` / trigger |
 | [fire-and-fog.md](fire-and-fog.md) | Flame — a masked decoration + coloured light; and zone fog |
+| [curved-run.md](curved-run.md)     | A seamless texture along a bend — `brush poly align run` over a revolve/cylinder strip |
 | [shapes/](shapes/)                 | **Shape** recipes — chamfered box, wedge, octagon column, ring cornice, add/subtract twin, L-ledge, arch voussoir, curved corridor, moulded cornice (the non-box brush constructions) |
 
 These recipes assume the mechanisms in the topic guides — [geometry-and-bsp.md](../geometry-and-bsp.md),

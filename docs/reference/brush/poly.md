@@ -78,7 +78,7 @@ grows in place rather than sliding off.
 
 - Pan comes after align, never before. Every `brush poly align` mode stamps `Pan` on each face
   it touches, so a dialled-in pan applied first is discarded.
-- Scale comes before `align --ring`, never after. A ring wrap computes each face's phase offset
+- Scale comes before `align run`, never after. A ring wrap computes each face's phase offset
   for the density it saw; rescaling afterwards leaves those offsets describing the old size and the
   seams no longer meet.
 - Panning a subset of an aligned run breaks its continuity, since those faces shift relative to
@@ -109,46 +109,58 @@ then `actor diagram <brush> --highlight <brush>:N` (below) to see it emphasised 
 
 ### Continuous texture alignment (`brush poly align`)
 
-**`brush poly align (--wall | --floor | --ring) [--fresh-frame] [--fit-perimeter] (targets…|-)`** makes
-one texture flow **continuously** across a set of faces instead of restarting the pattern at every
-brush edge (offline texture-vector math — no editor involved).
-Exactly one geometry mode is required. The face set is `BRUSH:SELECTOR` positionals (or a bare brush
-Name = all its polys) **or** `-` reading the set from stdin (bare names, or the `BRUSH:idx` lines
-`poly find` prints); empty stdin is a clean no-op. The **first face is the seam/seed**. Touched brush
-names → stdout, a summary → stderr.
+**`brush poly align <mode> (targets…|-)`**, with `<mode>` one of **`wall`**, **`floor`** or **`run`**,
+makes one texture flow **continuously** across a set of faces instead of restarting the pattern at
+every brush edge (offline texture-vector math — `wall`/`floor` reproduce the editor's projection
+modes, `run` is uedcli's own). The mode is a **subcommand**, so `brush poly align run -h` lists
+exactly the flags that apply. The face set is `BRUSH:SELECTOR` positionals (or a bare brush Name = all
+its polys) **or** `-` reading the set from stdin (bare names, or the `BRUSH:idx` lines `poly find`
+prints); empty stdin is a clean no-op. Every mode zeroes `Pan`. The touched faces → stdout as
+`BRUSH:idx` selectors, a summary → stderr.
 
-- **`--wall`** / **`--floor`** — a set of strictly **coplanar** faces gets ONE shared world texture
-  frame (a seam vertex maps to the same coordinate from either face). `--wall` requires the faces
-  **vertical** (normal ≈ ±X/±Y), `--floor` requires them **horizontal** (±Z) — an orientation guard.
-- **`--ring`** — wrap a texture around a **cylinder's side faces**: U advances by each facet's true
-  chord (`2·r·sin(π/N)`) around the ring, V runs along the axis. Exclude the two caps.
-- **Frame source:** default **adopt-seed** (continue the seed face's already-dialled-in
-  `TextureU/V` + `Pan`); `--fresh-frame` synthesizes a canonical frame from the face normal instead.
-  ⚠ That canonical frame is **uedcli's own convention, not a reproduction of UnrealEd's
-  "align to floor / wall direction"** — measured against the editor 2026-07-26, the two pick
-  different in-plane axis directions (a mirror, a 180° turn, or on a non-axis-aligned wall a full 90°)
-  and pin the texture's phase to a different point (uedcli to the seed face's centre, the editor to a
-  world axis). A face aligned here and in the editor's GUI will not look the same; pick one tool per
-  surface.
-- **`--fit-perimeter`** (`--ring` only) snaps the scale so an integer number of texels fits the
-  perimeter (an exact meet at the closing seam).
+- **`wall`** / **`floor`** — each face gets a **world-space** frame that reproduces UnrealEd's
+  `POLY TEXALIGN` `WALLX`/`WALLY`/`FLOOR` (measured 2026-07-26): the texture anchored where the face's
+  plane crosses a world axis, its U/V the other two world axes projected into the face. `floor`
+  projects down Z; `wall` projects down whichever of X/Y the face faces more. Because the anchor is a
+  **world axis, not the face**, faces on the same plane — or different planes at the same height —
+  share one continuous grid, and the result does not depend on which faces were selected together or
+  in what order. A face too near edge-on to its projection axis (`|N·axis| ≤ 0.05`) is a hard error
+  naming every offender (`brush poly find --facing` filters upstream). A tilted face carries the
+  planar-projection stretch (`|TextureU| = |proj| ≤ 1`); a face square to its axis is unit.
+  ⚠ Two coplanar faces pointing **opposite** ways get an identical frame, so the texture reads
+  **mirrored** on the back one — this is the editor's own polarity-blind behaviour, not a bug.
+  ⚠ **Destructive on imported content:** real maps carry deliberate texel scales and pans; `wall`/
+  `floor` replace them with the projection's density and zero the pan. Re-scale afterwards with
+  `brush poly scale` if you need a specific density.
+- **`run`** — lay one texture **continuously along a connected run** of faces: U follows the run, V
+  across it, the phase carried across every seam. It wraps a cylinder (U advances by each facet's
+  chord `2·r·sin(π/N)`, V along the axis), walks a wall run, or follows a flat/curved **bend**.
+  Coplanar sets are allowed (a curved track bed). `run` **derives its own walk order** from the
+  geometry and poly index, so the order faces are passed in has no bearing on the result. It must be
+  one brush and one un-forking strip: a set that **branches** (a face with 3+ neighbours — a
+  cylinder's cap touches every side) or is **disconnected** exits 2 naming the faces, with the hint
+  to exclude caps via `brush poly find <brush> --item Side`. V runs **down** (a UE1 texture's `V=0`
+  row is its top). On a subtractive brush's inner wall U reads mirrored (the same polarity-blindness
+  as `wall`/`floor`), so a run and the walls around it stay consistent.
+- **`--turn UU`** (`run` only) rotates the texture uniformly in each face's own run frame, in unreal
+  rotation units (16384 = 90°). Any angle is allowed. A **cylinder** run stays exact at every angle;
+  a **flat bend** shears at its seams (one axis at a quarter turn, both otherwise) — `run` reports the
+  worst seam shear to stderr so you can mitre a bad corner or accept it.
+- **`--fit-perimeter`** (`run` only) snaps the scale so a whole number of **texels** closes the loop
+  — it needs a **closed** run and a **quarter** `--turn` (else exit 2 naming why). It still leaves ~a
+  whole-texel residual (a texture repeats every `T` texels, not every texel — ~31 on the standard
+  8-sided cylinder); the whole-**tile** fix that truly closes the seam needs the texture size and
+  arrives with the catalog. Default leaves the seam.
 
 ```bash
-uedcli brush poly find Tower --item Side | uedcli brush poly align --ring -
-uedcli actor find --folder castle.hall.northwall | uedcli brush poly align --wall -
+uedcli brush poly find Tower --item Side | uedcli brush poly align run -
+uedcli actor find --folder castle.hall.northwall | uedcli brush poly align wall -
 ```
 
-⚠ The per-face verbs print faces, not actor names. `brush poly set` / `pan` / `rotate` / `scale`
-print `BRUSH:idx` selectors — one per touched face — because a bare brush name means all of
+⚠ The per-face verbs print faces, not actor names. `brush poly set` / `pan` / `rotate` / `scale` /
+`align` print `BRUSH:idx` selectors — one per touched face — because a bare brush name means all of
 that brush's faces, so printing one would hand the next verb a wider set than it edited. The names
-are canonical and `all` is expanded, so `brush poly pan wall:all …` prints `WALL:0 … WALL:5`,
-ready to feed the next verb's `-`.
-
-⚠ `brush poly align` has not been converted and still prints brush names, so its output cannot be
-piped into a per-face verb. It does not quietly widen the set — the per-face verbs take
-`BRUSH:SELECTOR` only (see below), so a bare name is rejected and
-`brush poly align … | brush poly rotate -` exits 2 with
-`surface selector must be BRUSH:SELECTOR, got 'WALL'`. Re-select the faces with `brush poly find`
-between the two verbs.
+are canonical and `all` is expanded, so `brush poly pan wall:all …` prints `WALL:0 … WALL:5`, ready
+to feed the next verb's `-`.
 
 See also: [`brush vertex`](vertex.md), [`brush measure relation`](measure.md), [`actor diagram`](../actor/diagram.md), [Textures & surfaces](../../leveldesign/general/textures-and-surfaces.md) (the level-design craft of texture alignment).

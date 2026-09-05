@@ -583,35 +583,52 @@ def register(sub) -> None:
                             "BRUSH:idx lines")
     _tree_flag(pfind)
 
-    # `poly align`: make a texture flow continuously across a face set (model-side). Exactly one
-    # geometry mode; targets are BRUSH:SELECTOR positionals OR `-` (stdin, bare names or the
-    # BRUSH:idx lines `poly find` prints).
+    # `poly align`: make a texture flow continuously across a face set (model-side). The geometry
+    # MODE is a SUBCOMMAND (wall/floor/run), not a flag — each mode's flags are disjoint (only `run`
+    # takes --fit-perimeter), so `-h` per mode lists exactly what applies, mirroring `brush build
+    # <shape>`. Every mode writes a canonical frame (unit density, Pan zeroed).
     palign = psub.add_parser(
-        "align", help="align faces so a texture flows continuously across them (wall/floor/ring)")
-    pamode = palign.add_mutually_exclusive_group(required=True)
-    pamode.add_argument("--wall", dest="mode", action="store_const", const="wall",
-                        help="one shared texture frame across a set of strictly COPLANAR VERTICAL "
-                             "faces (brickwork does not reset at each brush edge)")
-    pamode.add_argument("--floor", dest="mode", action="store_const", const="floor",
-                        help="one shared texture frame across a set of strictly COPLANAR HORIZONTAL "
-                             "faces (floor/ceiling)")
-    pamode.add_argument("--ring", dest="mode", action="store_const", const="ring",
-                        help="wrap a texture around a cylinder's side faces: U advances by each "
-                             "facet's chord around the ring, V runs along the axis")
-    palign.add_argument("targets", nargs="*", metavar="BRUSH:SELECTOR",
-                        help="faces to align: BRUSH:SELECTOR (SELECTOR = 'all' or comma indices) or "
-                             "a bare brush Name (= all its polys). Use `-` to read the set from "
-                             "stdin instead (bare names, or the BRUSH:idx lines `poly find` prints; "
-                             "empty stdin is a clean no-op). The first face is the seam/seed.")
-    palign.add_argument("--fresh-frame", dest="fresh_frame", action="store_true",
-                        help="synthesize a canonical texture frame from the face normal instead of "
-                             "adopting the seed face's frame (default). Adopt means: --wall/--floor "
-                             "continue the seed's exact TextureU/V+Pan; --ring keeps the seed's texel "
-                             "SCALE+Pan but re-derives U along the ring tangent and V along the axis")
-    palign.add_argument("--fit-perimeter", dest="fit_perimeter", action="store_true",
-                        help="--ring only: snap the texture scale so an integer number of texels "
-                             "fits the perimeter (exact seam meet); default leaves the closing seam")
-    _tree_flag(palign)
+        "align", help="align faces so a texture flows continuously across them: wall|floor|run")
+    pamode = palign.add_subparsers(dest="align_mode", required=True)
+
+    # Targets grammar shared by all three modes: BRUSH:SELECTOR positionals or a bare brush Name
+    # (= all its polys — a whole brush IS the natural unit of a mode), or `-` for stdin.
+    _ALIGN_TARGETS_HELP = (
+        "faces to align: BRUSH:SELECTOR (SELECTOR = 'all' or comma indices) or a bare brush Name "
+        "(= all its polys). Use `-` to read the set from stdin instead (bare names, or the "
+        "BRUSH:idx lines `poly find` prints; empty stdin is a clean no-op)")
+
+    pawall = pamode.add_parser(
+        "wall", help="stamp a world-projected frame on each VERTICAL face (brickwork does not reset "
+                     "at each brush edge)")
+    pawall.add_argument("targets", nargs="*", metavar="BRUSH:SELECTOR", help=_ALIGN_TARGETS_HELP)
+    _tree_flag(pawall)
+
+    pafloor = pamode.add_parser(
+        "floor", help="stamp a world-projected frame on each HORIZONTAL face (floor/ceiling)")
+    pafloor.add_argument("targets", nargs="*", metavar="BRUSH:SELECTOR", help=_ALIGN_TARGETS_HELP)
+    _tree_flag(pafloor)
+
+    parun = pamode.add_parser(
+        "run", help="lay one continuous texture along a connected RUN of faces: U follows the run, "
+                    "V across it, phase carried across every seam. Wraps a cylinder, walks a wall "
+                    "run or a curved/flat bend; derives its own walk order from geometry, so the "
+                    "order faces are passed in does not matter. Exclude a cylinder's caps")
+    parun.add_argument("targets", nargs="*", metavar="BRUSH:SELECTOR", help=_ALIGN_TARGETS_HELP)
+    parun.add_argument("--turn", dest="turn", type=int, default=0, metavar="UU",
+                       help="rotate the texture uniformly in each face's own run frame, in UNREAL "
+                            "ROTATION UNITS (16384 = 90 degrees), matching `brush build --rotate`. "
+                            "Any angle is allowed; on a flat bend a non-quarter turn shears both "
+                            "axes at the seams (the amount is reported to stderr), while a cylinder "
+                            "run stays exact at every angle")
+    parun.add_argument("--fit-perimeter", dest="fit_perimeter", action="store_true",
+                       help="snap the texture scale so a whole number of TEXELS fits the perimeter "
+                            "(needs a CLOSED run and a quarter --turn, else exit 2). This still "
+                            "leaves ~a whole-texel residual at the closing seam (a texture repeats "
+                            "every T texels, not every texel); the whole-TILE fix that closes the "
+                            "seam needs the texture size and arrives with the catalog. Default "
+                            "leaves the closing seam")
+    _tree_flag(parun)
 
     def _top_arg(s: str):
         if s == "all":

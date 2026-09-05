@@ -705,6 +705,97 @@ def test_texalign_pan_handling_matches_the_editor_against_a_non_zero_pan():
     assert authored in seen and (0, 0) in seen and (0, 63) in seen and (0, 255) in seen
 
 
+# --- `brush poly align wall|floor` reproduces the editor's projection family (§4.2 parity pins) ---
+# These assert uedcli's OWN implementation (`polyalign.align`) against the same editor golden, not the
+# reference model — the cheapest thing that catches a dropped negation, a swapped axis or a wrong
+# derived axis. A face square to its projection axis is unit; a tilted one carries the |proj| stretch.
+
+def _align_world_frame(verts, mode):
+    """Run `brush poly align <mode>` on a unrotated brush at the origin whose one poly has exactly
+    `verts` (there the stored frame IS the world frame) and return `(origin, tu, tv, pan)`."""
+    from uedcli import polyalign
+    from uedcli.builders import make_brush_actor
+    from uedcli.model import Brush, Level, Polygon
+    a = make_brush_actor("F", Brush("Model", [Polygon(vertices=[tuple(v) for v in verts])]))
+    lv = Level()
+    lv.actors[a.name] = a
+    lv.order = [a.name]
+    polyalign.align(lv, ["F:0"], mode)
+    p = a.brush.polys[0]
+    return p.origin, p.texture_u, p.texture_v, p.pan
+
+
+def _assert_editor_frame(label, got, want, point_tol=0.2, vec_tol=2e-3):
+    for name, g, w, tol in (("Origin", got[0], want["base"], point_tol),
+                            ("TextureU", got[1], want["tu"], vec_tol),
+                            ("TextureV", got[2], want["tv"], vec_tol)):
+        assert all(abs(x - y) <= tol for x, y in zip(g, w)), \
+            f"{label}: {name} got {g}, editor wrote {w}"
+    assert list(got[3]) == list(want["pan"]), f"{label}: Pan got {got[3]}, editor wrote {want['pan']}"
+
+
+def test_align_floor_reproduces_editor_FLOOR_on_every_guarded_face():
+    """`brush poly align floor` writes the exact frame `POLY TEXALIGN FLOOR` produced, on every
+    measured face passing the |N.Z| > 0.05 guard — including the |proj| density stretch on tilted
+    faces (the 45° ramp stores |TextureU| = 0.70711). Spike 2026-07-26-unrealed-texalign-semantics."""
+    import json
+    golden = json.loads((_TEXALIGN_SPIKE / "measured.json").read_text())
+    checked = 0
+    for ref, face in golden["faces"].items():
+        if abs(face["n_surf"][2]) <= 0.05:                  # floor exits 2 here; editor leaves it
+            continue
+        got = _align_world_frame(face["verts"], "floor")
+        _assert_editor_frame(f"FLOOR {ref}", got, golden["modes"]["FLOOR"][ref])
+        checked += 1
+    assert checked >= 15, f"only {checked} floor faces checked"
+
+
+def test_align_wall_reproduces_editor_WALLX_WALLY_and_pins_the_derived_axis():
+    """`brush poly align wall` derives its projection axis (|N.X| ≥ |N.Y| ⇒ X else Y) and reproduces
+    the corresponding editor mode. A wrong derivation picks the wrong golden and fails. Faces failing
+    the derived-axis guard are skipped — the editor leaves them untouched, so comparing exit 2 to an
+    untouched golden would fail a correct implementation (§4.2)."""
+    import json
+    golden = json.loads((_TEXALIGN_SPIKE / "measured.json").read_text())
+    checked = 0
+    for ref, face in golden["faces"].items():
+        n = face["n_surf"]
+        axis = 0 if abs(n[0]) >= abs(n[1]) else 1           # wall's own derivation
+        if abs(n[axis]) <= 0.05:
+            continue
+        want = golden["modes"]["WALLX" if axis == 0 else "WALLY"][ref]
+        got = _align_world_frame(face["verts"], "wall")
+        _assert_editor_frame(f"wall(A={'XY'[axis]}) {ref}", got, want)
+        checked += 1
+    assert checked >= 10, f"only {checked} wall faces checked"
+
+
+def test_align_wall_tie_break_picks_x_on_a_measured_corner():
+    """The |N.X| == |N.Y| tie resolves to X — pinned on SlantXYZ:3, a MEASURED corner normal
+    (0.577, 0.577, 0.577) whose WALLX and WALLY goldens differ, so a tie resolved the wrong way
+    would pick WALLY and fail (§4.2)."""
+    import json
+    golden = json.loads((_TEXALIGN_SPIKE / "measured.json").read_text())
+    face = golden["faces"]["SlantXYZ:3"]
+    assert abs(face["n_surf"][0]) == abs(face["n_surf"][1])         # a genuine tie
+    assert golden["modes"]["WALLX"]["SlantXYZ:3"]["tu"] != golden["modes"]["WALLY"]["SlantXYZ:3"]["tu"]
+    got = _align_world_frame(face["verts"], "wall")
+    _assert_editor_frame("wall tie SlantXYZ:3", got, golden["modes"]["WALLX"]["SlantXYZ:3"])
+
+
+def test_align_floor_is_invariant_under_normal_reversal():
+    """Feeding the reversed winding (the subtractive-brush case, normal negated) yields a
+    byte-identical frame — the invariance that licenses uedcli's brush-polygon normal where the
+    editor uses the CSG surface normal (§2.3, §4.2)."""
+    import json
+    golden = json.loads((_TEXALIGN_SPIKE / "measured.json").read_text())
+    ref = next(r for r, f in golden["faces"].items() if abs(f["n_surf"][2]) > 0.5)   # a floor/ceiling
+    verts = golden["faces"][ref]["verts"]
+    forward = _align_world_frame(verts, "floor")
+    reversed_ = _align_world_frame(list(reversed(verts)), "floor")
+    assert forward == reversed_, f"{ref}: floor frame changed under normal reversal"
+
+
 # --- UCC-built texture fixture (spikes/2026-07-26-ucc-texture-fixture/) -------------------
 
 _UCC_FIXTURE = (Path(__file__).resolve().parents[2] / "dev" / "docs" / "spikes"
