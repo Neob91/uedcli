@@ -104,9 +104,13 @@ def _trunk_to_actorspecs(level, schema, world_model=None):
         # on the UNATCO import golden, 2026-09-02 -- so the Zone late-binds to the LevelInfo export
         # via an ObjRef member (raw bytes cannot carry a forward ref). Skip when the trunk authors
         # `Region` itself (then the typed path serializes the authored value).
+        # The LevelInfo is the exception: the editor NEVER spatially zones it, so its Region stays
+        # the spawn default (Zone=self, iLeaf=-1, ZoneNumber=0) even in a built world -- byte-measured
+        # on OceanLab N=3, where the builder brush AND the LevelInfo both sit at the origin yet the
+        # golden zones the builder to leaf 73 and leaves the LevelInfo solid.
         if not any(k.casefold() == "region" for k, _v in a.props):
             i_leaf, zone_number = (-1, 0)
-            if world_model is not None and getattr(world_model, "nodes", None):
+            if world_model is not None and getattr(world_model, "nodes", None) and short != "LevelInfo":
                 loc = tuple(float(c) for c in (a.location or (0.0, 0.0, 0.0)))
                 i_leaf, zone_number = _model_point_region(world_model, loc)
             props.append(_pointregion_prop("Region", zone=li_name,

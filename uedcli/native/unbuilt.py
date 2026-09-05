@@ -716,8 +716,15 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
                  Prop("TimeSeconds", AW.PT_FLOAT, 0.0),
                  Prop("AIProfile", AW.PT_INT, 0),
                  Prop("Summary", AW.PT_OBJECT, ASM.ObjRef("LevelSummary"))]
-        return _actor_body(asm, li_name, "Engine.LevelInfo",
-                           props + list(li.props if li else []), rank_for, warnings)
+        # When the trunk carries the LevelInfo, its spec already holds the editor's stamps (Tag from
+        # the T3D, Region kept solid by `_trunk_to_actorspecs`). When it does NOT (the LevelInfo is
+        # not among the first-N actors), synthesize what the editor spawns for any LevelInfo: the
+        # class-default Tag and a solid Region (Zone=self, iLeaf=-1, ZoneNumber=0) -- byte-measured on
+        # Island N=1, whose golden LevelInfo carries exactly Tag='LevelInfo' + Region(-1,0).
+        extra = list(li.props) if li else [
+            Prop("Tag", AW.PT_NAME, "LevelInfo"),
+            _pointregion_prop("Region", zone=li_name)]
+        return _actor_body(asm, li_name, "Engine.LevelInfo", props + extra, rank_for, warnings)
     ASM._reserve_actor(asm, li_name, "Engine.LevelInfo", _li_body, flags=ASM._FLAGS_ACTOR)
 
     # The world Model + its empty Polys child carry the editor's fixed fresh-session names

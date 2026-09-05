@@ -104,3 +104,61 @@ def test_synthesized_builder_carries_editor_import_stamps():
     _base = struct.unpack_from("<3f", pk.buf, pos); pos += 12
     normal = struct.unpack_from("<3f", pk.buf, pos)
     assert normal == (0.0, 0.0, -1.0)                   # CalcNormal-recomputed, not authored (0,0,1)
+
+
+def _level_no_levelinfo() -> model.Level:
+    """A trunk with a placed actor but NO LevelInfo -- the editor always has one, so native must
+    synthesize it (the Island-N=1 case, where the LevelInfo is not among the first-N actors)."""
+    t3d = ("Begin Map\n"
+           "Begin Actor Class=Engine.PathNode Name=PathNode0\n    Name=\"PathNode0\"\nEnd Actor\n"
+           "End Map\n")
+    lv = model.parse_t3d(t3d)
+    lv.order = level_order(lv)
+    normalize_level(lv)
+    return lv
+
+
+def test_synthesized_levelinfo_carries_tag_and_solid_region():
+    """A trunk without a LevelInfo makes native synthesize one, matching what the editor spawns:
+    `Tag=LevelInfo` (class-default) + a solid `Region` (Zone=self, iLeaf=-1, ZoneNumber=0). The
+    editor never spatially zones the LevelInfo, so the Region stays solid (Island N=1 golden)."""
+    dx_bytes, _w = assemble_unbuilt(_level_no_levelinfo(), schema=None, pkg_dirs=None)
+    pk = _parse_package(dx_bytes, "t.dx", None)
+    tags = {t.name: t for t in _actor_tags(pk, "LevelInfo0")}
+    assert "Tag" in tags and pk.names[read_compact_index(tags["Tag"].raw, 0)[0]] == "LevelInfo"
+    assert "Region" in tags and tags["Region"].struct_name == "PointRegion"
+    zone_ref, off = read_compact_index(tags["Region"].raw, 0)
+    assert pk.object_path(zone_ref).endswith("LevelInfo0")          # Zone=self
+    assert struct.unpack_from("<i", tags["Region"].raw, off)[0] == -1   # iLeaf solid
+    assert tags["Region"].raw[off + 4] == 0                            # ZoneNumber solid
+
+
+def test_levelinfo_region_not_zoned_in_built_world(monkeypatch):
+    """`_trunk_to_actorspecs` recomputes every PLACED actor's Region from the built BSP EXCEPT the
+    LevelInfo, which the editor never zones (byte-measured OceanLab N=3: builder + LevelInfo both at
+    the origin, golden zones the builder but leaves the LevelInfo solid)."""
+    from uedcli.native import materialize
+    from uedcli.native.actor_write import StructValue
+
+    monkeypatch.setattr(materialize, "_model_point_region", lambda _m, _p: (99, 7))
+    t3d = ("Begin Map\n"
+           "Begin Actor Class=Engine.LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
+           "Begin Actor Class=Engine.PathNode Name=PathNode0\n    Name=\"PathNode0\"\nEnd Actor\n"
+           "End Map\n")
+    lv = model.parse_t3d(t3d)
+    lv.order = level_order(lv)
+    normalize_level(lv)
+
+    class _FakeWorld:                                    # truthy .nodes triggers the recompute path
+        nodes = [1]
+
+    actors, _brushes, _w = materialize._trunk_to_actorspecs(
+        lv, lambda _fqcn: {}, world_model=_FakeWorld())
+    region = {a.name: next(p for p in a.props if p.name == "Region") for a in actors}
+
+    def leaf_zone(prop):
+        m: StructValue = prop.value
+        return m.members[1].value, m.members[2].value
+
+    assert leaf_zone(region["LevelInfo0"]) == (-1, 0)   # NOT zoned
+    assert leaf_zone(region["PathNode0"]) == (99, 7)    # zoned from the BSP
