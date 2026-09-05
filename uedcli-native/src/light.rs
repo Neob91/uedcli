@@ -106,7 +106,7 @@ struct SurfBake {
     bits: Vec<u8>,
     /// True iff >=1 participating light passed the editor gather-pass predicate for this surf
     /// (special_lit partition + backface + `GetVisibleSurfs` + `WorldLightRadius >= |PlaneDot|`) —
-    /// see `bake_surf`. Drives the EMPTY-RUN vs DARK distinction in `emit_record`: a listed surf
+    /// see `bake_surf`. Drives the EMPTY-RUN vs DARK distinction in `finalize_offsets`: a listed surf
     /// whose every lumel then fails the per-lumel radius/LOS test gets an empty run, not a `-1` dark
     /// record.
     visible_to_any_light: bool,
@@ -353,10 +353,11 @@ fn validate_indices(model: &Model) -> Result<(), BuildError> {
 }
 
 /// Bake the lightmaps into `model`, given the participating lights.  Idempotent: fully resets the
-/// four lightmap outputs first.  Runs the per-surface work in parallel (rayon) and concatenates
-/// deterministically in the editor's **BSP tree-walk order** (`lightmap_emit_order`), so offsets
-/// are stable regardless of thread scheduling.  Returns `BuildError` (never panics) on an
-/// out-of-range geometry index.
+/// four lightmap outputs first.  Runs the per-surface work in parallel (rayon), then serially in two
+/// passes with different orders (see the `(5)` block): the `LightBits`/`Lights` data concat + offset
+/// assignment go in **surf-index order**, the `LightMap` record array in **BSP tree-walk order**.
+/// Both are deterministic, so offsets are stable regardless of thread scheduling.  Returns
+/// `BuildError` (never panics) on an out-of-range geometry index.
 pub fn bake(model: &mut Model, lights: &[LightInput]) -> Result<(), BuildError> {
     // (1) Reset.
     model.light_map.clear();
@@ -435,37 +436,51 @@ pub fn bake(model: &mut Model, lights: &[LightInput]) -> Result<(), BuildError> 
         .map(|si| bake_surf(model, &surf_verts[si], si, lights, &visible_per_light))
         .collect();
 
-    // (5) Serial concat: assign DataOffset/iLightActors, append planes + light runs, link surfs.
-    // The `LightMap` array is emitted in the editor's **BSP-tree-walk order** (`lightmap_emit_order`),
-    // NOT surf-index order — verified byte-exact against `Test_Castle.dx` (spike §20 §21). Emitting
-    // in walk order aligns `LightMap`, `LightBits`, and the per-surf `Lights` region-2 runs
-    // positionally with the editor. A defensive surf-order sweep afterward catches any lightmappable
-    // surf the walk from root missed (a disconnected BSP — shouldn't happen), so the record count can
-    // never silently drop below the surf's lit count.
+    // (5) Serial concat, in TWO passes with DIFFERENT orders — the editor decouples them:
+    //
+    // Pass 1 — DATA, in **surf-index order**: assign each surf's DataOffset (running `LightBits` len)
+    // and iLightActors (running `Lights` len) and append its shadow plane + light run. UED22's
+    // raytrace/concat pass iterates `Model.Surfs` in ascending index order (`Editor 0x100a5010`
+    // caller loop, spike §20 §1 step 4), so the two data arrays lay down surf-index-ascending.
+    //
+    // Pass 2 — RECORD ARRAY, in **BSP tree-walk order** (`lightmap_emit_order`): push each surf's now-
+    // finalized `FLightMapIndex` into `light_map` and link `surf.i_light_map` — verified byte-exact
+    // against `Test_Castle.dx` (spike §20 §21). A defensive surf-order sweep afterward catches any
+    // lightmappable surf the walk from root missed (a disconnected BSP — shouldn't happen), so the
+    // record count can never silently drop below the surf's lit count.
+    //
+    // Reusing the walk order for BOTH (the old code) permuted DataOffset/iLightActors vs UED22 once
+    // two lit surfs appeared in walk order opposite to surf-index order (WanChai N=10, UNATCO N=11);
+    // the record array, LightBits bytes, and Lights run contents were already identical.
+    for si in 0..bakes.len() {
+        if let Some(b) = bakes[si].as_mut() {
+            finalize_offsets(model, b);
+        }
+    }
     let order = lightmap_emit_order(model);
     for si in order {
         if let Some(b) = bakes[si].take() {
-            emit_record(model, b);
+            push_record(model, b);
         }
     }
     for si in 0..bakes.len() {
         if let Some(b) = bakes[si].take() {
-            emit_record(model, b);
+            push_record(model, b);
         }
     }
     Ok(())
 }
 
-/// Append one baked surf's record + its shadow bits + its light run to the Model, and link the surf.
-/// Records are pushed in the caller's chosen order; `surf.i_light_map` is set to the pushed index.
+/// Pass 1 of the serial concat: assign one baked surf's `DataOffset`/`iLightActors` and append its
+/// shadow bits + light run to the Model. Called in **surf-index order** so the two data arrays lay
+/// down surf-index-ascending, matching UED22's raytrace/concat pass.
 ///
 /// Three record shapes, matching the editor (§2):
 /// - **Populated run** (`light_indices` non-empty): real bit-planes + a `-1`-terminated light run.
 /// - **Empty run** (`light_indices` empty but `visible_to_any_light`): a surf listed by the gather
 ///   pass whose every listed light lit no lumel; slot allocated with a lone `-1` terminator, 0 bytes.
 /// - **Dark** (empty and not visible to any light): `DataOffset=0`, `iLightActors=-1`, no run.
-fn emit_record(model: &mut Model, b: SurfBake) {
-    let mut rec = b.rec;
+fn finalize_offsets(model: &mut Model, b: &mut SurfBake) {
     if b.light_indices.is_empty() {
         if b.visible_to_any_light {
             // Empty run: the surf is in >=1 light's gather set but every such light lit no lumel
@@ -474,23 +489,29 @@ fn emit_record(model: &mut Model, b: SurfBake) {
             // `-1` terminator and 0 shadow bytes. `data_offset` = current `LightBits` length (no
             // bytes appended); `i_light_actors` = the run's start offset in `Lights`. Confirmed vs
             // UED22 WanChai N=8 world Model rec 11 (DataOffset=16, iLightActors=30, one trailing
-            // `-1`). See `emit_record`'s doc comment and spike §20 §2.
-            rec.data_offset = model.light_bits.len() as i32;
-            rec.i_light_actors = model.lights.len() as i32;
+            // `-1`). See spike §20 §2.
+            b.rec.data_offset = model.light_bits.len() as i32;
+            b.rec.i_light_actors = model.lights.len() as i32;
             model.lights.push(-1);
         } else {
-            rec.data_offset = 0;
-            rec.i_light_actors = -1; // dark record (§2)
+            b.rec.data_offset = 0;
+            b.rec.i_light_actors = -1; // dark record (§2)
         }
     } else {
-        rec.data_offset = model.light_bits.len() as i32;
+        b.rec.data_offset = model.light_bits.len() as i32;
         model.light_bits.extend_from_slice(&b.bits);
-        rec.i_light_actors = model.lights.len() as i32;
+        b.rec.i_light_actors = model.lights.len() as i32;
         model.lights.extend_from_slice(&b.light_indices);
         model.lights.push(-1); // NULL terminator ends this surf's light run (§2/§8)
     }
+}
+
+/// Pass 2 of the serial concat: push one surf's now-finalized record into `LightMap` and link the
+/// surf. Called in **BSP tree-walk order** (`lightmap_emit_order`); `surf.i_light_map` is set to the
+/// pushed index. `b.rec` already carries the offsets assigned by `finalize_offsets` (pass 1).
+fn push_record(model: &mut Model, b: SurfBake) {
     let idx = model.light_map.len() as i32;
-    model.light_map.push(rec);
+    model.light_map.push(b.rec);
     model.surfs[b.surf_index].i_light_map = idx;
 }
 
@@ -636,7 +657,7 @@ fn bake_surf(
     //      surf's infinite plane, NOT a distance-to-surf and NOT the per-lumel radius test below.
     // A light that lists the surf but lights no lumel (its per-lumel radius/LOS prunes every lumel)
     // is dropped from the run by the raytrace, leaving an EMPTY run (a lone `-1` terminator, 0 bits) —
-    // NOT a `-1` dark record (`emit_record`). Confirmed vs UED22 WanChai N=8: this predicate keeps
+    // NOT a `-1` dark record (`finalize_offsets`). Confirmed vs UED22 WanChai N=8: this predicate keeps
     // rec 11 (empty run) and correctly leaves rec 6/9 dark, where native's imperfect
     // `GetVisibleSurfs` over-includes and both the plane test (broader) and native's own grid-corner
     // coarse cull (641, narrower/different geometry) mis-slot at least one of the three.
@@ -919,7 +940,7 @@ mod tests {
 
     #[test]
     fn emit_record_populated_empty_and_dark_encodings() {
-        // Pins the WanChai N=8 fix's on-disk encoding directly on `emit_record`, independent of the
+        // Pins the WanChai N=8 fix's on-disk encoding directly on the concat passes, independent of the
         // (imperfect) visibility gather. Three record shapes, concatenated in one Model:
         //   populated run (light_indices non-empty)  -> real bits + `[idx.., -1]` run
         //   EMPTY run   (empty but visible_to_any)   -> DataOffset = current LightBits len (0 bytes
@@ -930,7 +951,7 @@ mod tests {
             256.0, 256.0, 128.0, Vec3::new(0.0, 0.0, 0.0), CsgOper::Subtract,
         )])
         .unwrap();
-        // Start from clean lightmap arrays (bake() would; here we drive emit_record directly).
+        // Start from clean lightmap arrays (bake() would; here we drive the concat directly).
         m.light_map.clear();
         m.light_bits.clear();
         m.lights.clear();
@@ -938,12 +959,22 @@ mod tests {
             s.i_light_map = -1;
         }
         let rec = || descriptor(8, 8, 1.0, 1.0, 0.0, 0.0);
-        emit_record(&mut m, SurfBake { surf_index: 0, rec: rec(), light_indices: vec![0],
-                                       bits: vec![0xff; 8], visible_to_any_light: true });
-        emit_record(&mut m, SurfBake { surf_index: 1, rec: rec(), light_indices: vec![],
-                                       bits: vec![], visible_to_any_light: true });
-        emit_record(&mut m, SurfBake { surf_index: 2, rec: rec(), light_indices: vec![],
-                                       bits: vec![], visible_to_any_light: false });
+        // Two passes, mirroring `bake` (5): finalize offsets in surf-index order, then push records.
+        // Here surf-index order == push order (0,1,2), so the record array matches the surf order.
+        let mut bakes = vec![
+            SurfBake { surf_index: 0, rec: rec(), light_indices: vec![0],
+                       bits: vec![0xff; 8], visible_to_any_light: true },
+            SurfBake { surf_index: 1, rec: rec(), light_indices: vec![],
+                       bits: vec![], visible_to_any_light: true },
+            SurfBake { surf_index: 2, rec: rec(), light_indices: vec![],
+                       bits: vec![], visible_to_any_light: false },
+        ];
+        for b in bakes.iter_mut() {
+            finalize_offsets(&mut m, b);
+        }
+        for b in bakes {
+            push_record(&mut m, b);
+        }
 
         // Populated: run at Lights[0] = [0, -1]; 8 bytes at DataOffset 0.
         assert_eq!(m.light_map[0].data_offset, 0);
