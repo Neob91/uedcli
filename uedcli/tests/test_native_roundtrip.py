@@ -496,21 +496,22 @@ def test_unbuilt_world_model_is_empty_without_the_native_build(tmp_path):
     assert load_model_from_dx(dx.read_bytes()).nodes == []
 
 
-def test_content_brush_shape_polys_keep_ilink_minus_one():
-    """A static content brush's own `Model_Brush<n>.Polys` keep `iLink=-1` on every poly: the
-    editor does NOT run the bspValidateBrush LINK phase on an imported content brush's shape model
-    (byte-verified against UED22's `MAP IMPORT` of UNATCO Brush74 / WanChai Brush3675 at N=2). Two
-    coplanar same-texture faces WOULD link under the old `_assign_ilinks` call -- the regression is
-    native writing 0,1,2,... instead of the editor's all -1."""
+def test_content_brush_shape_polys_link_coplanar_faces():
+    """The editor DOES run bspValidateBrush's LINK phase on an imported content brush's own model:
+    coplanar same-facing/-texture/-flags faces fuse to the group master's index; a face in no group
+    keeps -1. Earlier a cube-only byte-check (UNATCO/WanChai N=2, all 6-face cubes = all singletons
+    -> all -1) was read as "no link phase at all"; WanChai N=16 `Model_Brush1643` disproves it -- its
+    two coplanar `Side` walls store the master index, every other face -1."""
     from uedcli.model import Brush, Polygon
     from uedcli.native.unbuilt import _builder_cube_polys, _fpolys
     quad = lambda z: Polygon(texture="Pkg.Tex", item="OUTSIDE", flags=0,
                              origin=(0.0, 0.0, z), normal=(0.0, 0.0, 1.0),
                              texture_u=(1.0, 0.0, 0.0), texture_v=(0.0, 1.0, 0.0),
                              vertices=[(0.0, 0.0, z), (8.0, 0.0, z), (8.0, 8.0, z), (0.0, 8.0, z)])
-    brush = Brush(model_name="Model_B", polys=[quad(0.0), quad(0.0)])  # coplanar + same texture
-    assert [fp.i_link for fp in _fpolys(brush, actor="B")] == [-1, -1]
-    # The synthesized builder cube DOES link (its Polys keep the assigned surf index), unchanged.
+    # two coplanar same-texture faces fuse to master 0; a third on a different Z plane stays -1
+    brush = Brush(model_name="Model_B", polys=[quad(0.0), quad(0.0), quad(64.0)])
+    assert [fp.i_link for fp in _fpolys(brush, actor="B")] == [0, 0, -1]
+    # The synthesized builder cube links with master=index even for singletons (its own convention).
     assert all(fp.i_link != -1 for fp in _builder_cube_polys())
 
 
@@ -585,3 +586,26 @@ def test_brush_bdynamiclight_is_dropped(tmp_path):
     got = decode_dx_level_offline(str(dx), index=_index(),
                                   schema=mapimport.ImportSchema(resolver=_resolver))
     assert "bDynamicLight" not in dict(got.actors["B1"].props)
+
+
+def _fp(normal, base, texture_ref=1, tu=(0.0, 1.0, 0.0), tv=(0.0, 0.0, 1.0), flags=0):
+    from uedcli.native.actor_write import FPoly
+    return FPoly(verts=[(0.0, 0.0, 0.0)], base=base, normal=normal,
+                 texture_u=tu, texture_v=tv, poly_flags=flags, texture_ref=texture_ref)
+
+
+def test_content_brush_ilink_link_phase_stores_editor_convention():
+    """`_assign_content_ilinks` mirrors how the editor STORES `bspValidateBrush`'s link phase on an
+    imported content brush's own model: coplanar same-facing/-texture/-flags faces fuse to the group
+    master's index; a poly in NO group keeps -1 (not its own index). This is what made WanChai N=16
+    diverge -- `Brush1643`'s two coplanar `Side` walls are the first real groups; every earlier
+    brush is a 6-face cube (all singletons -> all -1)."""
+    from uedcli.native.unbuilt import _assign_content_ilinks
+    polys = [
+        _fp((1.0, 0.0, 0.0), (0.0, 0.0, 0.0)),        # 0: master of the +X group
+        _fp((0.0, 1.0, 0.0), (0.0, 0.0, 0.0)),        # 1: +Y singleton -> -1
+        _fp((1.0, 0.0, 0.0), (0.0, 10.0, 0.0)),       # 2: coplanar with 0 -> links to 0
+        _fp((1.0, 0.0, 0.0), (0.0, 0.0, 0.0), texture_ref=2),  # 3: coplanar but other texture -> -1
+    ]
+    _assign_content_ilinks(polys)
+    assert [p.i_link for p in polys] == [0, -1, 0, -1]

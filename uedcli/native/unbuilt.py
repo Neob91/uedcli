@@ -169,10 +169,13 @@ def _fpolys(brush, texture_ref=None, *, actor: str = "?") -> list[FPoly]:
     `texture_ref(name) -> int` resolves a poly's stored `Package.Name` texture to an import ref.
     Without it every poly comes out untextured.
 
-    A static content brush's saved `Model_Brush<n>.Polys` keep `iLink=-1` on every poly (byte-
-    verified against UED22's `MAP IMPORT` of UNATCO/WanChai at N=2): the editor does NOT run the
-    bspValidateBrush LINK phase on an imported content brush's own shape model, unlike the live
-    builder brush (`_builder_cube_polys`, which does link). So no `_assign_ilinks` here."""
+    The editor runs the `bspValidateBrush` LINK phase on an imported content brush's own shape model
+    too (`_assign_content_ilinks`): coplanar same-facing same-texture faces fuse to a group master,
+    every other poly keeps `iLink=-1`. A 6-face cube has no coplanar pair -> all -1, which is why
+    every N<16 content brush matched before this was added (a cube can't tell "no link phase" from
+    "link phase, no groups"). `Brush1643`'s two coplanar `Side` walls (WanChai N=16) are the first
+    brush with real groups. A MOVER's iLinks are OVERWRITTEN by `build_mover_shape_model` downstream,
+    so this assignment only reaches static brushes."""
     for i, p in enumerate(brush.polys):
         # The T3D importer drops a <3-vertex face without a word -- the level then ships with a hole
         # (measured: surfs 10 -> 9, nothing in the log). Catch it here, where we can name it.
@@ -189,6 +192,7 @@ def _fpolys(brush, texture_ref=None, *, actor: str = "?") -> list[FPoly]:
                  # rather than let struct.pack reject them.
                  pan_u=(p.pan or (0, 0))[0] & 0xFFFF, pan_v=(p.pan or (0, 0))[1] & 0xFFFF)
            for p in brush.polys]
+    _assign_content_ilinks(out)
     return out
 
 
@@ -220,6 +224,24 @@ def _assign_ilinks(out: list[FPoly]) -> None:
                      + _f32(nrm[i][2] * db[2]))
             if _f32(-0.001) < d < _f32(0.001):
                 o.i_link = i
+
+
+def _assign_content_ilinks(out: list[FPoly]) -> None:
+    """`bspValidateBrush`'s LINK phase as the editor STORES it on an imported CONTENT brush's own
+    shape model: run the same coplanar-fuse as `_assign_ilinks`, but a poly in NO multi-poly group
+    keeps `iLink=-1` (the editor's unlinked sentinel) instead of its own index. Only a group MASTER
+    (>=1 follower) keeps its index; followers point at the master.
+
+    This differs from the live BUILDER brush (`_builder_cube_polys`, master=index even for a
+    singleton). A 6-face cube is all singletons -> all -1, which is why every N<16 content brush
+    matched with no link phase at all; `Brush1643`'s two coplanar `Side` walls (WanChai N=16) are the
+    first real groups, and there the editor stores the master index on the wall, -1 elsewhere."""
+    from collections import Counter
+    _assign_ilinks(out)                                  # master=index, follower=master, singleton=index
+    group_size = Counter(fp.i_link for fp in out)        # polys pointing at each master (incl. itself)
+    for i, fp in enumerate(out):
+        if fp.i_link == i and group_size[i] == 1:        # singleton -> the editor's -1 sentinel
+            fp.i_link = -1
 
 
 def _builder_cube_polys() -> list[FPoly]:
@@ -321,24 +343,31 @@ def build_mover_shape_model(polys: list[FPoly]) -> tuple[UM.Model, list[int]]:
 
 def _world_soup_fpolys(asm, world_model, csg_brushes, tex_ref) -> list:
     """The world Model's `Polys` soup (`Model.Polys`): one `FPoly` per post-CSG world poly the
-    native core retained (`umodel.Model.world_soup`). Resolves each poly's owner-brush export ref and
-    texture import the SAME way `_patch_native_surf_refs` does for the surfs; the editor tags every
-    world-soup poly `Item=OUTSIDE`. An out-of-range `i_actor` leaves the poly ownerless/untextured
-    (never raises), mirroring the surf patch."""
+    native core retained (`umodel.Model.world_soup`). Resolves each poly's owner-brush export ref,
+    texture import, and `Item=` name from its SOURCE brush poly (`i_actor`/`i_brush_poly`), the SAME
+    provenance `_patch_native_surf_refs` uses for the surfs. The editor propagates the source poly's
+    authored `ItemName` onto every world fragment it carves; a brush's faces are typically authored
+    `Item=OUTSIDE` (hence the common name), but a named face (a staircase `Rise`/`Step`/`Side`)
+    keeps its label. An out-of-range `i_actor` leaves the poly ownerless/untextured and named
+    `OUTSIDE` (the world-root default), never raising -- mirroring the surf patch."""
     from itertools import batched
     out = []
     for verts_flat, base, normal, tu, tv, pflags, i_actor, i_brush_poly, i_link, pan in \
             getattr(world_model, "world_soup", ()):
-        actor_ref, texture_ref = 0, 0
+        actor_ref, texture_ref, item = 0, 0, "OUTSIDE"
         if 0 <= i_actor < len(csg_brushes):
             name, polys = csg_brushes[i_actor]
             actor_ref = asm.eref(name)
-            if 0 <= i_brush_poly < len(polys) and polys[i_brush_poly].texture:
-                texture_ref = tex_ref(polys[i_brush_poly].texture)
+            if 0 <= i_brush_poly < len(polys):
+                src = polys[i_brush_poly]
+                if src.texture:
+                    texture_ref = tex_ref(src.texture)
+                if src.item is not None:
+                    item = src.item
         out.append(FPoly(
             verts=[tuple(v) for v in batched(verts_flat, 3)],
             base=tuple(base), normal=tuple(normal), texture_u=tuple(tu), texture_v=tuple(tv),
-            poly_flags=pflags, actor_ref=actor_ref, texture_ref=texture_ref, item="OUTSIDE",
+            poly_flags=pflags, actor_ref=actor_ref, texture_ref=texture_ref, item=item,
             i_link=i_link, i_brush_poly=i_brush_poly, pan_u=pan[0], pan_v=pan[1]))
     return out
 

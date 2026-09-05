@@ -31,3 +31,24 @@ a CSG ItemName inheritance/assignment difference. Not yet diagnosed to a mechani
 
     _scratch/actor-parity/06_hongkong_wanchai_market/{native,ref}_N16.dx
     parity_gate.gate(native_N16, ref_N16)  # -> (False, [2 polys BODY diffs])
+
+## Resolved
+
+Two independent Brush1643 causes, both fixed in `uedcli/native/unbuilt.py` (Python-only):
+
+- `Model2` (world soup): native hardcoded every world-soup poly `Item=OUTSIDE`. The editor
+  propagates each surviving world fragment's `ItemName` from its SOURCE brush poly. `_world_soup_fpolys`
+  now reads `csg_brushes[i_actor].polys[i_brush_poly].item` (same provenance as the texture ref) and
+  defaults to `OUTSIDE` only when the source is unresolvable/None. Brush faces are usually authored
+  `Item=OUTSIDE`, so cube brushes are unchanged; Brush1643's `Rise`/`Step`/`Side`/`Base` now carry.
+- `model_brush1643` (private model): the diff was `iLink`, not ItemName. The editor DOES run
+  bspValidateBrush's LINK phase on an imported content brush's own model — the prior "no link phase"
+  claim was an under-determined inference (every N<16 content brush is a 6-face cube = all singletons
+  = all -1, which can't distinguish it from "link phase, no groups"). `_fpolys` now calls new
+  `_assign_content_ilinks`: coplanar same-facing/-texture/-flags faces fuse to the group master's
+  index, singletons keep -1. Brush1643's two coplanar `Side` walls are the first real groups.
+
+Both verified: all 3 ladder levels (UNATCO / WanChai_Market / NYC_Bar) PASS the gate at N=1..16;
+cargo goldens 111/0; regression tests in `test_native_roundtrip.py`
+(`test_content_brush_shape_polys_link_coplanar_faces`,
+`test_content_brush_ilink_link_phase_stores_editor_convention`).
