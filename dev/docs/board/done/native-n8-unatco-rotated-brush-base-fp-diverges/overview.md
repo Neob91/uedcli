@@ -225,3 +225,27 @@ corpus, which the linear scan holds at 76/76 today. Pragmatic alternative for th
 review: EXCLUDE this residual — mask `|ΔW| < ~1e-3` on an axis-aligned node plane plus the one
 downstream `Region` flip — IF judged game-inconsequential (2.16e-4 ≈ 7 f32 ulp plane offset; one
 brush-actor `PointRegion`). Owner decision: exclude vs. core rewrite.
+
+## RESOLVED: owner-directed narrow EXCLUSION in the parity gate (2026-09-05)
+
+Owner ruled exclude (faithful fix = multi-week incremental-CSG-core rewrite). A second, independent
+adversarial re-confirmation of both killer facts, from the game `Engine.dll` disasm:
+
+- **Persisted `Brush` `Region` is inert at load.** `UGameEngine::LoadMap` (`0x158930`) iterates the
+  Level `Actors` array and calls `ULevel::SetActorZone(actor,1,1)` (vtable slot 43 `0x161e10`, at
+  `0x1015aeb4`) per actor, which recomputes the region and OVERWRITES `actor+0x88/+0x90` (`iLeaf`
+  default `-1`). The init gate `[actor+0x11c]&0x10000` is tested only in these 5 load loops and set
+  nowhere — an actor-init marker; either branch leaves a brush's `Region` unused.
+- **`W` epsilon ≫ 2.16e-4.** Zero-extent line-trace band is ±0.001 (`linecheck.rs:33`, engine
+  live-read), 4.6× the offset.
+
+Mechanism pinned from the two cached packages: `Points`(76) byte-identical, `surf35.pBase=32`
+byte-identical; `Points[32].x=447.99985` (ued's W, consistent with its own pBase) and
+`Points[29].x=448.00006` (native's W, snapped to a sibling) — both real, distinct, `2.16e-4` apart.
+
+Fix: `parity_gate.py` masks the node-plane `W` and CSG-soup `FPoly.Base` dedup-tie (normal stays
+byte-compared; a value masks only when both sides equal real byte-identical-table-point projections
+within the dedup tolerance) and the one `Brush`-class `Region` flip. Recorded in the
+`NATIVE-MATERIALIZE.md` exclusion set. Negative tests (`harness/test_n8_dedup_tie_mask.py`, 7 cases)
+prove a far/in-band-off-geometry `W`, an off-geometry soup base, a changed normal, and a non-`Brush`
+`Region` all still FAIL. UNATCO N=8 → PARITY: YES; WanChai N=8 unaffected (masks are a no-op there).

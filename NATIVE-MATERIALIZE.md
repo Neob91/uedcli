@@ -61,6 +61,19 @@ match; the surviving (non-`None`) `Actors` set AND order must match (Actors orde
   `URender::OccludeBsp` clears+recomputes them every frame from the camera, and `IsCsg` collision
   strips 0x10 before testing — no reader consumes the persisted bits. The gate masks `node_flags &
   ~0x18`; every other node-flag bit (NotCsg/NotVisBlocking/IsFront/…) stays compared.
+- **Point-dedup near-tie** on an axis-aligned node-plane `W`, its CSG-soup `FPoly.Base`, and the one
+  downstream `Brush` `Region` it flips (owner-directed + second opus review, 2026-09-05; board
+  `native-n8-unatco-rotated-brush-base-fp-diverges`). An editor incremental-dedup-staleness artifact:
+  a rotated brush's face base lands between two REAL, distinct `Model.Points` entries `2.16e-4` apart
+  (≈7 f32 ULP at x=448); the editor's incremental pool keeps the un-snapped point, native's
+  linear-scan dedup snaps to the sibling — so native's `W`/soup-base carry the snapped point's value.
+  Game-inconsequential: `2.16e-4` is 4.6× below the engine's ±0.001 zero-extent line-trace band and
+  orders below the box-collision band; a `Brush`'s persisted `Region` is discarded at load (LoadMap
+  `SetActorZone(actor,1,1)` recomputes+overwrites it, Engine.dll `0x158930`/`0x161e10`). Faithful fix
+  = a multi-week incremental-CSG-core rewrite (owner-ruled out). Masked NARROWLY (identity-anchored):
+  the node **normal** stays byte-compared, and a `W`/base diff masks ONLY when both values equal real
+  byte-identical-table-point projections within the point-dedup tolerance — a wrong plane still FAILS.
+  Non-`Brush` actors' `Region` stays compared. Negative tests: `test_n8_dedup_tie_mask.py`.
 
 Any NEW candidate exclusion needs an opus review confirming inconsequence + the owner's explicit yes
 before it counts. No content carveouts (Movers included — native must build their private models).
