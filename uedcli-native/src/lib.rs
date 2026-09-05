@@ -11,16 +11,23 @@
 mod bspcsg;
 mod bspoptgeom;
 mod build;
+mod collision;
 mod csg;
 mod f32;
 mod fpoly;
 mod light;
 mod linecheck;
 mod model;
+mod model_read;
 mod model_write;
 mod passes;
+mod paths;
+mod paths_py;
+#[cfg(test)]
+mod paths_golden;
 mod permeating_lights;
 mod render;
+mod scout;
 mod visible_surfs;
 mod zones;
 
@@ -29,6 +36,8 @@ use pyo3::prelude::*;
 use pyo3::types::PyBytes;
 
 create_exception!(uedcli_native, BuildError, pyo3::exceptions::PyException);
+/// A path-build failure naming the offending value (`paths::PathError`).
+create_exception!(uedcli_native, PathError, pyo3::exceptions::PyException);
 
 fn map_err(e: model::BuildError) -> PyErr {
     BuildError::new_err(e.to_string())
@@ -611,5 +620,11 @@ fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(serialize_model, m)?)?;
     m.add_function(wrap_pyfunction!(bake_lighting, m)?)?;
     m.add_function(wrap_pyfunction!(render_frame, m)?)?;
+    m.add("PathError", m.py().get_type_bound::<PathError>())?;
+    m.add_class::<paths_py::PresetIn>()?;
+    m.add_class::<paths_py::PathGraphOut>()?;
+    m.add_class::<paths_py::PlacementOut>()?;
+    m.add_function(wrap_pyfunction!(paths_py::build_path_graph, m)?)?;
+    m.add_function(wrap_pyfunction!(paths_py::place_path_nodes, m)?)?;
     Ok(())
 }

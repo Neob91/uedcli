@@ -30,7 +30,7 @@ use crate::model::{BspNode, Model, Plane, Vec3};
 /// strict `>=0`/`<0` split still counts as "whole segment" on the corresponding side, rather than
 /// forcing a crossing split. Round 6/7 pinned this value; round 8 re-confirmed it live
 /// (`linecheck_walker_state_trace.py`: `CONST1=-0.00100000005`, `CONST2=0.00100000005`).
-const WHOLE_SEGMENT_EPS: f32 = 0.001;
+pub(crate) const WHOLE_SEGMENT_EPS: f32 = 0.001;
 
 const NF_NOT_CSG: u8 = 0x01;
 const NF_NOT_VIS_BLOCKING: u8 = 0x04;
@@ -63,14 +63,14 @@ pub const VIS_EXTRA_FLAGS: u8 = NF_NOT_VIS_BLOCKING;
 pub const VIS_BRIGHT_CORNERS: u8 = NF_NOT_VIS_BLOCKING | NF_BRIGHT_CORNERS;
 /// Recursion-depth backstop.  A well-formed BSP is far shallower; if a pathological tree ever
 /// exceeds this we fail OPEN (report clear) — a missed shadow is cosmetic, a false shadow is not.
-const MAX_DEPTH: u32 = 4096;
+pub(crate) const MAX_DEPTH: u32 = 4096;
 
 // Conceptual halfspace sides (engine convention).
-const FRONT: i32 = 1;
-const BACK: i32 = 0;
+pub(crate) const FRONT: i32 = 1;
+pub(crate) const BACK: i32 = 0;
 
 #[inline]
-fn plane_dot(p: &Plane, v: &Vec3) -> f32 {
+pub(crate) fn plane_dot(p: &Plane, v: &Vec3) -> f32 {
     p.x * v.x + p.y * v.y + p.z * v.z - p.w
 }
 
@@ -79,7 +79,7 @@ fn plane_dot(p: &Plane, v: &Vec3) -> f32 {
 /// lerp: the `t` this is paired with is keyed on `d2` (point2's own plane-dot), not the segment
 /// fraction from `p1`.
 #[inline]
-fn crossing_mid(p1: Vec3, p2: Vec3, t: f32) -> Vec3 {
+pub(crate) fn crossing_mid(p1: Vec3, p2: Vec3, t: f32) -> Vec3 {
     Vec3::new(
         p2.x + (p2.x - p1.x) * t,
         p2.y + (p2.y - p1.y) * t,
@@ -97,7 +97,7 @@ fn crossing_mid(p1: Vec3, p2: Vec3, t: f32) -> Vec3 {
 /// see-through" — but the two whole-segment sites treat it as ordinary occlusion state (round 7's
 /// "self-correction": CSG-solid on the BACK side FORCES the state to solid, not "unchanged").
 #[inline]
-fn is_csg(node: &BspNode, extra_flags: u8, strip_bright_corners: bool) -> bool {
+pub(crate) fn is_csg(node: &BspNode, extra_flags: u8, strip_bright_corners: bool) -> bool {
     let mask = if strip_bright_corners { extra_flags & !NF_BRIGHT_CORNERS } else { extra_flags }
         | NF_NOT_CSG | NF_IS_NEW;
     node.num_vertices > 0 && (node.node_flags & mask) == 0
@@ -105,7 +105,7 @@ fn is_csg(node: &BspNode, extra_flags: u8, strip_bright_corners: bool) -> bool {
 
 /// The engine child index for a conceptual side (FRONT -> iChild[1] == `i_back`).
 #[inline]
-fn child(node: &BspNode, side: i32) -> i32 {
+pub(crate) fn child(node: &BspNode, side: i32) -> i32 {
     if side == FRONT {
         node.i_back
     } else {
@@ -119,7 +119,7 @@ fn child(node: &BspNode, side: i32) -> i32 {
 /// FRONT of a CSG-solid node PROVES open space (state becomes/stays true); going BACK of one PROVES
 /// solid (state becomes/stays false); a non-CSG node never changes the incoming state either way.
 #[inline]
-fn combine_state(side: i32, state: bool, csg: bool) -> bool {
+pub(crate) fn combine_state(side: i32, state: bool, csg: bool) -> bool {
     if side == FRONT {
         state || csg
     } else {
@@ -138,7 +138,7 @@ fn combine_state(side: i32, state: bool, csg: bool) -> bool {
 /// solid). `state==false` reports clear ONLY as the `NF_BrightCorners` start-in-solid suppression
 /// (same rule as v1's `descend`, folded in here) — and does NOT itself mark `seen_empty`.
 #[inline]
-fn terminal(state: bool, extra_flags: u8, seen_empty: &mut bool) -> bool {
+pub(crate) fn terminal(state: bool, extra_flags: u8, seen_empty: &mut bool) -> bool {
     if state {
         *seen_empty = true;
         return true;

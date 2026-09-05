@@ -1,0 +1,55 @@
+# pathlab2-define.dx ued22
+level_zone 0 0 none 0.0 0.0 -950.0 1.2 0.0 0.0 0.0
+zone 0.0 0.0 0.0 1 0 none 0.0 0.0 -950.0 1.2 0.0 0.0 0.0
+nav 0 E_N00 navigationpoint -300.0 0.0 -100.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 1 E_N01 navigationpoint 0.0 0.0 100.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 2 E_N02 navigationpoint 300.0 0.0 -100.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 3 F_N00 navigationpoint -300.0 2048.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 4 F_N01 navigationpoint 300.0 2048.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 5 G_Center liftcenter -256.0 4096.0 -184.0 0 0 0 12.0 15.0 0 g_lift none liftcenter
+nav 6 G_ExitLo liftexit 0.0 4096.0 -216.0 0 0 0 12.0 15.0 0 g_lift none liftexit
+nav 7 G_ExitHi liftexit 320.0 4096.0 296.0 0 0 0 12.0 15.0 0 g_lift none liftexit
+nav 8 G_N00 navigationpoint 200.0 4096.0 -216.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 9 H_T1 teleporter -1024.0 6144.0 -216.0 0 0 0 18.0 40.0 0 none h_t2 h_t1
+nav 10 H_T2 teleporter 1024.0 6144.0 -216.0 0 0 0 18.0 40.0 0 none h_t1 h_t2
+nav 11 H_N00 navigationpoint -1200.0 6144.0 -216.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 12 H_N01 navigationpoint 1200.0 6144.0 -216.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 13 I_N00 navigationpoint -300.0 -2048.0 -216.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 14 I_N01 navigationpoint 300.0 -2048.0 -216.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 15 J_N00 navigationpoint -800.0 -4096.0 -216.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 16 J_EndOnly navigationpoint -400.0 -4096.0 -216.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 17 J_PlayerOnly navigationpoint 0.0 -4096.0 -216.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 18 J_Extra navigationpoint 400.0 -4096.0 -216.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 19 J_N04 navigationpoint 800.0 -4096.0 -216.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 20 K0_N00 navigationpoint -150.0 -6144.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 21 K0_N01 navigationpoint 150.0 -6144.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 22 K1_N00 navigationpoint -150.0 -6656.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 23 K1_N01 navigationpoint 150.0 -6656.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 24 K2_N00 navigationpoint -150.0 -7168.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 25 K2_N01 navigationpoint 150.0 -7168.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 26 K3_N00 navigationpoint -150.0 -7680.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 27 K3_N01 navigationpoint 150.0 -7680.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 28 K4_N00 navigationpoint -150.0 -8192.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 29 K4_N01 navigationpoint 150.0 -8192.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 30 K5_N00 navigationpoint -150.0 -8704.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 31 K5_N01 navigationpoint 150.0 -8704.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 32 K6_N00 navigationpoint -150.0 -9216.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 33 K6_N01 navigationpoint 150.0 -9216.0 -88.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 34 L0_N00 navigationpoint 3946.0 -6144.0 -4.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 35 L0_N01 navigationpoint 4246.0 -6144.0 -4.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 36 L1_N00 navigationpoint 3946.0 -6656.0 -4.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 37 L1_N01 navigationpoint 4246.0 -6656.0 -4.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 38 L2_N00 navigationpoint 3946.0 -7168.0 -4.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 39 L2_N01 navigationpoint 4246.0 -7168.0 -4.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 40 L3_N00 navigationpoint 3946.0 -7680.0 -8.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 41 L3_N01 navigationpoint 4246.0 -7680.0 -8.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 42 L4_N00 navigationpoint 3946.0 -8192.0 -24.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 43 L4_N01 navigationpoint 4246.0 -8192.0 -24.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 44 L5_N00 navigationpoint 3946.0 -8704.0 -40.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 45 L5_N01 navigationpoint 4246.0 -8704.0 -40.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 46 L6_N00 navigationpoint 3946.0 -9216.0 -60.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 47 L6_N01 navigationpoint 4246.0 -9216.0 -60.0 0 0 0 12.0 15.0 0 none none pathnode
+nav 48 Start playerstart -800.0 -4096.0 -216.0 0 0 0 18.0 40.0 0 none none playerstart
+mover 0 F_Door 0.0 2048.0 0.0 0 0 0 0.0 0.0 0.0 1
+mover 1 G_Lift -256.0 4096.0 -240.0 0 0 0 0.0 0.0 0.0 1
+nav 49 InventorySpot0 navigationpoint 4.5816408840173335e+24 1.3744922652052e+25 -203.0 0 0 0 4.363467783093057e+24 4.363467783093057e+24 0 none none inventoryspot

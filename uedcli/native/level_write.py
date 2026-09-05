@@ -53,6 +53,16 @@ def write_url(u: URL) -> bytes:
     return bytes(out)
 
 
+def write_reach_specs(reach_specs: list[ReachSpec]) -> bytes:
+    """The `ReachSpecs` run: ci count + one FReachSpec each (`PATHING-BUILD.md` §1.1)."""
+    out = bytearray(write_ci(len(reach_specs)))
+    for rs in reach_specs:
+        out += enc_i32(rs.distance) + write_ci(rs.start) + write_ci(rs.end)
+        out += struct.pack("<iii", rs.radius, rs.height, rs.reach_flags)
+        out += bytes([rs.pruned & 0xFF])
+    return bytes(out)
+
+
 def write_level_body(*, none_index: int, actor_refs: list[int], model_ref: int,
                      url: URL | None = None, reach_specs: list[ReachSpec] | None = None,
                      text_buffer_ref: int = 0) -> bytes:
@@ -67,11 +77,7 @@ def write_level_body(*, none_index: int, actor_refs: list[int], model_ref: int,
         out += write_ci(r)
     out += write_url(url)
     out += write_ci(model_ref)
-    out += write_ci(len(reach_specs))
-    for rs in reach_specs:
-        out += enc_i32(rs.distance) + write_ci(rs.start) + write_ci(rs.end)
-        out += struct.pack("<iii", rs.radius, rs.height, rs.reach_flags)
-        out += bytes([rs.pruned & 0xFF])
+    out += write_reach_specs(reach_specs)
     # trailing block
     out += struct.pack("<f", 0.0)                      # TimeSeconds: 4-byte FLOAT (real maps: ~10..130s)
     out += write_ci(0)                                 # FirstDeleted = None

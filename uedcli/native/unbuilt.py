@@ -479,6 +479,31 @@ def _actor_body(asm, name: str, qualified_class: str, props: list, rank_for,
                              [asm._resolve_prop_value(p) for p in ordered]))
 
 
+def serialization_rank_resolver(pkg_dirs):
+    """`fqcn -> {casefold(prop): rank}` in the editor's tagged-property SERIALIZATION order
+    (`class_serialization_order`), memoized. The order MUST come from the UED22 substrate (the `.u`
+    the editor itself iterates at MAP SAVE), NOT the game's v68 `.u` -- the two disagree on prop
+    order: e.g. `Engine.Actor.AmbientSound` ranks after `SoundVolume` in the game schema but right
+    after `Tag` in UED22, the order the golden carries. So UED22 shadows any game copy of a package."""
+    from uedcli import tool_assets
+    from uedcli.uprops.uclass import class_serialization_order
+    rank_schema_paths: dict[str, str] = {}
+    for d in [str(tool_assets.uned_dir() / "UED22"), *(x for x in (pkg_dirs or ()) if x)]:
+        for f in Path(d).glob("*.u"):
+            rank_schema_paths.setdefault(f.stem.casefold(), str(f))
+    rank_pkgs: dict = {}
+    ranks: dict[str, dict[str, int]] = {}
+
+    def rank_for(fqcn: str) -> dict[str, int]:
+        r = ranks.get(fqcn.casefold())
+        if r is None:
+            r = class_serialization_order(
+                fqcn, resolver=lambda p: rank_schema_paths.get(p.casefold()), _pkgs=rank_pkgs)
+            ranks[fqcn.casefold()] = r
+        return r
+    return rank_for
+
+
 def _seed_tables(asm, pkg) -> None:
     """PARITY-GATE oracle injection, never set in production: pre-intern the golden's name table
     and replay its import table so the two linker-order unknowns (name/import order -- editor
@@ -672,27 +697,7 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
         for f in Path(d).glob("*.u"):
             schema_paths.setdefault(f.stem.casefold(), str(f))
 
-    # The editor's tagged-property SERIALIZATION order, per class, MUST come from the UED22
-    # substrate (`.u` the editor itself iterates at MAP SAVE), NOT the game's v68 `.u` -- the two
-    # disagree on prop order: e.g. `Engine.Actor.AmbientSound` ranks after `SoundVolume` in the
-    # game schema but right after `Tag` in UED22, the order the golden carries. So the rank
-    # resolver shadows any game copy of a package with the UED22 one.
-    from uedcli import tool_assets
-    from uedcli.uprops.uclass import class_serialization_order
-    rank_schema_paths: dict[str, str] = {}
-    for d in [str(tool_assets.uned_dir() / "UED22"), *(x for x in (pkg_dirs or ()) if x)]:
-        for f in Path(d).glob("*.u"):
-            rank_schema_paths.setdefault(f.stem.casefold(), str(f))
-    rank_pkgs: dict = {}
-    ranks: dict[str, dict[str, int]] = {}
-
-    def rank_for(fqcn: str) -> dict[str, int]:
-        r = ranks.get(fqcn.casefold())
-        if r is None:
-            r = class_serialization_order(
-                fqcn, resolver=lambda p: rank_schema_paths.get(p.casefold()), _pkgs=rank_pkgs)
-            ranks[fqcn.casefold()] = r
-        return r
+    rank_for = serialization_rank_resolver(pkg_dirs)
 
     li = next((a for a in actors if a.is_level_info), None)
     li_name = li.name if li else "LevelInfo0"

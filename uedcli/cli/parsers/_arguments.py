@@ -344,9 +344,9 @@ def _tree_flag(parser, *, level_only=False):
     if level_only:
         parser.add_argument(
             "--tree", metavar="level/NAME", default=None,
-            help="build/photo this level instead of $UEDCLI_LEVEL: level/NAME (materialize and "
-                 "photo operate on a level only — use `stash diagram`/`prefab diagram` for a "
-                 "captured set). Default: the level named by $UEDCLI_LEVEL.")
+            help="operate on this level instead of $UEDCLI_LEVEL: level/NAME (this verb takes a "
+                 "level only — use `stash diagram`/`prefab diagram` for a captured set). "
+                 "Default: the level named by $UEDCLI_LEVEL.")
         return
     parser.add_argument(
         "--tree", metavar="KIND/NAME", default=None,

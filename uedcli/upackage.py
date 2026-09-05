@@ -183,14 +183,19 @@ def load_package(path: str, *, name: str | None = None) -> Package:
         buf = open(path, "rb").read()
     except OSError as e:
         raise SchemaError(f"{path}: cannot read package ({e})") from e
+    return parse_package_bytes(buf, where=path, name=name)
+
+
+def parse_package_bytes(buf: bytes, *, where: str, name: str | None = None) -> Package:
+    """`load_package` over in-memory bytes; `where` names the source in errors."""
     if len(buf) < 36:
-        raise SchemaError(f"{path}: too small to be an Unreal package ({len(buf)} bytes)")
+        raise SchemaError(f"{where}: too small to be an Unreal package ({len(buf)} bytes)")
     try:
-        return _parse_package(buf, path, name)
+        return _parse_package(buf, where, name)
     except SchemaError:
         raise
     except (struct.error, ValueError, IndexError) as e:
-        raise SchemaError(f"{path}: malformed package ({e})") from e
+        raise SchemaError(f"{where}: malformed package ({e})") from e
 
 
 def _parse_package(buf: bytes, path: str, name: str | None) -> Package:
@@ -264,6 +269,7 @@ class PropertyTag:
     array_index: int                # static-array element index (0 for a scalar tag)
     bool_value: bool | None         # PT_BOOL: the value (bit 7); None otherwise
     raw: bytes                      # the raw value bytes (empty for PT_BOOL)
+    span: tuple[int, int] = (0, 0)  # [start, end) of the WHOLE tag in the package buffer
 
 
 def read_property_tags(pkg: Package, pos: int, end: int) -> tuple[list[PropertyTag], int]:
@@ -276,6 +282,7 @@ def read_property_tags(pkg: Package, pos: int, end: int) -> tuple[list[PropertyT
     while True:
         if pos >= end:
             raise SchemaError(f"tagged-property list overran its bounds at {pos} (no None)")
+        tag_start = pos
         nidx, pos = read_compact_index(buf, pos)
         if not (0 <= nidx < len(pkg.names)):
             raise SchemaError(f"tagged-property name index {nidx} out of range at {pos}")
@@ -300,7 +307,8 @@ def read_property_tags(pkg: Package, pos: int, end: int) -> tuple[list[PropertyT
             size = struct.unpack_from("<I", buf, pos)[0]; pos += 4
         if ptype == PT_BOOL:
             tags.append(PropertyTag(name=name, ptype=ptype, struct_name=None,
-                                    array_index=0, bool_value=bit7, raw=b""))
+                                    array_index=0, bool_value=bit7, raw=b"",
+                                    span=(tag_start, pos)))
             continue
         array_index = 0
         if bit7:
@@ -310,4 +318,5 @@ def read_property_tags(pkg: Package, pos: int, end: int) -> tuple[list[PropertyT
                               f"({pos}+{size} > {end})")
         raw = buf[pos:pos + size]; pos += size
         tags.append(PropertyTag(name=name, ptype=ptype, struct_name=struct_name,
-                                array_index=array_index, bool_value=None, raw=raw))
+                                array_index=array_index, bool_value=None, raw=raw,
+                                span=(tag_start, pos)))

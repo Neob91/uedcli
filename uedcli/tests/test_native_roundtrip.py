@@ -459,7 +459,7 @@ def test_native_materialize_builds_and_verifies_a_map_with_no_editor(tmp_path, c
         state_dir=tmp_path / ".uedcli", expected=applymod._expected_level(result, mo),
         defaults=ClassDefaults(_resolver), index=_index(),
         schema=mapimport.ImportSchema(resolver=_resolver), schema_resolver=_resolver,
-        no_verify=False, keep_build=False, no_bsp_check=False, ignore=frozenset())
+        path_pass=None, no_verify=False, keep_build=False, no_bsp_check=False, ignore=frozenset())
 
     assert r.rc == 0, r.message
     built = load_model_from_dx(out.read_bytes())

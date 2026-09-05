@@ -95,7 +95,18 @@ All dir keys are relative to the project root (absolute allowed), so uedcli can 
   its own `.gitignore` of `*`) on first use; safe to delete.
 - **The per-user `~/.uedcli/`** holds only `config.toml` (the `[games.*]` blocks — where each game's
   base asset packages live) and the derivable, content-addressed `cache/{textures,stubs,schema}`
-  shared across projects. There is no central per-project bucket and no project `id`.
+  shared across projects. There is no central per-project bucket and no project `id`. A game block:
+
+  ```toml
+  [games.deusex]
+  paths = "/games/deusex/System:/games/deusex/Textures"   # base package dirs, colon-separated
+  pathing = "deusex-1112fm"      # AI path build rules: deusex-1112fm | ued22-469 | none
+  ignore_props = []              # optional: Package.Class.prop the post-build verify ignores
+  ```
+
+  `pathing` picks which engine's path builder [`level materialize`](reference/level/materialize.md)
+  reproduces; omitting it (or `"none"`) builds a map with no AI path graph, exactly as an older
+  config without this key always has.
 
 **Package layering.** The effective package search path is the project's overlay `paths` first, then
 the selected game's base dirs. Duplicates are removed, keeping the project's copy over the game's.

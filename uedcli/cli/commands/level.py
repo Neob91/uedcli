@@ -38,6 +38,8 @@ def run(args) -> int:
     """Route one `level` invocation to its handler, preserving the monolith's dispatch order."""
     if args.sub == "materialize":
         return _level_materialize(args)
+    if args.sub == "paths":
+        return _level_paths_define(args)
     if args.sub == "photo":
         return _level_preview(args)
     if args.sub == "doctor":
@@ -529,13 +531,54 @@ def _level_materialize(args) -> int:
                                    no_verify=getattr(args, "no_verify", False),
                                    keep_build=getattr(args, "keep_build", False),
                                    no_bsp_check=getattr(args, "no_bsp_check", False),
-                                   ignore_props=resources.ignore_props_for(project))
+                                   ignore_props=resources.ignore_props_for(project),
+                                   pathing=resources.resolved_pathing(project))
     if result.rc != 0:
         print(result.message, file=sys.stderr)
         return result.rc
     print(result.message)
     if result.bsp_notes:                                # advisory BSP health → stderr, rc unchanged
         print(result.bsp_notes, file=sys.stderr)
+    return 0
+
+
+def _level_paths_define(args) -> int:
+    """`level paths define` — UED22's `createPaths` auto-placement over the trunk (spec §5), the
+    native world build + mover models as the collision world. Created and moved names to stdout
+    (producer convention); stripped names and counts to stderr."""
+    from ...classdefaults import ClassDefaults
+    from ...classindex import ClassRefError
+    from ...native.materialize import NativeBuildError
+    from ...native import pathplace
+    verb = "level paths define"
+    project = resources.resolve_project(args)
+    if resources.pathing_for(project, verb=verb) == "none":
+        raise CommandError(f'{verb}: [games.{project.game}].pathing is "none" -- placement needs '
+                           f"the reachability test; set it to deusex-1112fm or ued22-469")
+    maps_dir = Path(config.project_maps_dir(project))
+    name, from_env = level_sources.resolve_level_only(args, verb=verb)
+    if from_env:
+        level_sources.announce_env_level(name, action="placing path nodes in")
+    index = resources.class_index(project)
+    if index.empty:
+        raise CommandError(f"{verb}: {resources.NO_PACKAGE_PATH}")
+    src = level_sources.TrunkLevelSource(maps_dir / name)
+    level = src.load()
+    try:
+        result = pathplace.define_paths(
+            level, index=index, defaults=ClassDefaults(resources.schema_resolver_for(project)))
+    except (pathplace.PathPlaceError, NativeBuildError, ClassRefError, SchemaError) as e:
+        raise CommandError(f"{verb}: {e}")
+    src.save(verb="paths define", args={}, level=level,
+             touched=[*result.created, *result.moved])
+    for n in result.stripped:
+        print(f"removed previous auto node: {n}", file=sys.stderr)
+    for n in [*result.created, *result.moved]:
+        print(n)
+    print(f"batch label: {result.token}", file=sys.stderr)
+    print(f"starts walked: {result.starts}; created: {len(result.created)}; "
+          f"merged: {len(result.removed)}; moved: {len(result.moved)}; "
+          f"removed: {len(result.stripped) + len(result.removed)}", file=sys.stderr)
     return 0
 
 
@@ -643,7 +686,9 @@ def _level_preview(args) -> int:
             # needs them (a trunk cache miss) — never for `--map` or a cache hit.
             dirs = resources.composed_dirs(project)
             schema = resources.schema_resolver_for(project)
-            return preview_game.MaterializeResources(composed_dirs=dirs, schema_resolver=schema)
+            return preview_game.MaterializeResources(
+                composed_dirs=dirs, schema_resolver=schema,
+                pathing=resources.resolved_pathing(project))
 
         try:
             n = preview_game.render_shots(

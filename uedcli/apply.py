@@ -280,16 +280,41 @@ def _verify_and_install(staging: Path, *, dx_path: str, expected, defaults, stat
         Path(staging).unlink(missing_ok=True)                # if verify raised before the swap
 
 
+def _path_pass(*, pathing: str, pkg_dirs: list[str], index, defaults, schema_resolver):
+    """`bytes -> bytes`: the AI path build over the built map (`native.paths.apply_path_pass`, spec
+    §3), or None under `pathing == "none"` (no pass, the map is left as built). `index`/`defaults`
+    are the post-verify's when it has them; under `--no-verify` they are None and the pass builds
+    its own, since the map's content must not depend on a verify flag."""
+    from pathlib import Path as _P
+    from .classdefaults import ClassDefaults
+    from .classindex import ClassIndex
+    from .native.paths import apply_path_pass
+    from .native.unbuilt import serialization_rank_resolver
+    if pathing == "none":
+        return None
+    if index is None:
+        index = ClassIndex.from_files([(f.stem, str(f)) for d in pkg_dirs
+                                       for f in sorted(_P(d).glob("*.u"))])
+    if defaults is None:
+        defaults = ClassDefaults(schema_resolver)
+    rank_for = serialization_rank_resolver(pkg_dirs)
+    return lambda dx: apply_path_pass(dx, pathing=pathing, index=index, defaults=defaults,
+                                      rank_for=rank_for)
+
+
 def _save_and_swap_verified(ed, dx_path: str, expected, *, work_out, defaults, state_dir, index,
-                            schema, no_verify: bool = False, keep_build: bool = False,
+                            schema, path_pass, no_verify: bool = False, keep_build: bool = False,
                             ignore: frozenset[tuple[str, str]] = frozenset()) -> None:
     """Given the map ALREADY saved to `work_out` (the `MAP SAVE` is the last line of the build
-    script `run_materialize` runs), `cp_out` it to host staging, then verify + swap it in
-    (`_verify_and_install`). No container-written temp ever lands in the repo tree."""
+    script `run_materialize` runs), `cp_out` it to host staging, run the path pass over it, then
+    verify + swap it in (`_verify_and_install`). No container-written temp ever lands in the repo
+    tree."""
     from . import xfer
     staging = _staging_path(state_dir)
     try:
         xfer.cp_out(ed.container, work_out, str(staging))    # host copy: verified offline AND swapped in
+        if path_pass is not None:
+            staging.write_bytes(path_pass(staging.read_bytes()))
         _verify_and_install(staging, dx_path=dx_path, expected=expected, defaults=defaults,
                             state_dir=state_dir, index=index, schema=schema, no_verify=no_verify,
                             keep_build=keep_build, ignore=ignore)
@@ -318,8 +343,8 @@ _MATERIALIZE_ERRORS = (DriverError, RuntimeError, TimeoutError, ValueError, OSEr
 
 def _materialize_native(*, result: dict[str, str], materialized_order: list[str], search_dirs,
                         out_path: str, state_dir, expected, defaults, index, schema,
-                        schema_resolver, no_verify: bool, keep_build: bool, no_bsp_check: bool,
-                        ignore: frozenset[tuple[str, str]]) -> ApplyResult:
+                        schema_resolver, path_pass, no_verify: bool, keep_build: bool,
+                        no_bsp_check: bool, ignore: frozenset[tuple[str, str]]) -> ApplyResult:
     """Build the map with NO editor at all: the native CSG core (`native.materialize.build_world_model`)
     carves the world BSP AND bakes the lighting in-process, and `assemble_unbuilt` writes both
     straight into the package, so there is no `MAP LOAD`, no `MAP REBUILD`, no `LIGHT APPLY` and no
@@ -362,6 +387,8 @@ def _materialize_native(*, result: dict[str, str], materialized_order: list[str]
             light_names=[n for n, *_rest in lights])
         for w in warnings:
             print(f"warning: {w}", file=sys.stderr)
+        if path_pass is not None:
+            dx_bytes = path_pass(dx_bytes)
         Path(os.path.abspath(out_path)).parent.mkdir(parents=True, exist_ok=True)
         staging = _staging_path(state_dir)
         try:
@@ -387,12 +414,17 @@ def _materialize_native(*, result: dict[str, str], materialized_order: list[str]
     return ApplyResult(rc=0, message=f"materialized {out_path}", bsp_notes=bsp_notes)
 
 
-def run_materialize(*, level, out_path, overwrite, state_dir, schema_resolver,
+def run_materialize(*, level, out_path, overwrite, state_dir, schema_resolver, pathing="none",
                     search_dirs=None, no_verify=False, keep_build=False,
                     no_bsp_check=False, ignore_props=()) -> ApplyResult:
     """Materialize a TRUNK Level into `out_path` (.dx/.unr) via a PER-COMMAND EPHEMERAL editor, H3-
     post-verify it offline in that same container, and swap it in. PURE BUILD (git-native slice 3):
     no session, no 3-way merge, no backup, no git wrapping. Refuses to overwrite unless `overwrite`.
+    `pathing` is the game's path-build preset (`config.resolved_pathing`): both build paths run the
+    AI path pass over the built map before the verify (`_path_pass`); `none` (the default — every
+    caller that predates this feature, including old spike harnesses, gets it for free) builds a
+    path-less map, byte-for-byte what `run_materialize` always built. The CLI (`cli/commands/level.py`)
+    always resolves and passes it explicitly; this default exists for other callers only.
     `search_dirs` is the whole composed config dir set (`resources.composed_dirs`); the `mounts`
     (`/resources/<n>` bind mounts) and the HOST resolution list are computed ONCE here from it and
     threaded to `ensure_editor` +
@@ -473,12 +505,15 @@ def run_materialize(*, level, out_path, overwrite, state_dir, schema_resolver,
     if missing := missing_packages(referenced, host_search_dirs):
         return ApplyResult(rc=2, message="materialize failed (nothing written): "
                                          f"{ensure_load_message(missing)}")
+    path_pass = _path_pass(pathing=pathing, pkg_dirs=host_search_dirs, index=verify_index,
+                           defaults=defaults, schema_resolver=schema_resolver)
     if os.environ.get(_NATIVE_ENV) == "1":             # temporary editor-free gate, see _NATIVE_ENV
         return _materialize_native(
             result=result, materialized_order=mo, search_dirs=host_search_dirs, out_path=out_path,
             state_dir=state_dir, expected=_expected_level(result, mo), defaults=defaults,
             index=verify_index, schema=verify_schema, schema_resolver=schema_resolver,
-            no_verify=no_verify, keep_build=keep_build, no_bsp_check=no_bsp_check, ignore=ignore)
+            path_pass=path_pass, no_verify=no_verify, keep_build=keep_build,
+            no_bsp_check=no_bsp_check, ignore=ignore)
     ed_id = uuid7()                                    # bare uuid → editor_container keeps all groups
     bsp_notes = ""
     try:
@@ -515,7 +550,7 @@ def run_materialize(*, level, out_path, overwrite, state_dir, schema_resolver,
         host_out.parent.mkdir(parents=True, exist_ok=True)
         _save_and_swap_verified(ed, out_path, _expected_level(result, mo), work_out=work_out,
                                 defaults=defaults, state_dir=state_dir, index=verify_index,
-                                schema=verify_schema, no_verify=no_verify,
+                                schema=verify_schema, path_pass=path_pass, no_verify=no_verify,
                                 keep_build=keep_build, ignore=ignore)
         # Build+save succeeded: run the two advisory BSP health checks (owner design 2026-08-03).
         # ADVISORY ONLY — the map is already written; these must never turn a good build into a

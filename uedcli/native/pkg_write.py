@@ -187,6 +187,55 @@ def _enc_exports(exports: list[ExportRec]) -> bytes:
     return bytes(out)
 
 
+# --- re-lay an existing package with replaced bodies --------------------------
+
+def _names_end(buf: bytes, version: int, namecnt: int, nameoff: int) -> int:
+    pos = nameoff
+    for _ in range(namecnt):
+        if version < 64:
+            pos = buf.index(b"\x00", pos) + 1
+        else:
+            length, pos = read_ci(buf, pos)
+            pos += length
+        pos += 4
+    return pos
+
+
+def relayout_package(pkg, *, bodies: dict[int, bytes], new_names: list[str] = ()) -> bytes:
+    """Re-lay a parsed package (`upackage.Package`: `buf` + tables) with the export bodies in
+    `bodies` (0-based export index -> new body) replaced and every other body, the header (GUID,
+    generations), the name table and the import table kept byte-for-byte. `new_names` are appended
+    to the name table (table-context flags); the header's name count and the last generation record
+    follow. Export sizes/offsets are re-encoded — the canonical compact-index encoding the engine
+    itself writes, so an unchanged package round-trips byte-identical."""
+    buf = pkg.buf
+    (_tag, ver_l, _flags, namecnt, nameoff, _expcnt, _expoff,
+     _impcnt, impoff) = struct.unpack_from("<9I", buf, 0)
+    version = ver_l & 0xFFFF
+    out = bytearray(buf[:_names_end(buf, version, namecnt, nameoff)])
+    for n in new_names:
+        b = n.encode("latin-1") + b"\x00"
+        out += write_ci(len(b)) + b + struct.pack("<I", NameTable.NAME_FLAGS)
+    exports = []
+    for i, e in enumerate(pkg.exports):
+        body = bodies.get(i, buf[e["soff"]:e["soff"] + e["ssize"]])
+        rec = ExportRec(cls=e["cls"], super_ref=e["sup"], outer=e["outer"], name=e["nm"],
+                        flags=e["flags"], body=body, serial_offset=len(out) if body else 0)
+        out += body
+        exports.append(rec)
+    new_impoff = len(out)
+    out += _enc_imports([ImportRec(*im) for im in pkg.imports])
+    new_expoff = len(out)
+    out += _enc_exports(exports)
+    struct.pack_into("<I", out, 12, namecnt + len(new_names))
+    struct.pack_into("<I", out, 24, new_expoff)
+    struct.pack_into("<I", out, 32, new_impoff)
+    if new_names and version >= 68:
+        gencount, = struct.unpack_from("<I", buf, 52)
+        struct.pack_into("<I", out, 56 + 8 * (gencount - 1) + 4, namecnt + len(new_names))
+    return bytes(out)
+
+
 # --- reader (self-check re-parse) -----------------------------------------
 
 @dataclass

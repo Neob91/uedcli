@@ -11,7 +11,7 @@ Create, inspect, lint, import/reimport, build, and photograph a level. Most verb
 | [`level list [--json]`](list.md) | list the project's levels (trunk dirs under `<maps>`), one name per line to stdout (pipe-friendly); a count + the active `$UEDCLI_LEVEL` go to stderr |
 | [`level status [--tree KIND/NAME] [--json]`](status.md) | thin read-only dashboard for the current level (or a `--tree` box): actor counts, duplicate `order_value`s, git state |
 | [`level doctor [--json] [--severity …] [--category …]`](doctor.md) | statically check the level for BSP/geometry problems, fully offline |
-| [`level materialize [--out OUT] [--overwrite] …`](materialize.md) | drive UnrealEd to compile the trunk into the `.dx`/`.unr` build artifact |
+| [`level materialize [--out OUT] [--overwrite] …`](materialize.md) | drive UnrealEd to compile the trunk into the `.dx`/`.unr` build artifact; optionally builds the AI path graph into it natively |
 | [`level photo SHOT… --out-dir DIR …`](photo.md) | render still first-person shots of the current level from arbitrary camera poses |
 
 See also: [`event graph`](../event.md) (level lint & trigger wiring), [Level lifecycle](../../usage/README.md) for the create → populate → materialize → photo → hand-edit → reimport round trip.

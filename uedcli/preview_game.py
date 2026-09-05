@@ -58,6 +58,7 @@ class MaterializeResources:
     never on a cache hit)."""
     composed_dirs: list[str]
     schema_resolver: object
+    pathing: str                    # the game's path-build preset (`config.effective_pathing`)
 
 
 # The host-side per-substrate table (spec §5 gate fold — the .uc driver seam can't cover
@@ -175,7 +176,7 @@ def materialized_dx(project, level_name: str, level, *, rebuild: bool,
         return target
     res = provide_resources()                     # cache MISS: resolve the project inputs now
     result = run_materialize(level=level, search_dirs=res.composed_dirs,
-                             schema_resolver=res.schema_resolver,
+                             schema_resolver=res.schema_resolver, pathing=res.pathing,
                              state_dir=config.state_dir(project.root, create=True),
                              out_path=str(target), overwrite=True)
     if result.rc != 0:

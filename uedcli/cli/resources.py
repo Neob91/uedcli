@@ -72,6 +72,27 @@ def composed_dirs(project) -> list[str]:
     return config.composed_search_dirs(project, user_config)
 
 
+def pathing_for(project, *, verb: str) -> str:
+    """The game's `pathing` preset for a verb that REQUIRES an active preset (`config.require_pathing`):
+    a missing games config, an unknown game or a missing key is a clean exit 2 naming the verb and
+    the key. Reserved for a future verb (not `level materialize`/`level photo` — see
+    `resolved_pathing`)."""
+    user_config = config.load_user_config()
+    if user_config is None:
+        raise ProjectError(f"{verb}: {NO_GAMES_CONFIG}")
+    return config.require_pathing(config.select_substrate(project, user_config), verb=verb)
+
+
+def resolved_pathing(project) -> str:
+    """The game's `pathing` preset for `level materialize`/`level photo`: `"none"` when the key or
+    the games config is absent, never an error (`config.effective_pathing`) — an old project config
+    keeps building path-less maps exactly as before this feature existed."""
+    user_config = config.load_user_config()
+    if user_config is None:
+        return "none"
+    return config.effective_pathing(config.select_substrate(project, user_config))
+
+
 def ignore_props_for(project) -> tuple[str, ...]:
     """The game's `ignore_props` (`Package.Class.prop` the post-verify ignores — authored props the
     game's engine adds to a base class the materialize editor's engine package lacks). Empty when no

@@ -74,6 +74,36 @@ class Substrate:
     # package does not have, so they can never round-trip (e.g. DeusEx's `Engine.Actor.bOwned` under
     # the UED22 editor). Compared and dropped with a stderr warning, never silently.
     ignore_props: tuple[str, ...] = ()
+    # The AI path-build rule set `level materialize` / `level paths define` run for this game
+    # (`PATHING_PRESETS`). None = key absent; the two verbs that build paths refuse it at their use
+    # site (`require_pathing`), every other verb never reads it.
+    pathing: str | None = None
+
+
+# The `pathing` presets: which engine's path builder `level materialize` reproduces
+# (`native/pathrules.py`), or `none` for a path-less map.
+PATHING_PRESETS = ("deusex-1112fm", "ued22-469", "none")
+
+
+def require_pathing(substrate: Substrate, *, verb: str) -> str:
+    """The game's `pathing` preset, or `ConfigError` (exit 2) naming the missing key and the allowed
+    values. Reserved for a future verb that REQUIRES an active preset to do anything useful (e.g.
+    the not-yet-shipped PathNode placer) — not called by `level materialize`/`level photo`, which
+    use `effective_pathing` instead so an old config keeps building path-less maps exactly as
+    before this feature existed."""
+    if substrate.pathing is None:
+        raise ConfigError(
+            f"{verb}: [games.{substrate.name}].pathing is not set in the user config; set it to one "
+            f"of {', '.join(PATHING_PRESETS)}")
+    return substrate.pathing
+
+
+def effective_pathing(substrate: Substrate) -> str:
+    """The game's `pathing` preset for a verb that can build paths but doesn't have to: an absent
+    key is `"none"` (build no graph — the behavior every project had before this feature existed),
+    never an error. `level materialize`/`level photo` use this so merging the path-build feature
+    cannot break an existing project's config."""
+    return substrate.pathing or "none"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -292,7 +322,7 @@ def load_user_config(override: str | None = None) -> UserConfig | None:
         where = f"{path} [games.{name}]"
         if not isinstance(tbl, dict):
             raise ConfigError(f"{where}: must be a table")
-        _reject_unknown(tbl, {"paths", "ignore_props"}, where)
+        _reject_unknown(tbl, {"paths", "ignore_props", "pathing"}, where)
         paths = tbl.get("paths")
         if not isinstance(paths, str) or not paths.strip():
             raise ConfigError(f"{where}: required key 'paths' (a colon-separated dir list) is missing")
@@ -308,7 +338,12 @@ def load_user_config(override: str | None = None) -> UserConfig | None:
         for entry in ignore:
             if entry.count(".") < 2:
                 raise ConfigError(f"{where}: ignore_props entry must be Package.Class.prop: {entry!r}")
-        games[name] = Substrate(name=name, paths=paths, ignore_props=tuple(ignore))
+        pathing = tbl.get("pathing")
+        if pathing is not None and pathing not in PATHING_PRESETS:
+            raise ConfigError(f"{where}: 'pathing' must be one of {', '.join(PATHING_PRESETS)}, "
+                              f"got {pathing!r}")
+        games[name] = Substrate(name=name, paths=paths, ignore_props=tuple(ignore),
+                                pathing=pathing)
     return UserConfig(games=games, source=path)
 
 

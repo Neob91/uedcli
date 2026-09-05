@@ -79,6 +79,14 @@ def register(sub) -> None:
                            "detection). Those go to stderr and never change the exit code")
     _tree_flag(lmat, level_only=True)   # build a named level explicitly instead of $UEDCLI_LEVEL
 
+    # `level paths define` (native PathNode auto-placement) is NOT registered here yet: its
+    # placement algorithm (`createPaths`) is unimplemented (`uedcli/native/pathplace.py` raises
+    # `PathError("not implemented")` today) — see root `NATIVE-PATHING.md` "Not done" #1. The
+    # command function (`_level_paths_define` in `cli/commands/level.py`) and its dispatch route
+    # exist and are exercised directly by `tests/test_level_paths_define.py`; re-add the
+    # `lsub.add_parser("paths", ...)` block (removed 2026-09-05, see git history on this line) once
+    # the placer is real.
+
     lprev = lsub.add_parser(
         "photo",
         help="render freely-posed still shots of $UEDCLI_LEVEL. The default --game "

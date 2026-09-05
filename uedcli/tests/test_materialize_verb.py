@@ -55,7 +55,7 @@ def test_it_refuses_to_overwrite_an_existing_out(tmp_path, _stub_editor):
     out = tmp_path / "Map.dx"
     out.write_text("hand-placed")
     r = run_materialize(level=_one_actor_level(),
-                        schema_resolver=_NO_PACKAGES,
+                        schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / '.uedcli', out_path=str(out), overwrite=False)
     assert r.rc == 2 and str(out) in r.message
     assert out.read_text() == "hand-placed"                 # untouched
@@ -65,7 +65,7 @@ def test_it_allows_overwrite_with_the_flag(tmp_path, _stub_editor):
     out = tmp_path / "Map.dx"
     out.write_text("old")
     r = run_materialize(level=_one_actor_level(),
-                        schema_resolver=_NO_PACKAGES,
+                        schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / '.uedcli', out_path=str(out), overwrite=True)
     assert r.rc == 0
 
@@ -79,7 +79,7 @@ def test_relative_out_resolves_against_the_cwd(tmp_path, monkeypatch, _stub_edit
     monkeypatch.chdir(sub)
     (sub / "Map.dx").write_text("hand-placed")
     r = run_materialize(level=_one_actor_level(),
-                        schema_resolver=_NO_PACKAGES,
+                        schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / ".uedcli",
                         out_path="Map.dx", overwrite=False)
     assert r.rc == 2 and "Map.dx" in r.message              # guard hit the cwd-resolved target
@@ -88,7 +88,7 @@ def test_relative_out_resolves_against_the_cwd(tmp_path, monkeypatch, _stub_edit
 
 def test_it_rejects_a_non_map_extension(tmp_path, _stub_editor):
     r = run_materialize(level=_one_actor_level(),
-                        schema_resolver=_NO_PACKAGES,
+                        schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / '.uedcli',
                         out_path=str(tmp_path / "Map.txt"), overwrite=False)
     assert r.rc == 2 and ".dx" in r.message
@@ -96,7 +96,7 @@ def test_it_rejects_a_non_map_extension(tmp_path, _stub_editor):
 
 def test_it_rejects_a_directory_out(tmp_path, _stub_editor):
     r = run_materialize(level=_one_actor_level(),
-                        schema_resolver=_NO_PACKAGES,
+                        schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / '.uedcli',
                         out_path=str(tmp_path), overwrite=False)
     assert r.rc == 2 and "directory" in r.message
@@ -111,7 +111,7 @@ def test_it_tears_the_ephemeral_container_down_even_on_a_build_error(tmp_path, m
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("boom")))
     monkeypatch.setattr(applymod, "_level_defaults", lambda level, *, resolver: StubDefaults())
     r = run_materialize(level=_one_actor_level(),
-                        schema_resolver=_NO_PACKAGES,
+                        schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / '.uedcli',
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 2 and "nothing written" in r.message
@@ -134,7 +134,7 @@ def test_an_unresolvable_class_exits_2_naming_the_actor_and_never_starts_the_edi
     monkeypatch.setattr(applymod, "stop_editor", lambda ed_id, sd: None)
     monkeypatch.setattr(applymod, "Driver", lambda container=None: mock.Mock())
     r = run_materialize(level=_one_actor_level(cls="Camera"),
-                        schema_resolver=_NO_PACKAGES,
+                        schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 2
@@ -152,7 +152,7 @@ def test_no_verify_does_not_require_resolvable_class_defaults(tmp_path, monkeypa
     monkeypatch.setattr(applymod, "_materialize", lambda *a, **k: None)
     monkeypatch.setattr(applymod, "_save_and_swap_verified", lambda *a, **k: None)
     r = run_materialize(level=_one_actor_level(cls="Camera"),
-                        schema_resolver=_NO_PACKAGES, no_verify=True,
+                        schema_resolver=_NO_PACKAGES, pathing="none", no_verify=True,
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 0
@@ -174,7 +174,7 @@ def test_the_resolved_defaults_reach_the_post_verify(tmp_path, monkeypatch):
                         lambda **kw: seen.update(kw) or VerifyResult(ok=True))
     monkeypatch.setattr(xfer, "cp_out", lambda c, src, dst: Path(dst).write_bytes(b"dx"))
     monkeypatch.setattr(xfer, "remove", lambda *a, **k: None)
-    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 0
@@ -198,7 +198,7 @@ def test_an_unresolvable_class_in_the_BUILT_map_is_a_clean_exit_2(tmp_path, monk
     monkeypatch.setattr(xfer, "cp_out", lambda *a, **k: None)   # the .dx is cp'd to host BEFORE verify
     monkeypatch.setattr(xfer, "remove", lambda *a, **k: None)
     out = tmp_path / "New.dx"
-    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / ".uedcli", out_path=str(out), overwrite=False)
     assert r.rc == 2
     assert "'Cam_x'" in r.message and "Camera" in r.message
@@ -219,7 +219,7 @@ def test_a_referenced_package_absent_from_the_path_exits_2_before_the_editor(tmp
     monkeypatch.setattr(applymod, "_level_defaults", lambda level, *, resolver: StubDefaults())
     out = tmp_path / "New.dx"
     r = run_materialize(level=_one_actor_level(cls="Krq7Content.Crate"),
-                        schema_resolver=_NO_PACKAGES, search_dirs=[],
+                        schema_resolver=_NO_PACKAGES, pathing="none", search_dirs=[],
                         state_dir=tmp_path / ".uedcli", out_path=str(out), overwrite=False)
     assert r.rc == 2 and "Krq7Content" in r.message and "nothing written" in r.message
     assert not started                                   # gate fired before the editor
@@ -235,7 +235,7 @@ def test_the_referenced_package_gate_is_independent_of_no_verify(tmp_path, monke
     monkeypatch.setattr(applymod, "stop_editor", lambda ed_id, sd: None)
     monkeypatch.setattr(applymod, "Driver", lambda container=None: mock.Mock())
     r = run_materialize(level=_one_actor_level(cls="Krq7Content.Crate"),
-                        schema_resolver=_NO_PACKAGES, search_dirs=[], no_verify=True,
+                        schema_resolver=_NO_PACKAGES, pathing="none", search_dirs=[], no_verify=True,
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 2 and "Krq7Content" in r.message
@@ -245,7 +245,7 @@ def test_the_referenced_package_gate_is_independent_of_no_verify(tmp_path, monke
 def test_only_always_loaded_packages_pass_the_gate(tmp_path, _stub_editor):
     """Engine/Core/Editor are substrate code always resident (never OBJ LOADed), so a level that
     references only them (here `Engine.Light`) must NOT trip the missing-package gate."""
-    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES, search_dirs=[],
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES, pathing="none", search_dirs=[],
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 0
@@ -263,7 +263,7 @@ def test_several_missing_referenced_packages_report_as_one_sorted_set(tmp_path, 
     lvl = Level(actors={"A_1": Actor(name="A_1", cls="Zeta9.Deco", location=(1, 2, 3)),
                         "B_2": Actor(name="B_2", cls="Alpha3.Deco", location=(4, 5, 6))},
                 order=["A_1", "B_2"])
-    r = run_materialize(level=lvl, schema_resolver=_NO_PACKAGES, search_dirs=[],
+    r = run_materialize(level=lvl, schema_resolver=_NO_PACKAGES, pathing="none", search_dirs=[],
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 2 and not started
@@ -299,6 +299,7 @@ def test_materialize_resolves_the_trunk(tmp_path, monkeypatch):
     monkeypatch.setattr("uedcli.apply.run_materialize", fake_run)
     monkeypatch.setattr("uedcli.cli.resources.composed_load_set", lambda p: ["Engine", "DeusExDeco"])
     monkeypatch.setattr("uedcli.cli.resources.composed_dirs", lambda p: ["/g/Textures"])
+    monkeypatch.setattr("uedcli.cli.resources.pathing_for", lambda p, *, verb: "none")
     rc = dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),
                                out=str(tmp_path / "out.dx"), overwrite=False))
     assert rc == 0
@@ -318,6 +319,7 @@ def test_materialize_warns_on_duplicate_order_value(tmp_path, monkeypatch, capsy
                         lambda **kw: ApplyResult(rc=0, message="ok"))
     monkeypatch.setattr("uedcli.cli.resources.composed_load_set", lambda p: [])
     monkeypatch.setattr("uedcli.cli.resources.composed_dirs", lambda p: [])
+    monkeypatch.setattr("uedcli.cli.resources.pathing_for", lambda p, *, verb: "none")
     rc = dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),
                                out=str(tmp_path / "out.dx"), overwrite=False))
     assert rc == 0
@@ -332,6 +334,7 @@ def test_materialize_advises_when_the_composed_path_resolves_zero_packages(tmp_p
     monkeypatch.setattr("uedcli.apply.run_materialize", lambda **kw: ApplyResult(rc=0, message="ok"))
     monkeypatch.setattr("uedcli.cli.resources.composed_load_set", lambda p: [])
     monkeypatch.setattr("uedcli.cli.resources.composed_dirs", lambda p: [])
+    monkeypatch.setattr("uedcli.cli.resources.pathing_for", lambda p, *, verb: "none")
     rc = dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),
                                out=str(tmp_path / "out.dx"), overwrite=False))
     assert rc == 0
@@ -344,6 +347,7 @@ def test_materialize_prints_no_advisory_when_the_composed_path_is_non_empty(tmp_
     monkeypatch.setattr("uedcli.apply.run_materialize", lambda **kw: ApplyResult(rc=0, message="ok"))
     monkeypatch.setattr("uedcli.cli.resources.composed_load_set", lambda p: ["Engine", "DeusExDeco"])
     monkeypatch.setattr("uedcli.cli.resources.composed_dirs", lambda p: ["/g/Textures"])
+    monkeypatch.setattr("uedcli.cli.resources.pathing_for", lambda p, *, verb: "none")
     rc = dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),
                                out=str(tmp_path / "out.dx"), overwrite=False))
     assert rc == 0
@@ -398,7 +402,7 @@ def test_run_materialize_threads_search_dirs_into_mounts_and_ensure_load(tmp_pat
     monkeypatch.setattr(applymod, "_level_defaults", lambda level, *, resolver: StubDefaults())
 
     r = run_materialize(level=_one_actor_level(),
-                        schema_resolver=_NO_PACKAGES,
+                        schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / '.uedcli',
                         search_dirs=["/g/Textures", "/g/System"],
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
@@ -440,7 +444,7 @@ def test_a_successful_build_runs_the_bsp_checks_and_returns_their_notes_at_rc0(t
              "  [WARN ] degenerate @(1.0, 2.0, 3.0): BSP node 7 (surf 3) has ~zero area"]
     monkeypatch.setattr(checksmod, "run_bsp_checks",
                         lambda driver, *, log_offset, dx_path: notes)
-    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 0                                  # advisory: findings never change the exit code
@@ -451,7 +455,7 @@ def test_no_bsp_check_suppresses_both_checks(tmp_path, monkeypatch, _stub_editor
     import uedcli.bsp.checks as checksmod
     monkeypatch.setattr(checksmod, "run_bsp_checks",
                         lambda *a, **k: pytest.fail("run_bsp_checks must not be called under --no-bsp-check"))
-    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / ".uedcli", no_bsp_check=True,
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 0
@@ -464,7 +468,7 @@ def test_a_bsp_check_that_raises_does_not_fail_the_build(tmp_path, monkeypatch, 
     import uedcli.bsp.checks as checksmod
     monkeypatch.setattr(checksmod, "run_bsp_checks",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("parser exploded")))
-    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 0                                  # NOT "materialize failed (nothing written)"
@@ -480,18 +484,80 @@ def test_the_native_gate_routes_around_the_editor_entirely(tmp_path, monkeypatch
     seen = {}
     monkeypatch.setattr(applymod, "_materialize_native",
                         lambda **kw: seen.update(kw) or ApplyResult(rc=0, message="materialized New.dx"))
-    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / ".uedcli", keep_build=True,
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 0
     assert seen["keep_build"] is True and seen["expected"].order == ["A_1"]
+    assert seen["path_pass"] is None                  # `pathing = "none"`: no pass, the map as built
+
+
+@pytest.fixture
+def _stub_editor_keep_swap(monkeypatch):
+    """`_stub_editor` minus the `_save_and_swap_verified` stub: the real cp_out -> path pass ->
+    verify sequence runs, with `cp_out` writing a fake saved map and the install captured."""
+    monkeypatch.delenv("UEDCLI_NATIVE_MATERIALIZE", raising=False)
+    monkeypatch.setattr(applymod, "ensure_editor", lambda ed_id, **kw: "uned-stub")
+    monkeypatch.setattr(applymod, "stop_editor", lambda ed_id, sd: None)
+    monkeypatch.setattr(applymod, "Driver", lambda container=None: mock.Mock(container="c"))
+    monkeypatch.setattr(applymod, "_materialize", lambda *a, **k: None)
+    monkeypatch.setattr(applymod, "_level_defaults", lambda level, *, resolver: StubDefaults())
+    monkeypatch.setattr("uedcli.native.unbuilt.serialization_rank_resolver", lambda dirs: None)
+    monkeypatch.setattr(xfer, "cp_out", lambda c, src, dst: Path(dst).write_bytes(b"saved"))
+    monkeypatch.setattr(xfer, "remove", lambda *a, **k: None)
+
+
+def test_the_path_pass_runs_on_both_build_paths_before_the_verify(tmp_path, monkeypatch,
+                                                                  _stub_editor_keep_swap):
+    """Both materialize paths hand the BUILT map to the path pass and verify + install ITS output
+    (spec §3): the editor path after `cp_out`, the native path on the assembled bytes."""
+    from uedcli.native import paths as native_paths
+    seen = []
+
+    def fake_pass(dx, *, pathing, index, defaults, rank_for):
+        seen.append((dx, pathing))
+        return dx + b"+paths"
+    monkeypatch.setattr(native_paths, "apply_path_pass", fake_pass)
+    installed = []
+    monkeypatch.setattr(applymod, "_verify_and_install",
+                        lambda staging, **kw: installed.append(staging.read_bytes()))
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+                        pathing="ued22-469", state_dir=tmp_path / ".uedcli", search_dirs=[],
+                        out_path=str(tmp_path / "New.dx"), overwrite=False)
+    assert r.rc == 0 and seen == [(b"saved", "ued22-469")] and installed == [b"saved+paths"]
+    # native path: the assembled bytes
+    monkeypatch.setenv("UEDCLI_NATIVE_MATERIALIZE", "1")
+    monkeypatch.setattr("uedcli.native.unbuilt.assemble_unbuilt", lambda level, **kw: (b"built", []))
+    monkeypatch.setattr("uedcli.native.materialize.build_world_model", lambda level, **kw: (None, []))
+    monkeypatch.setattr("uedcli.native.materialize.gather_lights", lambda level, **kw: [])
+    monkeypatch.setattr("uedcli.native.materialize.resolve_zone_actors", lambda level, m: {})
+    monkeypatch.setattr(applymod, "_assembly_level", lambda *a: (_one_actor_level(), None))
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+                        pathing="deusex-1112fm", state_dir=tmp_path / ".uedcli", search_dirs=[],
+                        out_path=str(tmp_path / "New2.dx"), overwrite=False, no_bsp_check=True)
+    assert r.rc == 0, r.message
+    assert seen[-1] == (b"built", "deusex-1112fm") and installed[-1] == b"built+paths"
+
+
+def test_a_path_pass_error_is_a_clean_exit_2_and_writes_nothing(tmp_path, monkeypatch,
+                                                                _stub_editor_keep_swap):
+    from uedcli.native import paths as native_paths
+    monkeypatch.setattr(native_paths, "apply_path_pass",
+                        lambda dx, **kw: (_ for _ in ()).throw(native_paths.PathPassError(
+                            "actor 'Warp0' is a WarpZoneInfo")))
+    out = tmp_path / "New.dx"
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+                        pathing="ued22-469", state_dir=tmp_path / ".uedcli", search_dirs=[],
+                        out_path=str(out), overwrite=False)
+    assert r.rc == 2 and "Warp0" in r.message and "nothing written" in r.message
+    assert not out.exists()
 
 
 def test_without_the_native_gate_materialize_still_drives_the_editor(tmp_path, monkeypatch,
                                                                      _stub_editor):
     monkeypatch.setattr(applymod, "_materialize_native",
                         lambda **kw: pytest.fail("the default path routed to the native build"))
-    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
+    r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES, pathing="none",
                         state_dir=tmp_path / ".uedcli",
                         out_path=str(tmp_path / "New.dx"), overwrite=False)
     assert r.rc == 0
@@ -505,6 +571,7 @@ def test_dispatch_prints_bsp_notes_to_stderr(tmp_path, monkeypatch, capsys):
                                                            "build succeeded):\n  built-model defects:"))
     monkeypatch.setattr("uedcli.cli.resources.composed_load_set", lambda p: ["Engine"])
     monkeypatch.setattr("uedcli.cli.resources.composed_dirs", lambda p: ["/g/Textures"])
+    monkeypatch.setattr("uedcli.cli.resources.pathing_for", lambda p, *, verb: "none")
     rc = dispatch.dispatch(_ns(cmd="level", sub="materialize", project=str(proj),
                                out=str(tmp_path / "out.dx"), overwrite=False, no_bsp_check=False))
     assert rc == 0

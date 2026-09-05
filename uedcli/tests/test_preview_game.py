@@ -54,7 +54,8 @@ def _proj(tmp_path):
 
 
 def _resources(*, dirs=(), schema=None):
-    return pg.MaterializeResources(composed_dirs=list(dirs), schema_resolver=schema)
+    return pg.MaterializeResources(composed_dirs=list(dirs), schema_resolver=schema,
+                                   pathing="none")
 
 
 class _Provider:

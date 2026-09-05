@@ -233,14 +233,19 @@ loop while stillmoving:
 restore position and velocity; return success ? reachFlags : 0
 ```
 
-`walkMove` = `MoveActor(Delta)` with the scout's cylinder against the BSP and blocking actors
-(pawns/decorations ignored; the code blocks on a Mover iff the scout has `bCollideWorld` and the
-Mover `bBlockActors`, `IsBlockedBy ued 0x10113fd0`; nothing opens doors, nothing emits `R_DOOR`).
-On a hit: step up `MaxStepHeight`, finish the move, step down; wall if the landing normal has
-`Z < 0.7`; then a floor probe `MaxStepHeight + 2` down: no floor → −1, floor with `Normal.Z < 0.7`
-→ −1. 🔬 Live, a closed `Engine.Mover` across a corridor did **not** block the UED22 build
-(`pathlab2` `F_N00↔F_N01` plain WALK); whether the imported Mover had `bBlockActors` was not checked
-(§9).
+`walkMove` = `MoveActor(Delta)` with the scout's cylinder against the BSP. **Movers never block a
+path build, in either engine, regardless of `bBlockActors`** ✅ — `IsBlockedBy` (`ued 0x10113fd0`)
+is real code, but the actor-collision query that would call it is `MultiLineCheck`'s `if
+(bCheckActors && Hash)` (`Hash` = the level's collision-hash index), and the path build's scout is
+never added to that hash, so the condition is always false. The same `Hash == NULL` makes
+`CheckEncroachment` a no-op too (`dx 0x1039a3f1` / `ued 0x1015f3f4`: no hash → no hits). Confirmed
+two ways: reading the gate, and data — `pathlab2`'s closed `bBlockActors` door pair reachspecs as
+plain WALK in the live UED22 golden, and 15 retail Bar pairs cross closed doors in the LOS
+pre-check; a native rebuild that traces Mover models as collision volumes loses exactly those
+pairs from both goldens, and one that ignores Movers (as the engine does) reproduces all of them.
+Nothing opens doors, nothing emits `R_DOOR`. On a hit: step up `MaxStepHeight`, finish the move,
+step down; wall if the landing normal has `Z < 0.7`; then a floor probe `MaxStepHeight + 2` down:
+no floor → −1, floor with `Normal.Z < 0.7` → −1.
 
 Jumps: `FindBestJump` runs `jumpLanding`, a ballistic simulation at `dt = 0.1` (≤ 35 steps, `|v|² ≤
 2.5e6`, `ZoneGravity`/`ZoneFluidFriction`/`ZoneVelocity`), with `JumpZ` and `SuggestJumpVelocity`'s
@@ -439,17 +444,20 @@ are `createPaths`' merge radii); `supports` is pawn ⊇ spec; the size sweep is 
 every spec test; 48 is `FindJumpUp`'s step-up; `R_DOOR=16`/`R_PLAYERONLY=64` are confirmed by
 `calcMoveFlags`; `Paths` is descending, not "compact-sorted"; the on-disk
 `nextNavigationPoint`/`NavigationPointList`/`visitedWeight`/`bestPathWeight` are real and must be
-written; LOWOPT/HIGHOPT do nothing.
+written; LOWOPT/HIGHOPT do nothing. §3.4's Mover-blocking paragraph and the two bullets below it are
+also corrected from an earlier draft of this doc: Movers were thought to block per `IsBlockedBy`'s
+`bBlockActors` test; the collision-layer spike (`dev/docs/spikes/2026-09-05-pathing-build-re/
+findings/60-collision.md`, `uedcli-native/src/collision.rs`) found the actor-collision query itself
+never runs during a path build (no collision hash), so `IsBlockedBy` is never reached and Movers
+never block, in either engine, regardless of `bBlockActors` — confirmed against both the UED22
+goldens and the retail Bar. The same spike settled `FarMoveActor(bTest=1)`: it does write the
+actor's new `Location`, in both engines (`ued 0x101601bc`, gated only by a `CollisionTag` check that
+is itself skipped whenever `bTest`; `dx`'s `FarMoveActor` has no such gate at all).
 
 ## 9. Open questions
 
 - `dx` explorer handedness (`exploreWall` starts `followWall` with `R(N)`, `followWall` turns
   `L(N)`): needs a live `PATHS BUILD` in a Deus Ex editor or `UModel::LineCheck`'s normal sign.
-- Movers: the code says a `bBlockActors` Mover blocks the scout; live, a closed `Engine.Mover` did
-  not. Check the imported Mover's collision flags, or re-run with an explicit `bBlockActors=True`.
-- `FarMoveActor(bTest=1)`: one reading (`dx`, `findings/20` §3.6) has it leave the actor in place,
-  another (`ued`, `findings/11` §5) has it move; it decides where `findScoutStart`'s fallback and
-  `addVisNoReach`'s scout actually stand on `dx`.
 - Why `dx` flags so few drops `R_JUMP` (§7); `ued`'s merge/"closest path" moves of hand-placed
   nodes were read, not exercised live.
 - Whether the retail designers ever ran `PATHS BUILD` (no data trace either way); the residue
