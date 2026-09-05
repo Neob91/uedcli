@@ -161,6 +161,14 @@ def build_native_lit_dx(trunk_dir: Path, project_root: Path) -> tuple[bytes, lis
 
     level, _ranks = trunk_mod.read_level(trunk_dir)
     ci = class_index()
+    # What `level materialize` actually emits: `apply._materialize_native` runs the level through
+    # `_assembly_level`, which stamps every mover's key-0 base pose (`BasePos = Location`,
+    # `BaseRot = Rotation`). Skipping it made this harness compare a package the product never
+    # produces, and `LIGHT APPLY` normalises `Location = BasePos` -- so a missing BasePos drops the
+    # mover at the origin (NYC_Bar N=59).
+    from uedcli.movers import set_base_pose
+    for name in level.order:
+        set_base_pose(level.actors[name], ci)
     resolver = packages.schema_resolver(project, user_config)
     defaults = ClassDefaults(resolver)
     lights = gather_lights(level, defaults=defaults)
@@ -169,7 +177,7 @@ def build_native_lit_dx(trunk_dir: Path, project_root: Path) -> tuple[bytes, lis
     dx_bytes, warnings = assemble_unbuilt(
         level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=world_model,
         csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, world_model),
-        light_names=[n for n, *_rest in lights])
+        light_names=[n for n, *_rest in lights], class_defaults=defaults)
     return dx_bytes, list(warnings)
 
 

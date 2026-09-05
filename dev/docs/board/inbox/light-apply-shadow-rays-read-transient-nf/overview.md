@@ -1,6 +1,6 @@
 +++
 priority = "p1"
-kind = "bug"
+kind = "debug"
 summary = "UNATCO N=26 lighting diverges because UED22's shadow ray reads a stray NF_BoxOccluded bit written at a fixed 1024-byte stride into Model.Nodes; not portable, needs an owner ruling."
 +++
 

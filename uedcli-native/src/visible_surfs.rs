@@ -29,12 +29,26 @@
 //! rasterizer internals — sanctioned by the task brief when the fixture comparison doesn't show a
 //! systematic edge-stepping mismatch)
 //!
-//! - **Span buffer = a per-zone boolean pixel grid**, not `FSpanBuffer`'s run-length scanline
-//!   encoding. Front-to-back traversal (near child, self, far child, ordered by the light's side of
-//!   each node's plane) makes a boolean "still visible" grid behaviourally equivalent to the real
-//!   span buffer's accept/subtract semantics: painter's-algorithm-correct because BSP near-to-far
-//!   order guarantees a pixel is never revisited by something CLOSER after something FARTHER already
-//!   claimed it.
+//! - **The RASTERIZER is a functional stand-in, not a port.** [`rasterize_node`] clips the node
+//!   polygon against four side planes with an f32 Sutherland-Hodgman pass and fills each scanline
+//!   from the convex row's min/max x under pixel-CENTRE inclusion (`x0 = ceil(lo-0.5)`,
+//!   `x1 = ceil(hi-0.5)`); the editor runs `ClipBspSurf` (`0x10019987`) into a fixed-point scanline
+//!   setup (`0x1001b470`) with its own fill convention. This is the ONE structural gap left in this
+//!   module, and the pixel-centre rule was chosen EMPIRICALLY (see [`rasterize_node`]'s note), not
+//!   derived — so it is not a "simplification with a stated equivalence", it is an open divergence.
+//!   Scoped 2026-09-05 (board `wanchai-n45-spotlight22-light-runs-differ-on-4`): a WanChai N=44
+//!   build already resolves ~20k accept/prune decisions through it, all of them matching UED22
+//!   today, so replacing it moves the whole corpus at once — a multi-day spike, not a tweak.
+//!
+//!   **NOT a gap (and NOT a boolean pixel grid — an earlier version of this comment said so and sent
+//!   a session down the wrong path):** [`SpanBuf`] is already run-length, a sorted disjoint interval
+//!   list per scanline. [`test_and_maybe_subtract`] is `CopyFromRaster` (`0x1001dd10`, accept only)
+//!   and `CopyFromRasterUpdate` (`0x1001df70`, accept + subtract) under the one
+//!   `PolyFlags & 0x10020047` selector the editor uses at `0x10019b57`; [`merge_into`] is
+//!   `MergeWith` (`0x1001e3b0`), decoded and live-verified against 10 real calls. `ValidLines`
+//!   (`FSpanBuffer+8`, tested `<= 0` at `0x10019961`) differs only in what it counts — the editor
+//!   counts interval NODES, [`SpanBuf::valid_lines`] counts non-empty ROWS — and both are zero
+//!   exactly when the buffer is empty, which is the only thing any reader asks.
 //! - **Frustum-cone reject (board step 6) and render-bound occlusion (step 4) are not ported.**
 //!   Both are described as pure early-out optimizations: the four-plane clip in [`rasterize_node`]
 //!   already yields an empty footprint for anything outside the view cone (step 6's exact outcome),
