@@ -524,19 +524,25 @@ def register(sub) -> None:
     pscl = psub.add_parser(
         "scale", help="resize a face's texture in place (no continuity across faces)")
     pscl.add_argument("targets", nargs="+", metavar="BRUSH:SELECTOR", help=_POLY_TARGETS_HELP)
-    # A plain required flag, NOT a one-member mutually-exclusive group. `--to` (absolute world units
-    # per tile) needs the texture catalog and does not exist yet, and a group holding one argument
-    # only degrades the error text — "one of the arguments --by is required" where the sibling
-    # `rotate` says "the following arguments are required: --by". The group comes back with `--to`.
-    pscl.add_argument("--by", dest="by", type=parse_factor_pair, metavar="FU,FV", required=True,
-                      help="multiply the texture's APPARENT SIZE: --by 2,2 makes it look twice as "
-                           "big, --by 0.5,1 halves its width only. U and V are independent. "
-                           "(Internally this DIVIDES the stored TextureU/TextureV magnitudes, "
-                           "because T3D density is texels per world unit — the flag is named for "
-                           "what you see.) Factors must be positive. The face's own centre keeps "
-                           "its texture coordinate, so the texture grows in place rather than "
-                           "sliding off; scale BEFORE `brush poly align run`, never after, since "
-                           "the run's seam phases are computed for the density they saw")
+    psclm = pscl.add_mutually_exclusive_group(required=True)
+    psclm.add_argument("--by", dest="by", type=parse_factor_pair, metavar="FU,FV",
+                       help="multiply the texture's APPARENT SIZE: --by 2,2 makes it look twice as "
+                            "big, --by 0.5,1 halves its width only. U and V are independent. "
+                            "(Internally this DIVIDES the stored TextureU/TextureV magnitudes, "
+                            "because T3D density is texels per world unit — the flag is named for "
+                            "what you see.) Factors must be positive. The face's own centre keeps "
+                            "its texture coordinate, so the texture grows in place rather than "
+                            "sliding off; scale BEFORE `brush poly align run`, never after, since "
+                            "the run's seam phases are computed for the density they saw. Pure "
+                            "math — needs no project")
+    psclm.add_argument("--to", dest="to", type=parse_factor_pair, metavar="U,V",
+                       help="set the ABSOLUTE density in WORLD UNITS PER TILE: --to 128,128 means "
+                            "the face's own bound texture repeats every 128 uu each way (how a "
+                            "level designer thinks about it) — a SMALLER U,V looks like a BIGGER "
+                            "texture (fewer, larger tiles). Needs a project on the package path to "
+                            "read that texture's pixel size; a face with no bound texture, or an "
+                            "unresolvable ref, exits 2 naming every offender before writing "
+                            "anything. U and V are independent and must be positive")
     _tree_flag(pscl)
 
     # `poly move`: a GEOMETRY verb (not a texture-frame transform) — translate whole faces. Peer of
@@ -588,7 +594,8 @@ def register(sub) -> None:
     # takes --fit-perimeter), so `-h` per mode lists exactly what applies, mirroring `brush build
     # <shape>`. Every mode writes a canonical frame (unit density, Pan zeroed).
     palign = psub.add_parser(
-        "align", help="align faces so a texture flows continuously across them: wall|floor|run")
+        "align", help="align faces' texture frames: wall|floor|run flow continuously across a set, "
+                     "one-tile fits each face independently")
     pamode = palign.add_subparsers(dest="align_mode", required=True)
 
     # Targets grammar shared by all three modes: BRUSH:SELECTOR positionals or a bare brush Name
@@ -622,13 +629,21 @@ def register(sub) -> None:
                             "axes at the seams (the amount is reported to stderr), while a cylinder "
                             "run stays exact at every angle")
     parun.add_argument("--fit-perimeter", dest="fit_perimeter", action="store_true",
-                       help="snap the texture scale so a whole number of TEXELS fits the perimeter "
-                            "(needs a CLOSED run and a quarter --turn, else exit 2). This still "
-                            "leaves ~a whole-texel residual at the closing seam (a texture repeats "
-                            "every T texels, not every texel); the whole-TILE fix that closes the "
-                            "seam needs the texture size and arrives with the catalog. Default "
-                            "leaves the closing seam")
+                       help="snap the texture scale so a whole number of TILES exactly closes the "
+                            "loop (needs a CLOSED run, a quarter --turn, and every face bound to "
+                            "the SAME texture, else exit 2 naming why). Needs a project on the "
+                            "package path to read that texture's pixel size. Default leaves the "
+                            "closing seam")
     _tree_flag(parun)
+
+    paone = pamode.add_parser(
+        "one-tile", help="fit exactly ONE texture tile to each face, independently (a sign, a "
+                        "monitor, a light panel) — stretches non-uniformly to fill, no shared "
+                        "frame, no orientation guard (any face works). Needs a project on the "
+                        "package path: every face's bound texture must resolve, or exit 2 naming "
+                        "every offender")
+    paone.add_argument("targets", nargs="*", metavar="BRUSH:SELECTOR", help=_ALIGN_TARGETS_HELP)
+    _tree_flag(paone)
 
     def _top_arg(s: str):
         if s == "all":

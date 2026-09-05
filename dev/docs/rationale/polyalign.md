@@ -102,3 +102,36 @@ degradation reduces with more segments, where the orthogonal frame's shear halve
 
 **Refs.** `../unrealed/texalign.md`; `../board/inbox/the-per-surface-verb-split/spec.md` (§2.3, §2.4,
 §2.7); `uedcli/polyalign.py`.
+
+## `one-tile`: reusing the projection table, but orthogonalised
+
+`one-tile` fits exactly one texture tile per face, independently — no shared frame, no orientation
+guard. It reuses `wall`/`floor`'s world-axis projection table (`_AXIS_UV`), keyed on the face's own
+argmax axis over all three (not just X-vs-Y), but the raw table's two projected axes are NOT
+perpendicular off that axis — `proj(B₁)·proj(B₂) = −(N·B₁)(N·B₂)`, zero only when `N` is square to
+one of the two. On a corner normal `(0.577,0.577,0.577)` the raw pair is 120° apart, which both
+shears the fitted image and moves the extent's minimum corner off a vertex (the min of a skewed
+parallelogram's projections is not one of its own corners).
+
+**Why it is this way.** Gram-Schmidt of U against V — keep V exactly as the table gives it (the
+predictable up-vector the mode exists for), square U to it. Verified on the same corner normal: the
+pair comes back to exactly 90° and the fit spans exactly `[0, extent]` on both axes. On every
+axis-aligned face (the common case) the table's pair is already orthogonal and this is a no-op.
+
+**Rejected: `U = V × N`.** Also orthogonal, but it re-derives its own sign rather than inheriting the
+table's — it would mirror the image on half the face directions, the one failure this mode must not
+have.
+
+**The anchor is exact only because the frame is orthonormal.** With `Û ⊥ V̂ ⊥ n̂`, the world point
+whose `(Û,V̂)` projections are exactly the extent's minimum corner is `Origin = P0 − (P0·Û)Û −
+(P0·V̂)V̂ + min(pu)Û + min(pv)V̂` for any reference vertex `P0` — algebraically, `P0` with its `Û`/`V̂`
+components replaced by the minimum corner's. Under the skewed (non-orthogonalised) pair this
+construction does not hold, because the minimum of a skewed parallelogram's projections is not
+reachable as a point of the frame at all.
+
+**A zero-extent face is a division guard, not a real path.** A positive-area planar polygon has
+nonzero extent along any direction in its own plane, so `_world_normal`'s zero-area check already
+catches every real degenerate face before the extent guard could fire.
+
+**Refs.** `../board/inbox/the-per-surface-verb-split/spec.md` §2.6;
+`../board/to-plan/per-surface-texture-verbs/spec.md` §4; `uedcli/polyalign.py::_one_tile_align`.

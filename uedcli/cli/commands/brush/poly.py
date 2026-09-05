@@ -154,14 +154,21 @@ def _scale(args, src) -> int:
     targets = target_names.resolve_target_names(args.targets)
     if not targets:
         return 0
+    to = getattr(args, "to", None)
+    # `--to` needs a texture's pixel size; `--by` is pure math and stays project-independent.
+    resolve_dims = resources.texture_dims_resolver(args) if to is not None else None
     level = src.load()
     try:
-        touched = surface.apply_scale(level, targets, by=args.by)
+        touched = surface.apply_scale(level, targets, by=args.by, to=to, resolve_dims=resolve_dims)
     except ValueError as e:
         print(str(e), file=sys.stderr)
         return 2
-    src.save(verb="poly-scale", args={"targets": targets, "by": [str(c) for c in args.by]},
-             level=level, touched=touched)
+    rec_args = {"targets": targets}
+    if args.by is not None:
+        rec_args["by"] = [str(c) for c in args.by]
+    if to is not None:
+        rec_args["to"] = [str(c) for c in to]
+    src.save(verb="poly-scale", args=rec_args, level=level, touched=touched)
     return _print_poly_selectors(level, targets, touched, "scaled")
 
 
@@ -248,11 +255,17 @@ def _align(args, src) -> int:
     tokens = target_names.resolve_target_names(args.targets)     # `-` → stdin (bare names or BRUSH:idx lines)
     if not tokens:
         return 0                                      # empty stdin / no targets: clean no-op
-    level = src.load()
     fit_perimeter = getattr(args, "fit_perimeter", False)        # run-only; absent on wall/floor
     turn = getattr(args, "turn", 0)                              # run-only
+    # `one-tile` always needs a texture's pixel size; `run` only under --fit-perimeter — wall/floor
+    # and a plain `run` stay project-independent. Built before loading the level: a missing project
+    # exits 2 via `package_path_or_exit`'s own message, matching every author-time validation site.
+    needs_dims = mode == "one-tile" or (mode == "run" and fit_perimeter)
+    resolve_dims = resources.texture_dims_resolver(args) if needs_dims else None
+    level = src.load()
     try:
-        touched = polyalign.align(level, tokens, mode, turn=turn, fit_perimeter=fit_perimeter)
+        touched = polyalign.align(level, tokens, mode, turn=turn, fit_perimeter=fit_perimeter,
+                                  resolve_dims=resolve_dims)
         pairs = polyalign.resolve_align_targets(level, tokens)   # the exact aligned face set
     except ValueError as e:
         print(str(e), file=sys.stderr)

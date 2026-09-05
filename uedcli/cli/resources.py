@@ -300,6 +300,31 @@ def package_path_or_exit(args):
         raise CommandError(NO_PACKAGE_PATH)
     return project, user_config, files
 
+
+def texture_dims_resolver(args):
+    """A `ref -> (USize, VSize)` callable over the project's composed package files, built ONCE so
+    its cache (`utexture.TextureResolver._dims_cache`) is shared across every ref a single command
+    invocation looks up. Exits 2 (via `package_path_or_exit`) if the CLI is not run inside a
+    resolvable project — a precondition to building a resolver at all, not a content check.
+
+    The callable RAISES `ValueError` naming the ref and why on any failure, rather than returning a
+    `TextureError` — `apply_scale`'s `--to` path lives in `surface.py`, which does not import
+    `polyalign`, so a plain `ValueError` (which every step-5 caller already catches, `PolyAlignError`
+    included, since it is a `ValueError` subclass) needs no new dispatch wiring. This is the one seam
+    `align run --fit-perimeter`, `align one-tile` and `scale --to` all go through, so the wording is
+    identical everywhere `_validate_texture_ref`'s already is."""
+    _project, _user_config, files = package_path_or_exit(args)
+    resolver = utexture.TextureResolver(files)
+
+    def resolve_dims(ref: str) -> tuple[int, int]:
+        result = resolver.dimensions(ref)
+        if isinstance(result, utexture.TextureError):
+            raise ValueError(f"texture not found: {ref} — {result.detail}")
+        return result
+
+    return resolve_dims
+
+
 # The one explanation appended to both of `mover_index`'s failure messages (a review fix: the
 # "exits 2 naming the verb" promise held on only one of the two routes).
 MOVER_RESOLVER_WHY = ("a class resolver is required because mover detection resolves the actor's "

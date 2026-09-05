@@ -194,7 +194,7 @@ def _note_invisible_highlights(requests: list, shown: set) -> None:
     if unique:
         # "no HIGHLIGHT was drawn", not "nothing was drawn": an index `--annotate` asked for is
         # deliberately kept on a hidden face (numbering is facing-blind and grades hidden faces down), so
-        # on the default `--annotate` that face's number IS on the image — measured at 349 px.
+        # under `--annotate all` that face's number IS on the image — measured at 349 px.
         print(f"note: --highlight {', '.join(unique)} is not visible in this render, so no highlight was "
               f"drawn for it", file=sys.stderr)
 

@@ -278,7 +278,7 @@ def test_it_expands_the_whole_value_keywords():
     assert parse_annotation_spec("highlighted") == parse_annotation_spec("poly:hi")
 
 
-def test_it_maps_the_default_value_to_todays_poly_behavior():
+def test_it_maps_vis_hi_union_to_todays_poly_behavior():
     s = parse_annotation_spec("poly:vis,poly:hi")
     assert s.poly == frozenset({(True, False), (True, True), (False, True)})   # front OR highlighted
 
@@ -320,10 +320,12 @@ def test_onface_is_facing_blind_vis_paints_the_same_faces_as_bare_poly():
     assert _nonbg(visf) > _nonbg(none) > 0
 
 
-def test_default_labels_front_facing_indices_and_none_is_blank():
+def test_default_is_none_and_all_draws_indices():
     dflt = render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.default())
     none = render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.none())
-    assert _nonbg(dflt) > _nonbg(none)                 # default draws indices; none draws no text
+    allf = render_brush_pgm(_brush(), view="iso", size=256, annotations=AnnotationSpec.all())
+    assert dflt == none                                # poly numbers are opt-in: default draws nothing
+    assert _nonbg(allf) > _nonbg(none)                 # --annotate all draws indices
 
 
 def test_point_in_poly_basic():
@@ -586,14 +588,14 @@ def test_draw_painted_decal_underline_uses_the_same_tint_as_the_digit():
 
 
 def test_onface_paints_back_faces_dimmer_via_self_occlusion():
-    # A SOLID (additive) brush paints its BACK faces too — facing-blind, at graded opacity — even with the
-    # DEFAULT `poly:vis` labels. Its front faces occlude its own back faces, so strokes appear at >=2
+    # A SOLID (additive) brush paints its BACK faces too — facing-blind, at graded opacity — even with
+    # `--annotate all` labels. Its front faces occlude its own back faces, so strokes appear at >=2
     # depth levels: 0.56 (visible) plus >=1 dimmer (occluded back face: 0.336 / 0.2016 / floor 0.12).
     from uedcli.preview import _TINT_PALETTE
     a = copy.deepcopy(_brush())
     a.props = [(k, v) for k, v in a.props if k != "CsgOper"]      # additive => solid => self-occluding
 
-    ppm = render_brush_pgm(a, view="iso", size=256, annotations=AnnotationSpec.default(), color_by_csg=True)
+    ppm = render_brush_pgm(a, view="iso", size=256, annotations=AnnotationSpec.all(), color_by_csg=True)
 
     tint = _TINT_PALETTE[0]
     px = {tuple(ppm[i:i + 3]) for i in range(len(b"P6\n256 256\n255\n"), len(ppm), 3)}
@@ -619,7 +621,7 @@ def test_onface_omits_only_tiny_faces_with_no_leader_fallback(monkeypatch):
     # not a leader fallback.
     a = _brush()
     monkeypatch.setattr("uedcli.preview._onface_candidates", lambda *args, **kwargs: [])
-    omitted = render_brush_pgm(a, view="iso", size=256, annotations=AnnotationSpec.default(), color_by_csg=True)
+    omitted = render_brush_pgm(a, view="iso", size=256, annotations=AnnotationSpec.all(), color_by_csg=True)
     plain = render_brush_pgm(a, view="iso", size=256, annotations=AnnotationSpec.none(),
                              color_by_csg=True)
     assert omitted == plain          # un-paintable polys vanish (no leader box), leaving no numbers

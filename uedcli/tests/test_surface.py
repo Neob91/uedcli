@@ -829,6 +829,17 @@ def test_apply_scale_blames_the_FACTOR_not_the_frame_when_a_factor_is_absurd(by)
     assert p.texture_u == (1.0, 0.0, 0.0)               # nothing was written
 
 
+def test_apply_scale_to_names_the_to_flag_not_by_when_a_target_is_absurd():
+    # The offender-naming message must reflect how the caller actually spelled the request: a
+    # face scaled via --to must not be told it was --by that went wrong.
+    p = _face(texture="Pkg.Tex")
+    lvl = _level_with(_brush_actor("B1", [p]))
+    with pytest.raises(ValueError, match=r"--to U=.* is too extreme") as exc:
+        apply_scale(lvl, ["B1:all"], to=(1e22, 128.0), resolve_dims=lambda ref: (256, 256))
+    assert "--by" not in str(exc.value)
+    assert p.texture_u == (1.0, 0.0, 0.0)               # nothing was written
+
+
 @pytest.mark.parametrize("by", [(999.0, 999.0), (100.0, 100.0), (1e-21, 1.0), (0.001, 0.001)])
 def test_apply_scale_accepts_a_factor_whose_result_the_trunk_CAN_carry(by):
     """The counterpart bound: the guard must not reject a factor the trunk can hold.
@@ -911,3 +922,65 @@ def test_apply_scale_tolerates_an_out_of_plane_axis():
     lvl = _level_with(_brush_actor("B1", [p]))
     apply_scale(lvl, ["B1:all"], by=(2.0, 2.0))
     assert p.texture_u == pytest.approx((0.5, 0.0, 0.25))
+
+
+# --- apply_scale --to (step 5) -----------------------------------------------------
+
+def _mag(v):
+    return (v[0] ** 2 + v[1] ** 2 + v[2] ** 2) ** 0.5
+
+
+def test_apply_scale_to_sets_absolute_world_units_per_tile():
+    # --to 128,128 on a 256x256 texture: |TextureU| = W/U = 256/128 = 2.0.
+    p = _face(texture="Pkg.Tex")
+    lvl = _level_with(_brush_actor("B1", [p]))
+    apply_scale(lvl, ["B1:all"], to=(128.0, 128.0), resolve_dims=lambda ref: (256, 256))
+    assert _mag(p.texture_u) == pytest.approx(2.0)
+    assert _mag(p.texture_v) == pytest.approx(2.0)
+
+
+def test_apply_scale_to_uses_each_faces_own_bound_texture_independently():
+    a = _face(texture="Pkg.A")
+    b = _face(texture="Pkg.B")
+    lvl = _level_with(_brush_actor("B1", [a, b]))
+
+    def resolve_dims(ref):
+        return {"Pkg.A": (256, 256), "Pkg.B": (512, 512)}[ref]
+
+    apply_scale(lvl, ["B1:0", "B1:1"], to=(128.0, 128.0), resolve_dims=resolve_dims)
+    assert _mag(a.texture_u) == pytest.approx(2.0)
+    assert _mag(b.texture_u) == pytest.approx(4.0)
+
+
+def test_apply_scale_to_batches_every_untextured_and_unresolved_face():
+    ok = _face(texture="Pkg.Good")
+    none_tex = _face(texture=None)
+    bad_ref = _face(texture="Pkg.Bad")
+    lvl = _level_with(_brush_actor("B1", [ok, none_tex, bad_ref]))
+
+    def resolve_dims(ref):
+        if ref == "Pkg.Good":
+            return (256, 256)
+        raise ValueError(f"texture not found: {ref}")
+
+    with pytest.raises(ValueError) as exc:
+        apply_scale(lvl, ["B1:0", "B1:1", "B1:2"], to=(128.0, 128.0), resolve_dims=resolve_dims)
+    msg = str(exc.value)
+    assert "B1:1" in msg and "carry no texture" in msg
+    assert "Pkg.Bad" in msg
+    assert ok.texture_u == (1.0, 0.0, 0.0)                # nothing written — all-or-nothing
+
+
+def test_apply_scale_to_rejects_a_zero_or_negative_target():
+    p = _face(texture="Pkg.Tex")
+    lvl = _level_with(_brush_actor("B1", [p]))
+    with pytest.raises(ValueError, match="must be a positive number"):
+        apply_scale(lvl, ["B1:all"], to=(0.0, 128.0), resolve_dims=lambda ref: (256, 256))
+
+
+def test_apply_scale_to_never_calls_resolve_dims_for_by():
+    p = _face(texture="Pkg.Tex")
+    lvl = _level_with(_brush_actor("B1", [p]))
+    calls = []
+    apply_scale(lvl, ["B1:all"], by=(2.0, 2.0), resolve_dims=lambda ref: calls.append(ref) or (1, 1))
+    assert not calls

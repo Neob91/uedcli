@@ -23,3 +23,9 @@ dev/games/
 # Per-machine project selection `dev/scripts/setup-game-preview.sh` writes at the repo root
 # (`game = "<name>"` + local paths). Machine-local, not shared state — never committed.
 /uedcli.toml
+
+# UT99 build substrate the corpus toolchain compiles against — downloadable stock
+# UnrealTournament GOTY binaries (~50MB of .u/.dll/UCC.exe/.int), fetched by
+# uedcli/uscript/fetch_ut99.sh from archive.org. Reproducible, never committed.
+uned/UT99/
+uned/DXORIG/

@@ -207,3 +207,4 @@ also accepts `--tree KIND/NAME` (above) to edit a different box.
 | [`reference/project.md`](reference/project.md) | `project show` |
 | [`reference/cache.md`](reference/cache.md) | package-schema cache maintenance |
 | [`reference/substrate.md`](reference/substrate.md) | `substrate stub` — v68→v69 code package conversion |
+| [`reference/uscript.md`](reference/uscript.md) | `uscript compile` — compile UnrealScript to a .u package |

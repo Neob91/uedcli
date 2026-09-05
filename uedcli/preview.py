@@ -38,9 +38,9 @@ Rendering choices (all to make poly numbers readable):
     `highlight` OVERRIDES focus (a highlighted poly/actor stays vivid+bold on top, at FULL fill
     strength, and keeps its number).
   - an `AnnotationSpec` (parsed from `--annotate`) selects WHICH face indices draw, by category:
-    e.g. `poly:hi` = highlighted faces only, `poly:vis,poly:hi` (the default) = all face numbers.
-    On-face numbering is facing-blind, so `poly:vis` numbers every face (front/back shown by opacity);
-    `poly:hi`/`none` stay exact.
+    e.g. `poly:hi` = highlighted faces only, `all`/`poly` = all face numbers. Opt-in — `none` is the
+    default. On-face numbering is facing-blind, so `poly:vis` numbers every face (front/back shown by
+    opacity); `poly:hi`/`none` stay exact.
   - poly face indices are the SOLE thing painted ON the geometry: each index is a CENTERED texture flat
     IN its face plane (`_plan_onface_texture`/`_draw_painted_decal`) — gravity-hung on walls/slopes,
     world-Y-aligned on floors/ceilings/caps, per-brush tinted, translucent with a 6/9 underline + halo,
@@ -187,7 +187,7 @@ class AnnotationSpec:
         return parse_annotation_spec(DEFAULT_ANNOTATIONS)
 
 
-DEFAULT_ANNOTATIONS = "poly:vis,poly:hi"          # all face indices (vis is facing-blind)
+DEFAULT_ANNOTATIONS = "none"                      # poly numbers are opt-in; pass --annotate all/poly:hi
 _ALL_POLY = frozenset((f, h) for f in (False, True) for h in (False, True))
 _POLY_FILTERS = {"vis", "hi", "highlighted"}       # `highlighted` is a synonym for `hi`
 _KEYWORDS = {"all", "none", "highlighted"}

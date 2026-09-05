@@ -74,19 +74,20 @@ def test_it_renames_brush_preview_to_actor_preview(tmp_path, monkeypatch):
     assert _is_png(out)
 
 
-def test_default_preview_paints_onface_poly_numbers(tmp_path, monkeypatch):
-    # The default `actor diagram` (no flag) paints on-face poly numbers: a subtract room's face decals
-    # add content over an un-annotated render of the same actor.
+def test_default_preview_omits_onface_poly_numbers(tmp_path, monkeypatch):
+    # Poly numbers are opt-in: the default `actor diagram` (no `--annotate` flag) matches `--annotate
+    # none`, and `--annotate all` adds the on-face decals over that.
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
     from uedcli.preview import DEFAULT_ANNOTATIONS
-    labelled, plain = tmp_path / "l.png", tmp_path / "n.png"
+    assert DEFAULT_ANNOTATIONS == "none"
+    default_img, labelled = tmp_path / "d.png", tmp_path / "l.png"
     # size=256, not _prev's default 128: the wider locator gutter (2026-08-31, more breathing room
     # around the geometry) leaves too little drawable canvas at 128 for a face label to stay legible,
     # so BOTH renders below would silently omit it (view-dependent omission) and tie at equal content.
-    assert dispatch.dispatch(_prev(proj, labelled, names=["WallA"], annotate=DEFAULT_ANNOTATIONS,
+    assert dispatch.dispatch(_prev(proj, default_img, names=["WallA"], annotate=DEFAULT_ANNOTATIONS,
                                    size=256)) == 0
-    assert dispatch.dispatch(_prev(proj, plain, names=["WallA"], annotate="none", size=256)) == 0
-    assert _nonbg(_img(labelled)) > _nonbg(_img(plain))
+    assert dispatch.dispatch(_prev(proj, labelled, names=["WallA"], annotate="all", size=256)) == 0
+    assert _nonbg(_img(labelled)) > _nonbg(_img(default_img))
 
 
 def test_names_from_stdin(tmp_path, monkeypatch):

@@ -796,3 +796,71 @@ def test_a_negative_name_length_cannot_walk_the_cursor_backwards():
     path = _write(bytes(good), "NegLen.utx")
     got = TextureResolver([path]).resolve("NegLen.Fixture")
     assert isinstance(got, TextureError) and got.case == "package-unreadable"
+
+
+# --- TextureResolver.dimensions (per-surface texture verbs, step 5) ----------------------
+
+def test_dimensions_reads_mip0_size():
+    path = _write(pkgfixture.texture_package(mips=pkgfixture.linear_chain(256, 64)), "Sz.utx")
+    got = TextureResolver([path]).dimensions("Sz.Fixture")
+    assert got == (256, 64)
+
+
+def test_dimensions_on_a_committed_fixture():
+    got = _resolver().dimensions("LUM_InfoPortraits.ArthurCallaway")
+    assert got == (64, 64)
+
+
+def test_dimensions_falls_back_to_comp_mips_like_resolve_does():
+    """A texture whose `Mips` are all empty while `CompMips` carries data decodes through the
+    same fallback `resolve()` uses — `dimensions()` must not fail it with a stricter,
+    undocumented rule."""
+    empty = [(w, h, b"") for (w, h, _) in pkgfixture.linear_chain(64, 32)]
+    path = _write(pkgfixture.texture_package(mips=empty, comp_mips=pkgfixture.bc_chain(64, 32)),
+                  "CompOnlyDims.utx")
+    assert TextureResolver([path]).dimensions("CompOnlyDims.Fixture") == (64, 32)
+
+
+def test_dimensions_bare_ref_is_unqualified_ref():
+    got = _resolver().dimensions("dirtywater")
+    assert isinstance(got, TextureError) and got.case == "unqualified-ref"
+
+
+def test_dimensions_unknown_package_and_unknown_texture_are_both_not_found():
+    r = _resolver()
+    miss_pkg = r.dimensions("NoSuchPackage.foo")
+    assert isinstance(miss_pkg, TextureError) and miss_pkg.case == "not-found"
+    miss_tex = r.dimensions("CoreTexWater.nosuchtexture")
+    assert isinstance(miss_tex, TextureError) and miss_tex.case == "not-found"
+
+
+def test_dimensions_package_unreadable(tmp_path):
+    bad = tmp_path / "Corrupt.utx"
+    bad.write_bytes(b"\x12\x34" * 40)
+    got = TextureResolver([str(bad)]).dimensions("Corrupt.anything")
+    assert isinstance(got, TextureError) and got.case == "package-unreadable"
+
+
+def test_dimensions_no_mip_data_is_a_miss():
+    path = _write(pkgfixture.texture_package(mips=[(64, 64, b"")]), "NoDataDims.utx")
+    got = TextureResolver([path]).dimensions("NoDataDims.Fixture")
+    assert isinstance(got, TextureError) and got.case == "no-mip-data"
+
+
+def test_dimensions_caches_by_identity():
+    r = _resolver()
+    first = r.dimensions("LUM_InfoPortraits.ArthurCallaway")
+    assert r.dimensions("LUM_InfoPortraits.ArthurCallaway") is first
+    err = r.dimensions("CoreTexWater.nosuchtexture")
+    assert r.dimensions("CoreTexWater.nosuchtexture") is err
+
+
+def test_dimensions_never_decodes_pixels():
+    """A texture with real pixel data but no verified decoder (an unrecognised layout) still
+    reports its size — `dimensions()` doesn't route through layout detection at all, unlike
+    `resolve()`, which would fail this same texture with `unverified-format`."""
+    # A byte count that fits no known layout at any bpp uedcli recognises.
+    path = _write(pkgfixture.texture_package(mips=[(17, 17, b"\x00" * 41)]), "Weird.utx")
+    resolver = TextureResolver([path])
+    assert isinstance(resolver.resolve("Weird.Fixture"), TextureError)
+    assert resolver.dimensions("Weird.Fixture") == (17, 17)

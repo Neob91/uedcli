@@ -69,10 +69,15 @@ centre keeps its texture coordinate, so the texture **spins in place** instead o
 in-plane direction you cannot see or predict, so it would mean something different on every face
 normal. A *known* orientation is `brush poly align`'s job.
 
-**`brush poly scale --by FU,FV`** resizes the texture. It names what you **see**: `--by 2,2` makes
-the texture look twice as big, `--by 0.5,1` halves its width only. U and V are independent, and both
-factors must be positive. The face's own centre again keeps its texture coordinate, so the texture
-grows in place rather than sliding off.
+**`brush poly scale (--by FU,FV | --to U,V)`** resizes the texture. **`--by`** names what you
+**see**: `--by 2,2` makes the texture look twice as big, `--by 0.5,1` halves its width only — pure
+math, no project needed. **`--to U,V`** sets the **absolute** density in **world units per tile**:
+`--to 128,128` means each face's own bound texture repeats every 128 uu each way (a smaller `U,V`
+looks like a bigger texture — fewer, larger tiles). It needs a project on the package path to read
+that texture's pixel size; a face with no bound texture, or an unresolvable ref, exits 2 naming
+every offender before writing anything. Either way, U and V are independent and must be positive,
+and the face's own centre keeps its texture coordinate, so the texture grows in place rather than
+sliding off.
 
 ⚠ Ordering rules:
 
@@ -109,14 +114,14 @@ then `actor diagram <brush> --highlight <brush>:N` (below) to see it emphasised 
 
 ### Continuous texture alignment (`brush poly align`)
 
-**`brush poly align <mode> (targets…|-)`**, with `<mode>` one of **`wall`**, **`floor`** or **`run`**,
-makes one texture flow **continuously** across a set of faces instead of restarting the pattern at
-every brush edge (offline texture-vector math — `wall`/`floor` reproduce the editor's projection
-modes, `run` is uedcli's own). The mode is a **subcommand**, so `brush poly align run -h` lists
-exactly the flags that apply. The face set is `BRUSH:SELECTOR` positionals (or a bare brush Name = all
-its polys) **or** `-` reading the set from stdin (bare names, or the `BRUSH:idx` lines `poly find`
-prints); empty stdin is a clean no-op. Every mode zeroes `Pan`. The touched faces → stdout as
-`BRUSH:idx` selectors, a summary → stderr.
+**`brush poly align <mode> (targets…|-)`**, with `<mode>` one of **`wall`**, **`floor`**, **`run`** or
+**`one-tile`**, sets each face's texture frame (offline texture-vector math — `wall`/`floor`/`run`
+flow continuously across a set, `one-tile` fits each face independently; `wall`/`floor` reproduce
+the editor's projection modes, `run`/`one-tile` are uedcli's own). The mode is a **subcommand**, so
+`brush poly align run -h` lists exactly the flags that apply. The face set is `BRUSH:SELECTOR`
+positionals (or a bare brush Name = all its polys) **or** `-` reading the set from stdin (bare names,
+or the `BRUSH:idx` lines `poly find` prints); empty stdin is a clean no-op. Every mode zeroes `Pan`.
+The touched faces → stdout as `BRUSH:idx` selectors, a summary → stderr.
 
 - **`wall`** / **`floor`** — each face gets a **world-space** frame that reproduces UnrealEd's
   `POLY TEXALIGN` `WALLX`/`WALLY`/`FLOOR` (measured 2026-07-26): the texture anchored where the face's
@@ -146,11 +151,16 @@ prints); empty stdin is a clean no-op. Every mode zeroes `Pan`. The touched face
   rotation units (16384 = 90°). Any angle is allowed. A **cylinder** run stays exact at every angle;
   a **flat bend** shears at its seams (one axis at a quarter turn, both otherwise) — `run` reports the
   worst seam shear to stderr so you can mitre a bad corner or accept it.
-- **`--fit-perimeter`** (`run` only) snaps the scale so a whole number of **texels** closes the loop
-  — it needs a **closed** run and a **quarter** `--turn` (else exit 2 naming why). It still leaves ~a
-  whole-texel residual (a texture repeats every `T` texels, not every texel — ~31 on the standard
-  8-sided cylinder); the whole-**tile** fix that truly closes the seam needs the texture size and
-  arrives with the catalog. Default leaves the seam.
+- **`--fit-perimeter`** (`run` only) snaps the scale so a whole number of **tiles** exactly closes
+  the loop — it needs a **closed** run, a **quarter** `--turn`, and every face bound to the **same**
+  texture (else exit 2 naming why), and a project on the package path to read that texture's pixel
+  size. Default leaves the seam.
+- **`one-tile`** — fit exactly **one texture tile** to each face, independently: no shared frame, no
+  continuity, and no orientation guard (any face works — the fit axis is always the world axis the
+  face faces most over all three, so it's never edge-on). It stretches non-uniformly to fill the
+  face's own extent — the point, for a sign or a monitor a letterboxed fit would be wrong. Needs a
+  project on the package path: every targeted face's bound texture must resolve, or exit 2 naming
+  every offending face/ref before writing anything.
 
 ```bash
 uedcli brush poly find Tower --item Side | uedcli brush poly align run -

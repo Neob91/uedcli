@@ -26,6 +26,7 @@ from .parsers import (
     stash,
     substrate,
     texture,
+    uscript,
 )
 from .parsers._arguments import _CoordArgumentParser
 
@@ -52,6 +53,7 @@ def build_parser() -> argparse.ArgumentParser:
     texture.register(sub)
     substrate.register(sub)
     cache.register(sub)
+    uscript.register(sub)
 
     return p
 
