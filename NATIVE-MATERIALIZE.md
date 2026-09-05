@@ -11,6 +11,19 @@ exist: the **editor-driven** path (drives UED22) and the **native** path (`UEDCL
 a Rust `uedcli-native` CSG/BSP/lighting engine, no editor). The campaign goal is that the **native
 build is byte-identical to UED22's build of the same trunk** — full package bytes, not just counts.
 
+## Prime directive — fix toward UnrealEd's algorithm
+
+Close every divergence by making native's algorithm match what UED22 actually does: reproduce the
+editor's CSG/BSP/lighting/dedup step (decoded from the binaries, or measured by an editor probe) so
+the bytes agree at the source. Prefer the faithful fix even when it is larger, or when a mask would
+pass the gate today — a mask is a deferral, not a solution, and it erodes what the gate proves.
+
+An exclusion is a LAST RESORT, only for a divergence that is NOT a reproducible algorithm difference:
+a per-save-random engine field, or editor bookkeeping no reader consumes. A divergence caused by
+native's algorithm differing from the editor's — a different BSP split, point-dedup, or lighting run
+— is fixed, not masked, however costly. Any mask still standing over an algorithmic divergence is a
+stopgap owed a faithful fix, recorded as such. *(Owner ruling, 2026-09-05.)*
+
 ## The reference we compare against (how UED22 "builds" a trunk)
 
 `build_ued_import_built_golden.py`: `MAP NEW` → `MAP IMPORT FILE=<trunk T3D, with a sacrificial
@@ -76,23 +89,28 @@ match; the surviving (non-`None`) `Actors` set AND order must match (Actors orde
   orders above the band. The one downstream `Brush` `Region` flip is masked separately, resting on the
   disasm that EVERY brush's `Region` is discarded at load (LoadMap `SetActorZone(actor,1,1)`
   recomputes+overwrites it, Engine.dll `0x158930`/`0x161e10`), not on the tie; non-`Brush` `Region`
-  stays compared. Faithful fix = a multi-week incremental-CSG-core rewrite (owner-ruled out). Negative
-  tests: `test_n8_dedup_tie_mask.py`.
+  stays compared. **STOPGAP, not a permanent exclusion** (prime directive): this is an algorithmic
+  divergence — native's linear-scan dedup vs the editor's incremental `FindNearestVertex`. The faithful
+  fix reproduces that incremental point-dedup (a large CSG-core change; a first port attempt `ba23319`
+  shifted the point table 76→81, so it must hold the corpus green). Until it lands, the mask holds N8;
+  it is owed the fix. Negative tests: `test_n8_dedup_tie_mask.py`.
 
 Any NEW candidate exclusion needs an opus review confirming inconsequence + the owner's explicit yes
 before it counts. No content carveouts (Movers included — native must build their private models).
 
 ## The method — lockstep ladder, one actor at a time
 
-Drive three levels in LOCKSTEP: **UNATCO `03_NYC_UNATCOHQ`**, **WanChai `06_HongKong_WanChai_Market`**,
-**NYC_Bar `02_NYC_Bar`**. For N = 1, 2, 3, … (N = actor count, trunk order):
+Drive FIVE levels in LOCKSTEP: **UNATCO `03_NYC_UNATCOHQ`**, **WanChai `06_HongKong_WanChai_Market`**,
+**NYC_Bar `02_NYC_Bar`**, **Island `01_NYC_UNATCOIsland`** (outdoor/statues), **OceanLab
+`14_OceanLab_Lab`** (underwater/movers). For N = 1, 2, 3, … (N = actor count, trunk order):
 
-1. Build the first N actors of all three levels BOTH ways (native + the UED22 reference).
+1. Build the first N actors of all five levels BOTH ways (native + the UED22 reference).
 2. Compare each with the parity gate (below).
-3. Fix every divergence on all three until each is byte-exact at N. Each fix: one subagent builds it,
-   another reviews it, the first fixes the review findings; then re-verify all three.
-4. Squash-merge once all three pass at N; re-verify against fresh master.
-5. Only then advance to N+1. Never advance while any of the three isn't byte-exact at N.
+3. Fix every divergence on all five until each is byte-exact at N — with a faithful fix that moves
+   native's algorithm toward UED22's (prime directive), never a mask. Each fix: one subagent builds
+   it, another reviews it, the first fixes the review findings; then re-verify all five.
+4. Squash-merge once all five pass at N; re-verify against fresh master.
+5. Only then advance to N+1. Never advance while any of the five isn't byte-exact at N.
 
 N=1 is LevelInfo only (empty world) — native builds it (empty world Model). Iterate at small N;
 a full-level editor rebuild is ~24 min, so grow N, don't jump.
