@@ -1,6 +1,6 @@
 +++
 priority = "p1"
-kind = "bug"
+kind = "debug"
 summary = "relation.py plane_relationship broken: polyalign missing _PARALLEL_EPS/_PLANE_EPS"
 +++
 
