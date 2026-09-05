@@ -50,7 +50,8 @@
 //! ## What is faithfully ported
 //!
 //! Zone-mask subtree pruning (step 1), `bUseZones = viewZone != 0` and its unzoned-pass fallback
-//! (step 2), `IsFront`/near-far child order (step 5), the exact back-face cull (step 7 — reuses
+//! (step 2), `IsFront`/near-far child order (step 5, `IsFront` re-derived per coplanar chain member
+//! as the editor's chain advance does), the exact back-face cull (step 7 — reuses
 //! `light::light_in_front`, already ported and tested), `PF_Portal && !bUseZones` (step 8), zone
 //! reachability (step 10), the `PF_Invisible` mask (step 11; `ShowFlags=0x800` keeps it in the drop
 //! set — **from emission into the light's own run only**; rasterization, the span-buffer accept/
@@ -579,7 +580,7 @@ fn traverse(
         return;
     }
     let d = plane_dot(&head.plane, light_loc);
-    let is_front = d > 0.0;
+    let mut is_front = d > 0.0;
     // Engine child convention on the finalized model (matches `linecheck.rs`): FRONT = `i_back`,
     // BACK = `i_front`. The near child (same side as the light) is visited first.
     let (near_child, far_child) =
@@ -589,9 +590,15 @@ fn traverse(
     traverse(model, near_child, light_loc, face, use_zones, active_mask, spans, out, trace, trace_portals);
 
     // Own surface, then every remaining `i_plane` coplanar chain member's surface — `far_child` is
-    // visited only AFTER the whole chain (below), never interleaved with it. A coplanar chain
-    // MEMBER carries `i_front == i_back == -1` (only the chain HEAD splits space), so re-deriving
-    // near/far per member below is a harmless no-op.
+    // visited only AFTER the whole chain (below), never interleaved with it. A chain MEMBER carries
+    // `i_front == i_back == -1` (only the HEAD splits space), so the head's near/far still governs
+    // the descent; `is_front` itself is re-derived per member (see the chain advance at the tail).
+    //
+    // Unlike the editor, this loop re-applies the step-1 zone-mask prune to every member (the
+    // editor's chain advance jumps past it, to `0x100198a0`). Output-equivalent: `active_mask` here
+    // is monotone and carries a bit for every zone that has a span buffer, and a member's zone_mask
+    // folds in the rest of the chain, so a miss means step 10 would drop the member and every later
+    // one anyway.
     let mut cur = ni;
     while cur >= 0 {
         let nu = cur as usize;
@@ -724,6 +731,17 @@ fn traverse(
         }
 
         cur = n.i_plane;
+        // A coplanar chain member can carry the FLIPPED plane (`bspAddNode`'s flip case, which also
+        // swaps its `iZone` pair), so `IsFront` is NOT the head's. `OccludeBsp` recomputes it from
+        // each member's own plane on the chain advance (`render.dll 0x1001a954` PlaneDot,
+        // `0x1001a96a` `comiss` vs 0.0, `0x1001a971 seta`) before re-entering the per-node filters at
+        // `0x100198a0`. Carrying the head's value indexed `iZone[IsFront]` on the wrong side, so a
+        // flipped member's near zone read as the far one — WanChai N31: the four floor surfs on
+        // chain head 154's flipped tail read near_zone 0, had no span buffer, and were dropped as
+        // unreachable, losing Light189's whole lightmap run on them.
+        if cur >= 0 {
+            is_front = plane_dot(&model.nodes[cur as usize].plane, light_loc) > 0.0;
+        }
     }
 
     // Far child, full subtree, last — only after the whole coplanar chain above.
@@ -1120,6 +1138,77 @@ mod tests {
             visible.contains(&0),
             "the coplanar chain member (surf 0) must be tested before far_child's larger, opaque \
              subtree can claim its span-buffer footprint, got {visible:?}"
+        );
+    }
+
+    /// **Regression for the flipped-coplanar-member `IsFront` fix (2026-09-05, WanChai N31):** a
+    /// coplanar chain member can carry the flipped plane, with its `iZone` pair swapped to match, so
+    /// `IsFront` — and therefore which of `iZone[0]`/`iZone[1]` is the NEAR zone step 10 tests for
+    /// reachability — is the member's own, not the chain head's. `OccludeBsp` recomputes it on every
+    /// chain advance (`render.dll 0x1001a954`/`0x1001a96a`/`0x1001a971`); this port carried the
+    /// head's, so a flipped member's near zone read as its far one, found no span buffer, and was
+    /// dropped as unreachable.
+    ///
+    /// Fixture: head at z=0 with normal −Z (light at z=+100 is BEHIND it, `IsFront` false), no
+    /// surface, no children; one chain member with the flipped +Z plane (light in FRONT) carrying the
+    /// visible quad. The light's own zone is 1; the member's near (front) zone is 1, its back zone 2.
+    /// With the head's `IsFront` the member reads near zone 2, which has no buffer -> rejected.
+    #[test]
+    fn flipped_coplanar_member_uses_its_own_front_side_for_the_near_zone() {
+        use crate::model::{BspNode, BspSurf, BspVert};
+
+        let mut m = Model {
+            points: vec![
+                Vec3::new(-50.0, -50.0, 0.0),
+                Vec3::new(50.0, -50.0, 0.0),
+                Vec3::new(50.0, 50.0, 0.0),
+                Vec3::new(-50.0, 50.0, 0.0),
+            ],
+            vectors: vec![Vec3::new(0.0, 0.0, 1.0)],
+            verts: (0..4).map(|i| BspVert { i_vertex: i, i_side: 0 }).collect(),
+            surfs: vec![BspSurf {
+                texture_ref: -1,
+                poly_flags: 0,
+                p_base: 0,
+                v_normal: 0,
+                v_texture_u: 0,
+                v_texture_v: 0,
+                i_actor: -1,
+                i_brush_poly: -1,
+                pan: [0, 0],
+                i_light_map: -1,
+            }],
+            nodes: vec![
+                {
+                    // node 0: chain head, normal −Z. Both children absent, so the light's zone comes
+                    // from this node: `IsFront` false -> `iZone[0]` = 1.
+                    let mut n = BspNode::leaf(Plane { x: 0.0, y: 0.0, z: -1.0, w: 0.0 }, -1, 0, 0);
+                    n.i_front = -1;
+                    n.i_back = -1;
+                    n.i_plane = 1;
+                    n.i_zone = [1, 2];
+                    n
+                },
+                {
+                    // node 1: chain member, the FLIPPED +Z plane and the correspondingly swapped
+                    // zone pair — its front (z>0, where the light is) is zone 1.
+                    let mut n = BspNode::leaf(Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 }, 0, 0, 4);
+                    n.i_zone = [2, 1];
+                    n
+                },
+            ],
+            root_outside: true,
+            ..Model::default()
+        };
+        crate::zones::build_zone_masks(&mut m);
+
+        let light = Vec3::new(0.0, 0.0, 100.0);
+        assert_eq!(zone_of_point(&m, light), 1, "the light must sit in zone 1 for use_zones to hold");
+        let visible = get_visible_surfs(&m, light);
+        assert!(
+            visible.contains(&0),
+            "the flipped chain member's near zone is its OWN front zone (1, the view zone), so its \
+             surf must be reachable; got {visible:?}"
         );
     }
 

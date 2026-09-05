@@ -29,6 +29,8 @@ const THRESH_NORMALS_ARE_SAME: f32 = 2.0e-5;
 /// keeps near-parallel texture axes distinct below this; native previously used 0.001 and pooled
 /// axes the editor keeps (OceanLab N3 Brush779 rotated-tessellated subtract).
 const THRESH_VECTORS_ARE_NEAR: f32 = 4.0e-4;
+/// `bspBuild` stamps every poly it partitions, and the bit reaches the saved `Model.Polys`.
+const PF_ED_PROCESSED: u32 = 0x4000_0000;
 
 // ENodePlace
 const NODE_BACK: i32 = 0;
@@ -438,9 +440,10 @@ fn bsp_add_point(model: &mut Model, v: Vec3) -> i32 {
 /// (SAME)**, but the node vertex-RING add (`bspAddNode 0x352fd`, `push 0`) passes `0` → **0.015
 /// (NEAR)** (see `ring_point_tol` below, used by the ring loop in `bsp_add_node`).
 fn bsp_add_point_tol(model: &mut Model, v: Vec3, tol: f32) -> i32 {
-    // Incremental CSG uses the editor's radius-pruned FindNearestVertex descent; repartition and any
-    // other caller keeps the linear pool scan (see `FNV_DEDUP`).
-    let hit: Option<i32> = if FNV_DEDUP.with(|c| c.get()) && tol == THRESH_POINTS_ARE_SAME {
+    // Incremental CSG uses the editor's radius-pruned FindNearestVertex descent at BOTH thresholds —
+    // `bspAddPoint` picks 0.002/0.015 from its `Exact` arg and then calls FNV unconditionally
+    // (0x35465..0x35498). Repartition and any other caller keep the linear pool scan (see `FNV_DEDUP`).
+    let hit: Option<i32> = if FNV_DEDUP.with(|c| c.get()) {
         find_nearest_vertex(model, v, tol).map(|i| i as i32)
     } else if point_nearest_enabled() {
         match nearest(&model.points, &v) {
@@ -2293,11 +2296,13 @@ fn collect_repartition_frontier(model: &Model, ni: i32, list_a: &mut Vec<i32>, l
 /// Implementation: run the real reconstruction into a throwaway `scratch` clone of `model` (so
 /// `bsp_add_node`'s coplanar-chain walk and `MAX_VERTICES` splitting see the SAME pre-existing tree
 /// state the real call would), then copy out only the `Verts`/`Points` it appended — never
-/// `model.nodes`, never `model.surfs`. No new surf is ever allocated here: `FPoly::split_with_plane`
-/// always preserves `i_link` on its fragments (`empty_copy`), so `bsp_add_node`'s `alloc_surf` path
-/// is never reached — `scratch.surfs` never grows past what `model.surfs` already had.
-fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Result<(), BuildError> {
+/// `model.nodes`, never `model.surfs`. The scratch build DOES allocate surfs — the editor's own
+/// `SplitPolyList` re-seeds each splitter (see the `rsp_links` block below) — but they live and die
+/// in `scratch`; only the Verts/Points it appended are copied out.
+fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32], surf_pool_len: usize)
+    -> Result<(), BuildError> {
     let mut call_id = 0usize;
+    let mut surf_pool = surf_pool_len;
     let worklist: Vec<(i32, i32)> = list_a.iter().map(|&n| (n, NODE_BACK))
         .chain(list_b.iter().map(|&n| (n, NODE_FRONT)))
         .collect();
@@ -2316,20 +2321,63 @@ fn repartition_frontier(model: &mut Model, list_a: &[i32], list_b: &[i32]) -> Re
         }
         let mut polys = Vec::new();
         make_ed_polys(model, child, &mut polys);
-        if polys.is_empty() {
+        let merged = reduce_repartition_polys(polys);
+        // `bspRepartition`'s own `bspBuildFPolys` EMPTIES `Model->Polys` and refills it from this
+        // subtree (`Editor.dll 0x1004a007`), `bspMergeCoplanars` merges it in place (`0x1004a021`),
+        // and each survivor comes out `PF_EdProcessed` — and nothing after this loop rebuilds it
+        // (`csgRebuild` runs only `bspOptGeom`/`bspBuildBounds`). So the LAST frontier call's soup is
+        // what the world Model saves, not the structural repartition's. It only shows once a level
+        // has a detail brush (nothing grows the frontier otherwise): WanChai N35's first semisolid
+        // Add leaves UED22 with that brush's 8 faces in `Model.Polys` where native kept the 320-face
+        // structural soup.
+        let mut soup = merged.clone();
+        if merged.is_empty() {
+            model.polys = soup;
             continue;
         }
-        let merged = reduce_repartition_polys(polys);
         let before_verts = model.verts.len();
         let before_points = model.points.len();
 
+        // `SplitPolyList` with a non-zero `RebuildSimplePolys` (the frontier calls pass 2) hands its
+        // SPLITTER a fresh surf — `EdPoly->iLink = Model->Surfs.Num()` (`Editor.dll 0x100345cf`/
+        // `0x100345d4`), which `bspAddNode` (`0x10034ee3`) then allocates — and gives each coplanar
+        // `Surfs.Num()-1` to share it (`0x1003468c`/`0x1003469b`). A SPLIT poly is never rewritten
+        // (`0x100346f9` puts fresh fragments in the lists and leaves the source alone), so it keeps
+        // the iLink `bspBuildFPolys` gave it. `split_poly_list`'s `rsp_links` mode is that exact rule,
+        // already golden-verified on the mover models — use it rather than inferring an order.
+        let ready: Vec<FPoly> = merged
+            .into_iter()
+            .enumerate()
+            .map(|(i, mut p)| {
+                p.src = i as i32;
+                p
+            })
+            .collect();
+        let mut links: Vec<i32> = soup.iter().map(|p| p.i_link).collect();
         let mut scratch = model.clone();
-        split_poly_list(&mut scratch, parent, place, merged, 0, BALANCE, PORTAL_BIAS, Opt::Good, &mut call_id, None)?;
+        let scratch_surfs = scratch.surfs.len();
+        split_poly_list(&mut scratch, parent, place, ready, 0, BALANCE, PORTAL_BIAS, Opt::Good,
+                        &mut call_id, Some(&mut links))?;
         // Keep the Verts/Points growth (the real editor's permanent leak); discard everything else
         // in `scratch` — its new node tree and its own copy of the parent's rewritten child pointer
         // never touch `model`.
         model.points.extend_from_slice(&scratch.points[before_points..]);
         model.verts.extend_from_slice(&scratch.verts[before_verts..]);
+
+        // Native's surf pool is the repartition-rebuilt (shorter) one, so shift each freshly assigned
+        // index into the editor's pool. `surf_pool` tracks that pool across the loop: the call's own
+        // `bspRefresh` runs `NoRemapSurfs=1` (`0x10036d68` memzeroes the poly-ref table, so nothing is
+        // dropped) and only `bspOptGeom`'s `bspRefresh(Model,0)` (`0x100368ef`) collects them later,
+        // so every call's allocations are still in the pool when the next call starts.
+        let offset = surf_pool as i32 - scratch_surfs as i32;
+        for (p, &l) in soup.iter_mut().zip(links.iter()) {
+            if l >= scratch_surfs as i32 {
+                p.i_link = l + offset;
+            }
+            p.poly_flags |= PF_ED_PROCESSED;
+        }
+        surf_pool += scratch.surfs.len() - scratch_surfs;
+        model.polys = soup;
 
         if percall_verts_diag {
             eprintln!(
@@ -2625,7 +2673,6 @@ fn bsp_build(model: &mut Model, polys: Vec<FPoly>) -> Result<(), BuildError> {
     // bspBuild marks every processed poly `PF_EdProcessed` (0x40000000) and that bit ends up in the
     // saved `Model.Polys`; OR it onto the SOUP CLONE only — the polys fed to the partitioner below
     // must keep their real flags (PF_Portal etc. drive `find_best_split`'s scoring).
-    const PF_ED_PROCESSED: u32 = 0x4000_0000;
     let mut soup = ready.clone();
     for p in soup.iter_mut() {
         p.poly_flags |= PF_ED_PROCESSED;
@@ -3478,6 +3525,7 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
 
     // Pass 2: SEMISOLID detail brushes (incremental, NOT repartitioned) — NotSolid-only brushes
     // (portal or not) are NOT here; they were processed structurally in pass 1 (`detail_pass`).
+    let pre_detail_surfs = model.surfs.len();
     for (bi, b) in brushes.iter().enumerate() {
         let pf = eff_flags(b);
         if !detail_pass(b, pf) {
@@ -3538,7 +3586,17 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
     // Re-partition just the subtrees that grew on the pre-detail-loop frontier, then GC the
     // orphaned pre-repartition nodes `bsp_add_node`'s append-only growth leaves behind
     // (`bsp_refresh` does not collect nodes, only surfs/verts — see `compact_unreachable_nodes`).
-    repartition_frontier(&mut model, &repart_frontier_a, &repart_frontier_b)?;
+    // The editor never rebuilds its Surfs pool at repartition (see `canon_surf_keys` above), so its
+    // live pool through pass 2 is the incremental one plus whatever pass 2 appended — and that is the
+    // length the frontier repartition's fresh-surf iLinks count up from. Native's own pool is the
+    // repartition-rebuilt (shorter) one, so extend the canon snapshot with pass 2's appended surfs
+    // and measure from there. Extending it does not move the final surf order: these keys sort after
+    // every pass-1 rank, in the same pool order the `unwrap_or(base)` tie-break already gave them.
+    canon_surf_keys.extend(
+        model.surfs[pre_detail_surfs..].iter().map(|s| (s.i_actor, s.i_brush_poly)),
+    );
+    repartition_frontier(&mut model, &repart_frontier_a, &repart_frontier_b,
+                         canon_surf_keys.len())?;
     compact_unreachable_nodes(&mut model);
     // Round 15: each frontier `bspRepartition(node, 2)` ends with a full `bspRefresh`
     // (`bspRepartition.decompiled.c` line 34 / round 14's rfidx=4/5 — the LAST Points GCs of the
@@ -4026,6 +4084,48 @@ mod tests {
         // Root plane x=1 through the point; query on the point -> pd=0, within slab -> tested -> HIT.
         m.nodes.push(BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 10.0 }, 0, 0, 0));
         assert_eq!(find_nearest_vertex(&m, Vec3::new(10.0, 0.0, 0.0), 0.002), Some(0));
+    }
+
+    #[test]
+    fn ring_tolerance_add_also_goes_through_the_descent() {
+        // `bspAddPoint` (Editor.dll 0x35430) calls `FindNearestVertex` UNCONDITIONALLY, with the
+        // threshold its `Exact` arg picks (0x3545c: `arg ? 0.002 : 0.015`) -- so the node vertex-RING
+        // add (`bspAddNode 0x352fd push 0` -> 0.015) is deduped by the same radius-pruned descent as
+        // the 0.002 surf-base add, NOT by a pool scan. Native scoped the descent to 0.002 only, so a
+        // ring add snapped to a pool point the editor's descent cannot reach (WanChai N20: a
+        // 1.22e-4 near-tie at x=1408 that stored the grid value instead of the tilted brush's).
+        //
+        // One node, plane x=0, whose surf base is point 0 AT the plane; point 1 sits 100uu away, in
+        // the pool but wired to nothing. Both queries are 1e-3 from a pool point — inside 0.015,
+        // outside 0.002 — so they separate the ring tolerance from the surf-base one.
+        let mut model = Model::default();
+        model.points.push(Vec3::new(0.0, 0.0, 0.0)); // the node's surf base: the descent reaches it
+        model.points.push(Vec3::new(100.0, 0.0, 0.0)); // wired to no node, and 100uu off the plane
+        model.surfs.push(BspSurf {
+            texture_ref: -1, poly_flags: 0, p_base: 0, v_normal: 0, v_texture_u: 0,
+            v_texture_v: 0, i_actor: -1, i_brush_poly: -1, pan: [0, 0], i_light_map: -1,
+        });
+        model.nodes.push(BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 0.0 }, 0, 0, 0));
+        let unreachable_q = Vec3::new(100.001, 0.0, 0.0);
+        let reachable_q = Vec3::new(0.001, 0.0, 0.0);
+
+        let mut incremental = model.clone();
+        let _fnv = FnvDedupGuard::enable();
+        // Point 1 is 100uu beyond the root plane, so the descent prunes it and never tests it -> ADD.
+        assert_eq!(
+            bsp_add_point_tol(&mut incremental, unreachable_q, ring_point_tol()), 2,
+            "the ring add must use the descent, which cannot reach the pruned point -> ADD"
+        );
+        // Point 0 is inside the radius band, so the SAME descent snaps it at the ring tolerance —
+        // pinning that the descent runs with 0.015, not a hard-coded 0.002 (which would MISS here).
+        assert_eq!(
+            bsp_add_point_tol(&mut incremental, reachable_q, ring_point_tol()), 0,
+            "the ring add's descent must carry the 0.015 tolerance, not the 0.002 one"
+        );
+        drop(_fnv);
+
+        // Repartition (descent off) keeps the pool scan, which snaps the pruned point too.
+        assert_eq!(bsp_add_point_tol(&mut model, unreachable_q, ring_point_tol()), 1);
     }
 
     #[test]
@@ -5647,7 +5747,7 @@ mod tests {
         } else {
             (vec![], vec![parent])
         };
-        repartition_frontier(&mut model, &list_a, &list_b).unwrap();
+        repartition_frontier(&mut model, &list_a, &list_b, surfs_before).unwrap();
 
         assert_eq!(
             model.nodes.len(),
@@ -5675,6 +5775,22 @@ mod tests {
         assert!(
             model.points.len() >= points_before,
             "points must never shrink"
+        );
+        // `bspRepartition`'s `bspBuildFPolys` refills `Model->Polys` from THIS subtree and nothing in
+        // `csgRebuild` rebuilds it afterwards, so the world model saves the last call's soup.
+        assert!(
+            !model.polys.is_empty(),
+            "the frontier call must leave its own subtree's soup in Model.Polys"
+        );
+        assert!(
+            model.polys.iter().all(|p| p.poly_flags & PF_ED_PROCESSED != 0),
+            "every saved soup poly carries PF_EdProcessed"
+        );
+        // Every poly consumed whole took a freshly seeded surf index, counted off the pool length
+        // passed in; a split poly would keep its (smaller) pre-build iLink.
+        assert!(
+            model.polys.iter().any(|p| p.i_link >= surfs_before as i32),
+            "at least the splitter must carry a freshly seeded iLink at or above the pool length"
         );
     }
 

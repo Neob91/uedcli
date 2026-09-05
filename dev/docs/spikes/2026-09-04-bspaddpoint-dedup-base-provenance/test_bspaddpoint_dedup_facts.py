@@ -43,6 +43,18 @@ def test_dedup_disasm_constants():
     assert f32(ED, 0x100DCAFC) == pytest.approx(0.015, abs=1e-6)   # Points Exact=0
     assert f32(ED, 0x100DCAF0) == pytest.approx(2e-5, abs=1e-9)    # Vectors Exact=1
     assert f32(ED, 0x100DCAF4) == pytest.approx(4e-4, abs=1e-9)    # Vectors Exact=0
+    # bspAddPoint picks the threshold from its Exact arg and then calls FindNearestVertex
+    # UNCONDITIONALLY -- the 0.015 ring add is deduped by the SAME descent as the 0.002 surf-base add
+    # (native scoped the descent to 0.002 until WanChai N20 exposed it).
+    assert pe.read_at_va(str(ED), 0x10035465, 4).hex() == "837d1000"          # cmp [ebp+0x10],0
+    assert pe.read_at_va(str(ED), 0x10035469, 2).hex() == "740a"              # je -> the 0.015 arm
+    assert pe.read_at_va(str(ED), 0x1003546B, 8).hex() == "f30f1005f8ca0d10"  # movss xmm0,[0x100dcaf8]
+    assert pe.read_at_va(str(ED), 0x10035475, 8).hex() == "f30f1005fcca0d10"  # movss xmm0,[0x100dcafc]
+    assert pe.read_at_va(str(ED), 0x10035498, 6).hex() == "ff151cee0c10"      # call FindNearestVertex
+    # MISS path: AddThing(&Model->Points, V, Thresh, !(Editor+0x10c & 1)) -- that bit is GFastRebuild
+    # (see the csgRebuild assertions below), so throughout a rebuild Check is 0 and the fallback is a
+    # plain append; AddThing's own per-axis box scan runs only outside csgRebuild.
+    assert pe.read_at_va(str(ED), 0x100354D1, 11).hex() == "8b860c010000f7d083e001"
     # csgRebuild sets/clears GFastRebuild = Editor+0x10c bit0 around the whole rebuild
     assert pe.read_at_va(str(ED), 0x1004A6A5, 3).hex() == "83c801"           # or eax,1
     assert pe.read_at_va(str(ED), 0x1004AAC6, 7).hex() == "83a30c010000fe"   # and [ebx+0x10c],~1
