@@ -234,26 +234,28 @@ def test_run_wrap_seam_continuous_and_perimeter():
 
 
 def test_run_leave_seam_vs_fit_perimeter():
-    # 7 sides ⇒ perimeter does NOT land on an integer texel count at density 1.
+    # 7 sides ⇒ perimeter does NOT land on a whole number of 256-texel TILES at density 1.
     a = _brush("Cyl", cylinder(200, 100, 7), loc=(0, 0, 0))
     lv = _level(a)
     sides = [f"Cyl:{i}" for i in polyalign.find_faces(a, "Cyl", item="Side")]
     perim = 7 * 2 * 100 * math.sin(math.pi / 7)
-    assert abs(perim - round(perim)) > 0.1                 # genuinely non-dividing
+    assert abs(perim / 256 - round(perim / 256)) > 0.01     # genuinely non-dividing in tiles
 
     # default: leaves the seam — the density is exactly 1, total U is fractional.
     polyalign.align(lv, sides, "run")
     p0 = a.brush.polys[polyalign.find_faces(a, "Cyl", item="Side")[0]]
     assert abs(polyalign._len(p0.texture_u) - 1.0) < 1e-9
 
-    # --fit-perimeter: rescales density so total U texels is the nearest integer (a whole-texel
-    # residual remains at the seam — the whole-TILE close arrives with the catalog, step 5).
+    # --fit-perimeter: rescales density so the total U advance is a WHOLE NUMBER OF TILES (the
+    # bound texture's own width) — an exact seam meet, not just an integer texel count.
     a2 = _brush("Cyl", cylinder(200, 100, 7), loc=(0, 0, 0))
+    for p in a2.brush.polys:
+        p.texture = "Pkg.Tex"
     lv2 = _level(a2)
-    polyalign.align(lv2, sides, "run", fit_perimeter=True)
+    polyalign.align(lv2, sides, "run", fit_perimeter=True, resolve_dims=lambda ref: (256, 256))
     p0b = a2.brush.polys[0]
     density = polyalign._len(p0b.texture_u)
-    assert abs(density * perim - round(perim)) < 1e-6      # integer total texels
+    assert abs((density * perim) % 256) < 1e-6              # whole number of 256px TILES, exactly
 
 
 def test_run_continuous_on_rotated_relocated_cylinder():
@@ -291,17 +293,19 @@ def test_run_zeroes_pan_keeping_it_integer():
         assert all(isinstance(c, int) for c in p.pan)
 
 
-def test_run_fit_perimeter_snaps_to_integer_texels():
+def test_run_fit_perimeter_closes_the_seam_exactly():
     """At the closing seam (last face's far edge == first face's seam edge, same world points):
-    --fit-perimeter snaps the U difference around the ring to an INTEGER texel count; without it, for
-    a non-dividing 7-gon, it is fractional. NB an integer-texel gap is not a closed seam — a texture
-    repeats every T texels, so a whole-texel residual can remain; the whole-TILE close arrives with
-    the catalog (step 5)."""
+    --fit-perimeter now snaps the U difference around the ring to a WHOLE NUMBER OF TILES — the
+    exact seam meet the flag has always claimed (§2.4.4: the old whole-texel snap left ~31 texels
+    of residual on a 256-wide texture; the fixed rule leaves < 0.001)."""
     def _closing_gap(fit):
         a = _brush("C", cylinder(200, 100, 7), loc=(0, 0, 0))
+        for p in a.brush.polys:
+            p.texture = "Pkg.Tex"
         lv = _level(a)
         sides = polyalign.find_faces(a, "C", item="Side")
-        polyalign.align(lv, [f"C:{i}" for i in sides], "run", fit_perimeter=fit)
+        polyalign.align(lv, [f"C:{i}" for i in sides], "run", fit_perimeter=fit,
+                        resolve_dims=(lambda ref: (256, 256)) if fit else None)
         p_first, p_last = a.brush.polys[sides[0]], a.brush.polys[sides[-1]]
         shared = _shared_world_points(a, p_first, a, p_last)   # the seam edge (2 verts)
         assert len(shared) == 2
@@ -309,9 +313,31 @@ def test_run_fit_perimeter_snaps_to_integer_texels():
         return polyalign.face_uv(a, p_last, s)[0] - polyalign.face_uv(a, p_first, s)[0]
 
     gap_fit = _closing_gap(True)
-    assert abs(gap_fit - round(gap_fit)) < 1e-6            # integer texel meet
+    assert abs(gap_fit % 256) < 1e-3                       # whole number of TILES: exact meet
     gap_raw = _closing_gap(False)
-    assert abs(gap_raw - round(gap_raw)) > 0.1            # left fractional (seam visible)
+    assert abs(gap_raw % 256) > 1.0                        # left visibly fractional (no fit)
+
+
+def test_run_fit_perimeter_non_square_texture_picks_the_landed_axis():
+    """§2.4.4's own "4x error" case: T is the pixel size of the axis the along-run advance LANDS
+    IN, not always the width. A 256x64 texture must use VSize (64) at a quarter --turn, USize
+    (256) at turn 0 — using the wrong one is a 4x error on exactly this shape."""
+    def _density(turn):
+        a = _brush("C", cylinder(200, 100, 8), loc=(0, 0, 0))
+        for p in a.brush.polys:
+            p.texture = "Pkg.Tex"
+        lv = _level(a)
+        sides = polyalign.find_faces(a, "C", item="Side")
+        polyalign.align(lv, [f"C:{i}" for i in sides], "run", turn=turn, fit_perimeter=True,
+                        resolve_dims=lambda ref: (256, 64))
+        p0 = a.brush.polys[sides[0]]
+        return polyalign._len(p0.texture_u), polyalign._len(p0.texture_v)
+
+    du0, dv0 = _density(0)
+    duq, dvq = _density(16384)
+    perim = 8 * 2 * 100 * math.sin(math.pi / 8)
+    assert abs((du0 * perim) % 256) < 1e-3                 # turn 0: U tiled by USize=256
+    assert abs((dvq * perim) % 64) < 1e-3                  # turn 16384: V tiled by VSize=64
 
 
 def test_run_rejects_cap_face_with_the_item_side_hint():
@@ -528,6 +554,52 @@ def test_run_fit_perimeter_guards():
     sides = polyalign.find_faces(c, "Tower", item="Side")
     with pytest.raises(polyalign.PolyAlignError, match="quarter --turn"):
         polyalign.align(_level(c), [f"Tower:{i}" for i in sides], "run", turn=5000, fit_perimeter=True)
+
+
+def test_run_fit_perimeter_requires_a_texture_after_the_structural_guards():
+    # The structural guards (closed, quarter-turn) run BEFORE the texture requirement (step-5 spec
+    # §3): a broken+untextured run is diagnosed structurally first — resolve_dims is never called.
+    a = _brush_from_quads("R", [
+        [(0, 0, 0), (64, 0, 0), (64, 64, 0), (0, 64, 0)],
+        [(64, 0, 0), (128, 0, 0), (128, 64, 0), (64, 64, 0)]])
+    called = []
+    with pytest.raises(polyalign.PolyAlignError, match="CLOSED run"):
+        polyalign.align(_level(a), ["R:0", "R:1"], "run", fit_perimeter=True,
+                        resolve_dims=lambda ref: called.append(ref) or (256, 256))
+    assert not called                                     # never reached: structural guard fired first
+
+    # A structurally valid (closed) but UNTEXTURED run: the texture guard, not resolve_dims, fires.
+    c = _brush("Tower", cylinder(256, 128, 8), loc=(0, 0, 0))
+    sides = polyalign.find_faces(c, "Tower", item="Side")
+    with pytest.raises(polyalign.PolyAlignError, match="carry no texture"):
+        polyalign.align(_level(c), [f"Tower:{i}" for i in sides], "run", fit_perimeter=True,
+                        resolve_dims=lambda ref: called.append(ref) or (256, 256))
+    assert not called
+
+
+def test_run_fit_perimeter_rejects_faces_with_different_textures():
+    a = _brush("Tower", cylinder(256, 128, 8), loc=(0, 0, 0))
+    sides = polyalign.find_faces(a, "Tower", item="Side")
+    for i in sides[:1]:
+        a.brush.polys[i].texture = "Pkg.A"
+    for i in sides[1:]:
+        a.brush.polys[i].texture = "Pkg.B"
+    with pytest.raises(polyalign.PolyAlignError, match="different textures"):
+        polyalign.align(_level(a), [f"Tower:{i}" for i in sides], "run", fit_perimeter=True,
+                        resolve_dims=lambda ref: (256, 256))
+
+
+def test_run_fit_perimeter_same_texture_check_is_casefold_safe():
+    # Two spellings of the SAME texture (DeusExDeco.Wood / deusexdeco.wood) must NOT trip the
+    # "different textures" guard — every other texture-ref identity check in the codebase casefolds.
+    a = _brush("Tower", cylinder(256, 128, 8), loc=(0, 0, 0))
+    sides = polyalign.find_faces(a, "Tower", item="Side")
+    for i in sides[:1]:
+        a.brush.polys[i].texture = "DeusExDeco.Wood"
+    for i in sides[1:]:
+        a.brush.polys[i].texture = "deusexdeco.wood"
+    polyalign.align(_level(a), [f"Tower:{i}" for i in sides], "run", fit_perimeter=True,
+                    resolve_dims=lambda ref: (256, 256))   # no error
 
 
 def test_run_rejects_fewer_than_two_faces():
@@ -774,6 +846,29 @@ def test_dispatch_poly_align_positional_saves(capsys):
     assert capsys.readouterr().out.split() == [f"Tower:{i}" for i in range(8)]
 
 
+def test_dispatch_poly_align_run_fit_perimeter_builds_resolve_dims_only_then(capsys, monkeypatch):
+    from uedcli.cli import resources
+    calls = []
+    monkeypatch.setattr(resources, "texture_dims_resolver",
+                        lambda args: (calls.append(1) or (lambda ref: (256, 256))))
+    a = _brush("Tower", cylinder(256, 128, 8))
+    for p in a.brush.polys:
+        p.texture = "Pkg.Tex"
+    sides = [f"Tower:{i}" for i in range(8)]
+
+    # fit_perimeter=False: `run` stays project-independent — texture_dims_resolver never called.
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="align", targets=sides,
+                           align_mode="run", turn=0, fit_perimeter=False, container="c")
+    _run(args, _level(a))
+    assert not calls
+
+    # fit_perimeter=True: it IS needed, and built exactly once.
+    args2 = SimpleNamespace(cmd="brush", sub="poly", polysub="align", targets=sides,
+                            align_mode="run", turn=0, fit_perimeter=True, container="c")
+    rc, _ = _run(args2, _level(a))
+    assert rc == 0 and calls == [1]
+
+
 def test_dispatch_poly_align_reads_stdin_selectors(capsys):
     a = _brush("Tower", cylinder(256, 128, 8))
     stdin = "".join(f"Tower:{i}\n" for i in range(8))
@@ -901,3 +996,107 @@ def test_align_emits_no_zero_pan_so_materialize_can_verify_the_built_map():
 # The counterpart guard — that a non-zero Pan reaches the trunk — moved to `brush poly pan --to`
 # (the only verb left that writes a non-zero pan) when ruling 8 made every `align` mode zero it:
 # see test_surface.py::test_apply_pan_to_a_non_zero_value_reaches_the_trunk.
+
+
+# --------------------------------------------------------------------- one-tile (step 5, §2.6)
+
+def _brush_from_polys(name, polys, loc=(0, 0, 0)):
+    """A brush actor whose polys are `[(verts, texture_ref), ...]` — for one-tile fixtures that
+    need a bound texture, which `_brush_from_quads` doesn't set."""
+    from uedcli.model import Brush, Polygon
+    made = [Polygon(vertices=[tuple(float(c) for c in v) for v in verts], texture=tex)
+            for verts, tex in polys]
+    return make_brush_actor(name, Brush("Model", made), location=tuple(Decimal(str(c)) for c in loc))
+
+
+def test_one_tile_corner_face_orthogonalises_and_fits_exactly():
+    # The flagship regression (spike 2026-07-26-poly-rotate-curved-track/uv_preview.py
+    # onetile-ortho): un-orthogonalised the projected pair is 120° apart and the fit overshoots
+    # to [-85.33, 170.67]; Gram-Schmidt gives exactly 90° and [0, 256] on both axes.
+    verts = [(256.0, 0.0, 0.0), (0.0, 256.0, 0.0), (0.0, 0.0, 256.0)]
+    a = _brush_from_polys("F", [(verts, "Pkg.Tex")])
+    lv = _level(a)
+    polyalign.align(lv, ["F:0"], "one-tile", resolve_dims=lambda ref: (256, 256))
+    p = a.brush.polys[0]
+    assert abs(polyalign._dot(p.texture_u, p.texture_v)) < 1e-6
+    us = [polyalign.face_uv(a, p, v)[0] for v in verts]
+    vs = [polyalign.face_uv(a, p, v)[1] for v in verts]
+    assert abs(min(us) - 0.0) < 1e-6 and abs(max(us) - 256.0) < 1e-6
+    assert abs(min(vs) - 0.0) < 1e-6 and abs(max(vs) - 256.0) < 1e-6
+    assert p.pan == (0, 0)
+
+
+def test_one_tile_axis_aligned_face_maps_corners_exactly():
+    # A +Z face square to its (Z-projected) axis: Gram-Schmidt is a no-op (already orthogonal),
+    # unit-scaled U/V, so the four corners map to EXACTLY the four corners of [0,W]x[0,H] — which
+    # corner is (0,0) follows the axis sign (U/V may point either way along X/Y), so assert the
+    # SET of corners rather than assume one.
+    verts = [(0.0, 0.0, 64.0), (128.0, 0.0, 64.0), (128.0, 64.0, 64.0), (0.0, 64.0, 64.0)]
+    a = _brush_from_polys("F", [(verts, "Pkg.Tex")])
+    lv = _level(a)
+    polyalign.align(lv, ["F:0"], "one-tile", resolve_dims=lambda ref: (256, 128))
+    p = a.brush.polys[0]
+    got = sorted(polyalign.face_uv(a, p, v) for v in verts)
+    want = sorted([(0.0, 0.0), (256.0, 0.0), (0.0, 128.0), (256.0, 128.0)])
+    for (gu, gv), (wu, wv) in zip(got, want):
+        assert abs(gu - wu) < 1e-6 and abs(gv - wv) < 1e-6, (got, want)
+
+
+def test_one_tile_stretches_non_uniformly_on_a_non_square_face():
+    verts = [(0.0, 0.0, 0.0), (200.0, 0.0, 0.0), (200.0, 50.0, 0.0), (0.0, 50.0, 0.0)]
+    a = _brush_from_polys("F", [(verts, "Pkg.Tex")])
+    lv = _level(a)
+    polyalign.align(lv, ["F:0"], "one-tile", resolve_dims=lambda ref: (256, 256))
+    p = a.brush.polys[0]
+    # extent_u=200 -> density 256/200=1.28; extent_v=50 -> density 256/50=5.12: NOT equal.
+    assert abs(polyalign._len(p.texture_u) - polyalign._len(p.texture_v)) > 1.0
+
+
+def test_one_tile_no_orientation_guard_any_face_works():
+    # A slanted face that would fail wall/floor's |N.A|>0.05 guard on neither derived axis still
+    # aligns under one-tile (the axis is always the argmax, so |N.A| >= 1/sqrt(3) always).
+    verts = [(100.0, 100.0, 100.0), (0.0, 200.0, 100.0), (0.0, 100.0, 200.0)]
+    a = _brush_from_polys("F", [(verts, "Pkg.Tex")])
+    lv = _level(a)
+    polyalign.align(lv, ["F:0"], "one-tile", resolve_dims=lambda ref: (128, 128))  # no error
+    assert a.brush.polys[0].pan == (0, 0)
+
+
+def test_one_tile_batches_every_untextured_and_unresolved_face():
+    a = _brush_from_polys("F", [
+        ([(0.0, 0.0, 0.0), (64.0, 0.0, 0.0), (64.0, 64.0, 0.0), (0.0, 64.0, 0.0)], None),
+        ([(0.0, 100.0, 0.0), (64.0, 100.0, 0.0), (64.0, 164.0, 0.0), (0.0, 164.0, 0.0)], "Pkg.Bad"),
+        ([(0.0, 200.0, 0.0), (64.0, 200.0, 0.0), (64.0, 264.0, 0.0), (0.0, 264.0, 0.0)], "Pkg.Good"),
+    ])
+    lv = _level(a)
+
+    def resolve_dims(ref):
+        if ref == "Pkg.Good":
+            return (64, 64)
+        raise ValueError(f"texture not found: {ref}")
+
+    with pytest.raises(polyalign.PolyAlignError) as e:
+        polyalign.align(lv, ["F:0", "F:1", "F:2"], "one-tile", resolve_dims=resolve_dims)
+    msg = str(e.value)
+    assert "F:0" in msg and "carry no texture" in msg     # the untextured face named
+    assert "Pkg.Bad" in msg                               # the unresolved ref named
+    assert a.brush.polys[2].texture_u is None             # nothing written — all-or-nothing
+
+
+# NB: a face with zero extent along its OWN in-plane fit axis but nonzero area is not
+# constructible — a positive-area planar polygon has nonzero extent along any direction in its
+# own plane, so `_world_normal`'s zero-area check (raised well before the extent guard runs)
+# already catches every real-world degenerate case. The extent guard in `_one_tile_align` is
+# defensive only (division safety), not independently reachable, so it has no dedicated test.
+
+
+def test_one_tile_dispatch_prints_brush_idx_and_saves(capsys, monkeypatch):
+    from uedcli.cli import resources
+    monkeypatch.setattr(resources, "texture_dims_resolver", lambda args: (lambda ref: (256, 256)))
+    a = _brush_from_polys("F", [
+        ([(0.0, 0.0, 0.0), (64.0, 0.0, 0.0), (64.0, 64.0, 0.0), (0.0, 64.0, 0.0)], "Pkg.Tex")])
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="align", targets=["F:0"],
+                           align_mode="one-tile", turn=0, fit_perimeter=False, container="c")
+    rc, src = _run(args, _level(a))
+    assert rc == 0
+    assert capsys.readouterr().out.strip() == "F:0"

@@ -25,6 +25,7 @@ from __future__ import annotations
 import math
 import re
 from decimal import Decimal
+from typing import Callable
 
 from . import rotation, vertex
 from .emit import fmt_vertex
@@ -509,19 +510,33 @@ def apply_rotate(level: Level, targets: list[str], *, by_uu: int) -> list[str]:
     return touched
 
 
-def apply_scale(level: Level, targets: list[str], *, by: tuple[float, float]) -> list[str]:
-    """`brush poly scale --by FU,FV` — multiply the texture's APPARENT SIZE on each selected face,
-    re-anchoring on the face centroid.
+def apply_scale(level: Level, targets: list[str], *, by: tuple[float, float] | None = None,
+                to: tuple[float, float] | None = None,
+                resolve_dims: Callable[[str], tuple[int, int]] | None = None) -> list[str]:
+    """`brush poly scale (--by FU,FV | --to U,V)` — resize the texture on each selected face,
+    re-anchoring on the face centroid. Exactly one of `by`/`to` is set (the CLI's mutex group
+    guarantees it).
 
-    `--by 2,2` makes the texture look twice as big, which DIVIDES the stored magnitudes
+    **`--by 2,2`** makes the texture look twice as big, which DIVIDES the stored magnitudes
     (`|TextureU| ← |TextureU| / FU`): T3D density is texels per world unit, so a longer axis is a
     smaller-looking texture. The verb is named for what the author sees, not for what is stored.
+    Pure math — `resolve_dims` is never called.
+
+    **`--to U,V`** sets the ABSOLUTE density in WORLD UNITS PER TILE — `--to 128,128` means each
+    face's OWN bound texture repeats every 128 uu each way. Needs that texture's pixel `(W, H)`
+    (`resolve_dims`, a `ref -> (USize, VSize)` callable the CLI builds over the project's package
+    path): a face with no bound texture, or whose ref does not resolve, is named in ONE batch
+    pre-pass before anything is written (every offender, not just the first — `conventions.md`
+    "all-or-nothing"). The absolute target `|TextureU| = W / U` is converted to the same
+    relative-factor math `--by` uses (`fu = |TextureU| / (W/U)`), so the re-anchor below is
+    identical either way — just fed a per-face factor instead of one shared by the whole set.
+
     U and V scale independently. Directions are preserved, so an out-of-plane axis is harmless here
     and there is no in-plane guard (unlike `rotate`).
 
-    Writes `Origin`/`TextureU`/`TextureV`; leaves `Pan` untouched. A zero or negative factor exits
-    non-zero naming the value — a zero-length texture vector crashes the CSG rebuild
-    (`builders._tex_basis`).
+    Writes `Origin`/`TextureU`/`TextureV`; leaves `Pan` untouched. A zero or negative factor (or,
+    under `--to`, a non-positive `U`/`V`) exits non-zero naming the value — a zero-length texture
+    vector crashes the CSG rebuild (`builders._tex_basis`).
 
     **The re-anchor REPROJECTS `Origin` onto the face plane**, exactly as `rotate`'s does. The Gram
     solve writes `Origin' = C − (a·TU' + b·TV')`, which lies in the span of the two texture axes by
@@ -530,9 +545,11 @@ def apply_scale(level: Level, targets: list[str], *, by: tuple[float, float]) ->
     `(U,V)`, and the centroid's `(U,V)` is preserved exactly either way — but it IS a change the
     trunk records.
 
-    **`--by 1,1` is therefore short-circuited to write nothing at all**, matching `rotate --by 0`:
+    **Under `--by`, `1,1` is short-circuited to write nothing at all**, matching `rotate --by 0`:
     the operation the author asked for is the identity, and reprojecting `Origin` for it would churn
-    the trunk's git diff for a request to change nothing.
+    the trunk's git diff for a request to change nothing. **Under `--to` there is no such
+    short-circuit** — the per-face factor computed from an absolute target coincidentally landing on
+    `1,1` is measure-zero, and it is simpler to always write than to special-case it.
 
     NO continuity guarantee, and more strongly than `rotate`: scaling breaks a `brush poly align
     run` even when applied uniformly to the whole run, because each face re-anchors about its own
@@ -541,34 +558,74 @@ def apply_scale(level: Level, targets: list[str], *, by: tuple[float, float]) ->
 
     All-or-nothing: every face is resolved and its frame validated before anything is written."""
     verb = "brush poly scale"
-    fu, fv = float(by[0]), float(by[1])
-    for label, factor in (("FU", fu), ("FV", fv)):
-        if not math.isfinite(factor) or factor <= 0:
-            raise ValueError(f"{verb}: --by {label} must be a positive number, got {factor!r} — a "
-                             f"zero or negative texture axis crashes the CSG rebuild")
     pairs = resolve_targets(level, targets)
+
+    if to is not None:
+        u_units, v_units = float(to[0]), float(to[1])
+        for label, val in (("U", u_units), ("V", v_units)):
+            if not math.isfinite(val) or val <= 0:
+                raise ValueError(f"{verb}: --to {label} must be a positive number, got {val!r} — "
+                                 f"world units per tile must be positive")
+        missing, tried, dims, bad_refs = [], set(), {}, []
+        for brush_name, idx in pairs:
+            poly = level.actors[brush_name].brush.polys[idx]
+            if poly.texture is None:
+                missing.append(f"{brush_name}:{idx}")
+                continue
+            key = poly.texture.casefold()
+            if key in tried:
+                continue
+            tried.add(key)
+            try:
+                dims[key] = resolve_dims(poly.texture)
+            except ValueError as e:
+                bad_refs.append(str(e))
+        if missing or bad_refs:
+            parts = []
+            if missing:
+                parts.append(f"{len(missing)} face(s) carry no texture — {', '.join(missing)}")
+            if bad_refs:
+                parts.append("; ".join(bad_refs))
+            raise ValueError(f"{verb} --to: {'; '.join(parts)}")
+    else:
+        fu, fv = float(by[0]), float(by[1])
+        for label, factor in (("FU", fu), ("FV", fv)):
+            if not math.isfinite(factor) or factor <= 0:
+                raise ValueError(f"{verb}: --by {label} must be a positive number, got {factor!r} — a "
+                                 f"zero or negative texture axis crashes the CSG rebuild")
+
     prepared = []
     for brush_name, idx in pairs:
         ref = f"{brush_name}:{idx}"
         poly = level.actors[brush_name].brush.polys[idx]
         origin, tu, tv = _frame(poly, ref, verb)
         centroid = _centroid3(_local_verts(poly, ref, verb))
+        if to is not None:
+            w, h = dims[poly.texture.casefold()]
+            mag_u, mag_v = w / u_units, h / v_units
+            fu, fv = _len3(tu) / mag_u, _len3(tv) / mag_v
         tu2, tv2 = _mul3(tu, 1.0 / fu), _mul3(tv, 1.0 / fv)
         # Name the right offender, in BOTH directions. An axis the trunk cannot store is either the
         # FRAME's fault (it arrived that way) or the FACTOR's (this call made it so), and the Gram
         # check below cannot tell them apart — it would call a perfectly ordinary orthogonal frame
         # "degenerate" for an absurd factor, and blame an innocent `--by 1.0` for a monstrous
         # authored axis. Asking about the axis BEFORE and AFTER scaling separates the two exactly.
-        for label, factor, axis_name, axis, scaled in (
-                ("FU", fu, "TextureU", tu, tu2), ("FV", fv, "TextureV", tv, tv2)):
+        # `flag_desc` names the OFFENDING VALUE the way the caller actually spelled it — under
+        # `--to` that is the requested world-units-per-tile, not the internal derived factor.
+        if to is not None:
+            flag_desc = (f"--to U={u_units!r}", f"--to V={v_units!r}")
+        else:
+            flag_desc = (f"--by FU={fu!r}", f"--by FV={fv!r}")
+        for desc, axis_name, axis, scaled in (
+                (flag_desc[0], "TextureU", tu, tu2), (flag_desc[1], "TextureV", tv, tv2)):
             if not _axis_is_writable(axis):
                 raise ValueError(
                     f"{verb}: face {ref} already has a {axis_name} the trunk cannot store (it is "
                     f"zero-length, or too large for a T3D coordinate) — the FRAME is malformed, so "
-                    f"no --by factor can fix it; re-align the face instead")
+                    f"no scale factor can fix it; re-align the face instead")
             if not _axis_is_writable(scaled):
                 raise ValueError(
-                    f"{verb}: --by {label}={factor!r} is too extreme for face {ref} — it would "
+                    f"{verb}: {desc} is too extreme for face {ref} — it would "
                     f"leave {axis_name} at a length the trunk cannot store (too short to survive "
                     f"the grid snap, or too large for a T3D coordinate), and a zero-length texture "
                     f"axis crashes the CSG rebuild")
@@ -596,8 +653,11 @@ def apply_scale(level: Level, targets: list[str], *, by: tuple[float, float]) ->
         a = (u * g22 - v * g12) / det
         b = (v * g11 - u * g12) / det
         prepared.append((poly, tu2, tv2, _sub3(centroid, _add3(_mul3(tu2, a), _mul3(tv2, b)))))
-    if (fu, fv) != (1.0, 1.0):          # `--by 1,1` is the identity: see the docstring, and
-        for poly, tu2, tv2, origin2 in prepared:      # `rotate`'s matching whole-turn skip
+    # `--by 1,1` is the identity (docstring, `rotate`'s matching whole-turn skip) and writes
+    # nothing; `--to` always writes — its per-face factor is recomputed each iteration above, so
+    # `(fu, fv)` here is only the LAST face's, not a meaningful set-wide constant to compare.
+    if to is not None or (fu, fv) != (1.0, 1.0):
+        for poly, tu2, tv2, origin2 in prepared:
             poly.texture_u, poly.texture_v, poly.origin = tu2, tv2, origin2
     touched = _touched_brushes(pairs)
     for brush_name in touched:

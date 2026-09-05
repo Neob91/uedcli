@@ -649,6 +649,7 @@ class TextureResolver:
         self._pkg_unreadable: set[str] = set()
         self._ref_cache: dict[str, TextureResult] = {}
         self._exists_cache: dict[str, bool] = {}
+        self._dims_cache: dict[str, tuple[int, int] | TextureError] = {}
         self._defaults_cache: dict[str, dict | None] = {}
         self._defaults_pkgs: dict = {}           # uprops' own package cache, shared across classes
 
@@ -719,6 +720,91 @@ class TextureResolver:
                     continue
             return pkg, i
         return None
+
+    def dimensions(self, ref: str) -> tuple[int, int] | TextureError:
+        """Mip-0 `(USize, VSize)` for `ref`, or a `TextureError` naming why not. Cached by
+        identity per resolver instance, like `resolve`/`exists`.
+
+        Cheaper than `resolve`: `decode_texture` reads the header and the raw mip byte arrays
+        but does no layout detection or RGB/palette expansion, neither of which `dimensions`
+        needs — a face-alignment verb wants a pixel SIZE, not a pixel.
+
+        `package_for_ref` alone cannot supply this: it returns a bare `None` for three
+        different reasons (bad ref shape, no such package, package-has-no-matching-texture) and
+        cannot tell "package unreadable" from "package absent" either (both collapse to `None`
+        from `_package`). So this inlines the same two checks `_decode_ref` makes, rather than
+        widen `package_for_ref`'s contract for one caller.
+
+        Case vocabulary — deliberately narrower than `resolve`'s twelve, since `dimensions`
+        never reaches layout detection: `unqualified-ref` and `package-unreadable` mean exactly
+        what they do there; `resolve`'s separate `unknown-package`/`unknown-texture` are merged
+        into one `not-found` (existing author-time validation already presents both identically
+        — `no Texture of that name on the package path` either way); `corrupt-body` and
+        `no-mip-data` mean what they do in `_decode_export`."""
+        key = ref.casefold()
+        if key not in self._dims_cache:
+            try:
+                self._dims_cache[key] = self._dimensions_uncached(ref)
+            except (ValueError, struct.error, IndexError, KeyError, MemoryError,
+                    OverflowError, UnicodeDecodeError) as exc:
+                self._dims_cache[key] = TextureError(
+                    ref, "package-unreadable",
+                    f"{ref}: the package is on the search path but its structure will not "
+                    f"read ({type(exc).__name__}: {exc})")
+        return self._dims_cache[key]
+
+    def _dimensions_uncached(self, ref: str) -> tuple[int, int] | TextureError:
+        parts = ref.split(".")
+        if len(parts) == 2:
+            pkg_stem, group, name = parts[0], None, parts[1]
+        elif len(parts) == 3:
+            pkg_stem, group, name = parts
+        else:
+            return TextureError(ref, "unqualified-ref",
+                                f"{ref!r} is not a Package[.Group].Name reference; a package "
+                                f"qualifier is required (a bare name could match several)")
+        pkg = self._package(pkg_stem)
+        if pkg is None:
+            if pkg_stem.casefold() in self._pkg_unreadable:
+                return TextureError(ref, "package-unreadable",
+                                    f"package {pkg_stem!r} is on the search path but will not "
+                                    f"open or parse")
+            return TextureError(ref, "not-found",
+                                f"no Texture of that name on the package path")
+        want = name.casefold()
+        want_group = group.casefold() if group else None
+        i0 = None
+        for i in textures(pkg, self._class_index):
+            e = pkg.exports[i]
+            if (pkg.name(e["nm"]) or "").casefold() != want:
+                continue
+            if want_group is not None:
+                outer = pkg.name_of_ref(e["outer"])
+                if outer is None or outer.casefold() != want_group:
+                    continue
+            i0 = i
+            break
+        if i0 is None:
+            return TextureError(ref, "not-found",
+                                f"no Texture of that name on the package path")
+        try:
+            t = decode_texture(pkg, i0)
+        except (ValueError, struct.error, IndexError, MemoryError) as exc:
+            return TextureError(ref, "corrupt-body", f"{ref}: {exc}")
+        # Same array-selection precedent as `_decode_export`: a MIPS array carries data iff at
+        # least one mip has bytes (a list of empty mips is truthy but has nothing to measure
+        # against); fall back to CompMips, mirroring `resolve()`'s own fallback so a texture
+        # that decodes fine there does not fail HERE with a stricter, undocumented rule.
+        if any(m.data for m in t.mips):
+            selected = t.mips
+        elif any(m.data for m in t.comp_mips):
+            selected = t.comp_mips
+        else:
+            return TextureError(ref, "no-mip-data",
+                                f"{ref}: no mip carries pixel data "
+                                f"({len(t.mips)} Mips, {len(t.comp_mips)} CompMips, all empty)")
+        mip0 = selected[0]
+        return mip0.width, mip0.height
 
     def texture_refs(self) -> list[TextureRef]:
         """Every `Engine.Texture`-DESCENDANT export across the whole search path, as `TextureRef`s

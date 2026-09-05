@@ -27,6 +27,7 @@ from __future__ import annotations
 import math
 import sys
 from decimal import Decimal
+from typing import Callable
 
 from . import rotation
 from .facing_spec import FacingSpec, match_facing
@@ -249,17 +250,21 @@ def _proj(axis_vec, n):
     return (axis_vec[0] - n[0] * d, axis_vec[1] - n[1] * d, axis_vec[2] - n[2] * d)
 
 
+# axis index -> (U_src, V_src): the editor's FLOOR/WALLX/WALLY table (`dev/docs/unrealed/texalign.md`),
+# COPIED, not derived from a cyclic rule — both wall rows put V on Ẑ. Shared by `wall`/`floor`
+# (§2.3, axis chosen from `mode`) and `one-tile` (§2.6, axis chosen as the face's own argmax).
+_AXIS_UV = {2: (_WORLD_AXES[0], _WORLD_AXES[1]),          # A = Z (floor): U ← X̂, V ← Ŷ
+            0: (_WORLD_AXES[1], _WORLD_AXES[2]),          # A = X (wall):  U ← Ŷ, V ← Ẑ
+            1: (_WORLD_AXES[0], _WORLD_AXES[2])}          # A = Y (wall):  U ← X̂, V ← Ẑ
+
+
 def _projection_axis(mode: str, n) -> tuple[int, tuple, tuple]:
     """The world axis this face is projected DOWN (its index) plus the world axes its U and V come
-    from, per the editor's FLOOR/WALLX/WALLY table (`dev/docs/unrealed/texalign.md`). The table is
-    COPIED, not derived from a cyclic rule — both wall rows put V on Ẑ. `floor` drops Z; `wall`
-    derives X vs Y from the axis the face faces MORE (`|N.X| ≥ |N.Y|`), ties resolving to X (the
-    lowest axis index, matching `builders._tex_basis`)."""
-    if mode == "floor":
-        return 2, _WORLD_AXES[0], _WORLD_AXES[1]          # A = Z, U ← X̂, V ← Ŷ
-    if abs(n[0]) >= abs(n[1]):
-        return 0, _WORLD_AXES[1], _WORLD_AXES[2]          # A = X, U ← Ŷ, V ← Ẑ
-    return 1, _WORLD_AXES[0], _WORLD_AXES[2]              # A = Y, U ← X̂, V ← Ẑ
+    from (`_AXIS_UV`). `floor` drops Z; `wall` derives X vs Y from the axis the face faces MORE
+    (`|N.X| ≥ |N.Y|`), ties resolving to X (the lowest axis index, matching `builders._tex_basis`)."""
+    axis_idx = 2 if mode == "floor" else (0 if abs(n[0]) >= abs(n[1]) else 1)
+    u_src, v_src = _AXIS_UV[axis_idx]
+    return axis_idx, u_src, v_src
 
 
 def _projected_align(level: Level, targets, mode: str) -> list[str]:
@@ -303,6 +308,80 @@ def _projection_guard_message(mode: str, failures) -> str:
             f"20× and anchored thousands of uu away. Filter the set first, e.g. "
             f"`brush poly find <brush> --facing {'floor' if mode == 'floor' else 'wall'} | "
             f"brush poly align {mode} -`")
+
+
+# --------------------------------------------------------------------- fit-to-poly (one-tile)
+
+def _one_tile_align(level: Level, targets, resolve_dims) -> list[str]:
+    """`align one-tile`: fit exactly one texture tile to each face, independently — no shared
+    frame, no orientation guard (the projection axis is always the world axis the face faces
+    MOST over all three, so `|N.A| ≥ 1/√3` always and the wall/floor guard can never fire here).
+    §2.6: a uedcli invention (UnrealEd's own `ONETILE` is a no-op), reusing the wall/floor
+    projection table but ORTHOGONALISING it (Gram-Schmidt of U against V) — the raw table's two
+    projected axes are not perpendicular off-axis, which both shears the image and moves the
+    fitted extent's minimum corner off a vertex."""
+    faces = [(bn, i, level.actors[bn], level.actors[bn].brush.polys[i]) for bn, i in targets]
+
+    # Batch pre-pass (conventions.md "all-or-nothing"): every face with no bound texture, and
+    # every DISTINCT ref that fails to resolve, named together before anything is written.
+    missing = [f"{bn}:{i}" for bn, i, a, p in faces if p.texture is None]
+    dims: dict[str, tuple[int, int]] = {}
+    tried: set[str] = set()
+    bad_refs: list[str] = []
+    for _, _, _, p in faces:
+        if p.texture is None:
+            continue
+        key = p.texture.casefold()
+        if key in tried:
+            continue
+        tried.add(key)
+        try:
+            dims[key] = resolve_dims(p.texture)
+        except ValueError as e:
+            bad_refs.append(str(e))
+    if missing or bad_refs:
+        parts = []
+        if missing:
+            parts.append(f"{len(missing)} face(s) carry no texture — {', '.join(missing)}")
+        if bad_refs:
+            parts.append("; ".join(bad_refs))
+        raise PolyAlignError(f"brush poly align one-tile: {'; '.join(parts)}")
+
+    prepared = []
+    for bn, i, a, p in faces:
+        ref = f"{bn}:{i}"
+        n = _world_normal(a, p, ref)                      # raises naming a zero-area face
+        axis_idx = max(range(3), key=lambda k: abs(n[k]))  # over ALL three axes; first-wins ⇒ lowest
+        u_src, v_src = _AXIS_UV[axis_idx]
+        v_hat = _unit(_neg(_proj(v_src, n)))                # kept EXACTLY as the table gives it
+        raw_u = _neg(_proj(u_src, n))
+        u_hat = _unit(_sub(raw_u, _scale(v_hat, _dot(raw_u, v_hat))))   # Gram-Schmidt: square U to V
+
+        wv = _world_verts(a, p)
+        pu = [_dot(v, u_hat) for v in wv]
+        pv = [_dot(v, v_hat) for v in wv]
+        extent_u, extent_v = max(pu) - min(pu), max(pv) - min(pv)
+        if extent_u < 1e-6 or extent_v < 1e-6:
+            # Defensive only, not reachable by a real face: a positive-area planar polygon has
+            # nonzero extent along ANY in-plane direction, so `_world_normal`'s zero-area check
+            # above already catches every genuine degenerate case. This guards the division below.
+            raise PolyAlignError(
+                f"brush poly align one-tile: face {ref} has zero extent along its own fit "
+                f"axis (a degenerate projection) — {extent_u:.4g} x {extent_v:.4g}")
+
+        w, h = dims[p.texture.casefold()]
+        tu_w, tv_w = _scale(u_hat, w / extent_u), _scale(v_hat, h / extent_v)
+        p0 = wv[0]
+        # Origin = P0 minus its own Û/V̂ components (its component along n̂ survives), plus the
+        # extremal corner along Û/V̂ — the world point whose Û/V̂ projections are exactly
+        # (min(pu), min(pv)), so that corner maps to texel (0,0). Exact only because û ⊥ v̂ ⊥ n̂.
+        origin = _add(_sub(p0, _add(_scale(u_hat, _dot(p0, u_hat)), _scale(v_hat, _dot(p0, v_hat)))),
+                      _add(_scale(u_hat, min(pu)), _scale(v_hat, min(pv))))
+        prepared.append((a, p, origin, tu_w, tv_w))
+
+    for a, p, origin, tu_w, tv_w in prepared:
+        _write_world_frame(a, p, origin, tu_w, tv_w, (0, 0))
+    return sorted({bn for bn, _ in targets})
 
 
 # --------------------------------------------------------------------- connected run (run)
@@ -471,12 +550,14 @@ def _run_prewalk(brush_name: str, targets, actor):
     return data, walk, closed
 
 
-def _run_align(level: Level, targets, turn_uu: int, fit_perimeter: bool) -> list[str]:
+def _run_align(level: Level, targets, turn_uu: int, fit_perimeter: bool,
+               resolve_dims: Callable[[str], tuple[int, int]] | None = None) -> list[str]:
     brush_name = targets[0][0]
     actor = level.actors[brush_name]
     data, walk, closed = _run_prewalk(brush_name, targets, actor)
 
-    if fit_perimeter:                                   # §2.4.4 guards (the tile fix is step 5)
+    tile_texels = None
+    if fit_perimeter:                                   # §2.4.4 guards, then the texture requirement
         if not closed:
             raise PolyAlignError(
                 "brush poly align run: --fit-perimeter needs a CLOSED run — this run is open, so it "
@@ -486,14 +567,36 @@ def _run_align(level: Level, targets, turn_uu: int, fit_perimeter: bool) -> list
                 f"brush poly align run: --fit-perimeter needs a quarter --turn (a multiple of "
                 f"16384); got {turn_uu}. At other angles the advance splits across both axes and one "
                 f"density cannot close the loop.")
+        # The texture requirement lives HERE, after the structural guards above, so a run that is
+        # both broken and untextured is diagnosed structurally first (step-5 spec §3) — poly.texture
+        # is model data `polyalign` already reads elsewhere (`find_faces`'s texture filter), so this
+        # needs no resolver.
+        refs_by_idx = {idx: actor.brush.polys[idx].texture for idx, _, _ in walk}
+        missing = [idx for idx, ref in refs_by_idx.items() if ref is None]
+        if missing:
+            raise PolyAlignError(
+                f"brush poly align run: --fit-perimeter needs every face textured — "
+                f"{len(missing)} face(s) carry no texture — "
+                + ", ".join(f"{brush_name}:{i}" for i in sorted(missing)))
+        distinct = {ref.casefold() for ref in refs_by_idx.values()}
+        if len(distinct) > 1:
+            raise PolyAlignError(
+                "brush poly align run: --fit-perimeter needs ONE texture across the whole run — "
+                "faces carry different textures, so one density cannot satisfy two — split the run "
+                "or set one texture first: "
+                + ", ".join(f"{brush_name}:{i} ({ref})" for i, ref in sorted(refs_by_idx.items())))
+        ref = next(iter(refs_by_idx.values()))           # the one texture, original casing
+        w, h = resolve_dims(ref)                         # may raise ValueError; propagates as-is
+        tile_texels = w if (turn_uu // 16384) % 2 == 0 else h   # the along-run advance's landed axis
 
     theta = turn_uu / 65536.0 * 2.0 * math.pi
     cth, sth = math.cos(theta), math.sin(theta)
 
     total_chord = sum(_len(_sub(_mid(xe), _mid(ee))) for _, ee, xe in walk)
     density_u = density_v = 1.0
-    if fit_perimeter and total_chord > 1e-9:            # whole TEXELS (whole-TILE fit is step 5)
-        d = max(1, round(total_chord)) / total_chord
+    if fit_perimeter and total_chord > 1e-9:            # whole TILES: T = tile_texels, not 1 texel
+        target = max(tile_texels, round(total_chord / tile_texels) * tile_texels)
+        d = target / total_chord
         if (turn_uu // 16384) % 2 == 0:                 # the along-run advance lands in U (else V)
             density_u = d
         else:
@@ -555,21 +658,29 @@ def _report_seam_shear(walk, frames) -> None:
 # --------------------------------------------------------------------- entry point
 
 def align(level: Level, tokens: list[str], mode: str, *,
-          turn: int = 0, fit_perimeter: bool = False) -> list[str]:
+          turn: int = 0, fit_perimeter: bool = False,
+          resolve_dims: Callable[[str], tuple[int, int]] | None = None) -> list[str]:
     """Align the texture frames of the faces named by `tokens` (bare names / `BRUSH:SELECTOR`) in
-    `mode` (`wall`|`floor`|`run`). `wall`/`floor` write the editor's projection frame (`|proj|`
-    density, ≤ 1); `run` walks a connected run laying one continuous texture along it at unit density,
-    `--turn` rotating the frame in unreal rotation units. Every mode zeroes `Pan`. Returns the sorted
-    touched brush names; `run` also prints the worst seam shear to stderr. `turn`/`fit_perimeter` are
-    run-only (argparse enforces it via the subcommand). Empty `tokens` ⇒ `[]` (a clean no-op). Raises
-    `PolyAlignError` (a `ValueError`) naming the offender for every failure path."""
+    `mode` (`wall`|`floor`|`run`|`one-tile`). `wall`/`floor` write the editor's projection frame
+    (`|proj|` density, ≤ 1); `run` walks a connected run laying one continuous texture along it at
+    unit density, `--turn` rotating the frame in unreal rotation units; `one-tile` fits exactly one
+    texture tile to each face independently. Every mode zeroes `Pan`. Returns the sorted touched
+    brush names; `run` also prints the worst seam shear to stderr. `turn`/`fit_perimeter` are
+    run-only (argparse enforces it via the subcommand). `resolve_dims` (a `ref -> (USize, VSize)`
+    callable that RAISES `ValueError` naming the ref and why on failure) is required for `one-tile`
+    and for `run` when `fit_perimeter` is set — the CLI builds it once per invocation over the
+    project's package path; `polyalign` never imports a resolver itself. Empty `tokens` ⇒ `[]` (a
+    clean no-op). Raises `PolyAlignError` (a `ValueError`) naming the offender for every failure
+    path."""
     targets = resolve_align_targets(level, tokens)
     if not targets:
         return []
     if mode == "run":
-        return _run_align(level, targets, turn, fit_perimeter)
+        return _run_align(level, targets, turn, fit_perimeter, resolve_dims)
     if mode in ("wall", "floor"):
         return _projected_align(level, targets, mode)
+    if mode == "one-tile":
+        return _one_tile_align(level, targets, resolve_dims)
     raise PolyAlignError(f"brush poly align: unknown mode {mode!r}")
 
 

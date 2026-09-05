@@ -77,8 +77,10 @@ Combinations: `Fake Backdrop` + `Unlit` shows sky; `Mirror` + `Unlit`; a glass s
   the editor.) The verb needs the brush's `CsgOper` to be `CSG_Add` or `CSG_Subtract` (absent counts
   as `CSG_Add`); any other value exits 2 naming it — a brush with no inside and outside gives the
   turn no direction to follow, so uedcli refuses rather than guessing.
-- Scale with `brush poly scale --by FU,FV`: `--by 2,2` makes the texture look twice as big. Scale
-  before `align run`, never after — a ring wrap computes its seam phases for the density it saw.
+- Scale with `brush poly scale --by FU,FV` (`--by 2,2` makes the texture look twice as big) or
+  `--to U,V` (absolute world units per tile — `--to 128,128` repeats the face's own bound texture
+  every 128 uu; needs a project on the package path). Scale before `align run`, never after — a ring
+  wrap computes its seam phases for the density it saw.
 - ⚠ `rotate` and `scale` give no continuity across faces: each pivots or grows about its own centre,
   so applying either across an aligned set breaks the seams. Use them for a one-off face — a sign, a
   monitor, a light panel.

@@ -6390,7 +6390,7 @@
                 "scale": "resize a face's texture in place (no continuity across faces)",
                 "move": "translate whole faces: move every vertex of each face by a world delta",
                 "find": "print matching faces of one or more brushes as BRUSH:idx selectors (feed to poly align/set)",
-                "align": "align faces so a texture flows continuously across them: wall|floor|run"
+                "align": "align faces' texture frames: wall|floor|run flow continuously across a set, one-tile fits each face independently"
               }
             }
           ],
@@ -6796,7 +6796,15 @@
             "scale": {
               "class": "_CoordArgumentParser",
               "prog": "uedcli brush poly scale",
-              "mutex_groups": [],
+              "mutex_groups": [
+                {
+                  "required": true,
+                  "members": [
+                    "by",
+                    "to"
+                  ]
+                }
+              ],
               "actions": [
                 {
                   "class": "_HelpAction",
@@ -6840,12 +6848,34 @@
                   "nargs": null,
                   "const": null,
                   "default": null,
-                  "required": true,
+                  "required": false,
                   "choices": null,
                   "metavar": "FU,FV",
                   "converter": "parse_factor_pair",
-                  "help": "multiply the texture's APPARENT SIZE: --by 2,2 makes it look twice as big, --by 0.5,1 halves its width only. U and V are independent. (Internally this DIVIDES the stored TextureU/TextureV magnitudes, because T3D density is texels per world unit — the flag is named for what you see.) Factors must be positive. The face's own centre keeps its texture coordinate, so the texture grows in place rather than sliding off; scale BEFORE `brush poly align run`, never after, since the run's seam phases are computed for the density they saw",
-                  "mutex_group": null
+                  "help": "multiply the texture's APPARENT SIZE: --by 2,2 makes it look twice as big, --by 0.5,1 halves its width only. U and V are independent. (Internally this DIVIDES the stored TextureU/TextureV magnitudes, because T3D density is texels per world unit — the flag is named for what you see.) Factors must be positive. The face's own centre keeps its texture coordinate, so the texture grows in place rather than sliding off; scale BEFORE `brush poly align run`, never after, since the run's seam phases are computed for the density they saw. Pure math — needs no project",
+                  "mutex_group": [
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--to"
+                  ],
+                  "dest": "to",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "U,V",
+                  "converter": "parse_factor_pair",
+                  "help": "set the ABSOLUTE density in WORLD UNITS PER TILE: --to 128,128 means the face's own bound texture repeats every 128 uu each way (how a level designer thinks about it) — a SMALLER U,V looks like a BIGGER texture (fewer, larger tiles). Needs a project on the package path to read that texture's pixel size; a face with no bound texture, or an unresolvable ref, exits 2 naming every offender before writing anything. U and V are independent and must be positive",
+                  "mutex_group": [
+                    0,
+                    1
+                  ]
                 },
                 {
                   "class": "_StoreAction",
@@ -7100,12 +7130,14 @@
                   "subparser_choices": [
                     "wall",
                     "floor",
-                    "run"
+                    "run",
+                    "one-tile"
                   ],
                   "subparser_help": {
                     "wall": "stamp a world-projected frame on each VERTICAL face (brickwork does not reset at each brush edge)",
                     "floor": "stamp a world-projected frame on each HORIZONTAL face (floor/ceiling)",
-                    "run": "lay one continuous texture along a connected RUN of faces: U follows the run, V across it, phase carried across every seam. Wraps a cylinder, walks a wall run or a curved/flat bend; derives its own walk order from geometry, so the order faces are passed in does not matter. Exclude a cylinder's caps"
+                    "run": "lay one continuous texture along a connected RUN of faces: U follows the run, V across it, phase carried across every seam. Wraps a cylinder, walks a wall run or a curved/flat bend; derives its own walk order from geometry, so the order faces are passed in does not matter. Exclude a cylinder's caps",
+                    "one-tile": "fit exactly ONE texture tile to each face, independently (a sign, a monitor, a light panel) — stretches non-uniformly to fill, no shared frame, no orientation guard (any face works). Needs a project on the package path: every face's bound texture must resolve, or exit 2 naming every offender"
                   }
                 }
               ],
@@ -7291,7 +7323,64 @@
                       "choices": null,
                       "metavar": null,
                       "converter": null,
-                      "help": "snap the texture scale so a whole number of TEXELS fits the perimeter (needs a CLOSED run and a quarter --turn, else exit 2). This still leaves ~a whole-texel residual at the closing seam (a texture repeats every T texels, not every texel); the whole-TILE fix that closes the seam needs the texture size and arrives with the catalog. Default leaves the closing seam",
+                      "help": "snap the texture scale so a whole number of TILES exactly closes the loop (needs a CLOSED run, a quarter --turn, and every face bound to the SAME texture, else exit 2 naming why). Needs a project on the package path to read that texture's pixel size. Default leaves the closing seam",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreAction",
+                      "option_strings": [
+                        "--tree"
+                      ],
+                      "dest": "tree",
+                      "nargs": null,
+                      "const": null,
+                      "default": null,
+                      "required": false,
+                      "choices": null,
+                      "metavar": "KIND/NAME",
+                      "converter": null,
+                      "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+                      "mutex_group": null
+                    }
+                  ],
+                  "subparsers": {}
+                },
+                "one-tile": {
+                  "class": "_CoordArgumentParser",
+                  "prog": "uedcli brush poly align one-tile",
+                  "mutex_groups": [],
+                  "actions": [
+                    {
+                      "class": "_HelpAction",
+                      "option_strings": [
+                        "-h",
+                        "--help"
+                      ],
+                      "dest": "help",
+                      "nargs": 0,
+                      "const": null,
+                      "default": {
+                        "__suppress__": true
+                      },
+                      "required": false,
+                      "choices": null,
+                      "metavar": null,
+                      "converter": null,
+                      "help": "show this help message and exit",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreAction",
+                      "option_strings": [],
+                      "dest": "targets",
+                      "nargs": "*",
+                      "const": null,
+                      "default": null,
+                      "required": false,
+                      "choices": null,
+                      "metavar": "BRUSH:SELECTOR",
+                      "converter": null,
+                      "help": "faces to align: BRUSH:SELECTOR (SELECTOR = 'all' or comma indices) or a bare brush Name (= all its polys). Use `-` to read the set from stdin instead (bare names, or the BRUSH:idx lines `poly find` prints; empty stdin is a clean no-op)",
                       "mutex_group": null
                     },
                     {

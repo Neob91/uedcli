@@ -900,13 +900,42 @@ def test_dispatch_poly_scale_records_the_write():
 
 def test_dispatch_poly_scale_bad_factor_returns_2_and_does_not_record(capsys):
     args = SimpleNamespace(cmd="brush", sub="poly", polysub="scale", targets=["B1:all"],
-                           by=(0.0, 1.0))
+                           by=(0.0, 1.0), to=None)
     src = _fake_src(_brush_level())
     with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
         rc = dispatch(args)
     assert rc == 2
     assert "must be a positive number" in capsys.readouterr().err
     src.save.assert_not_called()
+
+
+def test_dispatch_poly_scale_to_records_the_write(monkeypatch):
+    from uedcli.cli import resources
+    monkeypatch.setattr(resources, "texture_dims_resolver", lambda args: (lambda ref: (256, 256)))
+    level = _brush_level()
+    for p in level.actors["B1"].brush.polys:
+        p.texture = "Pkg.Tex"
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="scale", targets=["B1:all"],
+                           by=None, to=(128.0, 128.0))
+    src = _fake_src(level)
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
+        rc = dispatch(args)
+    assert rc == 0
+    saved = src.save.call_args.kwargs
+    assert saved["verb"] == "poly-scale" and saved["args"]["to"] == ["128.0", "128.0"]
+    assert "by" not in saved["args"]
+
+
+def test_dispatch_poly_scale_to_never_calls_texture_dims_resolver_for_by(monkeypatch):
+    from uedcli.cli import resources
+    calls = []
+    monkeypatch.setattr(resources, "texture_dims_resolver", lambda args: calls.append(1))
+    args = SimpleNamespace(cmd="brush", sub="poly", polysub="scale", targets=["B1:all"],
+                           by=(2.0, 2.0), to=None)
+    src = _fake_src(_brush_level())
+    with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src):
+        rc = dispatch(args)
+    assert rc == 0 and not calls
 
 
 def test_dispatch_poly_set_unknown_brush_returns_2_and_does_not_record(capsys):
