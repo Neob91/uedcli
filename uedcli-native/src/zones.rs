@@ -17,7 +17,8 @@
 //!
 //! Zone 0 is the solid/outside zone (no leaves, ZoneActor 0, Connectivity `1<<0`).
 
-use crate::model::{BspLeaf, Model, Zone};
+use crate::fpoly::{FPoly, Split};
+use crate::model::{BspLeaf, Model, Vec3, Zone};
 use std::collections::HashSet;
 
 /// Unordered leaf-pair key (min, max) — the identity a portal and a zone barrier are matched on.
@@ -508,9 +509,120 @@ fn node_poly(model: &Model, ni: usize) -> Vec<[f32; 3]> {
         .collect()
 }
 
+/// A filter node's plane as `(base, normal)` for `FPoly::split_with_plane`
+/// (`base·normal == plane.w`, so `(v−base)·normal == v·normal − w`).
+fn filter_plane(model: &Model, ni: i32) -> (Vec3, Vec3) {
+    let pl = &model.nodes[ni as usize].plane;
+    let normal = Vec3::new(pl.x, pl.y, pl.z);
+    let base = Vec3::new(pl.x * pl.w, pl.y * pl.w, pl.z * pl.w);
+    (base, normal)
+}
+
+/// Faithful port of `FilterThroughSubtree` (`Editor.dll 0xa9030`): descend `poly` through the subtree
+/// at `i_filter` classifying it with `FPoly::SplitWithNode(VeryPrecise=1)` at each node — NOT the
+/// crude `clip_poly` Sutherland–Hodgman that Pass B still uses.  Three behaviours that `clip_poly`
+/// lacks are load-bearing for the vert-pool count (`oceanlab-n3-model2-orphan-vert-overcount`):
+///   * `> 14` verts → `SplitInHalf` first, recurse the half (the editor's own `MAX_VERTICES` guard);
+///   * a `Coplanar` (r==0) result DROPS the fragment with NO landing — a face coplanar with a deeper
+///     filter node contributes no zone landing and no re-emitted verts; `clip_poly` instead let it
+///     land on both sides, minting spurious orphan verts (native's +85 on OceanLab N3);
+///   * `Front`/`Back` (r==1/2) descend the WHOLE poly into one child (no cut), only `Split` (r==3)
+///     cuts — and the cut uses the precise 0.01 band, not `clip_poly`'s 1e-4, so near-plane faces
+///     the editor keeps whole are not split into extra slivers.
+/// Landings collect `(leaf, fragment)`; a `-1` child terminates at `leaf` (may be `-1` = solid).
+/// Engine child map: `iChild[1]`(front)=`i_back`/`iLeaf[1]`, `iChild[0]`(back)=`i_front`/`iLeaf[0]`.
+fn filter_through(
+    model: &Model,
+    mut i_filter: i32,
+    mut leaf: i32,
+    mut poly: FPoly,
+    out: &mut Vec<(i32, FPoly)>,
+) {
+    loop {
+        if poly.verts.len() < 3 {
+            return;
+        }
+        if i_filter == -1 {
+            out.push((leaf, poly));
+            return;
+        }
+        // >14 verts: split in half and recurse the tail; `poly` keeps the first half.
+        if poly.verts.len() > 14 {
+            let half = poly.split_in_half();
+            filter_through(model, i_filter, leaf, half, out);
+        }
+        let (base, normal) = filter_plane(model, i_filter);
+        let (i_front, i_back, il0, il1) = {
+            let n = &model.nodes[i_filter as usize];
+            (n.i_front, n.i_back, n.i_leaf[0], n.i_leaf[1])
+        };
+        match poly.split_with_plane(&base, &normal, true) {
+            Split::Front => {
+                // r==1: whole poly down the FRONT child (iChild[1] = i_back).
+                filter_through(model, i_back, il1, poly, out);
+                return;
+            }
+            Split::Back => {
+                // r==2: tail-descend the BACK child (iChild[0] = i_front) with the whole poly.
+                i_filter = i_front;
+                leaf = il0;
+            }
+            Split::Split(front, back) => {
+                // r==3: FRONT piece down the front child; BACK piece tail-descends the back child.
+                filter_through(model, i_back, il1, front, out);
+                poly = back;
+                i_filter = i_front;
+                leaf = il0;
+            }
+            // r==0: coplanar with a deeper node — fragment silently dropped (no landing).
+            Split::Coplanar => return,
+        }
+    }
+}
+
+/// Build the filter FPoly for node `ni`: its ring points, carrying the node's plane as the poly
+/// normal/base.  The normal is irrelevant to the classification (which is against the FILTER node's
+/// plane) but keeps `split_with_plane`'s fragment metadata well-formed.
+fn node_filter_poly(model: &Model, verts: Vec<[f32; 3]>) -> FPoly {
+    FPoly::new(verts.into_iter().map(|v| Vec3::new(v[0], v[1], v[2])).collect())
+}
+
+/// Pass D's re-filter: run `poly` through chain head `head`'s BACK then FRONT subtree with the
+/// PRECISE `filter_through` (`FPoly::SplitWithNode`), the editor's own `FilterThroughSubtree`.  This
+/// is the path whose emitted verts must byte-match the editor, so it needs the coplanar-drop /
+/// precise-split behaviour (`oceanlab-n3-model2-orphan-vert-overcount`).  Pass B' barriers keep the
+/// cheaper `node_landings` (clip_poly) — they read only leaf PAIRS, never emit verts, and that path
+/// is already leaf-pair-validated against four editor goldens (§70 §13); leaving it alone bounds the
+/// blast radius of this fix to the vert re-emit.
+fn node_landings_precise(
+    model: &Model,
+    head: usize,
+    poly: Vec<[f32; 3]>,
+) -> Vec<(i32, i32, Vec<[f32; 3]>)> {
+    let (hf, hb, hl0, hl1) = {
+        let n = &model.nodes[head];
+        (n.i_front, n.i_back, n.i_leaf[0], n.i_leaf[1])
+    };
+    // pass 0: BACK subtree (engine order: BACK child = i_front, BACK leaf = iLeaf[0]).
+    let mut back: Vec<(i32, FPoly)> = Vec::new();
+    filter_through(model, hf, hl0, node_filter_poly(model, poly), &mut back);
+    let mut out = Vec::new();
+    for (back_leaf, frag) in back {
+        // pass 1: FRONT subtree (FRONT child = i_back, FRONT leaf = iLeaf[1]).
+        let mut front: Vec<(i32, FPoly)> = Vec::new();
+        filter_through(model, hb, hl1, frag, &mut front);
+        for (front_leaf, sub) in front {
+            let verts: Vec<[f32; 3]> = sub.verts.iter().map(|v| [v.x, v.y, v.z]).collect();
+            out.push((back_leaf, front_leaf, verts));
+        }
+    }
+    out
+}
+
 /// Filter `poly` through chain head `head`'s BACK subtree, then re-filter each back-landing through
 /// its FRONT subtree — the editor's `FilterThroughSubtree` two-pass (pass 0 = `iChild[0]`/`iLeaf[0]`,
-/// pass 1 = `iChild[1]`/`iLeaf[1]`).  Returns `(backLeaf, frontLeaf, fragment)` per landing.
+/// pass 1 = `iChild[1]`/`iLeaf[1]`).  Returns `(backLeaf, frontLeaf, fragment)` per landing.  Uses the
+/// crude `clip_poly` filter; consumed by Pass B' barriers, which need only the leaf pairs.
 fn node_landings(
     model: &Model,
     head: usize,
@@ -555,7 +667,7 @@ fn passd_process(
         return; // degenerate / no real face — leave iZone (0,0), like the editor's OldNum==Num skip
     }
     let poly = node_poly(model, m);
-    let landings = node_landings(model, head, poly);
+    let landings = node_landings_precise(model, head, poly);
     if landings.is_empty() {
         return;
     }
@@ -1370,5 +1482,50 @@ mod tests {
         assert_eq!(m2.nodes.len(), 1, "the ringless fragment ships no node");
         assert_eq!(m2.nodes[0].num_vertices, 4);
         assert_eq!(tail2, vec![0], "an all-later-fragments-dead split still moves to the tail");
+    }
+
+    /// `filter_through` must reproduce the editor's `SplitWithNode(VeryPrecise=1)` classification —
+    /// especially the r==0 coplanar DROP that the old `clip_poly` filter lacked, which minted the
+    /// spurious Pass-D orphan verts (`oceanlab-n3-model2-orphan-vert-overcount`: native +85).
+    #[test]
+    fn filter_through_drops_coplanar_and_routes_front_back_split() {
+        use super::{filter_through, FPoly, Vec3};
+        use crate::model::BspLeaf;
+        // One x=0 splitter: BACK child (i_front) = leaf 0, FRONT child (i_back) = leaf 1.
+        let mut m = Model::default();
+        let mut n = BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 0.0 }, 0, -1, 0);
+        n.i_leaf = [0, 1];
+        m.nodes.push(n);
+        m.leaves.push(BspLeaf { i_zone: 1, i_permeating: -1, i_volumetric: -1, i_exclusive: 0 });
+        m.leaves.push(BspLeaf { i_zone: 2, i_permeating: -1, i_volumetric: -1, i_exclusive: 0 });
+
+        let quad = |xs: [f32; 4]| {
+            FPoly::new(vec![
+                Vec3::new(xs[0], 0.0, 0.0),
+                Vec3::new(xs[1], 0.0, 64.0),
+                Vec3::new(xs[2], 64.0, 64.0),
+                Vec3::new(xs[3], 64.0, 0.0),
+            ])
+        };
+
+        // Coplanar with the x=0 plane -> DROPPED, no landing (the fix's crux; clip_poly landed it
+        // on BOTH sides, minting orphan verts).
+        let mut out = Vec::new();
+        filter_through(&m, 0, -1, quad([0.0, 0.0, 0.0, 0.0]), &mut out);
+        assert!(out.is_empty(), "a face coplanar with the filter node yields no landing");
+
+        // Entirely front (x>0.01) -> one whole-poly landing in the FRONT leaf (1).
+        let mut out = Vec::new();
+        filter_through(&m, 0, -1, quad([10.0, 10.0, 10.0, 10.0]), &mut out);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].0, 1, "front poly lands in iLeaf[1]");
+        assert_eq!(out[0].1.verts.len(), 4, "front poly descends undivided");
+
+        // Straddling -> split, one landing per side (back leaf 0, front leaf 1).
+        let mut out = Vec::new();
+        filter_through(&m, 0, -1, quad([-10.0, -10.0, 10.0, 10.0]), &mut out);
+        let mut leaves: Vec<i32> = out.iter().map(|(l, _)| *l).collect();
+        leaves.sort();
+        assert_eq!(leaves, vec![0, 1], "a straddling face lands one fragment in each leaf");
     }
 }
