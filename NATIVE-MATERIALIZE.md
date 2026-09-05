@@ -104,12 +104,33 @@ Drive FIVE levels in LOCKSTEP: **UNATCO `03_NYC_UNATCOHQ`**, **WanChai `06_HongK
 N=1 is LevelInfo only (empty world) — native builds it (empty world Model). Iterate at small N;
 a full-level editor rebuild is ~24 min, so grow N, don't jump.
 
+### Re-verifying N=1..NX after a core change
+
+Any change to native's CSG/BSP/lighting core (not a gate-only change) can, in principle, move an
+already-passing N — re-verify N=1..NX per level with **`ladder_run.py`** (below), not a subagent
+driving `actor_parity.py`/`parity_gate.py` by hand one N at a time.
+
+Run the re-verification **in the background and do not let it block forward ladder work**: if the
+fix is expected to hold (it passed its own targeted N8/N19-style validation), start extending the
+ladder past the current NX while the N=1..NX back-verification runs in parallel, rather than gating
+all further work on it finishing first. Only stop forward progress if the back-verification actually
+reports a bail — then treat that bail as a real regression and stop to fix it before going further.
+
 ## THE parity script (do not reinvent)
 
 **`dev/docs/spikes/2026-09-03-incremental-actor-parity/harness/parity_gate.py`** is the single
 canonical parity-comparison entry point. It encodes the exact bar above (identity/permutation-based,
 the exclusion set, the surviving-Actors assertion) and gives a PASS/FAIL. Use it; do not write a new
 comparison from scratch. `actor_parity.py` (same dir) drives the first-N-actors subset build + gate.
+
+**`ladder_run.py`** (same dir) is the canonical SEQUENTIAL runner: `--dx <shipped.dx>
+[--dx <shipped2.dx> ...] [--from N] [--to N]` walks N ascending per level and **bails at the first
+non-parity N** for that level (moving on to the next `--dx`), printing a running log and a final
+per-level summary. It always rebuilds native (cheap) and reuses a cached editor ref unless
+`--force-ref` (the editor build is the slow half); it deletes each N's native build + subset scaffold
+right after gating, pass or fail, so a long walk does not accumulate disk. Use it for the whole-ladder
+re-verification above and for any "does this still hold N=1..NX" question — do not write a new N-sweep
+loop from scratch.
 
 ## Testing (project rule, owner 2026-09-04)
 
