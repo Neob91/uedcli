@@ -91,8 +91,8 @@ level to edit and lit `--game` renders — you supply your own Deus Ex copy;
 
 ## Project status
 
-Targets one engine (UE1) and, so far, one game (Deus Ex). Coverage is uneven; use it to
-explore, not to depend on. Issues and ideas welcome.
+The project is not yet mature, and keeps changing rapidly.
+It is being built with AI, and will require a thorough polish pass once all of the planned core functionality is built.
 
 ## License
 
