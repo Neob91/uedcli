@@ -91,12 +91,10 @@ impl Opt {
 
 // --- pooling (bspAddPoint / bspAddVector) — copied from build.rs to keep it untouched --------
 
-/// `UEDCLI_BSPCSG_POINT_NEAREST` — opt-in switch from FIRST-within-threshold to the real engine's
-/// NEAREST-within-threshold dedup rule (spec `unrealed-geometry-build-map-rebuild-bsp-rebuild/
-/// spec.md` §3.10, DISASM `Editor.dll 0x35430` calling `Engine.dll UModel::FindNearestVertex
-/// 0x1adeb0`): "this returns the *nearest* existing point within threshold, not the *first*
-/// found". Gated because it changes every dedup call site; measured effect on the lighting-bits-
-/// only-divergence-localizes-to grid-only bucket, `native-materialize-findings.md`.
+/// `UEDCLI_BSPCSG_POINT_NEAREST` — opt-in switch from FIRST-within-threshold to NEAREST-within-
+/// threshold for `bsp_add_vector` only (points now always use the faithful `find_nearest_vertex`
+/// descent below). Kept as a dev toggle for the Vectors pool; measured effect on the lighting-bits-
+/// grid-only bucket, `native-materialize-findings.md`.
 fn point_nearest_enabled() -> bool {
     static FLAG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
     *FLAG.get_or_init(|| std::env::var("UEDCLI_BSPCSG_POINT_NEAREST").is_ok())
@@ -112,22 +110,118 @@ fn bsp_add_point(model: &mut Model, v: Vec3) -> i32 {
 /// constants read from `.rdata`, decoded 2026-09-02): the surf `pBase` add passes `1` → **0.002
 /// (SAME)**, but the node vertex-RING add (`bspAddNode 0x352fd`, `push 0`) passes `0` → **0.015
 /// (NEAR)** (see `ring_point_tol` below, used by the ring loop in `bsp_add_node`).
+///
+/// Dedup is the editor's `FindNearestVertex` (`Engine.dll 0x1adeb0`) — a STALE BSP descent over the
+/// CURRENT `model.nodes`, not a scan over `model.points`. Only points already WIRED into a committed
+/// node (its surf base + its `NumVertices` vert-pool verts) are visible; a point merely appended to
+/// `model.points` but not yet attached to a node is INVISIBLE. This reproduces the editor's dedup
+/// MISSES (a candidate near an unwired point stays distinct) as well as its HITS bit-for-bit. On a
+/// miss (empty tree, or nothing within `tol`) the point is appended new. See `find_nearest_vertex`.
 fn bsp_add_point_tol(model: &mut Model, v: Vec3, tol: f32) -> i32 {
-    if point_nearest_enabled() {
-        if let Some((i, dist)) = nearest(&model.points, &v) {
-            if dist < tol {
-                return i as i32;
-            }
-        }
-    } else {
-        for (i, p) in model.points.iter().enumerate() {
-            if v.sub(p).size() < tol {
-                return i as i32;
-            }
-        }
+    let hit = find_nearest_vertex(model, v, tol);
+    if std::env::var("UEDCLI_FNV_TRACE").is_ok()
+        && (v.x - 448.0).abs() < 0.1
+        && (v.y - 64.0).abs() < 1.0
+        && v.z.abs() < 1.0
+    {
+        let wired = wired_points_dump(model, v, 0.5);
+        eprintln!(
+            "FNV v=({:.6},{:.6},{:.6}) tol={} hit={:?} nodes={} wired_near=[{}]",
+            v.x, v.y, v.z, tol, hit, model.nodes.len(), wired
+        );
+    }
+    if let Some(i) = hit {
+        return i as i32;
     }
     model.points.push(v);
     (model.points.len() - 1) as i32
+}
+
+fn wired_points_dump(model: &Model, v: Vec3, r: f32) -> String {
+    let mut out = Vec::new();
+    if model.nodes.is_empty() {
+        return String::new();
+    }
+    let mut stack = vec![0i32];
+    let mut push_pt = |pi: i32, kind: &str, out: &mut Vec<String>| {
+        if pi < 0 {
+            return;
+        }
+        let p = model.points[pi as usize];
+        if v.sub(&p).size() < r {
+            out.push(format!("{}#{}({:.6},{:.6},{:.6})", kind, pi, p.x, p.y, p.z));
+        }
+    };
+    while let Some(ni) = stack.pop() {
+        if ni < 0 {
+            continue;
+        }
+        let n = &model.nodes[ni as usize];
+        if n.i_surf >= 0 {
+            push_pt(model.surfs[n.i_surf as usize].p_base, "b", &mut out);
+        }
+        for k in 0..n.num_vertices {
+            push_pt(model.verts[(n.i_vert_pool + k) as usize].i_vertex, "v", &mut out);
+        }
+        stack.push(n.i_front);
+        stack.push(n.i_back);
+        stack.push(n.i_plane);
+    }
+    out.join(" ")
+}
+
+/// `UModel::FindNearestVertex` (`Engine.dll 0x1adeb0`) — the editor's CSG point dedup, decoded in
+/// spike `2026-09-04-bspaddpoint-dedup-base-provenance`. Returns the index of the nearest point
+/// WIRED into the current BSP tree within `tol`, or `None` (the editor's `-1.0` MISS → caller
+/// appends). "Wired" = reachable from the root node via `iFront`/`iBack`/`iPlane`, and per node its
+/// surf base (`Points[Surfs[iSurf].pBase]`, tested unconditionally) plus `Verts[iVertPool+k].pVertex`
+/// for `k < NumVertices`. Dead nodes (`NumVertices==0`) still contribute their surf base while they
+/// stay in the tree; nodes spliced out by `bspCleanup` (kept in the array but unreachable) contribute
+/// nothing — so the descent, not a flat `model.points`/`model.nodes` scan, is required.
+///
+/// The editor prunes the descent by plane side within radius `tol`; that pruning is distance-safe (a
+/// point within `tol` of `v` lies within `tol` of every plane's near side, so it is never pruned),
+/// so visiting every reachable node and taking the minimum yields the same result without
+/// replicating the branch logic. Metric + accept match the disasm: squared Euclidean summed
+/// `(dy²+dx²)+dz²`, strict-closer update against `tol²` (the editor's `R²` gate skips ties).
+fn find_nearest_vertex(model: &Model, v: Vec3, tol: f32) -> Option<usize> {
+    // 0x1adee3: Model->Nodes.Num == 0 -> immediate MISS.
+    if model.nodes.is_empty() {
+        return None;
+    }
+    let r2 = tol * tol;
+    let mut best_d2 = r2;
+    let mut best_i: Option<usize> = None;
+    let mut consider = |p_idx: i32| {
+        if p_idx < 0 {
+            return;
+        }
+        let d = v.sub(&model.points[p_idx as usize]);
+        let d2 = (d.y * d.y + d.x * d.x) + d.z * d.z; // editor's summation order (0x1adccb..0x1adccf)
+        if d2 < best_d2 {
+            best_d2 = d2;
+            best_i = Some(p_idx as usize);
+        }
+    };
+    // Descend from the root (node 0). No `seen` set: front/back/plane form a proper tree (one parent
+    // per node), same assumption `cleanup_nodes` already relies on.
+    let mut stack = vec![0i32];
+    while let Some(ni) = stack.pop() {
+        if ni < 0 {
+            continue;
+        }
+        let n = &model.nodes[ni as usize];
+        if n.i_surf >= 0 {
+            consider(model.surfs[n.i_surf as usize].p_base);
+        }
+        for k in 0..n.num_vertices {
+            consider(model.verts[(n.i_vert_pool + k) as usize].i_vertex);
+        }
+        stack.push(n.i_front);
+        stack.push(n.i_back);
+        stack.push(n.i_plane);
+    }
+    best_i
 }
 
 /// The node vertex-RING `bspAddPoint` threshold: 0.015 (NEAR), the real editor's value
