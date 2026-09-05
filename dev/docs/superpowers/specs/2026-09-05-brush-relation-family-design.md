@@ -23,11 +23,11 @@ on the same `uedcli/relation.py` math (`plane_relationship`, `project_to_plane`,
 
 ### Family shape
 
-`brush relation` becomes a new top-level verb group, peer of `brush poly`/`brush vertex`/`brush
-measure`, with three sub-verbs: `measure`, `find`, `set`. `brush measure relation` is renamed to
-`brush relation measure` — an outright rename, not an alias (uedcli is unreleased; no back-compat
-cruft). The `brush measure` subtree currently has exactly one sub-verb (`relation`); once it moves,
-`brush measure` has none and is removed from the parser entirely. (`brush measure alignment`,
+`brush relation` becomes a new top-level verb group, peer of `brush poly`/`brush vertex`, with three
+sub-verbs: `measure`, `find`, `set`. `brush measure relation` is renamed to `brush relation measure`
+— an outright rename, not an alias (uedcli is unreleased; no back-compat cruft). The `brush measure`
+subtree currently has exactly one sub-verb (`relation`); once it moves, `brush measure` has none and
+is removed from the parser entirely. (`brush measure alignment`,
 sketched in the 2026-08-29 spec, is still deferred and unbuilt; where it eventually lands — back
 under a re-added `brush measure`, or folded into `brush relation` too — is that spec's call to make
 when it's actually built, not this one's.)
@@ -37,14 +37,16 @@ the contract — "pure geometric measurement sub-verbs (no mutation, no verdicts
 (moves a brush). Promoting the whole family to `brush relation` keeps `measure`'s no-mutation
 contract intact and gives `find`/`set` a natural home next to it.
 
-### `brush relation measure REF_SELECTOR TARGET_SELECTOR [--top N|all]`
+### `brush relation measure REF_SELECTOR TARGET_SELECTOR [--top N|all] [--allow-self]`
 
 Same report as today's `brush measure relation`, restricted from N bare brush names (all-pairs) to
 **exactly 2 selectors**:
 
 - A selector is a bare `Name` (all of that brush's polys) or `Name:SELECTOR` (`SELECTOR` = `all` or
-  comma-separated poly indices) — the same grammar `brush poly align`'s targets already use
-  (`parse_poly_selector`/`resolve_polys` in `uedcli/surface.py`).
+  comma-separated poly indices) — the same token grammar `brush poly align`'s targets already use:
+  `Name:SELECTOR` splits via `parse_poly_selector`/`resolve_polys` in `uedcli/surface.py`, and a bare
+  `Name` resolves to `all` in `uedcli/polyalign.py`'s `resolve_align_targets` (which collection
+  measures/`find` reuse as-is rather than re-deriving).
 - The two selectors must resolve to 2 **distinct** brush names by default (self-comparison rejected —
   the existing "naming the same brush twice" guard, generalized from bare names to selectors, still
   catches the common case: a typo or copy-paste left the same name on both sides). **`--allow-self`**
@@ -62,7 +64,8 @@ Same report as today's `brush measure relation`, restricted from N bare brush na
   not just the two illustrated extremes.
 - Report format and `--top` are otherwise unchanged from today's verb; `format_report`'s `disjoint`
   line was already a single `disjoint: {A, B, C}` line for any N (`relation.py`'s `format_report`),
-  so this doesn't change shape at 2 selectors — just interpolates 0 or 1 name instead of a longer set.
+  so this doesn't change shape at 2 selectors — just interpolates 0, 1, or 2 brush names instead of
+  a longer set.
 - **Drops `-` (stdin) support.** Today's verb reads a newline-separated brush-name list from stdin for
   its N-ary `names` argument; the new grammar is exactly 2 fixed positional selectors, so there's no
   variable-length list left to read from stdin. Deliberate, not an oversight — flagged explicitly per
@@ -75,7 +78,7 @@ though `find` (below) covers a similar query, because the two verbs have differe
 output contracts (see "Why keep both `measure` and `find`" below) — not because of a functional gap
 `find` can't reach.
 
-### `brush relation find <candidates...> --relative-to REF[:idx] [predicates] [--top N|all] [--json]`
+### `brush relation find <candidates...> --relative-to REF[:idx] [predicates] [--top N|all] [--json] [--allow-self]`
 
 A **producer**: prints matching faces as pipeable selectors, mirroring `brush poly find`.
 
@@ -84,9 +87,12 @@ A **producer**: prints matching faces as pipeable selectors, mirroring `brush po
   not mixable with names; empty stdin is a clean no-op, exit 0). **Omitting `candidates` entirely**
   (no names, no `-`) defaults the candidate set to every OTHER brush actor in the level (every actor
   with `actor.brush is not None`, excluding REF's own canonical name — the same self-exclusion
-  `--overlapping ACTOR` already uses in the spatial-find spec). A non-brush actor named explicitly is
-  warned and skipped, matching `poly find`'s existing rule for its own `names`. Naming REF's own
-  brush explicitly among `candidates` is a clean exit 2 by default, same guard as `measure`.
+  `--overlapping ACTOR` already uses in the spatial-find spec). This default is the handler's job,
+  applied before `resolve_target_names` is ever consulted (the function is only invoked when a token
+  including `-` was actually given — see Design decisions); `resolve_target_names` itself doesn't
+  change. A non-brush actor named explicitly is warned and skipped, matching `poly find`'s existing
+  rule for its own `names`. Naming REF's own brush explicitly among `candidates` is a clean exit 2 by
+  default, same guard as `measure`.
   **`--allow-self`** (opt-in, default off) lifts both restrictions: REF's own brush is included in the
   default level-wide candidate set, and may be named explicitly — e.g. `brush relation find Wall
   --relative-to Wall:0 --allow-self` finds other faces of `Wall` itself related to face 0. As with
@@ -110,7 +116,7 @@ A **producer**: prints matching faces as pipeable selectors, mirroring `brush po
   - **REF is always `actor_a`** in the underlying `plane_relationship`/`compute_deltas` calls, for
     every candidate — the same convention `set`'s precondition uses. This keeps `distance` sign and
     the U/V deltas REF-relative and directly comparable across every shown match, and consistent with
-    what a downstream `relation set -` expects.
+    what a downstream `relation set - --relative-to REF:idx` expects.
 - Output:
   - **stdout**: bare `candidate:idx` lines, one per shown (candidate, poly) pair, best pair first per
     candidate (`relation.py`'s existing `_candidate_sort_key`). `--top N` (default 1) / `--top all`
@@ -121,8 +127,10 @@ A **producer**: prints matching faces as pipeable selectors, mirroring `brush po
     "Producer/query verbs print their result to stdout … human summaries … go to stderr" rule
     (`CLAUDE.md`).
   - **`--json`**: stdout instead emits a JSON array of full structured relation objects (plane,
-    normals, distance, footprint_2d, deltas) per shown match — same convention as `poly find --json`.
-    Suppresses the stderr summary (redundant once the structure is on stdout).
+    normals, distance, footprint_2d, deltas) per shown match. Unlike `poly find --json` (which keeps
+    its human summary line on stderr regardless), this **suppresses the stderr summary**: the array
+    on stdout is exact data, so a summary line beside it is redundant — a deliberate divergence from
+    `poly find`'s JSON behavior, not a shared convention.
 
 ### Why keep both `measure` and `find`
 
@@ -133,35 +141,39 @@ measure Ref:5 Target:idx`). Keeping both anyway:
 - `measure`'s contract is fixed: full report on stdout, always, never conditional on how many
   selectors or candidates you passed. `find`'s contract is equally fixed the other way: terse,
   pipeable stdout, always; detail is secondary. Merging them means one verb's stdout shape would vary
-  by argument count/flags — the kind of "same verb, different behavior by shape" the project's
-  no-branching conventions warn against for environment/host branching, and the same smell applies to
-  argument-shape branching.
+  by argument count/flags — the same "behavior by shape" smell the no-branching rules reject.
 - `measure` exists specifically for the case the original 2026-08-29 spec was built to fix (a
   known pair, wants the full report, not a search) — dropping it pushes that case through `find`'s
   search/predicate machinery (`--relative-to`, `--json`) it doesn't actually need.
 
-### `brush relation set TARGET:idx REF:idx [--gap N] [--centroid-u N] [--centroid-v N] [--edge-u-min N | --edge-u-max N] [--edge-v-min N | --edge-v-max N]`
+### `brush relation set TARGET:idx --relative-to REF:idx [--gap N] [--centroid-u N | --edge-u-min N | --edge-u-max N] [--centroid-v N | --edge-v-min N | --edge-v-max N]`
 
 Moves `TARGET` into a target relationship with the fixed `REF`.
 
-- Both selectors must be **exact** `Name:idx` — a single poly index, not a bare name (= all) or a
-  comma-list. A translation target can't be ambiguous. `TARGET` and `REF` must resolve to distinct
-  brush names.
-- `TARGET` is positional first (the thing acted on, matching `brush poly move <targets> --by`'s
-  convention of "the thing you're operating on comes first"); `REF` is positional second and never
-  moves. `REF` stays the reference for direction/sign regardless of position — same convention
+- `TARGET:idx` is an **exact** `Name:idx` — a single poly index, not a bare name (= all) or a
+  comma-list. A translation target can't be ambiguous. `--relative-to REF:idx` is **required** and is
+  likewise an exact `Name:idx`. `TARGET` and `REF` must resolve to distinct brush names.
+- `TARGET` is the sole positional (the thing acted on, matching `brush poly move <targets> --by`'s
+  "the thing you're operating on comes first" convention); `REF` arrives as a flag, the same
+  `--relative-to REF:idx` anchor `find` uses, so one anchor spelling serves both the search and the
+  move. REF never moves. REF stays the reference for direction/sign regardless — same convention
   `plane_relationship(actor_a, poly_a, actor_b, poly_b)` already uses internally (distance signed
-  along `normal_a`); the call passes REF as `actor_a`. **This inverts `measure`'s order deliberately**:
-  `measure`'s first selector is the reference (a query verb, ordered by "which one anchors the
-  report"); `set`'s first selector is the one that moves (a mutating verb, ordered by this CLI's
-  target-first convention, e.g. `poly move <targets> --by`). Not an inconsistency to reconcile — the
+  along `normal_a`); the call passes REF as `actor_a`. `measure` keeps its opposite surface order
+  deliberately: its first selector is the reference (a query verb, ordered by "which one anchors the
+  report"), whereas `set` puts the thing that moves first. Not an inconsistency to reconcile — the
   two verbs order by different, equally-established conventions.
+- **stdin:** `TARGET` may instead be the single token `-`, reading a newline list of `TARGET:idx`
+  selectors from stdin — the same name-list convention as `poly align -`/`poly move -`. The list is
+  the sole source of targets (not mixable with a positional `TARGET`); `--relative-to REF:idx` stays
+  on the command line; empty stdin is a clean no-op (exit 0). This is what closes the pipe:
+  `brush relation find <cands> --relative-to REF:idx … | brush relation set - --relative-to REF:idx --gap N`
+  moves every found face into the specified relationship with the same REF.
 - **Precondition:** `plane_relationship(REF_actor, REF_poly, TARGET_actor, TARGET_poly)` must not be
-  `None` (normals must be parallel or anti-parallel within `polyalign._PARALLEL_EPS`) — otherwise
-  there's no defined normal direction or in-plane U/V frame to move along, and the verb exits 2
-  naming both selectors and explaining why. In practice this pair usually comes straight from `brush
-  relation find`'s output (which only ever emits plane-related pairs) or a prior `brush relation
-  measure`.
+  `None` (normals must be parallel or anti-parallel within the plane-parallel tolerance
+  `_PARALLEL_EPS` — see "Required precursor" under Module shape) — otherwise there's no defined normal
+  direction or in-plane U/V frame to move along, and the verb exits 2 naming both selectors and
+  explaining why. In practice this pair usually comes straight from `brush relation find`'s output
+  (which only ever emits plane-related pairs) or a prior `brush relation measure`.
 - Every flag takes an **explicit target distance**, not a boolean "align it": omitting a flag leaves
   that degree of freedom untouched (TARGET doesn't move on that axis at all).
   - `--gap N` — sets `plane_relationship(...).distance` (signed, along REF's normal) to exactly `N`.
@@ -196,10 +208,14 @@ Moves `TARGET` into a target relationship with the fixed `REF`.
     `--centroid-u`/`--edge-u-min`/`--edge-u-max` was given, else 0. `delta_v` analogously.
   - Translate `TARGET`'s Location by `delta_n·normal + delta_u·U + delta_v·V` (converting the in-plane
     deltas from the 2-D UV frame back to a world-space vector via the same basis).
-- **Output:** prints the touched brush name (`TARGET`'s canonical Name) to stdout, matching
-  `poly move`/`poly align`'s "touched brush names" convention, plus a stderr confirmation line with
-  the resulting gap/deltas after the move (reusing `relation.py`'s `_fmt`), mirroring `poly align
-  run`'s worst-seam-shear stderr note.
+- **Output:** prints the touched brush name (`TARGET`'s canonical Name) to stdout, plus a stderr
+  confirmation line with the resulting gap/deltas after the move (reusing `relation.py`'s `_fmt`),
+  mirroring `poly align run`'s worst-seam-shear stderr note. The brush name, not a `Name:idx`
+  selector, because what moved is the whole brush: `set` translates the actor, whereas `poly
+  move`/`poly align` print per-face selectors precisely because a bare brush name on a per-face pipe
+  would silently widen the set (`_print_poly_selectors`'s docstring in `poly.py` states this). That concern has no analog
+  here — `set` moves whole brushes, so the brush name is the exact statement of what changed.
+  (Owner decision.)
 
 ## Design decisions and why
 
@@ -225,6 +241,11 @@ Moves `TARGET` into a target relationship with the fixed `REF`.
   A move target must be unambiguous; letting `set` accept "all polys" or several indices would need a
   rule for which one actually drives the translation math, which is exactly the ranking-and-picking
   job `find`/`measure` already do upstream. `set` assumes that work is done and takes the answer.
+- **`set`'s REF arrives as the `--relative-to REF:idx` flag rather than a second positional.** A
+  two-positional grammar can't compose with `-`: stdin is `set`'s sole source of targets and can't
+  mix with other names on the command line, so a piped target list left no channel for REF. Moving
+  REF onto the same flags `find` already defines keeps one anchor spelling across the pair and makes
+  `find`'s stdout a complete, pipeable `set` invocation (owner decision during design).
 - **`--gap`/`--centroid-*`/`--edge-*` are independent, explicit-value flags rather than a single
   "align" mode.** A user might want to fix only the gap and leave in-plane position alone (or vice
   versa), or fix only one in-plane axis — the original ask ("gap, delta from centroid, or any poly
@@ -232,6 +253,12 @@ Moves `TARGET` into a target relationship with the fixed `REF`.
 
 ## Module shape / touchpoints (implementation-stage detail, not prescriptive)
 
+- **Required precursor:** `uedcli/polyalign.py` no longer defines `_PARALLEL_EPS`/`_PLANE_EPS`
+  (deleted by the poly-align rewrite in commit 252c4ad), yet `uedcli/relation.py:41,48` still
+  dereference them, so `relation.compute()`/`plane_relationship` are currently red on master
+  (`AttributeError: module 'uedcli.polyalign' has no attribute '_PARALLEL_EPS'`; all 16 relation
+  tests fail). Restoring the two tolerance constants is step zero of any build — the existing
+  relation suite going green is the gate before any new verb lands.
 - `uedcli/relation.py`: keep `plane_relationship`/`project_to_plane`/`classify_footprint_2d`/
   `compute_deltas`/`_candidate_sort_key` as-is; expose `_plane_basis`'s world U/V vectors for `set`'s
   translation math; add a small "both extents, not just the closer one" variant alongside
@@ -258,11 +285,13 @@ Moves `TARGET` into a target relationship with the fixed `REF`.
    stdout selector format; stderr summary present by default, suppressed under `--json`; `--json`
    structure matches `relation.py`'s dataclasses and is REF-relative (REF as `actor_a`) for every
    match.
-3. `set`: precondition failure (non-parallel pair) → exit 2 naming both selectors; each flag in
-   isolation moves exactly the expected axis, others untouched; `--centroid-u`/`--edge-u-*` mutual
-   exclusion (and the V equivalent) enforced by argparse; zero flags given → exit 2; the move is a
-   pure Location translation (poly-relative vertex positions inside TARGET's own frame unchanged);
-   REF's Location never changes; touched-brush stdout + stderr confirmation format.
+3. `set`: precondition failure (non-parallel pair) → exit 2 naming both selectors; missing
+   `--relative-to` → exit 2; each flag in isolation moves exactly the expected axis, others
+   untouched; `--centroid-u`/`--edge-u-*` mutual exclusion (and the V equivalent) enforced by
+   argparse; zero flags given → exit 2; `-` with empty stdin → clean no-op, piped `TARGET:idx` list
+   moves each in turn; the move is a pure Location translation (poly-relative vertex positions inside
+   TARGET's own frame unchanged); REF's Location never changes; touched-brush stdout + stderr
+   confirmation format.
 4. `brush poly find`'s new optional-candidates default: a regression test alongside the existing
    suite in `tests/test_...` for that verb.
 
@@ -275,6 +304,10 @@ Test files: extend `uedcli/tests/test_relation.py` (the `relation.py` core), ren
 - `docs/reference/brush/measure.md` → replaced by `docs/reference/brush/relation.md` covering all
   three sub-verbs (per `dev/docs/rules/documentation.md`'s "keep the matching reference page current
   with the CLI, same change" rule).
+- `docs/reference/brush/README.md`'s index table: the `brush measure relation` row (line 14) → the
+  moved `brush relation measure` under `relation.md`.
+- `docs/leveldesign/general/recipes/shapes/mitered-corner.md` (line 63): the prose example that uses
+  `brush measure relation` → the new spelling.
 - `docs/reference/brush/poly.md`: the `poly find` `names`-now-optional behavior change.
 - Any "See also" cross-links to the old `measure.md` path (`docs/reference/brush/poly.md`'s current
   one, at minimum).
