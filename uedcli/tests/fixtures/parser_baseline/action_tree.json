@@ -8547,6 +8547,25 @@
             {
               "class": "_StoreAction",
               "option_strings": [
+                "--faces"
+              ],
+              "dest": "faces",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": [
+                "wire",
+                "textured"
+              ],
+              "metavar": null,
+              "converter": null,
+              "help": "--native only: 'textured' (the native default) software-rasterizes solid textured faces; 'wire' draws a content-free brush WIREFRAME from the same posed camera — brushes coloured by CSG op (add=blue, subtract=gold, semisolid=coral, nonsolid=green, mover=magenta), point actors as sprites/markers, every edge drawn (see-through). wire needs no CSG solve and no native extension. Rejected with --game",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
                 "--map"
               ],
               "dest": "map",

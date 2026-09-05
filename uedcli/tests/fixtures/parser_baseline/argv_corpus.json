@@ -397,7 +397,7 @@
     "exit_code": 2,
     "namespace": null,
     "stdout": "",
-    "stderr": "usage: uedcli level photo [-h] [--out-dir DIR] [--list-actors Package.Class]\n                          [--sample N] [--native | --game] [--size WxH]\n                          [--fov DEG] [--map PATH] [--rebuild] [--keep-alive]\n                          [--tree level/NAME]\n                          [SHOT ...]\nuedcli level photo: error: argument --game: not allowed with argument --native\n"
+    "stderr": "usage: uedcli level photo [-h] [--out-dir DIR] [--list-actors Package.Class]\n                          [--sample N] [--native | --game] [--size WxH]\n                          [--fov DEG] [--faces {wire,textured}] [--map PATH]\n                          [--rebuild] [--keep-alive] [--tree level/NAME]\n                          [SHOT ...]\nuedcli level photo: error: argument --game: not allowed with argument --native\n"
   },
   {
     "argv": [
