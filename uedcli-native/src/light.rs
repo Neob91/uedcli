@@ -679,9 +679,9 @@ fn bake_surf(
     // RUN (empty or populated) iff >=1 participating light passes ALL of the gather's own per-surf
     // filters. Decoded 2026-09-05 from `0x100a4e60`-`0x100a4f10`:
     //   1. special_lit partition (`0x100a4ea0`: `test [light+0x1a8],1` then `surf.PolyFlags &
-    //      0x100000`) — same as the loop's 663.
+    //      0x100000`).
     //   2. `GetVisibleSurfs` membership (the loop this decode sits in iterates its output) + backface
-    //      (inside `GetVisibleSurfs`, `light_in_front`) — same as 668/674.
+    //      (inside `GetVisibleSurfs`, `light_in_front`).
     //   3. `WorldLightRadius >= |PlaneDot(light)|` (`0x100a4e87` builds `FPlane(Base,Normal)`,
     //      `0x100a4ec6` `FPlane::PlaneDot(light.Location)`, `andps` abs, `0x100a4ef7`
     //      `comiss WorldLightRadius,|d| / jb skip`): the PERPENDICULAR distance from the light to the
@@ -692,12 +692,23 @@ fn bake_surf(
     // rec 11 (empty run) and correctly leaves rec 6/9 dark, where native's imperfect
     // `GetVisibleSurfs` over-includes and both the plane test (broader) and native's own grid-corner
     // coarse cull (641, narrower/different geometry) mis-slot at least one of the three.
-    let visible_to_any_light = lights.iter().enumerate().any(|(li, l)| {
+    //
+    // The gather builds each surf's light LIST and the raytrace only prunes lights out of it, so the
+    // same predicate gates the per-light bake below — filter 3 included. Native used to apply
+    // filter 3 here only, letting the raytrace consider a light the gather never listed: with the
+    // self-shadow bias pushing the lumel origin +4 along the normal, a light 1-2 uu past
+    // `WorldLightRadius` from the plane still passed the per-lumel radius test and entered the run.
+    // OceanLab N=44 surf 228 (`Brush1419`): `Light111`/`Light121` sit 1026.3/1027.7 from the plane
+    // against a 1025 radius; UED22 lists neither, native listed both. No editor build carries a
+    // pair violating the predicate (checked over the UNATCO/WanChai/NYC_Bar/Island/OceanLab
+    // reference packages), so it is a hard filter, not a tie-break.
+    let gathered = |li: usize, l: &LightInput| {
         l.special_lit == surf_special
             && light_in_front(&normal, &base, &l.location, s.poly_flags)
             && visible_per_light[li].contains(&(si as i32))
             && l.location.sub(&base).dot(&normal).abs() <= l.world_radius()
-    });
+    };
+    let visible_to_any_light = lights.iter().enumerate().any(|(li, l)| gathered(li, l));
 
     let Some((u_dir, v_dir)) = axes else {
         // No basis, no grid to walk: the surface still gets its record (empty run if any light
@@ -722,19 +733,10 @@ fn bake_surf(
     }
 
     for (li, l) in lights.iter().enumerate() {
-        // `bSpecialLit` partitions light and surface into two disjoint sets (see `LightInput`).
-        if l.special_lit != surf_special {
-            continue;
-        }
-        // Backface cull: a light behind this surface's plane never lights its front face (editor
-        // parity — see `light_in_front`). Cheapest possible test, so do it first.
-        if !light_in_front(&normal, &base, &l.location, s.poly_flags) {
-            continue;
-        }
-        // `URender::GetVisibleSurfs` gate (`visible_surfs.rs`): the editor's own six-face cube-map
-        // occlusion rasterization decides which surfaces even enter a light's run, independent of
-        // (and stricter than) the plane/radius/per-lumel tests below.
-        if !visible_per_light[li].contains(&(si as i32)) {
+        // Only the lights the gather listed for this surf reach the raytrace (`gathered`, above):
+        // the `bSpecialLit` partition, the backface cull, `GetVisibleSurfs` membership, and the
+        // perpendicular plane-distance test.
+        if !gathered(li, l) {
             continue;
         }
         let wr = l.world_radius();
@@ -1270,6 +1272,52 @@ mod tests {
         for pf in [PF_TWO_SIDED, PF_PORTAL, PF_TWO_SIDED | PF_PORTAL] {
             assert!(at(4000.0, pf), "PolyFlags {pf:#x} must exempt the surface from the cull");
         }
+    }
+
+    /// The `-X`-facing wall's light run in a `±256/±256/±128` room lit by one light on the X axis.
+    fn plus_x_wall_run(light_x: f32, radius: u8) -> Vec<i32> {
+        let mut m = build_geometry_from_brushes(&[box_brush(
+            256.0,
+            256.0,
+            128.0,
+            Vec3::new(0.0, 0.0, 0.0),
+            CsgOper::Subtract,
+        )])
+        .unwrap();
+        bake(&mut m, &[LightInput { location: Vec3::new(light_x, 0.0, 0.0), radius,
+                                    special_lit: false }])
+            .unwrap();
+        let si = m
+            .surfs
+            .iter()
+            .position(|s| m.vectors[s.v_normal as usize].x == -1.0
+                          && m.points[s.p_base as usize].x == 256.0)
+            .expect("the +X wall");
+        let ilm = m.surfs[si].i_light_map;
+        assert!(ilm >= 0, "the +X wall must get a lightmap record");
+        let rec = m.light_map[ilm as usize];
+        if rec.i_light_actors < 0 {
+            return Vec::new();
+        }
+        m.lights[rec.i_light_actors as usize..]
+            .iter()
+            .take_while(|&&v| v >= 0)
+            .copied()
+            .collect()
+    }
+
+    #[test]
+    fn a_light_past_the_planes_world_radius_never_enters_the_run() {
+        // The gather's perpendicular plane test (`Editor 0x100a4ef7`) measures from the PLANE, but
+        // the raytrace samples from `plane + Normal * SELF_SHADOW_BIAS`. A light between the two
+        // therefore lights lumels it must not be listed for: at `radius = 3` (world radius 100), a
+        // light 101 uu in front of the wall is only 97 from the nearest biased lumel. Pins the
+        // OceanLab N=44 fix -- before it, the raytrace ran for lights the gather never listed.
+        assert_eq!(plus_x_wall_run(256.0 - 101.0, 3), Vec::<i32>::new(),
+                   "101 > world radius 100: the gather drops the light despite lit lumels");
+        // Not vacuous: two units nearer, the same light populates the run.
+        assert_eq!(plus_x_wall_run(256.0 - 99.0, 3), vec![0],
+                   "99 <= world radius 100: the light is listed and lights the wall");
     }
 
     #[test]

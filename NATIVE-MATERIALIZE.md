@@ -236,13 +236,14 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   leaves its `bspAddVector` proposals in the pool
   (`dev/docs/spikes/2026-09-06-island-n6-vector-pool/`,
   `dev/docs/board/done/island-n6-vector-pool-order/`).
-- **OceanLab, N=44**: `BODY model model2` — the world `Model.Lights` per-surf light-run array has 2
-  extra light refs (`light121`, an extra `light106`) native emits that the editor's build does not,
-  plus a downstream `LightBits` byte diff. N=44 adds a plain brush, no new light/zone actor; cause
-  not yet found — `dev/docs/board/inbox/oceanlab-n44-world-model2-lights-array-has-2/`. Byte-exact
-  N=1..43 (was 16, then 33, then 43 across two independent fixes this session: a native texture
-  resolver no longer guessing a package when none is loaded, and the point-dedup repartition fix
-  below).
+- **OceanLab, N=46**: `BODY model model2` — the world `Model`'s `Bounds`, `LeafHulls` and per-leaf
+  permeating-light region all diverge (`LightBits` is byte-identical, so this is a leaf/bound-pass
+  divergence, not a lighting-run one) —
+  `dev/docs/board/inbox/oceanlab-n46-world-model2-bounds-leafhulls-and/`. Byte-exact N=1..45 (was
+  16, then 33, then 43, then 45 across three fixes this session: a native texture resolver no longer
+  guessing a package when none is loaded, the point-dedup repartition fix below, and the gather
+  pass's plane test now gating the raytrace loop, not just the empty-run/dark decision —
+  `dev/docs/board/done/oceanlab-n44-world-model2-lights-array-has-2/`).
 - **Standing stopgap, all levels**: `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/`
   — repartition dedups points with a linear pool scan; the editor descends and appends on a miss
   (`AddThing(..., !FastRebuild)` with `FastRebuild = 1`). Owed a faithful fix.
