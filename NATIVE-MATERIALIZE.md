@@ -212,19 +212,19 @@ Tests must NOT block the parity work. For this project specifically:
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
-- **UNATCO: no open blocker — the ladder is advancing.** The N=29 blocker is FIXED
-  (`dev/docs/board/done/unatco-n-29-world-model2-vert-rings-reference/`): the divergence was one
+- **UNATCO, N=116**: `dev/docs/board/inbox/unatco-n-116-world-model2-light-runs-differ-on/` — the
+  world `Model2`'s per-lightmap light RUNS differ on 13 of 214 lightmaps, both directions; same
+  family as the WanChai N=45 item. Byte-exact N=1..115 (was 28): the N=29 blocker is FIXED
+  (`dev/docs/board/done/unatco-n-29-world-model2-vert-rings-reference/`) — the divergence was one
   surf's `Texture` ref, not the vertex rings (all 91 live node rings were coordinate-identical; the
   391 differing `FVert`s were gate-excluded orphan slots). An untextured poly shipped
   `brush_marshal`'s per-brush texture dedup ordinal as an object ref, because
   `unbuilt._patch_native_surf_refs` only overwrote `texture_ref` when the poly named a texture.
-  Byte-exact N=1..100 and still climbing (2026-09-06) — no parity bail since; the sweep stops it
-  hits are the host's transient `docker exec` failures, so just re-run
-  `ladder_run.py --dx …/03_NYC_UNATCOHQ.dx --from <last PASS + 1>`. Also open, found by
-  the earlier N=26 work: `dev/docs/board/inbox/port-occludebsp-frustum-cone-subtree-reject/` —
-  native still box-tests 51 subtrees per UNATCO N=26 build that UED22's step-6 frustum-cone reject
-  discards. Diagnosing a `Verts` diff: run `harness/ring_diff.py` FIRST — `model_dump.py` reports
-  every orphan slot as a difference, which is what sent the N=29 item down the vertex-ring path.
+  Diagnosing a `Verts` diff: run `harness/ring_diff.py` FIRST — `model_dump.py` reports every
+  orphan slot as a difference, which is what sent the N=29 item down the vertex-ring path. Also
+  open, found by the earlier N=26 work:
+  `dev/docs/board/inbox/port-occludebsp-frustum-cone-subtree-reject/` — native still box-tests 51
+  subtrees per UNATCO N=26 build that UED22's step-6 frustum-cone reject discards.
 - **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-spotlight22-light-runs-differ-on-4/` — PARKED,
   multi-day rasterizer port (`FSpanBuffer`'s `ClipBspSurf` + fixed-point scanline setup), corpus-wide
   blast radius measured (~20k already-correct decisions per level would move at once).

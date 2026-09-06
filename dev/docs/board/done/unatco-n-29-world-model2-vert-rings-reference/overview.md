@@ -26,5 +26,6 @@ The patch now ASSIGNS `texture_ref` for every surf (`0` = None unless the poly n
 Pinned by `uedcli/tests/test_native_surf_texture_ref.py`. Follow-up (the source-level fix):
 `native-csg-core-stores-a-texture-dedup-ordinal`.
 
-UNATCO gates byte-exact at N=29 with no new mask. Re-verified: UNATCO 1..29, WanChai 1..44, NYC_Bar
-1..58, Island 1..9, OceanLab 1..45 — every level's ceiling unchanged.
+UNATCO gates byte-exact at N=29 with no new mask, and the ladder then ran on to N=115 before hitting
+a light-run divergence (`unatco-n-116-world-model2-light-runs-differ-on`). Re-verified: WanChai
+1..44, NYC_Bar 1..58, Island 1..9, OceanLab 1..45 — every other level's ceiling unchanged.
