@@ -304,68 +304,124 @@ def test_format_report_collapses_all_none_group_to_one_line():
     assert "plane:" not in text  # collapsed -- no full block fields printed
 
 
-def test_compute_pair_pins_to_exact_selectors():
+def test_compute_pairs_pins_to_exact_selectors():
     a = _brush("A", cube(32, 32, 32), loc=(0, 0, 0))
     b = _brush("B", cube(32, 32, 32), loc=(0, 0, 32))
     level = _level(a, b)
     top_a = next(i for i, p in enumerate(a.brush.polys) if p.normal == (0.0, 0.0, 1.0))
     bottom_b = next(i for i, p in enumerate(b.brush.polys) if p.normal == (0.0, 0.0, -1.0))
-    report = relation.compute_pair(level, f"A:{top_a}", f"B:{bottom_b}")
+    report = relation.compute_pairs(level, f"A:{top_a}", [f"B:{bottom_b}"])
     assert len(report.groups) == 1
     assert len(report.groups[0].shown) == 1  # pinned to one pair, no ranking needed
     assert report.groups[0].shown[0].plane.plane == "coincident" or report.groups[0].shown[0].plane.plane == "coplanar"
 
 
-def test_compute_pair_bare_names_ranks_like_compute():
+def test_compute_pairs_bare_names_ranks_like_compute():
     a = _brush("A", cube(32, 32, 32), loc=(0, 0, 0))
     b = _brush("B", cube(32, 32, 32), loc=(0, 0, 32))
     level = _level(a, b)
-    pair_report = relation.compute_pair(level, "A", "B", top=None)
+    pair_report = relation.compute_pairs(level, "A", ["B"], top=None)
     full_report = relation.compute(level, ["A", "B"], top=None)
     assert pair_report.groups[0].candidate_count == full_report.groups[0].candidate_count
 
 
-def test_compute_pair_mixed_bare_and_pinned_selectors():
+def test_compute_pairs_mixed_bare_and_pinned_selectors():
     # REF bare (ranks all its polys) against TARGET pinned to one exact poly.
     a = _brush("A", cube(32, 32, 32), loc=(0, 0, 0))
     b = _brush("B", cube(32, 32, 32), loc=(0, 0, 32))
     level = _level(a, b)
     bottom_b = next(i for i, p in enumerate(b.brush.polys) if p.normal == (0.0, 0.0, -1.0))
-    report = relation.compute_pair(level, "A", f"B:{bottom_b}", top=None)
+    report = relation.compute_pairs(level, "A", [f"B:{bottom_b}"], top=None)
     assert report.groups
     assert all(p.poly_b == bottom_b for p in report.groups[0].shown)
 
 
-def test_compute_pair_same_brush_rejected_by_default():
+def test_compute_pairs_same_brush_rejected_by_default():
     a = _brush("A", cube(32, 32, 32))
     level = _level(a)
     with pytest.raises(relation.RelationError, match="allow-self"):
-        relation.compute_pair(level, "A:0", "A:1")
+        relation.compute_pairs(level, "A:0", ["A:1"])
 
 
-def test_compute_pair_allow_self_permits_same_brush():
+def test_compute_pairs_allow_self_permits_same_brush():
     a = _brush("A", cube(32, 32, 32))
     level = _level(a)
-    report = relation.compute_pair(level, "A", "A", top=None, allow_self=True)
+    report = relation.compute_pairs(level, "A", ["A"], top=None, allow_self=True)
     assert report.brush_count == 1
     # every shown pair excludes the trivial (idx, idx) self-match
     assert all(not (p.poly_a == p.poly_b) for p in report.groups[0].shown) if report.groups else True
 
 
-def test_compute_pair_disjoint_never_reports_exactly_one():
+def test_compute_pairs_single_target_disjoint_never_reports_exactly_one():
+    # With exactly ONE target, disjoint is {ref_name, target_name} (both or neither) -- this
+    # invariant is specific to the single-target case; with multiple targets a length-1 disjoint
+    # set is legitimate (see test_compute_pairs_partial_disjoint_with_multiple_targets).
     a = _brush("A", cube(16, 16, 16), loc=(0, 0, 0))
     b = _brush("B", cube(16, 16, 16), loc=(500, 500, 500))
     b.props.insert(0, ("Rotation", "(Pitch=5000,Yaw=7000,Roll=3000)"))
     level = _level(a, b)
-    report = relation.compute_pair(level, "A", "B")
+    report = relation.compute_pairs(level, "A", ["B"])
     assert len(report.disjoint) in (0, 2)
 
 
-def test_compute_pair_unknown_selector_raises():
+def test_compute_pairs_partial_disjoint_with_multiple_targets():
+    # ref relates to Near but NOT Far -- only Far should be disjoint (a length-1 disjoint set,
+    # which the single-target invariant above says can't happen there, but is normal here since
+    # `measure` never compares targets against each other, only each against ref).
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    near = _brush("Near", cube(64, 64, 8), loc=(0, 0, 8))          # flush on top -- relates
+    far = _brush("Far", cube(16, 16, 16), loc=(500, 500, 500))
+    far.props.insert(0, ("Rotation", "(Pitch=5000,Yaw=7000,Roll=3000)"))  # no face stays parallel
+    level = _level(ref, near, far)
+    report = relation.compute_pairs(level, "Wall", ["Near", "Far"])
+    assert report.disjoint == ["Far"]
+    assert {g.brush_b for g in report.groups} == {"Near"}
+
+
+def test_compute_pairs_unknown_selector_raises():
     a = _brush("A", cube(16, 16, 16))
     level = _level(a)
     with pytest.raises(relation.RelationError):
-        relation.compute_pair(level, "A", "NoSuchBrush")
+        relation.compute_pairs(level, "A", ["NoSuchBrush"])
+
+
+def test_compute_pairs_multiple_distinct_targets_get_one_group_each():
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    near = _brush("Near", cube(64, 64, 8), loc=(0, 0, 8))
+    far = _brush("Far", cube(64, 64, 8), loc=(0, 0, 100))
+    level = _level(ref, near, far)
+    report = relation.compute_pairs(level, "Wall", ["Near", "Far"])
+    assert {g.brush_b for g in report.groups} == {"Near", "Far"}
+
+
+def test_compute_pairs_three_repeated_target_tokens_union_into_one_group():
+    a = _brush("A", cube(32, 32, 32), loc=(0, 0, 0))
+    b = _brush("B", cube(32, 32, 32), loc=(0, 0, 32))
+    level = _level(a, b)
+    top_a = next(i for i, p in enumerate(a.brush.polys) if p.normal == (0.0, 0.0, 1.0))
+    plus_x_a = next(i for i, p in enumerate(a.brush.polys) if p.normal == (1.0, 0.0, 0.0))
+    minus_x_a = next(i for i, p in enumerate(a.brush.polys) if p.normal == (-1.0, 0.0, 0.0))
+    report = relation.compute_pairs(
+        level, "B", [f"A:{top_a}", f"A:{plus_x_a}", f"A:{minus_x_a}"], top=None)
+    assert len(report.groups) == 1
+    assert report.groups[0].brush_b == "A"
+    seen = {p.poly_b for p in report.groups[0].shown}
+    assert seen == {top_a, plus_x_a, minus_x_a}
+
+
+def test_compute_pairs_repeated_target_brush_unions_poly_selectors():
+    # Two tokens naming the SAME brush with different pinned polys (as two rows of a `find --top
+    # all` result would) must fold into ONE group covering BOTH polys, not two groups/duplicates.
+    a = _brush("A", cube(32, 32, 32), loc=(0, 0, 0))
+    b = _brush("B", cube(32, 32, 32), loc=(0, 0, 32))
+    level = _level(a, b)
+    top_a = next(i for i, p in enumerate(a.brush.polys) if p.normal == (0.0, 0.0, 1.0))
+    side_a = next(i for i, p in enumerate(a.brush.polys) if p.normal == (1.0, 0.0, 0.0))
+    report = relation.compute_pairs(level, "B", [f"A:{top_a}", f"A:{side_a}"], top=None)
+    assert len(report.groups) == 1
+    assert report.groups[0].brush_b == "A"
+    seen_a_polys = {p.poly_b for p in report.groups[0].shown}
+    assert seen_a_polys == {top_a, side_a}   # BOTH indices present -- proves the union, not a drop
 
 
 def test_find_candidates_ranks_and_caps_per_candidate():

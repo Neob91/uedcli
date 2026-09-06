@@ -2,16 +2,20 @@
 
 measure / find / set
 
-**`brush relation measure REF TARGET`** reports the exact geometric relationship between exactly
-2 face selectors — replaces eyeballing a render with computed facts: whether the planes are
-coplanar or parallel, both normals, the signed distance between them, the 2-D footprint
-relationship (`none`/`vertex`/`edge`/`partial`/`contains`/`coincident`), and the centroid/edge-min
-deltas in the shared plane's own U/V axes. A selector is a bare brush Name (all its polys) or
-`Name:SELECTOR` (`SELECTOR` = `all` or comma indices) — pin `Wall:5 Floor:4` to compare exactly
-those two faces, or leave a side bare to rank every one of that brush's polys against the other
-side. `--top N` caps how many ranked candidate pairs are shown (default 1, closest first); `--top
-all` shows every qualifying pair. The two selectors must name different brushes unless
-`--allow-self` is given (comparing two faces of the same brush).
+**`brush relation measure REF TARGET...`** reports the exact geometric relationship between a
+reference face selector and one or more target selectors — replaces eyeballing a render with
+computed facts: whether the planes are coplanar or parallel, both normals, the signed distance
+between them, the 2-D footprint relationship (`none`/`vertex`/`edge`/`partial`/`contains`/
+`coincident`), and the centroid/edge-min deltas in the shared plane's own U/V axes. A selector is a
+bare brush Name (all its polys) or `Name:SELECTOR` (`SELECTOR` = `all` or comma indices) — pin
+`Wall:5 Floor:4` to compare exactly those two faces, or leave a side bare to rank every one of that
+brush's polys against the other side. `TARGET` accepts more than one selector, or `-` alone to read
+a newline selector list from stdin — exactly `brush relation find`'s output shape, so `find |
+measure REF -` gets full geometric detail on exactly the set `find` matched. Repeated
+target selectors naming the same brush have their polys unioned into one comparison. `--top N` caps
+how many ranked candidate pairs are shown per target (default 1, closest first); `--top all` shows
+every qualifying pair. REF and a target must name different brushes unless `--allow-self` is given
+(comparing two faces of the same brush).
 
 ```
 $ uedcli brush relation measure Wall_North Floor
@@ -39,14 +43,23 @@ against every one of its polys, `Name:idx` pins to one reference face. Filters A
 `--max-gap N` / `--min-gap N` bound the perpendicular gap, `--footprint LIST` (comma-separated
 `none`/`vertex`/`edge`/`partial`/`contains`/`coincident`) and `--plane {coplanar,parallel}` narrow
 by relationship shape. `--top N` (default 1) / `--top all` controls how many pairs are kept per
-candidate. A human summary of each match goes to stderr; `--json` emits the full structured
-relation as a JSON array on stdout instead (and drops the stderr summary). The reference's own
-brush is excluded from the default search and rejected if named explicitly, unless `--allow-self`.
+candidate. `find` only ever reports IDENTITY, never geometry: stderr gets one aggregate count
+("N face(s) matched across M candidate(s)"); `--json` emits each match's `ref`/`ref_poly`/
+`candidate`/`poly` as a JSON array on stdout instead (and drops the stderr summary). For the
+geometric detail behind a match — plane, normals, distance, footprint_2d, deltas — pipe into
+`brush relation measure REF -`, which reads exactly this stdout shape. The reference's own brush
+is excluded from the default search and rejected if named explicitly, unless `--allow-self`.
 
 ```
 $ uedcli brush relation find --relative-to Wall_North --max-gap 8
 Panel:0
 Shelf:2
+$ uedcli brush relation find --relative-to Wall_North --max-gap 8 | \
+    uedcli brush relation measure Wall_North -
+Wall_North <-> Panel
+  ...
+Wall_North <-> Shelf
+  ...
 ```
 
 **`brush relation set TARGET:idx --relative-to REF:idx`** moves `TARGET`'s whole brush (its

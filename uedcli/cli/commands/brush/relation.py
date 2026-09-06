@@ -21,10 +21,13 @@ def run(args, src) -> int:
 
 def _measure(args, src) -> int:
     top = None if args.top == "all" else args.top
+    targets = resolve_target_names(args.target)          # `-` → stdin (e.g. `relation find` output)
+    if not targets:
+        return 0                                          # '-' with empty stdin: clean no-op
     level = src.load()
     try:
-        report = relation.compute_pair(level, args.ref, args.target,
-                                        top=top, allow_self=args.allow_self)
+        report = relation.compute_pairs(level, args.ref, targets,
+                                         top=top, allow_self=args.allow_self)
     except relation.RelationError as e:
         print(str(e), file=sys.stderr)
         return 2
@@ -90,24 +93,14 @@ def _find(args, src) -> int:
         rows = [{
             "ref": m.pair.brush_a, "ref_poly": m.pair.poly_a,
             "candidate": m.candidate, "poly": m.poly,
-            "plane": m.pair.plane.plane,
-            "normal_ref": list(m.pair.plane.normal_a),
-            "normal_candidate": list(m.pair.plane.normal_b),
-            "distance": m.pair.plane.distance,
-            "footprint_2d": m.pair.footprint_2d,
-            "deltas": {"centroid_u": m.pair.deltas.centroid_u, "centroid_v": m.pair.deltas.centroid_v,
-                       "edge_u_label": m.pair.deltas.edge_u_label, "edge_u": m.pair.deltas.edge_u,
-                       "edge_v_label": m.pair.deltas.edge_v_label, "edge_v": m.pair.deltas.edge_v},
         } for m in matches]
         print(json.dumps(rows, indent=2))
     else:
         for m in matches:
             print(f"{m.candidate}:{m.poly}")
-        for m in matches:
-            print(f"{m.pair.brush_a}:{m.pair.poly_a} <-> {m.candidate}:{m.poly}  "
-                  f"plane={m.pair.plane.plane} "
-                  f"gap={relation._fmt(abs(m.pair.plane.distance))} "
-                  f"footprint={m.pair.footprint_2d}", file=sys.stderr)
+        matched_candidates = len({m.candidate for m in matches})
+        print(f"{len(matches)} face(s) matched across {matched_candidates} candidate(s)",
+              file=sys.stderr)
     return 0
 
 
