@@ -4,12 +4,12 @@
       "slug": "bar",
       "name": "NYC Bar",
       "codename": "02_NYC_Bar",
-      "highest_n": 150,
+      "highest_n": 152,
       "total_actors": 487,
       "status": "blocked",
-      "blocker": "BODY model model2 — world leaf 74 gets a permeating-light run UED22 leaves empty (iPermeating 63 vs -1), shifting every later leaf by +2. SAME root cause as Island N=123 (not a separate diagnosis) — one light incorrectly permeates a leaf. N=119's LightMap array-order bug is FIXED: the world LightMap walk now gates each surf's allocation on its BSP node having vertices (Editor.dll's real walk checks NumVertices first) — a surf spanning one 0-vertex node and one non-empty node was claimed at the wrong record.",
-      "board": "nyc-bar-n-151-world-model2-leaf-permeating-light",
-      "updated": "2026-09-07T00:10:00Z"
+      "blocker": "BODY model model2 — 3 world LightMap records get an iLightActors run UED22 leaves at -1 (Lights 484 vs 478, LightBits 6003 vs 5891); leaf permeating regions are clean (0/155 differ). Per-surf raytrace pass, same family as UNATCO N=116/WanChai N=45. N=151's leaf-permeating bug is FIXED: the beam-clip plane (FPlane(Light, edge)) wasn't normalized before testing against the editor's world-unit epsilon (+-0.25), so a ~1e4-magnitude cross product made the effective epsilon ~40000x too tight and let the beam survive extra portal hops.",
+      "board": "nyc-bar-n-153-world-model2-lightmap-runs-ued22",
+      "updated": "2026-09-07T01:20:00Z"
     },
     {
       "slug": "unatco",
@@ -51,9 +51,9 @@
       "highest_n": 122,
       "total_actors": 3653,
       "status": "blocked",
-      "blocker": "BODY model model2 — world Model2's LEAF light runs: native gives leaf 26 a permeating-light run UED22 leaves empty (iPermeating 107 vs -1), so every later leaf's iPermeating shifts by 2 and Lights is 1729 vs 1727. Every geometry array (points, vectors, bounds, leafhulls) and LightBits are byte-identical. N=93 is FIXED: resolve_zone_actors picked zone actors by class-NAME suffix and skipped DeusEx.WaterZone (a real Engine.ZoneInfo subclass); it now decides by ancestry — ULevel::SetActorZone's own IsA(AZoneInfo) && !IsA(ALevelInfo).",
+      "blocker": "BODY model model2 — leaf 26 gets a permeating-light run UED22 leaves empty. NOT the same cause as NYC_Bar's sibling bug (that fix, a beam-clip-plane normalization, left Island unchanged) -- root-caused to the PORTAL GRAPH: zones::collect_portals clips with a plain 1e-4 Sutherland-Hodgman where the editor's FilterThroughSubtree uses SplitWithNode(VeryPrecise) and DISCARDS an SP_Coplanar result, which moves the union-find graph the portal reachability rides on. Only one BSP node references leaf 26 and its portal shape is the open question.",
       "board": "island-n-123-world-model2-leaf-permeating-light",
-      "updated": "2026-09-06T22:30:00Z"
+      "updated": "2026-09-07T01:20:00Z"
     }
   ]
 }
