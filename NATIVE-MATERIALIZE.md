@@ -204,10 +204,11 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
 
 - **UNATCO, N=29**: `BODY model model2`, not yet diagnosed —
   `dev/docs/board/inbox/unatco-n-29-world-model2-vert-rings-reference/` (identical nodes and Points,
-  391 of 860 `FVert`s naming different Points). TWO independent fixes landed the same session and
-  both moved this ladder; which one actually closed the former N=26 `Light155` blocker (or whether
-  it was partly a stale inherited ref cache) is NOT yet disentangled — re-verify with `--force-ref`
-  before trusting the exact N this bullet names next:
+  391 of 860 `FVert`s naming different Points). Confirmed 2026-09-06 with a fully fresh
+  `--force-ref` build on current master (both fixes below applied): N=1..28 gate byte-exact, real,
+  not a stale-ref artifact. Two independent fixes landed the same session and both moved this
+  ladder past its old N=26 `Light155` blocker; whether one alone would have sufficed, or both were
+  needed together, is not disentangled (not important enough to re-test in isolation):
   - `URender::BoundVisible` + `FSpanBuffer::BoxIsVisible` are ported
     (`dev/docs/spikes/2026-09-06-boundvisible-port/`,
     `dev/docs/board/done/port-urender-boundvisible-box-occlusion-test/`), so the box-occlusion
