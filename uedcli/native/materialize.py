@@ -12,6 +12,8 @@ export.
 """
 from __future__ import annotations
 
+from struct import Struct
+
 from .actor_write import (Prop, PT_BYTE, PT_INT, PT_OBJECT, PT_STRUCT, StructValue,
                           struct_vector)
 from . import assemble as ASM
@@ -21,6 +23,9 @@ from .props import convert_actor_props
 # never finds them) yet are genuinely defined by `Engine`; falling back to `Engine.<X>` is correct
 # and must not warn. `Level`/`LevelInfo` are the ones a trunk can name.
 _ENGINE_PSEUDO_CLASSES = {"level", "levelinfo"}
+
+_pack_f32 = Struct("<f").pack
+_unpack_f32 = Struct("<f").unpack
 
 
 def default_schema(level=None):
@@ -369,18 +374,37 @@ def build_world_model(level, *, index, lights=()):
     return model, csg_brushes
 
 
+def _f32(x: float) -> float:
+    return _unpack_f32(_pack_f32(x))[0]
+
+
+def _plane_dot(plane, p) -> float:
+    """`FPlane::PlaneDot` (`Core.dll 0x10024e60`) exactly: an SSE horizontal add in SINGLE precision,
+    `(P.Z*Z + -W) + (P.Y*Y + P.X*X)`, every operation rounded to f32.
+
+    Both the precision and the summation order are load-bearing. A brush pivot that sits ON a node
+    plane can be ~1e-5 off zero in f64 and land on the wrong side of the descent: Island `Brush1359`
+    at node 22 (f64 -9.6e-05 -> back, leaf 13; the editor's f32 -> exactly 0.0 -> front, leaf 18) and
+    NYC_Bar `Brush69` at node 272 (f64 -7.6e-06 -> back, out of the tree; f32 -> 0.0 -> leaf 55)."""
+    px, py, pz = _f32(p[0]), _f32(p[1]), _f32(p[2])
+    x, y, z, w = plane
+    return _f32(_f32(_f32(-1.0 * w) + _f32(pz * z)) + _f32(_f32(py * y) + _f32(px * x)))
+
+
 def _model_point_region(model, p) -> tuple[int, int]:
     """PointRegion descent on a built `umodel.Model`: `(iLeaf, zone)` at point `p`. A point in solid
     space (no leaf on the terminating side) is `(-1, 0)`; a point in a carved leaf takes that leaf's
-    index and zone number. Mirrors the engine's `Model::PointRegion` used by `SetActorZone`."""
+    index and zone number. Mirrors the engine's `Model::PointRegion` used by `SetActorZone`.
+
+    `umodel` names the two children in ON-DISK order (`i_front` = the first serialized index), which
+    is the engine's `iChild[0]`/`iBack` -- hence side 1 (`PlaneDot >= 0`, the engine's `IsFront`)
+    takes `i_back`, matching `Engine.dll 0x101aef08`'s `iChild[IsFront]`."""
     if not model.nodes:
         return (-1, 0)
     ni = 0
     while True:
         n = model.nodes[ni]
-        nx, ny, nz, w = n.plane
-        pd = nx * p[0] + ny * p[1] + nz * p[2] - w
-        side = 1 if pd >= 0 else 0
+        side = 1 if _plane_dot(n.plane, p) >= 0 else 0
         child = n.i_back if side == 1 else n.i_front
         if child == -1:
             lf = n.i_leaf[side]

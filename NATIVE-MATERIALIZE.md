@@ -241,16 +241,20 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   models-unbuilt` is closed with it — the models were built all along. N=70 is fixed too
   (`dev/docs/board/done/nyc-bar-n-70-zone-actor-bound-to-the-alphabetically/`): `resolve_zone_actors`
   walked the name-keyed `level.actors` dict, so `ZoneInfo17` beat `ZoneInfo5` to the zone they share.
-  Byte-exact N=1..112 (was 58); the walk now bails at **N=113** on ONE token —
-  `dev/docs/board/inbox/nyc-bar-n-113-brush69-region-lands-outside-the/`, `Brush69`'s `Region`
-  descending out of the tree where UED22 lands in leaf 55.
-- **Island, N=10**: `dev/docs/board/inbox/island-n-10-brush1359-region-ileaf-13-vs-18/` — one token,
-  `Brush1359`'s cached `Region` iLeaf (13 vs 18); the world `Model` matches. Byte-exact N=1..9 (was
-  5): the N=6 vector-pool blocker is FIXED — native keeps the incremental Vectors pool across the
-  repartition instead of rebuilding it from the surviving surfs, because a surf CSG merges away still
-  leaves its `bspAddVector` proposals in the pool
+  N=113 is fixed too (`dev/docs/board/done/nyc-bar-n-113-brush69-region-lands-outside-the/`) — the
+  point-region descent evaluated the node plane in f64 where `FPlane::PlaneDot` is single-precision
+  SSE, so a pivot lying ON a node plane took the wrong child; same fix as Island N=10
+  (`dev/docs/spikes/2026-09-06-pointregion-planedot-f32/`). Byte-exact **N=1..118** (was 112); bails
+  at **N=119** on the world `Model2`'s `LightMap` array order —
+  `dev/docs/board/inbox/nyc-bar-n-119-world-model2-lightmap-array-order/`.
+- **Island, no open blocker**: N=6 and N=10 are both FIXED. N=6 was the Vectors pool — native keeps
+  the incremental pool across the repartition instead of rebuilding it from the surviving surfs
   (`dev/docs/spikes/2026-09-06-island-n6-vector-pool/`,
-  `dev/docs/board/done/island-n6-vector-pool-order/`).
+  `dev/docs/board/done/island-n6-vector-pool-order/`). N=10 was `Brush1359`'s `Region` iLeaf, the
+  same f32 `FPlane::PlaneDot` fix as NYC_Bar N=113
+  (`dev/docs/spikes/2026-09-06-pointregion-planedot-f32/`,
+  `dev/docs/board/done/island-n-10-brush1359-region-ileaf-13-vs-18/`). Byte-exact **N=1..40** (was 9)
+  with no bail yet; the `ladder_run.py --from 41` sweep is the next step.
 - **OceanLab, N=46**: `BODY model model2` — the world `Model`'s `Bounds`, `LeafHulls` and per-leaf
   permeating-light region all diverge (`LightBits` is byte-identical, so this is a leaf/bound-pass
   divergence, not a lighting-run one) —
