@@ -237,7 +237,9 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   models-unbuilt` is closed with it — the models were built all along. N=70 is fixed too
   (`dev/docs/board/done/nyc-bar-n-70-zone-actor-bound-to-the-alphabetically/`): `resolve_zone_actors`
   walked the name-keyed `level.actors` dict, so `ZoneInfo17` beat `ZoneInfo5` to the zone they share.
-  See the Parity Ladder artifact for where the walk stands now.
+  Byte-exact N=1..112 (was 58); the walk now bails at **N=113** on ONE token —
+  `dev/docs/board/inbox/nyc-bar-n-113-brush69-region-lands-outside-the/`, `Brush69`'s `Region`
+  descending out of the tree where UED22 lands in leaf 55.
 - **Island, N=10**: `dev/docs/board/inbox/island-n-10-brush1359-region-ileaf-13-vs-18/` — one token,
   `Brush1359`'s cached `Region` iLeaf (13 vs 18); the world `Model` matches. Byte-exact N=1..9 (was
   5): the N=6 vector-pool blocker is FIXED — native keeps the incremental Vectors pool across the
