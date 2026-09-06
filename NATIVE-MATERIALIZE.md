@@ -178,9 +178,38 @@ Tests must NOT block the parity work. For this project specifically:
 
 ## Where the detail lives
 
-- Process + rulings: `dev/docs/board/to-build/native-materialize/incremental-lockstep-full-structural-parity/`
+- Process + rulings: `dev/docs/board/to-build/native-materialize/incremental-lockstep-full-structural-parity/`,
+  `dev/docs/board/to-build/native-materialize/faithful-incremental-bsp-dedup-rewrite/` (the point-dedup
+  fix, landed).
 - Cause/exclusion findings: `dev/docs/board/inbox/ued22-world-bsp-differs-per-ingest-verb-paste/`,
   `dev/docs/board/inbox/n-1-built-parity-blocked-by-map-rebuild-object/`
 - Serialization foundation: `dev/docs/spikes/2026-09-02-unbuilt-structure-parity/`
 - Native engine: `uedcli-native/` (Rust), `uedcli/native/` (Python bridge), `uedcli/apply.py`
   (`_materialize_native`).
+- Parity harness: `dev/docs/spikes/2026-09-03-incremental-actor-parity/harness/` (`parity_gate.py`,
+  `actor_parity.py`, `ladder_run.py`).
+
+## Open blockers per level (2026-09-05) — read before pushing that level further
+
+Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
+
+- **UNATCO, N=26**: `dev/docs/board/inbox/port-urender-boundvisible-box-occlusion-test/` — real fix
+  scoped (port `URender::BoundVisible`, `render.dll 0x10012100`, gated to the confirmed
+  `iNode%16==0` residue), not yet built. Evidence: `dev/docs/spikes/2026-09-05-lightapply-node-flags/`
+  + `dev/docs/spikes/2026-09-05-lightapply-node-flags-verification/`.
+- **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-spotlight22-light-runs-differ-on-4/` — PARKED,
+  multi-day rasterizer port (`FSpanBuffer`'s `ClipBspSurf` + fixed-point scanline setup), corpus-wide
+  blast radius measured (~20k already-correct decisions per level would move at once).
+- **NYC_Bar, N=59**: `dev/docs/board/inbox/nyc-bar-n-59-brush-region-zone-and-ued22/` — Region
+  zone-actor, mover base pose, and pawn Foot/HeadRegion all FIXED; two native-geometry gaps remain:
+  world-node `NF_IsFront`/`NF_IsBack` (accumulates across multiple CSG-time descents, not a single
+  pass) and mover private `Model` geometry not built when real world CSG exists (reopened:
+  `dev/docs/board/inbox/native-geometry-path-leaves-mover-models-unbuilt/`).
+- **Island, N=5 / OceanLab, N=13**: same residual class — `dev/docs/board/to-spike/
+  island-n5-n12-pre-existing-model2-orphan-vert-4/`, `dev/docs/board/to-spike/
+  oceanlab-n13-csg-soup-split-vertex-1-ulp/` — 1-5 ULP split-vertex values in the world `Model2`;
+  walk order, summation order, plane provenance, and colinear removal all ruled out by disassembly;
+  cause not yet found. See also `dev/docs/board/inbox/corrupt-trunk-cache-silently-passes-the-ladder/`
+  — a cached trunk extraction can be silently truncated; verify actor COUNT against the level's known
+  scale before trusting a ladder result either way.
+- Live status + these same blockers, kept current: the **Parity Ladder** artifact (see above).
