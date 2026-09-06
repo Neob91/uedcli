@@ -389,12 +389,16 @@ def _world_soup_fpolys(asm, world_model, csg_brushes, tex_ref) -> list:
 
 def _patch_native_surf_refs(asm, model, csg_brushes, tex_ref) -> None:
     """Rewrite every surf of a NATIVELY built world Model to real object refs: `iActor` (a raw
-    brush index the Rust build tags) -> the brush actor's export ref, and `texture_ref` (always 0
-    out of the build -- the CSG core never sees textures) -> the import the source poly's `Texture=`
-    names, through the SAME `tex_ref` resolver the brush polys used, so an unqualified trunk texture
-    resolves identically on both. An out-of-range index leaves the surf ownerless/untextured rather
-    than raising -- the same guard `preview_native._node_polys` applies."""
+    brush index the Rust build tags) -> the brush actor's export ref, and `texture_ref` -> the
+    import the source poly's `Texture=` names, through the SAME `tex_ref` resolver the brush polys
+    used, so an unqualified trunk texture resolves identically on both. An out-of-range index
+    leaves the surf ownerless/untextured rather than raising -- the same guard
+    `preview_native._node_polys` applies."""
     for s in model.surfs:
+        # ASSIGN, never merge into: the Rust build leaves `texture_ref` holding `brush_marshal`'s
+        # per-brush texture dedup ordinal, so an untextured poly used to ship that ordinal as an
+        # object ref (board item `unatco-n-29-world-model2-vert-rings-reference`).
+        s.texture_ref = 0                                # no texture -> None, as UED22 writes
         bi = s.i_actor
         if not (0 <= bi < len(csg_brushes)):
             s.i_actor = 0                                # unknown owner -> none

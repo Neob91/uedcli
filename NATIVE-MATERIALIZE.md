@@ -212,25 +212,19 @@ Tests must NOT block the parity work. For this project specifically:
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
-- **UNATCO, N=29**: `BODY model model2`, not yet diagnosed —
-  `dev/docs/board/inbox/unatco-n-29-world-model2-vert-rings-reference/` (identical nodes and Points,
-  391 of 860 `FVert`s naming different Points). Confirmed 2026-09-06 with a fully fresh
-  `--force-ref` build on current master (both fixes below applied): N=1..28 gate byte-exact, real,
-  not a stale-ref artifact. Two independent fixes landed the same session and both moved this
-  ladder past its old N=26 `Light155` blocker; whether one alone would have sufficed, or both were
-  needed together, is not disentangled (not important enough to re-test in isolation):
-  - `URender::BoundVisible` + `FSpanBuffer::BoxIsVisible` are ported
-    (`dev/docs/spikes/2026-09-06-boundvisible-port/`,
-    `dev/docs/board/done/port-urender-boundvisible-box-occlusion-test/`), so the box-occlusion
-    `NF_BoxOccluded` bits the shadow-ray walker reads now match a real engine algorithm. Also open,
-    found by the same work: `dev/docs/board/inbox/port-occludebsp-frustum-cone-subtree-reject/` —
-    native still box-tests 51 subtrees per UNATCO N=26 build that UED22's step-6 frustum-cone reject
-    discards.
-  - `a762617` fixed `bsp_add_point_tol`'s repartition scan (nearest pool point, not first-within-
-    threshold) — see the Island bullet below — and independently moved UNATCO's N=23..28 to gate
-    byte-exact against a freshly built ref, with `URender::BoundVisible` still unported on that
-    branch. A UNATCO `ref_N25`/`ref_N26` inherited from another worktree (holding actors 26-27, not
-    25/26) was also found and fixed as a contributing false-failure source.
+- **UNATCO: no open blocker — the ladder is advancing.** The N=29 blocker is FIXED
+  (`dev/docs/board/done/unatco-n-29-world-model2-vert-rings-reference/`): the divergence was one
+  surf's `Texture` ref, not the vertex rings (all 91 live node rings were coordinate-identical; the
+  391 differing `FVert`s were gate-excluded orphan slots). An untextured poly shipped
+  `brush_marshal`'s per-brush texture dedup ordinal as an object ref, because
+  `unbuilt._patch_native_surf_refs` only overwrote `texture_ref` when the poly named a texture.
+  Byte-exact N=1..100 and still climbing (2026-09-06) — no parity bail since; the sweep stops it
+  hits are the host's transient `docker exec` failures, so just re-run
+  `ladder_run.py --dx …/03_NYC_UNATCOHQ.dx --from <last PASS + 1>`. Also open, found by
+  the earlier N=26 work: `dev/docs/board/inbox/port-occludebsp-frustum-cone-subtree-reject/` —
+  native still box-tests 51 subtrees per UNATCO N=26 build that UED22's step-6 frustum-cone reject
+  discards. Diagnosing a `Verts` diff: run `harness/ring_diff.py` FIRST — `model_dump.py` reports
+  every orphan slot as a difference, which is what sent the N=29 item down the vertex-ring path.
 - **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-spotlight22-light-runs-differ-on-4/` — PARKED,
   multi-day rasterizer port (`FSpanBuffer`'s `ClipBspSurf` + fixed-point scanline setup), corpus-wide
   blast radius measured (~20k already-correct decisions per level would move at once).
