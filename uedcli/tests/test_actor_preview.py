@@ -475,6 +475,59 @@ def test_schema_unavailable_point_actor_degrades_to_marker(tmp_path, monkeypatch
     assert _is_png(out)                                    # still renders (marker)
 
 
+def test_is_hidden_ed_checks_instance_then_class_default():
+    from uedcli.cli.rendering import _is_hidden_ed
+    from uedcli.uprops import SchemaError
+
+    explicit_hidden = Actor(name="A", cls="Engine.Light", props=[("bHiddenEd", "True")])
+    assert _is_hidden_ed(explicit_hidden, None) == (True, None)
+
+    explicit_visible = Actor(name="B", cls="Engine.Light", props=[("bHiddenEd", "False")])
+    assert _is_hidden_ed(explicit_visible, None) == (False, None)
+
+    default_hidden = Actor(name="C", cls="Engine.LevelInfo")               # e.g. LevelInfo
+    with mock.patch("uedcli.cli.resources.class_defaults",
+                    return_value={("bhiddened", 0): "True"}):
+        assert _is_hidden_ed(default_hidden, None) == (True, None)
+
+    unresolvable = Actor(name="D", cls="Engine.Light")
+    with mock.patch("uedcli.cli.resources.class_defaults", side_effect=SchemaError("no .u")):
+        hidden, note = _is_hidden_ed(unresolvable, None)
+    assert hidden is False and "schema unavailable" in note and "assuming visible" in note
+
+
+def test_preview_point_data_drops_hidden_ed_actors():
+    from uedcli.cli.rendering import _preview_point_data
+
+    hidden = Actor(name="Hidden", cls="Engine.Light", location=(0, 0, 0),
+                   props=[("bHiddenEd", "True")])
+    visible = Actor(name="Visible", cls="Engine.Light", location=(0, 0, 0))
+    with mock.patch("uedcli.cli.resources.resolve_project", return_value=None), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None), \
+         mock.patch("uedcli.cli.resources.class_defaults", return_value={}):
+        data = _preview_point_data([hidden, visible], SimpleNamespace(), show=set())
+    assert "Hidden" not in data
+    assert "Visible" in data
+
+
+def test_preview_point_data_notes_and_shows_when_class_default_unresolvable(capsys):
+    # `LevelInfo`-like actors carry no instance override, so a class-default lookup failure here
+    # (SchemaError in the no-project case; ConfigError for a bad --project/UEDCLI_PROJECT) is the
+    # COMMON path, not an edge case — it must not silently no-op.
+    from uedcli import config
+    from uedcli.cli.rendering import _preview_point_data
+
+    actor = Actor(name="LevelInfo0", cls="Engine.LevelInfo", location=(0, 0, 0))
+    with mock.patch("uedcli.cli.resources.resolve_project", return_value=None), \
+         mock.patch("uedcli.cli.resources.texture_resolver", return_value=None), \
+         mock.patch("uedcli.cli.resources.class_defaults",
+                    side_effect=config.ConfigError("no project")):
+        data = _preview_point_data([actor], SimpleNamespace(), show=set())
+    assert "LevelInfo0" in data                            # degrades to visible, not dropped
+    err = capsys.readouterr().err
+    assert "schema unavailable" in err and "assuming visible" in err
+
+
 def test_non_p8_sprite_vs_absent_are_distinguished(tmp_path, monkeypatch, capsys):
     proj = _project_with_light(tmp_path, monkeypatch)
     out = tmp_path / "o.png"
