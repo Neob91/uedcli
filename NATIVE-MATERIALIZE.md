@@ -24,6 +24,15 @@ native's algorithm differing from the editor's — a different BSP split, point-
 — is fixed, not masked, however costly. Any mask still standing over an algorithmic divergence is a
 stopgap owed a faithful fix, recorded as such. *(Owner ruling, 2026-09-05.)*
 
+**Standing direction: keep going.** Fixing issues and pushing the ladder further is the DEFAULT
+mode of this campaign, not something that needs asking for each time. When a divergence is found,
+root-cause it and fix it faithfully; when it's fixed, keep pushing N; when a fix turns out to be
+large, scope it, park it as a board item if it doesn't fit the current pass, and continue on the
+other levels — don't stop the whole campaign to ask permission to keep working. Bring the owner a
+real decision only when one actually exists (a new exclusion candidate, a reference-methodology
+question, something that changes what's being measured) — not "should I keep fixing things?".
+*(Owner ruling, 2026-09-06.)*
+
 ## The reference we compare against (how UED22 "builds" a trunk)
 
 `build_ued_import_built_golden.py`: `MAP NEW` → `MAP IMPORT FILE=<trunk T3D, with a sacrificial
