@@ -79,7 +79,7 @@ def _find(args, src) -> int:
                 candidate_names.append(canonical)
 
     try:
-        matches = relation.find_candidates(
+        result = relation.find_candidates(
             level, args.relative_to, candidate_names,
             max_gap=args.max_gap, min_gap=args.min_gap,
             footprint=args.footprint, plane=args.plane, top=top,
@@ -87,6 +87,7 @@ def _find(args, src) -> int:
     except relation.RelationError as e:
         print(str(e), file=sys.stderr)
         return 2
+    matches = result.matches
 
     if args.json:
         import json
@@ -101,6 +102,12 @@ def _find(args, src) -> int:
         matched_candidates = len({m.candidate for m in matches})
         print(f"{len(matches)} face(s) matched across {matched_candidates} candidate(s)",
               file=sys.stderr)
+    # Printed regardless of --json: --json only replaces the plain-text match listing/summary on
+    # stdout/stderr, not this separate transparency note -- a script/agent parsing --json output
+    # needs it just as much as a human reading the plain form.
+    if result.near_miss_count:
+        print(f"({result.near_miss_count} candidate face(s) nearby with no footprint overlap "
+              f"— pass --footprint none to include)", file=sys.stderr)
     return 0
 
 

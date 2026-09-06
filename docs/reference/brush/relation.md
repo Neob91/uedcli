@@ -50,6 +50,12 @@ geometric detail behind a match — plane, normals, distance, footprint_2d, delt
 `brush relation measure REF -`, which reads exactly this stdout shape. The reference's own brush
 is excluded from the default search and rejected if named explicitly, unless `--allow-self`.
 
+`--max-gap`'s comparison carries a tiny built-in tolerance for float dust, so a genuinely flush
+pair always passes `--max-gap 0`. Without `--footprint`, a same-plane candidate with NO footprint
+overlap is dropped by default (never shown as a match) — but if one exists within `--max-gap`,
+stderr adds a note ("N candidate face(s) nearby with no footprint overlap — pass --footprint none
+to include") rather than staying silent about it.
+
 ```
 $ uedcli brush relation find --relative-to Wall_North --max-gap 8
 Panel:0

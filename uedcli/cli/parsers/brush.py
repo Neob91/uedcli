@@ -727,7 +727,11 @@ def register(sub) -> None:
              "Name:idx (pin to exactly one reference poly)")
     rfind.add_argument(
         "--max-gap", dest="max_gap", type=float, default=None, metavar="N",
-        help="keep only pairs whose perpendicular gap (absolute distance) is at most N world units")
+        help="keep only pairs whose perpendicular gap (absolute distance) is at most N world "
+             "units (a tiny float-dust tolerance is built in, so a genuinely flush pair always "
+             "passes --max-gap 0). Given without --footprint, also enables a stderr note when a "
+             "same-plane candidate with NO footprint overlap sits within N of REF but is hidden "
+             "by the default footprint filter")
     rfind.add_argument(
         "--min-gap", dest="min_gap", type=float, default=None, metavar="N",
         help="keep only pairs whose perpendicular gap (absolute distance) is at least N world units")
@@ -751,9 +755,10 @@ def register(sub) -> None:
     rfind.add_argument(
         "--json", action="store_true",
         help="emit each match's identity (ref, ref_poly, candidate, poly) as a JSON array on "
-             "stdout, instead of bare candidate:idx lines; suppresses the stderr summary. For "
-             "the geometric detail (plane, normals, distance, footprint_2d, deltas) on a "
-             "specific match, pipe into `brush relation measure REF -`")
+             "stdout, instead of bare candidate:idx lines; suppresses the plain-text match "
+             "listing/summary on stderr (the near-miss note from --max-gap, if any, still "
+             "prints). For the geometric detail (plane, normals, distance, footprint_2d, "
+             "deltas) on a specific match, pipe into `brush relation measure REF -`")
 
     rset = rsub.add_parser(
         "set",

@@ -151,3 +151,31 @@ def test_find_stderr_count_reflects_matched_not_searched_candidates(tmp_path, mo
     assert rc == 0
     err = capsys.readouterr().err
     assert err.strip() == "1 face(s) matched across 1 candidate(s)"
+
+
+def test_find_near_miss_note_appears_in_plain_mode(tmp_path, monkeypatch, capsys):
+    actors = [
+        _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0)),
+        _brush("Near", cube(64, 64, 8), loc=(100, 100, 0)),   # diagonal offset: footprint none,
+    ]                                                          # but genuinely nearby in-plane
+    proj = _project(tmp_path, monkeypatch, actors)
+    rc = dispatch.dispatch(_ns(proj, ["Near"], "Wall", max_gap=200.0))
+    assert rc == 0
+    out, err = capsys.readouterr()
+    assert out == ""   # nothing matched by default (footprint=none excluded)
+    assert "6 candidate face(s) nearby with no footprint overlap" in err
+
+
+def test_find_near_miss_note_still_prints_under_json(tmp_path, monkeypatch, capsys):
+    # --json suppresses the plain match listing/summary, but NOT this note -- the JSON-consuming
+    # caller (the motivating audience) needs it just as much as a human reading plain text.
+    actors = [
+        _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0)),
+        _brush("Near", cube(64, 64, 8), loc=(100, 100, 0)),
+    ]
+    proj = _project(tmp_path, monkeypatch, actors)
+    rc = dispatch.dispatch(_ns(proj, ["Near"], "Wall", max_gap=200.0, json=True))
+    assert rc == 0
+    out, err = capsys.readouterr()
+    assert out.strip() == "[]"
+    assert "6 candidate face(s) nearby with no footprint overlap" in err
