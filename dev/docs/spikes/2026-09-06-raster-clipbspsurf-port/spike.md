@@ -215,11 +215,9 @@ rasterizer could not notice. Both were corrected to the measured invariant, not 
   | WanChai | 1-44 | 45 | this item (unchanged) |
   | OceanLab | 1-45 | 46 | Brush1427 Bounds/LeafHulls (unchanged) |
   | NYC_Bar | 1-112 | 113 | Brush69 `Region` (unchanged) |
-  | UNATCO | 1-32 | not reached yet | its own N=116 light-run item |
+  | UNATCO | 1-115 | 116 | its own N=116 light-run item (unchanged) |
 
-  UNATCO's leg was still walking when this landed — its per-N native build is the slowest of the
-  five. Finish it with
-  `ladder_run.py --dx <Maps>/03_NYC_UNATCOHQ.dx --from 33 --to 115` before trusting N=33-115.
+  325 PASS, 5 bails, every bail at the N that level already bailed at.
 
 - WanChai N=45's own decision counters move by 2 out of ~1300.
 
