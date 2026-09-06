@@ -451,6 +451,41 @@ def test_index_zero_is_an_ordinary_colour_on_an_unmasked_texture():
     assert 0.02 < frac < 0.03, f"index-0 usage {frac:.4f} moved; the fixture changed"
 
 
+# ── LIGHT APPLY lightmap allocation (spike 2026-09-06-lightmap-alloc-zero-vert-gate) ────────────
+
+def test_light_apply_allocates_a_lightmap_only_at_a_node_with_vertices():
+    """`LIGHT APPLY`'s world `LightMap` allocation walk, which fixes the array's ORDER.
+
+    `shadowIlluminateBsp` (`Editor.dll` RVA `0xa5e10`) empties `Model->LightMap`, sets every surf's
+    `iLightMap` to -1, and then recurses `0x100a4a90` from node 0 (the call at `0x100a60a9`). That
+    walk allocates one record per surf, in visit order, gated on
+
+        node->NumVertices != 0  &&  !(surf->PolyFlags & 0x400081)  &&  surf->iLightMap == -1
+
+    then recurses `node+0x24`, `node+0x20`, `node+0x28`. The vertex gate is the load-bearing half:
+    a vertex-less node neither allocates nor CLAIMS its surf, so a surf that also sits on a later
+    non-empty node is allocated THERE. `uedcli-native`'s `lightmap_emit_order` is that walk; the
+    order it produces is the on-disk `LightMap` order and every surf's `iLightMap`.
+
+    The corpus half of the pin (the walk reproduces the stored order of all 161 shipped world
+    Models) lives in the spike harness, which needs the gitignored `dev/games/` maps.
+    """
+    text = (UED22 / "Editor.dll").read_bytes()
+    for va, want, what in [
+        (0x100A4AD5, "8b7e1c", "mov edi,[esi+0x1c] — node->iSurf"),
+        (0x100A4AE1, "807e3600", "cmp byte [esi+0x36], 0 — node->NumVertices"),
+        (0x100A4AE7, "f7470481004000", "test [edi+4], 0x400081 — surf->PolyFlags"),
+        (0x100A4AF0, "837f18ff", "cmp [edi+0x18], -1 — surf->iLightMap"),
+        (0x100A4AFC, "6a286a01", "push 0x28 / push 1 — LightMap.Add(1, sizeof FLightMapIndex)"),
+        (0x100A4B10, "8b4624", "mov eax,[esi+0x24] — recurse the 2nd child first"),
+        (0x100A4B20, "8b4620", "mov eax,[esi+0x20] — then the 1st"),
+        (0x100A4B30, "8b4628", "mov eax,[esi+0x28] — then the iPlane chain"),
+    ]:
+        off = _rva_to_offset(text, va - _IMAGE_BASE)
+        got = text[off:off + len(want) // 2].hex()
+        assert got == want, f"Editor.dll {va:#x} ({what}): want {want}, found {got}"
+
+
 # ── POLY TEXALIGN (spike 2026-07-26-unrealed-texalign-semantics) ────────────────────────────────
 
 _TEXALIGN_SPIKE = (Path(__file__).resolve().parents[2] /

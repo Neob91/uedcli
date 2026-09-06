@@ -244,9 +244,12 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   N=113 is fixed too (`dev/docs/board/done/nyc-bar-n-113-brush69-region-lands-outside-the/`) — the
   point-region descent evaluated the node plane in f64 where `FPlane::PlaneDot` is single-precision
   SSE, so a pivot lying ON a node plane took the wrong child; same fix as Island N=10
-  (`dev/docs/spikes/2026-09-06-pointregion-planedot-f32/`). Byte-exact **N=1..118** (was 112); bails
-  at **N=119** on the world `Model2`'s `LightMap` array order —
-  `dev/docs/board/inbox/nyc-bar-n-119-world-model2-lightmap-array-order/`.
+  (`dev/docs/spikes/2026-09-06-pointregion-planedot-f32/`). N=119 is fixed too
+  (`dev/docs/board/done/nyc-bar-n-119-world-model2-lightmap-array-order/`) — UnrealEd's lightmap
+  allocate walk (`Editor.dll 0x100a4a90`) allocates a record only at a node with `NumVertices != 0`,
+  and a vertex-less node does not CLAIM its surf either, so a surf sitting on both gets its record at
+  the later non-empty node; native claimed at the first node it saw
+  (`dev/docs/spikes/2026-09-06-lightmap-alloc-zero-vert-gate/`).
 - **Island, N=123**: N=6, N=10 and N=93 are all FIXED. N=6 was the Vectors pool — native keeps
   the incremental pool across the repartition instead of rebuilding it from the surviving surfs
   (`dev/docs/spikes/2026-09-06-island-n6-vector-pool/`,

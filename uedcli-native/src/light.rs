@@ -32,10 +32,11 @@ const PF_HIGH_SHADOW_DETAIL: u32 = 0x0080_0000;
 const PF_PORTAL: u32 = 0x0400_0000;
 /// A surface with any of these flags is NOT lightmapped (gets `iLightMap = -1`, no record).
 ///
-/// This is the editor's exact lightmap-skip mask **`0x400081`**, read straight out of the
-/// allocate-meshes pass: `Editor 0x100a6031` does `test dword ptr [surf+0x1b0], 0x400081` and, when
-/// nonzero, stores `iLightMap = -1` (`+0x1c8`) and skips the `push 0x28` (=40, the IN-MEMORY
-/// `FLightMapIndex` size) allocation (disasm confirmed 2026-07-18; spike §20 §21).
+/// This is the editor's exact lightmap-skip mask **`0x400081`**, read straight out of `LIGHT
+/// APPLY`: the MOVER-poly loop `Editor 0x100a6031` does `test dword ptr [poly+0x1b0], 0x400081` and,
+/// when nonzero, stores `iLightMap = -1` (`+0x1c8`) and skips the `push 0x28` (=40, the IN-MEMORY
+/// `FLightMapIndex` size) allocation; the world node walk `Editor 0x100a4ae7` tests the same mask on
+/// `surf+0x04` (disasm confirmed 2026-07-18; spike §20 §21).
 ///
 /// ⚠️ `PF_Portal` (0x0400_0000) is **NOT** in this mask — an earlier §8 pseudo-code claim that it was
 /// is REFUTED by the editor oracle `Test_Castle.dx`, which lightmaps all 4 of its two-sided water
@@ -599,20 +600,41 @@ fn push_record(model: &mut Model, b: SurfBake) {
 }
 
 /// The editor's `LightMap`-array emission order: one `FLightMapIndex` per lightmapped surf in **BSP
-/// tree-walk order**, NOT surf-index order. UnrealEd's shadow/mesh-allocate pass descends the node
-/// tree — visit a node's surf, recurse its BACK subtree, then its FRONT subtree, then step to the
-/// next coplanar node along the `iPlane` chain — allocating a record the first time each lightmappable
-/// surf is seen. A surf is marked seen on first visit regardless of lightmappability (so an unlit surf
-/// is never re-considered) but only appended if it passes `PF_NO_LIGHTMAP`. Verified byte-exact
-/// against `Test_Castle.dx`: the resulting record→surf sequence reproduces the editor's `LightMap`
-/// order exactly (spike §20 §21).
+/// tree-walk order**, NOT surf-index order.
+///
+/// Transcribed from UnrealEd's recursive allocate-meshes walk, `Editor.dll 0x100a4a90`
+/// (`shadowIlluminateBsp` calls it on iNode 0 at `0x100a60a9`, after the reset and the mover pass):
+///
+/// ```text
+/// Alloc(iNode):
+///   node = Model->Nodes[iNode]                       ; 64-byte FBspNode
+///   surf = Model->Surfs[node->iSurf]                 ; node+0x1c
+///   if node->NumVertices != 0                        ; node+0x36 (BYTE)   0x100a4ae1
+///      && !(surf->PolyFlags & 0x400081)              ; surf+0x04          0x100a4ae7
+///      && surf->iLightMap == -1:                     ; surf+0x18          0x100a4af0
+///        surf->iLightMap = Model->LightMap.Add(1, 0x28)
+///   if node->iChild[1] != -1: Alloc(node->iChild[1]) ; node+0x24          0x100a4b10
+///   if node->iChild[0] != -1: Alloc(node->iChild[0]) ; node+0x20          0x100a4b20
+///   if node->iPlane    != -1: Alloc(node->iPlane)    ; node+0x28          0x100a4b30
+/// ```
+///
+/// `node+0x24` is the second on-disk child slot, which native calls `i_back`, and `node+0x20` the
+/// first, which native calls `i_front` (same inversion as `UModel::PointRegion`, spike
+/// `2026-09-06-pointregion-planedot-f32`).
+///
+/// The `NumVertices` gate is the load-bearing half: a node carrying no vertices allocates nothing
+/// and does not claim its surf, so a surf that also sits on a later non-empty node is allocated
+/// there. Over the 161 world Models of the shipped Deus Ex maps, reproducing each Model's own
+/// record→surf sequence, this walk is exact on 161/161; without the gate, on 158.
 fn lightmap_emit_order(model: &Model) -> Vec<usize> {
-    // `node_seen` (node-keyed) is a cycle/DAG guard: a well-formed BSP visits each node exactly once
-    // (disjoint front/back subtrees, disjoint `iPlane` chains), but a corrupt Model with an
-    // `iPlane`/child back-edge would otherwise loop forever or overflow the stack. Breaking on a
-    // re-visit keeps the walk O(nodes) and honors the "never hang on a corrupt Model" contract.
-    // `surf_seen` (surf-keyed) is the first-occurrence dedup that fixes the emission order.
-    fn walk(model: &Model, mut ni: i32, node_seen: &mut [bool], surf_seen: &mut [bool], order: &mut Vec<usize>) {
+    // `node_seen` is a cycle/DAG guard the editor does without: a well-formed BSP visits each node
+    // exactly once (disjoint front/back subtrees, disjoint `iPlane` chains), but a corrupt Model
+    // with an `iPlane`/child back-edge would otherwise loop forever or overflow the stack. Breaking
+    // on a re-visit keeps the walk O(nodes) and honors the "never hang on a corrupt Model" contract.
+    // `surf_claimed` is the editor's `iLightMap == -1` test (`iLightMap` itself is still -1 here,
+    // and is written by `push_record` afterwards).
+    fn walk(model: &Model, mut ni: i32, node_seen: &mut [bool], surf_claimed: &mut [bool],
+            order: &mut Vec<usize>) {
         while ni >= 0 {
             let nu = ni as usize;
             if node_seen[nu] {
@@ -621,25 +643,23 @@ fn lightmap_emit_order(model: &Model) -> Vec<usize> {
             node_seen[nu] = true;
             let n = &model.nodes[nu];
             let s = n.i_surf;
-            if s >= 0 {
+            if n.num_vertices != 0 && s >= 0 {
                 let su = s as usize;
-                if !surf_seen[su] {
-                    surf_seen[su] = true;
-                    if model.surfs[su].poly_flags & PF_NO_LIGHTMAP == 0 {
-                        order.push(su);
-                    }
+                if model.surfs[su].poly_flags & PF_NO_LIGHTMAP == 0 && !surf_claimed[su] {
+                    surf_claimed[su] = true;
+                    order.push(su);
                 }
             }
-            walk(model, n.i_back, node_seen, surf_seen, order);
-            walk(model, n.i_front, node_seen, surf_seen, order);
+            walk(model, n.i_back, node_seen, surf_claimed, order);
+            walk(model, n.i_front, node_seen, surf_claimed, order);
             ni = n.i_plane;
         }
     }
     let mut order = Vec::with_capacity(model.surfs.len());
-    let mut surf_seen = vec![false; model.surfs.len()];
+    let mut surf_claimed = vec![false; model.surfs.len()];
     let mut node_seen = vec![false; model.nodes.len()];
     if !model.nodes.is_empty() {
-        walk(model, 0, &mut node_seen, &mut surf_seen, &mut order);
+        walk(model, 0, &mut node_seen, &mut surf_claimed, &mut order);
     }
     order
 }
@@ -1449,19 +1469,18 @@ mod tests {
         }
     }
 
-    /// Independent reference BSP walk (a hand-rolled duplicate of `lightmap_emit_order`'s rule),
-    /// used to pin that `bake` emits `LightMap` in editor **tree-walk** order, not surf-index order.
+    /// A hand-rolled duplicate of `lightmap_emit_order`'s rule — not an independent oracle for the
+    /// rule itself (the DLL pin in `uedcli/tests/test_engine_facts.py` is), but it pins that `bake`
+    /// routes through the walk rather than emitting in surf-index order or via the fallback sweep.
     fn reference_walk(m: &Model) -> Vec<usize> {
         fn rec(m: &Model, mut ni: i32, seen: &mut [bool], out: &mut Vec<usize>) {
             while ni >= 0 {
                 let n = &m.nodes[ni as usize];
-                if n.i_surf >= 0 {
+                if n.num_vertices != 0 && n.i_surf >= 0 {
                     let s = n.i_surf as usize;
-                    if !seen[s] {
+                    if m.surfs[s].poly_flags & PF_NO_LIGHTMAP == 0 && !seen[s] {
                         seen[s] = true;
-                        if m.surfs[s].poly_flags & PF_NO_LIGHTMAP == 0 {
-                            out.push(s);
-                        }
+                        out.push(s);
                     }
                 }
                 rec(m, n.i_back, seen, out);
@@ -1525,5 +1544,54 @@ mod tests {
             rec2surf, ascending,
             "test geometry must exercise walk!=surf order, else it cannot catch a regression"
         );
+    }
+
+    #[test]
+    fn lightmap_emit_order_skips_zero_vertex_nodes() {
+        // `Editor.dll 0x100a4ae1` gates the whole allocation on `node->NumVertices != 0`, BEFORE the
+        // `iLightMap == -1` claim — so a vertex-less node neither allocates nor claims its surf, and
+        // a surf that also sits on a later non-empty node is allocated at that later position.
+        // NYC_Bar N=119's world Model has exactly this shape twice (surfs 174 and 178, each on one
+        // 0-vertex node and one 3-vertex node); missing the gate emitted them at records 144/152
+        // where UED22 has them at 228/229.
+        let surf = |flags: u32| BspSurf {
+            texture_ref: -1,
+            poly_flags: flags,
+            p_base: 0,
+            v_normal: 0,
+            v_texture_u: 1,
+            v_texture_v: 2,
+            i_actor: -1,
+            i_brush_poly: -1,
+            pan: [0, 0],
+            i_light_map: -1,
+        };
+        let plane = crate::model::Plane { x: 1.0, y: 0.0, z: 0.0, w: 0.0 };
+        let node = |i_surf: i32, num_vertices: i32, i_back: i32| {
+            let mut n = crate::model::BspNode::leaf(plane, i_surf, 0, num_vertices);
+            n.i_back = i_back;
+            n
+        };
+        let m = Model {
+            // 0 -> 1 (0 verts, surf 2) -> 2 (surf 1) -> 3 (surf 2).
+            nodes: vec![node(0, 3, 1), node(2, 0, 2), node(1, 3, 3), node(2, 3, -1)],
+            surfs: vec![surf(0), surf(0), surf(0)],
+            ..Model::default()
+        };
+        assert_eq!(
+            lightmap_emit_order(&m),
+            vec![0, 1, 2],
+            "the 0-vertex node must not claim surf 2 — it is allocated at node 3 instead"
+        );
+
+        // Teeth: without the gate the walk would claim surf 2 at node 1, i.e. [0, 2, 1].
+        let mut ungated = m.clone();
+        ungated.nodes[1].num_vertices = 3;
+        assert_eq!(lightmap_emit_order(&ungated), vec![0, 2, 1]);
+
+        // The flag mask still applies.
+        let mut unlit = m.clone();
+        unlit.surfs[1].poly_flags = PF_NO_LIGHTMAP;
+        assert_eq!(lightmap_emit_order(&unlit), vec![0, 2]);
     }
 }
