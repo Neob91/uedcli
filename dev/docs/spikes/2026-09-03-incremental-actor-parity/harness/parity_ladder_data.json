@@ -4,12 +4,12 @@
       "slug": "bar",
       "name": "NYC Bar",
       "codename": "02_NYC_Bar",
-      "highest_n": 58,
+      "highest_n": 112,
       "total_actors": 487,
       "status": "blocked",
-      "blocker": "BODY model model2 — two remaining gaps in native's world geometry: (1) world-node NF_IsFront/NF_IsBack bits, set by UModel::PrecomputeSphereFilter across multiple descents during incremental CSG; (2) mover private Model geometry (Bounds, Polys iLink/iBrushPoly) isn't built when real world CSG exists. Region zone-actor, mover base pose, and pawn Foot/HeadRegion are all fixed. N=48..58 re-verified 2026-09-06 with FRESH refs — the cached ones predated dbfebf0 (mover BasePos/BaseRot in the golden's T3D) and reported a false name_count divergence at N=48, the level's first mover.",
-      "board": "nyc-bar-n-59-brush-region-zone-and-ued22",
-      "updated": "2026-09-06T09:40:00Z"
+      "blocker": "BODY model model2 — Brush69's Region descends out of the tree (iLeaf -1, zone 0) where UED22 lands in leaf 55, zone 1; world Model is otherwise byte-identical. N=59/N=70 are FIXED: LIGHT APPLY's moving-brush pass (mover LightMap grids, a transient world-Surfs mirror driving Polys.iLink, and a 3-descent PrecomputeSphereFilter run in reverse actor order) is ported from Editor.dll/Engine.dll disassembly; a name-keyed (not trunk-order) zone-actor resolution bug is also fixed.",
+      "board": "nyc-bar-n-113-brush69-region-lands-outside-the",
+      "updated": "2026-09-06T15:10:00Z"
     },
     {
       "slug": "unatco",
