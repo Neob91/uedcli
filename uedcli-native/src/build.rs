@@ -743,8 +743,7 @@ fn finalize_leaves_and_bbox(model: &mut Model) {
     // Real leaves + multi-zone flood + per-node iZone/ZoneMask + the Zones array (replaces the old
     // single-zone stub); see zones.rs.  Runs on the finalized (engine-order) topology; reads the
     // NF_SOLID_BOUND marker to suppress synthetic-bound slivers.
-    // (legacy path: ignore the byte-parity node-emit-order — only the bspcsg pipeline relabels)
-    let _ = crate::zones::assign_leaves_and_zones(model);
+    crate::zones::assign_leaves_and_zones(model);
     // Clear the transient NF_SOLID_BOUND marker — never a real on-disk NodeFlag.
     for n in model.nodes.iter_mut() {
         n.node_flags &= !NF_SOLID_BOUND;

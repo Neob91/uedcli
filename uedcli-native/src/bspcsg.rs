@@ -799,7 +799,7 @@ fn inherit_parent_leaf_zone(model: &mut Model, i_parent: i32, i_node: i32, place
 /// this, the leaf-add multiset already matched through N=32 but the internal linkage diverged from
 /// brush 0 (a flipped-orientation splitter → reversed front/back emit order), so the from-scratch
 /// repartition saw a different `Polys` order (final `node_diff` prefix stuck at 0/1156).
-fn bsp_cleanup(model: &mut Model) {
+pub(crate) fn bsp_cleanup(model: &mut Model) {
     if !model.nodes.is_empty() {
         cleanup_nodes(model, 0, -1);
     }
@@ -2222,7 +2222,7 @@ fn make_ed_polys(model: &Model, i_node: i32, out: &mut Vec<FPoly>) {
 /// node-index references (e.g. `repartition_frontier`'s still-pending worklist) can fix them up —
 /// see `UEDCLI_REPART_COMPACT_PER_CALL`, testing whether the editor's real per-subtree `bspRefresh`
 /// compacts nodes immediately (not just once at the very end, as native currently does).
-fn compact_unreachable_nodes(model: &mut Model) -> Vec<i32> {
+pub(crate) fn compact_unreachable_nodes(model: &mut Model) -> Vec<i32> {
     if model.nodes.is_empty() {
         return Vec::new();
     }
@@ -3128,15 +3128,10 @@ fn swap_node_children(model: &mut Model) {
 /// and Pass D's per-zone fragment split.  Reads/writes the ENGINE child convention — bracket it with
 /// `swap_node_children` when the tree is in native's.
 fn zone_pass(model: &mut Model) {
-    let passd_tail = zones::assign_leaves_and_zones(model);
+    zones::assign_leaves_and_zones(model);
     for n in model.nodes.iter_mut() {
         n.node_flags &= !build::NF_SOLID_BOUND;
     }
-    // Node-emit-ORDER parity: relabel the array so Pass-D split fragments cluster at the tail in the
-    // editor's emission order (§82 §10.17).  Pure permutation — remaps child/chain links only, leaves
-    // the tree isomorphic — so collision/zones/render are byte-unchanged; only the on-disk node ORDER
-    // (and thus `Bounds`/`LeafHulls`, built after) moves to match `Test_Castle.dx` positionally.
-    reorder_nodes_to_tail(model, &passd_tail);
 }
 
 fn finalize(model: &mut Model) {
@@ -3158,68 +3153,6 @@ fn finalize(model: &mut Model) {
     }
     model.bbox_min = mn;
     model.bbox_max = mx;
-}
-
-/// Relabel the node array so the given `tail` node indices move to the END, in the given order,
-/// with all other nodes keeping their relative order.  A PURE, tree-preserving permutation: it
-/// clones the nodes into the new order and remaps every `i_front`/`i_back`/`i_plane` link through
-/// the old→new map, so the BSP tree is unchanged (isomorphic) — collision, zones, leaves, surfs and
-/// render all read the identical tree, only the on-disk node ORDER changes.  This reproduces
-/// UnrealEd's node-array layout, where `TestVisibility`/`AssignAllZones` appends every zone-split
-/// fragment (originals included) at the tail of `Model->Nodes` (§82 §10.17).  Nothing outside the
-/// node array references a node by index at this stage (leaves/surfs carry no node ref; `Bounds`/
-/// `LeafHulls` are built AFTER this, against the relabelled tree), so the relabel is total and safe.
-fn reorder_nodes_to_tail(model: &mut Model, tail: &[usize]) {
-    let n = model.nodes.len();
-    if tail.is_empty() || n == 0 {
-        return;
-    }
-    // Dedup while preserving first-occurrence order; never move the root (node 0 must stay at 0).
-    // Node 0 is a top-level FindBestSplit partition, never a Pass-D zone-split boundary face, so it
-    // is not expected in `tail`; the `t != 0` guard below keeps it fail-safe (a stray 0 would only
-    // cost byte-parity on that one group, never tree validity).
-    debug_assert!(!tail.contains(&0), "root node 0 must not be a Pass-D split owner");
-    let mut in_tail = vec![false; n];
-    let mut tail_seq: Vec<usize> = Vec::with_capacity(tail.len());
-    for &t in tail {
-        if t != 0 && t < n && !in_tail[t] {
-            in_tail[t] = true;
-            tail_seq.push(t);
-        }
-    }
-    if tail_seq.is_empty() {
-        return;
-    }
-    // new_order[new_pos] = old_idx : base nodes (current order, not in tail) then the tail sequence.
-    let mut new_order: Vec<usize> = Vec::with_capacity(n);
-    for i in 0..n {
-        if !in_tail[i] {
-            new_order.push(i);
-        }
-    }
-    new_order.extend_from_slice(&tail_seq);
-    debug_assert_eq!(new_order.len(), n);
-    // old -> new position.
-    let mut old2new = vec![-1i32; n];
-    for (new_pos, &old) in new_order.iter().enumerate() {
-        old2new[old] = new_pos as i32;
-    }
-    let remap = |i: i32| -> i32 {
-        if i < 0 {
-            i
-        } else {
-            old2new[i as usize]
-        }
-    };
-    let mut new_nodes: Vec<crate::model::BspNode> = Vec::with_capacity(n);
-    for &old in &new_order {
-        let mut nd = model.nodes[old].clone();
-        nd.i_front = remap(nd.i_front);
-        nd.i_back = remap(nd.i_back);
-        nd.i_plane = remap(nd.i_plane);
-        new_nodes.push(nd);
-    }
-    model.nodes = new_nodes;
 }
 
 // --- public entry point ----------------------------------------------------------------------
