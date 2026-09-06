@@ -101,3 +101,35 @@ def test_find_json_emits_structured_array(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert out.strip().startswith("[")
     assert "footprint_2d" in out
+
+
+def test_find_json_names_the_matched_ref_poly(tmp_path, monkeypatch, capsys):
+    # `--relative-to Wall` (a bare name) ranks against EVERY one of Wall's 6 faces; the winner
+    # here is its +Z top face (cube()'s face order puts +Z at index 4), touching Near's -Z
+    # bottom face (index 5). Before this fix, no output said WHICH of Wall's faces matched --
+    # only the candidate's poly index was ever printed.
+    import json
+    actors = [
+        _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0)),
+        _brush("Near", cube(64, 64, 8), loc=(0, 0, 8)),
+    ]
+    proj = _project(tmp_path, monkeypatch, actors)
+    rc = dispatch.dispatch(_ns(proj, ["Near"], "Wall", json=True))
+    assert rc == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert rows[0]["ref"] == "Wall"
+    assert rows[0]["ref_poly"] == 4
+    assert rows[0]["candidate"] == "Near"
+    assert rows[0]["poly"] == 5
+
+
+def test_find_stderr_summary_names_the_matched_ref_poly(tmp_path, monkeypatch, capsys):
+    actors = [
+        _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0)),
+        _brush("Near", cube(64, 64, 8), loc=(0, 0, 8)),
+    ]
+    proj = _project(tmp_path, monkeypatch, actors)
+    rc = dispatch.dispatch(_ns(proj, ["Near"], "Wall"))
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert "Wall:4 <-> Near:5" in err
