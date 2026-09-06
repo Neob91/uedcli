@@ -63,7 +63,8 @@ stamp and the `resolve_zone_actors` / `paths` / `pathplace` zone lookups route t
 - `2026-09-03-incremental-actor-parity/harness/test_pointregion_planedot_f32.py` pins the two DLL
   byte sequences and both near-tie cases.
 - `parity_gate.py`: Island N=10 PASS, NYC_Bar N=113 PASS, no new mask.
-- `ladder_run.py` after the change: Island N=1..50 PASS (was 9, still advancing), NYC_Bar N=1..118
+- `ladder_run.py` after the change: Island N=1..92 PASS (was 9; now bails at 93 on a zone-ACTOR
+  selection bug, `dev/docs/board/inbox/island-n-93-zone-actor-missed-resolve-zone/`), NYC_Bar N=1..118
   PASS (was 112, now bails at 119 on the world `Model2` `LightMap` order —
   `dev/docs/board/inbox/nyc-bar-n-119-world-model2-lightmap-array-order/`), UNATCO N=1..115 PASS,
   WanChai N=1..44 PASS, OceanLab N=1..45 PASS — every other level's ceiling unchanged.
