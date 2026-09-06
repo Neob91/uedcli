@@ -1,0 +1,1080 @@
+[New LWP 141]
+[New LWP 150]
+[New LWP 151]
+[New LWP 152]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 193]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f9bcfc in __kernel_vsyscall ()
+MAPS_BEGIN
+00010000-00110000 rw-p 00000000 00:00 0 
+00110000-00112000 r--s 00000000 00:39 960935                             /usr/share/wine/nls/l_intl.nls
+00112000-00120000 ---p 00000000 00:00 0 
+00120000-00131000 r--s 00000000 00:39 849759                             /usr/lib/i386-linux-gnu/wine/i386-windows/apisetschema.dll
+00131000-00140000 ---p 00000000 00:00 0 
+00140000-00340000 rw-p 00000000 00:00 0 
+00340000-003ec000 r--s 00000000 00:39 960937                             /usr/share/wine/nls/locale.nls
+003ec000-003f0000 ---p 00000000 00:00 0 
+003f0000-003ff000 r--s 00000000 00:39 960964                             /usr/share/wine/nls/normnfc.nls
+003ff000-00400000 ---p 00000000 00:00 0 
+00400000-00401000 r--p 00000000 00:39 972584                             /opt/UED22/unrealed.exe
+00401000-00485000 r-xp 00000000 00:00 0 
+00485000-004c8000 r--p 00000000 00:00 0 
+004c8000-004d1000 rw-p 00000000 00:00 0 
+004d1000-00515000 r--p 00000000 00:00 0 
+00515000-00520000 ---p 00000000 00:00 0 
+00520000-00522000 ---p 00000000 00:00 0 
+00522000-01570000 rw-p 00000000 00:00 0 
+01570000-01581000 r--s 00000000 00:39 960712                             /usr/share/wine/nls/c_1252.nls
+01581000-01590000 ---p 00000000 00:00 0 
+01590000-015a1000 r--s 00000000 00:39 960820                             /usr/share/wine/nls/c_437.nls
+015a1000-015b0000 ---p 00000000 00:00 0 
+015b0000-015b1000 r--p 00000000 00:39 972564                             /opt/UED22/render.dll
+015b1000-015e4000 r-xp 00000000 00:00 0 
+015e4000-015f6000 r--p 00000000 00:00 0 
+015f6000-01612000 rw-p 00000000 00:00 0 
+01612000-01617000 r--p 00000000 00:00 0 
+01617000-01620000 ---p 00000000 00:00 0 
+01620000-01621000 r--p 00000000 00:39 972243                             /opt/UED22/Engine.dll
+01621000-01819000 r-xp 00000000 00:00 0 
+01819000-01899000 r--p 00000000 00:00 0 
+01899000-0189c000 rw-p 00277000 00:39 972243                             /opt/UED22/Engine.dll
+0189c000-0197f000 rw-p 00000000 00:00 0 
+0197f000-0199d000 r--p 00000000 00:00 0 
+0199d000-019a0000 ---p 00000000 00:00 0 
+019a0000-019a1000 r--p 00000000 00:39 972298                             /opt/UED22/core.dll
+019a1000-01a3b000 r-xp 00000000 00:00 0 
+01a3b000-01a8f000 r--p 00000000 00:00 0 
+01a8f000-01b9f000 rw-p 00000000 00:00 0 
+01b9f000-01bad000 r--p 00000000 00:00 0 
+01bad000-01bb0000 ---p 00000000 00:00 0 
+01bb0000-01bb1000 r--p 00000000 00:39 850605                             /usr/lib/i386-linux-gnu/wine/i386-windows/ole32.dll
+01bb1000-01c62000 r-xp 00001000 00:39 850605                             /usr/lib/i386-linux-gnu/wine/i386-windows/ole32.dll
+01c62000-01c63000 rw-p 000b2000 00:39 850605                             /usr/lib/i386-linux-gnu/wine/i386-windows/ole32.dll
+01c63000-01c64000 rw-p 000b3000 00:39 850605                             /usr/lib/i386-linux-gnu/wine/i386-windows/ole32.dll
+01c64000-01ca0000 r--p 000b4000 00:39 850605                             /usr/lib/i386-linux-gnu/wine/i386-windows/ole32.dll
+01ca0000-01ca1000 rw-p 00000000 00:00 0 
+01ca1000-01cbe000 r--p 000f0000 00:39 850605                             /usr/lib/i386-linux-gnu/wine/i386-windows/ole32.dll
+01cbe000-01cc1000 rw-p 0010d000 00:39 850605                             /usr/lib/i386-linux-gnu/wine/i386-windows/ole32.dll
+01cc1000-01ce6000 rw-p 00110000 00:39 850605                             /usr/lib/i386-linux-gnu/wine/i386-windows/ole32.dll
+01ce6000-0203c000 r--p 00135000 00:39 850605                             /usr/lib/i386-linux-gnu/wine/i386-windows/ole32.dll
+0203c000-02040000 ---p 00000000 00:00 0 
+02040000-02041000 r--p 00000000 00:39 850761                             /usr/lib/i386-linux-gnu/wine/i386-windows/rpcrt4.dll
+02041000-0208a000 r-xp 00001000 00:39 850761                             /usr/lib/i386-linux-gnu/wine/i386-windows/rpcrt4.dll
+0208a000-0208b000 rw-p 0004a000 00:39 850761                             /usr/lib/i386-linux-gnu/wine/i386-windows/rpcrt4.dll
+0208b000-0208d000 rw-p 0004b000 00:39 850761                             /usr/lib/i386-linux-gnu/wine/i386-windows/rpcrt4.dll
+0208d000-020ae000 r--p 0004d000 00:39 850761                             /usr/lib/i386-linux-gnu/wine/i386-windows/rpcrt4.dll
+020ae000-020af000 rw-p 00000000 00:00 0 
+020af000-020cb000 r--p 0006e000 00:39 850761                             /usr/lib/i386-linux-gnu/wine/i386-windows/rpcrt4.dll
+020cb000-020cd000 rw-p 0008a000 00:39 850761                             /usr/lib/i386-linux-gnu/wine/i386-windows/rpcrt4.dll
+020cd000-020ce000 rw-p 0008c000 00:39 850761                             /usr/lib/i386-linux-gnu/wine/i386-windows/rpcrt4.dll
+020ce000-0225f000 r--p 0008d000 00:39 850761                             /usr/lib/i386-linux-gnu/wine/i386-windows/rpcrt4.dll
+0225f000-02260000 ---p 00000000 00:00 0 
+02260000-02261000 r--p 00000000 00:39 850861                             /usr/lib/i386-linux-gnu/wine/i386-windows/shlwapi.dll
+02261000-02281000 r-xp 00001000 00:39 850861                             /usr/lib/i386-linux-gnu/wine/i386-windows/shlwapi.dll
+02281000-02282000 rw-p 00021000 00:39 850861                             /usr/lib/i386-linux-gnu/wine/i386-windows/shlwapi.dll
+02282000-02284000 rw-p 00022000 00:39 850861                             /usr/lib/i386-linux-gnu/wine/i386-windows/shlwapi.dll
+02284000-02298000 r--p 00024000 00:39 850861                             /usr/lib/i386-linux-gnu/wine/i386-windows/shlwapi.dll
+02298000-02299000 rw-p 00000000 00:00 0 
+02299000-022b2000 r--p 00038000 00:39 850861                             /usr/lib/i386-linux-gnu/wine/i386-windows/shlwapi.dll
+022b2000-022b6000 rw-p 00051000 00:39 850861                             /usr/lib/i386-linux-gnu/wine/i386-windows/shlwapi.dll
+022b6000-022bb000 rw-p 00055000 00:39 850861                             /usr/lib/i386-linux-gnu/wine/i386-windows/shlwapi.dll
+022bb000-02360000 r--p 0005a000 00:39 850861                             /usr/lib/i386-linux-gnu/wine/i386-windows/shlwapi.dll
+02360000-02361000 r--p 00000000 00:39 972605                             /opt/UED22/window.dll
+02361000-0239d000 r-xp 00000000 00:00 0 
+0239d000-023cf000 r--p 00000000 00:00 0 
+023cf000-023d2000 rw-p 00000000 00:00 0 
+023d2000-023e2000 r--p 00000000 00:00 0 
+023e2000-023f0000 ---p 00000000 00:00 0 
+023f0000-02470000 rw-p 00000000 00:00 0 
+02470000-027a9000 r--s 00000000 00:39 960976                             /usr/share/wine/nls/sortdefault.nls
+027a9000-027b0000 ---p 00000000 00:00 0 
+027b0000-027c0000 rw-p 00000000 00:00 0 
+027c0000-029b0000 ---p 00000000 00:00 0 
+029b0000-029c1000 r--s 00000000 00:39 960755                             /usr/share/wine/nls/c_20127.nls
+029c1000-029d0000 ---p 00000000 00:00 0 
+029d0000-029e0000 rw-p 00000000 00:00 0 
+029e0000-02bd0000 ---p 00000000 00:00 0 
+02bd0000-02d60000 rw-p 00000000 00:00 0 
+02d60000-02f50000 ---p 00000000 00:00 0 
+02f50000-02f51000 r--p 00000000 00:39 851118                             /usr/lib/i386-linux-gnu/wine/i386-windows/winex11.drv
+02f51000-02f5b000 r-xp 00001000 00:39 851118                             /usr/lib/i386-linux-gnu/wine/i386-windows/winex11.drv
+02f5b000-02f5c000 rw-p 0000b000 00:39 851118                             /usr/lib/i386-linux-gnu/wine/i386-windows/winex11.drv
+02f5c000-02f5d000 rw-p 0000c000 00:39 851118                             /usr/lib/i386-linux-gnu/wine/i386-windows/winex11.drv
+02f5d000-02f69000 r--p 0000d000 00:39 851118                             /usr/lib/i386-linux-gnu/wine/i386-windows/winex11.drv
+02f69000-02f6a000 rw-p 00000000 00:00 0 
+02f6a000-02f7c000 r--p 00019000 00:39 851118                             /usr/lib/i386-linux-gnu/wine/i386-windows/winex11.drv
+02f7c000-02f7d000 rw-p 0002b000 00:39 851118                             /usr/lib/i386-linux-gnu/wine/i386-windows/winex11.drv
+02f7d000-02f7e000 rw-p 0002c000 00:39 851118                             /usr/lib/i386-linux-gnu/wine/i386-windows/winex11.drv
+02f7e000-02fd6000 r--p 0002d000 00:39 851118                             /usr/lib/i386-linux-gnu/wine/i386-windows/winex11.drv
+02fd6000-02fe0000 ---p 00000000 00:00 0 
+02fe0000-02ff1000 rw-p 00000000 00:00 0 
+02ff1000-03000000 ---p 00000000 00:00 0 
+03000000-03001000 rw-p 00000000 00:00 0 
+03001000-03010000 ---p 00000000 00:00 0 
+03010000-0374b000 r--s 00000000 fe:01 1078010                            /wineprefix/drive_c/windows/resources/themes/light/light.msstyles
+0374b000-03750000 ---p 00000000 00:00 0 
+03750000-03761000 r--s 00000000 00:39 960662                             /usr/share/wine/nls/c_10000.nls
+03761000-03770000 ---p 00000000 00:00 0 
+03770000-03830000 rw-p 00000000 00:00 0 
+03830000-03831000 r--p 00000000 00:39 972207                             /opt/UED22/AkelEdit.dll
+03831000-0386c000 r-xp 00000000 00:00 0 
+0386c000-03873000 r--p 00000000 00:00 0 
+03873000-03875000 rw-p 00000000 00:00 0 
+03875000-03879000 r--p 00000000 00:00 0 
+03879000-03880000 ---p 00000000 00:00 0 
+03880000-03881000 rw-p 00000000 00:00 0 
+03881000-03890000 ---p 00000000 00:00 0 
+03890000-03891000 rw-p 00000000 00:00 0 
+03891000-038a0000 ---p 00000000 00:00 0 
+038a0000-038a1000 rw-p 00000000 00:00 0 
+038a1000-038b0000 ---p 00000000 00:00 0 
+038b0000-038b1000 rw-p 00000000 00:00 0 
+038b1000-038c0000 ---p 00000000 00:00 0 
+038c0000-038c1000 rw-p 00000000 00:00 0 
+038c1000-038d0000 ---p 00000000 00:00 0 
+038d0000-038d5000 rw-p 00000000 00:00 0 
+038d5000-038e0000 ---p 00000000 00:00 0 
+038e0000-038e4000 rw-p 00000000 00:00 0 
+038e4000-038f0000 ---p 00000000 00:00 0 
+038f0000-038f1000 rw-p 00000000 00:00 0 
+038f1000-03900000 ---p 00000000 00:00 0 
+03900000-03901000 rw-p 00000000 00:00 0 
+03901000-03910000 ---p 00000000 00:00 0 
+03910000-03911000 rw-p 00000000 00:00 0 
+03911000-03920000 ---p 00000000 00:00 0 
+03920000-03b20000 rw-p 00000000 00:00 0 
+03b20000-04330000 rw-p 00000000 00:00 0 
+04330000-04331000 r--p 00000000 00:39 972530                             /opt/UED22/galaxy.dll
+04331000-04385000 r-xp 00000000 00:00 0 
+04385000-043b5000 r--p 00000000 00:00 0 
+043b5000-043f5000 rw-p 00000000 00:00 0 
+043f5000-043fb000 r--p 00000000 00:00 0 
+043fb000-04400000 ---p 00000000 00:00 0 
+04400000-04428000 rw-p 00000000 00:00 0 
+04428000-04430000 ---p 00000000 00:00 0 
+04430000-04437000 rw-p 00000000 00:00 0 
+04437000-04440000 ---p 00000000 00:00 0 
+04440000-0446f000 rw-p 00000000 00:00 0 
+0446f000-04470000 ---p 00000000 00:00 0 
+04470000-04480000 rw-p 00000000 00:00 0 
+04480000-04482000 ---p 00000000 00:00 0 
+04482000-054d0000 rw-p 00000000 00:00 0 
+054d0000-054d1000 r--p 00000000 00:39 972442                             /opt/UED22/fire.dll
+054d1000-054e8000 r-xp 00000000 00:00 0 
+054e8000-054f4000 r--p 00000000 00:00 0 
+054f4000-054f8000 rw-p 00000000 00:00 0 
+054f8000-054fb000 r--p 00000000 00:00 0 
+054fb000-05500000 ---p 00000000 00:00 0 
+05500000-05501000 r--p 00000000 00:39 972546                             /opt/UED22/ipdrv.dll
+05501000-05528000 r-xp 00000000 00:00 0 
+05528000-0553e000 r--p 00000000 00:00 0 
+0553e000-05543000 rw-p 00000000 00:00 0 
+05543000-05548000 r--p 00000000 00:00 0 
+05548000-05550000 ---p 00000000 00:00 0 
+05550000-05770000 rw-p 00000000 00:00 0 
+05770000-05950000 ---p 00000000 00:00 0 
+05950000-05951000 r--p 00000000 00:39 972291                             /opt/UED22/WinDrv.dll
+05951000-0596b000 r-xp 00000000 00:00 0 
+0596b000-0597e000 r--p 00000000 00:00 0 
+0597e000-05983000 rw-p 00000000 00:00 0 
+05983000-05989000 r--p 00000000 00:00 0 
+05989000-05990000 ---p 00000000 00:00 0 
+05990000-05991000 r--p 00000000 00:39 851093                             /usr/lib/i386-linux-gnu/wine/i386-windows/wined3d.dll
+05991000-05b2b000 r-xp 00001000 00:39 851093                             /usr/lib/i386-linux-gnu/wine/i386-windows/wined3d.dll
+05b2b000-05b2c000 rw-p 0019b000 00:39 851093                             /usr/lib/i386-linux-gnu/wine/i386-windows/wined3d.dll
+05b2c000-05b2d000 rw-p 0019c000 00:39 851093                             /usr/lib/i386-linux-gnu/wine/i386-windows/wined3d.dll
+05b2d000-05be5000 r--p 0019d000 00:39 851093                             /usr/lib/i386-linux-gnu/wine/i386-windows/wined3d.dll
+05be5000-05bee000 rw-p 00000000 00:00 0 
+05bee000-05bff000 r--p 00255000 00:39 851093                             /usr/lib/i386-linux-gnu/wine/i386-windows/wined3d.dll
+05bff000-05c01000 rw-p 00266000 00:39 851093                             /usr/lib/i386-linux-gnu/wine/i386-windows/wined3d.dll
+05c01000-05c02000 rw-p 00268000 00:39 851093                             /usr/lib/i386-linux-gnu/wine/i386-windows/wined3d.dll
+05c02000-06d0e000 r--p 00269000 00:39 851093                             /usr/lib/i386-linux-gnu/wine/i386-windows/wined3d.dll
+06d0e000-06d20000 ---p 00000000 00:00 0 
+06d20000-06d21000 rw-p 00000000 00:00 0 
+06d21000-06d30000 ---p 00000000 00:00 0 
+06d30000-07540000 rw-p 00000000 00:00 0 
+07540000-07542000 ---p 00000000 00:00 0 
+07542000-08720000 rw-p 00000000 00:00 0 
+08720000-10000000 ---p 00000000 00:00 0 
+10000000-10001000 r--p 00000000 00:39 972241                             /opt/UED22/Editor.dll
+10001000-100ce000 r-xp 00000000 00:00 0 
+100ce000-1013f000 r--p 00000000 00:00 0 
+1013f000-10143000 rw-p 0013d000 00:39 972241                             /opt/UED22/Editor.dll
+10143000-10175000 rw-p 00000000 00:00 0 
+10175000-1018c000 r--p 00000000 00:00 0 
+1018c000-3fe00000 ---p 00000000 00:00 0 
+3fe00000-3ffc0000 ---p 00000000 00:00 0 
+3ffc0000-40000000 rw-p 00000000 00:00 0 
+62500000-62501000 r--p 00000000 00:39 850616                             /usr/lib/i386-linux-gnu/wine/i386-windows/oleaut32.dll
+62501000-625ae000 r-xp 00001000 00:39 850616                             /usr/lib/i386-linux-gnu/wine/i386-windows/oleaut32.dll
+625ae000-625af000 rw-p 000ae000 00:39 850616                             /usr/lib/i386-linux-gnu/wine/i386-windows/oleaut32.dll
+625af000-625b0000 rw-p 000af000 00:39 850616                             /usr/lib/i386-linux-gnu/wine/i386-windows/oleaut32.dll
+625b0000-625e7000 r--p 000b0000 00:39 850616                             /usr/lib/i386-linux-gnu/wine/i386-windows/oleaut32.dll
+625e7000-62604000 rw-p 00000000 00:00 0 
+62604000-62622000 r--p 000e7000 00:39 850616                             /usr/lib/i386-linux-gnu/wine/i386-windows/oleaut32.dll
+62622000-62625000 rw-p 00105000 00:39 850616                             /usr/lib/i386-linux-gnu/wine/i386-windows/oleaut32.dll
+62625000-6262a000 rw-p 00108000 00:39 850616                             /usr/lib/i386-linux-gnu/wine/i386-windows/oleaut32.dll
+6262a000-628ff000 r--p 0010d000 00:39 850616                             /usr/lib/i386-linux-gnu/wine/i386-windows/oleaut32.dll
+63080000-63081000 r--p 00000000 00:39 851305                             /usr/lib/i386-linux-gnu/wine/i386-windows/zlib1.dll
+63081000-63099000 r-xp 00000000 00:00 0 
+63099000-6309a000 rw-p 00000000 00:00 0 
+6309a000-630a3000 r--p 00000000 00:00 0 
+630a3000-630a4000 rw-p 00000000 00:00 0 
+630a4000-630a5000 r--p 00000000 00:00 0 
+630a5000-630a9000 rw-p 00000000 00:00 0 
+630a9000-630aa000 r--p 00000000 00:00 0 
+64180000-64181000 r--p 00000000 00:39 851145                             /usr/lib/i386-linux-gnu/wine/i386-windows/winspool.drv
+64181000-6419a000 r-xp 00001000 00:39 851145                             /usr/lib/i386-linux-gnu/wine/i386-windows/winspool.drv
+6419a000-6419b000 rw-p 0001a000 00:39 851145                             /usr/lib/i386-linux-gnu/wine/i386-windows/winspool.drv
+6419b000-6419c000 rw-p 0001b000 00:39 851145                             /usr/lib/i386-linux-gnu/wine/i386-windows/winspool.drv
+6419c000-641a2000 r--p 0001c000 00:39 851145                             /usr/lib/i386-linux-gnu/wine/i386-windows/winspool.drv
+641a2000-641a3000 rw-p 00000000 00:00 0 
+641a3000-641a6000 r--p 00022000 00:39 851145                             /usr/lib/i386-linux-gnu/wine/i386-windows/winspool.drv
+641a6000-641a7000 rw-p 00025000 00:39 851145                             /usr/lib/i386-linux-gnu/wine/i386-windows/winspool.drv
+641a7000-641af000 rw-p 00026000 00:39 851145                             /usr/lib/i386-linux-gnu/wine/i386-windows/winspool.drv
+641af000-64222000 r--p 0002e000 00:39 851145                             /usr/lib/i386-linux-gnu/wine/i386-windows/winspool.drv
+643c0000-643c1000 r--p 00000000 00:39 851192                             /usr/lib/i386-linux-gnu/wine/i386-windows/ws2_32.dll
+643c1000-643d5000 r-xp 00001000 00:39 851192                             /usr/lib/i386-linux-gnu/wine/i386-windows/ws2_32.dll
+643d5000-643d6000 rw-p 00015000 00:39 851192                             /usr/lib/i386-linux-gnu/wine/i386-windows/ws2_32.dll
+643d6000-643d7000 rw-p 00016000 00:39 851192                             /usr/lib/i386-linux-gnu/wine/i386-windows/ws2_32.dll
+643d7000-643df000 r--p 00017000 00:39 851192                             /usr/lib/i386-linux-gnu/wine/i386-windows/ws2_32.dll
+643df000-643e0000 rw-p 00000000 00:00 0 
+643e0000-643e3000 r--p 0001f000 00:39 851192                             /usr/lib/i386-linux-gnu/wine/i386-windows/ws2_32.dll
+643e3000-643e4000 rw-p 00022000 00:39 851192                             /usr/lib/i386-linux-gnu/wine/i386-windows/ws2_32.dll
+643e4000-643e7000 rw-p 00023000 00:39 851192                             /usr/lib/i386-linux-gnu/wine/i386-windows/ws2_32.dll
+643e7000-6444c000 r--p 00026000 00:39 851192                             /usr/lib/i386-linux-gnu/wine/i386-windows/ws2_32.dll
+64a80000-64a81000 r--p 00000000 00:39 851025                             /usr/lib/i386-linux-gnu/wine/i386-windows/win32u.dll
+64a81000-64a90000 r-xp 00001000 00:39 851025                             /usr/lib/i386-linux-gnu/wine/i386-windows/win32u.dll
+64a90000-64a91000 rw-p 00010000 00:39 851025                             /usr/lib/i386-linux-gnu/wine/i386-windows/win32u.dll
+64a91000-64a99000 rw-p 00011000 00:39 851025                             /usr/lib/i386-linux-gnu/wine/i386-windows/win32u.dll
+64a99000-64a9d000 r--p 00019000 00:39 851025                             /usr/lib/i386-linux-gnu/wine/i386-windows/win32u.dll
+64a9d000-64a9e000 rw-p 00000000 00:00 0 
+64a9e000-64ab9000 r--p 0001d000 00:39 851025                             /usr/lib/i386-linux-gnu/wine/i386-windows/win32u.dll
+64ab9000-64aba000 rw-p 00038000 00:39 851025                             /usr/lib/i386-linux-gnu/wine/i386-windows/win32u.dll
+64aba000-64ad8000 r--p 00039000 00:39 851025                             /usr/lib/i386-linux-gnu/wine/i386-windows/win32u.dll
+65340000-65341000 r--p 00000000 00:39 850464                             /usr/lib/i386-linux-gnu/wine/i386-windows/msimg32.dll
+65341000-65342000 r-xp 00001000 00:39 850464                             /usr/lib/i386-linux-gnu/wine/i386-windows/msimg32.dll
+65342000-65343000 rw-p 00002000 00:39 850464                             /usr/lib/i386-linux-gnu/wine/i386-windows/msimg32.dll
+65343000-65344000 rw-p 00003000 00:39 850464                             /usr/lib/i386-linux-gnu/wine/i386-windows/msimg32.dll
+65344000-65346000 r--p 00004000 00:39 850464                             /usr/lib/i386-linux-gnu/wine/i386-windows/msimg32.dll
+65346000-65347000 rw-p 00000000 00:00 0 
+65347000-65348000 r--p 00006000 00:39 850464                             /usr/lib/i386-linux-gnu/wine/i386-windows/msimg32.dll
+65348000-65349000 rw-p 00007000 00:39 850464                             /usr/lib/i386-linux-gnu/wine/i386-windows/msimg32.dll
+65349000-65354000 r--p 00008000 00:39 850464                             /usr/lib/i386-linux-gnu/wine/i386-windows/msimg32.dll
+65680000-65681000 r--p 00000000 00:39 850542                             /usr/lib/i386-linux-gnu/wine/i386-windows/msvcrt.dll
+65681000-656f5000 r-xp 00001000 00:39 850542                             /usr/lib/i386-linux-gnu/wine/i386-windows/msvcrt.dll
+656f5000-656f7000 rw-p 00075000 00:39 850542                             /usr/lib/i386-linux-gnu/wine/i386-windows/msvcrt.dll
+656f7000-656f9000 rw-p 00077000 00:39 850542                             /usr/lib/i386-linux-gnu/wine/i386-windows/msvcrt.dll
+656f9000-65717000 r--p 00079000 00:39 850542                             /usr/lib/i386-linux-gnu/wine/i386-windows/msvcrt.dll
+65717000-65719000 rw-p 00000000 00:00 0 
+65719000-65727000 r--p 00097000 00:39 850542                             /usr/lib/i386-linux-gnu/wine/i386-windows/msvcrt.dll
+65727000-65729000 rw-p 000a5000 00:39 850542                             /usr/lib/i386-linux-gnu/wine/i386-windows/msvcrt.dll
+65729000-6572a000 rw-p 000a7000 00:39 850542                             /usr/lib/i386-linux-gnu/wine/i386-windows/msvcrt.dll
+6572a000-65900000 r--p 000a8000 00:39 850542                             /usr/lib/i386-linux-gnu/wine/i386-windows/msvcrt.dll
+66080000-66081000 r--p 00000000 00:39 850384                             /usr/lib/i386-linux-gnu/wine/i386-windows/msacm32.dll
+66081000-66090000 r-xp 00001000 00:39 850384                             /usr/lib/i386-linux-gnu/wine/i386-windows/msacm32.dll
+66090000-66091000 rw-p 00010000 00:39 850384                             /usr/lib/i386-linux-gnu/wine/i386-windows/msacm32.dll
+66091000-66092000 rw-p 00011000 00:39 850384                             /usr/lib/i386-linux-gnu/wine/i386-windows/msacm32.dll
+66092000-66098000 r--p 00012000 00:39 850384                             /usr/lib/i386-linux-gnu/wine/i386-windows/msacm32.dll
+66098000-66099000 rw-p 00000000 00:00 0 
+66099000-6609a000 r--p 00018000 00:39 850384                             /usr/lib/i386-linux-gnu/wine/i386-windows/msacm32.dll
+6609a000-6609b000 rw-p 00019000 00:39 850384                             /usr/lib/i386-linux-gnu/wine/i386-windows/msacm32.dll
+6609b000-660a1000 rw-p 0001a000 00:39 850384                             /usr/lib/i386-linux-gnu/wine/i386-windows/msacm32.dll
+660a1000-660e6000 r--p 00020000 00:39 850384                             /usr/lib/i386-linux-gnu/wine/i386-windows/msacm32.dll
+66640000-66641000 r--p 00000000 00:39 850990                             /usr/lib/i386-linux-gnu/wine/i386-windows/version.dll
+66641000-66644000 r-xp 00001000 00:39 850990                             /usr/lib/i386-linux-gnu/wine/i386-windows/version.dll
+66644000-66645000 rw-p 00004000 00:39 850990                             /usr/lib/i386-linux-gnu/wine/i386-windows/version.dll
+66645000-66646000 rw-p 00005000 00:39 850990                             /usr/lib/i386-linux-gnu/wine/i386-windows/version.dll
+66646000-66648000 r--p 00006000 00:39 850990                             /usr/lib/i386-linux-gnu/wine/i386-windows/version.dll
+66648000-66649000 rw-p 00000000 00:00 0 
+66649000-6664a000 r--p 00008000 00:39 850990                             /usr/lib/i386-linux-gnu/wine/i386-windows/version.dll
+6664a000-6664b000 rw-p 00009000 00:39 850990                             /usr/lib/i386-linux-gnu/wine/i386-windows/version.dll
+6664b000-6664c000 rw-p 0000a000 00:39 850990                             /usr/lib/i386-linux-gnu/wine/i386-windows/version.dll
+6664c000-6665c000 r--p 0000b000 00:39 850990                             /usr/lib/i386-linux-gnu/wine/i386-windows/version.dll
+667c0000-667c1000 r--p 00000000 00:39 850816                             /usr/lib/i386-linux-gnu/wine/i386-windows/shcore.dll
+667c1000-667cb000 r-xp 00001000 00:39 850816                             /usr/lib/i386-linux-gnu/wine/i386-windows/shcore.dll
+667cb000-667cc000 rw-p 0000b000 00:39 850816                             /usr/lib/i386-linux-gnu/wine/i386-windows/shcore.dll
+667cc000-667cd000 rw-p 0000c000 00:39 850816                             /usr/lib/i386-linux-gnu/wine/i386-windows/shcore.dll
+667cd000-667d2000 r--p 0000d000 00:39 850816                             /usr/lib/i386-linux-gnu/wine/i386-windows/shcore.dll
+667d2000-667d3000 rw-p 00000000 00:00 0 
+667d3000-667d8000 r--p 00012000 00:39 850816                             /usr/lib/i386-linux-gnu/wine/i386-windows/shcore.dll
+667d8000-667d9000 rw-p 00017000 00:39 850816                             /usr/lib/i386-linux-gnu/wine/i386-windows/shcore.dll
+667d9000-66809000 r--p 00018000 00:39 850816                             /usr/lib/i386-linux-gnu/wine/i386-windows/shcore.dll
+66fc0000-66fc1000 r--p 00000000 00:39 849852                             /usr/lib/i386-linux-gnu/wine/i386-windows/compstui.dll
+66fc1000-66fc3000 r-xp 00001000 00:39 849852                             /usr/lib/i386-linux-gnu/wine/i386-windows/compstui.dll
+66fc3000-66fc4000 rw-p 00003000 00:39 849852                             /usr/lib/i386-linux-gnu/wine/i386-windows/compstui.dll
+66fc4000-66fc5000 rw-p 00004000 00:39 849852                             /usr/lib/i386-linux-gnu/wine/i386-windows/compstui.dll
+66fc5000-66fc7000 r--p 00005000 00:39 849852                             /usr/lib/i386-linux-gnu/wine/i386-windows/compstui.dll
+66fc7000-66fd0000 rw-p 00000000 00:00 0 
+66fd0000-66fd1000 r--p 00007000 00:39 849852                             /usr/lib/i386-linux-gnu/wine/i386-windows/compstui.dll
+66fd1000-66fd2000 rw-p 00008000 00:39 849852                             /usr/lib/i386-linux-gnu/wine/i386-windows/compstui.dll
+66fd2000-66fd4000 rw-p 00009000 00:39 849852                             /usr/lib/i386-linux-gnu/wine/i386-windows/compstui.dll
+66fd4000-66fe4000 r--p 0000b000 00:39 849852                             /usr/lib/i386-linux-gnu/wine/i386-windows/compstui.dll
+67500000-67501000 r--p 00000000 00:39 850258                             /usr/lib/i386-linux-gnu/wine/i386-windows/imm32.dll
+67501000-6750d000 r-xp 00001000 00:39 850258                             /usr/lib/i386-linux-gnu/wine/i386-windows/imm32.dll
+6750d000-6750e000 rw-p 0000d000 00:39 850258                             /usr/lib/i386-linux-gnu/wine/i386-windows/imm32.dll
+6750e000-6750f000 rw-p 0000e000 00:39 850258                             /usr/lib/i386-linux-gnu/wine/i386-windows/imm32.dll
+6750f000-67514000 r--p 0000f000 00:39 850258                             /usr/lib/i386-linux-gnu/wine/i386-windows/imm32.dll
+67514000-67515000 rw-p 00000000 00:00 0 
+67515000-67518000 r--p 00014000 00:39 850258                             /usr/lib/i386-linux-gnu/wine/i386-windows/imm32.dll
+67518000-67519000 rw-p 00017000 00:39 850258                             /usr/lib/i386-linux-gnu/wine/i386-windows/imm32.dll
+67519000-6751a000 rw-p 00018000 00:39 850258                             /usr/lib/i386-linux-gnu/wine/i386-windows/imm32.dll
+6751a000-67552000 r--p 00019000 00:39 850258                             /usr/lib/i386-linux-gnu/wine/i386-windows/imm32.dll
+67bc0000-67bc1000 r--p 00000000 00:39 849825                             /usr/lib/i386-linux-gnu/wine/i386-windows/comctl32.dll
+67bc1000-67c7e000 r-xp 00001000 00:39 849825                             /usr/lib/i386-linux-gnu/wine/i386-windows/comctl32.dll
+67c7e000-67c7f000 rw-p 000be000 00:39 849825                             /usr/lib/i386-linux-gnu/wine/i386-windows/comctl32.dll
+67c7f000-67c80000 rw-p 000bf000 00:39 849825                             /usr/lib/i386-linux-gnu/wine/i386-windows/comctl32.dll
+67c80000-67cb0000 r--p 000c0000 00:39 849825                             /usr/lib/i386-linux-gnu/wine/i386-windows/comctl32.dll
+67cb0000-67cb2000 rw-p 00000000 00:00 0 
+67cb2000-67cc6000 r--p 000f0000 00:39 849825                             /usr/lib/i386-linux-gnu/wine/i386-windows/comctl32.dll
+67cc6000-67cc9000 rw-p 00104000 00:39 849825                             /usr/lib/i386-linux-gnu/wine/i386-windows/comctl32.dll
+67cc9000-67d43000 rw-p 00107000 00:39 849825                             /usr/lib/i386-linux-gnu/wine/i386-windows/comctl32.dll
+67d43000-6805d000 r--p 00181000 00:39 849825                             /usr/lib/i386-linux-gnu/wine/i386-windows/comctl32.dll
+684c0000-684c1000 r--p 00000000 00:39 849800                             /usr/lib/i386-linux-gnu/wine/i386-windows/combase.dll
+684c1000-684ea000 r-xp 00001000 00:39 849800                             /usr/lib/i386-linux-gnu/wine/i386-windows/combase.dll
+684ea000-684eb000 rw-p 0002a000 00:39 849800                             /usr/lib/i386-linux-gnu/wine/i386-windows/combase.dll
+684eb000-684ed000 rw-p 0002b000 00:39 849800                             /usr/lib/i386-linux-gnu/wine/i386-windows/combase.dll
+684ed000-68503000 r--p 0002d000 00:39 849800                             /usr/lib/i386-linux-gnu/wine/i386-windows/combase.dll
+68503000-68504000 rw-p 00000000 00:00 0 
+68504000-6851c000 r--p 00043000 00:39 849800                             /usr/lib/i386-linux-gnu/wine/i386-windows/combase.dll
+6851c000-6851e000 rw-p 0005b000 00:39 849800                             /usr/lib/i386-linux-gnu/wine/i386-windows/combase.dll
+6851e000-68610000 r--p 0005d000 00:39 849800                             /usr/lib/i386-linux-gnu/wine/i386-windows/combase.dll
+68880000-68881000 r--p 00000000 00:39 850961                             /usr/lib/i386-linux-gnu/wine/i386-windows/user32.dll
+68881000-6890d000 r-xp 00001000 00:39 850961                             /usr/lib/i386-linux-gnu/wine/i386-windows/user32.dll
+6890d000-6890e000 rw-p 0008d000 00:39 850961                             /usr/lib/i386-linux-gnu/wine/i386-windows/user32.dll
+6890e000-6890f000 rw-p 0008e000 00:39 850961                             /usr/lib/i386-linux-gnu/wine/i386-windows/user32.dll
+6890f000-68935000 r--p 0008f000 00:39 850961                             /usr/lib/i386-linux-gnu/wine/i386-windows/user32.dll
+68935000-68936000 rw-p 00000000 00:00 0 
+68936000-68944000 r--p 000b5000 00:39 850961                             /usr/lib/i386-linux-gnu/wine/i386-windows/user32.dll
+68944000-68949000 rw-p 000c3000 00:39 850961                             /usr/lib/i386-linux-gnu/wine/i386-windows/user32.dll
+68949000-68a2e000 rw-p 000c8000 00:39 850961                             /usr/lib/i386-linux-gnu/wine/i386-windows/user32.dll
+68a2e000-68d46000 r--p 001ad000 00:39 850961                             /usr/lib/i386-linux-gnu/wine/i386-windows/user32.dll
+69040000-69041000 r--p 00000000 00:39 849846                             /usr/lib/i386-linux-gnu/wine/i386-windows/comdlg32.dll
+69041000-69073000 r-xp 00001000 00:39 849846                             /usr/lib/i386-linux-gnu/wine/i386-windows/comdlg32.dll
+69073000-69074000 rw-p 00033000 00:39 849846                             /usr/lib/i386-linux-gnu/wine/i386-windows/comdlg32.dll
+69074000-69075000 rw-p 00034000 00:39 849846                             /usr/lib/i386-linux-gnu/wine/i386-windows/comdlg32.dll
+69075000-6908a000 r--p 00035000 00:39 849846                             /usr/lib/i386-linux-gnu/wine/i386-windows/comdlg32.dll
+6908a000-6908b000 rw-p 00000000 00:00 0 
+6908b000-6909d000 r--p 0004a000 00:39 849846                             /usr/lib/i386-linux-gnu/wine/i386-windows/comdlg32.dll
+6909d000-690a0000 rw-p 0005c000 00:39 849846                             /usr/lib/i386-linux-gnu/wine/i386-windows/comdlg32.dll
+690a0000-6917e000 rw-p 0005f000 00:39 849846                             /usr/lib/i386-linux-gnu/wine/i386-windows/comdlg32.dll
+6917e000-69285000 r--p 0013d000 00:39 849846                             /usr/lib/i386-linux-gnu/wine/i386-windows/comdlg32.dll
+69840000-69841000 r--p 00000000 00:39 849755                             /usr/lib/i386-linux-gnu/wine/i386-windows/advapi32.dll
+69841000-69866000 r-xp 00001000 00:39 849755                             /usr/lib/i386-linux-gnu/wine/i386-windows/advapi32.dll
+69866000-69867000 rw-p 00026000 00:39 849755                             /usr/lib/i386-linux-gnu/wine/i386-windows/advapi32.dll
+69867000-69868000 rw-p 00027000 00:39 849755                             /usr/lib/i386-linux-gnu/wine/i386-windows/advapi32.dll
+69868000-69874000 r--p 00028000 00:39 849755                             /usr/lib/i386-linux-gnu/wine/i386-windows/advapi32.dll
+69874000-69875000 rw-p 00000000 00:00 0 
+69875000-6987d000 r--p 00034000 00:39 849755                             /usr/lib/i386-linux-gnu/wine/i386-windows/advapi32.dll
+6987d000-69880000 rw-p 0003c000 00:39 849755                             /usr/lib/i386-linux-gnu/wine/i386-windows/advapi32.dll
+69880000-69881000 rw-p 0003f000 00:39 849755                             /usr/lib/i386-linux-gnu/wine/i386-windows/advapi32.dll
+69881000-69938000 r--p 00040000 00:39 849755                             /usr/lib/i386-linux-gnu/wine/i386-windows/advapi32.dll
+69ec0000-69ec1000 r--p 00000000 00:39 850069                             /usr/lib/i386-linux-gnu/wine/i386-windows/ddraw.dll
+69ec1000-69efe000 r-xp 00001000 00:39 850069                             /usr/lib/i386-linux-gnu/wine/i386-windows/ddraw.dll
+69efe000-69eff000 rw-p 0003e000 00:39 850069                             /usr/lib/i386-linux-gnu/wine/i386-windows/ddraw.dll
+69eff000-69f00000 rw-p 0003f000 00:39 850069                             /usr/lib/i386-linux-gnu/wine/i386-windows/ddraw.dll
+69f00000-69f27000 r--p 00040000 00:39 850069                             /usr/lib/i386-linux-gnu/wine/i386-windows/ddraw.dll
+69f27000-69f28000 rw-p 00000000 00:00 0 
+69f28000-69f3d000 r--p 00067000 00:39 850069                             /usr/lib/i386-linux-gnu/wine/i386-windows/ddraw.dll
+69f3d000-69f40000 rw-p 0007c000 00:39 850069                             /usr/lib/i386-linux-gnu/wine/i386-windows/ddraw.dll
+69f40000-69f41000 rw-p 0007f000 00:39 850069                             /usr/lib/i386-linux-gnu/wine/i386-windows/ddraw.dll
+69f41000-6a121000 r--p 00080000 00:39 850069                             /usr/lib/i386-linux-gnu/wine/i386-windows/ddraw.dll
+6aac0000-6aac1000 r--p 00000000 00:39 850906                             /usr/lib/i386-linux-gnu/wine/i386-windows/ucrtbase.dll
+6aac1000-6ab4c000 r-xp 00001000 00:39 850906                             /usr/lib/i386-linux-gnu/wine/i386-windows/ucrtbase.dll
+6ab4c000-6ab4e000 rw-p 0008c000 00:39 850906                             /usr/lib/i386-linux-gnu/wine/i386-windows/ucrtbase.dll
+6ab4e000-6ab52000 rw-p 0008e000 00:39 850906                             /usr/lib/i386-linux-gnu/wine/i386-windows/ucrtbase.dll
+6ab52000-6ab75000 r--p 00092000 00:39 850906                             /usr/lib/i386-linux-gnu/wine/i386-windows/ucrtbase.dll
+6ab75000-6ab77000 rw-p 00000000 00:00 0 
+6ab77000-6ab91000 r--p 000b5000 00:39 850906                             /usr/lib/i386-linux-gnu/wine/i386-windows/ucrtbase.dll
+6ab91000-6ab93000 rw-p 000cf000 00:39 850906                             /usr/lib/i386-linux-gnu/wine/i386-windows/ucrtbase.dll
+6ab93000-6ab94000 rw-p 000d1000 00:39 850906                             /usr/lib/i386-linux-gnu/wine/i386-windows/ucrtbase.dll
+6ab94000-6ada1000 r--p 000d2000 00:39 850906                             /usr/lib/i386-linux-gnu/wine/i386-windows/ucrtbase.dll
+6aec0000-6aec1000 r--p 00000000 00:39 850808                             /usr/lib/i386-linux-gnu/wine/i386-windows/setupapi.dll
+6aec1000-6aefa000 r-xp 00001000 00:39 850808                             /usr/lib/i386-linux-gnu/wine/i386-windows/setupapi.dll
+6aefa000-6aefb000 rw-p 0003a000 00:39 850808                             /usr/lib/i386-linux-gnu/wine/i386-windows/setupapi.dll
+6aefb000-6aefe000 rw-p 0003b000 00:39 850808                             /usr/lib/i386-linux-gnu/wine/i386-windows/setupapi.dll
+6aefe000-6af15000 r--p 0003e000 00:39 850808                             /usr/lib/i386-linux-gnu/wine/i386-windows/setupapi.dll
+6af15000-6af16000 rw-p 00000000 00:00 0 
+6af16000-6af32000 r--p 00055000 00:39 850808                             /usr/lib/i386-linux-gnu/wine/i386-windows/setupapi.dll
+6af32000-6af34000 rw-p 00071000 00:39 850808                             /usr/lib/i386-linux-gnu/wine/i386-windows/setupapi.dll
+6af34000-6af40000 rw-p 00073000 00:39 850808                             /usr/lib/i386-linux-gnu/wine/i386-windows/setupapi.dll
+6af40000-6b065000 r--p 0007f000 00:39 850808                             /usr/lib/i386-linux-gnu/wine/i386-windows/setupapi.dll
+6bbc0000-6bbc1000 r--p 00000000 00:39 850796                             /usr/lib/i386-linux-gnu/wine/i386-windows/sechost.dll
+6bbc1000-6bbd9000 r-xp 00001000 00:39 850796                             /usr/lib/i386-linux-gnu/wine/i386-windows/sechost.dll
+6bbd9000-6bbda000 rw-p 00019000 00:39 850796                             /usr/lib/i386-linux-gnu/wine/i386-windows/sechost.dll
+6bbda000-6bbdb000 rw-p 0001a000 00:39 850796                             /usr/lib/i386-linux-gnu/wine/i386-windows/sechost.dll
+6bbdb000-6bbe3000 r--p 0001b000 00:39 850796                             /usr/lib/i386-linux-gnu/wine/i386-windows/sechost.dll
+6bbe3000-6bbe4000 rw-p 00000000 00:00 0 
+6bbe4000-6bbe9000 r--p 00023000 00:39 850796                             /usr/lib/i386-linux-gnu/wine/i386-windows/sechost.dll
+6bbe9000-6bbea000 rw-p 00028000 00:39 850796                             /usr/lib/i386-linux-gnu/wine/i386-windows/sechost.dll
+6bbea000-6bc59000 r--p 00029000 00:39 850796                             /usr/lib/i386-linux-gnu/wine/i386-windows/sechost.dll
+6da80000-6da81000 r--p 00000000 00:39 850198                             /usr/lib/i386-linux-gnu/wine/i386-windows/gdi32.dll
+6da81000-6dacf000 r-xp 00001000 00:39 850198                             /usr/lib/i386-linux-gnu/wine/i386-windows/gdi32.dll
+6dacf000-6dad0000 rw-p 0004f000 00:39 850198                             /usr/lib/i386-linux-gnu/wine/i386-windows/gdi32.dll
+6dad0000-6dad1000 rw-p 00050000 00:39 850198                             /usr/lib/i386-linux-gnu/wine/i386-windows/gdi32.dll
+6dad1000-6daf3000 r--p 00051000 00:39 850198                             /usr/lib/i386-linux-gnu/wine/i386-windows/gdi32.dll
+6daf3000-6daf4000 rw-p 00000000 00:00 0 
+6daf4000-6dafd000 r--p 00073000 00:39 850198                             /usr/lib/i386-linux-gnu/wine/i386-windows/gdi32.dll
+6dafd000-6db00000 rw-p 0007c000 00:39 850198                             /usr/lib/i386-linux-gnu/wine/i386-windows/gdi32.dll
+6db00000-6db05000 rw-p 0007f000 00:39 850198                             /usr/lib/i386-linux-gnu/wine/i386-windows/gdi32.dll
+6db05000-6dc9c000 r--p 00084000 00:39 850198                             /usr/lib/i386-linux-gnu/wine/i386-windows/gdi32.dll
+6f240000-6f241000 r--p 00000000 00:39 851133                             /usr/lib/i386-linux-gnu/wine/i386-windows/winmm.dll
+6f241000-6f266000 r-xp 00001000 00:39 851133                             /usr/lib/i386-linux-gnu/wine/i386-windows/winmm.dll
+6f266000-6f267000 rw-p 00026000 00:39 851133                             /usr/lib/i386-linux-gnu/wine/i386-windows/winmm.dll
+6f267000-6f268000 rw-p 00027000 00:39 851133                             /usr/lib/i386-linux-gnu/wine/i386-windows/winmm.dll
+6f268000-6f276000 r--p 00028000 00:39 851133                             /usr/lib/i386-linux-gnu/wine/i386-windows/winmm.dll
+6f276000-6f280000 rw-p 00000000 00:00 0 
+6f280000-6f288000 r--p 00036000 00:39 851133                             /usr/lib/i386-linux-gnu/wine/i386-windows/winmm.dll
+6f288000-6f28a000 rw-p 0003e000 00:39 851133                             /usr/lib/i386-linux-gnu/wine/i386-windows/winmm.dll
+6f28a000-6f304000 rw-p 00040000 00:39 851133                             /usr/lib/i386-linux-gnu/wine/i386-windows/winmm.dll
+6f304000-6f3c2000 r--p 000ba000 00:39 851133                             /usr/lib/i386-linux-gnu/wine/i386-windows/winmm.dll
+70d80000-70d81000 r--p 00000000 00:39 850974                             /usr/lib/i386-linux-gnu/wine/i386-windows/uxtheme.dll
+70d81000-70d95000 r-xp 00001000 00:39 850974                             /usr/lib/i386-linux-gnu/wine/i386-windows/uxtheme.dll
+70d95000-70d96000 rw-p 00015000 00:39 850974                             /usr/lib/i386-linux-gnu/wine/i386-windows/uxtheme.dll
+70d96000-70d97000 rw-p 00016000 00:39 850974                             /usr/lib/i386-linux-gnu/wine/i386-windows/uxtheme.dll
+70d97000-70db0000 r--p 00017000 00:39 850974                             /usr/lib/i386-linux-gnu/wine/i386-windows/uxtheme.dll
+70db0000-70db1000 rw-p 00000000 00:00 0 
+70db1000-70db3000 r--p 00030000 00:39 850974                             /usr/lib/i386-linux-gnu/wine/i386-windows/uxtheme.dll
+70db3000-70db5000 rw-p 00032000 00:39 850974                             /usr/lib/i386-linux-gnu/wine/i386-windows/uxtheme.dll
+70db5000-70db6000 rw-p 00034000 00:39 850974                             /usr/lib/i386-linux-gnu/wine/i386-windows/uxtheme.dll
+70db6000-70e23000 r--p 00035000 00:39 850974                             /usr/lib/i386-linux-gnu/wine/i386-windows/uxtheme.dll
+71400000-71401000 r--p 00000000 00:39 850821                             /usr/lib/i386-linux-gnu/wine/i386-windows/shell32.dll
+71401000-71493000 r-xp 00001000 00:39 850821                             /usr/lib/i386-linux-gnu/wine/i386-windows/shell32.dll
+71493000-71494000 rw-p 00093000 00:39 850821                             /usr/lib/i386-linux-gnu/wine/i386-windows/shell32.dll
+71494000-71496000 rw-p 00094000 00:39 850821                             /usr/lib/i386-linux-gnu/wine/i386-windows/shell32.dll
+71496000-714d7000 r--p 00096000 00:39 850821                             /usr/lib/i386-linux-gnu/wine/i386-windows/shell32.dll
+714d7000-714d8000 rw-p 00000000 00:00 0 
+714d8000-714f1000 r--p 000d7000 00:39 850821                             /usr/lib/i386-linux-gnu/wine/i386-windows/shell32.dll
+714f1000-714f5000 rw-p 000f0000 00:39 850821                             /usr/lib/i386-linux-gnu/wine/i386-windows/shell32.dll
+714f5000-71d30000 rw-p 000f4000 00:39 850821                             /usr/lib/i386-linux-gnu/wine/i386-windows/shell32.dll
+71d30000-720aa000 r--p 0092f000 00:39 850821                             /usr/lib/i386-linux-gnu/wine/i386-windows/shell32.dll
+7a800000-7a801000 r--p 00000000 00:39 850647                             /usr/lib/i386-linux-gnu/wine/i386-windows/opengl32.dll
+7a801000-7a8c4000 r-xp 00001000 00:39 850647                             /usr/lib/i386-linux-gnu/wine/i386-windows/opengl32.dll
+7a8c4000-7a8c7000 rw-p 000c4000 00:39 850647                             /usr/lib/i386-linux-gnu/wine/i386-windows/opengl32.dll
+7a8c7000-7a8c8000 rw-p 000c7000 00:39 850647                             /usr/lib/i386-linux-gnu/wine/i386-windows/opengl32.dll
+7a8c8000-7a938000 r--p 000c8000 00:39 850647                             /usr/lib/i386-linux-gnu/wine/i386-windows/opengl32.dll
+7a938000-7a939000 rw-p 00000000 00:00 0 
+7a939000-7a93e000 r--p 00138000 00:39 850647                             /usr/lib/i386-linux-gnu/wine/i386-windows/opengl32.dll
+7a93e000-7a93f000 rw-p 0013d000 00:39 850647                             /usr/lib/i386-linux-gnu/wine/i386-windows/opengl32.dll
+7a93f000-7a940000 rw-p 0013e000 00:39 850647                             /usr/lib/i386-linux-gnu/wine/i386-windows/opengl32.dll
+7a940000-7acc8000 r--p 0013f000 00:39 850647                             /usr/lib/i386-linux-gnu/wine/i386-windows/opengl32.dll
+7b000000-7b001000 r--p 00000000 00:39 850299                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernelbase.dll
+7b001000-7b088000 r-xp 00001000 00:39 850299                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernelbase.dll
+7b088000-7b08a000 rw-p 00088000 00:39 850299                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernelbase.dll
+7b08a000-7b08c000 rw-p 0008a000 00:39 850299                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernelbase.dll
+7b08c000-7b0b7000 r--p 0008c000 00:39 850299                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernelbase.dll
+7b0b7000-7b0b9000 rw-p 00000000 00:00 0 
+7b0b9000-7b0de000 r--p 000b7000 00:39 850299                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernelbase.dll
+7b0de000-7b0e2000 rw-p 000dc000 00:39 850299                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernelbase.dll
+7b0e2000-7b2a0000 rw-p 000e0000 00:39 850299                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernelbase.dll
+7b2a0000-7b51b000 r--p 0029e000 00:39 850299                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernelbase.dll
+7b600000-7b601000 r--p 00000000 00:39 850298                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernel32.dll
+7b601000-7b62f000 r-xp 00001000 00:39 850298                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernel32.dll
+7b62f000-7b630000 rw-p 0002f000 00:39 850298                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernel32.dll
+7b630000-7b633000 rw-p 00030000 00:39 850298                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernel32.dll
+7b633000-7b63d000 r--p 00033000 00:39 850298                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernel32.dll
+7b63d000-7b63e000 rw-p 00000000 00:00 0 
+7b63e000-7b64e000 r--p 0003d000 00:39 850298                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernel32.dll
+7b64e000-7b656000 rw-p 0004d000 00:39 850298                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernel32.dll
+7b656000-7b65e000 rw-p 00055000 00:39 850298                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernel32.dll
+7b65e000-7b756000 r--p 0005d000 00:39 850298                             /usr/lib/i386-linux-gnu/wine/i386-windows/kernel32.dll
+7bc00000-7bc01000 r--p 00000000 00:39 850590                             /usr/lib/i386-linux-gnu/wine/i386-windows/ntdll.dll
+7bc01000-7bc6a000 r-xp 00001000 00:39 850590                             /usr/lib/i386-linux-gnu/wine/i386-windows/ntdll.dll
+7bc6a000-7bc6b000 rw-p 0006a000 00:39 850590                             /usr/lib/i386-linux-gnu/wine/i386-windows/ntdll.dll
+7bc6b000-7bc6e000 rw-p 0006b000 00:39 850590                             /usr/lib/i386-linux-gnu/wine/i386-windows/ntdll.dll
+7bc6e000-7bc8e000 r--p 0006e000 00:39 850590                             /usr/lib/i386-linux-gnu/wine/i386-windows/ntdll.dll
+7bc8e000-7bc91000 rw-p 00000000 00:00 0 
+7bc91000-7bca5000 r--p 0008e000 00:39 850590                             /usr/lib/i386-linux-gnu/wine/i386-windows/ntdll.dll
+7bca5000-7bca6000 rw-p 000a2000 00:39 850590                             /usr/lib/i386-linux-gnu/wine/i386-windows/ntdll.dll
+7bca6000-7bca7000 rw-p 000a3000 00:39 850590                             /usr/lib/i386-linux-gnu/wine/i386-windows/ntdll.dll
+7bca7000-7beba000 r--p 000a4000 00:39 850590                             /usr/lib/i386-linux-gnu/wine/i386-windows/ntdll.dll
+7d000000-7d001000 r--p 00000000 00:39 922368                             /usr/lib/wine/wine
+7d001000-7d002000 r-xp 00001000 00:39 922368                             /usr/lib/wine/wine
+7d002000-7d003000 r--p 00002000 00:39 922368                             /usr/lib/wine/wine
+7d003000-7d004000 r--p 00002000 00:39 922368                             /usr/lib/wine/wine
+7d004000-7d005000 rw-p 00003000 00:39 922368                             /usr/lib/wine/wine
+7e9ed000-7f4a6000 rw-p 00000000 00:00 0                                  [heap]
+7f6d7000-7f79a000 rw-p 00000000 00:00 0 
+7f79a000-7f854000 r--p 00000000 00:39 949340                             /usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+7f854000-7f902000 r--p 00000000 00:39 949313                             /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf
+7f902000-7f907000 r-xp 00000000 00:39 848766                             /usr/lib/i386-linux-gnu/libXxf86vm.so.1.0.0
+7f907000-7f908000 r--p 00004000 00:39 848766                             /usr/lib/i386-linux-gnu/libXxf86vm.so.1.0.0
+7f908000-7f909000 rw-p 00005000 00:39 848766                             /usr/lib/i386-linux-gnu/libXxf86vm.so.1.0.0
+7f909000-7f90b000 r--p 00000000 00:39 849419                             /usr/lib/i386-linux-gnu/libmd.so.0.0.5
+7f90b000-7f913000 r-xp 00002000 00:39 849419                             /usr/lib/i386-linux-gnu/libmd.so.0.0.5
+7f913000-7f916000 r--p 0000a000 00:39 849419                             /usr/lib/i386-linux-gnu/libmd.so.0.0.5
+7f916000-7f917000 r--p 0000c000 00:39 849419                             /usr/lib/i386-linux-gnu/libmd.so.0.0.5
+7f917000-7f918000 rw-p 0000d000 00:39 849419                             /usr/lib/i386-linux-gnu/libmd.so.0.0.5
+7f918000-7f91b000 r--p 00000000 00:39 849004                             /usr/lib/i386-linux-gnu/libbsd.so.0.11.7
+7f91b000-7f928000 r-xp 00003000 00:39 849004                             /usr/lib/i386-linux-gnu/libbsd.so.0.11.7
+7f928000-7f92d000 r--p 00010000 00:39 849004                             /usr/lib/i386-linux-gnu/libbsd.so.0.11.7
+7f92d000-7f92e000 r--p 00014000 00:39 849004                             /usr/lib/i386-linux-gnu/libbsd.so.0.11.7
+7f92e000-7f92f000 rw-p 00015000 00:39 849004                             /usr/lib/i386-linux-gnu/libbsd.so.0.11.7
+7f92f000-7f934000 r-xp 00000000 00:39 848758                             /usr/lib/i386-linux-gnu/libXdmcp.so.6.0.0
+7f934000-7f935000 r--p 00004000 00:39 848758                             /usr/lib/i386-linux-gnu/libXdmcp.so.6.0.0
+7f935000-7f936000 rw-p 00005000 00:39 848758                             /usr/lib/i386-linux-gnu/libXdmcp.so.6.0.0
+7f936000-7f937000 r--p 00000000 00:39 848756                             /usr/lib/i386-linux-gnu/libXau.so.6.0.0
+7f937000-7f938000 r-xp 00001000 00:39 848756                             /usr/lib/i386-linux-gnu/libXau.so.6.0.0
+7f938000-7f939000 r--p 00002000 00:39 848756                             /usr/lib/i386-linux-gnu/libXau.so.6.0.0
+7f939000-7f93a000 r--p 00002000 00:39 848756                             /usr/lib/i386-linux-gnu/libXau.so.6.0.0
+7f93a000-7f93b000 rw-p 00003000 00:39 848756                             /usr/lib/i386-linux-gnu/libXau.so.6.0.0
+7f93b000-7f945000 r--p 00000000 00:39 849615                             /usr/lib/i386-linux-gnu/libxcb.so.1.1.0
+7f945000-7f95b000 r-xp 0000a000 00:39 849615                             /usr/lib/i386-linux-gnu/libxcb.so.1.1.0
+7f95b000-7f967000 r--p 00020000 00:39 849615                             /usr/lib/i386-linux-gnu/libxcb.so.1.1.0
+7f967000-7f968000 r--p 0002b000 00:39 849615                             /usr/lib/i386-linux-gnu/libxcb.so.1.1.0
+7f968000-7f969000 rw-p 0002c000 00:39 849615                             /usr/lib/i386-linux-gnu/libxcb.so.1.1.0
+7f969000-7f97b000 r--p 00000000 00:39 848754                             /usr/lib/i386-linux-gnu/libX11.so.6.4.0
+7f97b000-7fa0a000 r-xp 00012000 00:39 848754                             /usr/lib/i386-linux-gnu/libX11.so.6.4.0
+7fa0a000-7fab7000 r--p 000a1000 00:39 848754                             /usr/lib/i386-linux-gnu/libX11.so.6.4.0
+7fab7000-7fab8000 r--p 0014e000 00:39 848754                             /usr/lib/i386-linux-gnu/libX11.so.6.4.0
+7fab8000-7fabb000 rw-p 0014f000 00:39 848754                             /usr/lib/i386-linux-gnu/libX11.so.6.4.0
+7fabb000-7fabe000 r--p 00000000 00:39 848760                             /usr/lib/i386-linux-gnu/libXext.so.6.4.0
+7fabe000-7fac9000 r-xp 00003000 00:39 848760                             /usr/lib/i386-linux-gnu/libXext.so.6.4.0
+7fac9000-7facf000 r--p 0000e000 00:39 848760                             /usr/lib/i386-linux-gnu/libXext.so.6.4.0
+7facf000-7fad0000 r--p 00013000 00:39 848760                             /usr/lib/i386-linux-gnu/libXext.so.6.4.0
+7fad0000-7fad1000 rw-p 00014000 00:39 848760                             /usr/lib/i386-linux-gnu/libXext.so.6.4.0
+7fad6000-7fad7000 r--p 00000000 00:39 849744                             /usr/lib/i386-linux-gnu/wine/i386-unix/winspool.so
+7fad7000-7fad9000 r-xp 00001000 00:39 849744                             /usr/lib/i386-linux-gnu/wine/i386-unix/winspool.so
+7fad9000-7fada000 r--p 00003000 00:39 849744                             /usr/lib/i386-linux-gnu/wine/i386-unix/winspool.so
+7fada000-7fadb000 r--p 00003000 00:39 849744                             /usr/lib/i386-linux-gnu/wine/i386-unix/winspool.so
+7fadb000-7fadc000 rw-p 00004000 00:39 849744                             /usr/lib/i386-linux-gnu/wine/i386-unix/winspool.so
+7fadc000-7fae3000 r--p 00000000 00:39 849743                             /usr/lib/i386-linux-gnu/wine/i386-unix/winex11.so
+7fae3000-7fb2e000 r-xp 00007000 00:39 849743                             /usr/lib/i386-linux-gnu/wine/i386-unix/winex11.so
+7fb2e000-7fb5c000 r--p 00052000 00:39 849743                             /usr/lib/i386-linux-gnu/wine/i386-unix/winex11.so
+7fb5c000-7fb5e000 r--p 0007f000 00:39 849743                             /usr/lib/i386-linux-gnu/wine/i386-unix/winex11.so
+7fb5e000-7fb62000 rw-p 00081000 00:39 849743                             /usr/lib/i386-linux-gnu/wine/i386-unix/winex11.so
+7fb62000-7fb67000 rw-p 00000000 00:00 0 
+7fb67000-7fb68000 r--p 00000000 00:39 849746                             /usr/lib/i386-linux-gnu/wine/i386-unix/ws2_32.so
+7fb68000-7fb6a000 r-xp 00001000 00:39 849746                             /usr/lib/i386-linux-gnu/wine/i386-unix/ws2_32.so
+7fb6a000-7fb6b000 r--p 00003000 00:39 849746                             /usr/lib/i386-linux-gnu/wine/i386-unix/ws2_32.so
+7fb6b000-7fb6c000 r--p 00003000 00:39 849746                             /usr/lib/i386-linux-gnu/wine/i386-unix/ws2_32.so
+7fb6c000-7fb6d000 rw-p 00004000 00:39 849746                             /usr/lib/i386-linux-gnu/wine/i386-unix/ws2_32.so
+7fb6d000-7fb77000 r--s 00000000 00:39 2780199                            /var/cache/fontconfig/a4e60e8d1e10d2fdff3fe3037a1845fb-le32d4.cache-8
+7fb77000-7fb82000 r--s 00000000 00:39 2780197                            /var/cache/fontconfig/6cc790b63b123a6a96ee260fcdad32a9-le32d4.cache-8
+7fb82000-7fb84000 r--p 00000000 00:39 849138                             /usr/lib/i386-linux-gnu/libexpat.so.1.8.10
+7fb84000-7fba1000 r-xp 00002000 00:39 849138                             /usr/lib/i386-linux-gnu/libexpat.so.1.8.10
+7fba1000-7fbac000 r--p 0001f000 00:39 849138                             /usr/lib/i386-linux-gnu/libexpat.so.1.8.10
+7fbac000-7fbae000 r--p 00029000 00:39 849138                             /usr/lib/i386-linux-gnu/libexpat.so.1.8.10
+7fbae000-7fbaf000 rw-p 0002b000 00:39 849138                             /usr/lib/i386-linux-gnu/libexpat.so.1.8.10
+7fbaf000-7fbb4000 r--p 00000000 00:39 849144                             /usr/lib/i386-linux-gnu/libfontconfig.so.1.12.0
+7fbb4000-7fbdf000 r-xp 00005000 00:39 849144                             /usr/lib/i386-linux-gnu/libfontconfig.so.1.12.0
+7fbdf000-7fc00000 r--p 00030000 00:39 849144                             /usr/lib/i386-linux-gnu/libfontconfig.so.1.12.0
+7fc00000-7fc01000 r--p 00051000 00:39 849144                             /usr/lib/i386-linux-gnu/libfontconfig.so.1.12.0
+7fc01000-7fc02000 rw-p 00052000 00:39 849144                             /usr/lib/i386-linux-gnu/libfontconfig.so.1.12.0
+7fc02000-7fc03000 r--p 00000000 00:39 848966                             /usr/lib/i386-linux-gnu/libbrotlicommon.so.1.0.9
+7fc03000-7fc04000 r-xp 00001000 00:39 848966                             /usr/lib/i386-linux-gnu/libbrotlicommon.so.1.0.9
+7fc04000-7fc23000 r--p 00002000 00:39 848966                             /usr/lib/i386-linux-gnu/libbrotlicommon.so.1.0.9
+7fc23000-7fc24000 r--p 00020000 00:39 848966                             /usr/lib/i386-linux-gnu/libbrotlicommon.so.1.0.9
+7fc24000-7fc25000 rw-p 00021000 00:39 848966                             /usr/lib/i386-linux-gnu/libbrotlicommon.so.1.0.9
+7fc25000-7fc26000 r--p 00000000 00:39 848968                             /usr/lib/i386-linux-gnu/libbrotlidec.so.1.0.9
+7fc26000-7fc2e000 r-xp 00001000 00:39 848968                             /usr/lib/i386-linux-gnu/libbrotlidec.so.1.0.9
+7fc2e000-7fc31000 r--p 00009000 00:39 848968                             /usr/lib/i386-linux-gnu/libbrotlidec.so.1.0.9
+7fc31000-7fc32000 r--p 0000b000 00:39 848968                             /usr/lib/i386-linux-gnu/libbrotlidec.so.1.0.9
+7fc32000-7fc33000 rw-p 0000c000 00:39 848968                             /usr/lib/i386-linux-gnu/libbrotlidec.so.1.0.9
+7fc33000-7fc37000 r--p 00000000 00:39 849458                             /usr/lib/i386-linux-gnu/libpng16.so.16.39.0
+7fc37000-7fc5d000 r-xp 00004000 00:39 849458                             /usr/lib/i386-linux-gnu/libpng16.so.16.39.0
+7fc5d000-7fc6e000 r--p 0002a000 00:39 849458                             /usr/lib/i386-linux-gnu/libpng16.so.16.39.0
+7fc6e000-7fc6f000 r--p 0003a000 00:39 849458                             /usr/lib/i386-linux-gnu/libpng16.so.16.39.0
+7fc6f000-7fc70000 rw-p 0003b000 00:39 849458                             /usr/lib/i386-linux-gnu/libpng16.so.16.39.0
+7fc70000-7fc72000 r--p 00000000 00:39 849625                             /usr/lib/i386-linux-gnu/libz.so.1.2.13
+7fc72000-7fc84000 r-xp 00002000 00:39 849625                             /usr/lib/i386-linux-gnu/libz.so.1.2.13
+7fc84000-7fc8b000 r--p 00014000 00:39 849625                             /usr/lib/i386-linux-gnu/libz.so.1.2.13
+7fc8b000-7fc8c000 r--p 0001a000 00:39 849625                             /usr/lib/i386-linux-gnu/libz.so.1.2.13
+7fc8c000-7fc8d000 rw-p 0001b000 00:39 849625                             /usr/lib/i386-linux-gnu/libz.so.1.2.13
+7fc8d000-7fc94000 r--p 00000000 00:39 849146                             /usr/lib/i386-linux-gnu/libfreetype.so.6.18.3
+7fc94000-7fd1a000 r-xp 00007000 00:39 849146                             /usr/lib/i386-linux-gnu/libfreetype.so.6.18.3
+7fd1a000-7fd56000 r--p 0008d000 00:39 849146                             /usr/lib/i386-linux-gnu/libfreetype.so.6.18.3
+7fd56000-7fd5b000 r--p 000c8000 00:39 849146                             /usr/lib/i386-linux-gnu/libfreetype.so.6.18.3
+7fd5b000-7fd5c000 rw-p 000cd000 00:39 849146                             /usr/lib/i386-linux-gnu/libfreetype.so.6.18.3
+7fd5c000-7fd69000 r--p 00000000 00:39 849417                             /usr/lib/i386-linux-gnu/libm.so.6
+7fd69000-7fe29000 r-xp 0000d000 00:39 849417                             /usr/lib/i386-linux-gnu/libm.so.6
+7fe29000-7fe5f000 r--p 000cd000 00:39 849417                             /usr/lib/i386-linux-gnu/libm.so.6
+7fe5f000-7fe60000 r--p 00103000 00:39 849417                             /usr/lib/i386-linux-gnu/libm.so.6
+7fe60000-7fe61000 rw-p 00104000 00:39 849417                             /usr/lib/i386-linux-gnu/libm.so.6
+7fe62000-7fe6c000 r--s 00000000 00:39 2778701                            /var/cache/fontconfig/e13b20fdb08344e0e664864cc2ede53d-le32d4.cache-8
+7fe6c000-7fe7a000 r--p 00000000 00:39 849736                             /usr/lib/i386-linux-gnu/wine/i386-unix/win32u.so
+7fe7a000-7ff4e000 r-xp 0000e000 00:39 849736                             /usr/lib/i386-linux-gnu/wine/i386-unix/win32u.so
+7ff4e000-7ffa3000 r--p 000e2000 00:39 849736                             /usr/lib/i386-linux-gnu/wine/i386-unix/win32u.so
+7ffa3000-7ffa9000 r--p 00137000 00:39 849736                             /usr/lib/i386-linux-gnu/wine/i386-unix/win32u.so
+7ffa9000-7ffb3000 rw-p 0013d000 00:39 849736                             /usr/lib/i386-linux-gnu/wine/i386-unix/win32u.so
+7ffb3000-7ffe0000 rw-p 00000000 00:00 0 
+7ffe0000-7ffe1000 r--s 00000000 00:39 2777888                            /tmp/wine-oJBc62/server-fe01-105321/tmpmap-29a94341 (deleted)
+7ffe1000-82000000 ---p 00000000 00:00 0 
+d70bb000-d7abb000 rwxp 00000000 00:00 0 
+d7bbd000-d7bbe000 ---p 00000000 00:00 0 
+d7bbe000-d83be000 rw-p 00000000 00:00 0 
+d83be000-d84ff000 rw-s 00000000 00:39 2780201                            /root/.cache/mesa_shader_cache/index
+d84ff000-d8500000 ---p 00000000 00:00 0 
+d8500000-d8d00000 rw-p 00000000 00:00 0 
+d8d00000-d8d21000 rw-p 00000000 00:00 0 
+d8d21000-d8e00000 ---p 00000000 00:00 0 
+d8eff000-d8f00000 ---p 00000000 00:00 0 
+d8f00000-d9700000 rw-p 00000000 00:00 0 
+d9700000-d9721000 rw-p 00000000 00:00 0 
+d9721000-d9800000 ---p 00000000 00:00 0 
+d98ff000-d9900000 ---p 00000000 00:00 0 
+d9900000-da100000 rw-p 00000000 00:00 0 
+da100000-da121000 rw-p 00000000 00:00 0 
+da121000-da200000 ---p 00000000 00:00 0 
+da2ff000-da300000 ---p 00000000 00:00 0 
+da300000-dab00000 rw-p 00000000 00:00 0 
+dab00000-dab21000 rw-p 00000000 00:00 0 
+dab21000-dac00000 ---p 00000000 00:00 0 
+dacff000-dad00000 ---p 00000000 00:00 0 
+dad00000-db500000 rw-p 00000000 00:00 0 
+db500000-db521000 rw-p 00000000 00:00 0 
+db521000-db600000 ---p 00000000 00:00 0 
+db6ff000-db700000 ---p 00000000 00:00 0 
+db700000-dbf00000 rw-p 00000000 00:00 0 
+dbf00000-dbf21000 rw-p 00000000 00:00 0 
+dbf21000-dc000000 ---p 00000000 00:00 0 
+dc0ff000-dc100000 ---p 00000000 00:00 0 
+dc100000-dc900000 rw-p 00000000 00:00 0 
+dc900000-dc921000 rw-p 00000000 00:00 0 
+dc921000-dca00000 ---p 00000000 00:00 0 
+dcaff000-dcb00000 ---p 00000000 00:00 0 
+dcb00000-dd300000 rw-p 00000000 00:00 0 
+dd300000-dd321000 rw-p 00000000 00:00 0 
+dd321000-dd400000 ---p 00000000 00:00 0 
+dd4ff000-dd500000 ---p 00000000 00:00 0 
+dd500000-ddd00000 rw-p 00000000 00:00 0 
+ddd00000-ddd21000 rw-p 00000000 00:00 0 
+ddd21000-dde00000 ---p 00000000 00:00 0 
+ddeff000-ddf00000 ---p 00000000 00:00 0 
+ddf00000-de700000 rw-p 00000000 00:00 0 
+de700000-de721000 rw-p 00000000 00:00 0 
+de721000-de800000 ---p 00000000 00:00 0 
+de8ff000-de900000 ---p 00000000 00:00 0 
+de900000-df100000 rw-p 00000000 00:00 0 
+df100000-df121000 rw-p 00000000 00:00 0 
+df121000-df200000 ---p 00000000 00:00 0 
+df2ff000-df300000 ---p 00000000 00:00 0 
+df300000-dfb00000 rw-p 00000000 00:00 0 
+dfb00000-dfb21000 rw-p 00000000 00:00 0 
+dfb21000-dfc00000 ---p 00000000 00:00 0 
+dfcff000-dfd00000 ---p 00000000 00:00 0 
+dfd00000-e0500000 rw-p 00000000 00:00 0 
+e0500000-e0521000 rw-p 00000000 00:00 0 
+e0521000-e0600000 ---p 00000000 00:00 0 
+e06ff000-e0700000 ---p 00000000 00:00 0 
+e0700000-e0f00000 rw-p 00000000 00:00 0 
+e0f00000-e0f21000 rw-p 00000000 00:00 0 
+e0f21000-e1000000 ---p 00000000 00:00 0 
+e10ff000-e1100000 ---p 00000000 00:00 0 
+e1100000-e1900000 rw-p 00000000 00:00 0 
+e1900000-e1921000 rw-p 00000000 00:00 0 
+e1921000-e1a00000 ---p 00000000 00:00 0 
+e1aff000-e1b00000 ---p 00000000 00:00 0 
+e1b00000-e2300000 rw-p 00000000 00:00 0 
+e2300000-e2321000 rw-p 00000000 00:00 0 
+e2321000-e2400000 ---p 00000000 00:00 0 
+e24ff000-e2500000 ---p 00000000 00:00 0 
+e2500000-e2d00000 rw-p 00000000 00:00 0 
+e2d00000-e2d21000 rw-p 00000000 00:00 0 
+e2d21000-e2e00000 ---p 00000000 00:00 0 
+e2eff000-e2f00000 ---p 00000000 00:00 0 
+e2f00000-e3700000 rw-p 00000000 00:00 0 
+e3700000-e3721000 rw-p 00000000 00:00 0 
+e3721000-e3800000 ---p 00000000 00:00 0 
+e38ff000-e3900000 ---p 00000000 00:00 0 
+e3900000-e4100000 rw-p 00000000 00:00 0 
+e4100000-e4121000 rw-p 00000000 00:00 0 
+e4121000-e4200000 ---p 00000000 00:00 0 
+e42ff000-e4300000 ---p 00000000 00:00 0 
+e4300000-e4b00000 rw-p 00000000 00:00 0 
+e4b00000-e4b21000 rw-p 00000000 00:00 0 
+e4b21000-e4c00000 ---p 00000000 00:00 0 
+e4cff000-e4d00000 ---p 00000000 00:00 0 
+e4d00000-e5500000 rw-p 00000000 00:00 0 
+e5500000-e5521000 rw-p 00000000 00:00 0 
+e5521000-e5600000 ---p 00000000 00:00 0 
+e56ff000-e5700000 ---p 00000000 00:00 0 
+e5700000-e5f00000 rw-p 00000000 00:00 0 
+e5f00000-e5f21000 rw-p 00000000 00:00 0 
+e5f21000-e6000000 ---p 00000000 00:00 0 
+e60ff000-e6100000 ---p 00000000 00:00 0 
+e6100000-e6900000 rw-p 00000000 00:00 0 
+e6900000-e6921000 rw-p 00000000 00:00 0 
+e6921000-e6a00000 ---p 00000000 00:00 0 
+e6aff000-e6b00000 ---p 00000000 00:00 0 
+e6b00000-e7300000 rw-p 00000000 00:00 0 
+e7300000-e7321000 rw-p 00000000 00:00 0 
+e7321000-e7400000 ---p 00000000 00:00 0 
+e74ff000-e7500000 ---p 00000000 00:00 0 
+e7500000-e7d00000 rw-p 00000000 00:00 0 
+e7d00000-e7d21000 rw-p 00000000 00:00 0 
+e7d21000-e7e00000 ---p 00000000 00:00 0 
+e7eff000-e7f00000 ---p 00000000 00:00 0 
+e7f00000-e8700000 rw-p 00000000 00:00 0 
+e8700000-e8721000 rw-p 00000000 00:00 0 
+e8721000-e8800000 ---p 00000000 00:00 0 
+e88e6000-e88e7000 ---p 00000000 00:00 0 
+e88e7000-e90e7000 rw-p 00000000 00:00 0 
+e90e7000-e90e8000 ---p 00000000 00:00 0 
+e90e8000-e98e8000 rw-p 00000000 00:00 0 
+e98e8000-e98e9000 r--p 00000000 00:39 849327                             /usr/lib/i386-linux-gnu/libicudata.so.72.1
+e98e9000-e98ea000 r-xp 00001000 00:39 849327                             /usr/lib/i386-linux-gnu/libicudata.so.72.1
+e98ea000-eb6b8000 r--p 00002000 00:39 849327                             /usr/lib/i386-linux-gnu/libicudata.so.72.1
+eb6b8000-eb6b9000 r--p 01dcf000 00:39 849327                             /usr/lib/i386-linux-gnu/libicudata.so.72.1
+eb6b9000-eb6ba000 rw-p 01dd0000 00:39 849327                             /usr/lib/i386-linux-gnu/libicudata.so.72.1
+eb6ba000-eb6bd000 r--p 00000000 00:39 849416                             /usr/lib/i386-linux-gnu/liblzma.so.5.4.1
+eb6bd000-eb6de000 r-xp 00003000 00:39 849416                             /usr/lib/i386-linux-gnu/liblzma.so.5.4.1
+eb6de000-eb6ee000 r--p 00024000 00:39 849416                             /usr/lib/i386-linux-gnu/liblzma.so.5.4.1
+eb6ee000-eb6ef000 r--p 00034000 00:39 849416                             /usr/lib/i386-linux-gnu/liblzma.so.5.4.1
+eb6ef000-eb6f0000 rw-p 00035000 00:39 849416                             /usr/lib/i386-linux-gnu/liblzma.so.5.4.1
+eb6f0000-eb73b000 r--p 00000000 00:39 849396                             /usr/lib/i386-linux-gnu/libicuuc.so.72.1
+eb73b000-eb845000 r-xp 0004b000 00:39 849396                             /usr/lib/i386-linux-gnu/libicuuc.so.72.1
+eb845000-eb8eb000 r--p 00155000 00:39 849396                             /usr/lib/i386-linux-gnu/libicuuc.so.72.1
+eb8eb000-eb8f6000 r--p 001fa000 00:39 849396                             /usr/lib/i386-linux-gnu/libicuuc.so.72.1
+eb8f6000-eb8f7000 rw-p 00205000 00:39 849396                             /usr/lib/i386-linux-gnu/libicuuc.so.72.1
+eb8f7000-eb8f8000 rw-p 00000000 00:00 0 
+eb8f8000-eb8fa000 r--p 00000000 00:39 849451                             /usr/lib/i386-linux-gnu/libpciaccess.so.0.11.1
+eb8fa000-eb900000 r-xp 00002000 00:39 849451                             /usr/lib/i386-linux-gnu/libpciaccess.so.0.11.1
+eb900000-eb903000 r--p 00008000 00:39 849451                             /usr/lib/i386-linux-gnu/libpciaccess.so.0.11.1
+eb903000-eb904000 r--p 0000a000 00:39 849451                             /usr/lib/i386-linux-gnu/libpciaccess.so.0.11.1
+eb904000-eb905000 rw-p 0000b000 00:39 849451                             /usr/lib/i386-linux-gnu/libpciaccess.so.0.11.1
+eb905000-eb922000 r--p 00000000 00:39 849619                             /usr/lib/i386-linux-gnu/libxml2.so.2.9.14
+eb922000-eba42000 r-xp 0001d000 00:39 849619                             /usr/lib/i386-linux-gnu/libxml2.so.2.9.14
+eba42000-ebacd000 r--p 0013d000 00:39 849619                             /usr/lib/i386-linux-gnu/libxml2.so.2.9.14
+ebacd000-ebad2000 r--p 001c7000 00:39 849619                             /usr/lib/i386-linux-gnu/libxml2.so.2.9.14
+ebad2000-ebad3000 rw-p 001cc000 00:39 849619                             /usr/lib/i386-linux-gnu/libxml2.so.2.9.14
+ebad3000-ebad4000 rw-p 00000000 00:00 0 
+ebad4000-ebadb000 r--p 00000000 00:39 849526                             /usr/lib/i386-linux-gnu/libtinfo.so.6.4
+ebadb000-ebaec000 r-xp 00007000 00:39 849526                             /usr/lib/i386-linux-gnu/libtinfo.so.6.4
+ebaec000-ebafc000 r--p 00018000 00:39 849526                             /usr/lib/i386-linux-gnu/libtinfo.so.6.4
+ebafc000-ebafe000 r--p 00028000 00:39 849526                             /usr/lib/i386-linux-gnu/libtinfo.so.6.4
+ebafe000-ebaff000 rw-p 0002a000 00:39 849526                             /usr/lib/i386-linux-gnu/libtinfo.so.6.4
+ebaff000-ebb36000 r--p 00000000 00:39 849626                             /usr/lib/i386-linux-gnu/libz3.so.4
+ebb36000-eceba000 r-xp 00037000 00:39 849626                             /usr/lib/i386-linux-gnu/libz3.so.4
+eceba000-ed2fb000 r--p 013bb000 00:39 849626                             /usr/lib/i386-linux-gnu/libz3.so.4
+ed2fb000-ed311000 r--p 017fc000 00:39 849626                             /usr/lib/i386-linux-gnu/libz3.so.4
+ed311000-ed312000 rw-p 01812000 00:39 849626                             /usr/lib/i386-linux-gnu/libz3.so.4
+ed312000-ed313000 rw-p 00000000 00:00 0 
+ed313000-ed318000 r--p 00000000 00:39 849132                             /usr/lib/i386-linux-gnu/libedit.so.2.0.70
+ed318000-ed334000 r-xp 00005000 00:39 849132                             /usr/lib/i386-linux-gnu/libedit.so.2.0.70
+ed334000-ed347000 r--p 00021000 00:39 849132                             /usr/lib/i386-linux-gnu/libedit.so.2.0.70
+ed347000-ed348000 r--p 00034000 00:39 849132                             /usr/lib/i386-linux-gnu/libedit.so.2.0.70
+ed348000-ed349000 rw-p 00035000 00:39 849132                             /usr/lib/i386-linux-gnu/libedit.so.2.0.70
+ed349000-ed34b000 rw-p 00000000 00:00 0 
+ed34b000-ed34c000 r--p 00000000 00:39 849142                             /usr/lib/i386-linux-gnu/libffi.so.8.1.2
+ed34c000-ed351000 r-xp 00001000 00:39 849142                             /usr/lib/i386-linux-gnu/libffi.so.8.1.2
+ed351000-ed353000 r--p 00006000 00:39 849142                             /usr/lib/i386-linux-gnu/libffi.so.8.1.2
+ed353000-ed354000 r--p 00007000 00:39 849142                             /usr/lib/i386-linux-gnu/libffi.so.8.1.2
+ed354000-ed355000 rw-p 00008000 00:39 849142                             /usr/lib/i386-linux-gnu/libffi.so.8.1.2
+ed355000-ed357000 r--p 00000000 00:39 848940                             /usr/lib/i386-linux-gnu/libatomic.so.1.2.0
+ed357000-ed359000 r-xp 00002000 00:39 848940                             /usr/lib/i386-linux-gnu/libatomic.so.1.2.0
+ed359000-ed35a000 r--p 00004000 00:39 848940                             /usr/lib/i386-linux-gnu/libatomic.so.1.2.0
+ed35a000-ed35b000 r--p 00005000 00:39 848940                             /usr/lib/i386-linux-gnu/libatomic.so.1.2.0
+ed35b000-ed35c000 rw-p 00006000 00:39 848940                             /usr/lib/i386-linux-gnu/libatomic.so.1.2.0
+ed35c000-ed35d000 rw-p 00000000 00:00 0 
+ed35d000-ed360000 r--p 00000000 00:39 849149                             /usr/lib/i386-linux-gnu/libgcc_s.so.1
+ed360000-ed37d000 r-xp 00003000 00:39 849149                             /usr/lib/i386-linux-gnu/libgcc_s.so.1
+ed37d000-ed382000 r--p 00020000 00:39 849149                             /usr/lib/i386-linux-gnu/libgcc_s.so.1
+ed382000-ed383000 r--p 00024000 00:39 849149                             /usr/lib/i386-linux-gnu/libgcc_s.so.1
+ed383000-ed384000 rw-p 00025000 00:39 849149                             /usr/lib/i386-linux-gnu/libgcc_s.so.1
+ed384000-ed3fc000 r--p 00000000 00:39 849492                             /usr/lib/i386-linux-gnu/libstdc++.so.6.0.30
+ed3fc000-ed513000 r-xp 00078000 00:39 849492                             /usr/lib/i386-linux-gnu/libstdc++.so.6.0.30
+ed513000-ed59a000 r--p 0018f000 00:39 849492                             /usr/lib/i386-linux-gnu/libstdc++.so.6.0.30
+ed59a000-ed5a0000 r--p 00215000 00:39 849492                             /usr/lib/i386-linux-gnu/libstdc++.so.6.0.30
+ed5a0000-ed5a2000 rw-p 0021b000 00:39 849492                             /usr/lib/i386-linux-gnu/libstdc++.so.6.0.30
+ed5a2000-ed5a4000 rw-p 00000000 00:00 0 
+ed5a4000-ed5a6000 r--p 00000000 00:39 849116                             /usr/lib/i386-linux-gnu/libdrm_intel.so.1.0.0
+ed5a6000-ed5bd000 r-xp 00002000 00:39 849116                             /usr/lib/i386-linux-gnu/libdrm_intel.so.1.0.0
+ed5bd000-ed5cb000 r--p 00019000 00:39 849116                             /usr/lib/i386-linux-gnu/libdrm_intel.so.1.0.0
+ed5cb000-ed5cc000 r--p 00026000 00:39 849116                             /usr/lib/i386-linux-gnu/libdrm_intel.so.1.0.0
+ed5cc000-ed5cd000 rw-p 00027000 00:39 849116                             /usr/lib/i386-linux-gnu/libdrm_intel.so.1.0.0
+ed5cd000-ed5cf000 r--p 00000000 00:39 849118                             /usr/lib/i386-linux-gnu/libdrm_nouveau.so.2.0.0
+ed5cf000-ed5d4000 r-xp 00002000 00:39 849118                             /usr/lib/i386-linux-gnu/libdrm_nouveau.so.2.0.0
+ed5d4000-ed5d6000 r--p 00007000 00:39 849118                             /usr/lib/i386-linux-gnu/libdrm_nouveau.so.2.0.0
+ed5d6000-ed5d7000 r--p 00008000 00:39 849118                             /usr/lib/i386-linux-gnu/libdrm_nouveau.so.2.0.0
+ed5d7000-ed5d8000 rw-p 00009000 00:39 849118                             /usr/lib/i386-linux-gnu/libdrm_nouveau.so.2.0.0
+ed5d8000-ed5da000 r--p 00000000 00:39 849114                             /usr/lib/i386-linux-gnu/libdrm_amdgpu.so.1.0.0
+ed5da000-ed5e0000 r-xp 00002000 00:39 849114                             /usr/lib/i386-linux-gnu/libdrm_amdgpu.so.1.0.0
+ed5e0000-ed5e3000 r--p 00008000 00:39 849114                             /usr/lib/i386-linux-gnu/libdrm_amdgpu.so.1.0.0
+ed5e3000-ed5e4000 r--p 0000a000 00:39 849114                             /usr/lib/i386-linux-gnu/libdrm_amdgpu.so.1.0.0
+ed5e4000-ed5e5000 rw-p 0000b000 00:39 849114                             /usr/lib/i386-linux-gnu/libdrm_amdgpu.so.1.0.0
+ed5e5000-ed5e7000 r--p 00000000 00:39 849133                             /usr/lib/i386-linux-gnu/libelf-0.188.so
+ed5e7000-ed5fa000 r-xp 00002000 00:39 849133                             /usr/lib/i386-linux-gnu/libelf-0.188.so
+ed5fa000-ed601000 r--p 00015000 00:39 849133                             /usr/lib/i386-linux-gnu/libelf-0.188.so
+ed601000-ed602000 r--p 0001b000 00:39 849133                             /usr/lib/i386-linux-gnu/libelf-0.188.so
+ed602000-ed603000 rw-p 0001c000 00:39 849133                             /usr/lib/i386-linux-gnu/libelf-0.188.so
+ed603000-ed604000 r--p 00000000 00:39 849120                             /usr/lib/i386-linux-gnu/libdrm_radeon.so.1.0.1
+ed604000-ed60b000 r-xp 00001000 00:39 849120                             /usr/lib/i386-linux-gnu/libdrm_radeon.so.1.0.1
+ed60b000-ed610000 r--p 00008000 00:39 849120                             /usr/lib/i386-linux-gnu/libdrm_radeon.so.1.0.1
+ed610000-ed611000 r--p 0000c000 00:39 849120                             /usr/lib/i386-linux-gnu/libdrm_radeon.so.1.0.1
+ed611000-ed612000 rw-p 0000d000 00:39 849120                             /usr/lib/i386-linux-gnu/libdrm_radeon.so.1.0.1
+ed612000-ed614000 r--p 00000000 00:39 849477                             /usr/lib/i386-linux-gnu/libsensors.so.5.0.0
+ed614000-ed61b000 r-xp 00002000 00:39 849477                             /usr/lib/i386-linux-gnu/libsensors.so.5.0.0
+ed61b000-ed621000 r--p 00009000 00:39 849477                             /usr/lib/i386-linux-gnu/libsensors.so.5.0.0
+ed621000-ed622000 r--p 0000e000 00:39 849477                             /usr/lib/i386-linux-gnu/libsensors.so.5.0.0
+ed622000-ed623000 rw-p 0000f000 00:39 849477                             /usr/lib/i386-linux-gnu/libsensors.so.5.0.0
+ed623000-ed626000 r--p 00000000 00:39 849703                             /usr/lib/i386-linux-gnu/libzstd.so.1.5.4
+ed626000-ed6bd000 r-xp 00003000 00:39 849703                             /usr/lib/i386-linux-gnu/libzstd.so.1.5.4
+ed6bd000-ed6d9000 r--p 0009a000 00:39 849703                             /usr/lib/i386-linux-gnu/libzstd.so.1.5.4
+ed6d9000-ed6da000 r--p 000b5000 00:39 849703                             /usr/lib/i386-linux-gnu/libzstd.so.1.5.4
+ed6da000-ed6db000 rw-p 000b6000 00:39 849703                             /usr/lib/i386-linux-gnu/libzstd.so.1.5.4
+ed6db000-f4a9f000 r-xp 00000000 00:39 848723                             /usr/lib/i386-linux-gnu/libLLVM-15.so.1
+f4a9f000-f5091000 r--p 073c3000 00:39 848723                             /usr/lib/i386-linux-gnu/libLLVM-15.so.1
+f5091000-f50d3000 rw-p 079b5000 00:39 848723                             /usr/lib/i386-linux-gnu/libLLVM-15.so.1
+f50d3000-f511d000 rw-p 00000000 00:00 0 
+f511d000-f5151000 r--p 00000000 00:39 848059                             /usr/lib/i386-linux-gnu/dri/swrast_dri.so
+f5151000-f61b2000 r-xp 00034000 00:39 848059                             /usr/lib/i386-linux-gnu/dri/swrast_dri.so
+f61b2000-f6af8000 r--p 01095000 00:39 848059                             /usr/lib/i386-linux-gnu/dri/swrast_dri.so
+f6af8000-f6b44000 r--p 019db000 00:39 848059                             /usr/lib/i386-linux-gnu/dri/swrast_dri.so
+f6b44000-f6b4a000 rw-p 01a27000 00:39 848059                             /usr/lib/i386-linux-gnu/dri/swrast_dri.so
+f6b4a000-f6d04000 rw-p 00000000 00:00 0 
+f6d04000-f6d0a000 r--p 00000000 00:39 849607                             /usr/lib/i386-linux-gnu/libxcb-randr.so.0.1.0
+f6d0a000-f6d11000 r-xp 00006000 00:39 849607                             /usr/lib/i386-linux-gnu/libxcb-randr.so.0.1.0
+f6d11000-f6d15000 r--p 0000d000 00:39 849607                             /usr/lib/i386-linux-gnu/libxcb-randr.so.0.1.0
+f6d15000-f6d16000 r--p 00011000 00:39 849607                             /usr/lib/i386-linux-gnu/libxcb-randr.so.0.1.0
+f6d16000-f6d17000 rw-p 00012000 00:39 849607                             /usr/lib/i386-linux-gnu/libxcb-randr.so.0.1.0
+f6d17000-f6d1a000 r--p 00000000 00:39 849613                             /usr/lib/i386-linux-gnu/libxcb-xfixes.so.0.0.0
+f6d1a000-f6d1e000 r-xp 00003000 00:39 849613                             /usr/lib/i386-linux-gnu/libxcb-xfixes.so.0.0.0
+f6d1e000-f6d20000 r--p 00007000 00:39 849613                             /usr/lib/i386-linux-gnu/libxcb-xfixes.so.0.0.0
+f6d20000-f6d21000 r--p 00008000 00:39 849613                             /usr/lib/i386-linux-gnu/libxcb-xfixes.so.0.0.0
+f6d21000-f6d22000 rw-p 00009000 00:39 849613                             /usr/lib/i386-linux-gnu/libxcb-xfixes.so.0.0.0
+f6d22000-f6d24000 r--p 00000000 00:39 849611                             /usr/lib/i386-linux-gnu/libxcb-sync.so.1.0.0
+f6d24000-f6d27000 r-xp 00002000 00:39 849611                             /usr/lib/i386-linux-gnu/libxcb-sync.so.1.0.0
+f6d27000-f6d29000 r--p 00005000 00:39 849611                             /usr/lib/i386-linux-gnu/libxcb-sync.so.1.0.0
+f6d29000-f6d2a000 r--p 00006000 00:39 849611                             /usr/lib/i386-linux-gnu/libxcb-sync.so.1.0.0
+f6d2a000-f6d2b000 rw-p 00007000 00:39 849611                             /usr/lib/i386-linux-gnu/libxcb-sync.so.1.0.0
+f6d2b000-f6d2c000 r--p 00000000 00:39 849605                             /usr/lib/i386-linux-gnu/libxcb-present.so.0.0.0
+f6d2c000-f6d2d000 r-xp 00001000 00:39 849605                             /usr/lib/i386-linux-gnu/libxcb-present.so.0.0.0
+f6d2d000-f6d2e000 r--p 00002000 00:39 849605                             /usr/lib/i386-linux-gnu/libxcb-present.so.0.0.0
+f6d2e000-f6d2f000 r--p 00002000 00:39 849605                             /usr/lib/i386-linux-gnu/libxcb-present.so.0.0.0
+f6d2f000-f6d30000 rw-p 00003000 00:39 849605                             /usr/lib/i386-linux-gnu/libxcb-present.so.0.0.0
+f6d30000-f6d32000 r--p 00000000 00:39 849600                             /usr/lib/i386-linux-gnu/libxcb-dri3.so.0.1.0
+f6d32000-f6d34000 r-xp 00002000 00:39 849600                             /usr/lib/i386-linux-gnu/libxcb-dri3.so.0.1.0
+f6d34000-f6d35000 r--p 00004000 00:39 849600                             /usr/lib/i386-linux-gnu/libxcb-dri3.so.0.1.0
+f6d35000-f6d36000 r--p 00004000 00:39 849600                             /usr/lib/i386-linux-gnu/libxcb-dri3.so.0.1.0
+f6d36000-f6d37000 rw-p 00005000 00:39 849600                             /usr/lib/i386-linux-gnu/libxcb-dri3.so.0.1.0
+f6d37000-f6d38000 r-xp 00000000 00:39 849621                             /usr/lib/i386-linux-gnu/libxshmfence.so.1.0.0
+f6d38000-f6d39000 r--p 00000000 00:39 849621                             /usr/lib/i386-linux-gnu/libxshmfence.so.1.0.0
+f6d39000-f6d3a000 rw-p 00001000 00:39 849621                             /usr/lib/i386-linux-gnu/libxshmfence.so.1.0.0
+f6d3a000-f6d3b000 r--p 00000000 00:39 848762                             /usr/lib/i386-linux-gnu/libXfixes.so.3.1.0
+f6d3b000-f6d3e000 r-xp 00001000 00:39 848762                             /usr/lib/i386-linux-gnu/libXfixes.so.3.1.0
+f6d3e000-f6d40000 r--p 00004000 00:39 848762                             /usr/lib/i386-linux-gnu/libXfixes.so.3.1.0
+f6d40000-f6d41000 r--p 00005000 00:39 848762                             /usr/lib/i386-linux-gnu/libXfixes.so.3.1.0
+f6d41000-f6d42000 rw-p 00006000 00:39 848762                             /usr/lib/i386-linux-gnu/libXfixes.so.3.1.0
+f6d42000-f6d4b000 r--p 00000000 00:39 849603                             /usr/lib/i386-linux-gnu/libxcb-glx.so.0.0.0
+f6d4b000-f6d56000 r-xp 00009000 00:39 849603                             /usr/lib/i386-linux-gnu/libxcb-glx.so.0.0.0
+f6d56000-f6d5d000 r--p 00014000 00:39 849603                             /usr/lib/i386-linux-gnu/libxcb-glx.so.0.0.0
+f6d5d000-f6d5e000 r--p 0001b000 00:39 849603                             /usr/lib/i386-linux-gnu/libxcb-glx.so.0.0.0
+f6d5e000-f6d5f000 rw-p 0001c000 00:39 849603                             /usr/lib/i386-linux-gnu/libxcb-glx.so.0.0.0
+f6d5f000-f6d63000 r--p 00000000 00:39 849112                             /usr/lib/i386-linux-gnu/libdrm.so.2.4.0
+f6d63000-f6d6f000 r-xp 00004000 00:39 849112                             /usr/lib/i386-linux-gnu/libdrm.so.2.4.0
+f6d6f000-f6d76000 r--p 00010000 00:39 849112                             /usr/lib/i386-linux-gnu/libdrm.so.2.4.0
+f6d76000-f6d77000 r--p 00016000 00:39 849112                             /usr/lib/i386-linux-gnu/libdrm.so.2.4.0
+f6d77000-f6d78000 rw-p 00017000 00:39 849112                             /usr/lib/i386-linux-gnu/libdrm.so.2.4.0
+f6d78000-f6d7d000 r--p 00000000 00:39 849162                             /usr/lib/i386-linux-gnu/libglapi.so.0.0.0
+f6d7d000-f6d7e000 r-xp 00005000 00:39 849162                             /usr/lib/i386-linux-gnu/libglapi.so.0.0.0
+f6d7e000-f6d90000 r--p 00006000 00:39 849162                             /usr/lib/i386-linux-gnu/libglapi.so.0.0.0
+f6d90000-f6d92000 r--p 00018000 00:39 849162                             /usr/lib/i386-linux-gnu/libglapi.so.0.0.0
+f6d92000-f6da0000 rwxp 0001a000 00:39 849162                             /usr/lib/i386-linux-gnu/libglapi.so.0.0.0
+f6da0000-f6db3000 r--p 00000000 00:39 848709                             /usr/lib/i386-linux-gnu/libGLX_mesa.so.0.0.0
+f6db3000-f6dec000 r-xp 00013000 00:39 848709                             /usr/lib/i386-linux-gnu/libGLX_mesa.so.0.0.0
+f6dec000-f6e0d000 r--p 0004c000 00:39 848709                             /usr/lib/i386-linux-gnu/libGLX_mesa.so.0.0.0
+f6e0d000-f6e0f000 r--p 0006d000 00:39 848709                             /usr/lib/i386-linux-gnu/libGLX_mesa.so.0.0.0
+f6e0f000-f6e18000 rwxp 0006f000 00:39 848709                             /usr/lib/i386-linux-gnu/libGLX_mesa.so.0.0.0
+f6e18000-f6e2e000 r--p 00000000 00:39 848720                             /usr/lib/i386-linux-gnu/libGLdispatch.so.0.0.0
+f6e2e000-f6e6d000 r-xp 00016000 00:39 848720                             /usr/lib/i386-linux-gnu/libGLdispatch.so.0.0.0
+f6e6d000-f6e81000 r--p 00055000 00:39 848720                             /usr/lib/i386-linux-gnu/libGLdispatch.so.0.0.0
+f6e81000-f6e8f000 r--p 00069000 00:39 848720                             /usr/lib/i386-linux-gnu/libGLdispatch.so.0.0.0
+f6e8f000-f6e90000 rw-p 00077000 00:39 848720                             /usr/lib/i386-linux-gnu/libGLdispatch.so.0.0.0
+f6e90000-f6e94000 rw-p 00000000 00:00 0 
+f6e94000-f6ec3000 r--p 00000000 00:39 848700                             /usr/lib/i386-linux-gnu/libGL.so.1.7.0
+f6ec3000-f6ee3000 r-xp 0002f000 00:39 848700                             /usr/lib/i386-linux-gnu/libGL.so.1.7.0
+f6ee3000-f6ef8000 r--p 0004f000 00:39 848700                             /usr/lib/i386-linux-gnu/libGL.so.1.7.0
+f6ef8000-f6eff000 r--p 00064000 00:39 848700                             /usr/lib/i386-linux-gnu/libGL.so.1.7.0
+f6eff000-f6f00000 rw-p 0006b000 00:39 848700                             /usr/lib/i386-linux-gnu/libGL.so.1.7.0
+f6f00000-f6f21000 rw-p 00000000 00:00 0 
+f6f21000-f7000000 ---p 00000000 00:00 0 
+f7000000-f7001000 r--p 00000000 00:39 849609                             /usr/lib/i386-linux-gnu/libxcb-shm.so.0.0.0
+f7001000-f7002000 r-xp 00001000 00:39 849609                             /usr/lib/i386-linux-gnu/libxcb-shm.so.0.0.0
+f7002000-f7003000 r--p 00002000 00:39 849609                             /usr/lib/i386-linux-gnu/libxcb-shm.so.0.0.0
+f7003000-f7004000 r--p 00002000 00:39 849609                             /usr/lib/i386-linux-gnu/libxcb-shm.so.0.0.0
+f7004000-f7005000 rw-p 00003000 00:39 849609                             /usr/lib/i386-linux-gnu/libxcb-shm.so.0.0.0
+f7005000-f7007000 r--p 00000000 00:39 849595                             /usr/lib/i386-linux-gnu/libxcb-dri2.so.0.0.0
+f7007000-f7009000 r-xp 00002000 00:39 849595                             /usr/lib/i386-linux-gnu/libxcb-dri2.so.0.0.0
+f7009000-f700a000 r--p 00004000 00:39 849595                             /usr/lib/i386-linux-gnu/libxcb-dri2.so.0.0.0
+f700a000-f700b000 r--p 00004000 00:39 849595                             /usr/lib/i386-linux-gnu/libxcb-dri2.so.0.0.0
+f700b000-f700c000 rw-p 00005000 00:39 849595                             /usr/lib/i386-linux-gnu/libxcb-dri2.so.0.0.0
+f700c000-f700d000 r--p 00000000 00:39 848752                             /usr/lib/i386-linux-gnu/libX11-xcb.so.1.0.0
+f700d000-f700e000 r-xp 00001000 00:39 848752                             /usr/lib/i386-linux-gnu/libX11-xcb.so.1.0.0
+f700e000-f700f000 r--p 00002000 00:39 848752                             /usr/lib/i386-linux-gnu/libX11-xcb.so.1.0.0
+f700f000-f7010000 r--p 00002000 00:39 848752                             /usr/lib/i386-linux-gnu/libX11-xcb.so.1.0.0
+f7010000-f7011000 rw-p 00003000 00:39 848752                             /usr/lib/i386-linux-gnu/libX11-xcb.so.1.0.0
+f7011000-f7013000 r--p 00000000 00:39 848705                             /usr/lib/i386-linux-gnu/libGLX.so.0.0.0
+f7013000-f703e000 r-xp 00002000 00:39 848705                             /usr/lib/i386-linux-gnu/libGLX.so.0.0.0
+f703e000-f7043000 r--p 0002d000 00:39 848705                             /usr/lib/i386-linux-gnu/libGLX.so.0.0.0
+f7043000-f7044000 r--p 00031000 00:39 848705                             /usr/lib/i386-linux-gnu/libGLX.so.0.0.0
+f7044000-f7045000 rw-p 00032000 00:39 848705                             /usr/lib/i386-linux-gnu/libGLX.so.0.0.0
+f7045000-f704d000 rw-p 00000000 00:00 0 
+f7058000-f7070000 r--p 00000000 00:39 849733                             /usr/lib/i386-linux-gnu/wine/i386-unix/opengl32.so
+f7070000-f70a2000 r-xp 00018000 00:39 849733                             /usr/lib/i386-linux-gnu/wine/i386-unix/opengl32.so
+f70a2000-f70ea000 r--p 0004a000 00:39 849733                             /usr/lib/i386-linux-gnu/wine/i386-unix/opengl32.so
+f70ea000-f70f3000 r--p 00091000 00:39 849733                             /usr/lib/i386-linux-gnu/wine/i386-unix/opengl32.so
+f70f3000-f70f7000 rw-p 0009a000 00:39 849733                             /usr/lib/i386-linux-gnu/wine/i386-unix/opengl32.so
+f70f7000-f70fa000 rw-p 00000000 00:00 0 
+f70fa000-f71f6000 rw-s 00000000 00:01 63                                 /SYSV00000000 (deleted)
+f71f6000-f7930000 rw-s 00000000 00:01 62                                 /SYSV00000000 (deleted)
+f7930000-f79f8000 rw-s 00000000 00:01 61                                 /SYSV00000000 (deleted)
+f79f8000-f7ac8000 rw-s 00000000 00:01 60                                 /SYSV00000000 (deleted)
+f7ac8000-f7b73000 rw-s 00000000 00:01 59                                 /SYSV00000000 (deleted)
+f7b73000-f7b9f000 rw-s 00000000 00:01 58                                 /SYSV00000000 (deleted)
+f7b9f000-f7c5d000 rw-s 00000000 00:01 57                                 /SYSV00000000 (deleted)
+f7c5d000-f7cb1000 r--p 00000000 00:39 949369                             /usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf
+f7cb1000-f7cb7000 r--p 00000000 00:39 849730                             /usr/lib/i386-linux-gnu/wine/i386-unix/ntdll.so
+f7cb7000-f7d10000 r-xp 00006000 00:39 849730                             /usr/lib/i386-linux-gnu/wine/i386-unix/ntdll.so
+f7d10000-f7d35000 r--p 0005f000 00:39 849730                             /usr/lib/i386-linux-gnu/wine/i386-unix/ntdll.so
+f7d35000-f7d36000 r--p 00084000 00:39 849730                             /usr/lib/i386-linux-gnu/wine/i386-unix/ntdll.so
+f7d36000-f7d37000 rw-p 00085000 00:39 849730                             /usr/lib/i386-linux-gnu/wine/i386-unix/ntdll.so
+f7d37000-f7d5f000 rw-p 00000000 00:00 0 
+f7d5f000-f7d81000 r--p 00000000 00:39 849010                             /usr/lib/i386-linux-gnu/libc.so.6
+f7d81000-f7efa000 r-xp 00022000 00:39 849010                             /usr/lib/i386-linux-gnu/libc.so.6
+f7efa000-f7f7a000 r--p 0019b000 00:39 849010                             /usr/lib/i386-linux-gnu/libc.so.6
+f7f7a000-f7f7c000 r--p 0021b000 00:39 849010                             /usr/lib/i386-linux-gnu/libc.so.6
+f7f7c000-f7f7d000 rw-p 0021d000 00:39 849010                             /usr/lib/i386-linux-gnu/libc.so.6
+f7f7d000-f7f87000 rw-p 00000000 00:00 0 
+f7f88000-f7f89000 rwxp 00000000 00:00 0 
+f7f89000-f7f8d000 r--s 00000000 00:39 2780198                            /var/cache/fontconfig/d589a48862398ed80a3d6066f4f56f4c-le32d4.cache-8
+f7f8d000-f7f8e000 r--p 00000000 00:39 849724                             /usr/lib/i386-linux-gnu/wine/i386-unix/libwine.so.1.0
+f7f8e000-f7f8f000 r-xp 00001000 00:39 849724                             /usr/lib/i386-linux-gnu/wine/i386-unix/libwine.so.1.0
+f7f8f000-f7f90000 r--p 00002000 00:39 849724                             /usr/lib/i386-linux-gnu/wine/i386-unix/libwine.so.1.0
+f7f90000-f7f91000 r--p 00002000 00:39 849724                             /usr/lib/i386-linux-gnu/wine/i386-unix/libwine.so.1.0
+f7f91000-f7f92000 rw-p 00003000 00:39 849724                             /usr/lib/i386-linux-gnu/wine/i386-unix/libwine.so.1.0
+f7f92000-f7f94000 rw-p 00000000 00:00 0 
+f7f94000-f7f98000 r--p 00000000 00:00 0                                  [vvar]
+f7f98000-f7f9a000 r--p 00000000 00:00 0                                  [vvar_vclock]
+f7f9a000-f7f9d000 r-xp 00000000 00:00 0                                  [vdso]
+f7f9d000-f7f9e000 r--p 00000000 00:39 848682                             /usr/lib/i386-linux-gnu/ld-linux.so.2
+f7f9e000-f7fc1000 r-xp 00001000 00:39 848682                             /usr/lib/i386-linux-gnu/ld-linux.so.2
+f7fc1000-f7fcf000 r--p 00024000 00:39 848682                             /usr/lib/i386-linux-gnu/ld-linux.so.2
+f7fcf000-f7fd1000 r--p 00031000 00:39 848682                             /usr/lib/i386-linux-gnu/ld-linux.so.2
+f7fd1000-f7fd2000 rw-p 00033000 00:39 848682                             /usr/lib/i386-linux-gnu/ld-linux.so.2
+ffcb0000-fffb0000 rw-p 00000000 00:00 0 
+fffbe000-fffdf000 rw-p 00000000 00:00 0                                  [stack]
+MAPS_END
+BYTES_AT_GETVISIBLESURFS_ENTRY (0x100187b0 remapped): 0x15c87b0:	0x55	0x8b	0xec	0x6a	0xff	0x68	0xd0	0x35
+0x15c87b8:	0x5e	0x01	0x64	0xa1
+DWORD_AT_REMAPPED_COUNTER: 0x160fa24:	0x00000000
+Breakpoint 1 at 0x15c87b0
+Breakpoint 2 at 0x100a5043
+Breakpoint 3 at 0x15c773b
+ORACLE_ATTACHED
+[New Thread 0x9adfb40 (LWP 381)]
+[New Thread 0xab2fb40 (LWP 382)]
+[New Thread 0xc4bfb40 (LWP 395)]
+GETVISIBLESURFS_ENTRY light=1 counter_before=0
+GETVISIBLESURFS_ENTRY light=2 counter_before=0
+GETVISIBLESURFS_ENTRY light=3 counter_before=0
+GETVISIBLESURFS_ENTRY light=4 counter_before=0
+GETVISIBLESURFS_ENTRY light=5 counter_before=0
+GETVISIBLESURFS_ENTRY light=6 counter_before=0
+GETVISIBLESURFS_ENTRY light=7 counter_before=0
+GETVISIBLESURFS_ENTRY light=8 counter_before=0
+GETVISIBLESURFS_ENTRY light=9 counter_before=0
+GETVISIBLESURFS_ENTRY light=10 counter_before=0
+GETVISIBLESURFS_ENTRY light=11 counter_before=0
+GETVISIBLESURFS_ENTRY light=12 counter_before=0
+ILLUMINATESURF_HIT light=12 esurf=0 counter=0
+ILLUMINATESURF_HIT light=12 esurf=1 counter=0
+ILLUMINATESURF_HIT light=12 esurf=2 counter=0
+ILLUMINATESURF_HIT light=12 esurf=3 counter=0
+ILLUMINATESURF_HIT light=12 esurf=4 counter=0
+ILLUMINATESURF_HIT light=12 esurf=5 counter=0
+ILLUMINATESURF_HIT light=12 esurf=6 counter=0
+ILLUMINATESURF_HIT light=12 esurf=7 counter=0
+ILLUMINATESURF_HIT light=12 esurf=8 counter=0
+ILLUMINATESURF_HIT light=12 esurf=9 counter=0
+ILLUMINATESURF_HIT light=12 esurf=10 counter=0
+ILLUMINATESURF_HIT light=12 esurf=11 counter=0
+ILLUMINATESURF_HIT light=12 esurf=12 counter=0
+ILLUMINATESURF_HIT light=12 esurf=13 counter=0
+ILLUMINATESURF_HIT light=12 esurf=14 counter=0
+ILLUMINATESURF_HIT light=12 esurf=15 counter=0
+ILLUMINATESURF_HIT light=12 esurf=16 counter=0
+ILLUMINATESURF_HIT light=12 esurf=17 counter=0
+ILLUMINATESURF_HIT light=12 esurf=18 counter=0
+ILLUMINATESURF_HIT light=12 esurf=19 counter=0
+ILLUMINATESURF_HIT light=12 esurf=20 counter=0
+ILLUMINATESURF_HIT light=12 esurf=21 counter=0
+ILLUMINATESURF_HIT light=12 esurf=22 counter=0
+ILLUMINATESURF_HIT light=12 esurf=23 counter=0
+ILLUMINATESURF_HIT light=12 esurf=24 counter=0
+ILLUMINATESURF_HIT light=12 esurf=25 counter=0
+ILLUMINATESURF_HIT light=12 esurf=26 counter=0
+ILLUMINATESURF_HIT light=12 esurf=27 counter=0
+ILLUMINATESURF_HIT light=12 esurf=28 counter=0
+ILLUMINATESURF_HIT light=12 esurf=29 counter=0
+ILLUMINATESURF_HIT light=12 esurf=30 counter=0
+ILLUMINATESURF_HIT light=12 esurf=31 counter=0
+ILLUMINATESURF_HIT light=12 esurf=32 counter=0
+ILLUMINATESURF_HIT light=12 esurf=33 counter=0
+ILLUMINATESURF_HIT light=12 esurf=34 counter=0
+ILLUMINATESURF_HIT light=12 esurf=35 counter=0
+ILLUMINATESURF_HIT light=12 esurf=36 counter=0
+ILLUMINATESURF_HIT light=12 esurf=37 counter=0
+ILLUMINATESURF_HIT light=12 esurf=38 counter=0
+ILLUMINATESURF_HIT light=12 esurf=39 counter=0
+ILLUMINATESURF_HIT light=12 esurf=40 counter=0
+ILLUMINATESURF_HIT light=12 esurf=41 counter=0
+ILLUMINATESURF_HIT light=12 esurf=42 counter=0
+ILLUMINATESURF_HIT light=12 esurf=43 counter=0
+ILLUMINATESURF_HIT light=12 esurf=44 counter=0
+ILLUMINATESURF_HIT light=12 esurf=45 counter=0
+ILLUMINATESURF_HIT light=12 esurf=46 counter=0
+ILLUMINATESURF_HIT light=12 esurf=47 counter=0
+ILLUMINATESURF_HIT light=12 esurf=48 counter=0
+ILLUMINATESURF_HIT light=12 esurf=49 counter=0
+ILLUMINATESURF_HIT light=12 esurf=50 counter=0
+ILLUMINATESURF_HIT light=12 esurf=51 counter=0
+ILLUMINATESURF_HIT light=12 esurf=52 counter=0
+ILLUMINATESURF_HIT light=12 esurf=53 counter=0
+ILLUMINATESURF_HIT light=12 esurf=54 counter=0
+ILLUMINATESURF_HIT light=12 esurf=55 counter=0
+ILLUMINATESURF_HIT light=12 esurf=56 counter=0
+ILLUMINATESURF_HIT light=12 esurf=57 counter=0
+ILLUMINATESURF_HIT light=12 esurf=58 counter=0
+ILLUMINATESURF_HIT light=12 esurf=59 counter=0
+ILLUMINATESURF_HIT light=12 esurf=60 counter=0
+ILLUMINATESURF_HIT light=12 esurf=61 counter=0
+ILLUMINATESURF_HIT light=12 esurf=62 counter=0
+ILLUMINATESURF_HIT light=12 esurf=63 counter=0
+ILLUMINATESURF_HIT light=12 esurf=64 counter=0
+ILLUMINATESURF_HIT light=12 esurf=65 counter=0
+ILLUMINATESURF_HIT light=12 esurf=66 counter=0
+ILLUMINATESURF_HIT light=12 esurf=67 counter=0
+ILLUMINATESURF_HIT light=12 esurf=68 counter=0
+ILLUMINATESURF_HIT light=12 esurf=69 counter=0
+ILLUMINATESURF_HIT light=12 esurf=70 counter=0
+ILLUMINATESURF_HIT light=12 esurf=71 counter=0
+ILLUMINATESURF_HIT light=12 esurf=72 counter=0
+DRAWWORLD_INC_HIT light=12 counter_before_inc=0

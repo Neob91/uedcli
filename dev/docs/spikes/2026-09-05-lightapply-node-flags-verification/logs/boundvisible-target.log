@@ -1,0 +1,46 @@
+render.dll live base = 0x15b0000; call site = 0x15c93d5
+
+[New LWP 144]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 197]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f49cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x15c93d5
+ORACLE_ATTACHED
+[New Thread 0x9adfb40 (LWP 377)]
+[New Thread 0xab2fb40 (LWP 378)]
+[New Thread 0xc4bfb40 (LWP 396)]
+CALL_TARGET target=0x15c2100 edx_vtable=0x15e45e0 ecx_box=0x56f925c box=[4.082509e-38,1.440815e-41,4.38746e-39]-[0,0,-nan] valid=1569196
+CALL_TARGET target=0x15c2100 edx_vtable=0x15e45e0 ecx_box=0x56f925c box=[4.082509e-38,1.440815e-41,4.38746e-39]-[0,0,-nan] valid=1569196
+CALL_TARGET target=0x15c2100 edx_vtable=0x15e45e0 ecx_box=0x56f925c box=[4.082509e-38,1.440815e-41,4.38746e-39]-[0,0,-nan] valid=1569196
+TARGET_DONE
+[Inferior 1 (process 33) detached]

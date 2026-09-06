@@ -170,3 +170,93 @@ reachable by a faithful port (the amortization is real UED22 behavior, but no `L
 recipe can un-starve it) and not fixable from the console. This still needs an owner decision — accept
 the affected surfaces as a documented reference defect (with a bound, the way the N8 base-fp exclusion
 is bounded), or rebuild the reference some other way. Do not mask it on an agent's authority.
+
+## CORRECTION — "the address is wrong" was itself a bug: `render.dll` is relocated
+
+A coordinator-relayed review flagged a real lead this spike's first pass missed: all 3 samples above
+landed on residue 0 with no camera ever opened, which — if that's a deterministic fresh-process
+invariant, not incidental state — is a portable native algorithm, not an unfixable artifact. Re-tested
+live, with a corrected probe. **Verdict: the invariant is real and now confirmed with direct
+instruction-level rigor across all 5 ladder levels — the "counter address is wrong, refuted" claim
+above is WRONG, and the actual bug was in this spike's own memory read.**
+
+**The bug**: `*(int*)0x1005fa24`, read literally, assumes `render.dll` loads at its preferred image
+base `0x10000000`. It doesn't — `Editor.dll` also prefers `0x10000000` and wins that address (confirmed:
+`illuminateSurf`/the walker hit correctly there in every probe), so Wine's loader relocates `render.dll`
+elsewhere — observed live, reproducibly, at `0x015b0000` across every session in this worktree. A
+literal read of `0x1005fa24` in that case silently reads `Editor.dll`'s own memory (whatever pointer
+happens to sit there), not the counter — which explains the earlier "fixed, pointer-looking,
+un-advanceable by `REDRAWALLVIEWPORTS`" result perfectly: that data has nothing to do with rendering at
+all. Confirmed via `/proc/<pid>/maps` (`harness/diag_render_base.py`) and cross-checked against the PE
+export table (`rdis.py exports Render`), not offset arithmetic alone:
+`?GetVisibleSurfs@URender@@...` at file address `0x100187b0`, `?DrawWorld@URender@@...` at
+`0x10017680` — both land exactly on real function prologues once remapped to the live base.
+
+**Corrected direct measurement** (`harness/counter_direct_probe.py`, remaps every `render.dll`
+address to the live base found in `/proc/pid/maps` before setting breakpoints): breaking on
+`GetVisibleSurfs`'s entry (once per light) and logging the counter at each entry, across a REAL,
+complete `LIGHT APPLY` run per level:
+
+| level | lights in this build | counter at every `GetVisibleSurfs` entry | `DrawWorld` fires |
+|---|---|---|---|
+| UNATCO (`N26`) | 12 | 0, all 12 | once, AFTER light 12's last surf |
+| WanChai (`N44`) | 10 | 0, all 10 | once, AFTER light 10 |
+| Bar (`N250`) | 49 | 0, all 49 | once, AFTER light 49 |
+| Island (`N300`) | 159 | 0, all 159 | once, AFTER light 159 |
+| OceanLab (`N300`) | 54 | 0, all 54 | once, AFTER light 54 |
+
+Every level, every light, counter is exactly 0 for the entire `LIGHT APPLY` pass — `DrawWorld` (the
+only write site to this address in the whole `.text` section, confirmed by a full-module disassembly
+grep) fires exactly once, always AFTER the very last light has already finished, too late to affect
+any box-occlusion test in that build. **This retroactively validates, rather than refutes, the
+original NodeFlags-array evidence** (residue-0 flagged nodes, reproducible across the same 5 levels,
+shifting +1 per `CAMERA OPEN`) — that evidence never depended on the buggy address; only the
+direct-memory-read cross-check did.
+
+**Conclusion**: every fresh-process headless golden build (`MAP IMPORT → MAP REBUILD → LIGHT APPLY →
+MAP SAVE`, no viewport) deterministically box-tests exactly the `iNode % 16 == 0` residue for its
+entire `LIGHT APPLY` pass, on all 5 campaign levels regardless of light count. This is a real,
+portable, geometry-independent property of UED22's own headless recipe — not incidental process
+state — confirming the review's lead.
+
+## Scoping the faithful native fix — `URender::BoundVisible` is a real, unported rendering primitive
+
+Per the review, attempted the actual port: gate native's box-occlusion to `node_index % 16 == 0`
+(matching the confirmed invariant) and implement the box-visibility test itself. Traced the call
+chain live: `GetVisibleSurfs`'s per-node box check (`render.dll 0x1001932c` onward, file-relative)
+calls a virtual method at `[Frame_vtable + 0x80]`; resolved live (`harness/
+boundvisible_target_probe.py`, breaks right before the `call eax` and reads the pushed `FBox` argument
+off the stack) to a STABLE target, remapped and identified via the PE export table:
+
+```
+?BoundVisible@URender@@UAEHPAUFSceneNode@@PAVFBox@@PAVFSpanBuffer@@AAUFScreenBounds@@@Z
+int URender::BoundVisible(FSceneNode*, FBox*, FSpanBuffer*, FScreenBounds&)
+```
+
+at file address `0x10012100`. Live-captured box arguments are real level-space AABBs (e.g.
+`[-2736,-1504,-80]-[1776,1616,416]`), confirming the call site and argument decode are right.
+
+Disassembling `BoundVisible` itself (`/tmp/boundvisible_full.txt`, not committed — regenerable via
+`rdis.py dis Render 0x10012100 0x1bf0`): it classifies each of the box's corners against the frame's
+view planes (an outcode-style test building a bitmask 0–0x1f from per-axis `comiss` compares), has
+an early-return path (`ret 0x10`, matching the 4-argument `__thiscall`) for the trivial "corner
+comparisons agree, no clipping needed" case at file offset `+0x24c`, and a substantially larger
+continuation past that for the partial-visibility/clipping case — genuinely comparable in size and
+character to `URender::GetVisibleSurfs` itself (which took real, multi-pass RE effort to port) and to
+the `FSpanBuffer` rasterizer this same campaign's WanChai N45 item explicitly scoped as "a real spike,
+not attempted yet."
+
+**Not implemented here.** A byte-exact port needs the same rigor already applied to `GetVisibleSurfs`
+and the span buffer — full disassembly, a controlled-fixture cross-check, and a review — not a rushed
+approximation in this pass. Standing in a cheaper proxy (e.g. reusing the existing per-zone
+`SpanBuf::any_visible` reachability check already in `visible_surfs.rs` as a "box visible" stand-in)
+would UNDER-occlude relative to the real per-box screen test and is exactly the kind of guessed
+approximation `NATIVE-MATERIALIZE.md`'s prime directive forbids ("no hacks just to satisfy a single
+package scenario"). Filed as a board item
+(`dev/docs/board/inbox/port-urender-boundvisible-box-occlusion-test/`) with the address/signature
+handoff above, scoped like the WanChai span-buffer item rather than attempted here.
+
+**Net status**: the residue-0 gate is now a confirmed, portable fact suitable for a faithful native
+implementation once `BoundVisible` is ported. Until then this remains exactly where the parent spike
+left it — UNATCO N26's `Light155` divergence is not closed by a recipe fix (established above) and
+not yet closed by a native port (needs the `BoundVisible` spike) — an open item, not an exclusion.

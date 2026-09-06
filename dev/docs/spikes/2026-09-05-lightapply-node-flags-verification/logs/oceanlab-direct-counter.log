@@ -1,0 +1,97 @@
+render.dll live base = 0x15b0000; GetVisibleSurfs @ 0x15c87b0; DrawWorld-inc @ 0x15c773b; counter @ 0x160fa24
+
+[New LWP 144]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 197]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f87cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x15c87b0
+Breakpoint 2 at 0x15c773b
+ORACLE_ATTACHED
+[New Thread 0x9adfb40 (LWP 384)]
+[New Thread 0xab2fb40 (LWP 385)]
+[New Thread 0xc4bfb40 (LWP 410)]
+GETVISIBLESURFS_ENTRY light=1 counter=0
+GETVISIBLESURFS_ENTRY light=2 counter=0
+GETVISIBLESURFS_ENTRY light=3 counter=0
+GETVISIBLESURFS_ENTRY light=4 counter=0
+GETVISIBLESURFS_ENTRY light=5 counter=0
+GETVISIBLESURFS_ENTRY light=6 counter=0
+GETVISIBLESURFS_ENTRY light=7 counter=0
+GETVISIBLESURFS_ENTRY light=8 counter=0
+GETVISIBLESURFS_ENTRY light=9 counter=0
+GETVISIBLESURFS_ENTRY light=10 counter=0
+GETVISIBLESURFS_ENTRY light=11 counter=0
+GETVISIBLESURFS_ENTRY light=12 counter=0
+GETVISIBLESURFS_ENTRY light=13 counter=0
+GETVISIBLESURFS_ENTRY light=14 counter=0
+GETVISIBLESURFS_ENTRY light=15 counter=0
+GETVISIBLESURFS_ENTRY light=16 counter=0
+GETVISIBLESURFS_ENTRY light=17 counter=0
+GETVISIBLESURFS_ENTRY light=18 counter=0
+GETVISIBLESURFS_ENTRY light=19 counter=0
+GETVISIBLESURFS_ENTRY light=20 counter=0
+GETVISIBLESURFS_ENTRY light=21 counter=0
+GETVISIBLESURFS_ENTRY light=22 counter=0
+GETVISIBLESURFS_ENTRY light=23 counter=0
+GETVISIBLESURFS_ENTRY light=24 counter=0
+GETVISIBLESURFS_ENTRY light=25 counter=0
+GETVISIBLESURFS_ENTRY light=26 counter=0
+GETVISIBLESURFS_ENTRY light=27 counter=0
+GETVISIBLESURFS_ENTRY light=28 counter=0
+GETVISIBLESURFS_ENTRY light=29 counter=0
+GETVISIBLESURFS_ENTRY light=30 counter=0
+GETVISIBLESURFS_ENTRY light=31 counter=0
+GETVISIBLESURFS_ENTRY light=32 counter=0
+GETVISIBLESURFS_ENTRY light=33 counter=0
+GETVISIBLESURFS_ENTRY light=34 counter=0
+GETVISIBLESURFS_ENTRY light=35 counter=0
+GETVISIBLESURFS_ENTRY light=36 counter=0
+GETVISIBLESURFS_ENTRY light=37 counter=0
+GETVISIBLESURFS_ENTRY light=38 counter=0
+GETVISIBLESURFS_ENTRY light=39 counter=0
+GETVISIBLESURFS_ENTRY light=40 counter=0
+GETVISIBLESURFS_ENTRY light=41 counter=0
+GETVISIBLESURFS_ENTRY light=42 counter=0
+GETVISIBLESURFS_ENTRY light=43 counter=0
+GETVISIBLESURFS_ENTRY light=44 counter=0
+GETVISIBLESURFS_ENTRY light=45 counter=0
+GETVISIBLESURFS_ENTRY light=46 counter=0
+GETVISIBLESURFS_ENTRY light=47 counter=0
+GETVISIBLESURFS_ENTRY light=48 counter=0
+GETVISIBLESURFS_ENTRY light=49 counter=0
+GETVISIBLESURFS_ENTRY light=50 counter=0
+GETVISIBLESURFS_ENTRY light=51 counter=0
+GETVISIBLESURFS_ENTRY light=52 counter=0
+GETVISIBLESURFS_ENTRY light=53 counter=0
+GETVISIBLESURFS_ENTRY light=54 counter=0
+DRAWWORLD_INC_HIT after_light=54 counter_before_inc=0

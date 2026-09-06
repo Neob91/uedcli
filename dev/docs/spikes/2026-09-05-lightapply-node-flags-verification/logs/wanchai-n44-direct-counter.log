@@ -1,0 +1,53 @@
+render.dll live base = 0x15b0000; GetVisibleSurfs @ 0x15c87b0; DrawWorld-inc @ 0x15c773b; counter @ 0x160fa24
+
+[New LWP 140]
+[New LWP 149]
+[New LWP 150]
+[New LWP 151]
+[New LWP 152]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 192]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f1acfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x15c87b0
+Breakpoint 2 at 0x15c773b
+ORACLE_ATTACHED
+[New Thread 0x9adfb40 (LWP 393)]
+[New Thread 0xab2fb40 (LWP 394)]
+[New Thread 0xc4bfb40 (LWP 407)]
+GETVISIBLESURFS_ENTRY light=1 counter=0
+GETVISIBLESURFS_ENTRY light=2 counter=0
+GETVISIBLESURFS_ENTRY light=3 counter=0
+GETVISIBLESURFS_ENTRY light=4 counter=0
+GETVISIBLESURFS_ENTRY light=5 counter=0
+GETVISIBLESURFS_ENTRY light=6 counter=0
+GETVISIBLESURFS_ENTRY light=7 counter=0
+GETVISIBLESURFS_ENTRY light=8 counter=0
+GETVISIBLESURFS_ENTRY light=9 counter=0
+GETVISIBLESURFS_ENTRY light=10 counter=0
+DRAWWORLD_INC_HIT after_light=10 counter_before_inc=0
