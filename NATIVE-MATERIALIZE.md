@@ -141,15 +141,25 @@ about not STARTING an agent for the mechanical part, not about interrupting one 
 ### The Parity Ladder artifact — MUST be kept current (owner ruling, 2026-09-05)
 
 The campaign's live status — highest byte-exact N per level, and what blocks the next N — is published
-as a claude.ai Artifact: **"Parity Ladder"**, <https://claude.ai/code/artifact/f5662f6e-b17e-45f9-9451-818b0e3d0b34>
-(`db` capability, collection `levels` keyed by level slug: `unatco`, `wanchai`, `bar`, `island`, `oceanlab`).
+as a claude.ai Artifact: **"Parity Ladder"**, <https://claude.ai/code/artifact/f5662f6e-b17e-45f9-9451-818b0e3d0b34>.
 
-**Whenever a level's highest verified N changes, or its blocking divergence changes, update the
-artifact in the same pass** — `Artifact` tool, `action: "write_db"`, `collection: "levels"`, the
-level's slug as `doc_id`, fields `{name, codename, highest_n, total_actors, status
-("advancing"|"blocked"), blocker, board, updated}`. This is not optional bookkeeping: the artifact is
-how the owner reads ladder state without re-deriving it from board items or chat scrollback. Find its
-URL via `Artifact` `action: "list"` if it isn't already in context.
+**It is a plain static page, rendered from data — NOT the `db` capability.** An earlier version used
+`write_db` against a `levels` collection with a live in-page read; the owner ruled that out
+(2026-09-06) after the live read proved unreliable across viewing contexts and a subagent's stale
+`write_db` call silently clobbered good data. **Never call `write_db`/`read_db` on this artifact.**
+
+**Whenever a level's highest verified N changes, or its blocking divergence changes, in the same pass:**
+1. Edit `dev/docs/spikes/2026-09-03-incremental-actor-parity/harness/parity_ladder_data.json` — one
+   object per level, keyed by `slug` (`unatco`, `wanchai`, `bar`, `island`, `oceanlab`), fields
+   `{name, codename, highest_n, total_actors, status ("advancing"|"blocked"), blocker, board, updated}`.
+2. Render it: `render_parity_ladder.py -o <path>.html` (same dir; reads the JSON + the
+   `parity_ladder_template.html` template — never hand-edit the template's embedded `SNAPSHOT`).
+3. Publish `<path>.html` with the `Artifact` tool, `action: "publish"`, the URL above as `url`.
+
+This is not optional bookkeeping: the artifact is how the owner reads ladder state without
+re-deriving it from board items or chat scrollback. If a subagent found this file before this
+correction landed and still calls `write_db`, that call is a no-op on a page nothing reads from
+anymore — check for it and switch to the JSON+render+publish flow instead.
 
 ## THE parity script (do not reinvent)
 
