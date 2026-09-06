@@ -52,3 +52,8 @@ brush poly's descent is the way in.
 
     ladder_run.py --dx <…>/Maps/14_OceanLab_Lab.dx --from 13 --to 13 --force-ref --keep-native
     token_diff.py <…>/native_N13.dx <…>/ref_N13.dx model2
+
+## Resolved
+
+Fixed by `db85703` (MergeNearPoints remaps `FBspSurf.pBase` too) — OceanLab now byte-exact N=1..16,
+covering this item's N=13. Not a separate cause; same welded-point-survives-refresh bug as WanChai N40.
