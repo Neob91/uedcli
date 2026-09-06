@@ -1,0 +1,8 @@
+Begin Actor Class=Engine.LevelInfo
+    AmbientBrightness=1
+    AmbientHue=150
+    AmbientSaturation=80
+    Song=Music'LibertyIsland_Music.LibertyIsland_Music'
+    Tag=LevelInfo
+    Location=(X=9296.000000,Y=15856.000000,Z=2848.000000)
+End Actor

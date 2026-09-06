@@ -229,10 +229,13 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   world-node `NF_IsFront`/`NF_IsBack` (accumulates across multiple CSG-time descents, not a single
   pass) and mover private `Model` geometry not built when real world CSG exists (reopened:
   `dev/docs/board/inbox/native-geometry-path-leaves-mover-models-unbuilt/`).
-- **Island, N=6**: `dev/docs/board/inbox/island-n6-vector-pool-order/` — one world `Model2` Vector
-  sits at pool index 8 in UED22 and 16 in native; UED22 proposes it to `bspAddVector` before the surf
-  that owns it, and only the normal, not that surf's texture axes. The old N=5 ULP residual is fixed
-  (`dev/docs/board/done/island-n5-n12-pre-existing-model2-orphan-vert-4/`).
+- **Island, N=10**: `dev/docs/board/inbox/island-n-10-brush1359-region-ileaf-13-vs-18/` — one token,
+  `Brush1359`'s cached `Region` iLeaf (13 vs 18); the world `Model` matches. Byte-exact N=1..9 (was
+  5): the N=6 vector-pool blocker is FIXED — native keeps the incremental Vectors pool across the
+  repartition instead of rebuilding it from the surviving surfs, because a surf CSG merges away still
+  leaves its `bspAddVector` proposals in the pool
+  (`dev/docs/spikes/2026-09-06-island-n6-vector-pool/`,
+  `dev/docs/board/done/island-n6-vector-pool-order/`).
 - **OceanLab, N=44**: `BODY model model2` — the world `Model.Lights` per-surf light-run array has 2
   extra light refs (`light121`, an extra `light106`) native emits that the editor's build does not,
   plus a downstream `LightBits` byte diff. N=44 adds a plain brush, no new light/zone actor; cause

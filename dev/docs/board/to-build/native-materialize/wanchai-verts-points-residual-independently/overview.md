@@ -79,8 +79,9 @@ checkpoint (16859 vs ~19626), and the editor's own weld then discards ~2835 more
 during T-junction welding — two much larger, opposite-signed errors landing close together by
 coincidence, not a matched mechanism (same shape as the "EmptyModel retains entries" note already in
 `unatco-verts-points-residual-after-the-zone` for UNATCO's points pool). Vectors (−8) is new — not
-previously measured for Wanchai at all; `reorder_surfs_canonical`/`rebuild_vector_pool` run after the
-weld and could be the site, but this needs its own investigation.
+previously measured for Wanchai at all; the stated lead (`rebuild_vector_pool` running after the
+weld) is void — that pass was deleted on 2026-09-06 by `island-n6-vector-pool-order`, which made the
+kept incremental pool the one that ships. Re-measure before investigating further.
 
 **No fix shipped.** No safe, verified change was found this round — the `repartition_frontier`
 +64 lead needs per-call identification before touching code (the sibling UNATCO investigation shows

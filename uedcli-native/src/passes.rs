@@ -193,11 +193,11 @@ pub fn bsp_merge_coplanars(polys: Vec<FPoly>) -> Vec<FPoly> {
 /// `bspRefresh` (§7.3): array compaction after a build — drop unreferenced surfs and renumber
 /// the nodes' `iSurf`, then re-pack the vert pool so each node's verts are contiguous in build
 /// order (renumbering `iVertPool`).  Pure array GC + reindex; no geometry decisions.  (Points/
-/// Vectors are left as-is HERE — the Vectors canonical re-ORDER is a dedicated post-build pass in
-/// `bspcsg.rs` (`reorder_surfs_canonical`/`rebuild_vector_pool` make the Surfs + Vectors pools
-/// byte-exact in ORDER), and the Points pool is GC'd incrementally at the editor's real `bspRefresh`
-/// call sites via `bsp_refresh_points_vectors[_stale_orphans]` below.  An unreferenced pool entry is
-/// otherwise harmless.)
+/// Vectors are left as-is HERE — the Surfs canonical re-ORDER is a dedicated post-build pass in
+/// `bspcsg.rs` (`reorder_surfs_canonical`), and the Points/Vectors pools are kept in the editor's
+/// own incremental order and GC'd at the editor's real `bspRefresh` call sites via
+/// `bsp_refresh_points_vectors[_stale_orphans]` below.  An unreferenced pool entry is otherwise
+/// harmless.)
 pub fn bsp_refresh(model: &mut Model) {
     // 1. Drop unreferenced surfs; renumber node.i_surf.
     let mut used = vec![false; model.surfs.len()];

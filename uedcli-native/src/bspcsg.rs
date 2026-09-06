@@ -480,6 +480,13 @@ fn ring_point_tol() -> f32 {
 /// `bspAddVector` (`Editor.dll 0x35530`): unlike `bspAddPoint` it never consults the tree — it calls
 /// `AddThing(&Model->Vectors, V, Thresh, Check=1)` (`0x31ae0`, `push 1`), whose scan takes the FIRST
 /// entry inside the threshold, not the nearest.
+///
+/// KNOWN DEVIATION: `AddThing`'s scan loop (`0x31b10`-`0x31b4f`) tests each COMPONENT against the
+/// threshold independently — an axis-aligned box — where this compares a Euclidean distance, a
+/// strictly smaller region, so native can push an entry the editor would have merged. It has not
+/// been observed to matter (the incremental pools measured against UED22 agree byte-for-byte), but
+/// the pool order it produces is now what ships, so closing it needs a five-level ladder
+/// re-verification: board `bsp-add-vector-uses-a-sphere-where-addthing`.
 fn bsp_add_vector(model: &mut Model, v: Vec3, exact: bool) -> i32 {
     let tol = if exact {
         THRESH_NORMALS_ARE_SAME
@@ -3341,6 +3348,13 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
                 model.nodes.len(), model.surfs.len(), model.verts.len(),
                 model.points.len(), model.vectors.len(), live_pts.len()
             );
+            for (i, v) in model.vectors.iter().enumerate() {
+                eprintln!("POOLVEC {} ({:.9},{:.9},{:.9})", i, v.x, v.y, v.z);
+            }
+            for (i, s) in model.surfs.iter().enumerate() {
+                eprintln!("POOLSURF {} actor={} bpoly={} vN={} vU={} vV={}",
+                          i, s.i_actor, s.i_brush_poly, s.v_normal, s.v_texture_u, s.v_texture_v);
+            }
         }
         let fpolys = bsp_build_fpolys(&model);
         // PRE-MERGE FRAGMENT DUMP (UEDCLI_BSPCSG_PREMERGE_DUMP=<ilink>[,<ilink>...]|ALL) — env-gated,
@@ -3409,34 +3423,36 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         // repartition clears + re-allocates surfs in split-recursion order — a pure PERMUTATION of the
         // same 485-surf set that scrambles the on-disk Surfs/Vectors/Points-base order.  We snapshot
         // the incremental pool's `(iActor, iBrushPoly)` key order here (pre-clear) and, after the whole
-        // build, re-sort the final surfs to it (`reorder_surfs_canonical`) + rebuild the Vectors pool
-        // from the new surf order.  Key is unique per surf (proven vs the golden); walking surfs
-        // `(vNormal, vTextureU, vTextureV)` reproduces the editor Vectors array byte-for-byte.
+        // build, re-sort the final surfs to it (`reorder_surfs_canonical`).  Key is unique per surf
+        // (proven vs the golden).
         canon_surf_keys = model.surfs.iter().map(|s| (s.i_actor, s.i_brush_poly)).collect();
 
         // Fresh node/surf/vert arrays: the reconstructed FPolys carry absolute coordinates
         // (bsp_node_to_fpoly copied them out), so a fresh Nodes/Surfs/Verts array lets `bsp_build`'s
         // own surf re-seeding (one fresh `alloc_surf` per distinct source surf id, see `bsp_build`)
-        // and `bsp_add_node` rebuild them from `merged`. Vectors is UNCONDITIONALLY rebuilt later
-        // anyway (`rebuild_vector_pool`, walking the final canonical Surfs' own refs), so clearing it
-        // here has no effect on the final result either way — left as-is for symmetry with the
-        // other CSG-phase pools, not because it matters.
+        // and `bsp_add_node` rebuild them from `merged`.
         //
         // The editor's `EmptyModel(0,0)` (live gdb `emptymodel_worldlevel_trace.py`, UNATCO +
         // Wanchai, both node/surf/leaf-exact — called on the PERSISTENT world Model at this
-        // checkpoint) clears Nodes/Verts but leaves Points BYTE-IDENTICAL across the call. Native
-        // reproduces the editor's incremental point-pool: the Points pool is kept across the world-
-        // level rebuild and GC'd only at the editor's real `bspRefresh` call sites — pre-repartition
-        // bases-only (`compact_points_to_surf_bases` = `bspBuild@0x35ef0`'s NumVertices-zeroed
-        // refresh before `EmptyModel(0,0)`), post-`bsp_build` (`bsp_refresh_points_vectors`), and
-        // after the frontier repartitions — never during brush CSG, never after optgeom (native-
-        // materialize-findings.md rounds 9-15; closes `DX.dx`'s `p_base` residual to 0/26).
+        // checkpoint) clears Nodes/Verts but leaves Points AND Vectors BYTE-IDENTICAL across the
+        // call. Native reproduces the editor's incremental point/vector pools: both are kept across
+        // the world-level rebuild and GC'd only at the editor's real `bspRefresh` call sites —
+        // pre-repartition bases-only (`compact_points_to_surf_bases` = `bspBuild@0x35ef0`'s
+        // NumVertices-zeroed refresh before `EmptyModel(0,0)`), post-`bsp_build`
+        // (`bsp_refresh_points_vectors`), and after the frontier repartitions — never during brush
+        // CSG, never after optgeom (native-materialize-findings.md rounds 9-15; closes `DX.dx`'s
+        // `p_base` residual to 0/26).
+        //
+        // KEEPING VECTORS IS LOAD-BEARING: a surf CSG later merges away still leaves its
+        // `bspAddVector` proposals in the pool, and a later surf's NORMAL can dedup into one of them,
+        // so the surviving order is not derivable from the surviving surfs.  Island N=6 is the live
+        // case — spike `spikes/2026-09-06-island-n6-vector-pool/`.
         compact_points_to_surf_bases(&mut model);
         model.nodes.clear();
         model.surfs.clear();
         model.verts.clear();
-        // Points are deliberately NOT cleared — kept across the rebuild, matching `EmptyModel(0,0)`.
-        model.vectors.clear();
+        // Points and Vectors are deliberately NOT cleared — kept across the rebuild, matching
+        // `EmptyModel(0,0)`.
         bsp_build(&mut model, merged)?;
         passes::bsp_refresh(&mut model);
         // The editor's `bspRefresh` also drops unreferenced Points/Vectors on this call (not just
@@ -3661,19 +3677,12 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         );
     }
 
-    // §10.19: canonicalize the Surfs pool to the editor's incremental-CSG order and rebuild the
-    // Vectors pool from it.  A pure relabel of the Surfs/Vectors arrays + node.iSurf remap — it
-    // touches no node plane/link, no vert, no bound/hull, so the node tree stays byte-identical.
-    // Both fire together or not at all: an empty snapshot (repartition skipped via NOREPART) leaves
-    // BOTH the Surfs order AND the Vectors pool untouched — never one without the other.
-    if !canon_surf_keys.is_empty() {
-        reorder_surfs_canonical(&mut model, &canon_surf_keys);
-        rebuild_vector_pool(&mut model);
-        // `model.points` is already in the editor's own incremental order, GC'd at the editor's
-        // real call sites (pre-repartition, post-`bsp_build`, frontier tails). The editor never GCs
-        // after the frontier repartitions — optgeom's additions survive untouched — so nothing runs
-        // here for Points.
-    }
+    // §10.19: canonicalize the Surfs pool to the editor's incremental-CSG order.  A pure relabel of
+    // the Surfs array + node.iSurf remap — it touches no node plane/link, no vert, no bound/hull, so
+    // the node tree stays byte-identical.  `model.vectors` and `model.points` are already in the
+    // editor's own incremental order (kept across the repartition, GC'd at the editor's real
+    // `bspRefresh` call sites), so neither is rebuilt here.
+    reorder_surfs_canonical(&mut model, &canon_surf_keys);
     Ok(model)
 }
 
@@ -3952,43 +3961,6 @@ fn reorder_surfs_canonical(model: &mut Model, canon: &[(i32, i32)]) {
     }
 }
 
-/// Rebuild the Vectors pool from the (now canonical) Surfs order: walk surfs, `find-or-add` each
-/// surf's `vNormal`, `vTextureU`, `vTextureV` (exact-equality dedup, pulled from the existing pool)
-/// and rewrite the surf's refs.  This is the exact rule that reproduces the editor's Vectors array
-/// (proven vs the golden: 26/26).  The pool value-set is unchanged — a pure permutation + reindex,
-/// referenced by nothing but the surfs, so no node/vert/bound is affected.  See §10.19.
-fn rebuild_vector_pool(model: &mut Model) {
-    if model.surfs.is_empty() {
-        return;
-    }
-    let old = model.vectors.clone();
-    let mut new_vecs: Vec<Vec3> = Vec::with_capacity(old.len());
-    // Remap a vector ref into the fresh pool.  A negative ref (`-1` = "no axis") is preserved as-is,
-    // mirroring the guarded read in `bsp_node_to_fpoly` (surf axes are legitimately optional); today
-    // every surf axis comes from `bsp_add_vector` (>= 0), but the guard keeps this no less defensive
-    // than its neighbours.  `old` entries are already tolerance-deduped on insertion, so exact-equality
-    // dedup here merges only true co-references and never collapses two distinct pool entries.
-    let mut remap = |r: i32| -> i32 {
-        if r < 0 {
-            return r;
-        }
-        let v = old[r as usize];
-        for (i, p) in new_vecs.iter().enumerate() {
-            if *p == v {
-                return i as i32;
-            }
-        }
-        new_vecs.push(v);
-        (new_vecs.len() - 1) as i32
-    };
-    for s in &mut model.surfs {
-        s.v_normal = remap(s.v_normal);
-        s.v_texture_u = remap(s.v_texture_u);
-        s.v_texture_v = remap(s.v_texture_v);
-    }
-    model.vectors = new_vecs;
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4166,6 +4138,23 @@ mod tests {
         let i_near = bsp_add_vector(&mut model, near, false);
         assert_eq!(i_near, 0, "axes <4e-4 apart must merge to the first within threshold");
         assert_eq!(model.vectors.len(), 2, "no new vector pushed for a sub-threshold axis");
+    }
+
+    /// Island N=6, live-traced 2026-09-06 (`spikes/2026-09-06-island-n6-vector-pool/`): UED22's
+    /// world Vectors slot 8 is claimed by `Brush1355`'s bottom-face `vTextureU`, a surf CSG later
+    /// merges away; `Brush1353`'s oblique-face NORMAL then dedups into that slot, which is why the
+    /// slot survives the `bspRefresh` GC and why the pool must be KEPT across the repartition rather
+    /// than rebuilt from the surviving surfs. The two values agree to 6e-7 — inside
+    /// `THRESH_NORMALS_ARE_SAME` (2e-5) even though the axis was added at the looser 4e-4.
+    #[test]
+    fn a_texture_axis_absorbs_a_later_near_equal_normal() {
+        let mut model = Model::default();
+        let axis = Vec3::new(0.242535993, 0.970142007, 0.0);
+        let normal = Vec3::new(0.242535651, 0.970142603, 0.0);
+        assert_eq!(bsp_add_vector(&mut model, axis, false), 0);
+        assert_eq!(bsp_add_vector(&mut model, normal, true), 0,
+                   "the later normal must reuse the texture axis's slot");
+        assert_eq!(model.vectors.len(), 1);
     }
 
     /// Decode one mover-build fixture (`dev/docs/spikes/2026-09-02-unbuilt-structure-parity/harness/extract_mover_fixtures.py` format):
