@@ -383,7 +383,8 @@ def _materialize_native(*, result: dict[str, str], materialized_order: list[str]
         world_model, csg_brushes = build_world_model(level, index=class_index, lights=lights)
         dx_bytes, warnings = assemble_unbuilt(
             level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=world_model,
-            csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, world_model),
+            csg_brushes=csg_brushes,
+            zone_actors=resolve_zone_actors(level, world_model, index=class_index),
             light_names=[n for n, *_rest in lights],
             class_defaults=defaults or ClassDefaults(schema_resolver))
         for w in warnings:

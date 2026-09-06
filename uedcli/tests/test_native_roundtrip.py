@@ -178,7 +178,7 @@ def test_native_world_model_ships_in_the_package_with_real_refs():
     pkg_dirs = [str(_UED22)]
     dx_bytes, _warnings = assemble_unbuilt(
         level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=built,
-        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built))
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built, index=_index()))
     saved = load_model_from_dx(dx_bytes)
 
     assert (len(saved.nodes), len(saved.surfs), len(saved.points), len(saved.verts)) == \
@@ -203,7 +203,7 @@ def test_built_path_tables_are_savepackage_count_descending():
     pkg_dirs = [str(_UED22)]
     dx_bytes, _w = assemble_unbuilt(
         level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=built,
-        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built))
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built, index=_index()))
     p = _parse_package(dx_bytes, "built.dx", None)
     totals = saveorder.import_totals(p, saveorder.collect(p))
     assert totals == sorted(totals, reverse=True), \
@@ -239,7 +239,7 @@ def test_brushless_level_builds_empty_world_and_valid_package(tmp_path):
     pkg_dirs = [str(_UED22)]
     dx_bytes, _warnings = assemble_unbuilt(
         level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=built,
-        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built))
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built, index=_index()))
     p = parse_package(dx_bytes)
     assert "LevelSummary" in {p.names[e["nm"]] for e in p.exports}
     assert load_model_from_dx(dx_bytes).nodes == []
@@ -386,7 +386,7 @@ def test_native_lit_room_ships_light_export_refs(tmp_path):
     pkg_dirs = [str(_UED22)]
     dx_bytes, _warnings = assemble_unbuilt(
         level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=built,
-        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built),
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, built, index=_index()),
         light_names=[n for n, *_rest in lights])
 
     dx = tmp_path / "Room.dx"
@@ -698,4 +698,31 @@ def test_zone_actor_binding_follows_actor_order_not_the_name_keyed_dict():
     assert level.order.index("ZoneInfo5") < level.order.index("ZoneInfo17")
 
     built, _csg = build_world_model(level, index=_index())
-    assert resolve_zone_actors(level, built) == {1: "ZoneInfo5"}
+    assert resolve_zone_actors(level, built, index=_index()) == {1: "ZoneInfo5"}
+
+
+def test_zone_actor_is_decided_by_ancestry_not_by_the_class_name_suffix():
+    """`DeusEx.WaterZone` is a real `Engine.ZoneInfo` subclass whose short name does not end in
+    "ZoneInfo". The old `short.endswith("ZoneInfo")` test skipped it, so Island's zone 1 got no zone
+    actor and every `Region` in it fell back to the LevelInfo where UED22 names `WaterZone1`
+    (N=93). `Engine.LevelInfo` is an AZoneInfo too and must still be excluded."""
+    pytest.importorskip("uedcli_native")
+    from uedcli.native.materialize import build_world_model, resolve_zone_actors
+
+    water = ("Begin Actor Class=DeusEx.WaterZone Name=WaterZone1\n"
+             "    Location=(X=0.000000,Y=0.000000,Z=0.000000)\n"
+             '    Name="WaterZone1"\nEnd Actor\n')
+    # The LevelInfo is placed in the same zone AND comes first in trunk order, so it would win zone 1
+    # if the AZoneInfo->ALevelInfo exclusion were dropped along with the name-suffix test.
+    level = model.parse_t3d(
+        _room_t3d()
+        .replace("Begin Actor Class=Engine.LevelInfo Name=LevelInfo0\n",
+                 "Begin Actor Class=Engine.LevelInfo Name=LevelInfo0\n"
+                 "    Location=(X=0.000000,Y=0.000000,Z=0.000000)\n")
+        .replace("End Map\n", water + "End Map\n"))
+    level.order = level_order(level)
+    normalize_level(level)
+    assert level.order.index("LevelInfo0") < level.order.index("WaterZone1")
+
+    built, _csg = build_world_model(level, index=_index())
+    assert resolve_zone_actors(level, built, index=_index()) == {1: "WaterZone1"}

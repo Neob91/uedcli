@@ -530,7 +530,7 @@ def test_the_path_pass_runs_on_both_build_paths_before_the_verify(tmp_path, monk
     monkeypatch.setattr("uedcli.native.unbuilt.assemble_unbuilt", lambda level, **kw: (b"built", []))
     monkeypatch.setattr("uedcli.native.materialize.build_world_model", lambda level, **kw: (None, []))
     monkeypatch.setattr("uedcli.native.materialize.gather_lights", lambda level, **kw: [])
-    monkeypatch.setattr("uedcli.native.materialize.resolve_zone_actors", lambda level, m: {})
+    monkeypatch.setattr("uedcli.native.materialize.resolve_zone_actors", lambda level, m, *, index: {})
     monkeypatch.setattr(applymod, "_assembly_level", lambda *a: (_one_actor_level(), None))
     r = run_materialize(level=_one_actor_level(), schema_resolver=_NO_PACKAGES,
                         pathing="deusex-1112fm", state_dir=tmp_path / ".uedcli", search_dirs=[],

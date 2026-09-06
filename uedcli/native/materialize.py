@@ -18,6 +18,10 @@ from .actor_write import (Prop, PT_BYTE, PT_INT, PT_OBJECT, PT_STRUCT, StructVal
                           struct_vector)
 from . import assemble as ASM
 from .props import convert_actor_props
+from ..classindex import CORE_OBJECT, ClassRefError
+
+ZONE_INFO_BASE = "Engine.ZoneInfo"      # AZoneInfo -- every spatial zone actor descends from it
+LEVEL_INFO_BASE = "Engine.LevelInfo"    # an AZoneInfo the editor never spatially zones
 
 # Engine pseudo-classes that are NOT normal UClass exports in any `.u` (so a class->package scan
 # never finds them) yet are genuinely defined by `Engine`; falling back to `Engine.<X>` is correct
@@ -419,10 +423,50 @@ def _model_point_zone(model, p) -> int:
     return _model_point_region(model, p)[1]
 
 
-def resolve_zone_actors(level, model) -> dict:
-    """`zone_number -> the ZoneInfo/SkyZoneInfo/WarpZoneInfo actor` whose `Location` PointRegion-
-    resolves into that zone. `LevelInfo` (also an AZoneInfo) is excluded -- a default interior zone
-    with no ZoneInfo keeps a NULL ZoneActor. First actor wins per zone, walked in TRUNK order --
+def _is_zone_actor_class(index, cls: str) -> bool:
+    """`ULevel::SetActorZone`'s own test -- `IsA(AZoneInfo) && !IsA(ALevelInfo)` -- decided by the
+    resolved class chain, never by how the class is SPELLED.
+
+    The old test was `short.endswith("ZoneInfo")`, which skipped `DeusEx.WaterZone` -- a real
+    `Engine.ZoneInfo` subclass. Island's zone 1 then got no zone actor and every `Region` in it fell
+    back to the LevelInfo, where UED22 names `WaterZone1` (N=93).
+
+    It answers or it raises (`ClassRefError` -> a clean exit 2): a chain that truncates before the
+    `Core.Object` root means a package is off the search path, and answering `False` there would
+    silently drop a real zone actor -- the bug above, again."""
+    if not cls:
+        return False
+    if "." not in cls:
+        candidates = sorted(index.bare_to_fqcn().get(cls.casefold(), ()))
+        if not candidates:
+            raise ClassRefError(
+                f"cannot decide whether the bare class {cls} is a ZoneInfo: no class of that name "
+                f"exists in any package on the composed search path")
+        verdicts = {_is_zone_actor_class(index, fqcn) for fqcn in candidates}
+        if len(verdicts) > 1:
+            raise ClassRefError(
+                f"cannot decide whether the bare class {cls} is a ZoneInfo: it resolves to "
+                f"{', '.join(candidates)}, and they disagree -- qualify the actor's class")
+        return verdicts.pop()
+    chain = [a.casefold() for a in index.ancestry(cls)]
+    if LEVEL_INFO_BASE.casefold() in chain:
+        return False
+    if ZONE_INFO_BASE.casefold() in chain:
+        return True
+    if chain[-1] != CORE_OBJECT.casefold():
+        raise ClassRefError(
+            f"cannot decide whether class {cls} is a ZoneInfo: its ancestor chain stops at "
+            f"{chain[-1]} instead of the {CORE_OBJECT} root, so a package on the chain is missing "
+            f"from the composed search path (check the project `paths` and the games config)")
+    return False
+
+
+def resolve_zone_actors(level, model, *, index) -> dict:
+    """`zone_number -> the ZoneInfo actor` whose `Location` PointRegion-resolves into that zone.
+    `index` is the `classindex.ClassIndex` `_is_zone_actor_class` decides ZoneInfo-ness against --
+    by ANCESTRY, so `Engine.SkyZoneInfo`, `Engine.WarpZoneInfo` and `DeusEx.WaterZone` all count.
+    `LevelInfo` (also an AZoneInfo) is excluded -- a default interior zone with no ZoneInfo keeps a
+    NULL ZoneActor. First actor wins per zone, walked in TRUNK order --
     `level.actors` is keyed by name and iterates alphabetically, which put `ZoneInfo17` ahead of
     `ZoneInfo5` and bound NYC_Bar N=70's only real zone to the wrong one of the two ZoneInfos that
     share it (both resolve to zone 1; UED22 keeps the earlier actor). The built `Actors` array
@@ -432,8 +476,7 @@ def resolve_zone_actors(level, model) -> dict:
     zone_actors: dict[int, str] = {}
     for name in level.order:
         a = level.actors[name]
-        short = (a.cls or "").split(".")[-1]
-        if short == "LevelInfo" or not short.endswith("ZoneInfo"):
+        if not _is_zone_actor_class(index, (a.cls or "").strip()):
             continue
         if a.location is None:
             continue

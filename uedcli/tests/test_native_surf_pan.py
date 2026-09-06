@@ -110,7 +110,7 @@ def test_the_pan_survives_into_the_written_package():
     built, csg_brushes = build_world_model(lvl, index=index)
     dx_bytes, _warnings = assemble_unbuilt(
         lvl, schema=substrate_schema(str(ued22)), pkg_dirs=[str(ued22)], world_model=built,
-        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(lvl, built))
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(lvl, built, index=index))
     saved = load_model_from_dx(dx_bytes)
     assert {s.i_brush_poly: s.pan for s in saved.surfs} == _WANT
 

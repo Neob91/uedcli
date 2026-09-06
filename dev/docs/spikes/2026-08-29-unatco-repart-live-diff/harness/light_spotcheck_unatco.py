@@ -67,7 +67,7 @@ def main() -> int:
 
     dx_bytes, warnings = assemble_unbuilt(
         level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=world_model,
-        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, world_model),
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, world_model, index=ci),
         light_names=[n for n, *_rest in lights])
     for w in warnings:
         print(f"[spotcheck] warning: {w}", file=sys.stderr)

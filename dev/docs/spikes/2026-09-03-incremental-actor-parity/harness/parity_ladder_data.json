@@ -48,12 +48,12 @@
       "slug": "island",
       "name": "UNATCO Island",
       "codename": "01_NYC_UNATCOIsland",
-      "highest_n": 92,
+      "highest_n": 122,
       "total_actors": 3653,
       "status": "blocked",
-      "blocker": "BODY brush brush1099 — Region's zone actor is wrong: native falls back to LevelInfo, UED22 uses WaterZone1 (same leaf 34, same zone number 1 — the descent itself is correct). resolve_zone_actors selects zone-actor candidates by class NAME suffix (ends with \"ZoneInfo\"), so DeusEx.WaterZone (a real Engine.ZoneInfo subclass whose short name doesn't end in \"ZoneInfo\") is skipped. Fix shape already scoped: select by ClassIndex ancestry instead, like movers._mover_by_ancestry.",
-      "board": "island-n-93-zone-actor-missed-resolve-zone",
-      "updated": "2026-09-06T19:15:00Z"
+      "blocker": "BODY model model2 — world Model2's LEAF light runs: native gives leaf 26 a permeating-light run UED22 leaves empty (iPermeating 107 vs -1), so every later leaf's iPermeating shifts by 2 and Lights is 1729 vs 1727. Every geometry array (points, vectors, bounds, leafhulls) and LightBits are byte-identical. N=93 is FIXED: resolve_zone_actors picked zone actors by class-NAME suffix and skipped DeusEx.WaterZone (a real Engine.ZoneInfo subclass); it now decides by ancestry — ULevel::SetActorZone's own IsA(AZoneInfo) && !IsA(ALevelInfo).",
+      "board": "island-n-123-world-model2-leaf-permeating-light",
+      "updated": "2026-09-06T22:30:00Z"
     }
   ]
 }

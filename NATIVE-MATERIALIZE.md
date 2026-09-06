@@ -247,16 +247,21 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   (`dev/docs/spikes/2026-09-06-pointregion-planedot-f32/`). Byte-exact **N=1..118** (was 112); bails
   at **N=119** on the world `Model2`'s `LightMap` array order —
   `dev/docs/board/inbox/nyc-bar-n-119-world-model2-lightmap-array-order/`.
-- **Island, no open blocker**: N=6 and N=10 are both FIXED. N=6 was the Vectors pool — native keeps
+- **Island, N=123**: N=6, N=10 and N=93 are all FIXED. N=6 was the Vectors pool — native keeps
   the incremental pool across the repartition instead of rebuilding it from the surviving surfs
   (`dev/docs/spikes/2026-09-06-island-n6-vector-pool/`,
   `dev/docs/board/done/island-n6-vector-pool-order/`). N=10 was `Brush1359`'s `Region` iLeaf, the
   same f32 `FPlane::PlaneDot` fix as NYC_Bar N=113
   (`dev/docs/spikes/2026-09-06-pointregion-planedot-f32/`,
-  `dev/docs/board/done/island-n-10-brush1359-region-ileaf-13-vs-18/`). Byte-exact **N=1..92** (was 9);
-  bails at **N=93** on `Brush1099`'s `Region` zone ACTOR — `resolve_zone_actors` selects zone actors
-  by class-NAME suffix, so `DeusEx.WaterZone` (a real `ZoneInfo` subclass) is skipped and the zone
-  falls back to the LevelInfo. `dev/docs/board/inbox/island-n-93-zone-actor-missed-resolve-zone/`.
+  `dev/docs/board/done/island-n-10-brush1359-region-ileaf-13-vs-18/`). N=93 was
+  `resolve_zone_actors` picking zone actors by class-NAME suffix, which skipped `DeusEx.WaterZone`
+  (a real `Engine.ZoneInfo` subclass) and let its zone fall back to the LevelInfo; it now decides by
+  ancestry, `ULevel::SetActorZone`'s own `IsA(AZoneInfo) && !IsA(ALevelInfo)`
+  (`dev/docs/board/done/island-n-93-zone-actor-missed-resolve-zone/`). Byte-exact **N=1..122** (was
+  92); bails at **N=123** on the world `Model2`'s LEAF light runs — native gives leaf 26 a
+  permeating-light run UED22 leaves empty, so every later leaf's `iPermeating` shifts by 2 and
+  `Lights` is 1729 vs 1727, every other array byte-exact —
+  `dev/docs/board/inbox/island-n-123-world-model2-leaf-permeating-light/`.
 - **OceanLab, N=48**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the

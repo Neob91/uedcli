@@ -176,7 +176,7 @@ def build_native_lit_dx(trunk_dir: Path, project_root: Path) -> tuple[bytes, lis
     world_model, csg_brushes = build_world_model(level, index=ci, lights=lights)
     dx_bytes, warnings = assemble_unbuilt(
         level, schema=substrate_schema(*pkg_dirs), pkg_dirs=pkg_dirs, world_model=world_model,
-        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, world_model),
+        csg_brushes=csg_brushes, zone_actors=resolve_zone_actors(level, world_model, index=ci),
         light_names=[n for n, *_rest in lights], class_defaults=defaults)
     return dx_bytes, list(warnings)
 
