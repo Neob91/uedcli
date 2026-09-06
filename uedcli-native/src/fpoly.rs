@@ -45,6 +45,22 @@ pub fn safe_normal_slow(v: &Vec3) -> Option<Vec3> {
     Some(Vec3::new(v.x * inv, v.y * inv, v.z * inv))
 }
 
+/// `FVector::SafeNormal` (`Core.dll 0x51090`) — the FAST sibling of [`safe_normal_slow`].  Same
+/// `SquareSum = ((x*x)+(y*y))+(z*z)` and the same `SMALL_NUMBER` cutoff, but the reciprocal is built
+/// differently: the `sqrt` result is rounded to f32 (`0x100510f5 fstp dword`), reloaded, and
+/// `1.0 / root` is evaluated in x87 80-bit and only then rounded to f32 (`0x10051104 fstp dword`) —
+/// modelled as an f64 divide, not `safe_normal_slow`'s single-precision one.  `None` is the
+/// editor's zero vector.
+pub fn safe_normal(v: &Vec3) -> Option<Vec3> {
+    let square_sum = v.x * v.x + v.y * v.y + v.z * v.z;
+    if square_sum < SMALL_NUMBER {
+        return None;
+    }
+    let root = (square_sum as f64).sqrt() as f32;
+    let scale = (1.0f64 / root as f64) as f32;
+    Some(Vec3::new(v.x * scale, v.y * scale, v.z * scale))
+}
+
 /// `FLinePlaneIntersection(P1, P2, PlaneBase, PlaneNormal)` (`Engine.dll 0x1506f0`) — where the
 /// segment `P1→P2` meets the plane.  The engine derives the parameter from two FRESH dot products,
 /// `t = ((Base-P1)·N) / ((P2-P1)·N)` with one `divss` (`0x150780`), not from the two vertices'

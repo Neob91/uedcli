@@ -530,6 +530,51 @@ def test_permeating_light_beam_planes_are_normalized_and_stop_clipping_at_14_ver
         assert got == want, f"Engine.dll {rva:#x} is {got}, want {want}"
 
 
+def test_make_portals_builds_a_65536_surf_plane_quad_and_classifies_with_split_with_node():
+    """Pass B, the leaf-adjacency portal graph the zone flood and the permeating-light flood ride on.
+
+    `FEditorVisibility::MakePortals` (`Editor.dll 0xa9750`) hands every node's `BuildInfiniteFPoly`
+    quad to `MakePortalsClip` (`0xa9970`) and then to `FilterThroughSubtree` (`0xa9030`). Three
+    facts native's `zones::collect_portals` port depends on:
+
+    1. **The quad is built off the node's SURF, not its stored `FPlane`** — `Points[pBase]` (surf
+       `+0x8`) and `Vectors[vNormal]` (`+0xc`), spanned by `FVector::FindBestAxisVectors`
+       (`Core.dll 0x507b0`) at half-extent `WORLD_MAX = 65536`.
+    2. **`FindBestAxisVectors` picks `X` only when `|N.z|` is STRICTLY greater than both `|N.x|` and
+       `|N.y|`**, else `Z`, then projects the normal out and re-normalizes through `SafeNormal`.
+    3. **Both filters classify with `FPoly::SplitWithNode(..., VeryPrecise = 1)`** — the 0.01 band,
+       not a Sutherland-Hodgman clip — and `MakePortalsClip` DISCARDS the poly outright on
+       `SP_Coplanar`. The vertex-overflow guards differ by one: `>= 14` in `MakePortalsClip`,
+       `> 14` in `FilterThroughSubtree`.
+
+    Spike: `dev/docs/spikes/2026-09-06-island-n123-portal-graph/`.
+    """
+    for dll, va, want, what in [
+        ("Editor.dll", 0x100A7B2E, "8b4108", "BuildInfiniteFPoly: mov eax,[ecx+8] — surf pBase"),
+        ("Editor.dll", 0x100A7B3A, "8b410c", "BuildInfiniteFPoly: mov eax,[ecx+0xc] — surf vNormal"),
+        ("Editor.dll", 0x100A7B50, "ff1564e20c10", "call FVector::FindBestAxisVectors"),
+        ("Editor.dll", 0x100A7B9E, "f30f100510ea0d10", "movss xmm0,[0x100dea10] — WORLD_MAX"),
+        ("Core.dll", 0x10050804, "0f2fd1763e", "FindBestAxisVectors: comiss |Nz|,|Nx| / jbe"),
+        ("Core.dll", 0x10050809, "0f2fd37639", "FindBestAxisVectors: comiss |Nz|,|Ny| / jbe"),
+        ("Core.dll", 0x100508E9, "e8a2070000", "FindBestAxisVectors: call FVector::SafeNormal"),
+        ("Editor.dll", 0x100A99E6, "83bdcc0100000e7c45", "MakePortalsClip: cmp NumVertices,0xe / jl"),
+        ("Editor.dll", 0x100A9A4C, "6a01", "MakePortalsClip: push 1 — VeryPrecise"),
+        ("Editor.dll", 0x100A9A63, "ff15a8ea0c10", "MakePortalsClip: call FPoly::SplitWithNode"),
+        ("Editor.dll", 0x100A9A80, "85c07439", "MakePortalsClip: test eax,eax / je — SP_Coplanar drop"),
+        ("Editor.dll", 0x100A9099, "83bddc0100000e7e52", "FilterThroughSubtree: cmp NumVertices,0xe / jle"),
+        ("Editor.dll", 0x100A910C, "6a01", "FilterThroughSubtree: push 1 — VeryPrecise"),
+        ("Editor.dll", 0x100A9123, "ff15a8ea0c10", "FilterThroughSubtree: call FPoly::SplitWithNode"),
+    ]:
+        text = (UED22 / dll).read_bytes()
+        off = _rva_to_offset(text, va - _IMAGE_BASE)
+        got = text[off:off + len(want) // 2].hex()
+        assert got == want, f"{dll} {va:#x} ({what}): want {want}, found {got}"
+
+    editor = (UED22 / "Editor.dll").read_bytes()
+    world_max = struct.unpack("<f", editor[_rva_to_offset(editor, 0x100DEA10 - _IMAGE_BASE):][:4])[0]
+    assert world_max == 65536.0, f"WORLD_MAX is {world_max}"
+
+
 # ── POLY TEXALIGN (spike 2026-07-26-unrealed-texalign-semantics) ────────────────────────────────
 
 _TEXALIGN_SPIKE = (Path(__file__).resolve().parents[2] /

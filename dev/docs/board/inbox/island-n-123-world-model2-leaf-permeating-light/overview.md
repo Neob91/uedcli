@@ -1,8 +1,8 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Island is byte-exact N=1..122 and bails at N=123: native gives world leaf 26 a permeating-light run UED22 leaves empty. Root-caused to the PORTAL GRAPH, not the beam clip — `zones::collect_portals` clips with a plain 1e-4 Sutherland-Hodgman where `FilterThroughSubtree` uses `SplitWithNode(VeryPrecise)` and DISCARDS an `SP_Coplanar` result."
-spikes = ["dev/docs/spikes/2026-09-06-permeating-beam-plane-normalize/"]
+summary = "Island is byte-exact N=1..122 and bails at N=123: native gives world leaf 26 a permeating-light run UED22 leaves empty. The PORTAL-GRAPH root cause is DISPROVEN — Pass B is now a faithful `MakePortals` port and UED22's own log reports the same 580 portals / 163 leaves / 427 nodes. Next step: a runtime dump of `AddPortal`'s fragments."
+spikes = ["dev/docs/spikes/2026-09-06-island-n123-portal-graph/", "dev/docs/spikes/2026-09-06-permeating-beam-plane-normalize/"]
 +++
 
 # Island N=123 — world `Model2` leaf 26 gets a permeating-light run UED22 does not
@@ -21,42 +21,61 @@ differ only by export-index permutation and the gate-excluded occlusion bits.
   one light (`Light124`) plus its terminator.
 - Exactly **1 leaf of 163** mismatches; every other leaf's run matches in content AND order.
 
-## Not the beam clip
+## Not the portal graph either (2026-09-06, corrected)
 
-The unnormalized-beam-plane bug that this item was originally paired with is fixed
-(`nyc-bar-n-151-world-model2-leaf-permeating-light`, spike
-`2026-09-06-permeating-beam-plane-normalize`) and does not move Island. Measured with a temporary
-trace of `actor_visibility`:
+This item previously blamed `zones::collect_portals`: a plain `1e-4` Sutherland-Hodgman clip where
+`FEditorVisibility::MakePortalsClip` uses `FPoly::SplitWithNode(VeryPrecise=1)` and DISCARDS an
+`SP_Coplanar` result. That difference was real and **Pass B is now a faithful port of it**
+(`dev/docs/spikes/2026-09-06-island-n123-portal-graph/`) — the `WORLD_MAX = 65536` surf-plane quad
+from `BuildInfiniteFPoly`, `FindBestAxisVectors`, the ancestor stack, the precise classify/drop, and
+`AddPortal` with `MIN_AREA` removed. (`front_leaf != back_leaf` had to stay as a recorded stopgap —
+board `portal-graph-builds-self-portals-from-stale`.)
 
-- `Light124` sits at `(-4528.35, 4385.68, 64.37)`, `WorldLightRadius` 1675, seeds in leaf 85 and
-  reaches leaf 26 via leaf 32 and leaf 27. Of the 13 beams arriving at the 27->26 portal exactly one
-  survives, and its tightest clip edge leaves the target **1.79 world units** inside — 7x the 0.25
-  epsilon. No arithmetic difference closes that; the portal quad would have to move ~24 units.
-- UED22 gives leaf 26 **no light at all**, which is what `ActorVisibility` produces for a leaf with
-  no portals (`Editor.dll 0x100a6e0d` returns 0 ahead of the radius gate). Only one BSP node
-  references leaf 26 (node 358, `iLeaf = (-1, 26)`); native's two portals for it come from
-  `zones::collect_portals` finding adjacency across other nodes' planes.
+It does not move leaf 26, and the graph was never the problem: `Portalize` prints its own counts into
+`Editor.log`, and UED22 reports **580 portals, 163 leaves, 427 nodes, 3 zones** — exactly what native
+produces. The same log line also places `Portalize` BEFORE `BspOptGeom` (native runs the flood after
+it), but dumping native's leaf-26/27 portals at both points gives identical polygons, so the
+deferral does not move this decision either.
 
-## Next step — port the editor's portal filter
+## Where it actually is
 
-`FEditorVisibility::MakePortals` (`Editor.dll 0xa9750`) recurses the tree pushing an ancestor stack
-at `this+0x14` (the `+0x20` child's entry ORed with `0x40000000`), builds
-`BuildInfiniteFPoly(Model, iNode)` (`0xa7ae0`) per node and hands it to `FilterThroughSubtree`
-(`0xa9970`). That clips against each ancestor with
-`FPoly::SplitWithNode(Model, iNode, Front, Back, VeryPrecise = 1)` (the `1` pushed at `0x100a9a4c`)
-and **discards the poly outright on `SP_Coplanar`** (`0x100a9a80 test eax,eax / je <return>`); it
-keeps `Front` in the front subtree and `Back` in the back one, and discards whole on the wrong-side
-`SP_Front`/`SP_Back`. `AddPortal` (`0xa72a0`) has no area gate at all — only `iFrontLeaf != -1 &&
-iBackLeaf != -1`.
+Native marks leaf 26 once, from light 34 (`Light124`), along
+`leaf 85 (seed) -> 32 -> 27 -> 26` (nodes 193, 344, 351). Every gate clears widely (seed descent's
+smallest `PlaneDot` is 63.6; the plane gates are -63.6 / -379.9 / -1092.3 against R = 1675; leaf 26's
+re-entry radius gate qualifies at 1162 of 1675) and the beam reaches leaf 26 UNCLIPPED.
 
-Native's `zones::clip_poly` is instead a plain Sutherland-Hodgman clip with a `1e-4` tolerance and
-no `SP_*` classification, so a face coplanar with an ancestor plane survives on BOTH sides rather
-than being dropped, and native adds a `MIN_AREA = 1.0` gate the editor does not have.
+The tightest of the six beam edges clears by **+1.795**, and it is not a floating-point near-tie: the
+constraint reduces to *"is the 27->26 portal quad on leaf 27's side of node 344's plane"*, and the
+quad's nearest corner is **1.90 units** inside — measured on the REFERENCE package, whose points and
+nodes are byte-identical to native's, on vertices that are real `Model.Points` entries. Moving the
+light +/-64 units changes that margin by under 0.03.
 
-Porting this changes the portal graph the ZONE union-find also rides on, so re-verify all five
-ladders after it, not just Island.
+`SplitWithPlaneFast`, `ActorVisibility`'s whole clip loop, the `FPlane(A,B,C)` argument order, the
+14-vertex break and the portal orientation are all re-verified instruction-exact against native's
+port (pinned in `test_engine_facts.py`). So under the algorithm as decoded UED22 should mark leaf 26
+and does not.
+
+## Next step — dump the editor's real portal fragments
+
+Every count UED22 reports already agrees with native, so nothing cheaper discriminates. Capture
+`FEditorVisibility::AddPortal`'s `(iFrontLeaf, iBackLeaf, FPoly)` triples from a live UED22
+`MAP REBUILD` under `winedbg` (INT3 at `Editor.dll 0xa72a0`, base `0x10000000`, no ASLR — the method
+the UnrealScript ordering work used) and diff all 580 against native's. That settles whether the
+editor's node-344 (32,27) fragment or the node-351 (27,26) fragment differs, or whether
+`ActorVisibility` has an undecoded behaviour.
+
+A second, smaller thing the port unblocks (not the fix — the heuristic takes no flip on the decisive
+beam): `permeating_lights::clip_beam` still orients each beam plane by sign-sum instead of by the
+clip poly's winding, justified by native's portal polys having had no winding guarantee. They now do.
+Dropping it moves every permeating-light decision on every level, so it wants its own pass.
 
 ## Repro
 
     ladder_run.py --dx dev/games/deusex/Maps/01_NYC_UNATCOIsland.dx --from 123 --to 123 --keep-native
     model_dump.py <native_N123.dx> <ref_N123.dx> Model2
+
+The editor-side counts come from a one-off `--log` capture: add a `--log PATH` option to
+`build_ued_import_built_golden.py` that snapshots `Driver.log_size()` before the EXEC batch and
+writes `read_log_since()` after it (settle by driving `OBJ LIST CLASS=Class` until `Portalized:`
+appears — `Editor.log` is 4KB-buffered). **Revert it afterwards**: the file digests into
+`actor_parity.recipe_fingerprint()`, so leaving it edited marks every cached ref stale.

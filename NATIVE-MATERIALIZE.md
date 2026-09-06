@@ -272,14 +272,18 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   (`dev/docs/board/done/island-n-93-zone-actor-missed-resolve-zone/`). Byte-exact **N=1..122** (was
   92); bails at **N=123** on the world `Model2`'s LEAF light runs — native gives leaf 26 a
   permeating-light run UED22 leaves empty (1 leaf of 163; `Lights` 1729 vs 1727, every other array
-  byte-exact). NOT the NYC_Bar N=151 beam-plane bug (that fix does not move it): the surviving beam
-  clears its tightest clip edge by 1.79 units, 7x the 0.25 epsilon, and UED22 gives leaf 26 no light
-  at ALL — the signature of a leaf with no portals. Root cause is the PORTAL GRAPH:
-  `FilterThroughSubtree` (`Editor.dll 0xa9970`) clips each infinite node poly with
-  `SplitWithNode(…, VeryPrecise=1)` and DISCARDS an `SP_Coplanar` result, where `zones::clip_poly`
-  is a plain 1e-4 Sutherland-Hodgman that keeps such a face on both sides —
-  `dev/docs/board/inbox/island-n-123-world-model2-leaf-permeating-light/`. Porting it moves the graph
-  the ZONE union-find rides on, so re-verify all five ladders after it.
+  byte-exact). Two root causes have now been RULED OUT by measurement
+  (`dev/docs/spikes/2026-09-06-island-n123-portal-graph/`). It is not the NYC_Bar N=151 beam-plane
+  bug, and it is not the PORTAL GRAPH either: Pass B is now a faithful port of `MakePortals` /
+  `MakePortalsClip` / `BuildInfiniteFPoly` (the `WORLD_MAX` surf-plane quad, `FindBestAxisVectors`,
+  the ancestor stack, `SplitWithNode(VeryPrecise=1)` with its `SP_Coplanar` drop, and `AddPortal`
+  with native's invented `MIN_AREA` gate removed), and the editor's own `Portalized:` log line reports
+  **580 portals / 163 leaves / 427 nodes**, exactly what native builds. The flood's every gate,
+  `SplitWithPlaneFast` and `ActorVisibility`'s clip loop are re-verified instruction-exact; the
+  decisive constraint reduces to a 1.90-unit clearance between the 27→26 portal quad and node 344's
+  plane, measured on model points that are byte-identical in both builds. Next step is a `winedbg`
+  dump of `AddPortal`'s 580 fragments —
+  `dev/docs/board/inbox/island-n-123-world-model2-leaf-permeating-light/`.
 - **OceanLab, N=48**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the
@@ -293,9 +297,12 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   `dev/docs/board/done/oceanlab-n44-world-model2-lights-array-has-2/`). Bails at **N=48** on the
   world `Model2`'s `LightBits` alone — 28 bytes over 3 lightmaps, every geometry array byte-exact —
   `dev/docs/board/inbox/oceanlab-n48-world-model2-lightbits-differ-on/`.
-- **Standing stopgap, all levels**: `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/`
-  — repartition dedups points with a linear pool scan; the editor descends and appends on a miss
-  (`AddThing(..., !FastRebuild)` with `FastRebuild = 1`). Owed a faithful fix.
+- **Standing stopgaps, all levels**:
+  `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/` — repartition dedups points
+  with a linear pool scan; the editor descends and appends on a miss (`AddThing(..., !FastRebuild)`
+  with `FastRebuild = 1`). And `dev/docs/board/inbox/portal-graph-builds-self-portals-from-stale/` —
+  Pass B drops a portal whose two leaves are the same, where `AddPortal` has no such test; without
+  it the permeating-light flood loops forever on WanChai N=35. Both owed a faithful fix.
 - A cached editor ref goes stale two ways — a truncated trunk extraction, and a change to the golden
   recipe under it. Run `harness/verify_refs.py` before trusting a ladder result built on an inherited
   cache (`dev/docs/board/inbox/corrupt-trunk-cache-silently-passes-the-ladder/`).

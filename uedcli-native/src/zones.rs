@@ -3,8 +3,8 @@
 //!
 //! Runs on the finalized (engine-order topology) tree and produces:
 //!   - real `FBspLeaf`s (one per empty convex terminal cell) + per-node `iLeaf` (Pass A),
-//!   - a leaf-adjacency PORTAL graph (Pass B, simplified: infinite node-plane quad clipped to the
-//!     node's cell, then point-region sampled either side to find the two leaves it joins),
+//!   - a leaf-adjacency PORTAL graph (Pass B, `MakePortals`: each node's infinite plane-quad clipped
+//!     to its own BSP cell through the ancestor stack, then filtered to the leaf PAIRS it joins),
 //!   - the zone-BARRIER set (Pass B', `collect_zone_barriers`: the faithful `BlockPortal` — the
 //!     leaf-PAIRS a `PF_Portal` node's REAL polygon separates; these pairs do NOT merge),
 //!   - the zone flood (Pass C union-find over non-barrier portals) → `leaf.iZone` in `1..=63`,
@@ -30,7 +30,6 @@ fn pair(a: i32, b: i32) -> (i32, i32) {
 const NF_MASK_LEAF: u8 = 0x25; // IsCsg mask for leaf/zone descent: NF_NotCsg|NF_IsNew|portal(0x04)
 const NF_SOLID_BOUND: u8 = 0x40; // synthetic solid-bound marker (build::NF_SOLID_BOUND)
 const PF_PORTAL: u32 = 0x0400_0000;
-const WORLD: f32 = 32768.0;
 
 fn is_csg_leaf(n: &crate::model::BspNode) -> bool {
     n.num_vertices > 0 && (n.node_flags & NF_MASK_LEAF) == 0
@@ -116,36 +115,6 @@ fn clip_poly(verts: &[[f32; 3]], n: [f32; 3], w: f32) -> Vec<[f32; 3]> {
     out
 }
 
-/// Two in-plane orthonormal axes for a plane normal.
-fn plane_axes(n: [f32; 3]) -> ([f32; 3], [f32; 3]) {
-    let (ax, ay, az) = (n[0].abs(), n[1].abs(), n[2].abs());
-    let helper = if ax <= ay && ax <= az {
-        [1.0, 0.0, 0.0]
-    } else if ay <= az {
-        [0.0, 1.0, 0.0]
-    } else {
-        [0.0, 0.0, 1.0]
-    };
-    let cross = |a: [f32; 3], b: [f32; 3]| {
-        [
-            a[1] * b[2] - a[2] * b[1],
-            a[2] * b[0] - a[0] * b[2],
-            a[0] * b[1] - a[1] * b[0],
-        ]
-    };
-    let norm = |v: [f32; 3]| {
-        let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-        if l < 1e-8 {
-            [1.0, 0.0, 0.0]
-        } else {
-            [v[0] / l, v[1] / l, v[2] / l]
-        }
-    };
-    let u = norm(cross(helper, n));
-    let v = norm(cross(n, u));
-    (u, v)
-}
-
 /// One portal record: the two empty leaves a node face joins.  Whether the pair is a ZONE barrier
 /// is NOT a per-portal-face property — it is decided separately by `collect_zone_barriers` (the
 /// faithful `BlockPortal`, §3), which stamps the leaf-PAIRS a `PF_Portal` node's REAL polygon
@@ -161,31 +130,6 @@ pub(crate) struct Portal {
     pub(crate) poly: Vec<[f32; 3]>,
     pub(crate) normal: [f32; 3],
     pub(crate) w: f32,
-}
-
-/// Area² proxy (sum of triangle cross-products) — reject slivers below `MIN_AREA`.
-const MIN_AREA: f32 = 1.0;
-fn poly_area(verts: &[[f32; 3]]) -> f32 {
-    if verts.len() < 3 {
-        return 0.0;
-    }
-    let mut n = [0.0f32; 3];
-    for i in 1..verts.len() - 1 {
-        let a = [
-            verts[i][0] - verts[0][0],
-            verts[i][1] - verts[0][1],
-            verts[i][2] - verts[0][2],
-        ];
-        let b = [
-            verts[i + 1][0] - verts[0][0],
-            verts[i + 1][1] - verts[0][1],
-            verts[i + 1][2] - verts[0][2],
-        ];
-        n[0] += a[1] * b[2] - a[2] * b[1];
-        n[1] += a[2] * b[0] - a[0] * b[2];
-        n[2] += a[0] * b[1] - a[1] * b[0];
-    }
-    0.5 * (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt()
 }
 
 /// Filter `poly` down the subtree rooted at child slot `child` (`-1` => terminal leaf
@@ -225,92 +169,158 @@ fn filter_subtree(
     filter_child(model, n.i_front, n.i_leaf[0], back, out);
 }
 
-/// For each node, build its face polygon (infinite plane-quad clipped to the node's cell), then
-/// find EVERY (frontLeaf, backLeaf) pair the face joins by nested filtering (Pass B): filter the
-/// face down the BACK subtree, then re-filter each back-fragment down the FRONT subtree.  Both
-/// leaves empty => a portal (a leaf ADJACENCY).  Whether the pair is a ZONE barrier is decided
-/// separately by `collect_zone_barriers` (Pass B', the faithful `BlockPortal`) — NOT from this
-/// node's surf flag, which over-marks (see the `Portal` struct doc / §70 §13).
-fn collect_portals(
+/// `FVector::FindBestAxisVectors` (`Core.dll 0x507b0`) — the in-plane basis `BuildInfiniteFPoly`
+/// spans its quad with.  `Tmp` is the world axis the normal is LEAST aligned with (`X` when `|N.z|`
+/// strictly dominates both others, else `Z`, `0x10050804`/`0x10050809`); `Axis1` is `Tmp` with the
+/// normal component projected out and re-normalized through `FVector::SafeNormal`; `Axis2` is
+/// `Axis1 ^ N` (`0x10050914`-`0x10050941`).  Term order matters to the last bits, so the dot is
+/// summed `((N.x*T.x) + (N.y*T.y)) + N.z*T.z` the way the SSE code does.
+fn find_best_axis_vectors(n: &Vec3) -> (Vec3, Vec3) {
+    let tmp = if n.z.abs() > n.x.abs() && n.z.abs() > n.y.abs() {
+        Vec3::new(1.0, 0.0, 0.0)
+    } else {
+        Vec3::new(0.0, 0.0, 1.0)
+    };
+    let d = (n.x * tmp.x + n.y * tmp.y) + n.z * tmp.z;
+    let axis1 = crate::fpoly::safe_normal(&Vec3::new(
+        tmp.x - n.x * d,
+        tmp.y - n.y * d,
+        tmp.z - n.z * d,
+    ))
+    .unwrap_or(Vec3::new(0.0, 0.0, 0.0));
+    let axis2 = Vec3::new(
+        n.z * axis1.y - n.y * axis1.z,
+        n.x * axis1.z - n.z * axis1.x,
+        n.y * axis1.x - n.x * axis1.y,
+    );
+    (axis1, axis2)
+}
+
+/// `WORLD_MAX`, the half-extent `BuildInfiniteFPoly` spans its quad over
+/// (`Editor.dll 0x100a7b9e movss xmm0, [0x100dea10]`).
+const WORLD_MAX: f32 = 65536.0;
+
+/// `BuildInfiniteFPoly` (`Editor.dll 0xa7ae0`): a 4-vertex square of half-extent `WORLD_MAX` on
+/// node `ni`'s plane, read off the node's SURF (`Points[pBase]`, `Vectors[vNormal]`) exactly as
+/// `FPoly::SplitWithNode` reads it — see [`filter_plane`], which also carries the fallback for
+/// native's own surfless synthetic solid-bound nodes.  The `(Base ± B) ± A` grouping is the
+/// binary's (`0x100a7bfa` onward), and it is load-bearing: regrouping moves vertices by ULPs.
+fn build_infinite_fpoly(model: &Model, ni: i32) -> FPoly {
+    let (base, normal) = filter_plane(model, ni);
+    let (axis1, axis2) = find_best_axis_vectors(&normal);
+    let a = Vec3::new(axis2.x * WORLD_MAX, axis2.y * WORLD_MAX, axis2.z * WORLD_MAX);
+    let b = Vec3::new(axis1.x * WORLD_MAX, axis1.y * WORLD_MAX, axis1.z * WORLD_MAX);
+    let plus = |p: Vec3, q: &Vec3| Vec3::new(p.x + q.x, p.y + q.y, p.z + q.z);
+    let minus = |p: Vec3, q: &Vec3| Vec3::new(p.x - q.x, p.y - q.y, p.z - q.z);
+    let mut poly = FPoly::new(vec![
+        plus(plus(base, &b), &a),
+        plus(minus(base, &b), &a),
+        minus(minus(base, &b), &a),
+        minus(plus(base, &b), &a),
+    ]);
+    poly.base = base;
+    poly.normal = normal;
+    poly
+}
+
+/// One entry of `MakePortals`' ancestor stack (`FEditorVisibility+0x14`): the ancestor node, and
+/// whether the subtree we descended into lies on that ancestor's BACK side (the `0x40000000` bit
+/// the entry is ORed with at `Editor.dll 0x100a981e`).
+type Ancestor = (i32, bool);
+
+/// `FEditorVisibility::MakePortalsClip` (`Editor.dll 0xa9970`): clip `poly` — which lies on node
+/// `ni`'s plane — down to node `ni`'s own BSP cell by classifying it against every ancestor plane
+/// on the stack, then hand the survivor to `FilterThroughSubtree` rooted at `ni`.
+///
+/// The classification is `FPoly::SplitWithNode(Model, iAnc, &Front, &Back, VeryPrecise = 1)` (the
+/// `1` pushed at `0x100a9a4c`), i.e. the 0.01 band — NOT a Sutherland–Hodgman clip.  Four outcomes,
+/// and three of them can END the poly rather than trim it:
+///   * `SP_Coplanar` → the poly is DISCARDED outright (`0x100a9a80 test eax,eax / je <return>`);
+///   * `SP_Front` while the subtree is on the ancestor's back side (and the mirror `SP_Back` on the
+///     front side) → wrong side of the cell, discarded whole (`0x100a9a72` / `0x100a9ab5`);
+///   * `SP_Front`/`SP_Back` on the matching side → kept WHOLE, no cut;
+///   * `SP_Split` → keep only our side's fragment (`0x100a9a97 cmove`).
+/// `>= 14` vertices are `SplitInHalf`'d first and the second half re-entered at the SAME stack
+/// position (`0x100a99e6`; note `FilterThroughSubtree`'s own guard is `> 14`).
+fn make_portals_clip(
     model: &Model,
     ni: i32,
-    planes: &mut Vec<([f32; 3], f32)>,
+    mut poly: FPoly,
+    mut i: usize,
+    stack: &[Ancestor],
     out: &mut Vec<Portal>,
 ) {
+    while i < stack.len() {
+        let (i_anc, subtree_is_back) = stack[i];
+        if poly.verts.len() >= 14 {
+            let half = poly.split_in_half();
+            make_portals_clip(model, ni, half, i, stack, out);
+        }
+        let (base, normal) = filter_plane(model, i_anc);
+        match poly.split_with_plane(&base, &normal, true) {
+            Split::Coplanar => return,
+            Split::Front if subtree_is_back => return,
+            Split::Back if !subtree_is_back => return,
+            Split::Front | Split::Back => {}
+            Split::Split(front, back) => poly = if subtree_is_back { back } else { front },
+        }
+        i += 1;
+    }
+    // Survivor spans `ni`'s plane inside `ni`'s cell: two-phase filter (BACK subtree, then each
+    // back-fragment through the FRONT subtree) to the leaf PAIRS it joins.  `AddPortal`
+    // (`Editor.dll 0xa72a0`) then keeps every fragment whose two leaves are both non-solid — it has
+    // no area gate and no other test.
+    let n_plane = model.nodes[ni as usize].plane;
+    for (back_leaf, front_leaf, verts) in node_landings_precise(model, ni as usize, poly) {
+        if front_leaf < 0 || back_leaf < 0 {
+            continue;
+        }
+        // STOPGAP, owed a faithful fix — board `portal-graph-builds-self-portals-from-stale`.
+        // `AddPortal` has NO such test, and this really does fire: a node whose `iLeaf[0]` and
+        // `iLeaf[1]` are the SAME leaf makes both filter phases land there (WanChai N=35 nodes
+        // 355..363 all carry `iLeaf = (71, 71)` — in UED22's own package as much as native's).  The
+        // editor files that record ONCE with one orientation; `permeating_lights::leaf_portal_map`
+        // files BOTH directions, so one always clears the `d < 0` gate and the light flood loops on
+        // that leaf forever (35M+ `actor_visibility` calls, depth-capped).
+        if front_leaf == back_leaf {
+            continue;
+        }
+        out.push(Portal {
+            a: front_leaf,
+            b: back_leaf,
+            poly: verts,
+            normal: [n_plane.x, n_plane.y, n_plane.z],
+            w: n_plane.w,
+        });
+    }
+}
+
+/// `FEditorVisibility::MakePortals` (`Editor.dll 0xa9750`), Pass B: pre-order recursion that gives
+/// every node's infinite plane-quad to [`make_portals_clip`], maintaining the ancestor stack —
+/// FRONT child first with the side bit clear, then BACK child with it set (`0x100a97e1` /
+/// `0x100a9815`; engine `iChild[1]`/front = native `i_back`, `iChild[0]`/back = native `i_front`).
+///
+/// Whether a resulting leaf pair is a ZONE barrier is decided separately by `collect_zone_barriers`
+/// (Pass B', the faithful `BlockPortal`) — NOT from this node's surf flag, which over-marks (see
+/// the `Portal` struct doc / §70 §13).
+fn collect_portals(model: &Model, ni: i32, stack: &mut Vec<Ancestor>, out: &mut Vec<Portal>) {
     if ni < 0 {
         return;
     }
-    let n = &model.nodes[ni as usize];
-    let (i_front, i_back) = (n.i_front, n.i_back);
-    let pl = [n.plane.x, n.plane.y, n.plane.z];
-    let (u, v) = plane_axes(pl);
-    let base = [
-        n.plane.x * n.plane.w,
-        n.plane.y * n.plane.w,
-        n.plane.z * n.plane.w,
-    ];
-    let mut face: Vec<[f32; 3]> = vec![
-        [
-            base[0] - (u[0] + v[0]) * WORLD,
-            base[1] - (u[1] + v[1]) * WORLD,
-            base[2] - (u[2] + v[2]) * WORLD,
-        ],
-        [
-            base[0] + (u[0] - v[0]) * WORLD,
-            base[1] + (u[1] - v[1]) * WORLD,
-            base[2] + (u[2] - v[2]) * WORLD,
-        ],
-        [
-            base[0] + (u[0] + v[0]) * WORLD,
-            base[1] + (u[1] + v[1]) * WORLD,
-            base[2] + (u[2] + v[2]) * WORLD,
-        ],
-        [
-            base[0] - (u[0] - v[0]) * WORLD,
-            base[1] - (u[1] - v[1]) * WORLD,
-            base[2] - (u[2] - v[2]) * WORLD,
-        ],
-    ];
-    for &(cn, cw) in planes.iter() {
-        if face.len() < 3 {
-            break;
-        }
-        face = clip_poly(&face, cn, cw);
-    }
-    if face.len() >= 3 && poly_area(&face) >= MIN_AREA {
-        // BACK side leaves (child = i_front, terminal leaf = iLeaf[0]).
-        let mut back_frags: Vec<(i32, Vec<[f32; 3]>)> = Vec::new();
-        filter_child(model, i_front, n.i_leaf[0], face.clone(), &mut back_frags);
-        for (back_leaf, frag) in back_frags {
-            if back_leaf < 0 {
-                continue;
-            }
-            // FRONT side leaves for this back-fragment (child = i_back, leaf = iLeaf[1]).
-            let mut front_frags: Vec<(i32, Vec<[f32; 3]>)> = Vec::new();
-            filter_child(model, i_back, n.i_leaf[1], frag, &mut front_frags);
-            for (front_leaf, sub) in front_frags {
-                if front_leaf >= 0 && front_leaf != back_leaf && poly_area(&sub) >= MIN_AREA {
-                    out.push(Portal {
-                        a: front_leaf,
-                        b: back_leaf,
-                        poly: sub.clone(),
-                        normal: pl,
-                        w: n.plane.w,
-                    });
-                }
-            }
-        }
-    }
-    // recurse children, each adding THIS node's plane oriented so the child cell is negative-side.
+    let (i_front, i_back) = {
+        let n = &model.nodes[ni as usize];
+        (n.i_front, n.i_back)
+    };
+    make_portals_clip(model, ni, build_infinite_fpoly(model, ni), 0, stack, out);
     if i_back != -1 {
-        planes.push(([-pl[0], -pl[1], -pl[2]], -n.plane.w));
-        collect_portals(model, i_back, planes, out);
-        planes.pop();
+        stack.push((ni, false));
+        collect_portals(model, i_back, stack, out);
+        stack.pop();
     }
     if i_front != -1 {
-        planes.push((pl, n.plane.w));
-        collect_portals(model, i_front, planes, out);
-        planes.pop();
+        stack.push((ni, true));
+        collect_portals(model, i_front, stack, out);
+        stack.pop();
     }
 }
 
@@ -319,9 +329,9 @@ fn collect_portals(
 /// `assign_leaves_and_zones` doesn't survive past that call, but the node tree is unchanged by the
 /// time lighting runs, so recomputing here is cheap and exact.
 pub(crate) fn collect_leaf_portals(model: &Model) -> Vec<Portal> {
-    let mut planes: Vec<([f32; 3], f32)> = Vec::new();
+    let mut stack: Vec<Ancestor> = Vec::new();
     let mut out = Vec::new();
-    collect_portals(model, 0, &mut planes, &mut out);
+    collect_portals(model, 0, &mut stack, &mut out);
     out
 }
 
@@ -604,7 +614,7 @@ fn split_dump() -> bool {
 
 /// Faithful port of `FilterThroughSubtree` (`Editor.dll 0xa9030`): descend `poly` through the subtree
 /// at `i_filter` classifying it with `FPoly::SplitWithNode(VeryPrecise=1)` at each node — NOT the
-/// crude `clip_poly` Sutherland–Hodgman that Pass B still uses.  Three behaviours that `clip_poly`
+/// crude `clip_poly` Sutherland–Hodgman that Pass B' still uses.  Three behaviours that `clip_poly`
 /// lacks are load-bearing for the vert-pool count (`oceanlab-n3-model2-orphan-vert-overcount`):
 ///   * `> 14` verts → `SplitInHalf` first, recurse the half (the editor's own `MAX_VERTICES` guard);
 ///   * a `Coplanar` (r==0) result DROPS the fragment with NO landing — a face coplanar with a deeper
@@ -681,13 +691,13 @@ fn node_filter_poly(model: &Model, verts: Vec<[f32; 3]>) -> FPoly {
     FPoly::new(verts.into_iter().map(|v| Vec3::new(v[0], v[1], v[2])).collect())
 }
 
-/// Pass D's re-filter: run `poly` through chain head `head`'s BACK then FRONT subtree with the
-/// PRECISE `filter_through` (`FPoly::SplitWithNode`), the editor's own `FilterThroughSubtree`.  This
-/// is the path whose emitted verts must byte-match the editor, so it needs the coplanar-drop /
-/// precise-split behaviour (`oceanlab-n3-model2-orphan-vert-overcount`).  Pass B' barriers keep the
-/// cheaper `node_landings` (clip_poly) — they read only leaf PAIRS, never emit verts, and that path
-/// is already leaf-pair-validated against four editor goldens (§70 §13); leaving it alone bounds the
-/// blast radius of this fix to the vert re-emit.
+/// Run `poly` through chain head `head`'s BACK then FRONT subtree with the PRECISE `filter_through`
+/// (`FPoly::SplitWithNode`), the editor's own `FilterThroughSubtree` two-phase.  Shared by Pass D's
+/// re-filter (whose emitted verts must byte-match the editor, so it needs the coplanar-drop /
+/// precise-split behaviour — `oceanlab-n3-model2-orphan-vert-overcount`) and by Pass B's
+/// `make_portals_clip`.  Pass B' barriers keep the cheaper `node_landings` (clip_poly) — they read
+/// only leaf PAIRS, never emit verts, and that path is leaf-pair-validated against four editor
+/// goldens (§70 §13).
 fn node_landings_precise(
     model: &Model,
     head: usize,
@@ -1127,8 +1137,8 @@ pub fn assign_leaves_and_zones(model: &mut Model) {
     // Pass B: portal graph.
     let mut portals: Vec<Portal> = Vec::new();
     {
-        let mut planes: Vec<([f32; 3], f32)> = Vec::new();
-        collect_portals(model, 0, &mut planes, &mut portals);
+        let mut stack: Vec<Ancestor> = Vec::new();
+        collect_portals(model, 0, &mut stack, &mut portals);
     }
 
     // Pass B': zone barriers (faithful BlockPortal) — the leaf-PAIRS a PF_Portal node's REAL

@@ -61,6 +61,7 @@
 //!    was dividing it by the cross product's length. Fixed with [`safe_normal`]/[`plane_w`]/
 //!    [`plane_dot`]; spike `dev/docs/spikes/2026-09-06-permeating-beam-plane-normalize/`.
 
+use crate::fpoly::safe_normal;
 use crate::light::LightInput;
 use crate::model::{Model, Vec3};
 use crate::zones::{collect_leaf_portals, Portal};
@@ -143,30 +144,10 @@ fn bsp_descend_to_leaf(model: &Model, p: &Vec3) -> i32 {
 /// distance against are `+0.25`/`-0.25` at RVA `0x206780`/`0x20b580`. See [`split_with_plane_fast`].
 const THRESH_SPLIT_POLY_WITH_PLANE: f32 = 0.25;
 
-/// `SMALL_NUMBER`, `FVector::SafeNormal`'s zero-length cutoff (`core.dll 0x10051090`, the f32 at
-/// `.rdata 0x100a0a40`). A cross product shorter than this normalizes to `FVector(0,0,0)`, which
-/// makes every `PlaneDot` exactly 0 -- `SP_Coplanar`, i.e. no constraint at all.
-const SMALL_NUMBER: f32 = 1e-8;
-
 /// The editor stops clipping once the working poly reaches 14 vertices
 /// (`Editor.dll 0x100a7083 cmp eax, 0xe / jge`), checked BEFORE each edge -- it keeps the poly it
 /// has and recurses with it, it does not truncate.
 const MAX_CLIP_VERTS: usize = 14;
-
-/// `FVector::SafeNormal` (`core.dll 0x10051090`). `None` is the editor's zero vector.
-///
-/// The scale is not a plain `1.0/sqrt`: the square sum is widened to f64, `sqrt`ed, **rounded back
-/// to f32** (`0x100510f5 fstp dword`), and only then reciprocated and rounded to f32 again
-/// (`0x10051104 fstp dword`). Each component is scaled in single precision.
-fn safe_normal(v: &Vec3) -> Option<Vec3> {
-    let square_sum = v.x * v.x + v.y * v.y + v.z * v.z;
-    if square_sum < SMALL_NUMBER {
-        return None;
-    }
-    let root = (square_sum as f64).sqrt() as f32;
-    let scale = (1.0f64 / root as f64) as f32;
-    Some(Vec3::new(v.x * scale, v.y * scale, v.z * scale))
-}
 
 /// `FPlane(A, B, C)`'s `W` (`core.dll 0x1000b440`): `A | Normal`, summed as
 /// `(A.y*N.y + A.x*N.x) + A.z*N.z` (`0x1000b4e3`/`0x1000b4f1`/`0x1000b4fe`/`0x1000b50b`).
@@ -187,10 +168,9 @@ fn plane_dot(normal: &Vec3, w: f32, v: &Vec3) -> f32 {
 /// `0.25` a real 0.25-world-unit epsilon rather than an effectively-zero one.
 ///
 /// The one deliberate departure is the ORIENTATION. The editor inherits it from its portal poly's
-/// vertex winding; native's portal polys are synthesized by `zones::collect_portals` from
-/// `plane_axes` and carry no such guarantee, so the plane is oriented explicitly instead: flip it
-/// when `clip`'s own remaining (convex) vertices fall on the negative side, which reproduces the
-/// editor's "keep the beam interior" for either winding.
+/// vertex winding; `leaf_portal_map` re-winds the reverse direction of every `zones::Portal`, so the
+/// plane is oriented explicitly instead: flip it when `clip`'s own remaining (convex) vertices fall
+/// on the negative side, which reproduces the editor's "keep the beam interior" for either winding.
 fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> {
     let mut poly = target.to_vec();
     let n = clip.len();
