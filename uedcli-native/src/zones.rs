@@ -600,6 +600,15 @@ fn filter_plane(model: &Model, ni: i32) -> (Vec3, Vec3) {
     )
 }
 
+/// `UEDCLI_SPLIT_DUMP`: log every Pass-D filter split with the plane it used and where that plane
+/// came from. A node whose stored `plane.w` disagrees with `Points[surf.pBase] · normal` is the
+/// fingerprint of a mis-pooled surf base (board `island-n5-n12-pre-existing-model2-orphan-vert-4`),
+/// which shifts every cut taken against that plane. Cached — `filter_through` is the hot path.
+fn split_dump() -> bool {
+    static FLAG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *FLAG.get_or_init(|| std::env::var_os("UEDCLI_SPLIT_DUMP").is_some())
+}
+
 /// Faithful port of `FilterThroughSubtree` (`Editor.dll 0xa9030`): descend `poly` through the subtree
 /// at `i_filter` classifying it with `FPoly::SplitWithNode(VeryPrecise=1)` at each node — NOT the
 /// crude `clip_poly` Sutherland–Hodgman that Pass B still uses.  Three behaviours that `clip_poly`
@@ -638,6 +647,16 @@ fn filter_through(
             let n = &model.nodes[i_filter as usize];
             (n.i_front, n.i_back, n.i_leaf[0], n.i_leaf[1])
         };
+        if split_dump() {
+            let nd = &model.nodes[i_filter as usize];
+            let pb = usize::try_from(nd.i_surf).ok().map(|s| model.surfs[s].p_base).unwrap_or(-1);
+            eprintln!(
+                "SPLIT node={} isurf={} pbase={} plane=({:.9},{:.9},{:.9},{:.9}) base=({:.9},{:.9},{:.9}) n=({:.9},{:.9},{:.9}) poly={:?}",
+                i_filter, nd.i_surf, pb, nd.plane.x, nd.plane.y, nd.plane.z, nd.plane.w,
+                base.x, base.y, base.z, normal.x, normal.y, normal.z,
+                poly.verts.iter().map(|v| (v.x, v.y, v.z)).collect::<Vec<_>>()
+            );
+        }
         match poly.split_with_plane(&base, &normal, true) {
             Split::Front => {
                 // r==1: whole poly down the FRONT child (iChild[1] = i_back).

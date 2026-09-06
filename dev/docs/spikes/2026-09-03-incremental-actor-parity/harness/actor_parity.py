@@ -24,6 +24,7 @@ Scratch under `_scratch/actor-parity/<level>/`. The editor `ref` build is the sl
 from __future__ import annotations
 
 import argparse
+import hashlib
 import shutil
 import subprocess
 import sys
@@ -82,6 +83,30 @@ def ref_path(name: str, n: int) -> Path:
     return ROOT_SCRATCH / name / f"ref_N{n}.dx"
 
 
+def recipe_fingerprint() -> str:
+    """Digest of the golden builder — what the reference build IS. Stamped beside every ref it makes
+    so `verify_refs.py` can spot a cached ref produced by an older recipe (e.g. before `dbfebf0`
+    taught the golden's T3D to author mover `BasePos`/`BaseRot`), which fails the gate on names its
+    build never had. A cached ref is worthless without knowing which recipe made it.
+
+    Covers the builder script only, not the `uedcli` modules it emits the T3D through — a change in
+    `uedcli.emit`/`movers`/`materialize` also changes what the golden builds and will not move this
+    digest."""
+    return hashlib.sha256(REF_BUILDER.read_bytes()).hexdigest()
+
+
+def ref_is_reusable(name: str, n: int) -> bool:
+    """A cached ref may be reused unless its `.recipe` stamp names a DIFFERENT golden builder — that
+    ref was built by another recipe and will diverge on whatever the recipe changed (`dbfebf0`'s
+    mover `BasePos`/`BaseRot`). A ref with no stamp predates stamping; it is reused, and
+    `verify_refs.py` reports it as unknown."""
+    ref = ref_path(name, n)
+    if not ref.exists():
+        return False
+    stamp = ref.with_suffix(".recipe")
+    return not stamp.exists() or stamp.read_text().strip() == recipe_fingerprint()
+
+
 def build_native(subset: Path, name: str, n: int) -> Path:
     dx, warn = pc.build_native_lit_dx(subset, subset.parent.parent)
     out = native_path(name, n)
@@ -100,6 +125,7 @@ def build_ref(subset: Path, name: str, n: int, *, timeout: float) -> Path:
     if r.returncode != 0 or not out.exists():
         sys.stderr.write(r.stdout[-3000:] + "\n" + r.stderr[-3000:] + "\n")
         raise SystemExit(f"ref build N={n} FAILED (rc={r.returncode})")
+    out.with_suffix(".recipe").write_text(recipe_fingerprint())
     return out
 
 
@@ -130,7 +156,7 @@ def main() -> int:
     if args.cmd == "diff":
         nat = build_native(subset, name, args.n)
         ref = ref_path(name, args.n)
-        if not ref.exists():
+        if not ref_is_reusable(name, args.n):
             ref = build_ref(subset, name, args.n, timeout=args.timeout)
         print(f"\n=== structure_diff  native={nat.name}  ref={ref.name}  (level {name}, N={args.n}) ===",
               flush=True)

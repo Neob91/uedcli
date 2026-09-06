@@ -57,3 +57,6 @@ brush poly's descent is the way in.
 
 Fixed by `db85703` (MergeNearPoints remaps `FBspSurf.pBase` too) — OceanLab now byte-exact N=1..16,
 covering this item's N=13. Not a separate cause; same welded-point-survives-refresh bug as WanChai N40.
+
+OceanLab reaches N=1..33 after `a762617` (repartition point dedup takes the nearest pool point);
+`--to 33` was the run's limit, not a bail.

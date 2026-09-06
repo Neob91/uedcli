@@ -64,7 +64,7 @@ def run_level(dx_path: Path, *, game: str, start: int, stop: int | None,
         subset = ap.make_subset(full_trunk, name, n)
         native = ap.build_native(subset, name, n)
         ref = ap.ref_path(name, n)
-        if force_ref or not ref.exists():
+        if force_ref or not ap.ref_is_reusable(name, n):
             ref = ap.build_ref(subset, name, n, timeout=timeout)
         ok, fails = pg.gate(str(native), str(ref))
         if ok:

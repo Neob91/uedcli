@@ -198,19 +198,28 @@ Tests must NOT block the parity work. For this project specifically:
 - Parity harness: `dev/docs/spikes/2026-09-03-incremental-actor-parity/harness/` (`parity_gate.py`,
   `actor_parity.py`, `ladder_run.py`).
 
-## Open blockers per level (2026-09-05) — read before pushing that level further
+## Open blockers per level (2026-09-06) — read before pushing that level further
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
-- **UNATCO, N=29** (was N=26, closed 2026-09-06): `URender::BoundVisible` + `FSpanBuffer::BoxIsVisible`
-  are ported (`dev/docs/spikes/2026-09-06-boundvisible-port/`,
-  `dev/docs/board/done/port-urender-boundvisible-box-occlusion-test/`), so the box-occlusion
-  `NF_BoxOccluded` bits the shadow-ray walker reads now match; N=1..28 gate byte-exact. The new bail
-  at N=29 is a world `Model2` geometry diff —
+- **UNATCO, N=29**: `BODY model model2`, not yet diagnosed —
   `dev/docs/board/inbox/unatco-n-29-world-model2-vert-rings-reference/` (identical nodes and Points,
-  391 of 860 `FVert`s naming different Points). Also open, found by the same work:
-  `dev/docs/board/inbox/port-occludebsp-frustum-cone-subtree-reject/` — native still box-tests 51
-  subtrees per UNATCO N=26 build that UED22's step-6 frustum-cone reject discards.
+  391 of 860 `FVert`s naming different Points). TWO independent fixes landed the same session and
+  both moved this ladder; which one actually closed the former N=26 `Light155` blocker (or whether
+  it was partly a stale inherited ref cache) is NOT yet disentangled — re-verify with `--force-ref`
+  before trusting the exact N this bullet names next:
+  - `URender::BoundVisible` + `FSpanBuffer::BoxIsVisible` are ported
+    (`dev/docs/spikes/2026-09-06-boundvisible-port/`,
+    `dev/docs/board/done/port-urender-boundvisible-box-occlusion-test/`), so the box-occlusion
+    `NF_BoxOccluded` bits the shadow-ray walker reads now match a real engine algorithm. Also open,
+    found by the same work: `dev/docs/board/inbox/port-occludebsp-frustum-cone-subtree-reject/` —
+    native still box-tests 51 subtrees per UNATCO N=26 build that UED22's step-6 frustum-cone reject
+    discards.
+  - `a762617` fixed `bsp_add_point_tol`'s repartition scan (nearest pool point, not first-within-
+    threshold) — see the Island bullet below — and independently moved UNATCO's N=23..28 to gate
+    byte-exact against a freshly built ref, with `URender::BoundVisible` still unported on that
+    branch. A UNATCO `ref_N25`/`ref_N26` inherited from another worktree (holding actors 26-27, not
+    25/26) was also found and fixed as a contributing false-failure source.
 - **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-spotlight22-light-runs-differ-on-4/` — PARKED,
   multi-day rasterizer port (`FSpanBuffer`'s `ClipBspSurf` + fixed-point scanline setup), corpus-wide
   blast radius measured (~20k already-correct decisions per level would move at once).
@@ -219,11 +228,21 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   world-node `NF_IsFront`/`NF_IsBack` (accumulates across multiple CSG-time descents, not a single
   pass) and mover private `Model` geometry not built when real world CSG exists (reopened:
   `dev/docs/board/inbox/native-geometry-path-leaves-mover-models-unbuilt/`).
-- **Island, N=5 / OceanLab, N=13**: same residual class — `dev/docs/board/to-spike/
-  island-n5-n12-pre-existing-model2-orphan-vert-4/`, `dev/docs/board/to-spike/
-  oceanlab-n13-csg-soup-split-vertex-1-ulp/` — 1-5 ULP split-vertex values in the world `Model2`;
-  walk order, summation order, plane provenance, and colinear removal all ruled out by disassembly;
-  cause not yet found. See also `dev/docs/board/inbox/corrupt-trunk-cache-silently-passes-the-ladder/`
-  — a cached trunk extraction can be silently truncated; verify actor COUNT against the level's known
-  scale before trusting a ladder result either way.
+- **Island, N=6**: `dev/docs/board/inbox/island-n6-vector-pool-order/` — one world `Model2` Vector
+  sits at pool index 8 in UED22 and 16 in native; UED22 proposes it to `bspAddVector` before the surf
+  that owns it, and only the normal, not that surf's texture axes. The old N=5 ULP residual is fixed
+  (`dev/docs/board/done/island-n5-n12-pre-existing-model2-orphan-vert-4/`).
+- **OceanLab, N=44**: `BODY model model2` — the world `Model.Lights` per-surf light-run array has 2
+  extra light refs (`light121`, an extra `light106`) native emits that the editor's build does not,
+  plus a downstream `LightBits` byte diff. N=44 adds a plain brush, no new light/zone actor; cause
+  not yet found — `dev/docs/board/inbox/oceanlab-n44-world-model2-lights-array-has-2/`. Byte-exact
+  N=1..43 (was 16, then 33, then 43 across two independent fixes this session: a native texture
+  resolver no longer guessing a package when none is loaded, and the point-dedup repartition fix
+  below).
+- **Standing stopgap, all levels**: `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/`
+  — repartition dedups points with a linear pool scan; the editor descends and appends on a miss
+  (`AddThing(..., !FastRebuild)` with `FastRebuild = 1`). Owed a faithful fix.
+- A cached editor ref goes stale two ways — a truncated trunk extraction, and a change to the golden
+  recipe under it. Run `harness/verify_refs.py` before trusting a ladder result built on an inherited
+  cache (`dev/docs/board/inbox/corrupt-trunk-cache-silently-passes-the-ladder/`).
 - Live status + these same blockers, kept current: the **Parity Ladder** artifact (see above).

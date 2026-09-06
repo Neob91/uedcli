@@ -97,17 +97,6 @@ impl Opt {
 
 // --- pooling (bspAddPoint / bspAddVector) — copied from build.rs to keep it untouched --------
 
-/// `UEDCLI_BSPCSG_POINT_NEAREST` — opt-in switch from FIRST-within-threshold to the real engine's
-/// NEAREST-within-threshold dedup rule (spec `unrealed-geometry-build-map-rebuild-bsp-rebuild/
-/// spec.md` §3.10, DISASM `Editor.dll 0x35430` calling `Engine.dll UModel::FindNearestVertex
-/// 0x1adeb0`): "this returns the *nearest* existing point within threshold, not the *first*
-/// found". Gated because it changes every dedup call site; measured effect on the lighting-bits-
-/// only-divergence-localizes-to grid-only bucket, `native-materialize-findings.md`.
-fn point_nearest_enabled() -> bool {
-    static FLAG: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
-    *FLAG.get_or_init(|| std::env::var("UEDCLI_BSPCSG_POINT_NEAREST").is_ok())
-}
-
 // --- STAGE-1 POINT-DEDUP TRACE (UEDCLI_BSPCSG_POINT_TRACE) — env-gated, default path byte-unchanged.
 // Faithful-dedup rewrite, Stage 1 (spike 2026-09-05-faithful-dedup-fix-attempt/stage1). Emits, per
 // `bsp_add_point_tol` call: the query, native's SNAP-vs-ADD decision + target idx/value, the global
@@ -442,20 +431,30 @@ fn bsp_add_point(model: &mut Model, v: Vec3) -> i32 {
 fn bsp_add_point_tol(model: &mut Model, v: Vec3, tol: f32) -> i32 {
     // Incremental CSG uses the editor's radius-pruned FindNearestVertex descent at BOTH thresholds —
     // `bspAddPoint` picks 0.002/0.015 from its `Exact` arg and then calls FNV unconditionally
-    // (0x35465..0x35498). Repartition and any other caller keep the linear pool scan (see `FNV_DEDUP`).
+    // (0x35465..0x35498). That branch is faithful.
+    //
+    // The repartition branch is NOT, and is a known STOPGAP (board
+    // `repartition-point-dedup-still-uses-a-linear`). The editor has no second rule: on an FNV miss
+    // `bspAddPoint` calls `AddThing(&Points, V, Thresh, !FastRebuild)` (`0x354d1`-`0x354ed`), and
+    // `csgRebuild` sets `FastRebuild = 1` (`0x4a69f`-`0x4a6a8`), so during a rebuild the check
+    // argument is 0 and `AddThing` (`0x31ae0`) appends WITHOUT scanning. Faithful = descent, else
+    // append. Native instead scans the retained pool, because an earlier descent port over the
+    // rebuilding tree over-created points (`native-materialize-findings.md`, garage-pool-snap rounds
+    // 2-3) — with the pBase/chain candidates it was then missing.
+    //
+    // Within that stand-in, NEAREST beats FIRST: the retained pool holds the very point the editor's
+    // descent finds, and taking the first point inside the threshold instead picks a neighbour's when
+    // two are closer to each other than the threshold. Island's `Brush1359` and `Brush1355` oblique
+    // faces have bases 0.001953125 apart, so `Brush1359`'s surf took `Brush1355`'s point as its
+    // `pBase` and every Pass-D cut against that plane came out ~2 ULP off (board
+    // `island-n5-n12-pre-existing-model2-orphan-vert-4`).
     let hit: Option<i32> = if FNV_DEDUP.with(|c| c.get()) {
         find_nearest_vertex(model, v, tol).map(|i| i as i32)
-    } else if point_nearest_enabled() {
+    } else {
         match nearest(&model.points, &v) {
             Some((i, dist)) if dist < tol => Some(i as i32),
             _ => None,
         }
-    } else {
-        model
-            .points
-            .iter()
-            .position(|p| v.sub(p).size() < tol)
-            .map(|i| i as i32)
     };
     if !matches!(pt_trace(), PtTrace::Off) {
         trace_point_add(model, v, tol, hit);
@@ -478,23 +477,18 @@ fn ring_point_tol() -> f32 {
     THRESH_POINTS_ARE_NEAR
 }
 
+/// `bspAddVector` (`Editor.dll 0x35530`): unlike `bspAddPoint` it never consults the tree — it calls
+/// `AddThing(&Model->Vectors, V, Thresh, Check=1)` (`0x31ae0`, `push 1`), whose scan takes the FIRST
+/// entry inside the threshold, not the nearest.
 fn bsp_add_vector(model: &mut Model, v: Vec3, exact: bool) -> i32 {
     let tol = if exact {
         THRESH_NORMALS_ARE_SAME
     } else {
         THRESH_VECTORS_ARE_NEAR
     };
-    if point_nearest_enabled() {
-        if let Some((i, dist)) = nearest(&model.vectors, &v) {
-            if dist < tol {
-                return i as i32;
-            }
-        }
-    } else {
-        for (i, p) in model.vectors.iter().enumerate() {
-            if v.sub(p).size() < tol {
-                return i as i32;
-            }
+    for (i, p) in model.vectors.iter().enumerate() {
+        if v.sub(p).size() < tol {
+            return i as i32;
         }
     }
     model.vectors.push(v);
@@ -502,13 +496,20 @@ fn bsp_add_vector(model: &mut Model, v: Vec3, exact: bool) -> i32 {
 }
 
 /// `(index, distance)` of the entry in `pool` nearest `v` — the real `FindNearestVertex`'s
-/// selection rule. Descent pruning uses squared distance; the accept test the caller applies uses
-/// a real (post-`sqrt`) distance (spec §3.10), so this returns the real distance, not squared.
+/// selection rule. It selects on SQUARED distance and `appSqrt`s only the winner (`Engine.dll`
+/// `0x1adcd3` compares squared, `0x1adced` sqrts the winner), so the caller's accept test compares a
+/// real distance against a real threshold (spec §3.10). Selecting on the sqrt of every candidate
+/// would be the same choice at N times the cost.
 fn nearest(pool: &[Vec3], v: &Vec3) -> Option<(usize, f32)> {
-    pool.iter()
+    let (i, d2) = pool
+        .iter()
         .enumerate()
-        .map(|(i, p)| (i, v.sub(p).size()))
-        .min_by(|a, b| a.1.partial_cmp(&b.1).unwrap())
+        .map(|(i, p)| {
+            let d = v.sub(p);
+            (i, d.dot(&d))
+        })
+        .min_by(|a, b| a.1.partial_cmp(&b.1).expect("pool coordinate is NaN"))?;
+    Some((i, d2.sqrt()))
 }
 
 /// Derive `NodeFlags` from a surf's PolyFlags (matches build.rs::derive_nf).
@@ -4126,6 +4127,22 @@ mod tests {
 
         // Repartition (descent off) keeps the pool scan, which snaps the pruned point too.
         assert_eq!(bsp_add_point_tol(&mut model, unreachable_q, ring_point_tol()), 1);
+    }
+
+    #[test]
+    fn repartition_point_add_snaps_to_the_nearest_pool_point_not_the_first() {
+        // The repartition stand-in picks the nearest pool point, not the first inside the threshold
+        // (see `bsp_add_point_tol`). Island's two coplanar oblique-face bases, 0.001953125 apart in y
+        // and both inside the 0.002 SAME threshold, are the case that separates the two rules.
+        let mut model = Model::default();
+        model.points.push(Vec3::new(-3488.0, -6336.0, 0.0)); // Brush1355's base, pooled first
+        model.points.push(Vec3::new(-3488.0, -6336.001953125, 0.0)); // Brush1359's own base
+        let q = Vec3::new(-3488.0, -6336.001953125, 0.0);
+        assert_eq!(
+            bsp_add_point_tol(&mut model, q, THRESH_POINTS_ARE_SAME), 1,
+            "must snap to the exact point, not the 0.00195-away one that comes first in the pool"
+        );
+        assert_eq!(model.points.len(), 2, "an exact match must not push a new point");
     }
 
     #[test]

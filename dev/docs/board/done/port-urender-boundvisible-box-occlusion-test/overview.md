@@ -75,3 +75,12 @@ UNDER-occlude relative to the real per-box screen test: exactly the guessed-appr
 4. Re-verify UNATCO N26 (and any other level/N this affects) with `parity_gate.py` — target: gates
    byte-exact with NO mask (the tie/exclusion machinery already removed per `NATIVE-MATERIALIZE.md`'s
    "point-dedup near-tie" entry stays the model: faithful fix, not a mask).
+
+## No longer blocking UNATCO N26 (2026-09-06)
+
+`a762617` (repartition point dedup: nearest, not first —
+`island-n5-n12-pre-existing-model2-orphan-vert-4`) moved UNATCO's geometry, and N=26 now gates
+byte-exact against a freshly editor-built ref, as do N=23..25 and N=27. So the `Light155` divergence
+this item was filed to close is gone at that N. The engine gap itself is real and unported — keep the
+item — but it is no longer what stops the UNATCO ladder; re-target it at whatever N reintroduces a
+box-occlusion divergence.

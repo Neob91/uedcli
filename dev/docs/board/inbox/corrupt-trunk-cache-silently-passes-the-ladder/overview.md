@@ -27,3 +27,18 @@ only valid against the trunk it was built from — refs and trunk must be copied
   factor of the shipped `.dx`'s export count before writing `.extraction-complete`; treat a mismatch
   as a failed extraction (exit non-zero), not a cache entry.
 - Record the extracting build's actor count in the marker and re-check it on reuse.
+
+## Partly covered 2026-09-06
+
+`harness/verify_refs.py` checks every cached `ref_N<n>.dx` against the current trunk's first N actor
+names and (with `--delete`) drops the ones that disagree. It caught two UNATCO refs seeded from
+another worktree that held actors 26-27 under the `N=25` name, which the ladder had reported as a
+divergence. It does NOT cover the trunk extraction itself — the two bullets above still stand.
+
+A cached ref goes stale a **second** way, found the same day: the golden RECIPE changes under it.
+`dbfebf0` taught `build_ued_import_built_golden.py` to author mover `BasePos`/`BaseRot`, so every ref
+built before it lacks those two names, and NYC_Bar N=48 — the level's first mover — reported a
+`header name_count` divergence that a freshly forced ref does not. `actor_parity.build_ref` now
+stamps the builder's digest into a `ref_N<n>.recipe` sidecar and `verify_refs.py` compares it; refs
+predating the stamp are reported as unknown rather than deleted (rebuilding a whole cache costs
+editor-hours). Copy the sidecar whenever you copy a ref.
