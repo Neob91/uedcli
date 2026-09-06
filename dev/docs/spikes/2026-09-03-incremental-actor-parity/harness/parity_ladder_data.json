@@ -26,12 +26,12 @@
       "slug": "oceanlab",
       "name": "OceanLab",
       "codename": "14_OceanLab_Lab",
-      "highest_n": 45,
+      "highest_n": 47,
       "total_actors": 2745,
       "status": "blocked",
-      "blocker": "BODY model model2 — Brush1427 (N=46) diverges in Bounds (from idx 19), LeafHulls (from idx 221), and the per-leaf permeating-light region (from idx 0); LightBits is byte-identical. A leaf/bound-pass divergence (passes.rs + permeating_lights.rs), not a lighting-gather issue. N=44's extra-lights bug is FIXED: native's per-light raytrace loop wasn't applying the same WorldLightRadius-vs-plane-distance filter the gather pass already used to decide if a surf is lit at all — validated against 188 cached reference packages, zero counterexamples.",
-      "board": "oceanlab-n46-world-model2-bounds-leafhulls-and",
-      "updated": "2026-09-06T12:35:00Z"
+      "blocker": "BODY model model2 — world Model2's LightBits differ on 3 lightmaps, 28 bytes total; every geometry array is byte-exact. N=46's Bounds/LeafHulls bug is FIXED: Pass D's zone SPLIT must KILL the original chain node and append every fragment as a new node, so the post-Pass-D bspCleanup promotes the dead node's coplanar successor (inheriting its children, mirrored on opposite facing); native was reusing the original node in place, which left it heading two chains.",
+      "board": "oceanlab-n48-world-model2-lightbits-differ-on",
+      "updated": "2026-09-06T19:15:00Z"
     },
     {
       "slug": "wanchai",
@@ -48,12 +48,12 @@
       "slug": "island",
       "name": "UNATCO Island",
       "codename": "01_NYC_UNATCOIsland",
-      "highest_n": 50,
+      "highest_n": 92,
       "total_actors": 3653,
-      "status": "advancing",
-      "blocker": null,
-      "board": null,
-      "updated": "2026-09-06T18:05:00Z"
+      "status": "blocked",
+      "blocker": "BODY brush brush1099 — Region's zone actor is wrong: native falls back to LevelInfo, UED22 uses WaterZone1 (same leaf 34, same zone number 1 — the descent itself is correct). resolve_zone_actors selects zone-actor candidates by class NAME suffix (ends with \"ZoneInfo\"), so DeusEx.WaterZone (a real Engine.ZoneInfo subclass whose short name doesn't end in \"ZoneInfo\") is skipped. Fix shape already scoped: select by ClassIndex ancestry instead, like movers._mover_by_ancestry.",
+      "board": "island-n-93-zone-actor-missed-resolve-zone",
+      "updated": "2026-09-06T19:15:00Z"
     }
   ]
 }
