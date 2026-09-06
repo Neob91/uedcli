@@ -1,0 +1,59 @@
+{
+  "levels": [
+    {
+      "slug": "bar",
+      "name": "NYC Bar",
+      "codename": "02_NYC_Bar",
+      "highest_n": 58,
+      "total_actors": 487,
+      "status": "blocked",
+      "blocker": "BODY model model2 — two remaining gaps in native's world geometry: (1) world-node NF_IsFront/NF_IsBack bits, set by UModel::PrecomputeSphereFilter across multiple descents during incremental CSG; (2) mover private Model geometry (Bounds, Polys iLink/iBrushPoly) isn't built when real world CSG exists. Region zone-actor, mover base pose, and pawn Foot/HeadRegion are all fixed. N=48..58 re-verified 2026-09-06 with FRESH refs — the cached ones predated dbfebf0 (mover BasePos/BaseRot in the golden's T3D) and reported a false name_count divergence at N=48, the level's first mover.",
+      "board": "nyc-bar-n-59-brush-region-zone-and-ued22",
+      "updated": "2026-09-06T09:40:00Z"
+    },
+    {
+      "slug": "unatco",
+      "name": "UNATCO HQ",
+      "codename": "03_NYC_UNATCOHQ",
+      "highest_n": 28,
+      "total_actors": 1437,
+      "status": "blocked",
+      "blocker": "BODY model model2 — a NEW divergence, not the old one. The N=26 Light155 blocker is CLOSED: URender::BoundVisible + FSpanBuffer::BoxIsVisible are ported into visible_surfs.rs, gated to the confirmed iNode%16==0 residue, and each light's NF_BoxOccluded writes are replayed onto Model.Nodes in light order. Pinned by 225 live BoundVisible calls (225/225 match). ladder_run.py now passes N=1..28 and bails at N=29 on an undiagnosed world Model2 body diff (391 of 860 FVerts naming different Points, being worked now). Known residual from the same work: native still box-tests 51 subtrees per build that UED22's step-6 frustum-cone reject discards (board/port-occludebsp-frustum-cone-subtree-reject).",
+      "board": "port-occludebsp-frustum-cone-subtree-reject",
+      "updated": "2026-09-06T08:40:00Z"
+    },
+    {
+      "slug": "oceanlab",
+      "name": "OceanLab",
+      "codename": "14_OceanLab_Lab",
+      "highest_n": 45,
+      "total_actors": 2745,
+      "status": "blocked",
+      "blocker": "BODY model model2 — Brush1427 (N=46) diverges in Bounds (from idx 19), LeafHulls (from idx 221), and the per-leaf permeating-light region (from idx 0); LightBits is byte-identical. A leaf/bound-pass divergence (passes.rs + permeating_lights.rs), not a lighting-gather issue. N=44's extra-lights bug is FIXED: native's per-light raytrace loop wasn't applying the same WorldLightRadius-vs-plane-distance filter the gather pass already used to decide if a surf is lit at all — validated against 188 cached reference packages, zero counterexamples.",
+      "board": "oceanlab-n46-world-model2-bounds-leafhulls-and",
+      "updated": "2026-09-06T12:35:00Z"
+    },
+    {
+      "slug": "wanchai",
+      "name": "WanChai Market",
+      "codename": "06_HongKong_WanChai_Market",
+      "highest_n": 44,
+      "total_actors": 2288,
+      "status": "blocked",
+      "blocker": "N=45 Spotlight22: Model.Lights 687 vs 686 — 4 lightmap light-runs differ (3 over-, 1 under-inclusion). GetVisibleSurfs drops the under-included surf with zone 1's span buffer already exhausted. Real gap is ClipBspSurf (0x10019987) + the fixed-point scanline rasterizer (0x1001b470), which decides ~20k currently-byte-exact outcomes per level against an empirically tuned pixel-centre baseline. Estimate 2-4 focused days — NOT attempted; needs its own spike.",
+      "board": "wanchai-n45-spotlight22-light-runs-differ-on-4",
+      "updated": "2026-09-06T00:30:00Z"
+    },
+    {
+      "slug": "island",
+      "name": "UNATCO Island",
+      "codename": "01_NYC_UNATCOIsland",
+      "highest_n": 9,
+      "total_actors": 3653,
+      "status": "blocked",
+      "blocker": "BODY model model2 — Brush1359's cached Region iLeaf is 13 (native) vs 18 (UED22), same Zone actor; the world Model/Model2 are otherwise byte-identical here. N=6's vector-pool-order bug is FIXED: native was throwing away and rebuilding the incremental Vectors pool at each repartition instead of keeping it (matching how Points was already kept) — a stale pool slot claimed by a merged-away surf's texture axis, later re-claimed by a different surf's near-identical normal, can never be reconstructed by rebuilding from surviving surfs alone.",
+      "board": "island-n-10-brush1359-region-ileaf-13-vs-18",
+      "updated": "2026-09-06T10:30:00Z"
+    }
+  ]
+}
