@@ -684,8 +684,8 @@ def register(sub) -> None:
     rmeasure = rsub.add_parser(
         "measure",
         formatter_class=argparse.RawDescriptionHelpFormatter,
-        help="report the exact geometric relationship between 2 face selectors (plane, normals, "
-             "distance, footprint_2d overlap, deltas)",
+        help="report the exact geometric relationship between a reference face selector and one "
+             "or more target selectors (plane, normals, distance, footprint_2d overlap, deltas)",
         epilog=_FOOTPRINT_EPILOG,
     )
     rmeasure.add_argument(
@@ -694,8 +694,11 @@ def register(sub) -> None:
              "(SELECTOR = 'all' or comma indices). Sign conventions (distance, deltas) are "
              "relative to THIS selector")
     rmeasure.add_argument(
-        "target", metavar="TARGET_SELECTOR",
-        help="the other face selector, same grammar as REF_SELECTOR")
+        "target", nargs="+", metavar="TARGET_SELECTOR",
+        help="one or more other face selectors, same grammar as REF_SELECTOR, or '-' alone to "
+             "read a newline selector list from stdin (e.g. `brush relation find`'s output; "
+             "empty stdin: clean no-op). Repeated selectors naming the same brush have their "
+             "polys unioned into one comparison rather than duplicated")
     rmeasure.add_argument(
         "--top", type=_top_arg, default=1,
         help="max ranked candidate poly-pairs to show (default 1); 'all' shows every "
@@ -747,9 +750,10 @@ def register(sub) -> None:
              "explicitly")
     rfind.add_argument(
         "--json", action="store_true",
-        help="emit the full structured relation (plane, normals, distance, footprint_2d, "
-             "deltas) per match as a JSON array on stdout, instead of bare candidate:idx "
-             "lines; suppresses the stderr summary")
+        help="emit each match's identity (ref, ref_poly, candidate, poly) as a JSON array on "
+             "stdout, instead of bare candidate:idx lines; suppresses the stderr summary. For "
+             "the geometric detail (plane, normals, distance, footprint_2d, deltas) on a "
+             "specific match, pipe into `brush relation measure REF -`")
 
     rset = rsub.add_parser(
         "set",

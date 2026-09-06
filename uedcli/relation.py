@@ -419,29 +419,52 @@ def _resolve_measure_selector(level, token: str):
     return canonical, actor, indices
 
 
-def compute_pair(level, ref_token: str, target_token: str, *, top: int | None = 1,
-                  allow_self: bool = False) -> RelationReport:
-    """`brush relation measure REF TARGET` -- exactly 2 selectors, each a bare brush Name (all its
-    polys) or `Name:SELECTOR`. Returns a `RelationReport` with at most one `PairGroup`, reusing
-    `format_report` as-is. Raises `RelationError` naming the offender for every failure path,
-    including two selectors naming the same brush unless `allow_self`."""
+def compute_pairs(level, ref_token: str, target_tokens: list[str], *, top: int | None = 1,
+                   allow_self: bool = False) -> RelationReport:
+    """`brush relation measure REF TARGET...` -- one ref selector against one or more target
+    selectors (each a bare brush Name, all its polys, or `Name:SELECTOR`). Repeated target tokens
+    naming the SAME brush have their poly-index sets UNIONED into one group rather than producing
+    duplicates -- e.g. piping `Near:5` and `Near:3` (two rows of one `find --top all` candidate)
+    compares both indices against ref together. Returns a `RelationReport` with one `PairGroup`
+    per distinct target brush that has a qualifying pair (`format_report` already iterates
+    multiple groups), reusing the same "disjoint" model as `compute`'s N-actor sweep: a name is
+    disjoint only if it never appears in ANY group, ref included. Raises `RelationError` naming
+    the offender for every failure path, including a target naming ref's own brush unless
+    `allow_self`."""
     if top is not None and top < 1:
         raise RelationError(f"--top must be a positive integer or 'all', got {top!r}")
     ref_name, ref_actor, ref_idxs = _resolve_measure_selector(level, ref_token)
-    target_name, target_actor, target_idxs = _resolve_measure_selector(level, target_token)
-    if ref_name == target_name and not allow_self:
-        raise RelationError(
-            f"brush relation measure: both selectors name the same brush ({ref_name!r}) -- pass "
-            f"--allow-self to compare two faces of one brush")
-    candidates = _pairs_between(ref_actor, ref_idxs, target_actor, target_idxs)
-    shown = candidates if top is None else candidates[:top]
+
+    merged: dict[str, tuple] = {}   # canonical target name -> (actor, unioned idx set)
+    order: list[str] = []           # first-seen order
+    for tok in target_tokens:
+        target_name, target_actor, target_idxs = _resolve_measure_selector(level, tok)
+        if target_name == ref_name and not allow_self:
+            raise RelationError(
+                f"brush relation measure: target {target_name!r} is the reference's own brush "
+                f"-- pass --allow-self to compare two faces of one brush")
+        if target_name in merged:
+            merged[target_name] = (target_actor, merged[target_name][1] | target_idxs)
+        else:
+            merged[target_name] = (target_actor, set(target_idxs))
+            order.append(target_name)
+
     groups = []
-    if candidates:
-        groups.append(PairGroup(brush_a=ref_name, brush_b=target_name,
-                                 shown=shown, candidate_count=len(candidates)))
-    disjoint = sorted({ref_name, target_name}) if not candidates else []
-    brush_count = 1 if ref_name == target_name else 2
-    return RelationReport(groups=groups, disjoint=disjoint, brush_count=brush_count, pair_count=1)
+    involved: set[str] = set()
+    for target_name in order:
+        target_actor, idxs = merged[target_name]
+        candidates = _pairs_between(ref_actor, ref_idxs, target_actor, idxs)
+        if candidates:
+            shown = candidates if top is None else candidates[:top]
+            groups.append(PairGroup(brush_a=ref_name, brush_b=target_name,
+                                     shown=shown, candidate_count=len(candidates)))
+            involved.add(ref_name)
+            involved.add(target_name)
+
+    disjoint = sorted(name for name in {ref_name, *order} if name not in involved)
+    brush_count = len({ref_name, *order})
+    return RelationReport(groups=groups, disjoint=disjoint, brush_count=brush_count,
+                           pair_count=len(order))
 
 
 # --------------------------------------------------------------------- brush relation find
@@ -661,7 +684,7 @@ def format_report(report: RelationReport) -> str:
             lines.append("")
         names = ", ".join(report.disjoint)
         lines.append(f"disjoint: {{{names}}} shares no plane and has no parallel-facing "
-                      f"relationship with anything else named")
+                      f"relationship with any brush it was checked against here")
 
     lines.append("")
     lines.append(f"checked: {report.brush_count} brushes, {report.pair_count} pairs, every face")

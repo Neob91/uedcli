@@ -26,9 +26,10 @@ def _project(tmp_path, monkeypatch, actors, name="lvl"):
 
 
 def _ns(proj, ref, target, top=1, allow_self=False):
+    targets = [target] if isinstance(target, str) else target   # nargs="+" always gives a list
     return argparse.Namespace(
         cmd="brush", sub="relation", relationsub="measure",
-        project=str(proj), tree=None, ref=ref, target=target, top=top, allow_self=allow_self,
+        project=str(proj), tree=None, ref=ref, target=targets, top=top, allow_self=allow_self,
     )
 
 
@@ -88,3 +89,64 @@ def test_relation_allow_self_permits_same_brush(tmp_path, monkeypatch, capsys):
     proj = _project(tmp_path, monkeypatch, actors)
     rc = dispatch.dispatch(_ns(proj, "A", "A", allow_self=True))
     assert rc == 0
+
+
+def test_relation_multiple_targets_report_one_group_each(tmp_path, monkeypatch, capsys):
+    actors = [
+        _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0)),
+        _brush("Near", cube(64, 64, 8), loc=(0, 0, 8)),
+        _brush("Far", cube(64, 64, 8), loc=(0, 0, 100)),
+    ]
+    proj = _project(tmp_path, monkeypatch, actors)
+    rc = dispatch.dispatch(_ns(proj, "Wall", ["Near", "Far"]))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Wall <-> Near" in out
+    assert "Wall <-> Far" in out
+    assert "checked: 3 brushes, 2 pairs, every face" in out
+
+
+def test_relation_target_dash_reads_stdin_like_find_output(tmp_path, monkeypatch, capsys):
+    # This is the whole point of the pipe: `relation find`'s stdout is exactly this shape.
+    actors = [
+        _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0)),
+        _brush("Near", cube(64, 64, 8), loc=(0, 0, 8)),
+    ]
+    proj = _project(tmp_path, monkeypatch, actors)
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO("Near:5\n"))
+    rc = dispatch.dispatch(_ns(proj, "Wall", ["-"]))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert "Wall <-> Near" in out
+
+
+def test_relation_target_dash_empty_stdin_is_clean_noop(tmp_path, monkeypatch, capsys):
+    actors = [_brush("Wall", cube(16, 16, 16))]
+    proj = _project(tmp_path, monkeypatch, actors)
+    monkeypatch.setattr("sys.stdin", __import__("io").StringIO(""))
+    rc = dispatch.dispatch(_ns(proj, "Wall", ["-"]))
+    assert rc == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_relation_dash_mixed_with_names_exits_2(tmp_path, monkeypatch, capsys):
+    actors = [_brush("Wall", cube(16, 16, 16)), _brush("Near", cube(16, 16, 16), loc=(0, 0, 16))]
+    proj = _project(tmp_path, monkeypatch, actors)
+    rc = dispatch.dispatch(_ns(proj, "Wall", ["-", "Near"]))
+    assert rc == 2
+    assert capsys.readouterr().out == ""
+
+
+def test_relation_bad_target_mid_list_prints_nothing(tmp_path, monkeypatch, capsys):
+    # All-or-nothing: a bad token anywhere in the target list must leave stdout untouched, not
+    # print the report for the targets that resolved fine before it.
+    actors = [
+        _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0)),
+        _brush("Near", cube(64, 64, 8), loc=(0, 0, 8)),
+    ]
+    proj = _project(tmp_path, monkeypatch, actors)
+    rc = dispatch.dispatch(_ns(proj, "Wall", ["Near", "NoSuchBrush"]))
+    assert rc == 2
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert "NoSuchBrush" in err

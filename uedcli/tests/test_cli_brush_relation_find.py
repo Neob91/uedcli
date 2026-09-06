@@ -100,7 +100,7 @@ def test_find_json_emits_structured_array(tmp_path, monkeypatch, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     assert out.strip().startswith("[")
-    assert "footprint_2d" in out
+    assert '"ref"' in out and '"ref_poly"' in out and '"candidate"' in out and '"poly"' in out
 
 
 def test_find_json_names_the_matched_ref_poly(tmp_path, monkeypatch, capsys):
@@ -123,13 +123,31 @@ def test_find_json_names_the_matched_ref_poly(tmp_path, monkeypatch, capsys):
     assert rows[0]["poly"] == 5
 
 
-def test_find_stderr_summary_names_the_matched_ref_poly(tmp_path, monkeypatch, capsys):
+def test_find_stderr_is_one_aggregate_line_not_per_match(tmp_path, monkeypatch, capsys):
+    # stderr is a terse count, matching every other query verb's convention (poly.py's
+    # `_print_poly_selectors`/`_find`) -- geometric/identity detail per match lives in --json only,
+    # or in `relation measure` for full geometry. No per-match "ref:idx <-> cand:idx" echo here.
     actors = [
         _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0)),
         _brush("Near", cube(64, 64, 8), loc=(0, 0, 8)),
+        _brush("Far", cube(64, 64, 8), loc=(0, 0, 100)),
     ]
     proj = _project(tmp_path, monkeypatch, actors)
-    rc = dispatch.dispatch(_ns(proj, ["Near"], "Wall"))
+    rc = dispatch.dispatch(_ns(proj, ["Near", "Far"], "Wall"))
     assert rc == 0
     err = capsys.readouterr().err
-    assert "Wall:4 <-> Near:5" in err
+    assert err.strip() == "2 face(s) matched across 2 candidate(s)"
+
+
+def test_find_stderr_count_reflects_matched_not_searched_candidates(tmp_path, monkeypatch, capsys):
+    # 2 candidates searched, only 1 (Near) survives --max-gap -- the count must say 1, not 2.
+    actors = [
+        _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0)),
+        _brush("Near", cube(64, 64, 8), loc=(0, 0, 8)),
+        _brush("Far", cube(64, 64, 8), loc=(0, 0, 100)),
+    ]
+    proj = _project(tmp_path, monkeypatch, actors)
+    rc = dispatch.dispatch(_ns(proj, ["Near", "Far"], "Wall", max_gap=1.0))
+    assert rc == 0
+    err = capsys.readouterr().err
+    assert err.strip() == "1 face(s) matched across 1 candidate(s)"
