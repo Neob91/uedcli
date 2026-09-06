@@ -15,12 +15,12 @@
       "slug": "unatco",
       "name": "UNATCO HQ",
       "codename": "03_NYC_UNATCOHQ",
-      "highest_n": 28,
+      "highest_n": 115,
       "total_actors": 1437,
       "status": "blocked",
-      "blocker": "BODY model model2 — a NEW divergence, not the old one. The N=26 Light155 blocker is CLOSED: URender::BoundVisible + FSpanBuffer::BoxIsVisible are ported into visible_surfs.rs, gated to the confirmed iNode%16==0 residue, and each light's NF_BoxOccluded writes are replayed onto Model.Nodes in light order. Pinned by 225 live BoundVisible calls (225/225 match). ladder_run.py now passes N=1..28 and bails at N=29 on an undiagnosed world Model2 body diff (391 of 860 FVerts naming different Points, being worked now). Known residual from the same work: native still box-tests 51 subtrees per build that UED22's step-6 frustum-cone reject discards (board/port-occludebsp-frustum-cone-subtree-reject).",
-      "board": "port-occludebsp-frustum-cone-subtree-reject",
-      "updated": "2026-09-06T08:40:00Z"
+      "blocker": "BODY model model2 — world Model.Lights RUNS differ on 13 of 214 lightmaps, both directions (native-only lights, UED-only lights, one lightmap empty vs seven). Same family as the WanChai N=45/OceanLab N=44 lighting-gather work, not yet fixed here. N=29's blocker is FIXED: _patch_native_surf_refs now assigns texture_ref=0 for an untextured surf instead of leaving the marshaller's per-brush texture dedup ordinal in place (Brush516's untextured poly 2 got ordinal 2, shipped as a bogus object ref).",
+      "board": "unatco-n-116-world-model2-light-runs-differ-on",
+      "updated": "2026-09-06T13:55:00Z"
     },
     {
       "slug": "oceanlab",
