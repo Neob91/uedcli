@@ -202,10 +202,15 @@ Tests must NOT block the parity work. For this project specifically:
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
-- **UNATCO, N=26**: `dev/docs/board/inbox/port-urender-boundvisible-box-occlusion-test/` — real fix
-  scoped (port `URender::BoundVisible`, `render.dll 0x10012100`, gated to the confirmed
-  `iNode%16==0` residue), not yet built. Evidence: `dev/docs/spikes/2026-09-05-lightapply-node-flags/`
-  + `dev/docs/spikes/2026-09-05-lightapply-node-flags-verification/`.
+- **UNATCO, N=29** (was N=26, closed 2026-09-06): `URender::BoundVisible` + `FSpanBuffer::BoxIsVisible`
+  are ported (`dev/docs/spikes/2026-09-06-boundvisible-port/`,
+  `dev/docs/board/done/port-urender-boundvisible-box-occlusion-test/`), so the box-occlusion
+  `NF_BoxOccluded` bits the shadow-ray walker reads now match; N=1..28 gate byte-exact. The new bail
+  at N=29 is a world `Model2` geometry diff —
+  `dev/docs/board/inbox/unatco-n-29-world-model2-vert-rings-reference/` (identical nodes and Points,
+  391 of 860 `FVert`s naming different Points). Also open, found by the same work:
+  `dev/docs/board/inbox/port-occludebsp-frustum-cone-subtree-reject/` — native still box-tests 51
+  subtrees per UNATCO N=26 build that UED22's step-6 frustum-cone reject discards.
 - **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-spotlight22-light-runs-differ-on-4/` — PARKED,
   multi-day rasterizer port (`FSpanBuffer`'s `ClipBspSurf` + fixed-point scanline setup), corpus-wide
   blast radius measured (~20k already-correct decisions per level would move at once).

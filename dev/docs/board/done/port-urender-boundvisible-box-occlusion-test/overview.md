@@ -7,6 +7,26 @@ spikes = ["dev/docs/spikes/2026-09-05-lightapply-node-flags-verification/"]
 
 # Port `URender::BoundVisible` box-occlusion test into native
 
+## DONE 2026-09-06 — UNATCO N=26 gates byte-exact, no mask
+
+`BoundVisible` (`render.dll 0x10012100`) and `FSpanBuffer::BoxIsVisible` (`0x1001dc10`) are ported in
+`uedcli-native/src/visible_surfs.rs`, wired into `traverse` at the editor's own position (before
+either child is descended), gated to `iNode % 16 == 0` plus the already-flagged retest rule, and
+replayed onto `Model.Nodes[].NodeFlags` in light order by `light::bake`.
+
+The frame constants the port needed were LIVE-MEASURED, not derived (`FSceneNode+0xc8` = 512.0 as the
+projection centre, `Proj.Z` = `0x43ffffff`, all four clip slopes `0x3f800001`), and the port is pinned
+against 225 real calls captured from a UNATCO N=26 golden build: every one of the 135 accepted calls
+reproduces the editor's `FScreenBounds` exactly, and a whole-build trace diff agrees with the editor
+on 225 of 225 shared box tests, node 48's reject included. Spike:
+`dev/docs/spikes/2026-09-06-boundvisible-port/`.
+
+One gap found and split out, not masked: native still skips `OccludeBsp`'s frustum-cone subtree
+reject, so it box-tests 51 subtrees the editor discards and marks one extra node —
+`dev/docs/board/inbox/port-occludebsp-frustum-cone-subtree-reject/`.
+
+## Original task
+
 Blocks UNATCO N26 (`light-apply-shadow-rays-read-transient-nf`). The amortization-counter mechanism
 gating `NF_BoxOccluded` is now live-confirmed as a real, deterministic, portable property (not
 incidental process state): every fresh-process headless golden build (`MAP IMPORT → MAP REBUILD →

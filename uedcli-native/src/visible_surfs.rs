@@ -49,12 +49,20 @@
 //!   (`FSpanBuffer+8`, tested `<= 0` at `0x10019961`) differs only in what it counts — the editor
 //!   counts interval NODES, [`SpanBuf::valid_lines`] counts non-empty ROWS — and both are zero
 //!   exactly when the buffer is empty, which is the only thing any reader asks.
-//! - **Frustum-cone reject (board step 6) and render-bound occlusion (step 4) are not ported.**
-//!   Both are described as pure early-out optimizations: the four-plane clip in [`rasterize_node`]
-//!   already yields an empty footprint for anything outside the view cone (step 6's exact outcome),
-//!   and the board item itself says box-occlusion is "conservative, so skipping it should change cost
-//!   and not the surface set" (step 4). Skipping both changes performance only, not this port's
-//!   output — under that stated equivalence.
+//! - **Frustum-cone reject (board step 6) is not ported, and that is now a MEASURED divergence, not
+//!   a free optimization.** The four-plane clip in [`rasterize_node`] does yield an empty footprint
+//!   for anything outside the view cone, so the surf set is unaffected — but since step 4 below
+//!   writes persistent `NF_BoxOccluded` bits, descending into a subtree the editor discards means
+//!   box-testing nodes the editor never tests. Measured on a UNATCO N=26 golden build: native runs
+//!   276 box tests to UED22's 225 (all 225 shared ones agree), and marks one node UED22 leaves
+//!   clear. Board: `dev/docs/board/inbox/port-occludebsp-frustum-cone-subtree-reject/`.
+//!
+//!   **Render-bound box occlusion (step 4) IS now ported** — see [`bound_visible`]. The board item's
+//!   "conservative, so skipping it should change cost and not the surface set" was falsified: the
+//!   step's `NodeFlags |= NF_BoxOccluded` write persists, and `LIGHT APPLY`'s shadow-ray walker reads
+//!   it at a crossing (`linecheck::is_csg` with `ExtraNodeFlags = 0x14`), so a node the editor marks
+//!   stops occluding shadow rays. That is UNATCO N=26's whole `Light155` divergence
+//!   (`spikes/2026-09-05-lightapply-node-flags/`).
 //! - **Moving-brush filter (step 3) and the `PlayerPawn` viewport-actor filter (step 9) are not
 //!   modeled.** The board item says whether `BrushTracker` is even non-NULL during `LIGHT APPLY` is
 //!   undetermined, and native has no dynamic-brush tracking to answer it; the editor's temp gather
@@ -76,7 +84,7 @@
 //! `PF_NONOCCLUDING` mask (`render.dll 0x10019b57`'s `test …, 0x10020047`).
 
 use crate::light::light_in_front;
-use crate::model::{Model, Plane, Vec3};
+use crate::model::{FBox, Model, Plane, Vec3};
 use std::collections::HashSet;
 
 const PF_INVISIBLE: u32 = 0x0000_0001;
@@ -191,6 +199,216 @@ impl SpanBuf {
     fn any_visible(&self) -> bool {
         self.valid_lines > 0
     }
+
+    /// `FSpanBuffer::BoxIsVisible(X1, Y1, X2, Y2)` — `render.dll 0x1001dc10`, disassembled
+    /// 2026-09-06. Does any still-unclaimed span in any row of `[Y1, Y2)` overlap the column range
+    /// `[X1, X2)`? Rows are clamped to the buffer's `[StartY, EndY)` (always `[0, RES)` here) and an
+    /// empty clamped range answers "no" (the editor's `sub edi,1; js` on a zero row count — a
+    /// reversed rect can reach here, see [`bound_visible`]'s outcode-forced seed). Within a row the
+    /// real function stops at the first span starting at/after `X2` (the list is sorted), which this
+    /// reproduces. The editor visits the LAST row first and then rows 0..n-2; the answer is an OR
+    /// over rows, so this ascending walk is equivalent — do not "fix" it to match.
+    fn box_is_visible(&self, rect: [i32; 4]) -> bool {
+        let [x1, y1, x2, y2] = rect;
+        let (y1, y2) = (y1.max(0), y2.min(RES));
+        if y1 >= y2 {
+            return false;
+        }
+        for row in &self.rows[y1 as usize..y2 as usize] {
+            for &(sx0, sx1) in row {
+                if x2 <= sx0 {
+                    break;
+                }
+                if x1 < sx1 {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+}
+
+/// `NF_BoxOccluded` — the bit `URender::OccludeBsp` writes when the render-bound box test rejects a
+/// node (`render.dll 0x100193db`/`0x10019526`, `or byte ptr [node+0x37], 0x10`). Excluded from the
+/// parity gate's byte compare (`NATIVE-MATERIALIZE.md`) but NOT inert: `linecheck::is_csg` tests it
+/// at a shadow ray's crossing sites, so a marked node stops blocking light. The same bit is the
+/// engine's `NF_BrightCorners` on the walker side ([`crate::linecheck::NF_BRIGHT_CORNERS`]) — one
+/// bit, two engine names, kept separate because each side names what it means there.
+pub const NF_BOX_OCCLUDED: u8 = 0x10;
+
+/// `FSceneNode` fields `URender::BoundVisible` reads, for the gather pass's 1024x1024 FOV-90
+/// offscreen viewport. LIVE-MEASURED, not derived: all 225 real `BoundVisible` calls of a UNATCO
+/// N=26 golden build carry exactly these (`spikes/2026-09-06-boundvisible-port/`,
+/// `logs/boundvisible-frame-probe.log`, gdb at the `render.dll 0x100193d5` call site).
+/// `FRAME_PROJ_Z` is `0x43ffffff` (512·(1−2⁻²⁴), the editor's `512/appTan(pi/4)`) and `FRAME_CLIP`
+/// is `0x3f800001` — both a last-ulp step off the round numbers this port's rasterizer uses, kept
+/// verbatim rather than rounded.
+const FRAME_XY: i32 = RES; // FSceneNode+0xa8 / +0xac
+const FRAME_FXY: f32 = RES as f32; // FSceneNode+0xb8 / +0xbc
+/// FSceneNode+0xc8 / +0xcc — the screen centre `BoundVisible` projects about (note: NOT +0xc0's
+/// 512.500061, which the polygon rasterizer uses).
+const FRAME_CXY: f32 = 512.0;
+const FRAME_PROJ_Z: f32 = 511.999969;
+/// The frustum clip slope. The editor reads FOUR separate fields in a non-obvious slot order —
+/// `+0xec` for outcode bit 1 (+X), `+0xf4` for bit 2 (−X), `+0xf0` for bit 4 (+Y), `+0xf8` for
+/// bit 8 (−Y) — which are all this one value on a square FOV-90 frame and only there; a
+/// non-square or non-90° gather frame would need them separated again.
+const FRAME_CLIP: f32 = 1.00000012;
+
+/// SSE `cvtss2si` under the default MXCSR: round to nearest, ties to even; anything unrepresentable
+/// (NaN, ±inf, out of `i32` range) yields the "integer indefinite" `0x80000000`.
+fn cvt_ss2si(v: f32) -> i32 {
+    if !v.is_finite() || v < -2147483648.0 || v >= 2147483648.0 {
+        return i32::MIN;
+    }
+    v.round_ties_even() as i32
+}
+
+/// `URender::BoundVisible(FSceneNode*, FBox*, FSpanBuffer*, FScreenBounds&)` — `render.dll
+/// 0x10012100`, disassembled in full 2026-09-06 (`spikes/2026-09-06-boundvisible-port/spike.md`).
+/// Returns the box's clamped screen rectangle `[MinX, MinY, MaxX, MaxY]` when the box is visible,
+/// `None` when it is not.
+///
+/// The real function, in order:
+///
+/// 1. `Min`/`Max` relative to the view origin. If the origin is inside the box on all three axes
+///    (the "region" code sums to 0) return the full screen immediately — the span buffer is NOT
+///    consulted on that path.
+/// 2. Reject when all six `ZAxis.c * Min.c` / `ZAxis.c * Max.c` products are negative (every corner
+///    is behind the camera). Conservative in the safe direction and reproduced literally.
+/// 3. For each of the 8 corners (bit 0 = X, 1 = Y, 2 = Z picks `Max` over `Min`), the view-space
+///    `(X, Y, Z)` as `(ax + ay) + az`, and a 4-bit frustum outcode against the clip slopes. Reject
+///    when the AND of all 8 outcodes is non-zero (every corner outside one shared plane).
+/// 4. Screen rect: corner 0 seeds min/max, each outcode bit present in the OR *replaces* that seed
+///    with the screen edge, then corners 1..7 extend it. `MinX`/`MinY` clamp up to 0 and
+///    `MaxX`/`MaxY` down to `Frame->X`/`Y` for the returned `FScreenBounds`. The real
+///    `FScreenBounds` carries a fifth field, `max(min corner Z, 0)`; nothing on this path reads it,
+///    so it is not computed here.
+/// 5. With a span buffer (only the unzoned pass passes one — with zones the CALLER runs the test
+///    per active zone, `render.dll 0x1001949c`), `BoxIsVisible` on the UNCLAMPED rect decides.
+///
+/// View axes: `ZAxis` = `face.forward`, `XAxis` = `face.right`, `YAxis` = −`face.up` (the editor's
+/// screen Y grows downward), the same relation [`rasterize_node`] projects with — so the rectangle
+/// and the span content it is tested against share one screen convention. The editor's own six
+/// frames use a different in-plane axis pair (live-captured: face 0 is `X=+Y, Y=+X` where this port
+/// has `right=+X, up=−Y`); that is a rigid 90°/reflection relabelling of the same square screen, so
+/// box rect and span content move together and the accept/reject is unchanged.
+fn bound_visible(b: &FBox, origin: &Vec3, face: &Face, span: Option<&SpanBuf>) -> Option<[i32; 4]> {
+    let min = b.min.sub(origin);
+    let max = b.max.sub(origin);
+
+    // Step 1 (`0x1001222d`): the "region" code is 0 exactly when the origin is inside the box.
+    let mut region = 0i32;
+    if min.x > 0.0 {
+        region += 1;
+    } else if max.x < 0.0 {
+        region += 2;
+    }
+    if min.y > 0.0 {
+        region += 3;
+    } else if max.y < 0.0 {
+        region += 6;
+    }
+    if min.z > 0.0 {
+        region += 9;
+    } else if max.z < 0.0 {
+        region += 17; // 0x11, not 18 — the editor's own constant (`0x100122d4`).
+    }
+    if region == 0 {
+        return Some([0, 0, FRAME_FXY as i32, FRAME_FXY as i32]);
+    }
+
+    // Componentwise axis*extent products, reused by every corner (`0x1001234f`, `0x10012456`,
+    // `0x1001255f`). `y_*` carries the editor's downward screen Y, i.e. −`face.up`.
+    let axis_products = |a: &Vec3| {
+        ([a.x * min.x, a.y * min.y, a.z * min.z], [a.x * max.x, a.y * max.y, a.z * max.z])
+    };
+    let (z_min, z_max) = axis_products(&face.forward);
+    let (x_min, x_max) = axis_products(&face.right);
+    let (y_min, y_max) = axis_products(&Vec3::new(-face.up.x, -face.up.y, -face.up.z));
+
+    // Step 2 (`0x10012410`): every depth product negative => the whole box is behind the camera.
+    if z_min.iter().chain(z_max.iter()).all(|&v| 0.0 > v) {
+        return None;
+    }
+
+    // Step 3: the 8 corners.
+    let pick = |lo: &[f32; 3], hi: &[f32; 3], i: usize| {
+        let c = |k: usize, bit: usize| if i & (1 << bit) != 0 { hi[k] } else { lo[k] };
+        (c(0, 0) + c(1, 1)) + c(2, 2)
+    };
+    let mut corners = [[0.0f32; 3]; 8];
+    let mut or_code = 0u32;
+    let mut and_code = 0xfu32;
+    for i in 0..8 {
+        let cz = pick(&z_min, &z_max, i);
+        let cx = pick(&x_min, &x_max, i);
+        let cy = pick(&y_min, &y_max, i);
+        corners[i] = [cx, cy, cz];
+        let mut code = 0u32;
+        if 0.0 > FRAME_CLIP * cz + cx {
+            code |= 1;
+        }
+        if 0.0 > FRAME_CLIP * cz - cx {
+            code |= 2;
+        }
+        if 0.0 > FRAME_CLIP * cz + cy {
+            code |= 4;
+        }
+        if 0.0 > cz * FRAME_CLIP - cy {
+            code |= 8;
+        }
+        or_code |= code;
+        and_code &= code;
+    }
+    if and_code != 0 {
+        return None;
+    }
+
+    // Step 4 (`0x1001376a`): the screen rectangle.
+    let project = |c: &[f32; 3]| {
+        let rz = FRAME_PROJ_Z / c[2];
+        (cvt_ss2si((c[0] * rz + FRAME_CXY) - 0.5), cvt_ss2si((c[1] * rz + FRAME_CXY) - 0.5))
+    };
+    let (sx0, sy0) = project(&corners[0]);
+    let (mut min_x, mut max_x, mut min_y, mut max_y) = (sx0, sx0, sy0, sy0);
+    if or_code & 1 != 0 {
+        min_x = 0;
+    }
+    if or_code & 2 != 0 {
+        max_x = FRAME_XY;
+    }
+    if or_code & 4 != 0 {
+        min_y = 0;
+    }
+    if or_code & 8 != 0 {
+        max_y = FRAME_XY;
+    }
+    for c in &corners[1..] {
+        let (sx, sy) = project(c);
+        // The editor's `else if` (`0x100138c6`/`0x100138fb`), not an independent min and max: an
+        // outcode-forced seed can leave `min > max`, and only this shape reproduces what happens
+        // then.
+        if sx < min_x {
+            min_x = sx;
+        } else if sx > max_x {
+            max_x = sx;
+        }
+        if sy < min_y {
+            min_y = sy;
+        } else if sy > max_y {
+            max_y = sy;
+        }
+    }
+
+    // Step 5: the unzoned pass's own span test runs on the UNCLAMPED rect (`0x100139d4` pushes the
+    // raw registers, not the `FScreenBounds` floats the zoned caller re-reads).
+    if let Some(s) = span {
+        if !s.box_is_visible([min_x, min_y, max_x, max_y]) {
+            return None;
+        }
+    }
+    Some([min_x.max(0), min_y.max(0), max_x.min(FRAME_XY), max_y.min(FRAME_XY)])
 }
 
 /// One row's screen-space span `[x0, x1)` of a convex polygon at scanline `y` (pixel-centre sampled
@@ -573,6 +791,7 @@ fn traverse(
     active_mask: &mut u64,
     spans: &mut ZoneBufs,
     out: &mut HashSet<i32>,
+    boxes: &mut BoxOcclusion,
     trace: Option<(usize, i32)>, // (face index, target surf) — see `trace_target`
     trace_portals: bool,        // see `trace_portals`
 ) {
@@ -593,6 +812,47 @@ fn traverse(
         }
         return;
     }
+    // Step 4: render-bound box occlusion (`render.dll 0x1001932c`–`0x1001952a`), before either
+    // child is descended into — a rejected node's whole subtree is skipped. Runs only for a node
+    // with a render bound, and only when it already carries `NF_BoxOccluded` or its index is in the
+    // tested residue class (see [`BoxOcclusion::wants_test`]).
+    if head.i_render_bound >= 0 && boxes.wants_test(ni) {
+        // `passes::bsp_build_bounds` gives every node with a render bound a slot; a node pointing
+        // past the array would silently turn the whole box-occlusion step into a no-op, so trip
+        // instead of skipping.
+        assert!(
+            (head.i_render_bound as usize) < model.bounds.len(),
+            "node {ni} iRenderBound {} outside Bounds[{}]",
+            head.i_render_bound,
+            model.bounds.len()
+        );
+        let bound = &model.bounds[head.i_render_bound as usize];
+        let unzoned_span = if use_zones { None } else { spans.bufs.get(&SHARED_KEY) };
+        let rect = bound_visible(bound, light_loc, face, unzoned_span);
+        let visible = match rect {
+            None => false,
+            // With zones the caller re-runs the screen rect against EVERY active zone whose bit is
+            // in this node's `ZoneMask`, and one hit is enough (`0x10019456`–`0x10019518`).
+            Some(r) if use_zones => (0..64).any(|z| {
+                *active_mask >> z & 1 != 0
+                    && head.zone_mask >> z & 1 != 0
+                    && spans.bufs.get(&(z as i32)).is_some_and(|s| s.box_is_visible(r))
+            }),
+            Some(_) => true,
+        };
+        if boxes.trace {
+            eprintln!(
+                "VISGATE_BOX light=[{},{},{}] fwd=[{},{},{}] node={ni} bound={} visible={visible} \
+                 rect={rect:?}",
+                light_loc.x, light_loc.y, light_loc.z,
+                face.forward.x, face.forward.y, face.forward.z, head.i_render_bound,
+            );
+        }
+        boxes.record(ni, visible);
+        if !visible {
+            return;
+        }
+    }
     let d = plane_dot(&head.plane, light_loc);
     let mut is_front = d > 0.0;
     // Engine child convention on the finalized model (matches `linecheck.rs`): FRONT = `i_back`,
@@ -601,7 +861,7 @@ fn traverse(
         if is_front { (head.i_back, head.i_front) } else { (head.i_front, head.i_back) };
 
     // Near child, full subtree, first (front-to-back).
-    traverse(model, near_child, light_loc, face, use_zones, active_mask, spans, out, trace, trace_portals);
+    traverse(model, near_child, light_loc, face, use_zones, active_mask, spans, out, boxes, trace, trace_portals);
 
     // Own surface, then every remaining `i_plane` coplanar chain member's surface — `far_child` is
     // visited only AFTER the whole chain (below), never interleaved with it. A chain MEMBER carries
@@ -759,7 +1019,7 @@ fn traverse(
     }
 
     // Far child, full subtree, last — only after the whole coplanar chain above.
-    traverse(model, far_child, light_loc, face, use_zones, active_mask, spans, out, trace, trace_portals);
+    traverse(model, far_child, light_loc, face, use_zones, active_mask, spans, out, boxes, trace, trace_portals);
 }
 
 /// TEMP root-cause diagnostic (`getvisiblesurfs-wanchai-run-gap-root-cause`, 2026-08-30): when
@@ -796,13 +1056,66 @@ fn trace_portals_for(light_loc: &Vec3) -> bool {
         && Vec3::new(parts[0], parts[1], parts[2]).sub(light_loc).size() < 0.5
 }
 
+/// One light's gather result: the surfaces it is listed on, plus every render-bound box test the
+/// six-face traversal ran, in the order it ran them.
+pub struct Gather {
+    pub surfs: HashSet<i32>,
+    /// `(iNode, occluded)` per box test — replayed in light order by `light::bake` onto
+    /// `Model.Nodes[].NodeFlags`, because the editor's `NF_BoxOccluded` writes persist across lights
+    /// and the shadow-ray pass afterwards reads whatever the last test of each node left.
+    pub box_tests: Vec<(u32, bool)>,
+}
+
+/// Live `NF_BoxOccluded` state during one light's six faces, plus the test log.
+///
+/// **Amortization gate** (`render.dll 0x1001935b`–`0x1001936d`): the box test runs only when the
+/// node already carries `NF_BoxOccluded`, or when `((iNode ^ counter) & 0xf) == 0` for a global
+/// counter bumped solely by `URender::DrawWorld`. A headless `MAP IMPORT → MAP REBUILD → LIGHT APPLY
+/// → MAP SAVE` never paints a viewport before lighting, so that counter is 0 for the entire pass —
+/// live-confirmed at instruction level on all five ladder levels, every light
+/// (`spikes/2026-09-05-lightapply-node-flags-verification/`, "CORRECTION"). Hence `iNode % 16 == 0`.
+///
+/// Because that residue class is tested unconditionally and nothing outside it can ever acquire the
+/// bit, the "already set" arm never widens the tested set, so seeding this per light (rather than
+/// carrying the previous light's marks in) changes nothing — it is kept only to mirror the real
+/// predicate.
+struct BoxOcclusion {
+    occluded: Vec<bool>,
+    log: Vec<(u32, bool)>,
+    /// `UEDCLI_VISGATE_TRACE_BOX` — print every box test (light, face, node, geometric verdict,
+    /// final verdict) so a run can be diffed against the live editor capture the port was built
+    /// from (`spikes/2026-09-06-boundvisible-port/harness/compare_box_tests.py`).
+    trace: bool,
+}
+
+impl BoxOcclusion {
+    fn new(model: &Model) -> Self {
+        BoxOcclusion {
+            occluded: model.nodes.iter().map(|n| n.node_flags & NF_BOX_OCCLUDED != 0).collect(),
+            log: Vec::new(),
+            trace: std::env::var("UEDCLI_VISGATE_TRACE_BOX").is_ok(),
+        }
+    }
+    fn wants_test(&self, ni: i32) -> bool {
+        self.occluded[ni as usize] || ni % 16 == 0
+    }
+    /// The editor clears the bit before retesting (`and cl, 0xef`, `0x10019373`) and [`record`]
+    /// then writes the verdict; the clear is only observable if the test in between could read the
+    /// flag, which it cannot, so it is folded into `record`'s unconditional assignment.
+    fn record(&mut self, ni: i32, visible: bool) {
+        self.occluded[ni as usize] = !visible;
+        self.log.push((ni as u32, !visible));
+    }
+}
+
 /// The full six-face gather for one light: the port of `URender::GetVisibleSurfs`. Returns the set of
 /// `iSurf` indices the editor's occlusion rasterization would list this light on (before the caller's
-/// own `bSpecialLit`/radius/per-lumel filters).
-pub fn get_visible_surfs(model: &Model, light_loc: Vec3) -> HashSet<i32> {
+/// own `bSpecialLit`/radius/per-lumel filters), plus its render-bound box-test log.
+pub fn get_visible_surfs(model: &Model, light_loc: Vec3) -> Gather {
     let mut out = HashSet::new();
+    let mut boxes = BoxOcclusion::new(model);
     if model.nodes.is_empty() {
-        return out;
+        return Gather { surfs: out, box_tests: boxes.log };
     }
     let trace = trace_target().filter(|(_, loc)| loc.sub(&light_loc).size() < 0.5);
     let trace_portals = trace_portals_for(&light_loc);
@@ -821,12 +1134,12 @@ pub fn get_visible_surfs(model: &Model, light_loc: Vec3) -> HashSet<i32> {
         let seed_key = if use_zones { view_zone } else { SHARED_KEY };
         spans.bufs.insert(seed_key, SpanBuf::full());
         let mut active_mask: u64 = if use_zones { 1u64 << (view_zone as u64 & 63) } else { u64::MAX };
-        traverse(model, 0, &light_loc, face, use_zones, &mut active_mask, &mut spans, &mut out, trace.map(|(s, _)| (fi, s)), trace_portals);
+        traverse(model, 0, &light_loc, face, use_zones, &mut active_mask, &mut spans, &mut out, &mut boxes, trace.map(|(s, _)| (fi, s)), trace_portals);
     }
     if let Some((surf, _)) = trace {
         eprintln!("VISGATE_TRACE result: surf {surf} {}", if out.contains(&surf) { "ACCEPTED" } else { "REJECTED" });
     }
-    out
+    Gather { surfs: out, box_tests: boxes.log }
 }
 
 #[cfg(test)]
@@ -872,7 +1185,7 @@ mod tests {
         )])
         .unwrap();
         crate::zones::assign_leaves_and_zones(&mut m);
-        let visible = get_visible_surfs(&m, Vec3::new(0.0, 0.0, 0.0));
+        let visible = get_visible_surfs(&m, Vec3::new(0.0, 0.0, 0.0)).surfs;
         assert_eq!(visible.len(), 6, "a light at the room centre sees every one of the 6 walls");
     }
 
@@ -894,7 +1207,7 @@ mod tests {
         )])
         .unwrap();
         crate::zones::assign_leaves_and_zones(&mut m);
-        let visible = get_visible_surfs(&m, Vec3::new(10000.0, 0.0, 0.0));
+        let visible = get_visible_surfs(&m, Vec3::new(10000.0, 0.0, 0.0)).surfs;
         let near_wall = m
             .surfs
             .iter()
@@ -918,7 +1231,7 @@ mod tests {
         ])
         .unwrap();
         crate::zones::assign_leaves_and_zones(&mut m);
-        let visible = get_visible_surfs(&m, Vec3::new(-400.0, 0.0, 0.0));
+        let visible = get_visible_surfs(&m, Vec3::new(-400.0, 0.0, 0.0)).surfs;
         // Every visible surf must belong to room A: its vertices all have x well below 0.
         for &si in &visible {
             let s = &m.surfs[si as usize];
@@ -936,7 +1249,7 @@ mod tests {
         )])
         .unwrap();
         crate::zones::assign_leaves_and_zones(&mut m);
-        let visible = get_visible_surfs(&m, Vec3::new(0.0, 0.0, 0.0));
+        let visible = get_visible_surfs(&m, Vec3::new(0.0, 0.0, 0.0)).surfs;
         assert!(visible.is_empty(), "PF_Invisible surfaces must never appear in the gather");
     }
 
@@ -1042,7 +1355,7 @@ mod tests {
         assert_eq!(m.nodes[0].zone_mask & 0x6, 0x6, "node0 must reach both zone 1 and zone 2");
         assert_eq!(m.nodes[1].zone_mask & 0x4, 0x4, "node1 must reach zone 2");
 
-        let visible = get_visible_surfs(&m, Vec3::new(-100.0, 0.0, 0.0));
+        let visible = get_visible_surfs(&m, Vec3::new(-100.0, 0.0, 0.0)).surfs;
         assert!(
             visible.contains(&1),
             "the wall (surf 1) behind an INVISIBLE portal must still be reached by crossing it, \
@@ -1147,7 +1460,7 @@ mod tests {
         // sits in zone 0, the default `i_zone`), so the zone-mask prune never engages — this fixture
         // isolates the chain/far_child ORDER question from zone-crossing entirely.
 
-        let visible = get_visible_surfs(&m, Vec3::new(-100.0, 0.0, 0.0));
+        let visible = get_visible_surfs(&m, Vec3::new(-100.0, 0.0, 0.0)).surfs;
         assert!(
             visible.contains(&0),
             "the coplanar chain member (surf 0) must be tested before far_child's larger, opaque \
@@ -1218,12 +1531,56 @@ mod tests {
 
         let light = Vec3::new(0.0, 0.0, 100.0);
         assert_eq!(zone_of_point(&m, light), 1, "the light must sit in zone 1 for use_zones to hold");
-        let visible = get_visible_surfs(&m, light);
+        let visible = get_visible_surfs(&m, light).surfs;
         assert!(
             visible.contains(&0),
             "the flipped chain member's near zone is its OWN front zone (1, the view zone), so its \
              surf must be reachable; got {visible:?}"
         );
+    }
+
+    /// Pins the `URender::BoundVisible` port (`render.dll 0x10012100`) against the real editor.
+    ///
+    /// The fixture is every distinct `(FBox, view FCoords)` `BoundVisible` was called with during a
+    /// live UNATCO N=26 golden build — captured by gdb at the `render.dll 0x100193d5` call site
+    /// (`spikes/2026-09-06-boundvisible-port/harness/boundvisible_frame_probe.py`), with the
+    /// `FScreenBounds` the callee wrote and WHICH of its four exits it took (each exit bumps its own
+    /// stat counter, so a breakpoint on that `inc` names the path). The frame's own `FCoords` is
+    /// replayed, not this port's face basis, so the rectangle is comparable byte-for-byte.
+    ///
+    /// The exit path makes every row a two-way pin, with no aggregate-count escape hatch:
+    /// `outcode`/`depth` must be rejected here by geometry alone, and every other path — `inside`,
+    /// a plain `accept`, and a `span` reject alike — must be ACCEPTED with that exact rectangle,
+    /// since the editor writes `FScreenBounds` before it consults the span buffer. `span` rows are
+    /// the ones the editor then rejected on span content this test cannot reconstruct (UNATCO
+    /// N=26's node 48 among them); the port's own span test is exercised by the ladder, not here.
+    #[test]
+    fn bound_visible_matches_the_real_editor_on_every_live_call() {
+        let csv = include_str!("../testdata/boundvisible_live_calls.csv");
+        let mut seen: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+        for line in csv.lines().filter(|l| !l.starts_with('#') && !l.trim().is_empty()) {
+            let col: Vec<&str> = line.split(',').collect();
+            let f = |i: usize| col[i].parse::<f32>().unwrap();
+            let v = |i: usize| Vec3::new(f(i), f(i + 1), f(i + 2));
+            let rect: Vec<i32> = col[19..23].iter().map(|c| c.parse().unwrap()).collect();
+            let path = col[23];
+            // `Face` stores `up`; the editor's `Coords.YAxis` is screen-DOWN, hence the negation.
+            let ya = v(6);
+            let face = Face { right: v(3), up: Vec3::new(-ya.x, -ya.y, -ya.z), forward: v(9) };
+            let b = FBox { min: v(12), max: v(15), valid: 1 };
+            let got = bound_visible(&b, &v(0), &face, None);
+            let want = match path {
+                "outcode" | "depth" => None,
+                _ => Some([rect[0], rect[1], rect[2], rect[3]]),
+            };
+            assert_eq!(got, want, "live exit `{path}` for box {b:?}; port said {got:?}");
+            *seen.entry(path).or_default() += 1;
+        }
+        // Every exit path is exercised; `depth` never fires on this level's boxes.
+        assert_eq!(seen.get("accept"), Some(&87));
+        assert_eq!(seen.get("inside"), Some(&48));
+        assert_eq!(seen.get("outcode"), Some(&83));
+        assert_eq!(seen.get("span"), Some(&7));
     }
 
     #[test]

@@ -409,13 +409,44 @@ pub fn bake(model: &mut Model, lights: &[LightInput]) -> Result<(), BuildError> 
     // computed BEFORE the per-surf bake below, once per light, in parallel. This replaces the old,
     // more permissive selection (plane test + per-lumel LOS alone) with the editor's own six-face
     // cube-map occlusion rasterization; see that module's doc comment for what is and isn't ported.
-    let visible_per_light: Vec<std::collections::HashSet<i32>> = lights
+    // The gather may run in parallel only because no node reaches it already carrying
+    // `NF_BoxOccluded` — that is what keeps `BoxOcclusion::wants_test`'s "already flagged, retest
+    // anyway" arm from widening the tested set past the `iNode % 16 == 0` residue, and so keeps each
+    // light's box tests independent of every other's. `build::derive_nf` sets only bits 1/2/4 and
+    // the CSG passes clear `NF_IsNew`/`NF_SolidBound`, so it holds today; 0x10 is also
+    // `NF_BrightCorners`, so a future CSG change could set it and silently make the parallel gather
+    // order-dependent. Trip rather than build a non-deterministic package.
+    assert!(
+        model.nodes.iter().all(|n| n.node_flags & crate::visible_surfs::NF_BOX_OCCLUDED == 0),
+        "a node carries NF_BoxOccluded before the gather; the parallel gather would be order-dependent"
+    );
+    let gathers: Vec<crate::visible_surfs::Gather> = lights
         .par_iter()
         .map(|l| crate::visible_surfs::get_visible_surfs(model, l.location))
         .collect();
     if std::env::var("UEDCLI_VISGATE_DUMP").is_ok() {
         crate::visible_surfs::dump_debug_counters();
     }
+    // `URender::OccludeBsp`'s render-bound box test writes `NF_BoxOccluded` straight into
+    // `Model.Nodes[].NodeFlags` and the bit PERSISTS: it is never cleared between lights, only
+    // recomputed for a node the next traversal reaches. Replay every light's tests in light order so
+    // the flags the shadow-ray pass below then reads (`linecheck::is_csg` consults 0x10 at a
+    // crossing) are the ones UED22 leaves behind. Last write wins, so this depends on `lights`
+    // being in UED22's own `LIGHT APPLY` order — measured, not assumed: a single-threaded native
+    // build's light sequence matches the live editor capture's 12 for 12 on UNATCO N=26
+    // (`spikes/2026-09-06-boundvisible-port/harness/compare_light_order.py`).
+    for g in &gathers {
+        for &(ni, occluded) in &g.box_tests {
+            let flags = &mut model.nodes[ni as usize].node_flags;
+            if occluded {
+                *flags |= crate::visible_surfs::NF_BOX_OCCLUDED;
+            } else {
+                *flags &= !crate::visible_surfs::NF_BOX_OCCLUDED;
+            }
+        }
+    }
+    let visible_per_light: Vec<std::collections::HashSet<i32>> =
+        gathers.into_iter().map(|g| g.surfs).collect();
 
     // Gather each surf's node vertices (a shared surf is referenced by several nodes) once.
     let mut surf_verts: Vec<Vec<Vec3>> = vec![Vec::new(); model.surfs.len()];
