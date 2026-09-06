@@ -4,12 +4,12 @@
       "slug": "bar",
       "name": "NYC Bar",
       "codename": "02_NYC_Bar",
-      "highest_n": 118,
+      "highest_n": 150,
       "total_actors": 487,
       "status": "blocked",
-      "blocker": "BODY model model2 — world Model2's LightMap array reorders from index 144, shifting every downstream surf's iLightMap by 2. Every geometry array (points, vectors, bounds, leafhulls, leaves) and LightBits are byte-identical. N=113 is FIXED: PointRegion's node-plane test now evaluates FPlane::PlaneDot in f32 (matching the engine's SSE horizontal-add), not f64 — a brush pivot lying near a node plane took the wrong child at f64 precision (Brush69 fell off the tree entirely).",
-      "board": "nyc-bar-n-119-world-model2-lightmap-array-order",
-      "updated": "2026-09-06T18:05:00Z"
+      "blocker": "BODY model model2 — world leaf 74 gets a permeating-light run UED22 leaves empty (iPermeating 63 vs -1), shifting every later leaf by +2. SAME root cause as Island N=123 (not a separate diagnosis) — one light incorrectly permeates a leaf. N=119's LightMap array-order bug is FIXED: the world LightMap walk now gates each surf's allocation on its BSP node having vertices (Editor.dll's real walk checks NumVertices first) — a surf spanning one 0-vertex node and one non-empty node was claimed at the wrong record.",
+      "board": "nyc-bar-n-151-world-model2-leaf-permeating-light",
+      "updated": "2026-09-07T00:10:00Z"
     },
     {
       "slug": "unatco",
