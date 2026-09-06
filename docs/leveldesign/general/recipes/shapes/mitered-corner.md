@@ -60,7 +60,7 @@ edge-exact pair only clips a wedge off one side, leaving a pentagon.
 
 Two ways to get the pairing wrong, and both pass a naive check:
 
-- **Same side for both pieces.** `brush measure relation` looks fine — coplanar, distance `0.000uu`,
+- **Same side for both pieces.** `brush relation measure` looks fine — coplanar, distance `0.000uu`,
   footprint coincident — because it only checks the cut face, not which side survived. It's still
   wrong: one triangle overlaps, the other is empty.
 - **Opposite sides, swapped pairing** (below/above reversed). Both strips retreat from the corner

@@ -302,3 +302,195 @@ def test_format_report_collapses_all_none_group_to_one_line():
     text = relation.format_report(report)
     assert "Far1 <-> Far2: no overlapping face pairs" in text
     assert "plane:" not in text  # collapsed -- no full block fields printed
+
+
+def test_compute_pair_pins_to_exact_selectors():
+    a = _brush("A", cube(32, 32, 32), loc=(0, 0, 0))
+    b = _brush("B", cube(32, 32, 32), loc=(0, 0, 32))
+    level = _level(a, b)
+    top_a = next(i for i, p in enumerate(a.brush.polys) if p.normal == (0.0, 0.0, 1.0))
+    bottom_b = next(i for i, p in enumerate(b.brush.polys) if p.normal == (0.0, 0.0, -1.0))
+    report = relation.compute_pair(level, f"A:{top_a}", f"B:{bottom_b}")
+    assert len(report.groups) == 1
+    assert len(report.groups[0].shown) == 1  # pinned to one pair, no ranking needed
+    assert report.groups[0].shown[0].plane.plane == "coincident" or report.groups[0].shown[0].plane.plane == "coplanar"
+
+
+def test_compute_pair_bare_names_ranks_like_compute():
+    a = _brush("A", cube(32, 32, 32), loc=(0, 0, 0))
+    b = _brush("B", cube(32, 32, 32), loc=(0, 0, 32))
+    level = _level(a, b)
+    pair_report = relation.compute_pair(level, "A", "B", top=None)
+    full_report = relation.compute(level, ["A", "B"], top=None)
+    assert pair_report.groups[0].candidate_count == full_report.groups[0].candidate_count
+
+
+def test_compute_pair_mixed_bare_and_pinned_selectors():
+    # REF bare (ranks all its polys) against TARGET pinned to one exact poly.
+    a = _brush("A", cube(32, 32, 32), loc=(0, 0, 0))
+    b = _brush("B", cube(32, 32, 32), loc=(0, 0, 32))
+    level = _level(a, b)
+    bottom_b = next(i for i, p in enumerate(b.brush.polys) if p.normal == (0.0, 0.0, -1.0))
+    report = relation.compute_pair(level, "A", f"B:{bottom_b}", top=None)
+    assert report.groups
+    assert all(p.poly_b == bottom_b for p in report.groups[0].shown)
+
+
+def test_compute_pair_same_brush_rejected_by_default():
+    a = _brush("A", cube(32, 32, 32))
+    level = _level(a)
+    with pytest.raises(relation.RelationError, match="allow-self"):
+        relation.compute_pair(level, "A:0", "A:1")
+
+
+def test_compute_pair_allow_self_permits_same_brush():
+    a = _brush("A", cube(32, 32, 32))
+    level = _level(a)
+    report = relation.compute_pair(level, "A", "A", top=None, allow_self=True)
+    assert report.brush_count == 1
+    # every shown pair excludes the trivial (idx, idx) self-match
+    assert all(not (p.poly_a == p.poly_b) for p in report.groups[0].shown) if report.groups else True
+
+
+def test_compute_pair_disjoint_never_reports_exactly_one():
+    a = _brush("A", cube(16, 16, 16), loc=(0, 0, 0))
+    b = _brush("B", cube(16, 16, 16), loc=(500, 500, 500))
+    b.props.insert(0, ("Rotation", "(Pitch=5000,Yaw=7000,Roll=3000)"))
+    level = _level(a, b)
+    report = relation.compute_pair(level, "A", "B")
+    assert len(report.disjoint) in (0, 2)
+
+
+def test_compute_pair_unknown_selector_raises():
+    a = _brush("A", cube(16, 16, 16))
+    level = _level(a)
+    with pytest.raises(relation.RelationError):
+        relation.compute_pair(level, "A", "NoSuchBrush")
+
+
+def test_find_candidates_ranks_and_caps_per_candidate():
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    near = _brush("Near", cube(64, 64, 8), loc=(0, 0, 8))     # flush on top
+    far = _brush("Far", cube(64, 64, 8), loc=(0, 0, 100))     # same axis, far gap
+    level = _level(ref, near, far)
+    matches = relation.find_candidates(level, "Wall", ["Near", "Far"], top=1)
+    assert {m.candidate for m in matches} <= {"Near", "Far"}
+    near_matches = [m for m in matches if m.candidate == "Near"]
+    assert len(near_matches) == 1
+    assert near_matches[0].pair.plane.plane == "coplanar"
+
+
+def test_find_candidates_max_gap_filters_out_far():
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    near = _brush("Near", cube(64, 64, 8), loc=(0, 0, 8))
+    far = _brush("Far", cube(64, 64, 8), loc=(0, 0, 100))
+    level = _level(ref, near, far)
+    matches = relation.find_candidates(level, "Wall", ["Near", "Far"], max_gap=1.0)
+    assert {m.candidate for m in matches} == {"Near"}
+
+
+def test_find_candidates_min_gap_filters_out_near():
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    near = _brush("Near", cube(64, 64, 8), loc=(0, 0, 8))
+    far = _brush("Far", cube(64, 64, 8), loc=(0, 0, 100))
+    level = _level(ref, near, far)
+    matches = relation.find_candidates(level, "Wall", ["Near", "Far"], min_gap=70.0)
+    assert {m.candidate for m in matches} == {"Far"}
+
+
+def test_find_candidates_footprint_filter():
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    small = _brush("Small", cube(8, 8, 8), loc=(0, 0, 8))     # small footprint, contained
+    level = _level(ref, small)
+    contained = relation.find_candidates(level, "Wall", ["Small"], footprint={"contains"})
+    assert len(contained) == 1
+    none_only = relation.find_candidates(level, "Wall", ["Small"], footprint={"none"})
+    assert none_only == []
+
+
+def test_find_candidates_plane_filter():
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    coplanar = _brush("Coplanar", cube(64, 64, 8), loc=(0, 0, 8))
+    parallel = _brush("Parallel", cube(64, 64, 8), loc=(0, 0, 20))
+    level = _level(ref, coplanar, parallel)
+    coplanar_only = relation.find_candidates(
+        level, "Wall", ["Coplanar", "Parallel"], plane="coplanar")
+    assert {m.candidate for m in coplanar_only} == {"Coplanar"}
+
+
+def test_find_candidates_min_gap_exceeds_max_gap_raises():
+    a = _brush("Wall", cube(16, 16, 16))
+    level = _level(a)
+    with pytest.raises(relation.RelationError):
+        relation.find_candidates(level, "Wall", [], min_gap=10.0, max_gap=1.0)
+
+
+def test_compute_set_translation_gap_only():
+    ref = _brush("Ref", cube(64, 64, 8), loc=(0, 0, 0))
+    tgt = _brush("Tgt", cube(64, 64, 8), loc=(0, 0, 8))   # flush, gap=0 today
+    level = _level(ref, tgt)
+    top_ref = next(i for i, p in enumerate(ref.brush.polys) if p.normal == (0.0, 0.0, 1.0))
+    bottom_tgt = next(i for i, p in enumerate(tgt.brush.polys) if p.normal == (0.0, 0.0, -1.0))
+    name, ref_name, move = relation.compute_set_translation(
+        level, f"Tgt:{bottom_tgt}", f"Ref:{top_ref}", gap=10.0)
+    assert name == "Tgt"
+    assert ref_name == "Ref"
+    assert move == pytest.approx((0.0, 0.0, 10.0), abs=1e-6)  # was 0 gap, now 10 along +Z normal
+
+
+def test_compute_set_translation_centroid_only_leaves_gap():
+    ref = _brush("Ref", cube(64, 64, 8), loc=(0, 0, 0))
+    tgt = _brush("Tgt", cube(64, 64, 8), loc=(20, 0, 8))  # offset 20uu in X (world U or V)
+    level = _level(ref, tgt)
+    top_ref = next(i for i, p in enumerate(ref.brush.polys) if p.normal == (0.0, 0.0, 1.0))
+    bottom_tgt = next(i for i, p in enumerate(tgt.brush.polys) if p.normal == (0.0, 0.0, -1.0))
+    name, ref_name, move = relation.compute_set_translation(
+        level, f"Tgt:{bottom_tgt}", f"Ref:{top_ref}", centroid_v=0.0)
+    # gap (Z) untouched: the move has zero Z component
+    assert move[2] == pytest.approx(0.0, abs=1e-6)
+    # some in-plane component is non-zero (the 20uu offset gets nulled on whichever axis U mapped to)
+    assert abs(move[0]) + abs(move[1]) > 1.0
+
+
+def test_compute_set_translation_no_flags_raises():
+    ref = _brush("Ref", cube(16, 16, 16), loc=(0, 0, 0))
+    tgt = _brush("Tgt", cube(16, 16, 16), loc=(0, 0, 16))
+    level = _level(ref, tgt)
+    with pytest.raises(relation.RelationError, match="at least one"):
+        relation.compute_set_translation(level, "Tgt:0", "Ref:0")
+
+
+def test_compute_set_translation_non_planar_pair_raises():
+    ref = _brush("Ref", cube(64, 64, 8), loc=(0, 0, 0))
+    tgt = _brush("Tgt", cube(64, 64, 8), loc=(0, 0, 8))
+    level = _level(ref, tgt)
+    top_ref = next(i for i, p in enumerate(ref.brush.polys) if p.normal == (0.0, 0.0, 1.0))
+    side_tgt = next(i for i, p in enumerate(tgt.brush.polys) if p.normal == (1.0, 0.0, 0.0))
+    with pytest.raises(relation.RelationError):
+        relation.compute_set_translation(level, f"Tgt:{side_tgt}", f"Ref:{top_ref}", gap=0.0)
+
+
+def test_compute_set_translation_bare_name_rejected():
+    ref = _brush("Ref", cube(16, 16, 16), loc=(0, 0, 0))
+    tgt = _brush("Tgt", cube(16, 16, 16), loc=(0, 0, 16))
+    level = _level(ref, tgt)
+    with pytest.raises(relation.RelationError):
+        relation.compute_set_translation(level, "Tgt", "Ref:0", gap=0.0)  # TARGET must be BRUSH:idx
+
+
+def test_compute_set_translation_same_brush_rejected():
+    a = _brush("A", cube(16, 16, 16))
+    level = _level(a)
+    with pytest.raises(relation.RelationError):
+        relation.compute_set_translation(level, "A:0", "A:1", gap=0.0)
+
+
+def test_compute_set_translation_edge_u_min_explicit():
+    ref = _brush("Ref", cube(64, 64, 8), loc=(0, 0, 0))
+    tgt = _brush("Tgt", cube(64, 64, 8), loc=(0, 0, 8))
+    level = _level(ref, tgt)
+    top_ref = next(i for i, p in enumerate(ref.brush.polys) if p.normal == (0.0, 0.0, 1.0))
+    bottom_tgt = next(i for i, p in enumerate(tgt.brush.polys) if p.normal == (0.0, 0.0, -1.0))
+    name, ref_name, move = relation.compute_set_translation(
+        level, f"Tgt:{bottom_tgt}", f"Ref:{top_ref}", edge_u=("min", 5.0))
+    assert move[2] == pytest.approx(0.0, abs=1e-6)  # gap untouched

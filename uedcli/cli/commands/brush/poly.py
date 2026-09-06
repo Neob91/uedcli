@@ -195,22 +195,27 @@ def _find(args, src) -> int:
     except ValueError as e:
         print(str(e), file=sys.stderr)                # malformed --facing → clean exit 2, naming it
         return 2
-    raw = target_names.resolve_target_names(args.names)   # `-` → stdin (bare names or BRUSH:idx lines)
-    if not raw:
-        return 0                                      # empty stdin / no targets: clean no-op
-    level = src.load()
-    brushes: list[str] = []
-    seen: set[str] = set()
-    for tok in raw:
-        bname = tok.split(":", 1)[0]                  # accept a BRUSH:idx line — the :idx is irrelevant here
-        try:
-            canonical = query.resolve_actor_name(level, bname)
-        except KeyError as e:
-            print(e.args[0], file=sys.stderr)         # unknown name → hard error (a typo must not pass)
-            return 2
-        if canonical not in seen:                     # dedup on canonical, first-seen order
-            seen.add(canonical)
-            brushes.append(canonical)
+    if not args.names:                                 # no names, no '-': default to every brush
+        level = src.load()
+        brushes: list[str] = sorted(
+            name for name, actor in level.actors.items() if actor.brush is not None)
+    else:
+        raw = target_names.resolve_target_names(args.names)   # `-` → stdin (bare names or BRUSH:idx lines)
+        if not raw:
+            return 0                                   # '-' with empty stdin: clean no-op
+        level = src.load()
+        brushes = []
+        seen: set[str] = set()
+        for tok in raw:
+            bname = tok.split(":", 1)[0]               # accept a BRUSH:idx line — the :idx is irrelevant here
+            try:
+                canonical = query.resolve_actor_name(level, bname)
+            except KeyError as e:
+                print(e.args[0], file=sys.stderr)      # unknown name → hard error (a typo must not pass)
+                return 2
+            if canonical not in seen:                  # dedup on canonical, first-seen order
+                seen.add(canonical)
+                brushes.append(canonical)
     use_json = getattr(args, "json", False)
     rows: list[dict] = []
     lines: list[str] = []

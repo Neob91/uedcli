@@ -564,11 +564,12 @@ def register(sub) -> None:
     pfind = psub.add_parser(
         "find", help="print matching faces of one or more brushes as BRUSH:idx selectors (feed to "
                      "poly align/set)")
-    pfind.add_argument("names", nargs="+", metavar="NAME",
+    pfind.add_argument("names", nargs="*", metavar="NAME",
                        help="brush actor Name(s) to search (case-insensitive), or the single token "
                             "- to read the set from stdin (bare names, or the BRUSH:idx lines a "
                             "prior find/per-face verb prints — the :idx is stripped to the brush). "
-                            "- is the sole source, not mixable; empty stdin is a clean no-op. A "
+                            "- is the sole source, not mixable; empty stdin is a clean no-op. Omit "
+                            "entirely (no names, no -) to search every brush in the level. A "
                             "non-brush actor is warned and skipped; an unknown name is an error")
     pfind.add_argument("--item", default=None, metavar="NAME",
                        help="keep only faces whose builder ItemName equals NAME (case-insensitive; "
@@ -656,28 +657,134 @@ def register(sub) -> None:
             raise argparse.ArgumentTypeError(f"--top must be a positive integer or 'all', got {s!r}")
         return n
 
-    measure = bsub.add_parser("measure", help="pure geometric measurement (no mutation)")
-    msub = measure.add_subparsers(dest="measuresub", required=True)
-    mrel = msub.add_parser(
-        "relation",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        help="report the exact geometric relationship between every pair of faces across "
-             "2+ named brushes (plane, normals, distance, footprint_2d overlap, deltas)",
-        epilog=(
-            "footprint_2d values (the 2-D outline relationship, projected onto the shared or\n"
-            "parallel plane -- independent of `distance`, the out-of-plane gap):\n"
-            "  none        no touching or overlap at all\n"
-            "  vertex      touch at a single point\n"
-            "  edge        touch along a line segment, zero area overlap\n"
-            "  partial     real area overlap, neither fully contains the other\n"
-            "  contains    one fully inside the other's footprint (direction stated)\n"
-            "  coincident  identical footprint both ways -- usually a stray duplicate\n"
-        ),
+    def _parse_footprint_list(s: str) -> set[str]:
+        valid = {"none", "vertex", "edge", "partial", "contains", "coincident"}
+        parts = {p.strip() for p in s.split(",") if p.strip()}
+        bad = parts - valid
+        if bad:
+            raise argparse.ArgumentTypeError(
+                f"--footprint: unknown value(s) {sorted(bad)} (valid: {sorted(valid)})")
+        return parts
+
+    relation = bsub.add_parser(
+        "relation", help="cross-brush geometric relationships: measure/find/set")
+    rsub = relation.add_subparsers(dest="relationsub", required=True)
+
+    _FOOTPRINT_EPILOG = (
+        "footprint_2d values (the 2-D outline relationship, projected onto the shared or\n"
+        "parallel plane -- independent of `distance`, the out-of-plane gap):\n"
+        "  none        no touching or overlap at all\n"
+        "  vertex      touch at a single point\n"
+        "  edge        touch along a line segment, zero area overlap\n"
+        "  partial     real area overlap, neither fully contains the other\n"
+        "  contains    one fully inside the other's footprint (direction stated)\n"
+        "  coincident  identical footprint both ways -- usually a stray duplicate\n"
     )
-    mrel.add_argument(
-        "names", nargs="+",
-        help="brush actor names to compare, or '-' to read a newline name list from stdin")
-    mrel.add_argument(
+
+    rmeasure = rsub.add_parser(
+        "measure",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        help="report the exact geometric relationship between 2 face selectors (plane, normals, "
+             "distance, footprint_2d overlap, deltas)",
+        epilog=_FOOTPRINT_EPILOG,
+    )
+    rmeasure.add_argument(
+        "ref", metavar="REF_SELECTOR",
+        help="reference face selector: a bare brush Name (all its polys) or Name:SELECTOR "
+             "(SELECTOR = 'all' or comma indices). Sign conventions (distance, deltas) are "
+             "relative to THIS selector")
+    rmeasure.add_argument(
+        "target", metavar="TARGET_SELECTOR",
+        help="the other face selector, same grammar as REF_SELECTOR")
+    rmeasure.add_argument(
         "--top", type=_top_arg, default=1,
-        help="max ranked candidate poly-pairs to show per brush pair (default 1); "
-             "'all' shows every qualifying pair with no cap")
+        help="max ranked candidate poly-pairs to show (default 1); 'all' shows every "
+             "qualifying pair with no cap")
+    rmeasure.add_argument(
+        "--allow-self", dest="allow_self", action="store_true",
+        help="permit REF_SELECTOR and TARGET_SELECTOR to name the SAME brush (comparing two "
+             "faces of one brush). Without it, naming the same brush on both sides is a clean "
+             "exit 2 -- it usually means a typo or a copy-paste left the same name twice")
+
+    rfind = rsub.add_parser(
+        "find",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        help="print faces of one or more candidate brushes related to a reference face, "
+             "filtered by gap/footprint/plane, as candidate:idx selectors",
+        epilog=_FOOTPRINT_EPILOG,
+    )
+    rfind.add_argument(
+        "candidates", nargs="*", metavar="NAME",
+        help="candidate brush Name(s) to search, or '-' to read a newline name list from "
+             "stdin (empty stdin: clean no-op). Omit entirely (no names, no '-') to search "
+             "every OTHER brush in the level")
+    rfind.add_argument(
+        "--relative-to", dest="relative_to", required=True, metavar="REF[:idx]",
+        help="the reference: a bare brush Name (rank against every one of its polys) or "
+             "Name:idx (pin to exactly one reference poly)")
+    rfind.add_argument(
+        "--max-gap", dest="max_gap", type=float, default=None, metavar="N",
+        help="keep only pairs whose perpendicular gap (absolute distance) is at most N world units")
+    rfind.add_argument(
+        "--min-gap", dest="min_gap", type=float, default=None, metavar="N",
+        help="keep only pairs whose perpendicular gap (absolute distance) is at least N world units")
+    rfind.add_argument(
+        "--footprint", dest="footprint", type=_parse_footprint_list, default=None, metavar="LIST",
+        help="comma-separated footprint_2d values to keep (none,vertex,edge,partial,contains,"
+             "coincident -- 'contains' matches either direction). Omit: no filter")
+    rfind.add_argument(
+        "--plane", dest="plane", choices=["coplanar", "parallel"], default=None,
+        help="keep only pairs of this plane relationship. Omit: either")
+    rfind.add_argument(
+        "--top", type=_top_arg, default=1,
+        help="max ranked qualifying pairs to show PER CANDIDATE (default 1); 'all' shows "
+             "every qualifying pair")
+    rfind.add_argument(
+        "--allow-self", dest="allow_self", action="store_true",
+        help="permit the reference's OWN brush among the candidates (finding other faces of "
+             "the same brush related to its reference face). Without it, the reference's own "
+             "brush is excluded from the default level-wide search and rejected if named "
+             "explicitly")
+    rfind.add_argument(
+        "--json", action="store_true",
+        help="emit the full structured relation (plane, normals, distance, footprint_2d, "
+             "deltas) per match as a JSON array on stdout, instead of bare candidate:idx "
+             "lines; suppresses the stderr summary")
+
+    rset = rsub.add_parser(
+        "set",
+        help="translate a brush (by its Location) so one of its faces hits a target gap/"
+             "centroid/edge offset from a reference face")
+    rset.add_argument(
+        "target", nargs="+", metavar="TARGET:idx",
+        help="the face to move, as an exact BRUSH:idx (a bare name or index list is not "
+             "allowed). Repeat, or pass the single token '-' to read a newline TARGET:idx "
+             "list from stdin (empty stdin: clean no-op) -- every target moves relative to "
+             "the SAME --relative-to reference")
+    rset.add_argument(
+        "--relative-to", dest="relative_to", required=True, metavar="REF:idx",
+        help="the fixed reference face, as an exact BRUSH:idx. Never moves")
+    rset.add_argument(
+        "--gap", type=float, default=None, metavar="N",
+        help="set the signed perpendicular distance to the reference plane to exactly N "
+             "(along the reference's own normal; 0 = flush/coplanar). Omit: leave untouched")
+    ucg = rset.add_mutually_exclusive_group()
+    ucg.add_argument(
+        "--centroid-u", dest="centroid_u", type=float, default=None, metavar="N",
+        help="set the footprint centroid's U offset from the reference to exactly N")
+    ucg.add_argument(
+        "--edge-u-min", dest="edge_u_min", type=float, default=None, metavar="N",
+        help="set the offset between this face's U-min extent and the reference's to exactly N")
+    ucg.add_argument(
+        "--edge-u-max", dest="edge_u_max", type=float, default=None, metavar="N",
+        help="set the offset between this face's U-max extent and the reference's to exactly N")
+    vcg = rset.add_mutually_exclusive_group()
+    vcg.add_argument(
+        "--centroid-v", dest="centroid_v", type=float, default=None, metavar="N",
+        help="set the footprint centroid's V offset from the reference to exactly N")
+    vcg.add_argument(
+        "--edge-v-min", dest="edge_v_min", type=float, default=None, metavar="N",
+        help="set the offset between this face's V-min extent and the reference's to exactly N")
+    vcg.add_argument(
+        "--edge-v-max", dest="edge_v_max", type=float, default=None, metavar="N",
+        help="set the offset between this face's V-max extent and the reference's to exactly N")

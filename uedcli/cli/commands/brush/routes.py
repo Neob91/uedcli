@@ -44,8 +44,8 @@ def run(args):
         from . import poly as feature
     elif sub == "vertex":
         from . import vertex as feature
-    elif sub == "measure":
-        from . import measure as feature
+    elif sub == "relation":
+        from . import relation as feature
     elif sub in ("scale", "apply-transform", "replace"):
         from . import edit as feature
     else:

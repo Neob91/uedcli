@@ -11,8 +11,9 @@ emits `{actor, polys:[…]}`, each poly carrying the visible unit `normal` (`[nx
 **`brush poly find`** is a stateless producer over ONE OR MORE brushes: it prints their matching
 faces as `BRUSH:idx` selectors, one per line (a match count → stderr). It takes brush Name(s), or `-`
 to read the set from stdin (bare names, or the `BRUSH:idx` lines a prior find/per-face verb prints —
-the `:idx` is stripped to the brush); empty stdin is a clean no-op. A non-brush actor is warned and
-skipped; an unknown name is an error. Filters AND together:
+the `:idx` is stripped to the brush); empty stdin is a clean no-op. Omitting names entirely (no
+names, no `-`) searches every brush in the level. A non-brush actor is warned and skipped; an unknown
+name is an error. Filters AND together:
 - `--item NAME` — the builder ItemName (`Side`/`Cap`/`Step`/…, case-insensitive).
 - `--facing SPEC` — a predicate on the face's **visible** unit normal `(nx,ny,nz)`, each in `[-1,1]`.
   `;` = AND across terms, `,` = OR within one axis, `..` = an inclusive range. Presets: `flat`/`wall`/
@@ -174,4 +175,4 @@ that brush's faces, so printing one would hand the next verb a wider set than it
 are canonical and `all` is expanded, so `brush poly pan wall:all …` prints `WALL:0 … WALL:5`, ready
 to feed the next verb's `-`.
 
-See also: [`brush vertex`](vertex.md), [`brush measure relation`](measure.md), [`actor diagram`](../actor/diagram.md), [Textures & surfaces](../../leveldesign/general/textures-and-surfaces.md) (the level-design craft of texture alignment).
+See also: [`brush vertex`](vertex.md), [`brush relation`](relation.md), [`actor diagram`](../actor/diagram.md), [Textures & surfaces](../../leveldesign/general/textures-and-surfaces.md) (the level-design craft of texture alignment).

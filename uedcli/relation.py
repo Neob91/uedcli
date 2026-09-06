@@ -1,15 +1,20 @@
-"""Cross-brush geometric relationships — `brush measure relation`. Pure Python, model-side, no
-editor, no native CSG. See dev/docs/superpowers/specs/2026-08-29-brush-measure-design.md."""
+"""Cross-brush geometric relationships — `brush relation measure|find|set`. Pure Python, model-side,
+no editor, no native CSG. See dev/docs/superpowers/specs/2026-09-05-brush-relation-family-design.md."""
 from __future__ import annotations
 
 import itertools
 from dataclasses import dataclass
 
 from . import polyalign
+from . import query
+from . import surface
 from .preview import _poly_centroid_2d
 
 Vec2 = tuple[float, float]
 Vec3 = tuple[float, float, float]
+
+_PARALLEL_EPS = 1e-3   # 1 - |n.n'| below this => same plane orientation
+_PLANE_EPS = 0.5       # |distance| below this => coplanar rather than merely parallel
 
 
 @dataclass(frozen=True)
@@ -30,7 +35,7 @@ def _sub(a: Vec3, b: Vec3) -> Vec3:
 
 def plane_relationship(actor_a, poly_a, actor_b, poly_b) -> PlaneRelation | None:
     """Compare two (possibly different-brush, possibly-rotated) polys' planes. Returns None if
-    their normals aren't parallel or anti-parallel within `polyalign._PARALLEL_EPS`."""
+    their normals aren't parallel or anti-parallel within `_PARALLEL_EPS`."""
     try:
         normal_a = polyalign._world_normal(actor_a, poly_a, ref=f"{actor_a.name}")
         normal_b = polyalign._world_normal(actor_b, poly_b, ref=f"{actor_b.name}")
@@ -38,14 +43,14 @@ def plane_relationship(actor_a, poly_a, actor_b, poly_b) -> PlaneRelation | None
         return None  # a degenerate (zero-area) poly can't participate in a plane comparison
 
     alignment = _dot(normal_a, normal_b)  # +1 same direction, -1 opposite, 0 perpendicular
-    if abs(abs(alignment) - 1.0) > polyalign._PARALLEL_EPS:
+    if abs(abs(alignment) - 1.0) > _PARALLEL_EPS:
         return None  # not parallel (in either direction) -> "neither"
 
     point_a = polyalign._world_verts(actor_a, poly_a)[0]
     point_b = polyalign._world_verts(actor_b, poly_b)[0]
     distance = _dot(_sub(point_b, point_a), normal_a)
 
-    plane = "coplanar" if abs(distance) <= polyalign._PLANE_EPS else "parallel"
+    plane = "coplanar" if abs(distance) <= _PLANE_EPS else "parallel"
     return PlaneRelation(plane=plane, normal_a=normal_a, normal_b=normal_b, distance=distance)
 
 
@@ -323,6 +328,37 @@ def _candidate_sort_key(pair: PairFace) -> tuple:
     )
 
 
+def _pairs_between(actor_a, idxs_a: set, actor_b, idxs_b: set) -> list:
+    """Every (idx_a, idx_b) poly pair between `actor_a`'s `idxs_a` and `actor_b`'s `idxs_b` with a
+    defined plane relationship, as `PairFace` objects ranked best-first (`_candidate_sort_key`).
+    Skips the identical `(actor, idx)` pairing when `actor_a is actor_b` -- a poly compared to
+    itself is never a meaningful relation, independent of any actor-level self-comparison guard a
+    caller applies."""
+    same_brush = actor_a is actor_b
+    candidates: list[PairFace] = []
+    for idx_a in idxs_a:
+        poly_a = actor_a.brush.polys[idx_a]
+        for idx_b in idxs_b:
+            if same_brush and idx_a == idx_b:
+                continue
+            poly_b = actor_b.brush.polys[idx_b]
+            rel = plane_relationship(actor_a, poly_a, actor_b, poly_b)
+            if rel is None:
+                continue
+            world_a = polyalign._world_verts(actor_a, poly_a)
+            world_b = polyalign._world_verts(actor_b, poly_b)
+            uv_a = project_to_plane(world_a, rel.normal_a)
+            uv_b = project_to_plane(world_b, rel.normal_a, origin=world_a[0])
+            footprint_2d = classify_footprint_2d(uv_a, uv_b)
+            deltas = compute_deltas(uv_a, uv_b)
+            candidates.append(PairFace(
+                brush_a=actor_a.name, poly_a=idx_a, brush_b=actor_b.name, poly_b=idx_b,
+                plane=rel, footprint_2d=footprint_2d, deltas=deltas,
+            ))
+    candidates.sort(key=_candidate_sort_key)
+    return candidates
+
+
 def compute(level, names: list[str], *, top: int | None = 1) -> RelationReport:
     if top is not None and top < 1:
         raise RelationError(f"--top must be a positive integer or 'all', got {top!r}")
@@ -339,29 +375,12 @@ def compute(level, names: list[str], *, top: int | None = 1) -> RelationReport:
     groups: list[PairGroup] = []
     involved: set[str] = set()
     for actor_a, actor_b in itertools.combinations(actors, 2):
-        candidates: list[PairFace] = []
-        for idx_a, poly_a in enumerate(actor_a.brush.polys):
-            for idx_b, poly_b in enumerate(actor_b.brush.polys):
-                rel = plane_relationship(actor_a, poly_a, actor_b, poly_b)
-                if rel is None:
-                    continue
-                world_a = polyalign._world_verts(actor_a, poly_a)
-                world_b = polyalign._world_verts(actor_b, poly_b)
-                # Shared origin (poly_a's own first vertex) -- see project_to_plane's docstring:
-                # two independently-defaulted origins would compare unrelated coordinate frames.
-                uv_a = project_to_plane(world_a, rel.normal_a)
-                uv_b = project_to_plane(world_b, rel.normal_a, origin=world_a[0])
-                footprint_2d = classify_footprint_2d(uv_a, uv_b)
-                deltas = compute_deltas(uv_a, uv_b)
-                candidates.append(PairFace(
-                    brush_a=actor_a.name, poly_a=idx_a,
-                    brush_b=actor_b.name, poly_b=idx_b,
-                    plane=rel, footprint_2d=footprint_2d, deltas=deltas,
-                ))
-
+        candidates = _pairs_between(
+            actor_a, set(range(len(actor_a.brush.polys))),
+            actor_b, set(range(len(actor_b.brush.polys))),
+        )
         if not candidates:
             continue
-        candidates.sort(key=_candidate_sort_key)
         shown = candidates if top is None else candidates[:top]
         groups.append(PairGroup(
             brush_a=actor_a.name, brush_b=actor_b.name,
@@ -375,6 +394,202 @@ def compute(level, names: list[str], *, top: int | None = 1) -> RelationReport:
     return RelationReport(
         groups=groups, disjoint=disjoint, brush_count=n, pair_count=n * (n - 1) // 2,
     )
+
+
+# --------------------------------------------------------------------- brush relation measure
+
+def _resolve_measure_selector(level, token: str):
+    """Bare `Name` (all its polys) or `Name:SELECTOR` -> (canonical_name, actor, index set).
+    Raises `RelationError` naming the offender for every failure path."""
+    if ":" in token:
+        brush_name, selector = surface.parse_poly_selector(token)
+    else:
+        brush_name, selector = token, "all"
+    try:
+        canonical = query.resolve_actor_name(level, brush_name)
+    except KeyError as e:
+        raise RelationError(e.args[0]) from e
+    actor = level.actors[canonical]
+    if actor.brush is None:
+        raise RelationError(f"{canonical!r} is not a brush actor (no PolyList)")
+    try:
+        indices = surface.resolve_polys(selector, actor, brush_name=canonical)
+    except ValueError as e:
+        raise RelationError(str(e)) from e
+    return canonical, actor, indices
+
+
+def compute_pair(level, ref_token: str, target_token: str, *, top: int | None = 1,
+                  allow_self: bool = False) -> RelationReport:
+    """`brush relation measure REF TARGET` -- exactly 2 selectors, each a bare brush Name (all its
+    polys) or `Name:SELECTOR`. Returns a `RelationReport` with at most one `PairGroup`, reusing
+    `format_report` as-is. Raises `RelationError` naming the offender for every failure path,
+    including two selectors naming the same brush unless `allow_self`."""
+    if top is not None and top < 1:
+        raise RelationError(f"--top must be a positive integer or 'all', got {top!r}")
+    ref_name, ref_actor, ref_idxs = _resolve_measure_selector(level, ref_token)
+    target_name, target_actor, target_idxs = _resolve_measure_selector(level, target_token)
+    if ref_name == target_name and not allow_self:
+        raise RelationError(
+            f"brush relation measure: both selectors name the same brush ({ref_name!r}) -- pass "
+            f"--allow-self to compare two faces of one brush")
+    candidates = _pairs_between(ref_actor, ref_idxs, target_actor, target_idxs)
+    shown = candidates if top is None else candidates[:top]
+    groups = []
+    if candidates:
+        groups.append(PairGroup(brush_a=ref_name, brush_b=target_name,
+                                 shown=shown, candidate_count=len(candidates)))
+    disjoint = sorted({ref_name, target_name}) if not candidates else []
+    brush_count = 1 if ref_name == target_name else 2
+    return RelationReport(groups=groups, disjoint=disjoint, brush_count=brush_count, pair_count=1)
+
+
+# --------------------------------------------------------------------- brush relation find
+
+_FOOTPRINT_FILTER_ALIASES = {"contains": {"contains_a_in_b", "contains_b_in_a"}}
+
+
+@dataclass(frozen=True)
+class FindMatch:
+    candidate: str
+    poly: int
+    pair: PairFace   # REF is always pair.brush_a/poly_a; the candidate is pair.brush_b/poly_b
+
+
+def _passes_predicates(pair: PairFace, *, max_gap, min_gap, footprint, plane) -> bool:
+    if plane is not None and pair.plane.plane != plane:
+        return False
+    gap = abs(pair.plane.distance)
+    if max_gap is not None and gap > max_gap:
+        return False
+    if min_gap is not None and gap < min_gap:
+        return False
+    if footprint is not None:
+        allowed: set = set()
+        for f in footprint:
+            allowed |= _FOOTPRINT_FILTER_ALIASES.get(f, {f})
+        if pair.footprint_2d not in allowed:
+            return False
+    elif pair.footprint_2d == "none":
+        return False   # a same-plane pair with NO footprint overlap is never a meaningful match
+                        # unless the caller explicitly asked for footprint=none
+    return True
+
+
+def find_candidates(level, ref_token: str, candidate_names: list, *,
+                     max_gap: float | None = None, min_gap: float | None = None,
+                     footprint: set | None = None, plane: str | None = None,
+                     top: int | None = 1) -> list:
+    """`brush relation find` -- rank every brush in `candidate_names` (already resolved to
+    canonical brush-actor names by the caller) against `ref_token` (bare `Name` or `Name:idx`),
+    keeping only poly pairs that satisfy every given predicate. Returns `FindMatch` objects, best
+    pair first per candidate, `top` capping how many pairs per candidate are kept. Raises
+    `RelationError` naming the offender for a bad `ref_token`, a bad `top`, or an inverted gap range."""
+    if top is not None and top < 1:
+        raise RelationError(f"--top must be a positive integer or 'all', got {top!r}")
+    if min_gap is not None and max_gap is not None and min_gap > max_gap:
+        raise RelationError(f"--min-gap ({min_gap}) must not exceed --max-gap ({max_gap})")
+    ref_name, ref_actor, ref_idxs = _resolve_measure_selector(level, ref_token)
+    results = []
+    for cand_name in candidate_names:
+        cand_actor = level.actors[cand_name]
+        cand_idxs = set(range(len(cand_actor.brush.polys)))
+        pairs = _pairs_between(ref_actor, ref_idxs, cand_actor, cand_idxs)
+        pairs = [p for p in pairs
+                 if _passes_predicates(p, max_gap=max_gap, min_gap=min_gap,
+                                        footprint=footprint, plane=plane)]
+        shown = pairs if top is None else pairs[:top]
+        results.extend(FindMatch(candidate=cand_name, poly=p.poly_b, pair=p) for p in shown)
+    return results
+
+
+# --------------------------------------------------------------------- brush relation set
+
+def _resolve_exact_face(level, token: str, label: str):
+    """`BRUSH:idx` only -- a bare name or a comma/`all` selector is rejected, since a translation
+    target or reference can't be ambiguous. Raises `RelationError` naming the offender."""
+    if ":" not in token:
+        raise RelationError(f"{label} must be BRUSH:idx (a bare brush name is not allowed): {token!r}")
+    brush_name, selector = surface.parse_poly_selector(token)
+    try:
+        canonical = query.resolve_actor_name(level, brush_name)
+    except KeyError as e:
+        raise RelationError(e.args[0]) from e
+    actor = level.actors[canonical]
+    if actor.brush is None:
+        raise RelationError(f"{canonical!r} is not a brush actor (no PolyList)")
+    try:
+        indices = surface.resolve_polys(selector, actor, brush_name=canonical)
+    except ValueError as e:
+        raise RelationError(str(e)) from e
+    if len(indices) != 1:
+        raise RelationError(f"{label} must select exactly one poly, got {len(indices)}: {token!r}")
+    return canonical, actor, next(iter(indices))
+
+
+def _edge_extent(poly_ref, poly_target, *, axis: int, mode: str) -> float:
+    """The offset between TARGET's `mode` (`'min'`/`'max'`) extent on `axis` (0=U, 1=V) and REF's
+    corresponding extent, in the shared UV frame. `compute_deltas` only reports whichever of
+    min/max is currently CLOSER; `brush relation set` needs either one, explicitly picked."""
+    ref_vals = [p[axis] for p in poly_ref]
+    target_vals = [p[axis] for p in poly_target]
+    pick = min if mode == "min" else max
+    return pick(target_vals) - pick(ref_vals)
+
+
+def compute_set_translation(level, target_token: str, ref_token: str, *,
+                             gap: float | None = None,
+                             centroid_u: float | None = None, centroid_v: float | None = None,
+                             edge_u=None, edge_v=None):
+    """`brush relation set TARGET --relative-to REF` -- resolves both exact faces, checks they
+    share a plane relationship, and returns `(target_name, ref_name, move)` where `move` is the
+    world-space `(dx, dy, dz)` delta to add to TARGET's Location so the requested degree(s) of
+    freedom land exactly on their target value(s); an omitted degree of freedom's delta is 0.
+    `edge_u`/`edge_v`, when given, are `(mode, value)` with `mode` `'min'`/`'max'`. Raises
+    `RelationError` naming the offender for every failure path, including no flag given at all."""
+    if (gap is None and centroid_u is None and centroid_v is None
+            and edge_u is None and edge_v is None):
+        raise RelationError(
+            "brush relation set: at least one of --gap/--centroid-u/--centroid-v/--edge-u-min/"
+            "--edge-u-max/--edge-v-min/--edge-v-max is required")
+    target_name, target_actor, target_idx = _resolve_exact_face(level, target_token, "TARGET")
+    ref_name, ref_actor, ref_idx = _resolve_exact_face(level, ref_token, "--relative-to")
+    if target_name == ref_name:
+        raise RelationError(
+            f"brush relation set: TARGET and REF must be different brushes, both are {target_name!r}")
+    ref_poly = ref_actor.brush.polys[ref_idx]
+    target_poly = target_actor.brush.polys[target_idx]
+    rel = plane_relationship(ref_actor, ref_poly, target_actor, target_poly)
+    if rel is None:
+        raise RelationError(
+            f"brush relation set: {target_name}:{target_idx} and {ref_name}:{ref_idx} are not "
+            f"parallel/coplanar -- no defined normal direction or in-plane frame to move along")
+    normal = rel.normal_a
+    u_axis, v_axis = _plane_basis(normal)
+    ref_world = polyalign._world_verts(ref_actor, ref_poly)
+    target_world = polyalign._world_verts(target_actor, target_poly)
+    uv_ref = project_to_plane(ref_world, normal)
+    uv_target = project_to_plane(target_world, normal, origin=ref_world[0])
+    deltas = compute_deltas(uv_ref, uv_target)
+
+    delta_n = (gap - rel.distance) if gap is not None else 0.0
+    if centroid_u is not None:
+        delta_u = centroid_u - deltas.centroid_u
+    elif edge_u is not None:
+        mode, want = edge_u
+        delta_u = want - _edge_extent(uv_ref, uv_target, axis=0, mode=mode)
+    else:
+        delta_u = 0.0
+    if centroid_v is not None:
+        delta_v = centroid_v - deltas.centroid_v
+    elif edge_v is not None:
+        mode, want = edge_v
+        delta_v = want - _edge_extent(uv_ref, uv_target, axis=1, mode=mode)
+    else:
+        delta_v = 0.0
+
+    move = tuple(delta_n * normal[i] + delta_u * u_axis[i] + delta_v * v_axis[i] for i in range(3))
+    return target_name, ref_name, move
 
 
 def _fmt(v: float) -> str:

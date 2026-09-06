@@ -11,7 +11,7 @@ covers.
 | [`brush poly list`](poly.md) | query | per-poly table for a brush |
 | [`brush poly find`](poly.md) | query | matching faces as `BRUSH:idx` selectors, for piping |
 | [`brush vertex list`](vertex.md) | query | welded brush corners: world coord + the polys sharing each |
-| [`brush measure relation`](measure.md) | query | exact geometric facts between every pair of faces across 2+ brushes |
+| [`brush relation measure/find/set`](relation.md) | query/mutate | exact geometric facts between two faces, filtered search, and move-to-relationship |
 | [`brush poly set/pan/rotate/scale/move`](poly.md) | mutate | edit face attributes or texture frame |
 | [`brush poly align`](poly.md) | mutate | flow one texture continuously across faces |
 | [`brush vertex move`](vertex.md) | mutate | move welded corners |

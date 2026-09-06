@@ -921,6 +921,15 @@ def test_dispatch_poly_find_json_has_normal_orientation_role(capsys):
     assert rows[0]["normal"] == [0.0, 0.0, 1.0]
 
 
+def test_dispatch_poly_find_omitted_names_defaults_to_every_brush(capsys):
+    lv = _level(_brush("Wa", cube(8, 8, 8)), _brush("Wb", cube(8, 8, 8)))
+    rc, _ = _run(_find_args([]), lv)
+    out = capsys.readouterr()
+    assert rc == 0
+    assert out.out.splitlines() == [f"Wa:{i}" for i in range(6)] + [f"Wb:{i}" for i in range(6)]
+    assert "12 face(s) matched" in out.err
+
+
 def test_dispatch_poly_align_positional_saves(capsys):
     a = _brush("Tower", cylinder(256, 128, 8))
     sides = [f"Tower:{i}" for i in range(8)]
