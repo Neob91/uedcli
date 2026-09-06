@@ -685,8 +685,16 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
                 return asm.resolver.object_ref(texture_kinds.get((head, base), "Texture"), name)
             raise ValueError(f"texture {name!r} is not in any package on the search path -- a "
                              f"substituted default is not acceptable, fix the search path")
+        # If NO candidate package is already referenced (qualified) elsewhere in the level, the
+        # editor never loads one to satisfy this bare name -- it leaves the poly's texture NULL
+        # rather than guess (measured: OceanLab N=37 `Brush1412`'s unqualified `Texture=bluewater_a`
+        # -- no other actor in the subset qualifies any package containing that name -- golden
+        # `Model_Brush1412`'s FPoly.texture_ref is 0). Guessing from the full on-disk `candidates`
+        # set here (the old behaviour) invents an import the editor's own build never makes.
         loaded = candidates & ref_pkgs
-        pkg_stem = min(loaded or candidates, key=lambda s: stem_case.get(s, s))
+        if not loaded:
+            return 0
+        pkg_stem = min(loaded, key=lambda s: stem_case.get(s, s))
         return asm.resolver.object_ref(texture_kinds.get((pkg_stem, base), "Texture"),
                                        f"{stem_case.get(pkg_stem, pkg_stem)}.{name.split('.')[-1]}")
 
