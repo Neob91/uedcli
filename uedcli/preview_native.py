@@ -103,8 +103,12 @@ def _brush_inputs(level, index) -> tuple[list, list[tuple[str, list]]]:
 
 # --------------------------------------------------------------------- geometry extract
 
-def _node_polys(model) -> list[tuple[list[tuple[float, float, float]], int, int]]:
-    """Each BSP node's polygon from its vert pool → (world verts, i_actor, i_brush_poly).
+def _node_polys(model) -> list[tuple[list[tuple[float, float, float]], int, int, int]]:
+    """Each BSP node's polygon from its vert pool → (world verts, i_actor, i_brush_poly,
+    poly_flags). `poly_flags` is the surf's OWN merged actor+poly `PolyFlags` (the Rust CSG core
+    ORs the brush-level flags onto it — `native/brush_marshal.py`'s marshalling docstring) — single
+    source for both preview renderers' backface-cull exemption, available even when the join below
+    is out of range (a BSP node always has a surf; only i_actor/i_brush_poly can miss).
     Guarded like `assemble._patch_surf_refs`: an out-of-range index never raises — the surf
     joins to no source poly and renders flat grey."""
     out = []
@@ -119,15 +123,16 @@ def _node_polys(model) -> list[tuple[list[tuple[float, float, float]], int, int]
         if any(not (0 <= i < len(model.points)) for i in idx):
             continue
         s = model.surfs[n.i_surf]
-        out.append(([model.points[i] for i in idx], s.i_actor, s.i_brush_poly))
+        out.append(([model.points[i] for i in idx], s.i_actor, s.i_brush_poly, s.poly_flags))
     return out
 
 
 def _mover_actor_world_polys(actor) -> list[tuple[list, object, object]]:
     """One mover actor's brush polys world-transformed at the BASE pose
     (`Location + L·(v − PrePivot)`, `L = actor_linear` — the full scale/rotation map, so a scaled
-    mover renders at its real size). A mirrored `L` (`det < 0`) reverses each ring (the native
-    renderer is winding-agnostic, so this is only for consistency with the CSG path). Returns
+    mover renders at its real size). A mirrored `L` (`det < 0`) reverses each ring — LOAD-BEARING
+    now that both preview renderers backface-cull by winding: a mirrored mover without this flip
+    would render inside-out (culled where it should show, and vice versa). Returns
     `(world_verts, actor, poly)` so the UV frame comes from the same authored fields.
 
     A degenerate (non-invertible) `MainScale`/`PostScale` exits 2 naming the actor, same as a
@@ -299,8 +304,17 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
     textures = _TextureTable(TextureResolver(search_files))
     polys = []
 
-    def add_poly(world_verts, actor, poly):
-        flags = (poly.flags or 0) | (poly_flags_int(dict(actor.props)) if actor else 0)
+    def add_poly(world_verts, actor, poly, surf_flags=None):
+        # `surf_flags` (a CSG-solved surf's OWN `poly_flags`, always real even when the join below
+        # is out of range) takes priority; a mover has no surf, so it falls back to deriving the
+        # merged flags itself from its authored poly + actor PolyFlags. `poly` can be None (the
+        # out-of-range-join grey filler) independently of `actor` being None, so the poly half of
+        # the fallback must not assume `poly is not None` just because `actor is not None`.
+        if surf_flags is not None:
+            flags = surf_flags
+        else:
+            flags = ((poly.flags or 0) if poly is not None else 0) | (
+                poly_flags_int(dict(actor.props)) if actor else 0)
         if flags & PF_INVISIBLE:
             return                                       # dropped Python-side (spec §5)
         if actor is not None and poly is not None:
@@ -320,17 +334,19 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
         # "a face draws index 0 as a hole iff poly.flags & PF_Masked OR its texture carries bMasked").
         # Matches `cli/rendering.py`'s `--faces` gate.
         masked = bool(flags & PF_MASKED) or textures.is_bmasked(tex_index)
-        polys.append((verts_flat, list(base_w), list(tu), list(tv), list(pan), tex_index, masked))
+        polys.append((verts_flat, list(base_w), list(tu), list(tv), list(pan), tex_index, masked,
+                     flags))
 
-    for world_verts, i_actor, i_brush_poly in _node_polys(model):
+    for world_verts, i_actor, i_brush_poly, poly_flags in _node_polys(model):
         if 0 <= i_actor < len(join):
             name, source_polys = join[i_actor]
             if 0 <= i_brush_poly < len(source_polys):
-                add_poly(world_verts, level.actors[name], source_polys[i_brush_poly])
+                add_poly(world_verts, level.actors[name], source_polys[i_brush_poly],
+                         surf_flags=poly_flags)
             else:
-                add_poly(world_verts, None, None)        # out-of-range poly → grey (§4.4)
+                add_poly(world_verts, None, None, surf_flags=poly_flags)  # out-of-range poly (§4.4)
         else:
-            add_poly(world_verts, None, None)            # out-of-range owner → grey (§4.4)
+            add_poly(world_verts, None, None, surf_flags=poly_flags)     # out-of-range owner (§4.4)
 
     for world_verts, actor, poly in _mover_world_polys(level, index):
         add_poly(world_verts, actor, poly)
@@ -343,10 +359,15 @@ class SolvedSurface:
     """One surviving world-space surface from the CSG solve. `actor`/`poly_index` identify the
     SOURCE brush poly (for texture/UV frame and the per-poly index decal), or both are None for a
     BSP node that joined to no source poly (renders flat grey). `world_verts` is the fragment's
-    ring, already in world space — NO local→world transform is applied again downstream."""
+    ring, already in world space — NO local→world transform is applied again downstream.
+    `poly_flags` is the surf's OWN merged actor+poly `PolyFlags` (real even when actor/poly_index
+    are None — a BSP node always has a surf) — the `actor diagram --faces textured` backface
+    cull's `PF_TwoSided`/`PF_Portal` exemption reads this, single-sourced with `level photo
+    --native`'s own cull."""
     actor: object | None
     poly_index: int | None
     world_verts: list
+    poly_flags: int
 
 
 @dataclass(frozen=True)
@@ -392,15 +413,15 @@ def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
             raise NativePreviewError(f"native CSG solve failed: {ex}") from ex
         from .native.umodel import parse_model_body
         model = parse_model_body(body, 0, len(body))
-        for world_verts, i_actor, i_brush_poly in _node_polys(model):
+        for world_verts, i_actor, i_brush_poly, poly_flags in _node_polys(model):
             if 0 <= i_actor < len(join):
                 actor = join[i_actor]
                 if 0 <= i_brush_poly < len(actor.brush.polys):
-                    world_surfaces.append(SolvedSurface(actor, i_brush_poly, world_verts))
+                    world_surfaces.append(SolvedSurface(actor, i_brush_poly, world_verts, poly_flags))
                 else:                                    # out-of-range poly → grey (M5)
-                    world_surfaces.append(SolvedSurface(None, None, world_verts))
+                    world_surfaces.append(SolvedSurface(None, None, world_verts, poly_flags))
             else:                                        # out-of-range owner → grey (M5)
-                world_surfaces.append(SolvedSurface(None, None, world_verts))
+                world_surfaces.append(SolvedSurface(None, None, world_verts, poly_flags))
 
     mover_polys = []
     for actor in actors:

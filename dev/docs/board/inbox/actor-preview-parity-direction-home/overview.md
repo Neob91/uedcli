@@ -20,8 +20,16 @@ actor-preview topic, or a section of `direction/trunk-and-editor.md`):
 >   texture and authored UV frame. Visibility is spatial CONTAINMENT, not a per-brush rule — an
 >   additive brush not inside subtracted space is invisible — and a subtracted room shows its interior
 >   via a per-view backface cull (each surviving fragment whose post-CSG normal faces away from the
->   camera is dropped). Texture alignment holds across CSG splits. Movers are excluded from the world
->   solve and draw as a magenta overlay; point actors keep their sprite/marker overlay.
+>   camera is dropped) — UNLESS the fragment's `PolyFlags` carry `PF_TwoSided` or `PF_Portal`, the
+>   real editor's own exemption (disassembled `URender::OccludeBsp`, `uedcli-native/src/light.rs`;
+>   confirmed against `dev/docs/unrealed/leveldesign/kb/textures.md`'s own "2-Sided renders both
+>   faces" entry), in which case it draws from either side. Texture alignment holds across CSG
+>   splits. Movers are excluded from the world solve and draw as a magenta overlay, subject to the
+>   SAME backface cull (and the same `PF_TwoSided`/`PF_Portal` exemption) as world surfaces — no
+>   longer a blanket no-cull overlay, which was the old behavior; point actors keep their
+>   sprite/marker overlay.
+>   `level photo --native`'s own perspective renderer shares this same single-sided rule (previously
+>   it had none at all — every face rendered from both sides, unconditionally).
 > - The solve routes through the faithful `build_geometry_bspcsg` core (not the default core, which
 >   mis-renders overlapping-subtract doorways). Its residual byte-divergences are acceptable for a
 >   visual preview.

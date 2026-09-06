@@ -111,6 +111,14 @@ PF_INVISIBLE = 0x00000001
 PF_MASKED = 0x00000002
 PF_SEMISOLID = 0x00000020
 PF_NOTSOLID = 0x00000008
+PF_TWOSIDED = 0x00000100
+PF_PORTAL = 0x04000000
+# The exemption from the per-view backface cull below — the SAME mask `light::light_in_front`
+# reads for the light-bake's own facing test (disassembled `URender::OccludeBsp`,
+# `uedcli-native/src/light.rs`), and confirmed against `dev/docs/unrealed/leveldesign/kb/
+# textures.md`'s own "2-Sided renders both faces" entry: single-sided is the real editor's
+# default, `PF_TwoSided`/`PF_Portal` are the exemptions.
+_CULL_EXEMPT = PF_TWOSIDED | PF_PORTAL
 _CSG_PALETTE: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
     "add":       ((70, 110, 255),  (35, 55, 130)),    # additive solid — blue (front lifted for the dark bg)
     "subtract":  ((225, 170, 40),  (120, 90, 20)),    # subtracted — yellow / gold
@@ -1586,10 +1594,14 @@ def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_poly
     splits. A per-view BACKFACE CULL drops each fragment whose post-CSG normal faces away from the
     camera (owner ruling 2026-08-03): bspcsg orients every surviving normal into empty space, so this
     shows a subtracted room's interior (like UnrealEd's textured view) while a fully-buried add stays
-    hidden (containment already removed it). `textured` draws NO wireframe, so `edges` here only feed
-    label placement; the sole line art is the `--highlight` outline. Movers draw as a filled magenta
-    overlay against the same depth buffer (occluded by / occluding the solved world), no cull, no
-    labels. A source poly split into N fragments gets ONE index decal, on its largest fragment."""
+    hidden (containment already removed it) — UNLESS the fragment's `PolyFlags` carry `PF_TwoSided`
+    or `PF_Portal` (`_CULL_EXEMPT`), the real editor's own exemption for a face meant to render from
+    both sides (sheets, banners, chain-link, water portals). `textured` draws NO wireframe, so
+    `edges` here only feed label placement; the sole line art is the `--highlight` outline. Movers
+    draw as a filled magenta overlay against the same depth buffer (occluded by / occluding the
+    solved world), backface-culled the SAME way (their authored winding is already outward-correct
+    — `_mover_actor_world_polys` reverses a mirrored mover's ring for exactly this). A source poly
+    split into N fragments gets ONE index decal, on its largest fragment."""
     best_decal: dict = {}     # (name, idx) -> (area, centroid2d, depth, v3, accent)
     brush_cands: dict = {}    # name -> projected 2d points (framing + locator cell)
 
@@ -1599,8 +1611,8 @@ def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_poly
         vs = [_project(p, view, iso_angle) for p in v3]
         if len(vs) < 3:
             continue
-        if not _is_front(v3, view, iso_angle):     # backface cull by post-CSG normal
-            continue
+        if not (surf.poly_flags & _CULL_EXEMPT) and not _is_front(v3, view, iso_angle):
+            continue                                # backface cull by post-CSG normal
         name = actor.name if actor is not None else None
         idx = surf.poly_index
         n = len(vs)
@@ -1656,11 +1668,14 @@ def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_poly
                     out.hi_only_labels.add(face_key)
 
     mover_rgb = _CSG_PALETTE["mover"][0]
-    for world_verts, actor, _poly in solved.mover_polys:
+    for world_verts, actor, poly in solved.mover_polys:
         v3 = [(float(p[0]), float(p[1]), float(p[2])) for p in world_verts]
         vs = [_project(p, view, iso_angle) for p in v3]
         if len(vs) < 3:
             continue
+        flags = (poly.flags or 0) | poly_flags_int(dict(actor.props))
+        if not (flags & _CULL_EXEMPT) and not _is_front(v3, view, iso_angle):
+            continue                                # backface cull, same rule as world_surfaces
         n = len(vs)
         centroid = (sum(p[0] for p in v3) / n, sum(p[1] for p in v3) / n, sum(p[2] for p in v3) / n)
         depth = sum(c * dc for c, dc in zip(centroid, d_vec))

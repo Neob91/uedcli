@@ -51,11 +51,14 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
 - **`--native`** — the opt-in offline draft. **No container at all**: the native CSG core carves the
   trunk in-process and a software rasterizer renders perspective stills in seconds. `--fov DEG`
   (default 75) applies here; `--map` / `--rebuild` / `--keep-alive` are rejected with `--native`.
-  - **`--faces textured` (the default)** — solid **textured, flat-shaded** faces. Movers render at
-    base pose; point actors, meshes, sky, lighting, and translucency do NOT render
-    (translucent/masked faces render opaque). Scaled, mirrored, and sheared brushes render (the
-    transform is baked into the geometry, and the texture frame follows it too — texels stretch/shear
-    with the surface).
+  - **`--faces textured` (the default)** — solid **textured, flat-shaded** faces, **single-sided
+    like the real editor**: a face renders only from the side its surface normal faces, unless it
+    carries `PF_TwoSided` or `PF_Portal` (sheets, banners, chain-link, water portals — the same
+    exemption UnrealEd itself uses), in which case it renders from either side. Movers render at
+    base pose, culled the same way; point actors, meshes, sky, lighting, and translucency do NOT
+    render (translucent/masked faces render opaque). Scaled, mirrored, and sheared brushes render
+    (the transform is baked into the geometry, and the texture frame follows it too — texels
+    stretch/shear with the surface).
   - **`--faces wire`** — a content-free **brush wireframe** from the same posed camera: every brush
     edge drawn (see-through, no hidden-line removal), coloured by CSG op — **add** blue, **subtract**
     gold, **semisolid** coral, **nonsolid** green, **mover** magenta. Point actors draw as their

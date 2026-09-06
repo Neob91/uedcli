@@ -468,11 +468,14 @@ fn bake_lighting(
 }
 
 /// One flat world-space textured polygon for `render_frame` (native preview, spec §5):
-/// `(verts_flat, uv_base, uv_axis_u, uv_axis_v, pan, tex_index, masked)`.  `verts_flat` = the
-/// ring as x,y,z triples; the UV frame is in texel units (Python computes it from the SOURCE
-/// poly's authored axes); `tex_index` indexes the texture table, `-1` = flat default grey.
-/// `masked` = the face's PF_Masked bit: sample the texture's mask and skip transparent texels.
-type RenderPolyTuple = (Vec<f32>, [f32; 3], [f32; 3], [f32; 3], [f32; 2], i32, bool);
+/// `(verts_flat, uv_base, uv_axis_u, uv_axis_v, pan, tex_index, masked, poly_flags)`.
+/// `verts_flat` = the ring as x,y,z triples; the UV frame is in texel units (Python computes it
+/// from the SOURCE poly's authored axes); `tex_index` indexes the texture table, `-1` = flat
+/// default grey. `masked` = the face's PF_Masked bit: sample the texture's mask and skip
+/// transparent texels. `poly_flags` = the merged actor+poly `PolyFlags` (Python single-sources it
+/// from `BspSurf.poly_flags` for a CSG-solved surface, or `poly.flags | actor PolyFlags` for a
+/// mover) — consulted by the backface cull's `PF_TwoSided|PF_Portal` exemption.
+type RenderPolyTuple = (Vec<f32>, [f32; 3], [f32; 3], [f32; 3], [f32; 2], i32, bool, u32);
 
 /// `render_frame` — the `--native` preview rasterizer (spec §5).  Flat world-space
 /// polygons + a texture table (`(w, h, rgb_bytes, mask_bytes)` mip0; `mask` is `w*h` bytes,
@@ -516,7 +519,7 @@ fn render_frame(
     }
     let rpolys: Vec<render::RenderPoly> = polys
         .into_iter()
-        .map(|(verts_flat, base, au, av, pan, tex_index, masked)| {
+        .map(|(verts_flat, base, au, av, pan, tex_index, masked, poly_flags)| {
             let verts = verts_flat
                 .chunks_exact(3)
                 .map(|c| model::Vec3::new(c[0], c[1], c[2]))
@@ -529,6 +532,7 @@ fn render_frame(
                 pan,
                 tex_index,
                 masked,
+                poly_flags,
             }
         })
         .collect();

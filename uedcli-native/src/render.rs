@@ -11,6 +11,7 @@
 //! computes each polygon's world UV frame (base/axes/pan, texel units); Rust only
 //! rasterizes. `cargo test`-able with no Python.
 
+use crate::light::light_in_front;
 use crate::model::Vec3;
 
 /// One world-space textured polygon: vertex ring + UV frame (texel units) + texture slot.
@@ -24,6 +25,11 @@ pub struct RenderPoly {
     pub pan: [f32; 2],
     pub tex_index: i32,
     pub masked: bool, // PF_Masked: skip texels whose mask byte is 0 (palette-index-0 transparent)
+    /// The merged actor+poly `PolyFlags` (Python single-sources it from `BspSurf.poly_flags` for a
+    /// CSG-solved surface, or `poly.flags | actor PolyFlags` for a mover). Consulted only by the
+    /// backface cull (`light_in_front`'s `PF_TwoSided|PF_Portal` exemption) — no other bit here
+    /// currently changes rendering.
+    pub poly_flags: u32,
 }
 
 /// A decoded texture: mip0 RGB, row-major, `data.len() == w*h*3`. `mask` is the per-texel
@@ -56,9 +62,11 @@ pub const DEFAULT_GREY: [u8; 3] = [128, 128, 128];
 pub const NEAR: f32 = 4.0;
 
 /// Fixed world "key light" direction for the per-face brightness factor (v1 flat shading).
-/// The factor is `0.55 + 0.45·|N·L|` — the |·| makes it robust to polygon winding (BSP
-/// node polys face the viewable side, but the preview must not go flat if one arrives
-/// reversed), while still separating differently-oriented faces.
+/// The factor is `0.55 + 0.45·|N·L|` — the `|·|` is NOT a winding-robustness hedge (a wrong-wound
+/// single-sided face's shade is computed but never shown — the facing cull right below drops the
+/// whole poly before rasterizing any of it): a genuinely `PF_TwoSided`/`PF_Portal` face IS actually
+/// drawn from either side and must read identically lit from both, same reasoning as
+/// `light::light_in_front`'s own two-sided exemption for the light-bake pass.
 const KEY_LIGHT: Vec3 = Vec3 {
     x: -0.408,
     y: -0.577,
@@ -153,6 +161,16 @@ pub fn render(
         } else {
             continue; // degenerate (zero-area) polygon
         };
+
+        // Single-sided by default (real UnrealEd: `dev/docs/unrealed/leveldesign/kb/textures.md`
+        // "2-Sided renders both faces"). Reuses the editor's own disassembled facing test
+        // (`light::light_in_front`, from `URender::OccludeBsp`) with the camera standing in for
+        // the light: `PF_TwoSided`/`PF_Portal` faces are never culled, everything else needs
+        // `PlaneDot >= -1.0`.
+        let unit_n = Vec3::new(n.x / n_len, n.y / n_len, n.z / n_len);
+        if !light_in_front(&unit_n, &poly.verts[0], &camera.location, poly.poly_flags) {
+            continue;
+        }
 
         // World -> camera frame + world-frame texel UV per vertex.
         let cam: Vec<CamVert> = poly
@@ -297,6 +315,12 @@ fn raster_tri(
 mod tests {
     use super::*;
 
+    // PolyFlags used by these tests — not re-exported from `light`, so kept as plain hex
+    // (canonical values: `light::light_in_front`'s doc comment, `dev/docs/unrealed/leveldesign/
+    // kb/textures.md`).
+    const PF_TWO_SIDED: u32 = 0x0000_0100;
+    const PF_PORTAL: u32 = 0x0400_0000;
+
     fn cam_at_origin_looking_plus_x(fov: f32) -> Camera {
         Camera {
             location: Vec3::new(0.0, 0.0, 0.0),
@@ -307,15 +331,17 @@ mod tests {
         }
     }
 
-    /// A `size`-uu square wall at x=depth, centred on the view axis, UV = 1 texel/uu.
+    /// A `size`-uu square wall at x=depth, centred on the view axis, UV = 1 texel/uu, wound to
+    /// face BACK toward the origin (normal -X) — i.e. front-facing to `cam_at_origin_looking_plus_x`,
+    /// which every caller here relies on now that a single-sided back face is culled.
     fn wall(depth: f32, size: f32, tex_index: i32) -> RenderPoly {
         let s = size / 2.0;
         RenderPoly {
             verts: vec![
-                Vec3::new(depth, -s, -s),
-                Vec3::new(depth, s, -s),
-                Vec3::new(depth, s, s),
                 Vec3::new(depth, -s, s),
+                Vec3::new(depth, s, s),
+                Vec3::new(depth, s, -s),
+                Vec3::new(depth, -s, -s),
             ],
             uv_base: Vec3::new(depth, -s, s), // top-left in screen terms
             uv_axis_u: Vec3::new(0.0, 1.0, 0.0),
@@ -323,6 +349,7 @@ mod tests {
             pan: [0.0, 0.0],
             tex_index,
             masked: false,
+            poly_flags: 0,
         }
     }
 
@@ -373,9 +400,15 @@ mod tests {
 
     #[test]
     fn near_plane_clips_geometry_behind_camera() {
-        // A wall BEHIND the camera must not wrap into view.
+        // A wall BEHIND the camera must not wrap into view. `wall()` at a NEGATIVE depth keeps
+        // its own front (-X) facing further into -X, i.e. AWAY from a camera at the origin — so
+        // it would already be dropped by the backface cull before ever reaching `clip_near`.
+        // `PF_TwoSided` bypasses that cull, so this test still exercises the near-plane clip it's
+        // named for, not the (separately, directly tested) facing cull.
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[wall(-100.0, 400.0, -1)], &[], &cam, 32, 32);
+        let mut behind = wall(-100.0, 400.0, -1);
+        behind.poly_flags = PF_TWO_SIDED;
+        let img = render(&[behind], &[], &cam, 32, 32);
         assert!(img.chunks_exact(3).all(|p| p == BACKGROUND));
         // A wall straddling the camera plane clips cleanly (no panic, partial coverage).
         let mut straddle = wall(1.0, 400.0, -1);
@@ -531,5 +564,45 @@ mod tests {
         let right = px(32);
         assert_ne!(right, BACKGROUND);
         assert!(right[0] > 0 && right[0] == right[1] && right[1] == right[2]);
+    }
+
+    /// A wall wound to face AWAY from `cam_at_origin_looking_plus_x` (the reverse of `wall()`).
+    fn wall_facing_away(depth: f32, size: f32, tex_index: i32) -> RenderPoly {
+        let mut w = wall(depth, size, tex_index);
+        w.verts.reverse();
+        w
+    }
+
+    #[test]
+    fn single_sided_back_face_is_culled() {
+        // A wall facing away from the camera renders nothing: pure background, not even the
+        // flat default grey (spec: real UnrealEd is single-sided by default).
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let img = render(&[wall_facing_away(100.0, 400.0, -1)], &[], &cam, 64, 64);
+        assert!(img.chunks_exact(3).all(|p| p == BACKGROUND));
+        // The same wall facing the camera (unchanged from `wall()`) DOES render.
+        let img = render(&[wall(100.0, 400.0, -1)], &[], &cam, 64, 64);
+        assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
+    }
+
+    #[test]
+    fn two_sided_flag_exempts_a_back_face_from_the_cull() {
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let mut w = wall_facing_away(100.0, 400.0, -1);
+        w.poly_flags = PF_TWO_SIDED;
+        let img = render(&[w], &[], &cam, 64, 64);
+        assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
+    }
+
+    #[test]
+    fn portal_flag_exempts_a_back_face_from_the_cull() {
+        // Same exemption, the OTHER real mask bit (`light_in_front`'s test is `PF_TwoSided |
+        // PF_Portal`, not `PF_TwoSided` alone — a visible two-sided portal sheet, `PF_Portal` set
+        // and NOT `PF_TwoSided`, still renders).
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let mut w = wall_facing_away(100.0, 400.0, -1);
+        w.poly_flags = PF_PORTAL;
+        let img = render(&[w], &[], &cam, 64, 64);
+        assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
     }
 }

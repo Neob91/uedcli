@@ -839,6 +839,26 @@ def test_backface_cull_keeps_far_interior_walls_and_drops_the_near_ones():
     assert geom.tex_faces and len(geom.tex_faces) == len(geom.fills)   # index-aligned
 
 
+def test_two_sided_flag_exempts_the_near_walls_from_the_backface_cull():
+    """A `PF_TwoSided` room's near walls (normally culled — camera-facing-away) survive too: the
+    real editor's own exemption (`PF_TwoSided|PF_Portal`, same mask `light::light_in_front` reads
+    for the light-bake pass), not just `PF_TwoSided` read here as a special case."""
+    from uedcli.preview import PF_TWOSIDED
+    room = make_brush_actor("Room", cube(512.0, 512.0, 256.0), csg="subtract", poly_flags=PF_TWOSIDED)
+    geom = _geom([room], faces="textured", view="iso")
+    assert len(geom.fills) == 6           # all 6 walls now, not just the 3 far ones
+
+
+def test_portal_flag_also_exempts_from_the_backface_cull():
+    """The SAME exemption fires for `PF_Portal` alone (no `PF_TwoSided`) — a visible two-sided
+    portal sheet in the real corpus (`Test_Castle.dx`'s water portals) carries exactly this
+    combination."""
+    from uedcli.preview import PF_PORTAL
+    room = make_brush_actor("Room", cube(512.0, 512.0, 256.0), csg="subtract", poly_flags=PF_PORTAL)
+    geom = _geom([room], faces="textured", view="iso")
+    assert len(geom.fills) == 6
+
+
 def test_a_buried_add_contributes_no_surface_while_the_room_interior_does():
     """Containment, not a per-brush rule: an add INSIDE the subtracted room survives where it borders
     empty; an add BURIED in solid space (outside any subtraction) leaves nothing at all."""
@@ -930,6 +950,30 @@ def test_a_mover_draws_as_a_filled_magenta_overlay():
                             mover_class="Engine.Mover")
     geom = _geom([room, door], faces="textured", movers=["Door"])
     assert any(rgb == MOVER_F for _v3, _vs, rgb, _d in geom.fills)   # mover magenta fill present
+
+
+def test_a_mover_is_backface_culled_the_same_as_world_surfaces():
+    """Movers share the SAME per-view backface cull as world surfaces now (not exempt): a solid
+    door cube shows only the 3 faces an `iso` camera actually faces, not all 6 — its authored
+    winding is already outward-correct (`_mover_actor_world_polys` flips a mirrored one), so no
+    extra plumbing is needed for this to just work."""
+    room = _room("Room", size=1024.0, height=1024.0)
+    door = make_brush_actor("Door", cube(400.0, 400.0, 400.0), location=(0.0, 0.0, -300.0),
+                            mover_class="Engine.Mover")
+    geom = _geom([room, door], faces="textured", movers=["Door"])
+    mover_fills = [f for f in geom.fills if f[2] == MOVER_F]
+    assert len(mover_fills) == 3
+
+
+def test_a_two_sided_mover_is_exempt_from_the_backface_cull():
+    """The same `PF_TwoSided`/`PF_Portal` exemption applies to a mover's own `PolyFlags`."""
+    from uedcli.preview import PF_TWOSIDED
+    room = _room("Room", size=1024.0, height=1024.0)
+    door = make_brush_actor("Door", cube(400.0, 400.0, 400.0), location=(0.0, 0.0, -300.0),
+                            mover_class="Engine.Mover", poly_flags=PF_TWOSIDED)
+    geom = _geom([room, door], faces="textured", movers=["Door"])
+    mover_fills = [f for f in geom.fills if f[2] == MOVER_F]
+    assert len(mover_fills) == 6
 
 
 def test_a_degenerate_scale_mover_exits_2_naming_it_not_silently_collapsed():

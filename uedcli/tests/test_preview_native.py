@@ -111,13 +111,78 @@ def test_out_of_range_surf_owner_renders_grey_not_indexerror():
     m.surfs = [BspSurf(i_actor=999, i_brush_poly=-1)]
     m.nodes = [BspNode(plane=(0, 0, 1, 0), i_vert_pool=0, i_surf=0, num_vertices=3)]
     got = pn._node_polys(m)
-    assert got == [([m.points[0], m.points[1], m.points[2]], 999, -1)]
+    assert got == [([m.points[0], m.points[1], m.points[2]], 999, -1, 0)]
     # A hostile vert pool / point index never raises either — the node is skipped.
     m.nodes[0].i_vert_pool = 99
     assert pn._node_polys(m) == []
     m.nodes[0].i_vert_pool = 0
     m.verts[0].i_vertex = 12345
     assert pn._node_polys(m) == []
+
+
+def test_out_of_range_join_does_not_crash_add_poly(monkeypatch):
+    """Regression, user-visible half: an out-of-range `i_brush_poly` (valid `i_actor`, no source
+    poly) still renders flat grey, never a traceback. This exercises `add_poly`'s `surf_flags`
+    branch (every `_node_polys`-driven call site passes one), which was never the buggy path.
+
+    The ACTUAL bug fixed alongside this — `add_poly`'s no-`surf_flags` FALLBACK derivation
+    (`(poly.flags or 0) if poly is not None else 0`) used to read `poly.flags` unconditionally,
+    crashing with `AttributeError` whenever `poly` was `None` — has no live caller today (every
+    `_node_polys` call site passes `surf_flags`; the only caller that doesn't, `_mover_world_polys`,
+    always has a real `actor`+`poly`). The fix is kept as defensive-correct code for any future
+    caller that omits `surf_flags` with `poly=None`, but is not exercised by any current test."""
+    room = cube_room()
+    real_node_polys = pn._node_polys
+
+    def hostile(model):
+        out = real_node_polys(model)
+        verts, i_actor, _i_brush_poly, poly_flags = out[0]
+        return [(verts, i_actor, 99999, poly_flags)] + out[1:]
+
+    monkeypatch.setattr(pn, "_node_polys", hostile)
+    polys, _ = pn.build_scene(_level(room), [], IDX)
+    assert len(polys) == 6   # the hostile node still renders (flat grey), no crash
+
+
+# --------------------------------------------------------------- backface cull, end to end (§?)
+
+_BACKGROUND_RGB = bytes([56, 56, 60])   # render.rs::BACKGROUND — not exported, pinned here
+
+
+def test_backface_cull_end_to_end_through_the_full_pipeline():
+    """The real regression this change fixes, through the WHOLE chain (`_node_polys` -> `add_poly`
+    -> the Rust `light_in_front` cull): a lone additive box's geometric +X face (`polys[0]`) renders
+    when viewed from the side its post-CSG normal actually points to, and renders BACKGROUND — not
+    its own texture seen from the wrong side — from the opposite side. The CSG core's own winding
+    for a lone add brush is measured, not assumed: `newell(polys[0])` gives -X (the face's front is
+    the world-origin side, x<64, not the outward x>64 side a raw authored brush would have) — a
+    real, if slightly surprising, fact about this specific CSG-solved case; this test locks it down
+    with an assertion rather than silently relying on it."""
+    import uedcli_native
+    from uedcli.texframe import newell
+    box = make_brush_actor("Box", cube(128.0, 128.0, 128.0), csg="add")
+    polys, table = pn.build_scene(_level(box), [], IDX)
+    assert len(polys) == 6
+    verts_flat = polys[0][0]
+    verts = [tuple(verts_flat[j:j + 3]) for j in range(0, len(verts_flat), 3)]
+    assert all(v[0] == 64.0 for v in verts)          # polys[0] IS the geometric +X face
+    assert newell(verts)[0] < 0                      # ...and its front faces -X (measured, not assumed)
+
+    # Isolate this ONE face: with all 6 present, a ray through the culled near face legitimately
+    # keeps going and hits the (correctly front-facing) OPPOSITE wall — a real result, not a
+    # confound this test is about, but it would make an untextured grey "background" check
+    # meaningless here (same default-grey shade either way).
+    one_face = [polys[0]]
+
+    def centre_px(eye_x: float, yaw: float) -> bytes:
+        fwd, right, up = pn.camera_basis(0.0, yaw)
+        buf = uedcli_native.render_frame(one_face, table, ((eye_x, 5.0, 5.0), fwd, right, up, 30.0),
+                                         (64, 64))
+        o = (32 * 64 + 32) * 3
+        return bytes(buf[o:o + 3])
+
+    assert centre_px(-500.0, 0.0) != _BACKGROUND_RGB    # -X side, looking +X: the front
+    assert centre_px(200.0, 180.0) == _BACKGROUND_RGB   # +X side, looking -X: the back, now culled
 
 
 # --------------------------------------------------------------- checkerboard + warning
@@ -171,6 +236,9 @@ def test_pf_masked_flag_plumbed_to_poly_tuple():
     set_prop(masked, "PolyFlags", str(pn.PF_MASKED))
     polys, _ = pn.build_scene(_level(masked), [], IDX)
     assert polys and all(p[6] is True for p in polys)
+    # The raw merged flags (8th element) carry PF_MASKED too — the same value the backface cull's
+    # PF_TwoSided|PF_Portal exemption reads.
+    assert polys and all(p[7] & pn.PF_MASKED for p in polys)
 
 
 def test_bmasked_texture_masks_without_the_surface_flag():
@@ -253,8 +321,10 @@ def test_scaled_brush_preview_geometry_matches_world_vertices():
 
 def test_mirrored_world_csg_brush_preview_geometry_matches_world_vertices():
     """A MIRRORED world-CSG brush (`det L < 0`, ring-reverse path) renders where `world_vertices`
-    puts it. The Rust core keys winding off ring order (unlike the winding-agnostic renderer), so the
-    marshaller's pre-reverse is what keeps the carved solid right-side-out here."""
+    puts it. The CSG core keys winding off ring order for its own carve, so the marshaller's
+    pre-reverse is what keeps the carved solid right-side-out here — independent of whether the
+    RENDERER also reads winding (it now does, via the backface cull, but that is a separate
+    concern from this geometric correctness check)."""
     room = cube_room("Mir", 256, 128)
     room.location = (Decimal(64), Decimal(-32), Decimal(16))
     set_prop(room, "PostScale", "(Scale=(X=-1.500000),SheerAxis=SHEER_ZX)")
@@ -358,10 +428,11 @@ def test_pixel_probe_marker_quad_lands_at_oracle_pixel():
     room = cube_room("Room", 1024, 512)
     lvl = _level(room)
     polys, table = pn.build_scene(lvl, [], IDX)
-    # marker quad: 8uu square centred at (200, 60, -40), facing the camera at origin
+    # marker quad: 8uu square centred at (200, 60, -40), wound to face the camera at origin
+    # (yaw=0 -> forward=+X; the ring must wind so its Newell normal points back toward -X).
     cx, cy, cz = 200.0, 60.0, -40.0
-    quad = ([cx, cy - 4, cz - 4, cx, cy + 4, cz - 4, cx, cy + 4, cz + 4, cx, cy - 4, cz + 4],
-            [cx, cy, cz], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0], 0, False)
+    quad = ([cx, cy - 4, cz + 4, cx, cy + 4, cz + 4, cx, cy + 4, cz - 4, cx, cy - 4, cz - 4],
+            [cx, cy, cz], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0], 0, False, 0)
     red = (1, 1, bytes([255, 0, 0]), bytes([1]))
     import uedcli_native
     W, H, FOV = 320, 240, 90.0
