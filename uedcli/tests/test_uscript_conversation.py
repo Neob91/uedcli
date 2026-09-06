@@ -124,6 +124,7 @@ def test_main_package_ignores_directive():
 
 
 # ── docker-gated: every byte-exact event type, freshly built ───────────────────────────────────────
+@pytest.mark.integration
 @pytest.mark.skipif(not (_docker_up() and _SUBSTRATE is not None),
                     reason="needs a live docker daemon and the DX substrate")
 def test_all_events_fresh_build(tmp_path):

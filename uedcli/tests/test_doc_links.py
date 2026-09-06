@@ -32,6 +32,7 @@ Three of the five current `to-build/` items are affected — see board item
 """
 from __future__ import annotations
 
+import functools
 import re
 import subprocess
 from pathlib import Path
@@ -91,6 +92,7 @@ def _links(path: Path) -> list[str]:
     return [t for t in found if _is_doc_target(t)]
 
 
+@functools.lru_cache(maxsize=None)
 def _tracked(*suffixes: str) -> list[Path]:
     # Walk `git ls-files`, not the working tree: the checker's scope is the TRACKED tree, so a
     # citation target measured with a working-tree `grep -r` (which sees ignored/untracked files)
@@ -160,9 +162,8 @@ def _checked_docs() -> list[Path]:
     return [p for p in _tracked(".md") if not _is_ephemeral(str(p.relative_to(REPO)))]
 
 
-@pytest.mark.parametrize("doc", _checked_docs(), ids=lambda p: str(p.relative_to(REPO)))
-def test_markdown_links_resolve(doc: Path) -> None:
-    """Every ``[text](path)`` in a checked doc points at a file that exists."""
+def _links_broken(doc: Path) -> list[str]:
+    """Every ``[text](path)`` in `doc` that does not point at a file that exists."""
     broken = []
     for target in _links(doc):
         if target.startswith(("http://", "https://", "mailto:")) or target.startswith("#"):
@@ -170,16 +171,27 @@ def test_markdown_links_resolve(doc: Path) -> None:
         resolved = (doc.parent / target.split("#")[0]).resolve()
         if not resolved.exists():
             broken.append(f"{target} -> {resolved}")
+    return broken
+
+
+def _assert_links_resolve(doc: Path) -> None:
+    """Drive the REAL per-doc gate (shared with the mass check below), not a re-implementation."""
+    broken = _links_broken(doc)
     assert not broken, f"{_rel(doc)} links to missing files:\n  " + "\n  ".join(broken)
 
 
-@pytest.mark.parametrize("doc", _checked_docs(), ids=lambda p: str(p.relative_to(REPO)))
-def test_markdown_anchors_resolve(doc: Path) -> None:
-    """Every ``[text](path#anchor)`` points at a heading that exists in the target.
+def test_markdown_links_resolve() -> None:
+    """Every ``[text](path)`` in every checked doc points at a file that exists."""
+    bad = []
+    for doc in _checked_docs():
+        broken = _links_broken(doc)
+        if broken:
+            bad.append(f"{_rel(doc)} links to missing files:\n  " + "\n  ".join(broken))
+    assert not bad, "\n\n".join(bad)
 
-    This is the check that catches revise-in-place rot: the file still exists, so an
-    existence-only checker passes, while the heading the citation was about is gone.
-    """
+
+def _anchors_broken(doc: Path) -> list[str]:
+    """Every ``[text](path#anchor)`` in `doc` whose anchor is missing from its target."""
     broken = []
     for target in _links(doc):
         if target.startswith(("http://", "https://", "mailto:")) or "#" not in target:
@@ -190,7 +202,27 @@ def test_markdown_anchors_resolve(doc: Path) -> None:
             continue
         if _slug(anchor) not in _anchors(resolved):
             broken.append(f"{target} (no heading '#{anchor}')")
+    return broken
+
+
+def _assert_anchors_resolve(doc: Path) -> None:
+    """Drive the REAL per-doc gate (shared with the mass check below), not a re-implementation."""
+    broken = _anchors_broken(doc)
     assert not broken, f"{_rel(doc)} cites missing anchors:\n  " + "\n  ".join(broken)
+
+
+def test_markdown_anchors_resolve() -> None:
+    """Every ``[text](path#anchor)`` points at a heading that exists in the target.
+
+    This is the check that catches revise-in-place rot: the file still exists, so an
+    existence-only checker passes, while the heading the citation was about is gone.
+    """
+    bad = []
+    for doc in _checked_docs():
+        broken = _anchors_broken(doc)
+        if broken:
+            bad.append(f"{_rel(doc)} cites missing anchors:\n  " + "\n  ".join(broken))
+    assert not bad, "\n\n".join(bad)
 
 
 #: Files that MAY name a deleted doc, because naming it is their job. Without this the check below
@@ -274,20 +306,20 @@ def test_link_check_fails_on_a_missing_file(tmp_path: Path) -> None:
     """
     doc = _probe(tmp_path, "[gone](./no-such-file.md)\n")
     with pytest.raises(AssertionError, match="links to missing files"):
-        test_markdown_links_resolve(doc)
+        _assert_links_resolve(doc)
 
 
 def test_anchor_check_fails_on_a_missing_anchor(tmp_path: Path) -> None:
     doc = _probe(tmp_path, "[dead](real.md#not-a-heading)\n")
     with pytest.raises(AssertionError, match="cites missing anchors"):
-        test_markdown_anchors_resolve(doc)
+        _assert_anchors_resolve(doc)
 
 
 def test_both_checks_pass_on_a_clean_doc(tmp_path: Path) -> None:
     """A green run must be reachable, or the checks are just a wall."""
     doc = _probe(tmp_path, "[fine](real.md#real-heading)\n[code](real.md)\n")
-    test_markdown_links_resolve(doc)
-    test_markdown_anchors_resolve(doc)
+    _assert_links_resolve(doc)
+    _assert_anchors_resolve(doc)
 
 
 def test_repeated_headings_get_numeric_suffixes(tmp_path: Path) -> None:
@@ -297,7 +329,7 @@ def test_repeated_headings_get_numeric_suffixes(tmp_path: Path) -> None:
     false positive on correct content, which is how a check earns its own deletion.
     """
     doc = _probe(tmp_path, "[second](real.md#procedure-1)\n")
-    test_markdown_anchors_resolve(doc)
+    _assert_anchors_resolve(doc)
     assert {"procedure", "procedure-1"} <= _anchors(tmp_path / "real.md")
 
 
@@ -309,7 +341,7 @@ def test_headings_inside_code_fences_are_not_anchors(tmp_path: Path) -> None:
     doc = tmp_path / "probe.md"
     doc.write_text("[phantom](real.md#not-a-heading)\n", encoding="utf-8")
     with pytest.raises(AssertionError, match="cites missing anchors"):
-        test_markdown_anchors_resolve(doc)
+        _assert_anchors_resolve(doc)
 
 # --- prose citations ------------------------------------------------------------------------
 # The dominant citation form in this tree is PROSE, not a markdown link: `dev/docs/rules/spikes.md`
@@ -345,17 +377,20 @@ def _prose_paths(path: Path) -> list[str]:
     return _PROSE_PATH.findall(text)
 
 
-@pytest.mark.parametrize("doc", _checked_docs(), ids=lambda p: str(p.relative_to(REPO)))
-def test_prose_citations_into_the_new_trees_resolve(doc: Path) -> None:
+def test_prose_citations_into_the_new_trees_resolve() -> None:
     """A backticked path into `direction/`, `rationale/` or `rules/` points at a real file."""
-    broken = []
-    for ref in _prose_paths(doc):
-        norm = ref if ref.startswith("dev/docs/") else "dev/docs/" + ref.lstrip("./")
-        if not norm.startswith(_NEW_TREES):
-            continue
-        if any((base / ref).exists() for base in (doc.parent, REPO, REPO / "dev/docs")):
-            continue
-        if norm.startswith("dev/docs/direction/") and Path(ref).name in _declared_direction_topics():
-            continue  # declared in the index, pending migration
-        broken.append(ref)
-    assert not broken, f"{_rel(doc)} cites missing paths in the new trees:\n  " + "\n  ".join(broken)
+    bad = []
+    for doc in _checked_docs():
+        broken = []
+        for ref in _prose_paths(doc):
+            norm = ref if ref.startswith("dev/docs/") else "dev/docs/" + ref.lstrip("./")
+            if not norm.startswith(_NEW_TREES):
+                continue
+            if any((base / ref).exists() for base in (doc.parent, REPO, REPO / "dev/docs")):
+                continue
+            if norm.startswith("dev/docs/direction/") and Path(ref).name in _declared_direction_topics():
+                continue  # declared in the index, pending migration
+            broken.append(ref)
+        if broken:
+            bad.append(f"{_rel(doc)} cites missing paths in the new trees:\n  " + "\n  ".join(broken))
+    assert not bad, "\n\n".join(bad)

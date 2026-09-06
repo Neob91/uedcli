@@ -1,8 +1,9 @@
 """Integration test for the UCC reference toolchain (`uedcli.uscript.reference`).
 
-Needs a live docker daemon + the committed UED22 substrate (the build container's compiler). It
-gates the SAME way `test_import_verb.py` does — a module-level `skipif` — so `-k uscript_reference`
-runs it when docker is up and skips cleanly otherwise, rather than erroring on collection.
+Needs a live docker daemon + the committed UED22 substrate (the build container's compiler). Marked
+`@pytest.mark.integration` (excluded from the default offline `-m "not integration"` run) and gated
+by a module-level `skipif`, so `-m integration -k uscript_reference` runs it when docker is up and
+skips cleanly otherwise, rather than erroring on collection.
 """
 from __future__ import annotations
 
@@ -28,9 +29,12 @@ def _docker_up() -> bool:
         return False
 
 
-pytestmark = pytest.mark.skipif(
-    not (_docker_up() and (_UED22 / "UCC.exe").is_file()),
-    reason="needs a live docker daemon and the committed UED22 substrate (UCC.exe)")
+pytestmark = [
+    pytest.mark.integration,
+    pytest.mark.skipif(
+        not (_docker_up() and (_UED22 / "UCC.exe").is_file()),
+        reason="needs a live docker daemon and the committed UED22 substrate (UCC.exe)"),
+]
 
 
 def test_compiles_a_trivial_package(tmp_path):

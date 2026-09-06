@@ -81,6 +81,7 @@ def test_ut99_offline_byte_exact(pkg: str, exports: int):
 
 
 # ── docker-gated: rebuild the golden with UT99's UCC and re-gate (guards golden drift) ─────────────
+@pytest.mark.integration
 @pytest.mark.skipif(not (_docker_up() and _substrate_present()),
                     reason="needs a live docker daemon and the fetched UT99 substrate")
 @pytest.mark.parametrize("pkg,exports", _PACKAGES)
@@ -92,6 +93,7 @@ def test_ut99_matches_fresh_ucc(pkg: str, exports: int, tmp_path):
 
 
 # ── the UT99 reference toolchain is self-consistent (compile/decompile round-trip) ────────────────
+@pytest.mark.integration
 @pytest.mark.skipif(not (_docker_up() and _substrate_present()),
                     reason="needs a live docker daemon and the fetched UT99 substrate")
 def test_trivial_compile(tmp_path):
@@ -102,6 +104,7 @@ def test_trivial_compile(tmp_path):
     assert struct.unpack_from("<I", u, 0)[0] == _PKG_MAGIC
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(not (_docker_up() and _substrate_present()),
                     reason="needs a live docker daemon and the fetched UT99 substrate")
 def test_ipserver_roundtrips(tmp_path):

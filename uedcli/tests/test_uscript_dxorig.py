@@ -48,6 +48,7 @@ def _mask_guid(b: bytes) -> bytes:
     return b[:36] + b"\x00" * 16 + b[52:]
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(not (_docker_up() and _substrate_present()),
                     reason="needs a live docker daemon and the DX substrate "
                            "(uedcli/uscript/fetch_dxorig.sh)")

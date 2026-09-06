@@ -139,6 +139,7 @@ _DOCKER = pytest.mark.skipif(
     reason="needs a live docker daemon and the committed UED22 substrate (UCC.exe)")
 
 
+@pytest.mark.integration
 @_DOCKER
 def test_recompiled_goldens_still_match(tmp_path):
     """Recompile SRC_L and SRC_W with UCC now and re-check — the committed goldens stay current."""
@@ -155,6 +156,7 @@ def test_recompiled_goldens_still_match(tmp_path):
             assert not bad, f"{pkg_name}: {bad}"
 
 
+@pytest.mark.integration
 @_DOCKER
 def test_real_stock_functions_breadth(tmp_path):
     """Whole real functions from a decompiled stock package (`Extension`) lower token-exact. Records

@@ -85,6 +85,7 @@ def _docker_up() -> bool:
         return False
 
 
+@pytest.mark.integration
 @pytest.mark.skipif(not (_docker_up() and (_UED22 / "UCC.exe").is_file()),
                     reason="needs a live docker daemon and the committed UED22 substrate (UCC.exe)")
 @pytest.mark.parametrize("pkg,classes", _PACKAGES)

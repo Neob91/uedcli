@@ -24,6 +24,7 @@ directories *and* un-migrated `.md` files.
 """
 from __future__ import annotations
 
+import functools
 import re
 import subprocess
 import tomllib
@@ -88,20 +89,21 @@ def _rel(p: Path) -> str:
 
 
 def _frontmatter(overview: Path) -> dict:
-    """Parse the ``+++`` block, or fail the calling test with a readable message."""
+    """Parse the ``+++`` block, or raise `ValueError` with a readable message."""
     text = overview.read_text(encoding="utf-8")
     if not text.startswith("+++\n"):
-        pytest.fail(f"{_rel(overview)}: no `+++` frontmatter on line 1")
+        raise ValueError(f"{_rel(overview)}: no `+++` frontmatter on line 1")
     _, _, rest = text.partition("+++\n")
     body, sep, _ = rest.partition("\n+++")
     if not sep:
-        pytest.fail(f"{_rel(overview)}: frontmatter is not closed by `+++`")
+        raise ValueError(f"{_rel(overview)}: frontmatter is not closed by `+++`")
     try:
         return tomllib.loads(body)
     except tomllib.TOMLDecodeError as exc:
-        pytest.fail(f"{_rel(overview)}: frontmatter is not valid TOML — {exc}")
+        raise ValueError(f"{_rel(overview)}: frontmatter is not valid TOML — {exc}") from exc
 
 
+@functools.lru_cache(maxsize=None)
 def _tracked(*suffixes: str) -> list[Path]:
     out = subprocess.run(
         ["git", "-C", str(REPO), "ls-files", "-z"],
@@ -137,43 +139,66 @@ def test_a_stage_holds_only_item_directories(stage: str) -> None:
     )
 
 
-@pytest.mark.parametrize("item", _items(), ids=_rel)
-def test_item_shape(item: Path) -> None:
+def test_item_shape() -> None:
     """An item is an `overview.md` plus, at most, a `questions/` directory."""
-    assert (item / "overview.md").is_file(), f"{_rel(item)}: no overview.md"
-    stray = [d.name for d in item.iterdir() if d.is_dir() and d.name != "questions"]
-    assert not stray, f"{_rel(item)}: unexpected subdirectories {stray} (only `questions/` allowed)"
+    bad = []
+    for item in _items():
+        if not (item / "overview.md").is_file():
+            bad.append(f"{_rel(item)}: no overview.md")
+            continue
+        stray = [d.name for d in item.iterdir() if d.is_dir() and d.name != "questions"]
+        if stray:
+            bad.append(f"{_rel(item)}: unexpected subdirectories {stray} (only `questions/` allowed)")
+    assert not bad, "\n".join(bad)
 
 
-@pytest.mark.parametrize("item", _items(), ids=_rel)
-def test_frontmatter(item: Path) -> None:
+def test_frontmatter() -> None:
     """Required keys present, no unknown keys, values in range — and inside the pinned subset.
 
     The subset check is the load-bearing half. `bin/board` parses this frontmatter in bash with a
     hand-rolled reader, so anything TOML permits but that reader does not handle (literal strings,
     triple-quoted strings, comments, multi-line arrays) would make the two disagree silently.
     """
-    overview = item / "overview.md"
-    fm = _frontmatter(overview)
+    bad = []
+    for item in _items():
+        overview = item / "overview.md"
+        try:
+            fm = _frontmatter(overview)
 
-    missing = REQUIRED_KEYS - fm.keys()
-    assert not missing, f"{_rel(overview)}: missing frontmatter keys {sorted(missing)}"
-    unknown = fm.keys() - REQUIRED_KEYS - OPTIONAL_KEYS
-    assert not unknown, f"{_rel(overview)}: unknown frontmatter keys {sorted(unknown)}"
+            missing = REQUIRED_KEYS - fm.keys()
+            if missing:
+                bad.append(f"{_rel(overview)}: missing frontmatter keys {sorted(missing)}")
+            unknown = fm.keys() - REQUIRED_KEYS - OPTIONAL_KEYS
+            if unknown:
+                bad.append(f"{_rel(overview)}: unknown frontmatter keys {sorted(unknown)}")
+            if "priority" in fm and fm["priority"] not in PRIORITIES:
+                bad.append(f"{_rel(overview)}: priority {fm['priority']!r} not in {sorted(PRIORITIES)}")
+            if "kind" in fm and fm["kind"] not in KINDS:
+                bad.append(f"{_rel(overview)}: kind {fm['kind']!r} not in {sorted(KINDS)}")
+            if "summary" in fm:
+                summary = fm["summary"]
+                if not isinstance(summary, str):
+                    bad.append(f"{_rel(overview)}: summary must be a string, got {type(summary).__name__}")
+                else:
+                    if not summary.strip():
+                        bad.append(f"{_rel(overview)}: summary is empty")
+                    if "\n" in summary:
+                        bad.append(f"{_rel(overview)}: summary must be one line")
 
-    assert fm["priority"] in PRIORITIES, f"{_rel(overview)}: priority {fm['priority']!r} not in {sorted(PRIORITIES)}"
-    assert fm["kind"] in KINDS, f"{_rel(overview)}: kind {fm['kind']!r} not in {sorted(KINDS)}"
-    assert fm["summary"].strip(), f"{_rel(overview)}: summary is empty"
-    assert "\n" not in fm["summary"], f"{_rel(overview)}: summary must be one line"
-
-    body = overview.read_text(encoding="utf-8").partition("+++\n")[2].partition("\n+++")[0]
-    for n, line in enumerate(body.splitlines(), start=2):
-        if not line.strip():
-            continue
-        assert re.fullmatch(r'[a-z-]+ = (".*"|\[.*\])', line), (
-            f"{_rel(overview)}:{n}: outside the pinned TOML subset "
-            f"(single-line basic strings and one-line arrays only) — {line!r}"
-        )
+            body = overview.read_text(encoding="utf-8").partition("+++\n")[2].partition("\n+++")[0]
+            for n, line in enumerate(body.splitlines(), start=2):
+                if not line.strip():
+                    continue
+                if not re.fullmatch(r'[a-z-]+ = (".*"|\[.*\])', line):
+                    bad.append(
+                        f"{_rel(overview)}:{n}: outside the pinned TOML subset "
+                        f"(single-line basic strings and one-line arrays only) — {line!r}"
+                    )
+        except ValueError as exc:
+            bad.append(str(exc))
+        except Exception as exc:  # a malformed value (e.g. an array where a string is required)
+            bad.append(f"{_rel(overview)}: {exc!r}")  # must not abort checking the rest of the board
+    assert not bad, "\n".join(bad)
 
 
 def test_slugs_are_unique_board_wide() -> None:
@@ -189,20 +214,28 @@ def test_slugs_are_unique_board_wide() -> None:
     assert not dupes, f"slugs used more than once: {dupes}"
 
 
-@pytest.mark.parametrize("item", _items(), ids=_rel)
-def test_dependencies_resolve(item: Path) -> None:
+def test_dependencies_resolve() -> None:
     """`depends-on` names live slugs; `spikes` names real paths; a to-build item is not blocked."""
-    fm = _frontmatter(item / "overview.md")
-    slugs = {d.name for d in _items()}
-
-    for dep in fm.get("depends-on", []):
-        assert dep in slugs, f"{_rel(item)}: depends-on `{dep}` matches no board item"
-        if item.parent.name == "to-build":
-            assert not (BOARD / "stale" / dep).is_dir(), (
-                f"{_rel(item)}: is queued to build but depends on `{dep}`, which is shelved as stale"
-            )
-    for spike in fm.get("spikes", []):
-        assert (REPO / spike).exists(), f"{_rel(item)}: spikes path does not exist — {spike}"
+    items = _items()
+    slugs = {d.name for d in items}
+    bad = []
+    for item in items:
+        try:
+            fm = _frontmatter(item / "overview.md")
+        except ValueError as exc:
+            bad.append(str(exc))
+            continue
+        for dep in fm.get("depends-on", []):
+            if dep not in slugs:
+                bad.append(f"{_rel(item)}: depends-on `{dep}` matches no board item")
+            elif item.parent.name == "to-build" and (BOARD / "stale" / dep).is_dir():
+                bad.append(
+                    f"{_rel(item)}: is queued to build but depends on `{dep}`, which is shelved as stale"
+                )
+        for spike in fm.get("spikes", []):
+            if not (REPO / spike).exists():
+                bad.append(f"{_rel(item)}: spikes path does not exist — {spike}")
+    assert not bad, "\n".join(bad)
 
 
 def test_no_dependency_cycles() -> None:
@@ -224,17 +257,22 @@ def test_no_dependency_cycles() -> None:
         walk(slug, [])
 
 
-@pytest.mark.parametrize("item", _items(), ids=_rel)
-def test_question_files_are_well_formed(item: Path) -> None:
+def test_question_files_are_well_formed() -> None:
     """Both sections are mandatory.
 
     A missing `## Answer` must FAIL rather than read as "open": worded the other way round, a
     malformed file has no empty answer section and would sail through the gate below.
     """
-    for q in sorted((item / "questions").glob("*.md")) if (item / "questions").is_dir() else []:
-        text = q.read_text(encoding="utf-8")
-        assert re.search(r"^## Context\s*$", text, re.M), f"{_rel(q)}: no `## Context` section"
-        assert re.search(r"^## Answer\s*$", text, re.M), f"{_rel(q)}: no `## Answer` section"
+    bad = []
+    for item in _items():
+        qdir = item / "questions"
+        for q in sorted(qdir.glob("*.md")) if qdir.is_dir() else []:
+            text = q.read_text(encoding="utf-8", errors="replace")
+            if not re.search(r"^## Context\s*$", text, re.M):
+                bad.append(f"{_rel(q)}: no `## Context` section")
+            if not re.search(r"^## Answer\s*$", text, re.M):
+                bad.append(f"{_rel(q)}: no `## Answer` section")
+    assert not bad, "\n".join(bad)
 
 
 def test_a_question_never_moves_its_item() -> None:
@@ -263,16 +301,19 @@ def test_a_question_never_moves_its_item() -> None:
     assert with_questions or True  # no lower bound: an empty board legitimately has none
 
 
-@pytest.mark.parametrize("doc", _tracked(*_REF_SUFFIXES), ids=_rel)
-def test_slug_references_resolve(doc: Path) -> None:
+def test_slug_references_resolve() -> None:
     """Every ``board item `<slug>``` in the tree names an item that exists."""
-    if _rel(doc) in _MAY_DEFINE_THE_FORM:
-        pytest.skip("documents the reference form itself")
     slugs = {i.name for i in _items()}
-    text = doc.read_text(encoding="utf-8", errors="replace")
-    dangling = [
-        s for m in _SLUG_REF.finditer(text)
-        for s in _BACKTICKED.findall(m.group(1))
-        if s not in slugs
-    ]
-    assert not dangling, f"{_rel(doc)} references missing board items: {dangling}"
+    bad = []
+    for doc in _tracked(*_REF_SUFFIXES):
+        if _rel(doc) in _MAY_DEFINE_THE_FORM:
+            continue
+        text = doc.read_text(encoding="utf-8", errors="replace")
+        dangling = [
+            s for m in _SLUG_REF.finditer(text)
+            for s in _BACKTICKED.findall(m.group(1))
+            if s not in slugs
+        ]
+        if dangling:
+            bad.append(f"{_rel(doc)} references missing board items: {dangling}")
+    assert not bad, "\n".join(bad)
