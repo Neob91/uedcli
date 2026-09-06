@@ -1,0 +1,7 @@
+Begin Actor Class=DeusEx.Pan2
+    DistanceFromPlayer=349.248505
+    LastRenderTime=21.396976
+    Tag=Pan2
+    bOwned=True
+    Location=(X=-621.467468,Y=-493.782990,Z=36.052429)
+End Actor

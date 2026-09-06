@@ -1,0 +1,16 @@
+Begin Actor Class=Engine.PlayerStart
+    Paths(0)=139
+    Paths(1)=138
+    PrunedPaths(0)=142
+    PrunedPaths(1)=141
+    PrunedPaths(2)=143
+    PrunedPaths(3)=140
+    Rotation=(Yaw=-16264)
+    Tag=PlayerStart
+    bestPathWeight=137
+    previousPath=PathNode'3250d3a0c3074b399df5e3a10541fc50.PathNode1'
+    upstreamPaths(0)=158
+    upstreamPaths(1)=152
+    visitedWeight=10000000
+    Location=(X=387.910614,Y=564.698914,Z=15.099710)
+End Actor

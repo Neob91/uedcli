@@ -1,0 +1,27 @@
+Begin Actor Class=DeusEx.Jock
+    Alliance=BarFlys
+    BarkBindName=Man
+    Base=LevelInfo'MyLevel.LevelInfo0'
+    DistanceFromPlayer=542.363525
+    FootRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=492,ZoneNumber=1)
+    HeadRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=485,ZoneNumber=1)
+    InitialAlliances(0)=(AllianceName="Player")
+    InitialAlliances(1)=(AllianceName="BarFlys")
+    InitialInventory(0)=(Inventory=Class'DeusEx.WeaponStealthPistol')
+    InitialInventory(1)=(Inventory=Class'DeusEx.Ammo10mm',Count=12)
+    InitialInventory(2)=(Inventory=Class'DeusEx.WeaponCombatKnife')
+    LastRenderTime=21.396976
+    Orders=Standing
+    Rotation=(Yaw=11040)
+    Tag=Jock
+    UnfamiliarName=Pilot guy
+    ViewRotation=(Yaw=11040)
+    VisibilityThreshold=0.000000
+    bHateCarcass=True
+    bHateDistress=True
+    bLikesNeutral=False
+    bReactAlarm=False
+    bReactDistress=True
+    bReactShot=True
+    Location=(X=-942.777710,Y=-487.315552,Z=48.964230)
+End Actor

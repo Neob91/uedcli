@@ -1,0 +1,24 @@
+Begin Actor Class=DeusEx.JoeGreene
+    Alliance=BarFlys
+    BarkBindName=Man
+    Base=LevelInfo'MyLevel.LevelInfo0'
+    DistanceFromPlayer=1157.716553
+    FootRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=203,ZoneNumber=1)
+    HeadRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=174,ZoneNumber=1)
+    InitialAlliances(0)=(AllianceName="Player")
+    InitialAlliances(1)=(AllianceName="BarFlys")
+    LastRenderTime=21.396976
+    Orders=Sitting
+    Rotation=(Yaw=27200)
+    Tag=JoeGreene
+    UnfamiliarName=Used car salesman?
+    ViewRotation=(Yaw=27200)
+    bFearInjury=True
+    bFearProjectiles=True
+    bFearWeapon=True
+    bLeaveAfterFleeing=True
+    bReactDistress=True
+    bReactProjectiles=True
+    bReactShot=True
+    Location=(X=-1594.824829,Y=-580.276245,Z=48.780209)
+End Actor

@@ -1,0 +1,7 @@
+Begin Actor Class=DeusEx.Pot1
+    DistanceFromPlayer=324.348541
+    LastRenderTime=21.396976
+    Tag=Pot1
+    bOwned=True
+    Location=(X=-478.513428,Y=-491.895905,Z=39.392517)
+End Actor

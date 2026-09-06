@@ -630,3 +630,72 @@ def test_world_soup_item_defaults_to_none_not_outside():
     asm = SimpleNamespace(eref=lambda name: 7)
     out = _world_soup_fpolys(asm, wm, csg_brushes, lambda t: 0)
     assert [fp.item for fp in out] == ["OUTSIDE", None, None]
+
+
+def test_precompute_sphere_filter_marks_a_branching_tree_like_the_recursion():
+    """`UModel::PrecomputeSphereFilter` recurses into the FIRST child and continues down the second
+    (`Engine.dll 0x101aefb0`); the port turns that into a LIFO stack. NYC_Bar N=59's world tree is a
+    6-node chain whose first child is always -1, so nothing there walks the deferred branch at all
+    -- a dropped subtree would go unnoticed."""
+    from uedcli.native.umodel import BspNode
+    from uedcli.native.unbuilt import _precompute_sphere_filter
+
+    def tree():
+        # A straddling root over two straddling children, each with a marked leaf pair; every node
+        # shares a plane the sphere straddles or clears, so both branches are walked.
+        planes = [(0, 0, 1, 0), (0, 0, 1, 0), (0, 0, 1, 900), (0, 0, 1, -900), (0, 0, 1, 0),
+                  (0, 0, 1, 900), (0, 0, 1, -900)]
+        kids = [(1, 4), (2, 3), (-1, -1), (-1, -1), (5, 6), (-1, -1), (-1, -1)]
+        return [BspNode(plane=p, i_front=f, i_back=b) for p, (f, b) in zip(planes, kids)]
+
+    def reference(nodes, i, center, radius, seen):
+        while i != -1:
+            n = nodes[i]
+            seen.append(i)
+            n.node_flags &= 0x3F
+            d = n.plane[0] * center[0] + n.plane[1] * center[1] + n.plane[2] * center[2] - n.plane[3]
+            if -radius > d:
+                n.node_flags |= 0x80
+                i = n.i_front
+            elif d > radius:
+                n.node_flags |= 0x40
+                i = n.i_back
+            else:
+                if n.i_front != -1:
+                    reference(nodes, n.i_front, center, radius, seen)
+                i = n.i_back
+
+    center, radius = (0.0, 0.0, 0.0), 10.0
+    want, seen = tree(), []
+    reference(want, 0, center, radius, seen)
+    got = tree()
+    _precompute_sphere_filter(got, center, radius)
+    assert seen == [0, 1, 2, 3, 4, 5, 6], "the reference must walk the front subtree first"
+    assert [n.node_flags for n in want] == [0, 0, 0x80, 0x40, 0, 0x80, 0x40], \
+        "the fixture must actually mark both deferred subtrees"
+    assert [n.node_flags for n in got] == [n.node_flags for n in want]
+
+
+def test_zone_actor_binding_follows_actor_order_not_the_name_keyed_dict():
+    """Two ZoneInfos in the same zone: the EARLIER one in `Level.Actors` order owns it.
+
+    `resolve_zone_actors` used to walk `level.actors`, a name-keyed dict, so `ZoneInfo17` sorted
+    ahead of `ZoneInfo5` and won a zone UED22 gives to `ZoneInfo5` (NYC_Bar N=70: every actor's
+    `Region.Zone` and the world `Model`'s `Zones[1].ZoneActor` followed the wrong one)."""
+    pytest.importorskip("uedcli_native")
+    from uedcli.native.materialize import build_world_model, resolve_zone_actors
+
+    zone_infos = "".join(
+        f"Begin Actor Class=Engine.ZoneInfo Name={n}\n"
+        f"    Location=(X={x}.000000,Y=0.000000,Z=0.000000)\n"
+        f'    Name="{n}"\nEnd Actor\n'
+        for n, x in (("ZoneInfo5", 16), ("ZoneInfo17", -16)))
+    level = model.parse_t3d(_room_t3d().replace("End Map\n", zone_infos + "End Map\n"))
+    level.order = level_order(level)
+    normalize_level(level)
+    # The dict is name-keyed, so it hands out ZoneInfo17 first; the trunk order does not.
+    assert list(level.actors).index("ZoneInfo17") < list(level.actors).index("ZoneInfo5")
+    assert level.order.index("ZoneInfo5") < level.order.index("ZoneInfo17")
+
+    built, _csg = build_world_model(level, index=_index())
+    assert resolve_zone_actors(level, built) == {1: "ZoneInfo5"}

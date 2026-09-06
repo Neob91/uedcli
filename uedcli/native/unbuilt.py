@@ -327,6 +327,12 @@ def _shape_bounds(polys: list[FPoly]) -> tuple | None:
     return mn, mx, (*center, radius)
 
 
+def _marshal_brush_polys(polys: list[FPoly]) -> list:
+    """The flat `BrushPolyTuple` list the Rust brush entry points take."""
+    return [([c for v in fp.verts for c in v], fp.base, fp.normal, fp.texture_u, fp.texture_v,
+             fp.poly_flags, fp.texture_ref, fp.pan_u, fp.pan_v) for fp in polys]
+
+
 def build_mover_shape_model(polys: list[FPoly]) -> tuple[UM.Model, list[int]]:
     """The editor's `csgPrepMovingBrush`, natively: build a MOVER's private shape-model BSP over
     its own local-space `polys` (as `_fpolys` produces them). UED22 builds one for every mover at
@@ -341,9 +347,7 @@ def build_mover_shape_model(polys: list[FPoly]) -> tuple[UM.Model, list[int]]:
     `Polys` bodies of the UNATCO import golden (2026-09-02). Requires the `uedcli_native`
     extension (heavy compute lives in Rust)."""
     import uedcli_native
-    built, links = uedcli_native.build_brush_model(
-        [([c for v in fp.verts for c in v], fp.base, fp.normal, fp.texture_u, fp.texture_v,
-          fp.poly_flags, fp.texture_ref, fp.pan_u, fp.pan_v) for fp in polys])
+    built, links = uedcli_native.build_brush_model(_marshal_brush_polys(polys))
     body = uedcli_native.serialize_model(built)
     m = UM.parse_model_body(body, 0, len(body))
     m.root_outside = m.linked = 1
@@ -352,6 +356,139 @@ def build_mover_shape_model(polys: list[FPoly]) -> tuple[UM.Model, list[int]]:
         m.bbox_min, m.bbox_max, m.sphere = b[0], b[1], b[2]
         m.bbox_valid = 1
     return m, links
+
+
+def _mover_world_verts(actor) -> list[tuple]:
+    """The mover brush's vertices in world space, `FPoly::Transform`'s way: `(v - PrePivot)` mapped
+    by the brush coords and offset by `Location`, every step narrowed to f32 as the engine's
+    `FVector::TransformPointBy` chain is. `rotation.world_vertices` computes the same points in
+    DOUBLE (its own note at `actor_linear`), which drifts on a rotated or scaled brush."""
+    from uedcli import rotation as ROT
+
+    linear = ROT.actor_linear(actor) or ((1, 0, 0), (0, 1, 0), (0, 0, 1))
+    loc = tuple(_f32(float(c)) for c in (actor.location or (0, 0, 0)))
+    pivot = tuple(_f32(float(c)) for c in ROT.actor_prepivot(actor))
+    rows = [tuple(_f32(float(c)) for c in row) for row in linear]
+    out = []
+    for poly in actor.brush.polys:
+        for v in poly.vertices:
+            d = tuple(_f32(_f32(float(v[i])) - pivot[i]) for i in range(3))
+            out.append(tuple(
+                _f32(loc[i] + _f32(_f32(_f32(d[0] * r[0]) + _f32(d[1] * r[1])) + _f32(d[2] * r[2])))
+                for i, r in enumerate(rows)))
+    return out
+
+
+def _mover_world_sphere(actor) -> tuple[tuple, float] | None:
+    """`FSphere(Pts, Count)` over the mover brush's WORLD-space poly vertices: centre = the bbox
+    midpoint, radius = `sqrt(max squared distance) * 1.001` -- the same construction
+    `_shape_bounds` uses for a shape model's stored sphere, but over the world ring rather than the
+    local one. `None` for a brush with no vertices."""
+    import math
+
+    pts = _mover_world_verts(actor)
+    if not pts:
+        return None
+    center = tuple(_f32(_f32(min(p[i] for p in pts) + max(p[i] for p in pts)) * 0.5)
+                   for i in range(3))
+    max_sq = max(_f32(_f32(_f32(_f32(p[0] - center[0]) * _f32(p[0] - center[0]))
+                           + _f32(_f32(p[1] - center[1]) * _f32(p[1] - center[1])))
+                      + _f32(_f32(p[2] - center[2]) * _f32(p[2] - center[2]))) for p in pts)
+    return center, _f32(math.sqrt(max_sq) * _f32(1.001))
+
+
+def _precompute_sphere_filter(nodes: list, center: tuple, radius: float) -> None:
+    """`UModel::PrecomputeSphereFilter` (`Engine.dll 0x101af030`, recursive helper `0x101aefb0`),
+    IN PLACE on the world nodes: mark each node the sphere lies wholly in front of / behind.
+
+    Per visited node: clear `NF_IsFront|NF_IsBack` (`flags &= 0x3f`), then with
+    `d = PlaneDot(Plane, centre)` and `r = radius` -- `-r > d` sets `NF_IsBack` (0x80) and continues
+    down the FIRST child; `d > r` sets `NF_IsFront` (0x40) and continues down the SECOND; otherwise
+    (straddling) the node keeps NEITHER bit, the first child is walked recursively, and the loop
+    continues down the second. First/second are the on-disk child order (memory `+0x20`/`+0x24`),
+    which `umodel.BspNode` names `i_front`/`i_back` -- the descent, not the names, is what the
+    engine does.
+
+    Nodes the descent never reaches KEEP whatever an earlier descent left, which is why a level's
+    stored bits are the accumulation over every mover, last write wins."""
+    if not nodes:
+        return
+    # The engine's recursion into the first child, as a LIFO stack: push the second child, descend
+    # the first, pop when that chain ends.
+    pending: list[int] = []
+    i = 0
+    while True:
+        while i != -1:
+            n = nodes[i]
+            n.node_flags &= 0x3F
+            # `FPlane::PlaneDot` (`core.dll 0x10024e60`) is SSE, not the usual left-to-right dot:
+            # it multiplies `(Px, Py, Pz, -1)` by the plane and folds the four lanes as
+            # `(Z*Pz - W) + (X*Px + Y*Py)`.
+            d = _f32(_f32(_f32(n.plane[2] * center[2]) - n.plane[3])
+                     + _f32(_f32(n.plane[0] * center[0]) + _f32(n.plane[1] * center[1])))
+            if -radius > d:
+                n.node_flags |= 0x80
+                i = n.i_front
+            elif d > radius:
+                n.node_flags |= 0x40
+                i = n.i_back
+            elif n.i_front != -1:
+                pending.append(n.i_back)
+                i = n.i_front
+            else:
+                i = n.i_back
+        if not pending:
+            return
+        i = pending.pop()
+
+
+def light_apply_movers(world_model, movers: list) -> None:
+    """`UEditorEngine::shadowIlluminateBsp`'s moving-brush half (`Editor.dll 0x100a5e10`), on a
+    BUILT world. `movers` is `(actor, polys, model)` per moving brush in `Level.Actors` order.
+
+    `LIGHT APPLY` returns immediately when the world Model has no nodes (`0x100a5ea9`), so a trunk
+    prefix with no world CSG yet leaves all three outputs below untouched -- which is why they only
+    appear once a level's first world brush lands.
+
+    Three things happen, and all three are STORED:
+
+    1. Each mover model's `LightMap` gets one `FLightMapIndex` per poly the editor lightmaps, and
+       the poly's `iBrushPoly` records the slot (`0x100a6020`-`0x100a6065`); a poly with
+       `PolyFlags & 0x400081` gets no record and `iBrushPoly = -1`.
+    2. `FMovingBrushTracker` (`Engine.dll 0x1014d250`, reached through `AMover::SetBrushRaytraceKey`)
+       mirrors every mover poly into a TRANSIENT world `Surfs` entry, appended after the world's own
+       surfs, and writes that surf index into the poly's `iLink`. The surfs are dropped when the
+       tracker dies at the end of the bake; the `iLink`s stay.
+    3. The tracker then processes its pending movers in REVERSE actor order (it prepends each to a
+       list and drains it), and per mover builds an `FSphere` over the brush's world-space vertices
+       and runs `UModel::PrecomputeSphereFilter` (`Engine.dll 0x1014d812`) over the world BSP. The
+       `NF_IsFront`/`NF_IsBack` bits that leaves accumulate across the descents.
+    """
+    if world_model is None or not world_model.nodes or not movers:
+        return
+    import uedcli_native
+
+    for _actor, polys, model in movers:
+        model.light_map = []
+        for fp, desc in zip(polys, uedcli_native.brush_lightmap_indices(
+                _marshal_brush_polys(polys))):
+            if desc is None:
+                fp.i_brush_poly = -1
+                continue
+            pan_x, pan_y, u_size, v_size, u_scale, v_scale = desc
+            fp.i_brush_poly = len(model.light_map)
+            model.light_map.append(UM.LightMapIndex(
+                pan=(pan_x, pan_y, 0.0), u_size=u_size, v_size=v_size,
+                u_scale=u_scale, v_scale=v_scale))
+    i_surf = len(world_model.surfs)
+    for _actor, polys, _model in movers:
+        for fp in polys:
+            fp.i_link = i_surf
+            i_surf += 1
+    for actor, _polys, _model in reversed(movers):
+        sphere = _mover_world_sphere(actor)
+        if sphere is not None:
+            _precompute_sphere_filter(world_model.nodes, *sphere)
 
 
 def _world_soup_fpolys(asm, world_model, csg_brushes, tex_ref) -> list:
@@ -849,23 +986,39 @@ def _assemble_once(level, *, version: int = 69, level_name: str = "MyLevel",
                           lambda: AW.write_props(asm.name_index,
                                                  [Prop("Title", AW.PT_STR, "Untitled")]))
 
+    # A MOVER's private shape model and the `LIGHT APPLY` pass both WRITE the saved polys
+    # (iLink/iBrushPoly), so both run here, before any body is serialized -- the export ORDER puts a
+    # mover's `Polys` before its `Model` on some levels, and a lazily-built model would then have
+    # written the links after they were read.
+    brush_polys = []
+    for b in brush_actors:
+        src = level.actors.get(b.name)
+        brush_polys.append(
+            _fpolys(src.brush, tex_ref, actor=b.name) if src is not None and src.brush else [])
+    mover_models = {}
+    for b, polys in zip(brush_actors, brush_polys):
+        if _is_mover(b.name) and polys:
+            # A MOVER ships its BUILT private shape model (`csgPrepMovingBrush`); the build also
+            # reassigns the saved polys' iLinks (surf index for a whole-consumed poly, the
+            # validate link for a split one). These links only SURVIVE on a nodeless world --
+            # `light_apply_movers` overwrites every one of them once the world has geometry.
+            model, links = build_mover_shape_model(polys)
+            for fp, ln in zip(polys, links):
+                fp.i_link = ln
+            mover_models[b.name] = model
+    light_apply_movers(world_model, [(level.actors[b.name], polys, mover_models[b.name])
+                                     for b, polys in zip(brush_actors, brush_polys)
+                                     if b.name in mover_models])
+
     # The creation STREAM: points, brush actors, then per-brush (Model, Polys) pairs -- the editor
     # builds the shape models in a post pass -- with LevelSummary created just before the last
     # Polys. Brush i's Polys is counter-named `Polys(6+2i)` (2 ticks per brush; 3..5 consumed at
     # MAP NEW).
     stream = [_point_desc(a) for a in points] + [_brush_desc(b) for b in brush_actors]
-    for i, b in enumerate(brush_actors):
+    for i, (b, polys) in enumerate(zip(brush_actors, brush_polys)):
         shape, polys_name = f"Model_{b.name}", f"Polys{6 + 2 * i}"
-        src = level.actors.get(b.name)
-        polys = _fpolys(src.brush, tex_ref, actor=b.name) if src is not None and src.brush else []
-        if _is_mover(b.name) and polys:
-            # A MOVER ships its BUILT private shape model (`csgPrepMovingBrush`); the build also
-            # reassigns the saved polys' iLinks (surf index for a whole-consumed poly, the
-            # validate link for a split one).
-            def _mover_model_body(pn=polys_name, p=polys):
-                m, links = build_mover_shape_model(p)
-                for fp, ln in zip(p, links):
-                    fp.i_link = ln
+        if b.name in mover_models:
+            def _mover_model_body(pn=polys_name, m=mover_models[b.name]):
                 m.none_index = asm.name_index("None")
                 m.field_0x54 = asm.eref(pn)
                 return UM.write_model_body(m)

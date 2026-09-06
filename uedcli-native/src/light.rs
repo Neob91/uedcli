@@ -15,6 +15,7 @@
 //!                       terminators — Python assembly rewrites them to export object-refs).
 //! Sets `surf.i_light_map` to the record index (or `-1` for an unlightmapped surf).
 
+use crate::fpoly::FPoly;
 use crate::linecheck::{line_clear, VIS_BRIGHT_CORNERS, VIS_EXTRA_FLAGS};
 use crate::model::{BuildError, LightMapIndex, Model, Vec3};
 use rayon::prelude::*;
@@ -205,6 +206,57 @@ fn descriptor(u_size: i32, v_size: i32, u_scale: f32, v_scale: f32, pan_x: f32, 
         u_size,
         v_size,
     }
+}
+
+/// `LIGHT APPLY`'s moving-brush lightmap allocation: one `FLightMapIndex` per poly of a MOVER's
+/// private brush model, in poly order, skipping a poly whose `PolyFlags & PF_NO_LIGHTMAP` is set
+/// (that poly gets `None` here and `iBrushPoly = -1` on disk; a kept poly's `iBrushPoly` is its slot
+/// in this list).  `Editor.dll 0x100a6020`-`0x100a6065` allocates the slots;
+/// `0x100a51e3`-`0x100a52e5` measures each one's grid.
+///
+/// The grid is measured in the brush's OWN LOCAL space, from the poly's stored `Base`/`TextureU`/
+/// `TextureV` and its own vertices (`d = Vertex - Base`, `u = d . TextureU`, `v = d . TextureV`) —
+/// NOT from the world surf the moving-brush tracker mirrors it into, whose vectors are world-space.
+/// After that it is the same `axis_grid` the world surfaces use.
+pub fn brush_lightmap_indices(polys: &[FPoly]) -> Vec<Option<LightMapIndex>> {
+    polys
+        .iter()
+        .map(|p| {
+            // ONLY the flag mask: the editor allocates a record for every other poly, so skipping
+            // one here (a vertex-less poly, say) would shift every later slot.  `_fpolys` rejects a
+            // sub-3-vertex poly long before this, so the extent below always has a ring to walk.
+            (p.poly_flags & PF_NO_LIGHTMAP == 0).then(|| {
+                grid_descriptor(&p.verts, &p.base, &p.texture_u, &p.texture_v, p.poly_flags)
+            })
+        })
+        .collect()
+}
+
+/// One surface's stored grid descriptor: the texture-space extent of `verts` in the `base`/`tu`/`tv`
+/// frame, run through `axis_grid` at the PolyFlags' lumel scale (§4).
+///
+/// The extent's base subtraction is PER-VERTEX and BEFORE the dot — `(v - base) . tex`, not the
+/// algebraically equal `v . tex - base . tex`. On an angled texture axis the two round differently
+/// in f32, and the editor's is subtract-first: it reproduced the golden's stored `Pan`/`VScale` on
+/// 484/484 records, vs 412/484 for dot-then-subtract (spike §20 §22,
+/// `harness/lightmap_grid_diff.py`). Axis-aligned axes are unaffected, which is why only the 75
+/// angled-V surfaces diverged. `Vec3::dot` accumulates x+y+z left-to-right, matching the engine.
+fn grid_descriptor(verts: &[Vec3], base: &Vec3, tu: &Vec3, tv: &Vec3, poly_flags: u32)
+                   -> LightMapIndex {
+    let (mut umin, mut umax) = (f32::INFINITY, f32::NEG_INFINITY);
+    let (mut vmin, mut vmax) = (f32::INFINITY, f32::NEG_INFINITY);
+    for v in verts {
+        let d = v.sub(base);
+        let (u, w) = (d.dot(tu), d.dot(tv));
+        umin = umin.min(u);
+        umax = umax.max(u);
+        vmin = vmin.min(w);
+        vmax = vmax.max(w);
+    }
+    let scale = lumel_scale(poly_flags);
+    let (u_size, u_scale, pan_x) = axis_grid(umin, umax, scale);
+    let (v_size, v_scale, pan_y) = axis_grid(vmin, vmax, scale);
+    descriptor(u_size, v_size, u_scale, v_scale, pan_x, pan_y)
 }
 
 /// The lumel STEP a `PF_BrightCorners` surface is walked with: `(f32)((f64)scale - 0.5/(size-1))`
@@ -623,28 +675,9 @@ fn bake_surf(
     // world point landed far outside the tiny lumel grid → out-of-bounds lightmap reads smeared all
     // the colored lights into a rainbow.  Subtract the base projection so Pan is small & local.
 
-    // Texture-space extent = min/max of (vert - Base)·TextureU / (vert - Base)·TextureV (§4).
-    // The base subtraction is done PER-VERTEX BEFORE the dot — `(v - Base)·Tex`, NOT the algebraically
-    // equal `v·Tex - Base·Tex`. On an *angled* TextureU/V (a rotated surface) the two orderings round
-    // differently in f32, and the editor's is subtract-first: computing extent as `(v-Base)·Tex`
-    // reproduces the golden's stored `Pan`/`TextureVScale` on 484/484 records, vs 412/484 for the
-    // dot-then-subtract form (spike §20 §22, `harness/lightmap_grid_diff.py`). Axis-aligned axes are
-    // unaffected (both orderings collapse to `v.x - Base.x`), which is why only the angled-V surfaces
-    // (75 records) diverged. `Vec3::dot` accumulates x+y+z left-to-right in f32, matching the engine.
-    let (mut umin, mut umax) = (f32::INFINITY, f32::NEG_INFINITY);
-    let (mut vmin, mut vmax) = (f32::INFINITY, f32::NEG_INFINITY);
-    for v in verts {
-        let d = v.sub(&base);
-        let u = d.dot(&tu);
-        let w = d.dot(&tv);
-        umin = umin.min(u);
-        umax = umax.max(u);
-        vmin = vmin.min(w);
-        vmax = vmax.max(w);
-    }
-    let scale = lumel_scale(s.poly_flags);
-    let (u_size, u_scale, pan_x) = axis_grid(umin, umax, scale);
-    let (v_size, v_scale, pan_y) = axis_grid(vmin, vmax, scale);
+    let rec = grid_descriptor(verts, &base, &tu, &tv, s.poly_flags);
+    let (u_size, v_size, u_scale, v_scale) = (rec.u_size, rec.v_size, rec.u_scale, rec.v_scale);
+    let (pan_x, pan_y) = (rec.pan.x, rec.pan.y);
 
     // `PF_BrightCorners` (`0x00080000` — read off `unrealed.exe`'s own surface-flags dialog table at
     // `.data 0x4cd8f8`, where the mask sits beside control `0x42a`, captioned "Bright Corners")

@@ -1,0 +1,11 @@
+Begin Actor Class=DeusEx.ComputerPublic
+    Base=LevelInfo'MyLevel.LevelInfo0'
+    ComputerNode=CN_NYC
+    DistanceFromPlayer=948.633545
+    LastRenderTime=21.396976
+    Rotation=(Yaw=-65528)
+    Tag=ComputerPublic
+    bulletinTag=02_BulletinMenu
+    nodeName=NYC net
+    Location=(X=8.285408,Y=469.459503,Z=77.550934)
+End Actor

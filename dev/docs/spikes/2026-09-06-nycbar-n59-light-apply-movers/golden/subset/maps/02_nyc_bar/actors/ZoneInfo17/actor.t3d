@@ -1,0 +1,8 @@
+Begin Actor Class=Engine.ZoneInfo
+    AmbientSaturation=0
+    Rotation=(Yaw=16384)
+    Tag=ZoneInfo
+    ZoneGroundFriction=0.200000
+    bFogZone=True
+    Location=(X=-1741.159180,Y=-493.591064,Z=53.986572)
+End Actor

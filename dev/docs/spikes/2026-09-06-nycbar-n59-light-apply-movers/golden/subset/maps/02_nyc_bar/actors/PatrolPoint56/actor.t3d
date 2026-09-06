@@ -1,0 +1,26 @@
+Begin Actor Class=Engine.PatrolPoint
+    Paths(0)=117
+    Paths(1)=131
+    PrunedPaths(0)=127
+    PrunedPaths(1)=128
+    PrunedPaths(10)=134
+    PrunedPaths(11)=137
+    PrunedPaths(12)=132
+    PrunedPaths(13)=136
+    PrunedPaths(2)=119
+    PrunedPaths(3)=129
+    PrunedPaths(4)=121
+    PrunedPaths(5)=118
+    PrunedPaths(6)=133
+    PrunedPaths(7)=120
+    PrunedPaths(8)=130
+    PrunedPaths(9)=135
+    Tag=SandraPP
+    bestPathWeight=149
+    previousPath=PathNode'3250d3a0c3074b399df5e3a10541fc50.PathNode7'
+    upstreamPaths(0)=82
+    upstreamPaths(1)=3
+    upstreamPaths(2)=368
+    visitedWeight=10000000
+    Location=(X=-854.199646,Y=62.103500,Z=13.257690)
+End Actor

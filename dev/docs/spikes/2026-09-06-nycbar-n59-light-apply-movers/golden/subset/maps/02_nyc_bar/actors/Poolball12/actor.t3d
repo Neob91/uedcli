@@ -1,0 +1,8 @@
+Begin Actor Class=DeusEx.Poolball
+    DistanceFromPlayer=1260.211792
+    LastRenderTime=129.322067
+    Rotation=(Yaw=16384)
+    SkinColor=SC_6
+    Tag=Poolball
+    Location=(X=-1721.896240,Y=-483.465454,Z=52.121643)
+End Actor

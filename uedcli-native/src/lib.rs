@@ -398,35 +398,59 @@ type BrushPolyTuple = (
 #[pyfunction]
 fn build_brush_model(py: Python<'_>, polys: Vec<BrushPolyTuple>) -> PyResult<(Built, Vec<i32>)> {
     let (model, links) = py
-        .allow_threads(|| {
-            let mut fps: Vec<fpoly::FPoly> = Vec::with_capacity(polys.len());
-            for (pi, (verts_flat, base, normal, tex_u, tex_v, pf, tex, pan_u, pan_v)) in
-                polys.iter().enumerate()
-            {
-                if verts_flat.len() % 3 != 0 {
-                    return Err(model::BuildError(format!(
-                        "poly {pi}: verts_flat length {} is not a multiple of 3",
-                        verts_flat.len()
-                    )));
-                }
-                let verts: Vec<model::Vec3> = verts_flat
-                    .chunks_exact(3)
-                    .map(|c| model::Vec3::new(c[0], c[1], c[2]))
-                    .collect();
-                let mut p = fpoly::FPoly::new(verts);
-                p.base = model::Vec3::new(base[0], base[1], base[2]);
-                p.normal = model::Vec3::new(normal[0], normal[1], normal[2]);
-                p.texture_u = model::Vec3::new(tex_u[0], tex_u[1], tex_u[2]);
-                p.texture_v = model::Vec3::new(tex_v[0], tex_v[1], tex_v[2]);
-                p.poly_flags = *pf;
-                p.texture = *tex;
-                p.pan = [*pan_u, *pan_v];
-                fps.push(p);
-            }
-            bspcsg::build_brush_model(&fps)
-        })
+        .allow_threads(|| bspcsg::build_brush_model(&brush_tuples_to_fpolys(&polys)?))
         .map_err(map_err)?;
     Ok((Built { model }, links))
+}
+
+/// `BrushPolyTuple`s -> `FPoly`s, verbatim: the mover paths never recompute a poly's stored
+/// `Base`/`Normal`/`TextureU`/`TextureV`.
+fn brush_tuples_to_fpolys(polys: &[BrushPolyTuple]) -> Result<Vec<fpoly::FPoly>, model::BuildError> {
+    let mut out = Vec::with_capacity(polys.len());
+    for (pi, (verts_flat, base, normal, tex_u, tex_v, pf, tex, pan_u, pan_v)) in
+        polys.iter().enumerate()
+    {
+        if verts_flat.len() % 3 != 0 {
+            return Err(model::BuildError(format!(
+                "poly {pi}: verts_flat length {} is not a multiple of 3",
+                verts_flat.len()
+            )));
+        }
+        let mut p = fpoly::FPoly::new(
+            verts_flat
+                .chunks_exact(3)
+                .map(|c| model::Vec3::new(c[0], c[1], c[2]))
+                .collect(),
+        );
+        p.base = model::Vec3::new(base[0], base[1], base[2]);
+        p.normal = model::Vec3::new(normal[0], normal[1], normal[2]);
+        p.texture_u = model::Vec3::new(tex_u[0], tex_u[1], tex_u[2]);
+        p.texture_v = model::Vec3::new(tex_v[0], tex_v[1], tex_v[2]);
+        p.poly_flags = *pf;
+        p.texture = *tex;
+        p.pan = [*pan_u, *pan_v];
+        out.push(p);
+    }
+    Ok(out)
+}
+
+/// `brush_lightmap_indices` — `LIGHT APPLY`'s moving-brush lightmap allocation over the same flat
+/// `BrushPolyTuple` list `build_brush_model` takes.  One entry per poly, in poly order: `None` for a
+/// poly the editor skips (`PolyFlags & 0x400081`), else the stored grid descriptor as
+/// `(pan_x, pan_y, u_size, v_size, u_scale, v_scale)`.  The caller turns a kept poly's position in
+/// the kept-subsequence into its `iBrushPoly`.
+#[pyfunction]
+fn brush_lightmap_indices(
+    py: Python<'_>,
+    polys: Vec<BrushPolyTuple>,
+) -> PyResult<Vec<Option<(f32, f32, i32, i32, f32, f32)>>> {
+    py.allow_threads(|| {
+        Ok(light::brush_lightmap_indices(&brush_tuples_to_fpolys(&polys)?)
+            .into_iter()
+            .map(|r| r.map(|d| (d.pan.x, d.pan.y, d.u_size, d.v_size, d.u_scale, d.v_scale)))
+            .collect())
+    })
+    .map_err(map_err)
 }
 
 /// `serialize_model` (§8.1) — the built UModel body as `bytes`.  Pinned byte-identical to
@@ -621,6 +645,7 @@ fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(build_geometry_bspcsg, m)?)?;
     m.add_function(wrap_pyfunction!(intersect_brushset, m)?)?;
     m.add_function(wrap_pyfunction!(build_brush_model, m)?)?;
+    m.add_function(wrap_pyfunction!(brush_lightmap_indices, m)?)?;
     m.add_function(wrap_pyfunction!(serialize_model, m)?)?;
     m.add_function(wrap_pyfunction!(bake_lighting, m)?)?;
     m.add_function(wrap_pyfunction!(render_frame, m)?)?;

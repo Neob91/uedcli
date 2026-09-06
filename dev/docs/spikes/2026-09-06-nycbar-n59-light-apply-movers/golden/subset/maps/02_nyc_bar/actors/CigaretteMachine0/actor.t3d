@@ -1,0 +1,7 @@
+Begin Actor Class=DeusEx.CigaretteMachine
+    DistanceFromPlayer=2455.175293
+    LastRenderTime=129.322067
+    Rotation=(Yaw=-16360)
+    Tag=CigaretteMachine
+    Location=(X=-2758.925293,Y=630.938354,Z=58.140839)
+End Actor

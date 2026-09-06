@@ -1,0 +1,7 @@
+Begin Actor Class=Engine.AmbientSound
+    AmbientSound=Sound'Ambient.Ambient.EchoWaterDrips'
+    SoundRadius=6
+    SoundVolume=100
+    Tag=AmbientSound
+    Location=(X=-3415.629883,Y=673.263794,Z=59.187805)
+End Actor

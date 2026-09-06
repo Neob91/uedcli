@@ -1,0 +1,10 @@
+Begin Actor Class=DeusEx.DeusExLevelInfo
+    MapAuthor=Bob White
+    MapName=02_NYC_Bar
+    MissionLocation=NYC - Underworld Tavern
+    Script=Class'DeusEx.Mission02'
+    Tag=DeusExLevelInfo
+    TrueNorth=16384
+    missionNumber=2
+    Location=(X=343.422241,Y=499.790253,Z=139.470612)
+End Actor

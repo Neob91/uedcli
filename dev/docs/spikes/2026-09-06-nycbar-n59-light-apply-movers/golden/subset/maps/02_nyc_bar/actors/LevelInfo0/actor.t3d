@@ -1,0 +1,4 @@
+Begin Actor Class=Engine.LevelInfo
+    Song=Music'NYCBar2_Music.NYCBar2_Music'
+    Tag=LevelInfo
+End Actor

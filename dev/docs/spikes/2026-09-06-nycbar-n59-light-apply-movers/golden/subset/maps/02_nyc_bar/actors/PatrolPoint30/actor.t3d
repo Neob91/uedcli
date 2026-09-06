@@ -1,0 +1,24 @@
+Begin Actor Class=Engine.PatrolPoint
+    Group="BarGirl1"
+    Nextpatrol=BarGirlPatrol0
+    Paths(0)=66
+    Paths(1)=72
+    Paths(2)=74
+    Paths(3)=73
+    Paths(4)=75
+    Paths(5)=76
+    PrunedPaths(0)=77
+    PrunedPaths(1)=71
+    PrunedPaths(2)=68
+    PrunedPaths(3)=70
+    PrunedPaths(4)=67
+    PrunedPaths(5)=69
+    PrunedPaths(6)=78
+    PrunedPaths(7)=65
+    Rotation=(Yaw=120)
+    Tag=BarGirlPatrol5
+    pausetime=15.000000
+    previousPath=PathNode'3250d3a0c3074b399df5e3a10541fc50.PathNode71'
+    visitedWeight=10000000
+    Location=(X=-3360.064941,Y=352.857788,Z=-5.899902)
+End Actor

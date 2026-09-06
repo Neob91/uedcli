@@ -1,0 +1,23 @@
+Begin Actor Class=DeusEx.Female1
+    Alliance=BarFlys
+    Base=LevelInfo'MyLevel.LevelInfo0'
+    BindName=BarWoman2
+    DistanceFromPlayer=668.744629
+    FamiliarName=Lady in sweater
+    FootRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=429,ZoneNumber=1)
+    HeadRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=429,ZoneNumber=1)
+    InitialAlliances(0)=(AllianceName="Player")
+    InitialAlliances(1)=(AllianceName="BarFlys")
+    LastRenderTime=21.396976
+    OrderTag=BarGirlPatrol0
+    Orders=Patrolling
+    Rotation=(Yaw=-33744)
+    Tag=Female1
+    UnfamiliarName=Lady in sweater
+    ViewRotation=(Yaw=-33744)
+    bCower=True
+    bReactDistress=True
+    bReactProjectiles=True
+    bReactShot=True
+    Location=(X=59.317078,Y=-35.736465,Z=45.935875)
+End Actor

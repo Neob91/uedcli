@@ -1,0 +1,9 @@
+Begin Actor Class=Engine.Teleporter
+    CollisionRadius=60.000000
+    Rotation=(Yaw=27848)
+    Tag=Teleporter
+    URL=02_NYC_Street#FromBarBackEntrance
+    bestPathWeight=127
+    visitedWeight=10000000
+    Location=(X=-3187.154053,Y=-1791.666504,Z=188.465103)
+End Actor

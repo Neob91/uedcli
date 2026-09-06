@@ -1,0 +1,8 @@
+Begin Actor Class=DeusEx.PoolTableLight
+    DistanceFromPlayer=1241.769287
+    LastRenderTime=129.322067
+    Rotation=(Yaw=-16488)
+    ScaleGlow=1.500000
+    Tag=PoolTableLight
+    Location=(X=-1729.945068,Y=-452.850098,Z=223.430389)
+End Actor

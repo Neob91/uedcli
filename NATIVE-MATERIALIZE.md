@@ -228,11 +228,16 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
 - **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-spotlight22-light-runs-differ-on-4/` — PARKED,
   multi-day rasterizer port (`FSpanBuffer`'s `ClipBspSurf` + fixed-point scanline setup), corpus-wide
   blast radius measured (~20k already-correct decisions per level would move at once).
-- **NYC_Bar, N=59**: `dev/docs/board/inbox/nyc-bar-n-59-brush-region-zone-and-ued22/` — Region
-  zone-actor, mover base pose, and pawn Foot/HeadRegion all FIXED; two native-geometry gaps remain:
-  world-node `NF_IsFront`/`NF_IsBack` (accumulates across multiple CSG-time descents, not a single
-  pass) and mover private `Model` geometry not built when real world CSG exists (reopened:
-  `dev/docs/board/inbox/native-geometry-path-leaves-mover-models-unbuilt/`).
+- **NYC_Bar**: N=59 is FIXED (`dev/docs/board/done/nyc-bar-n-59-brush-region-zone-and-ued22/`) —
+  its last three residuals (world-node `NF_IsFront`/`NF_IsBack`, the mover models' `LightMap`, and
+  the mover `Polys`' `iLink`/`iBrushPoly`) were one thing: the moving-brush half of
+  `shadowIlluminateBsp`, which bails when the world `Model` has no nodes and so only appears once a
+  level has its first world brush. Ported as `unbuilt.light_apply_movers`
+  (`dev/docs/spikes/2026-09-06-nycbar-n59-light-apply-movers/`); `native-geometry-path-leaves-mover-
+  models-unbuilt` is closed with it — the models were built all along. N=70 is fixed too
+  (`dev/docs/board/done/nyc-bar-n-70-zone-actor-bound-to-the-alphabetically/`): `resolve_zone_actors`
+  walked the name-keyed `level.actors` dict, so `ZoneInfo17` beat `ZoneInfo5` to the zone they share.
+  See the Parity Ladder artifact for where the walk stands now.
 - **Island, N=10**: `dev/docs/board/inbox/island-n-10-brush1359-region-ileaf-13-vs-18/` — one token,
   `Brush1359`'s cached `Region` iLeaf (13 vs 18); the world `Model` matches. Byte-exact N=1..9 (was
   5): the N=6 vector-pool blocker is FIXED — native keeps the incremental Vectors pool across the

@@ -1,0 +1,4 @@
+Begin Actor Class=DeusEx.MedKit
+    Tag=MedKit
+    Location=(X=-519.032898,Y=-491.095795,Z=32.992676)
+End Actor

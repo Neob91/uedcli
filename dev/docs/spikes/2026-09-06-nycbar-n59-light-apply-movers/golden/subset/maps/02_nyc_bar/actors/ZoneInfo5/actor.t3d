@@ -1,0 +1,8 @@
+Begin Actor Class=Engine.ZoneInfo
+    AmbientSaturation=0
+    AmbientSound=Sound'Ambient.Ambient.Bar'
+    SoundVolume=64
+    Tag=ZoneInfo
+    bFogZone=True
+    Location=(X=-1352.724243,Y=-52.640236,Z=130.318848)
+End Actor

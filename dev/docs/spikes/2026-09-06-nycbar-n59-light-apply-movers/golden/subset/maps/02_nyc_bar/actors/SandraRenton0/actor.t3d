@@ -1,0 +1,23 @@
+Begin Actor Class=DeusEx.SandraRenton
+    Alliance=Sandra
+    BarkBindName=Woman
+    Base=LevelInfo'MyLevel.LevelInfo0'
+    DistanceFromPlayer=1338.927856
+    FootRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=163,ZoneNumber=1)
+    HeadRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=163,ZoneNumber=1)
+    InitialAlliances(0)=(AllianceName="Player",AllianceLevel=1.000000)
+    InitialAlliances(1)=(AllianceName="BarPatrons",AllianceLevel=1.000000,bPermanent=True)
+    LastRenderTime=129.322067
+    Orders=Sitting
+    Rotation=(Yaw=480)
+    Tag=SandraRenton
+    ViewRotation=(Yaw=480)
+    bFearInjury=True
+    bFearProjectiles=True
+    bFearWeapon=True
+    bInWorld=False
+    bReactDistress=True
+    bReactProjectiles=True
+    bReactShot=True
+    Location=(X=-1717.937378,Y=193.835876,Z=44.104710)
+End Actor

@@ -1,0 +1,8 @@
+Begin Actor Class=Engine.Teleporter
+    Rotation=(Yaw=-23728)
+    Tag=ToBarFrontEntrance
+    VisNoReachPaths(0)=PathNode'3250d3a0c3074b399df5e3a10541fc50.PathNode5'
+    bestPathWeight=667
+    visitedWeight=10000000
+    Location=(X=633.623962,Y=810.134521,Z=60.299129)
+End Actor

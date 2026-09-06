@@ -1,0 +1,7 @@
+Begin Actor Class=DeusEx.Pinball
+    DistanceFromPlayer=474.251648
+    LastRenderTime=21.396976
+    Rotation=(Yaw=-32872)
+    Tag=Pinball
+    Location=(X=-99.772301,Y=-325.633331,Z=46.868927)
+End Actor

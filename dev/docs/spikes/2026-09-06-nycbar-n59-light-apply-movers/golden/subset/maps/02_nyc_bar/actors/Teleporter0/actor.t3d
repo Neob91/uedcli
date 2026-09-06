@@ -1,0 +1,7 @@
+Begin Actor Class=Engine.Teleporter
+    Rotation=(Yaw=1368)
+    Tag=ToBarBackEntrance
+    bestPathWeight=207
+    visitedWeight=10000000
+    Location=(X=-2845.534668,Y=-1788.519043,Z=178.859344)
+End Actor

@@ -1,0 +1,8 @@
+Begin Actor Class=Engine.AmbientSound
+    AmbientSound=Sound'Ambient.Ambient.Sink'
+    SoundPitch=50
+    SoundRadius=4
+    SoundVolume=150
+    Tag=AmbientSound
+    Location=(X=-3468.864258,Y=1.769531,Z=91.932129)
+End Actor

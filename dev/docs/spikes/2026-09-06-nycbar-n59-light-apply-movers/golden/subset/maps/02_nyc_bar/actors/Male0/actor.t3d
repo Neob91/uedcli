@@ -1,0 +1,27 @@
+Begin Actor Class=DeusEx.Male1
+    Alliance=BarFlys
+    BarkBindName=Man
+    Base=LevelInfo'MyLevel.LevelInfo0'
+    BindName=Worker
+    DistanceFromPlayer=333.225250
+    FamiliarName=Dan
+    FootRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=390,ZoneNumber=1)
+    HeadRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=286,ZoneNumber=1)
+    InitialAlliances(0)=(AllianceName="Player")
+    InitialAlliances(1)=(AllianceName="BarFlys")
+    LastRenderTime=21.396976
+    Orders=Standing
+    Rotation=(Yaw=-43264)
+    Tag=Male1
+    UnfamiliarName=Worker
+    ViewRotation=(Yaw=-43264)
+    bFearAlarm=False
+    bFearInjury=True
+    bFearProjectiles=True
+    bFearWeapon=True
+    bLeaveAfterFleeing=True
+    bReactDistress=True
+    bReactProjectiles=True
+    bReactShot=True
+    Location=(X=-339.408997,Y=-447.920380,Z=48.267677)
+End Actor

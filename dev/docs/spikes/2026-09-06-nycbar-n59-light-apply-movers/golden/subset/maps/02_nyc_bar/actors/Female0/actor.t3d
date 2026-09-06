@@ -1,0 +1,27 @@
+Begin Actor Class=DeusEx.Female2
+    Alliance=BarFlys
+    BarkBindName=Woman
+    Base=LevelInfo'MyLevel.LevelInfo0'
+    BindName=BarWoman1
+    DistanceFromPlayer=304.778259
+    FamiliarName=Woman
+    FootRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=389,ZoneNumber=1)
+    HeadRegion=(Zone=ZoneInfo'3250d3a0c3074b399df5e3a10541fc50.ZoneInfo5',iLeaf=389,ZoneNumber=1)
+    InitialAlliances(0)=(AllianceName="Player")
+    InitialAlliances(1)=(AllianceName="BarFlys")
+    LastRenderTime=21.396976
+    Orders=Standing
+    Rotation=(Yaw=-71024)
+    Tag=Female2
+    UnfamiliarName=Lady
+    ViewRotation=(Yaw=-71024)
+    bCower=True
+    bFearInjury=True
+    bFearProjectiles=True
+    bFearWeapon=True
+    bLeaveAfterFleeing=True
+    bReactDistress=True
+    bReactProjectiles=True
+    bReactShot=True
+    Location=(X=-373.822479,Y=-411.220032,Z=45.836433)
+End Actor

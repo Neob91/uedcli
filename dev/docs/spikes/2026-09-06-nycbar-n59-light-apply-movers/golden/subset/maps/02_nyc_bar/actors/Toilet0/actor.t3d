@@ -1,0 +1,8 @@
+Begin Actor Class=DeusEx.Toilet
+    Base=LevelInfo'MyLevel.LevelInfo0'
+    DistanceFromPlayer=3225.637207
+    LastRenderTime=129.322067
+    SkinColor=SC_Filthy
+    Tag=Toilet
+    Location=(X=-3521.240234,Y=788.582092,Z=-3.038757)
+End Actor

@@ -1,0 +1,11 @@
+Begin Actor Class=DeusEx.ATM
+    Base=LevelInfo'MyLevel.LevelInfo0'
+    DistanceFromPlayer=861.817871
+    LastRenderTime=21.396976
+    Rotation=(Yaw=16360)
+    Tag=ATM
+    userList(0)=(accountNumber="446009",PIN="3124",balance=250)
+    userList(1)=(accountNumber="312446",PIN="1351",balance=125)
+    userList(2)=(accountNumber="947761",PIN="2867",balance=36)
+    Location=(X=327.575806,Y=-374.695129,Z=71.375824)
+End Actor

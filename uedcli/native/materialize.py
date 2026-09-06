@@ -398,10 +398,16 @@ def _model_point_zone(model, p) -> int:
 def resolve_zone_actors(level, model) -> dict:
     """`zone_number -> the ZoneInfo/SkyZoneInfo/WarpZoneInfo actor` whose `Location` PointRegion-
     resolves into that zone. `LevelInfo` (also an AZoneInfo) is excluded -- a default interior zone
-    with no ZoneInfo keeps a NULL ZoneActor. First actor wins per zone.
+    with no ZoneInfo keeps a NULL ZoneActor. First actor wins per zone, walked in TRUNK order --
+    `level.actors` is keyed by name and iterates alphabetically, which put `ZoneInfo17` ahead of
+    `ZoneInfo5` and bound NYC_Bar N=70's only real zone to the wrong one of the two ZoneInfos that
+    share it (both resolve to zone 1; UED22 keeps the earlier actor). The built `Actors` array
+    reshuffles brushes ahead of point actors (`levelinfo_first_order`), which cannot reorder
+    ZoneInfos against each other -- they are all point actors.
     `assemble._patch_zone_refs` rewrites these names to export refs."""
     zone_actors: dict[int, str] = {}
-    for name, a in level.actors.items():
+    for name in level.order:
+        a = level.actors[name]
         short = (a.cls or "").split(".")[-1]
         if short == "LevelInfo" or not short.endswith("ZoneInfo"):
             continue
