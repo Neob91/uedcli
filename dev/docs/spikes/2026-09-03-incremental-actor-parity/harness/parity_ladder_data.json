@@ -40,9 +40,9 @@
       "highest_n": 44,
       "total_actors": 2288,
       "status": "blocked",
-      "blocker": "N=45 Spotlight22: Model.Lights 687 vs 686 — 4 lightmap light-runs differ (3 over-, 1 under-inclusion). GetVisibleSurfs drops the under-included surf with zone 1's span buffer already exhausted. Real gap is ClipBspSurf (0x10019987) + the fixed-point scanline rasterizer (0x1001b470), which decides ~20k currently-byte-exact outcomes per level against an empirically tuned pixel-centre baseline. Estimate 2-4 focused days — NOT attempted; needs its own spike.",
+      "blocker": "N=45 Spotlight22: Model.Lights 687 vs 686 — same 4 lightmap light-runs differ, byte-for-byte unchanged. URender::ClipBspSurf + the fixed-point scanline rasterizer are now FULLY PORTED from disassembly (replacing the old empirical pixel-centre stand-in) and a real zone-portal occlusion bug was fixed along the way — but measurement shows the rasterizer was never the cause here (only 2 of ~1300 accept/reject decisions moved). Remaining lead: front-to-back visit ORDER — native's zone-1 span buffer drains before node 59 on all six faces; next probe is a live breakpoint at 0x100198a0 logging iNode/IsFront/ValidLines.",
       "board": "wanchai-n45-spotlight22-light-runs-differ-on-4",
-      "updated": "2026-09-06T00:30:00Z"
+      "updated": "2026-09-06T16:40:00Z"
     },
     {
       "slug": "island",
