@@ -249,7 +249,11 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   allocate walk (`Editor.dll 0x100a4a90`) allocates a record only at a node with `NumVertices != 0`,
   and a vertex-less node does not CLAIM its surf either, so a surf sitting on both gets its record at
   the later non-empty node; native claimed at the first node it saw
-  (`dev/docs/spikes/2026-09-06-lightmap-alloc-zero-vert-gate/`).
+  (`dev/docs/spikes/2026-09-06-lightmap-alloc-zero-vert-gate/`). Byte-exact **N=1..150** (was 118);
+  bails at **N=151** on the world `Model2`'s LEAF permeating light runs — native gives leaf 74 a run
+  UED22 leaves empty, so every later leaf's `iPermeating` shifts by 2 and `Lights` is 247 vs 245,
+  every other array byte-exact. Same root cause as Island N=123 —
+  `dev/docs/board/inbox/nyc-bar-n-151-world-model2-leaf-permeating-light/`.
 - **Island, N=123**: N=6, N=10 and N=93 are all FIXED. N=6 was the Vectors pool — native keeps
   the incremental pool across the repartition instead of rebuilding it from the surviving surfs
   (`dev/docs/spikes/2026-09-06-island-n6-vector-pool/`,
