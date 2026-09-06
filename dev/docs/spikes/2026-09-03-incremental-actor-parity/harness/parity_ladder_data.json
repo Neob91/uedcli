@@ -51,9 +51,9 @@
       "highest_n": 122,
       "total_actors": 3653,
       "status": "blocked",
-      "blocker": "BODY model model2 — leaf 26 gets a permeating-light run UED22 leaves empty. NOT the same cause as NYC_Bar's sibling bug (that fix, a beam-clip-plane normalization, left Island unchanged) -- root-caused to the PORTAL GRAPH: zones::collect_portals clips with a plain 1e-4 Sutherland-Hodgman where the editor's FilterThroughSubtree uses SplitWithNode(VeryPrecise) and DISCARDS an SP_Coplanar result, which moves the union-find graph the portal reachability rides on. Only one BSP node references leaf 26 and its portal shape is the open question.",
+      "blocker": "BODY model model2 — leaf 26 gets a permeating-light run UED22 leaves empty. The portal-graph theory was WRONG: native's portal builder is now a faithful port of UnrealEd's MakePortals (SplitWithNode VeryPrecise, SP_Coplanar discard) and UED22's own log confirms native produces the identical portal/leaf/node counts (580/163/427) before and after — the graph was never the problem. Every decoded step of the beam-clip algorithm (SplitWithPlaneFast, ActorVisibility's clip loop, the seed descent, the re-entry radius gate) is faithful and, as decoded, predicts UED22 SHOULD mark leaf 26 too. Next step: a winedbg dump of AddPortal's 580 fragments -- nothing cheaper discriminates.",
       "board": "island-n-123-world-model2-leaf-permeating-light",
-      "updated": "2026-09-07T01:20:00Z"
+      "updated": "2026-09-07T03:05:00Z"
     }
   ]
 }
