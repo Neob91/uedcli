@@ -253,16 +253,23 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   `dev/docs/board/done/island-n6-vector-pool-order/`). N=10 was `Brush1359`'s `Region` iLeaf, the
   same f32 `FPlane::PlaneDot` fix as NYC_Bar N=113
   (`dev/docs/spikes/2026-09-06-pointregion-planedot-f32/`,
-  `dev/docs/board/done/island-n-10-brush1359-region-ileaf-13-vs-18/`). Byte-exact **N=1..50** (was 9)
-  with no bail yet; the `ladder_run.py --from 51` sweep is the next step.
-- **OceanLab, N=46**: `BODY model model2` — the world `Model`'s `Bounds`, `LeafHulls` and per-leaf
-  permeating-light region all diverge (`LightBits` is byte-identical, so this is a leaf/bound-pass
-  divergence, not a lighting-run one) —
-  `dev/docs/board/inbox/oceanlab-n46-world-model2-bounds-leafhulls-and/`. Byte-exact N=1..45 (was
-  16, then 33, then 43, then 45 across three fixes this session: a native texture resolver no longer
-  guessing a package when none is loaded, the point-dedup repartition fix below, and the gather
-  pass's plane test now gating the raytrace loop, not just the empty-run/dark decision —
-  `dev/docs/board/done/oceanlab-n44-world-model2-lights-array-has-2/`).
+  `dev/docs/board/done/island-n-10-brush1359-region-ileaf-13-vs-18/`). Byte-exact **N=1..92** (was 9);
+  bails at **N=93** on `Brush1099`'s `Region` zone ACTOR — `resolve_zone_actors` selects zone actors
+  by class-NAME suffix, so `DeusEx.WaterZone` (a real `ZoneInfo` subclass) is skipped and the zone
+  falls back to the LevelInfo. `dev/docs/board/inbox/island-n-93-zone-actor-missed-resolve-zone/`.
+- **OceanLab, N=48**: N=46 is FIXED
+  (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
+  `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the
+  original chain node and append every fragment as a new node, so the post-Pass-D `bspCleanup`
+  promotes the dead node's coplanar successor (inheriting its children, mirrored on opposite
+  facing); native reused the original in place, which left it heading two chains and diverged every
+  `Bounds`/`LeafHulls`/`LightMap` walk after it. Byte-exact **N=1..47** (was 16, then 33, 43, 45
+  across three earlier fixes this session: a native texture resolver no longer guessing a package
+  when none is loaded, the point-dedup repartition fix below, and the gather pass's plane test now
+  gating the raytrace loop —
+  `dev/docs/board/done/oceanlab-n44-world-model2-lights-array-has-2/`). Bails at **N=48** on the
+  world `Model2`'s `LightBits` alone — 28 bytes over 3 lightmaps, every geometry array byte-exact —
+  `dev/docs/board/inbox/oceanlab-n48-world-model2-lightbits-differ-on/`.
 - **Standing stopgap, all levels**: `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/`
   — repartition dedups points with a linear pool scan; the editor descends and appends on a miss
   (`AddThing(..., !FastRebuild)` with `FastRebuild = 1`). Owed a faithful fix.
