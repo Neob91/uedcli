@@ -40,3 +40,14 @@ and every realistic scene has a subtracting room), or should the bspcsg core be 
 preview so an add with no surrounding subtract is invisible (true UnrealEd parity)? Likely related to
 the residual in the depends-on `incremental-bspbrushcsg-core` (merge/repartition). Not fixed here —
 the item shipped the core "as it stands" per its own overview.
+
+**New interaction (found while adding the single-sided-render backface cull to `level photo
+--native`, `actor-preview-parity-direction-home`'s cull refinement).** Because an isolated add's
+normals here point INWARD (there being no real "outside" for them to face away from), the new
+per-view/per-camera backface cull makes such a brush render INSIDE-OUT: its near faces (facing the
+camera) cull and its far/interior faces draw. Before that cull existed this was invisible in
+`actor diagram` (unaffected — its own cull predates this) but new for `level photo --native`, which
+previously drew every face from both sides unconditionally. Confirmed by direct measurement: a lone
+128uu add cube's CSG-solved faces all measure inward-pointing normals via `newell()`. Whichever way
+this item resolves (seeded-solid or not) will also fix the inside-out symptom, since it stems from
+the same empty-world root cause — no separate fix needed once this lands.

@@ -49,14 +49,18 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
     (`Origin`/`TextureU`/`TextureV`/`Pan`), with **no wireframe**. Because it is a real solve, an
     additive brush that is **not inside subtracted (empty) space is invisible** — visibility is spatial
     containment, not a per-brush rule — and a subtracted **room shows its interior** (its camera-facing
-    near walls are dropped, so you see in) instead of a solid box. Texture **alignment, panning and
+    near walls are dropped, so you see in) instead of a solid box. A face is single-sided **like the
+    real editor**: it draws only from the side its normal faces, unless it carries **`PF_TwoSided`**
+    or **`PF_Portal`** (sheets, banners, chain-link, water portals — the same exemption UnrealEd
+    itself uses), in which case it draws from either side. Texture **alignment, panning and
     tiling** stay correct **across CSG splits**, so a wall cut by a doorway keeps one continuous texture.
   - It shades each face by a fixed key light (no scene lighting), picks a mip level per face from how
     densely the texture lands on screen, and honours a **masked** texture's cut-out holes. A surviving
     surface with no `Texture` fills a neutral grey; that is normal, not an error.
   - **Movers** are excluded from the world solve (a mover carries no world `CsgOper`) and draw as a
     **magenta overlay** against the same depth buffer, so a mover behind a wall is hidden and one in
-    front occludes. **Point actors** keep their sprite/marker overlay.
+    front occludes — backface-culled the same way as world surfaces (its authored winding is already
+    outward-correct, mirrored ones included). **Point actors** keep their sprite/marker overlay.
   - **`textured` reads the game's class hierarchy** (to tell a mover from a world brush), so unlike
     `wire` it needs **both a resolved project and the per-user games config**, plus **every texture a
     surviving surface references to be readable** — miss one and it exits 2 naming the ref (a bare
