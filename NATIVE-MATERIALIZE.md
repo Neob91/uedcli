@@ -225,9 +225,13 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   open, found by the earlier N=26 work:
   `dev/docs/board/inbox/port-occludebsp-frustum-cone-subtree-reject/` — native still box-tests 51
   subtrees per UNATCO N=26 build that UED22's step-6 frustum-cone reject discards.
-- **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-spotlight22-light-runs-differ-on-4/` — PARKED,
-  multi-day rasterizer port (`FSpanBuffer`'s `ClipBspSurf` + fixed-point scanline setup), corpus-wide
-  blast radius measured (~20k already-correct decisions per level would move at once).
+- **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-spotlight22-light-runs-differ-on-4/` — the
+  rasterizer port it was parked on is DONE and landed (`ClipBspSurf`, its clipper, the per-vertex
+  transform and the fixed-point scanline setup, `dev/docs/spikes/2026-09-06-raster-clipbspsurf-port/`)
+  and it changes nothing here: the same four lightmap runs still differ. Fill rule, texture
+  `PolyFlags` and flipped node rings are all ruled out by measurement. What is left is the
+  front-to-back VISIT ORDER — the three surfaces trade accept/reject consistently — and the next step
+  is a live capture of `OccludeBsp`'s node order for spotlight22.
 - **NYC_Bar**: N=59 is FIXED (`dev/docs/board/done/nyc-bar-n-59-brush-region-zone-and-ued22/`) —
   its last three residuals (world-node `NF_IsFront`/`NF_IsBack`, the mover models' `LightMap`, and
   the mover `Polys`' `iLink`/`iBrushPoly`) were one thing: the moving-brush half of

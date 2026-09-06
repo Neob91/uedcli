@@ -25,26 +25,24 @@
 //! 90° is the only angle under which the six-face scheme is geometrically sound at all. Flagged here
 //! per the task brief: **this is an assumption, not a disassembly-pinned fact.**
 //!
-//! ## Simplifications vs. the byte-level decode (functional-spec port, not a disassembly of the
-//! rasterizer internals — sanctioned by the task brief when the fixture comparison doesn't show a
-//! systematic edge-stepping mismatch)
+//! ## Simplifications vs. the byte-level decode
 //!
-//! - **The RASTERIZER is a functional stand-in, not a port.** [`rasterize_node`] clips the node
-//!   polygon against four side planes with an f32 Sutherland-Hodgman pass and fills each scanline
-//!   from the convex row's min/max x under pixel-CENTRE inclusion (`x0 = ceil(lo-0.5)`,
-//!   `x1 = ceil(hi-0.5)`); the editor runs `ClipBspSurf` (`0x10019987`) into a fixed-point scanline
-//!   setup (`0x1001b470`) with its own fill convention. This is the ONE structural gap left in this
-//!   module, and the pixel-centre rule was chosen EMPIRICALLY (see [`rasterize_node`]'s note), not
-//!   derived — so it is not a "simplification with a stated equivalence", it is an open divergence.
-//!   Scoped 2026-09-05 (board `wanchai-n45-spotlight22-light-runs-differ-on-4`): a WanChai N=44
-//!   build already resolves ~20k accept/prune decisions through it, all of them matching UED22
-//!   today, so replacing it moves the whole corpus at once — a multi-day spike, not a tweak.
+//! - **The RASTERIZER is now a real port** (2026-09-06, `spikes/2026-09-06-raster-clipbspsurf-port/`).
+//!   [`clip_bsp_surf`] is `URender::ClipBspSurf` (`0x10013cf0`) with its clipper (`0x10013b70`) and
+//!   per-vertex transform (`0x1001adb0`); [`raster_setup`] is the fixed-point scanline setup
+//!   (`0x1001b470`); [`rasterize_node`] runs them back to back with `OccludeBsp`'s point-list
+//!   reversal between. It replaced an empirically-tuned pixel-centre stand-in
+//!   (`x0 = ceil(lo-0.5)`, `x1 = ceil(hi-0.5)`) that this module used to flag as its one open
+//!   structural divergence. Measured effect on a WanChai N=45 build: 2 of ~1300 accept/reject
+//!   decisions move — the stand-in was already giving UED22's answer nearly everywhere — and no
+//!   already-byte-exact ladder N on any of the five levels moved. It did NOT fix WanChai N=45; that
+//!   board item now points at the front-to-back visit order instead.
 //!
 //!   **NOT a gap (and NOT a boolean pixel grid — an earlier version of this comment said so and sent
 //!   a session down the wrong path):** [`SpanBuf`] is already run-length, a sorted disjoint interval
 //!   list per scanline. [`test_and_maybe_subtract`] is `CopyFromRaster` (`0x1001dd10`, accept only)
-//!   and `CopyFromRasterUpdate` (`0x1001df70`, accept + subtract) under the one
-//!   `PolyFlags & 0x10020047` selector the editor uses at `0x10019b57`; [`merge_into`] is
+//!   and `CopyFromRasterUpdate` (`0x1001df70`, accept + subtract) under the [`occludes`] selector
+//!   the editor uses at `0x10019b4f`–`0x10019b9c`; [`merge_into`] is
 //!   `MergeWith` (`0x1001e3b0`), decoded and live-verified against 10 real calls. `ValidLines`
 //!   (`FSpanBuffer+8`, tested `<= 0` at `0x10019961`) differs only in what it counts — the editor
 //!   counts interval NODES, [`SpanBuf::valid_lines`] counts non-empty ROWS — and both are zero
@@ -80,20 +78,44 @@
 //! reject test and portal zone-crossing all run BEFORE this check, disassembly address order
 //! `0x1001a257` < `0x1001a30d` — see `invisible`'s doc comment in [`traverse`]), the six exact
 //! 90°-apart face rotations and `AddUniqueItem` (here: a `HashSet`) union across
-//! them (§ "What it is"), and the opaque/non-opaque split on the disassembly-verified
-//! `PF_NONOCCLUDING` mask (`render.dll 0x10019b57`'s `test …, 0x10020047`).
+//! them (§ "What it is"), the polygon pipeline ([`clip_bsp_surf`], [`raster_setup`]) and the
+//! opaque/non-opaque split ([`occludes`]).
 
 use crate::light::light_in_front;
 use crate::model::{FBox, Model, Plane, Vec3};
 use std::collections::HashSet;
 
 const PF_INVISIBLE: u32 = 0x0000_0001;
+const PF_TWO_SIDED: u32 = 0x0000_0100;
 const PF_PORTAL: u32 = 0x0400_0000;
-/// The non-opaque mask read straight off `render.dll 0x10019b57`'s `test dword ptr […], 0x10020047`
-/// (board item, "What it is"): a surface carrying any of these bits does not SUBTRACT its accepted
-/// spans from the zone's span buffer, i.e. it never occludes anything behind it (masked/translucent/
-/// portal/invisible/selected all pass light through for occlusion purposes even where visible).
+const PF_MIRRORED: u32 = 0x0800_0000;
+/// The candidate non-opaque mask, read straight off `render.dll 0x10019b57`'s
+/// `test dword ptr […], 0x10020047` — `PF_Invisible|PF_Masked|PF_Translucent|PF_Modulated|
+/// PF_CloudWavy|PF_Highlighted`. It is only the FIRST of [`occludes`]'s three tests.
 const PF_NONOCCLUDING: u32 = 0x1002_0047;
+
+/// Which of `FSpanBuffer::CopyFromRaster` (no subtract) / `CopyFromRasterUpdate` (subtract) the
+/// editor picks, `render.dll 0x10019b4f`–`0x10019b9c`, decoded in full 2026-09-06:
+///
+/// ```text
+/// no-subtract  iff  (PolyFlags & 0x10020047) != 0
+///                && (PolyFlags & (PF_Portal|PF_Invisible)) != (PF_Portal|PF_Invisible)
+///                && (PolyFlags & PF_Mirrored) == 0
+/// ```
+///
+/// The two exemptions are NOT decoration. A zone portal is near-universally
+/// `PF_Portal | PF_Invisible`, and `PF_Invisible` is inside the `0x10020047` mask — so reading the
+/// mask alone (which this port did until now) made every zone portal non-occluding, where the editor
+/// subtracts it like any opaque surface.
+///
+/// `PolyFlags` here is the SURFACE's alone. The editor ORs in `Surf->Texture->PolyFlags`
+/// (`0x10019aa9`) before this test; native builds without textures loaded and cannot see those bits.
+/// Pre-existing gap, unchanged by this function, flagged rather than silently assumed away.
+fn occludes(poly_flags: u32) -> bool {
+    !(poly_flags & PF_NONOCCLUDING != 0
+        && poly_flags & (PF_PORTAL | PF_INVISIBLE) != (PF_PORTAL | PF_INVISIBLE)
+        && poly_flags & PF_MIRRORED == 0)
+}
 
 /// Whether an accepted OPAQUE surface subtracts its footprint from the zone buffer (the "occludes
 /// what is behind it" half of the port sketch).
@@ -128,30 +150,46 @@ const SUBTRACT_OCCLUSION: bool = true;
 
 /// Cube-face resolution, `0x400 x 0x400` (board item, "What it is").
 const RES: i32 = 1024;
-/// `Proj.Z` at the pinned `FovAngle = 90°`: `(SizeX/2)/tan(45°) = SizeX/2` (port sketch step 1).
-const PROJ_Z: f32 = (RES / 2) as f32;
 
-/// One cube face's camera basis: `forward` = view axis, `right`/`up` = the screen axes. Order and
-/// axes match the board item's six rotators exactly: `(0x4000,0,0)`=+Z, `(0xc000,0,0)`=−Z,
-/// `(0,0,0)`=+X, `(0,0x8000,0)`=−X, `(0,0xc000,0)`=−Y, `(0,0x4000,0)`=+Y. The `right`/`up` choice
-/// within each face is this port's own (never disassembled) but self-consistent and orthonormal;
-/// since occlusion is a purely geometric accept/reject test, any consistent choice of in-plane axes
-/// yields the same visible-surface SET (a rotation/reflection of the same screen makes no pixel
-/// newly visible or newly occluded).
+/// One gather frame's `FCoords` view basis, exactly as the editor builds it: `x_axis` is screen
+/// RIGHT, `y_axis` is screen DOWN, `z_axis` is the view direction, and a world point is transformed
+/// by `FVector::TransformPointBy` — `((V − Origin) | XAxis, … | YAxis, … | ZAxis)`.
+///
+/// The six triples are LIVE-CAPTURED, not derived: every `FSceneNode` a UNATCO N=26 golden build's
+/// gather passed to `BoundVisible` carries one of exactly these
+/// (`spikes/2026-09-06-boundvisible-port/logs/boundvisible-frame-probe.log`). They are
+/// `GMath.ViewCoords` (`XAxis = +Y, YAxis = −Z, ZAxis = +X`) turned by the board item's six
+/// rotators, so the off-axis `8.74227766e-08` entries are the engine's own `sin` of a 16384-unit
+/// turn and are kept verbatim.
+///
+/// This basis USED to be a free choice — the old pixel-centre stand-in rasterizer was isotropic, so
+/// any orthonormal relabelling of the same square screen gave the same visible set. It is not free
+/// any more: [`raster_setup`] fills SCANLINES, which is anisotropic, so the port has to stand on the
+/// editor's own axes.
 struct Face {
-    forward: Vec3,
-    right: Vec3,
-    up: Vec3,
+    x_axis: Vec3,
+    y_axis: Vec3,
+    z_axis: Vec3,
 }
 
+/// Rotator order, matching the editor's own gather sequence: `(0x4000,0,0)`=+Z, `(0xc000,0,0)`=−Z,
+/// `(0,0,0)`=+X, `(0,0x8000,0)`=−X, `(0,0xc000,0)`=−Y, `(0,0x4000,0)`=+Y. The order is observable —
+/// `NF_BoxOccluded` is last-write-wins across faces.
 fn faces() -> [Face; 6] {
+    const S: f32 = 8.74227766e-08;
     [
-        Face { forward: Vec3::new(0.0, 0.0, 1.0), right: Vec3::new(1.0, 0.0, 0.0), up: Vec3::new(0.0, -1.0, 0.0) }, // +Z
-        Face { forward: Vec3::new(0.0, 0.0, -1.0), right: Vec3::new(1.0, 0.0, 0.0), up: Vec3::new(0.0, 1.0, 0.0) }, // -Z
-        Face { forward: Vec3::new(1.0, 0.0, 0.0), right: Vec3::new(0.0, 1.0, 0.0), up: Vec3::new(0.0, 0.0, 1.0) }, // +X
-        Face { forward: Vec3::new(-1.0, 0.0, 0.0), right: Vec3::new(0.0, -1.0, 0.0), up: Vec3::new(0.0, 0.0, 1.0) }, // -X
-        Face { forward: Vec3::new(0.0, -1.0, 0.0), right: Vec3::new(1.0, 0.0, 0.0), up: Vec3::new(0.0, 0.0, 1.0) }, // -Y
-        Face { forward: Vec3::new(0.0, 1.0, 0.0), right: Vec3::new(-1.0, 0.0, 0.0), up: Vec3::new(0.0, 0.0, 1.0) }, // +Y
+        // +Z
+        Face { x_axis: Vec3::new(0.0, 1.0, 0.0), y_axis: Vec3::new(1.0, 0.0, S), z_axis: Vec3::new(-S, 0.0, 1.0) },
+        // -Z
+        Face { x_axis: Vec3::new(0.0, 1.0, 0.0), y_axis: Vec3::new(-1.0, 0.0, 0.0), z_axis: Vec3::new(0.0, 0.0, -1.0) },
+        // +X
+        Face { x_axis: Vec3::new(0.0, 1.0, 0.0), y_axis: Vec3::new(0.0, 0.0, -1.0), z_axis: Vec3::new(1.0, 0.0, 0.0) },
+        // -X
+        Face { x_axis: Vec3::new(S, -1.0, 0.0), y_axis: Vec3::new(0.0, 0.0, -1.0), z_axis: Vec3::new(-1.0, -S, 0.0) },
+        // -Y
+        Face { x_axis: Vec3::new(1.0, 0.0, 0.0), y_axis: Vec3::new(0.0, 0.0, -1.0), z_axis: Vec3::new(0.0, -1.0, 0.0) },
+        // +Y
+        Face { x_axis: Vec3::new(-1.0, -S, 0.0), y_axis: Vec3::new(0.0, 0.0, -1.0), z_axis: Vec3::new(-S, 1.0, 0.0) },
     ]
 }
 
@@ -287,12 +325,8 @@ fn cvt_ss2si(v: f32) -> i32 {
 /// 5. With a span buffer (only the unzoned pass passes one — with zones the CALLER runs the test
 ///    per active zone, `render.dll 0x1001949c`), `BoxIsVisible` on the UNCLAMPED rect decides.
 ///
-/// View axes: `ZAxis` = `face.forward`, `XAxis` = `face.right`, `YAxis` = −`face.up` (the editor's
-/// screen Y grows downward), the same relation [`rasterize_node`] projects with — so the rectangle
-/// and the span content it is tested against share one screen convention. The editor's own six
-/// frames use a different in-plane axis pair (live-captured: face 0 is `X=+Y, Y=+X` where this port
-/// has `right=+X, up=−Y`); that is a rigid 90°/reflection relabelling of the same square screen, so
-/// box rect and span content move together and the accept/reject is unchanged.
+/// View axes are [`Face`]'s, i.e. the editor's own `Coords` — the same basis [`rasterize_node`]
+/// projects with, so the rectangle and the span content it is tested against share one screen.
 fn bound_visible(b: &FBox, origin: &Vec3, face: &Face, span: Option<&SpanBuf>) -> Option<[i32; 4]> {
     let min = b.min.sub(origin);
     let max = b.max.sub(origin);
@@ -319,13 +353,13 @@ fn bound_visible(b: &FBox, origin: &Vec3, face: &Face, span: Option<&SpanBuf>) -
     }
 
     // Componentwise axis*extent products, reused by every corner (`0x1001234f`, `0x10012456`,
-    // `0x1001255f`). `y_*` carries the editor's downward screen Y, i.e. −`face.up`.
+    // `0x1001255f`). `face.y_axis` already IS the editor's downward screen Y.
     let axis_products = |a: &Vec3| {
         ([a.x * min.x, a.y * min.y, a.z * min.z], [a.x * max.x, a.y * max.y, a.z * max.z])
     };
-    let (z_min, z_max) = axis_products(&face.forward);
-    let (x_min, x_max) = axis_products(&face.right);
-    let (y_min, y_max) = axis_products(&Vec3::new(-face.up.x, -face.up.y, -face.up.z));
+    let (z_min, z_max) = axis_products(&face.z_axis);
+    let (x_min, x_max) = axis_products(&face.x_axis);
+    let (y_min, y_max) = axis_products(&face.y_axis);
 
     // Step 2 (`0x10012410`): every depth product negative => the whole box is behind the camera.
     if z_min.iter().chain(z_max.iter()).all(|&v| 0.0 > v) {
@@ -411,136 +445,269 @@ fn bound_visible(b: &FBox, origin: &Vec3, face: &Face, span: Option<&SpanBuf>) -
     Some([min_x.max(0), min_y.max(0), max_x.min(FRAME_XY), max_y.min(FRAME_XY)])
 }
 
-/// One row's screen-space span `[x0, x1)` of a convex polygon at scanline `y` (pixel-centre sampled
-/// at `y + 0.5`), or `None` if the row misses the polygon entirely.
-fn convex_row_span(poly: &[(f32, f32)], y: f32) -> Option<(f32, f32)> {
-    let (mut lo, mut hi) = (f32::INFINITY, f32::NEG_INFINITY);
-    let n = poly.len();
-    for i in 0..n {
-        let (x1, y1) = poly[i];
-        let (x2, y2) = poly[(i + 1) % n];
-        if (y1 <= y && y2 > y) || (y2 <= y && y1 > y) {
-            let t = (y - y1) / (y2 - y1);
-            let x = x1 + t * (x2 - x1);
-            lo = lo.min(x);
-            hi = hi.max(x);
-        }
-    }
-    if hi > lo {
-        Some((lo, hi))
-    } else {
-        None
-    }
+/// One clipped/projected polygon vertex — the editor's `FTransform` (32 bytes), of which the
+/// gather reads `Point` (view space, `+0x0`), `ScreenX` (`+0x10`), `ScreenY` (`+0x14`) and `IntY`
+/// (`+0x18`).
+#[derive(Clone, Copy, Debug)]
+struct XPoint {
+    p: Vec3,
+    sx: f32,
+    sy: f32,
+    iy: i32,
 }
 
-/// Clip a convex camera-space polygon (list of `(depth, right, up)`) against the four `FovAngle=90`
-/// side planes (`|right| <= depth`, `|up| <= depth` — no near/far plane, matching the port sketch:
-/// "Four side planes, no near/far"), then project to screen pixel coordinates. Returns `None` if
-/// nothing survives.
-fn clip_and_project(cam: &[(f32, f32, f32)]) -> Option<Vec<(f32, f32)>> {
-    // Sutherland-Hodgman against depth - side*right/up >= 0 for the two side/up half-spaces (using
-    // signed +1/-1 sign so both planes of a pair share the same clip routine).
-    fn clip(poly: &[(f32, f32, f32)], axis_is_up: bool, sign: f32) -> Vec<(f32, f32, f32)> {
-        let inside = |v: &(f32, f32, f32)| {
-            let a = if axis_is_up { v.2 } else { v.1 };
-            v.0 - sign * a >= 0.0
-        };
-        let mut out = Vec::with_capacity(poly.len() + 2);
-        let n = poly.len();
-        for i in 0..n {
-            let a = poly[i];
-            let b = poly[(i + 1) % n];
-            let (a_in, b_in) = (inside(&a), inside(&b));
-            if a_in {
-                out.push(a);
-            }
-            if a_in != b_in {
-                let fa = if axis_is_up { a.2 } else { a.1 };
-                let fb = if axis_is_up { b.2 } else { b.1 };
-                // Solve t along a->b where (d - sign*x) == 0.
-                let da = a.0 - sign * fa;
-                let db = b.0 - sign * fb;
-                let t = da / (da - db);
-                out.push((a.0 + t * (b.0 - a.0), a.1 + t * (b.1 - a.1), a.2 + t * (b.2 - a.2)));
-            }
+/// `FSceneNode+0xc0` / `+0xc4` — the screen centre the POLYGON pipeline projects about. Live-measured
+/// `512.500061` on every gather frame; note it is deliberately NOT [`FRAME_CXY`] (`+0xc8`, `512.0`),
+/// which is what `BoundVisible` uses instead. Two different centres, one frame.
+const FRAME_PXY: f32 = 512.500061;
+
+/// Project a view-space point exactly as the editor does at `render.dll 0x1001ae86` (the transform)
+/// and `0x10013c78` (the clipper's new points): `RZ = Proj.Z / Z`, screen = `coord*RZ + centre`, and
+/// `IntY = appFloor(ScreenY)` — the engine's `appFloor(F) = appRound(F − 0.5)`, i.e. an SSE
+/// `cvtss2si` (round-half-to-even) of `ScreenY − 0.5`.
+fn project(p: Vec3) -> XPoint {
+    let rz = FRAME_PROJ_Z / p.z;
+    let sx = p.x * rz + FRAME_PXY;
+    let sy = p.y * rz + FRAME_PXY;
+    XPoint { p, sx, sy, iy: cvt_ss2si(sy - 0.5) }
+}
+
+/// `URender::ClipBspSurf` (`render.dll 0x10013cf0`, disassembled in full 2026-09-06) — transform the
+/// node's world vertex ring into view space, frustum-outcode it, Sutherland-Hodgman it against
+/// whichever of the four side planes anything crosses, and project what survives.
+///
+/// Per vertex the editor's transform (`0x1001adb0`) computes four plane distances and folds them
+/// into a 4-bit outcode via the byte tables at `render.dll 0x10036af4`..`0x10036b00`
+/// (`{0,0x04},{0,0x08},{0,0x10},{0,0x20}`, each set when `0 > dist`, strictly):
+///
+/// | bit | distance | slope field |
+/// |------|-----------|---------|
+/// | 0x04 | `Z*c + X` | `+0xec` |
+/// | 0x08 | `Z*c − X` | `+0xf4` |
+/// | 0x10 | `Z*c + Y` | `+0xf0` |
+/// | 0x20 | `Z*c − Y` | `+0xf8` |
+///
+/// All four `c` are [`FRAME_CLIP`] on this square FOV-90 gather frame. The AND over every vertex
+/// rejects the node outright (every vertex outside one shared plane); the OR selects which planes to
+/// clip against, IN THAT bit order. A vertex whose outcode is non-zero is NOT projected by the
+/// transform (`0x1001ae84` skips it) — only clip-generated points and fully-inside points carry
+/// `ScreenX`/`ScreenY`/`IntY`, which is exactly the set that survives clipping.
+///
+/// The clipper itself (`0x10013b70`) keeps a vertex when its distance's SIGN BIT is clear — the
+/// editor compares the float's raw bits as an integer (`cmp dword ptr [...], 0; jl`), so `−0.0` is
+/// dropped and `+0.0` kept — and emits a crossing point when consecutive distances' sign bits
+/// differ, at `alpha = d_prev / (d_prev − d_cur)` from `prev` toward `cur`.
+///
+/// NOT ported: the optional near-plane clip (`Frame->NearClip`, `+0x24`, run only when its `W` at
+/// `+0x30` is non-zero). `NearClip` is written by `CreateChildFrame` (portals and mirrors) and the
+/// gather builds master frames only, so `W` is 0 for the whole pass. NOT live-confirmed — a gdb
+/// breakpoint on this per-node path kills the editor container
+/// (`spikes/2026-09-06-raster-clipbspsurf-port/spike.md`), so this one rests on the call graph.
+fn clip_bsp_surf(world: &[Vec3], light_loc: &Vec3, face: &Face) -> Option<Vec<XPoint>> {
+    let mut pts: Vec<XPoint> = Vec::with_capacity(world.len() + 4);
+    let mut and_code = 0x3cu8;
+    let mut or_code = 0u8;
+    for w in world {
+        let rel = w.sub(light_loc);
+        let p = Vec3::new(rel.dot(&face.x_axis), rel.dot(&face.y_axis), rel.dot(&face.z_axis));
+        let mut code = 0u8;
+        if 0.0 > p.z * FRAME_CLIP + p.x {
+            code |= 0x04;
         }
-        out
-    }
-    let mut poly: Vec<(f32, f32, f32)> = cam.to_vec();
-    for (axis_is_up, sign) in [(false, 1.0), (false, -1.0), (true, 1.0), (true, -1.0)] {
-        if poly.len() < 3 {
-            return None;
+        if 0.0 > p.z * FRAME_CLIP - p.x {
+            code |= 0x08;
         }
-        poly = clip(&poly, axis_is_up, sign);
+        if 0.0 > p.z * FRAME_CLIP + p.y {
+            code |= 0x10;
+        }
+        if 0.0 > p.z * FRAME_CLIP - p.y {
+            code |= 0x20;
+        }
+        and_code &= code;
+        or_code |= code;
+        pts.push(if code == 0 { project(p) } else { XPoint { p, sx: 0.0, sy: 0.0, iy: 0 } });
     }
-    if poly.len() < 3 {
+    if and_code != 0 {
         return None;
     }
-    let half = RES as f32 / 2.0;
-    Some(
-        poly.iter()
-            .map(|&(d, r, u)| {
-                let d = d.max(1e-6); // guard: clip keeps d>=|axis|>=0; d==0 only for the degenerate apex
-                (half + r / d * PROJ_Z, half - u / d * PROJ_Z)
+    for (bit, use_y, plus) in
+        [(0x04u8, false, true), (0x08, false, false), (0x10, true, true), (0x20, true, false)]
+    {
+        if or_code & bit == 0 {
+            continue;
+        }
+        let dist: Vec<f32> = pts
+            .iter()
+            .map(|q| {
+                let a = if use_y { q.p.y } else { q.p.x };
+                if plus {
+                    q.p.z * FRAME_CLIP + a
+                } else {
+                    q.p.z * FRAME_CLIP - a
+                }
             })
-            .collect(),
-    )
+            .collect();
+        pts = clip_against(&pts, &dist);
+        if pts.is_empty() {
+            return None;
+        }
+    }
+    Some(pts)
 }
 
-/// Rasterize node `ni`'s polygon as seen from `light_loc` through camera basis `face` into a list of
-/// `(row, x0, x1)` screen spans, clamped to `[0, RES)`. `None` if the polygon is fully behind, fully
-/// clipped away, or degenerate.
-fn rasterize_node(model: &Model, ni: usize, light_loc: &Vec3, face: &Face) -> Option<Vec<(i32, i32, i32)>> {
+/// The Sutherland-Hodgman pass of `URender::ClipBspSurf` (`render.dll 0x10013b70`) — see
+/// [`clip_bsp_surf`] for the sign-bit conventions this reproduces literally.
+fn clip_against(src: &[XPoint], dist: &[f32]) -> Vec<XPoint> {
+    let n = src.len();
+    let mut out = Vec::with_capacity(n + 2);
+    let mut prev = n - 1;
+    for cur in 0..n {
+        if (dist[prev].to_bits() as i32) >= 0 {
+            out.push(src[prev]);
+        }
+        if ((dist[cur].to_bits() ^ dist[prev].to_bits()) as i32) < 0 {
+            let alpha = dist[prev] / (dist[prev] - dist[cur]);
+            let (a, b) = (src[prev].p, src[cur].p);
+            out.push(project(Vec3::new(
+                (b.x - a.x) * alpha + a.x,
+                (b.y - a.y) * alpha + a.y,
+                (b.z - a.z) * alpha + a.z,
+            )));
+        }
+        prev = cur;
+    }
+    out
+}
+
+/// The editor's scanline setup (`render.dll 0x1001b470`, disassembled in full 2026-09-06) — turn a
+/// clipped, projected, screen-wound polygon into one `FRasterSpan {INT Start, End;}` per scanline in
+/// `[MinY, MaxY)`, which `FSpanBuffer::CopyFromRaster[Update]` then intersects with the zone's
+/// remaining free spans. Returns `(y, Start, End)` per row, half-open in X exactly as
+/// `CopyFromRaster` reads it (`0x1001de05`: `End <= Start` skips the row).
+///
+/// In order:
+///
+/// 1. Screen bounds over the input points: `MinY`/`MaxY` from `IntY` directly, accumulated with the
+///    editor's `if (v < min) … else if (v > max)` shape rather than an independent min and max. The
+///    editor also tracks `MinX`/`MaxX` (from `appFloor(ScreenX)`) in the same loop; only the
+///    unported `BoxIsVisible` pre-test below reads them, so they are not computed here.
+/// 2. Y clamp: if `MinY < 0`, or `MaxY > Frame->Y`, clamp both into `[0, Frame->Y]` AND rewrite
+///    every point's `IntY` to its clamped value and its `ScreenY` to `(float)IntY`. When
+///    `MinY >= 0 && MaxY <= Frame->Y` the whole pass is skipped and `ScreenY` keeps its true
+///    fractional value — so a polygon that pokes off the top or bottom of the screen has its edge
+///    slopes distorted by the rewrite and one that does not, does not. That asymmetry is the
+///    editor's (`0x1001b543`–`0x1001b5e0`) and is reproduced literally.
+/// 3. Per edge `A→B` of the ring `(last→first), (first→second), …`, skipping `A.IntY == B.IntY`:
+///    `P1` is the endpoint with the smaller `IntY`, and `flag = (B.IntY > A.IntY)` picks which field
+///    the edge writes — a DOWNWARD edge writes `End`, an upward edge writes `Start`. That is what
+///    makes the winding load-bearing (see [`rasterize_node`]).
+/// 4. The walk itself, in 16.16 fixed point: `DX = (X2−X1)*65536/(Y2−Y1)`,
+///    `X = appFloor(X1*65536 + DX*(IntY1 − Y1))`, `DXi = appFloor(DX)`, then for each row
+///    `y ∈ [IntY1, IntY2)`: **`X += DXi` FIRST, then store `X >> 16`**. The pre-increment is not a
+///    reading artefact — `0x1001b725` is `add ecx, edi` and `0x1001b72f` the store that follows it —
+///    so every row records the x one step DOWN the edge from its own scanline. Both edges of a row
+///    carry the same bias. Pinned by
+///    [`tests::raster_setup_pre_increments_the_fixed_point_x_before_storing_each_row`].
+///
+/// The float work is genuinely `f32`: `X1*65536` reaches ~2²⁶ for a right-edge vertex, where the
+/// f32 grid is 4 units wide, so `appFloor` there discards low bits. Reproduced by computing in f32,
+/// not f64.
+///
+/// NOT ported: the `FSpanBuffer::BoxIsVisible` pre-test at `0x1001b60d`, which the caller arms only
+/// for a node already carrying `NF_PolyOccluded` (`0x10019a54`, `test byte ptr [node+0x37], 8`). It
+/// tests the polygon's own screen bounding box against the same span buffer `CopyFromRaster` is
+/// about to intersect with, so it can only reject when that intersection would have come back empty
+/// anyway — a pure early-out, and its reject path writes nothing a later call could read.
+fn raster_setup(pts: &mut [XPoint], frame_y: i32) -> Vec<(i32, i32, i32)> {
+    let n = pts.len();
+    if n == 0 {
+        return Vec::new();
+    }
+    let (mut min_y, mut max_y) = (pts[0].iy, pts[0].iy);
+    for q in &pts[1..] {
+        if q.iy < min_y {
+            min_y = q.iy;
+        } else if q.iy > max_y {
+            max_y = q.iy;
+        }
+    }
+
+    // Step 2 — the Y clamp, with the editor's own control flow (`0x1001b543`).
+    if min_y < 0 || max_y > frame_y {
+        min_y = if min_y < 0 { 0 } else { min_y.min(frame_y) };
+        max_y = if max_y < 0 { 0 } else { max_y.min(frame_y) };
+        for q in pts.iter_mut() {
+            q.iy = if q.iy < 0 { 0 } else { q.iy.min(frame_y) };
+            q.sy = q.iy as f32;
+        }
+    }
+    if max_y <= min_y {
+        return Vec::new();
+    }
+
+    // Steps 3-4 — the edge walk. Rows are `[MinY, MaxY)` and a convex ring writes both fields of
+    // every one of them, so nothing is read back stale (the editor's raster array is global and
+    // never cleared, for the same reason).
+    let mut rows = vec![[0i32; 2]; (max_y - min_y) as usize];
+    for i in 0..n {
+        let a = pts[(i + n - 1) % n];
+        let b = pts[i];
+        if a.iy == b.iy {
+            continue;
+        }
+        let down = b.iy > a.iy;
+        let (p1, p2) = if down { (a, b) } else { (b, a) };
+        let dx = (p2.sx - p1.sx) * 65536.0 / (p2.sy - p1.sy);
+        let mut x = cvt_ss2si((dx * (p1.iy as f32 - p1.sy) + p1.sx * 65536.0) - 0.5);
+        let step = cvt_ss2si(dx - 0.5);
+        let field = down as usize;
+        for y in p1.iy..p2.iy {
+            x = x.wrapping_add(step);
+            rows[(y - min_y) as usize][field] = x >> 16;
+        }
+    }
+    (min_y..max_y)
+        .map(|y| (y, rows[(y - min_y) as usize][0], rows[(y - min_y) as usize][1]))
+        .collect()
+}
+
+/// Rasterize node `ni`'s polygon as seen from `light_loc` through gather frame `face` into a list of
+/// `(row, Start, End)` screen spans — the editor's `ClipBspSurf` + scanline setup, back to back, as
+/// `URender::OccludeBsp` runs them (`render.dll 0x10019987` and `0x10019a6c`).
+///
+/// Between the two, `OccludeBsp` REVERSES the point list (`0x100199af`–`0x10019a34`) when
+/// `(Frame->Mirror == −1) != (!IsFront && (PolyFlags & (PF_TwoSided|PF_Portal)))`. `Frame->Mirror`
+/// is `+1` on any frame the gather builds (it is `−1` only on a mirror child frame, which this pass
+/// never creates), so the condition reduces to the second half: a two-sided or portal surface seen
+/// from BEHIND its plane — the only surface the back-face cull lets through from behind — is
+/// reversed.
+///
+/// That is load-bearing now, and was not before. [`raster_setup`] assigns a row's `Start` from
+/// upward edges and its `End` from downward ones, which is only correct while the projected ring
+/// runs CLOCKWISE on screen (x right, y down). Two invariants, both MEASURED over the UED22 goldens
+/// for WanChai N=45, UNATCO N=116 and NYC_Bar N=113 (`spikes/2026-09-06-raster-clipbspsurf-port/
+/// harness/ringwind.py`, `flipnodes.py`), make that hold: all 1188 node rings wind WITH their own
+/// node plane, and no node's plane disagrees in sign with its surf's `vNormal`. So a ring projects
+/// clockwise exactly when the light is in front of the plane; from behind it runs the other way, and
+/// without the reversal every row would come out with `End <= Start` and `CopyFromRaster` would drop
+/// the whole surface.
+fn rasterize_node(
+    model: &Model,
+    ni: usize,
+    light_loc: &Vec3,
+    face: &Face,
+    is_front: bool,
+    poly_flags: u32,
+) -> Option<Vec<(i32, i32, i32)>> {
     let world = node_poly(model, ni);
     if world.len() < 3 {
         return None;
     }
-    let cam: Vec<(f32, f32, f32)> = world
-        .iter()
-        .map(|p| {
-            let rel = p.sub(light_loc);
-            (rel.dot(&face.forward), rel.dot(&face.right), rel.dot(&face.up))
-        })
-        .collect();
-    let screen = clip_and_project(&cam)?;
-    let (mut ymin, mut ymax) = (f32::INFINITY, f32::NEG_INFINITY);
-    for &(_, y) in &screen {
-        ymin = ymin.min(y);
-        ymax = ymax.max(y);
+    let mut pts = clip_bsp_surf(&world, light_loc, face)?;
+    if !is_front && poly_flags & (PF_TWO_SIDED | PF_PORTAL) != 0 {
+        pts.reverse();
     }
-    let y0 = (ymin.floor() as i32).max(0);
-    let y1 = (ymax.ceil() as i32).min(RES);
-    if y1 <= y0 {
-        return None;
-    }
-    let mut rows = Vec::with_capacity((y1 - y0) as usize);
-    // Pixel-CENTER coverage (include column i iff its center i+0.5 lies in [lo,hi)), not
-    // full-coverage floor/ceil (`getvisiblesurfs-wanchai-run-gap-root-cause`, 2026-08-30). Live
-    // trace of a concrete missing (surf, light) pair on Wanchai (see that board item) found the
-    // target's tiny footprint swallowed by an accumulation of dozens of small NEIGHBOURING opaque
-    // surfaces' subtracted spans in the same row — plausible cause: full-coverage floor/ceil pads
-    // every polygon's footprint outward by up to ~1px per edge, and in a scene with many small
-    // adjacent surfaces (Wanchai's market clutter) those pads compound across neighbours and can
-    // swallow a genuine gap a pixel-center rasterizer would leave open. Measured net effect of this
-    // one-line change: Wanchai records byte-identical 3228/4530 (71.3%) -> 3297/4530 (72.8%), run
-    // differs 348->266, extra pairs 134->79, missed 350->314; UNATCO (geometry-matched, its tree
-    // isn't node-exact so positional compare doesn't apply) run_ok 92.0%->94.2%, dark/lit
-    // mismatches 29+36 -> 27+20. No regression on either level's shadow-bit-equal or grid/pan/scale
-    // rates. `x0 = ceil(lo-0.5)`, `x1 = ceil(hi-0.5)` is the standard pixel-center-inclusion
-    // formula. Zone-crossing pairs are NOT the dominant cause of the run gap this was chasing (only
-    // ~20% of Wanchai's missed pairs cross a zone, measured via `pair_geometry.py`), so `MergeWith`
-    // fidelity — named below as "the likeliest source" — is a smaller factor than that comment
-    // claimed; left uncorrected there pending independent re-confirmation per the findings-ledger
-    // process (`dev/docs/native-materialize-findings.md`).
-    for y in y0..y1 {
-        if let Some((lo, hi)) = convex_row_span(&screen, y as f32 + 0.5) {
-            let x0 = ((lo - 0.5).ceil() as i32).max(0);
-            let x1 = ((hi - 0.5).ceil() as i32).min(RES);
-            if x1 > x0 {
-                rows.push((y, x0, x1));
-            }
-        }
-    }
+    let rows = raster_setup(&mut pts, FRAME_XY);
     if rows.is_empty() {
         None
     } else {
@@ -845,7 +1012,7 @@ fn traverse(
                 "VISGATE_BOX light=[{},{},{}] fwd=[{},{},{}] node={ni} bound={} visible={visible} \
                  rect={rect:?}",
                 light_loc.x, light_loc.y, light_loc.z,
-                face.forward.x, face.forward.y, face.forward.z, head.i_render_bound,
+                face.z_axis.x, face.z_axis.y, face.z_axis.z, head.i_render_bound,
             );
         }
         boxes.record(ni, visible);
@@ -936,9 +1103,9 @@ fn traverse(
                 );
             }
             if reachable && front_ok && !portal_needs_zones {
-                if let Some(rows) = rasterize_node(model, nu, light_loc, face) {
+                if let Some(rows) = rasterize_node(model, nu, light_loc, face, is_front, poly_flags) {
                     DBG_RASTERIZED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    let opaque = SUBTRACT_OCCLUSION && poly_flags & PF_NONOCCLUDING == 0;
+                    let opaque = SUBTRACT_OCCLUSION && occludes(poly_flags);
                     let buf = spans.get_or_empty(near_key);
                     if is_target {
                         for &(y, wx0, wx1) in &rows {
@@ -1304,7 +1471,12 @@ mod tests {
                 Vec3::new(1.0, 0.0, 0.0),  // portal normal (unused: PF_Portal exempts backface cull)
                 Vec3::new(-1.0, 0.0, 0.0), // wall normal, faces back toward the light at -X
             ],
-            verts: (0..8).map(|i| BspVert { i_vertex: i, i_side: 0 }).collect(),
+            // The portal ring (0..4) winds with the node plane it is given (+X); the wall ring is
+            // REVERSED (7,6,5,4) so it winds with ITS node's plane, which is −X — see the node list.
+            verts: [0, 1, 2, 3, 7, 6, 5, 4]
+                .into_iter()
+                .map(|i| BspVert { i_vertex: i, i_side: 0 })
+                .collect(),
             surfs: vec![
                 BspSurf {
                     texture_ref: -1,
@@ -1340,7 +1512,14 @@ mod tests {
                     n
                 },
                 {
-                    let mut n = BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 0.0 }, 1, 4, 4);
+                    // The wall's own plane, matching its surf normal (−X) and its (reversed) ring.
+                    // A real build never produces anything else: measured over the UED22 goldens for
+                    // WanChai N=45, UNATCO N=116 and NYC_Bar N=113, every one of 1188 nodes has its
+                    // vertex ring winding WITH its own plane and its plane agreeing in sign with its
+                    // surf's `vNormal` (0 flipped). That invariant is what makes the projected ring
+                    // clockwise on screen whenever the light is in front, which is what
+                    // [`raster_setup`]'s Start/End assignment needs.
+                    let mut n = BspNode::leaf(Plane { x: -1.0, y: 0.0, z: 0.0, w: -50.0 }, 1, 4, 4);
                     n.i_zone = [2, 2]; // same zone either side — orientation doesn't matter here
                     n
                 },
@@ -1403,7 +1582,12 @@ mod tests {
                 Vec3::new(200.0, -200.0, 200.0),
             ],
             vectors: vec![Vec3::new(-1.0, 0.0, 0.0)], // both quads face back toward the light at -X
-            verts: (0..8).map(|i| BspVert { i_vertex: i, i_side: 0 }).collect(),
+            // Both rings are wound to match their nodes' own −X planes (see the node list), which is
+            // what every real node does — measured 1188/1188 over three UED22 goldens.
+            verts: [3, 2, 1, 0, 7, 6, 5, 4]
+                .into_iter()
+                .map(|i| BspVert { i_vertex: i, i_side: 0 })
+                .collect(),
             surfs: vec![
                 BspSurf {
                     // surf 0: the chain-member target.
@@ -1444,13 +1628,14 @@ mod tests {
                     n
                 },
                 {
-                    // node 1: far_child leaf, the occluder (surf 1).
-                    BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 0.0 }, 1, 4, 4)
+                    // node 1: far_child leaf, the occluder (surf 1). Its own plane, matching its
+                    // surf normal and its ring.
+                    BspNode::leaf(Plane { x: -1.0, y: 0.0, z: 0.0, w: -200.0 }, 1, 4, 4)
                 },
                 {
                     // node 2: coplanar chain member, the target (surf 0). Leaf: no children of its
                     // own, end of chain (i_plane=-1, the `BspNode::leaf` default).
-                    BspNode::leaf(Plane { x: 1.0, y: 0.0, z: 0.0, w: 0.0 }, 0, 0, 4)
+                    BspNode::leaf(Plane { x: -1.0, y: 0.0, z: 0.0, w: -50.0 }, 0, 0, 4)
                 },
             ],
             root_outside: true,
@@ -1564,9 +1749,7 @@ mod tests {
             let v = |i: usize| Vec3::new(f(i), f(i + 1), f(i + 2));
             let rect: Vec<i32> = col[19..23].iter().map(|c| c.parse().unwrap()).collect();
             let path = col[23];
-            // `Face` stores `up`; the editor's `Coords.YAxis` is screen-DOWN, hence the negation.
-            let ya = v(6);
-            let face = Face { right: v(3), up: Vec3::new(-ya.x, -ya.y, -ya.z), forward: v(9) };
+            let face = Face { x_axis: v(3), y_axis: v(6), z_axis: v(9) };
             let b = FBox { min: v(12), max: v(15), valid: 1 };
             let got = bound_visible(&b, &v(0), &face, None);
             let want = match path {
@@ -1581,6 +1764,36 @@ mod tests {
         assert_eq!(seen.get("inside"), Some(&48));
         assert_eq!(seen.get("outcode"), Some(&83));
         assert_eq!(seen.get("span"), Some(&7));
+    }
+
+    /// Pins the two things about the editor's scanline setup (`render.dll 0x1001b470`) that an
+    /// "obvious" rasterizer gets wrong, on a quad whose f32 arithmetic is exact at every step:
+    ///
+    /// - the fixed-point x is advanced BEFORE the row is stored (`0x1001b725` `add ecx, edi`, then
+    ///   `0x1001b72f` the store), so a row records the x one step down its own edge;
+    /// - `appFloor(F) = appRound(F − 0.5)` is an SSE `cvtss2si`, i.e. round-half-to-EVEN, not a
+    ///   truncation.
+    ///
+    /// The right edge runs exactly one pixel per scanline from `(110, 10.25)` to `(120, 20.25)`, so
+    /// `DX = 65536` and the pre-increment is worth exactly one column: row 10's `End` is 110 here and
+    /// would be 109 if the row were sampled at its own scanline. The left edge is vertical, which is
+    /// where the ties fall: `appFloor(100*65536)` rounds `6553599.5` up to the even `6553600` and
+    /// `appFloor(0)` rounds `−0.5` to `0`, so a truncating `appFloor` would give 99 and a step of −1.
+    #[test]
+    fn raster_setup_pre_increments_the_fixed_point_x_before_storing_each_row() {
+        let p = |sx: f32, sy: f32| XPoint {
+            p: Vec3::new(0.0, 0.0, 1.0),
+            sx,
+            sy,
+            iy: cvt_ss2si(sy - 0.5),
+        };
+        // Clockwise on screen (x right, y down), the winding a front-facing node ring projects to.
+        let mut pts = [p(100.0, 10.25), p(110.0, 10.25), p(120.0, 20.25), p(100.0, 20.25)];
+        assert_eq!(pts.map(|q| q.iy), [10, 10, 20, 20]);
+        let rows = raster_setup(&mut pts, FRAME_XY);
+        assert_eq!(rows.len(), 10, "rows are [MinY, MaxY) = [10, 20)");
+        assert_eq!(rows[0], (10, 100, 110));
+        assert_eq!(rows[9], (19, 100, 119));
     }
 
     #[test]
