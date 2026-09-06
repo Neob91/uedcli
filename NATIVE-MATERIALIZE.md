@@ -253,8 +253,8 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   `dev/docs/board/done/island-n6-vector-pool-order/`). N=10 was `Brush1359`'s `Region` iLeaf, the
   same f32 `FPlane::PlaneDot` fix as NYC_Bar N=113
   (`dev/docs/spikes/2026-09-06-pointregion-planedot-f32/`,
-  `dev/docs/board/done/island-n-10-brush1359-region-ileaf-13-vs-18/`). Byte-exact **N=1..40** (was 9)
-  with no bail yet; the `ladder_run.py --from 41` sweep is the next step.
+  `dev/docs/board/done/island-n-10-brush1359-region-ileaf-13-vs-18/`). Byte-exact **N=1..50** (was 9)
+  with no bail yet; the `ladder_run.py --from 51` sweep is the next step.
 - **OceanLab, N=46**: `BODY model model2` — the world `Model`'s `Bounds`, `LeafHulls` and per-leaf
   permeating-light region all diverge (`LightBits` is byte-identical, so this is a leaf/bound-pass
   divergence, not a lighting-run one) —
