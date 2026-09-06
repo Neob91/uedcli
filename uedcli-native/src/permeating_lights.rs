@@ -55,7 +55,11 @@
 //!    leaves (extra lights only, never missing, never reordered) — the exact signature of a clip that
 //!    keeps slivers the real epsilon-gated function would have discarded outright. This fix closed
 //!    87/762 mismatches to 35/762 (727/762 exact, was 675/762) and fully eliminated the 5-leaf
-//!    under-reach case (`Light127`) that existed before it.
+//!    under-reach case (`Light127`) that existed before it. **2026-09-06:** that epsilon was still
+//!    inert, because [`clip_beam`] fed it an UNNORMALIZED plane — `FPlane(A,B,C)` normalizes
+//!    (`core.dll 0xb440` -> `FVector::SafeNormal`), so `0.25` is a world-unit distance, and native
+//!    was dividing it by the cross product's length. Fixed with [`safe_normal`]/[`plane_w`]/
+//!    [`plane_dot`]; spike `dev/docs/spikes/2026-09-06-permeating-beam-plane-normalize/`.
 
 use crate::light::LightInput;
 use crate::model::{Model, Vec3};
@@ -139,26 +143,66 @@ fn bsp_descend_to_leaf(model: &Model, p: &Vec3) -> i32 {
 /// distance against are `+0.25`/`-0.25` at RVA `0x206780`/`0x20b580`. See [`split_with_plane_fast`].
 const THRESH_SPLIT_POLY_WITH_PLANE: f32 = 0.25;
 
+/// `SMALL_NUMBER`, `FVector::SafeNormal`'s zero-length cutoff (`core.dll 0x10051090`, the f32 at
+/// `.rdata 0x100a0a40`). A cross product shorter than this normalizes to `FVector(0,0,0)`, which
+/// makes every `PlaneDot` exactly 0 -- `SP_Coplanar`, i.e. no constraint at all.
+const SMALL_NUMBER: f32 = 1e-8;
+
+/// The editor stops clipping once the working poly reaches 14 vertices
+/// (`Editor.dll 0x100a7083 cmp eax, 0xe / jge`), checked BEFORE each edge -- it keeps the poly it
+/// has and recurses with it, it does not truncate.
+const MAX_CLIP_VERTS: usize = 14;
+
+/// `FVector::SafeNormal` (`core.dll 0x10051090`). `None` is the editor's zero vector.
+///
+/// The scale is not a plain `1.0/sqrt`: the square sum is widened to f64, `sqrt`ed, **rounded back
+/// to f32** (`0x100510f5 fstp dword`), and only then reciprocated and rounded to f32 again
+/// (`0x10051104 fstp dword`). Each component is scaled in single precision.
+fn safe_normal(v: &Vec3) -> Option<Vec3> {
+    let square_sum = v.x * v.x + v.y * v.y + v.z * v.z;
+    if square_sum < SMALL_NUMBER {
+        return None;
+    }
+    let root = (square_sum as f64).sqrt() as f32;
+    let scale = (1.0f64 / root as f64) as f32;
+    Some(Vec3::new(v.x * scale, v.y * scale, v.z * scale))
+}
+
+/// `FPlane(A, B, C)`'s `W` (`core.dll 0x1000b440`): `A | Normal`, summed as
+/// `(A.y*N.y + A.x*N.x) + A.z*N.z` (`0x1000b4e3`/`0x1000b4f1`/`0x1000b4fe`/`0x1000b50b`).
+fn plane_w(a: &Vec3, normal: &Vec3) -> f32 {
+    (a.y * normal.y + a.x * normal.x) + a.z * normal.z
+}
+
+/// `FPlane::PlaneDot` (`core.dll 0x10024e60`): a SIMD horizontal add of
+/// `(x*Nx, y*Ny, z*Nz, -W)` that pairs the terms as `(x*Nx + y*Ny) + (z*Nz - W)`.
+fn plane_dot(normal: &Vec3, w: f32, v: &Vec3) -> f32 {
+    (v.x * normal.x + v.y * normal.y) + (v.z * normal.z - w)
+}
+
 /// Clip `target` against the beam formed by `light` and each edge of `clip`: for edge
-/// `(clip[j-1], clip[j])`, the plane through `light`/`clip[j]`/`clip[j-1]`, oriented so the OTHER
-/// vertices of `clip` fall on the kept side (self-consistent regardless of `clip`'s own winding).
-/// Stops once fewer than 3 vertices survive; caps output at 14 vertices (`FPoly::SplitWithPlaneFast`'s
-/// own vertex-count clamp, board item Flood step).
+/// `(clip[jPrev], clip[j])`, the editor builds `FPlane(Light, clip[j], clip[jPrev])`
+/// (`Editor.dll 0x100a70b7`-`0x100a7146`; the ctor's args land Location-first, see [`plane_w`]) and
+/// keeps the front half. The plane is **normalized** — that is what makes `SplitWithPlaneFast`'s
+/// `0.25` a real 0.25-world-unit epsilon rather than an effectively-zero one.
+///
+/// The one deliberate departure is the ORIENTATION. The editor inherits it from its portal poly's
+/// vertex winding; native's portal polys are synthesized by `zones::collect_portals` from
+/// `plane_axes` and carry no such guarantee, so the plane is oriented explicitly instead: flip it
+/// when `clip`'s own remaining (convex) vertices fall on the negative side, which reproduces the
+/// editor's "keep the beam interior" for either winding.
 fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> {
     let mut poly = target.to_vec();
     let n = clip.len();
     for j in 0..n {
-        if poly.len() < 3 {
-            return None;
+        if poly.len() >= MAX_CLIP_VERTS {
+            break;
         }
         let a = clip[(j + n - 1) % n];
         let b = clip[j];
-        let mut normal = (b.sub(light)).cross(&(a.sub(light)));
-        let nlen2 = normal.dot(&normal);
-        if nlen2 < 1e-12 {
+        let Some(mut normal) = safe_normal(&(b.sub(light)).cross(&(a.sub(light)))) else {
             continue; // degenerate edge (through the light or zero-length): no constraint
-        }
-        // Orient so the clip polygon's own other vertices are on the kept (>= 0) side.
+        };
         let mut sign_sum = 0.0f32;
         for &v in clip {
             sign_sum += normal.dot(&v.sub(light));
@@ -166,10 +210,9 @@ fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> 
         if sign_sum < 0.0 {
             normal = Vec3::new(-normal.x, -normal.y, -normal.z);
         }
-        poly = split_with_plane_fast(&poly, light, &normal)?;
+        poly = split_with_plane_fast(&poly, &normal, plane_w(light, &normal))?;
     }
     if poly.len() >= 3 {
-        poly.truncate(14);
         Some(poly)
     } else {
         None
@@ -178,8 +221,7 @@ fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> 
 
 /// Port of `FPoly::SplitWithPlaneFast` (`Engine.dll 0x10151f90`, disassembled 2026-08-31, image
 /// base `0x10000000`), specialized to this caller's use (keep the front/kept half of `poly` for the
-/// half-space `dot(v - origin, normal) >= 0`; the real function also produces a back-half output,
-/// unused here).
+/// half-space `PlaneDot(v) >= 0`; the real function also produces a back-half output, unused here).
 ///
 /// The real function is NOT a plain per-vertex Sutherland-Hodgman clip: it first classifies every
 /// vertex by the SIGN of its signed distance (`>= 0.0` exactly, no epsilon, ties go to front — the
@@ -195,13 +237,12 @@ fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> 
 /// (`SP_Coplanar`, neither flag set) is treated here as kept-whole — the real caller's `ActorVisibility`
 /// (`Editor.dll`, not yet disassembled for this call site) may differ; the one remaining unconfirmed
 /// branch of the two the board item flagged.
-fn split_with_plane_fast(poly: &[Vec3], origin: &Vec3, normal: &Vec3) -> Option<Vec<Vec3>> {
+fn split_with_plane_fast(poly: &[Vec3], normal: &Vec3, w: f32) -> Option<Vec<Vec3>> {
     let n = poly.len();
     if n == 0 {
         return None;
     }
-    let dot = |v: &Vec3| v.sub(origin).dot(normal);
-    let dots: Vec<f32> = poly.iter().map(dot).collect();
+    let dots: Vec<f32> = poly.iter().map(|v| plane_dot(normal, w, v)).collect();
     let positive = dots.iter().any(|&d| d > THRESH_SPLIT_POLY_WITH_PLANE);
     let negative = dots.iter().any(|&d| d < -THRESH_SPLIT_POLY_WITH_PLANE);
     if !negative {
@@ -339,6 +380,48 @@ mod tests {
     use crate::fpoly::FPoly;
     use crate::light::LightInput;
 
+    /// A 100-unit-square beam at `z = 100` seen from a light at the origin.
+    fn beam_clip_poly() -> Vec<Vec3> {
+        vec![
+            Vec3::new(-100.0, -100.0, 100.0),
+            Vec3::new(100.0, -100.0, 100.0),
+            Vec3::new(100.0, 100.0, 100.0),
+            Vec3::new(-100.0, 100.0, 100.0),
+        ]
+    }
+
+    // The beam plane must be NORMALIZED (`FPlane(A,B,C)` runs `SafeNormal`), or
+    // `SplitWithPlaneFast`'s +/-0.25 epsilon is divided by the cross product's length -- order 1e4
+    // for room-scale geometry -- and stops gating anything. This target sits 0.1 units INSIDE the
+    // beam's left plane at its near edge and 10 units outside at its far edge: with the epsilon
+    // alive nothing is decisively positive, so the whole poly is `SP_Back` and the flood stops. An
+    // unnormalized plane calls both ends decisive, splits, and carries a sliver onward -- which is
+    // exactly how native reached leaves UED22 leaves dark.
+    #[test]
+    fn clip_beam_rejects_a_poly_that_only_grazes_the_beam() {
+        let light = Vec3::new(0.0, 0.0, 0.0);
+        // Left beam plane: 0.7071*(x + z) -- 0.1 at x = -199.859, -10 at x = -214.142 (z = 200).
+        let target = vec![
+            Vec3::new(-199.859, -50.0, 200.0),
+            Vec3::new(-199.859, 50.0, 200.0),
+            Vec3::new(-214.142, 50.0, 200.0),
+            Vec3::new(-214.142, -50.0, 200.0),
+        ];
+        assert_eq!(clip_beam(&light, &beam_clip_poly(), &target), None);
+    }
+
+    #[test]
+    fn clip_beam_keeps_a_poly_well_inside_the_beam() {
+        let light = Vec3::new(0.0, 0.0, 0.0);
+        let target = vec![
+            Vec3::new(-50.0, -50.0, 200.0),
+            Vec3::new(-50.0, 50.0, 200.0),
+            Vec3::new(50.0, 50.0, 200.0),
+            Vec3::new(50.0, -50.0, 200.0),
+        ];
+        assert_eq!(clip_beam(&light, &beam_clip_poly(), &target), Some(target));
+    }
+
     // `split_with_plane_fast` regression tests. Before the 2026-08-31 fix, `clip_beam` used a plain
     // Sutherland-Hodgman half-space clip (kept side = `dot >= 0.0`, no epsilon) in place of the real
     // `FPoly::SplitWithPlaneFast` (`Engine.dll 0x10151f90`). Measured against a UNATCO golden, that
@@ -350,7 +433,6 @@ mod tests {
     // while `negative` is true, classifies the WHOLE polygon `SP_Back`, and rejects it outright.
     #[test]
     fn split_with_plane_fast_rejects_a_weakly_kept_poly_wholesale() {
-        let origin = Vec3::new(0.0, 0.0, 0.0);
         let normal = Vec3::new(1.0, 0.0, 0.0);
         // dot(v) = v.x here (origin at 0, normal = +X): 0.1 (kept, but < 0.25) / -10.0 (rejected,
         // well past -0.25).
@@ -361,14 +443,13 @@ mod tests {
             Vec3::new(-10.0, -10.0, 0.0),
         ];
         // A plain Sutherland-Hodgman clip would return Some(4 points) here (2 kept + 2 interpolated).
-        assert_eq!(split_with_plane_fast(&poly, &origin, &normal), None);
+        assert_eq!(split_with_plane_fast(&poly, &normal, 0.0), None);
     }
 
     #[test]
     fn split_with_plane_fast_keeps_a_decisively_positive_poly_whole() {
         // No vertex past -0.25 (`negative` stays false) -- SP_Front: returned UNCLIPPED, even
         // though the plane technically passes near two vertices' epsilon band.
-        let origin = Vec3::new(0.0, 0.0, 0.0);
         let normal = Vec3::new(1.0, 0.0, 0.0);
         let poly = vec![
             Vec3::new(10.0, -10.0, 0.0),
@@ -376,13 +457,12 @@ mod tests {
             Vec3::new(0.1, 10.0, 0.0),
             Vec3::new(0.1, -10.0, 0.0),
         ];
-        assert_eq!(split_with_plane_fast(&poly, &origin, &normal), Some(poly));
+        assert_eq!(split_with_plane_fast(&poly, &normal, 0.0), Some(poly));
     }
 
     #[test]
     fn split_with_plane_fast_clips_a_decisively_split_poly_normally() {
         // Both sides decisively past the epsilon -- behaves like a normal half-space clip.
-        let origin = Vec3::new(0.0, 0.0, 0.0);
         let normal = Vec3::new(1.0, 0.0, 0.0);
         let poly = vec![
             Vec3::new(10.0, -10.0, 0.0),
@@ -390,7 +470,7 @@ mod tests {
             Vec3::new(-10.0, 10.0, 0.0),
             Vec3::new(-10.0, -10.0, 0.0),
         ];
-        let out = split_with_plane_fast(&poly, &origin, &normal).unwrap();
+        let out = split_with_plane_fast(&poly, &normal, 0.0).unwrap();
         assert_eq!(out.len(), 4, "2 kept corners + 2 interpolated crossing points");
         for v in &out {
             assert!(v.x >= -1e-4, "every kept vertex must be on the front side: {v:?}");

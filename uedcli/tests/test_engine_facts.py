@@ -486,6 +486,50 @@ def test_light_apply_allocates_a_lightmap_only_at_a_node_with_vertices():
         assert got == want, f"Editor.dll {va:#x} ({what}): want {want}, found {got}"
 
 
+def test_permeating_light_beam_planes_are_normalized_and_stop_clipping_at_14_vertices():
+    """The per-leaf permeating-light flood's beam clip, which decides which leaves a light reaches.
+
+    `FEditorVisibility::ActorVisibility` (`Editor.dll 0xa6d00`) narrows each portal polygon against
+    the beam from the light through the polygon it entered by: per clip edge it builds
+    `FPlane(Actor->Location, ClipPoly->Vertex[j], ClipPoly->Vertex[jPrev])` and keeps
+    `FPoly::SplitWithPlaneFast`'s front half. Two facts the port needs:
+
+    1. **The plane is NORMALIZED.** `FPlane(A,B,C)` (`core.dll 0xb440`) cross-multiplies `B-A` and
+       `C-A` and then calls `FVector::SafeNormal` (`0x51090`), which returns `FVector(0,0,0)` below
+       `SMALL_NUMBER` and otherwise scales by `1/sqrt(SquareSum)`. Without that, the `+/-0.25`
+       `THRESH_SPLIT_POLY_WITH_PLANE` that `SplitWithPlaneFast` compares each vertex against is
+       divided by the cross product's length (order 1e4 for room-scale geometry) and stops gating
+       anything — the clip keeps slivers the editor rejects whole, and the flood over-reaches.
+    2. **The clip STOPS at 14 vertices, it does not truncate.** `0x100a7083` tests the working
+       poly's `NumVertices >= 14` at the TOP of each edge and jumps out of the loop, recursing with
+       the poly it has.
+
+    Spike: `dev/docs/spikes/2026-09-06-permeating-beam-plane-normalize/`.
+    """
+    for dll, va, want, what in [
+        ("core.dll", 0x1000B4C8, "e8c35b0400", "call 0x10051090 — FVector::SafeNormal in FPlane(A,B,C)"),
+        ("core.dll", 0x100510BC, "f30f1005400a0a10", "movss xmm0, [0x100a0a40] — SMALL_NUMBER"),
+        ("core.dll", 0x100510C4, "0f2fc2761c", "comiss xmm0, xmm2 / jbe — zero vector below it"),
+        ("Editor.dll", 0x100A7083, "83f80e0f8d13010000", "cmp eax, 0xe / jge — stop clipping at 14"),
+        ("Editor.dll", 0x100A7146, "ff1508e00c10", "call FPlane::FPlane(FVector,FVector,FVector)"),
+        ("Editor.dll", 0x100A7152, "ff1530ee0c10", "call FPoly::SplitWithPlaneFast"),
+        ("Engine.dll", 0x1015202F, "0f2f0580672010", "comiss xmm0, [0x10206780] — +0.25"),
+        ("Engine.dll", 0x10152051, "f30f100d80b52010", "movss xmm1, [0x1020b580] — -0.25"),
+    ]:
+        text = (UED22 / dll).read_bytes()
+        off = _rva_to_offset(text, va - _IMAGE_BASE)
+        got = text[off:off + len(want) // 2].hex()
+        assert got == want, f"{dll} {va:#x} ({what}): want {want}, found {got}"
+
+    core = (UED22 / "core.dll").read_bytes()
+    small = struct.unpack("<f", core[_rva_to_offset(core, 0x100A0A40 - _IMAGE_BASE):][:4])[0]
+    assert small == pytest.approx(1e-8), f"SMALL_NUMBER is {small}"
+    engine = (UED22 / "Engine.dll").read_bytes()
+    for rva, want in ((0x10206780, 0.25), (0x1020B580, -0.25)):
+        got = struct.unpack("<f", engine[_rva_to_offset(engine, rva - _IMAGE_BASE):][:4])[0]
+        assert got == want, f"Engine.dll {rva:#x} is {got}, want {want}"
+
+
 # ── POLY TEXALIGN (spike 2026-07-26-unrealed-texalign-semantics) ────────────────────────────────
 
 _TEXALIGN_SPIKE = (Path(__file__).resolve().parents[2] /

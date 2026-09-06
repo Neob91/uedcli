@@ -249,11 +249,16 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   allocate walk (`Editor.dll 0x100a4a90`) allocates a record only at a node with `NumVertices != 0`,
   and a vertex-less node does not CLAIM its surf either, so a surf sitting on both gets its record at
   the later non-empty node; native claimed at the first node it saw
-  (`dev/docs/spikes/2026-09-06-lightmap-alloc-zero-vert-gate/`). Byte-exact **N=1..150** (was 118);
-  bails at **N=151** on the world `Model2`'s LEAF permeating light runs — native gives leaf 74 a run
-  UED22 leaves empty, so every later leaf's `iPermeating` shifts by 2 and `Lights` is 247 vs 245,
-  every other array byte-exact. Same root cause as Island N=123 —
-  `dev/docs/board/inbox/nyc-bar-n-151-world-model2-leaf-permeating-light/`.
+  (`dev/docs/spikes/2026-09-06-lightmap-alloc-zero-vert-gate/`). N=151 is fixed too
+  (`dev/docs/board/done/nyc-bar-n-151-world-model2-leaf-permeating-light/`) — the permeating-light
+  beam clip built `FPlane(Light, ClipPoly[j], ClipPoly[jPrev])` from an UNNORMALIZED cross product,
+  so `SplitWithPlaneFast`'s 0.25 epsilon was divided by that cross product's length (~1e4 at room
+  scale) and stopped gating anything; the flood then carried slivers the editor rejects whole
+  (`dev/docs/spikes/2026-09-06-permeating-beam-plane-normalize/`). Byte-exact **N=1..152** (was 118);
+  bails at **N=153** on the world `Model2`'s PER-SURF light runs — three `LightMap` records get an
+  `iLightActors` run UED22 leaves at -1 (`Lights` 484 vs 478, `LightBits` 6003 vs 5891), with the
+  leaf permeating region clean —
+  `dev/docs/board/inbox/nyc-bar-n-153-world-model2-lightmap-runs-ued22/`.
 - **Island, N=123**: N=6, N=10 and N=93 are all FIXED. N=6 was the Vectors pool — native keeps
   the incremental pool across the repartition instead of rebuilding it from the surviving surfs
   (`dev/docs/spikes/2026-09-06-island-n6-vector-pool/`,
@@ -266,9 +271,15 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   ancestry, `ULevel::SetActorZone`'s own `IsA(AZoneInfo) && !IsA(ALevelInfo)`
   (`dev/docs/board/done/island-n-93-zone-actor-missed-resolve-zone/`). Byte-exact **N=1..122** (was
   92); bails at **N=123** on the world `Model2`'s LEAF light runs — native gives leaf 26 a
-  permeating-light run UED22 leaves empty, so every later leaf's `iPermeating` shifts by 2 and
-  `Lights` is 1729 vs 1727, every other array byte-exact —
-  `dev/docs/board/inbox/island-n-123-world-model2-leaf-permeating-light/`.
+  permeating-light run UED22 leaves empty (1 leaf of 163; `Lights` 1729 vs 1727, every other array
+  byte-exact). NOT the NYC_Bar N=151 beam-plane bug (that fix does not move it): the surviving beam
+  clears its tightest clip edge by 1.79 units, 7x the 0.25 epsilon, and UED22 gives leaf 26 no light
+  at ALL — the signature of a leaf with no portals. Root cause is the PORTAL GRAPH:
+  `FilterThroughSubtree` (`Editor.dll 0xa9970`) clips each infinite node poly with
+  `SplitWithNode(…, VeryPrecise=1)` and DISCARDS an `SP_Coplanar` result, where `zones::clip_poly`
+  is a plain 1e-4 Sutherland-Hodgman that keeps such a face on both sides —
+  `dev/docs/board/inbox/island-n-123-world-model2-leaf-permeating-light/`. Porting it moves the graph
+  the ZONE union-find rides on, so re-verify all five ladders after it.
 - **OceanLab, N=48**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the
