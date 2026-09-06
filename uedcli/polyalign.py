@@ -406,23 +406,24 @@ def _mid(edge):
     return ((a[0] + b[0]) / 2.0, (a[1] + b[1]) / 2.0, (a[2] + b[2]) / 2.0)
 
 
-def _run_adjacency(brush_name: str, data: dict):
-    """Shared-edge adjacency over `data` (idx → (world_verts, normal)). Returns
-    `(adjacency, shared_local)`: `adjacency[i]` = set of neighbour indices; `shared_local[i][j]` =
-    the local edge index of `i` shared with `j`. Enforces §2.4.1 steps 2-3: a face PAIR sharing more
+def _run_adjacency(data: dict):
+    """Shared-edge adjacency over `data` (keyed by `(brush, idx)` → (world_verts, normal)). Returns
+    `(adjacency, shared_local)`: `adjacency[k]` = set of neighbour keys; `shared_local[k][j]` = the
+    local edge index of `k` shared with `j`. Enforces §2.4.1 steps 2-3: a face PAIR sharing more
     than one edge, or an EDGE shared by more than two faces, exits 2 — either makes the chord
-    ambiguous."""
+    ambiguous. Brush-identity-blind: a shared edge is a world-point coincidence, same test whether
+    both faces are on one brush or two."""
     idxs = list(data)
-    fe = {i: _face_edges(data[i][0]) for i in idxs}
-    adjacency = {i: set() for i in idxs}
-    shared_local: dict = {i: {} for i in idxs}
+    fe = {k: _face_edges(data[k][0]) for k in idxs}
+    adjacency = {k: set() for k in idxs}
+    shared_local: dict = {k: {} for k in idxs}
     for ai in range(len(idxs)):
         for bi in range(ai + 1, len(idxs)):
             a, b = idxs[ai], idxs[bi]
             shared = [(ka, kb) for ka, ea in fe[a] for kb, eb in fe[b] if _edges_coincide(ea, eb)]
             if len(shared) > 1:
                 raise PolyAlignError(
-                    f"brush poly align run: faces {brush_name}:{a} and {brush_name}:{b} share "
+                    f"brush poly align run: faces {a[0]}:{a[1]} and {b[0]}:{b[1]} share "
                     f"{len(shared)} edges — the run chord is ambiguous, not a simple strip")
             if shared:
                 ka, kb = shared[0]
@@ -431,14 +432,14 @@ def _run_adjacency(brush_name: str, data: dict):
                 shared_local[a][b] = ka
                 shared_local[b][a] = kb
     over = []
-    for i in idxs:                                       # one local edge of i shared with ≥2 faces
+    for k in idxs:                                       # one local edge of k shared with ≥2 faces
         by_edge: dict = {}
-        for nbr, ka in shared_local[i].items():
+        for nbr, ka in shared_local[k].items():
             by_edge.setdefault(ka, []).append(nbr)
-        over += [(i, nbrs) for nbrs in by_edge.values() if len(nbrs) >= 2]
+        over += [(k, nbrs) for nbrs in by_edge.values() if len(nbrs) >= 2]
     if over:
-        listed = "; ".join(f"{brush_name}:{i} with "
-                           + ", ".join(f"{brush_name}:{n}" for n in sorted(nbrs)) for i, nbrs in over)
+        listed = "; ".join(f"{k[0]}:{k[1]} with "
+                           + ", ".join(f"{n[0]}:{n[1]}" for n in sorted(nbrs)) for k, nbrs in over)
         raise PolyAlignError(
             f"brush poly align run: an edge is shared by more than two faces ({listed}) — the set "
             f"is not a surface strip")
@@ -452,43 +453,43 @@ def _across_root_sign(c):
     return c if c[k] < 0 else _neg(c)
 
 
-def _run_prewalk(brush_name: str, targets, actor):
-    """§2.4.1 steps 1-8: validate the set and DERIVE the ordered walk (root and direction from poly
-    index alone). Returns `(data, walk, closed)` where `walk` is `[(idx, entry_edge, exit_edge), …]`
-    in walk order, each edge a `(pa, pb)` world-point pair (a terminal face's missing seam is its
-    opposite quad edge). Raises `PolyAlignError` naming the offender for every failure path."""
-    # step 1 — single brush, ≥ 2 faces
-    brushes = {bn for bn, _ in targets}
-    if len(brushes) != 1:
-        raise PolyAlignError("brush poly align run: all faces must belong to ONE brush, got: "
-                             + ", ".join(sorted(brushes)))
+def _run_prewalk(level: Level, targets):
+    """§2.4.1 steps 1-8: validate the set and DERIVE the ordered walk (root and direction from the
+    `(brush, poly)` key alone — spans any number of brushes). Returns `(data, walk, closed)` where
+    `walk` is `[((bn, idx), entry_edge, exit_edge), …]` in walk order, each edge a `(pa, pb)`
+    world-point pair (a terminal face's missing seam is its opposite quad edge). Raises
+    `PolyAlignError` naming the offender for every failure path."""
+    # step 1 — ≥ 2 faces (brush count is unconstrained; step 5's connectivity check is what actually
+    # ensures the set forms one run, whether that's one brush or several)
     if len(targets) < 2:
         raise PolyAlignError("brush poly align run: need at least 2 faces to form a run")
 
     # step 2 — world geometry + unit normal; every zero-area face named (batch)
     data: dict = {}
     degenerate = []
-    for _, i in targets:
+    for bn, i in targets:
+        actor = level.actors[bn]
         wv = _world_verts(actor, actor.brush.polys[i])
         n = newell(wv)
         if _len(n) < 1e-9:
-            degenerate.append(i)
+            degenerate.append((bn, i))
         else:
-            data[i] = (wv, _unit(n))
+            data[(bn, i)] = (wv, _unit(n))
     if degenerate:
         raise PolyAlignError("brush poly align run: zero-area face(s) — "
-                             + ", ".join(f"{brush_name}:{i}" for i in degenerate))
+                             + ", ".join(f"{bn}:{i}" for bn, i in degenerate))
 
-    adjacency, shared_local = _run_adjacency(brush_name, data)   # steps 2-3
+    adjacency, shared_local = _run_adjacency(data)   # steps 2-3
 
     # step 4 — BRANCH CHECK: a run cannot fork (degree ≥ 3). Always carries the --item Side hint.
-    branched = sorted(i for i in data if len(adjacency[i]) >= 3)
+    branched = sorted(k for k in data if len(adjacency[k]) >= 3)
     if branched:
-        listed = ", ".join(f"{brush_name}:{i} ({len(adjacency[i])} neighbours)" for i in branched)
+        listed = ", ".join(f"{bn}:{i} ({len(adjacency[(bn, i)])} neighbours)" for bn, i in branched)
+        names = " ".join(sorted({bn for bn, _ in branched}))
         raise PolyAlignError(
             f"brush poly align run: {listed} — a run cannot branch; align each arm as its own set. "
             f"If these are a cylinder's caps, exclude them: "
-            f"`brush poly find {brush_name} --item Side | brush poly align run -`")
+            f"`brush poly find {names} --item Side | brush poly align run -`")
 
     # step 5 — CONNECTIVITY: one component (after step 4, max degree ≤ 2 ⇒ a simple path or cycle)
     seen: set = set()
@@ -502,16 +503,18 @@ def _run_prewalk(brush_name: str, targets, actor):
         others = sorted(set(data) - seen)
         raise PolyAlignError(
             "brush poly align run: the faces are not one connected run — "
-            + ", ".join(f"{brush_name}:{i}" for i in others) + " form a separate component")
+            + ", ".join(f"{bn}:{i}" for bn, i in others) + " form a separate component")
 
     # step 6 — NON-QUAD (after branch, so a cylinder+cap still shows the branch hint, not this)
-    nonquad = sorted(i for i in data if len(data[i][0]) != 4)
+    nonquad = sorted(k for k in data if len(data[k][0]) != 4)
     if nonquad:
         raise PolyAlignError(
             "brush poly align run: non-quad face(s) (a run walks quads) — "
-            + ", ".join(f"{brush_name}:{i} ({len(data[i][0])} verts)" for i in nonquad))
+            + ", ".join(f"{bn}:{i} ({len(data[(bn, i)][0])} verts)" for bn, i in nonquad))
 
-    # step 7 — ROOT + WALK DIRECTION, derived from poly index
+    # step 7 — ROOT + WALK DIRECTION, derived from the (brush, poly) key alone (tuple-sorted: brush
+    # name first, then poly index — an arbitrary but deterministic tiebreak; it only fixes phase zero
+    # and initial across-axis sign, never correctness — see rationale/polyalign.md "run: the frame")
     ends = [i for i in data if len(adjacency[i]) == 1]
     closed = not ends
     root = min(data) if closed else min(ends)
@@ -552,9 +555,7 @@ def _run_prewalk(brush_name: str, targets, actor):
 
 def _run_align(level: Level, targets, turn_uu: int, fit_perimeter: bool,
                resolve_dims: Callable[[str], tuple[int, int]] | None = None) -> list[str]:
-    brush_name = targets[0][0]
-    actor = level.actors[brush_name]
-    data, walk, closed = _run_prewalk(brush_name, targets, actor)
+    data, walk, closed = _run_prewalk(level, targets)
 
     tile_texels = None
     if fit_perimeter:                                   # §2.4.4 guards, then the texture requirement
@@ -571,20 +572,20 @@ def _run_align(level: Level, targets, turn_uu: int, fit_perimeter: bool,
         # both broken and untextured is diagnosed structurally first (step-5 spec §3) — poly.texture
         # is model data `polyalign` already reads elsewhere (`find_faces`'s texture filter), so this
         # needs no resolver.
-        refs_by_idx = {idx: actor.brush.polys[idx].texture for idx, _, _ in walk}
-        missing = [idx for idx, ref in refs_by_idx.items() if ref is None]
+        refs_by_idx = {(bn, i): level.actors[bn].brush.polys[i].texture for (bn, i), _, _ in walk}
+        missing = [(bn, i) for (bn, i), ref in refs_by_idx.items() if ref is None]
         if missing:
             raise PolyAlignError(
                 f"brush poly align run: --fit-perimeter needs every face textured — "
                 f"{len(missing)} face(s) carry no texture — "
-                + ", ".join(f"{brush_name}:{i}" for i in sorted(missing)))
+                + ", ".join(f"{bn}:{i}" for bn, i in sorted(missing)))
         distinct = {ref.casefold() for ref in refs_by_idx.values()}
         if len(distinct) > 1:
             raise PolyAlignError(
                 "brush poly align run: --fit-perimeter needs ONE texture across the whole run — "
                 "faces carry different textures, so one density cannot satisfy two — split the run "
                 "or set one texture first: "
-                + ", ".join(f"{brush_name}:{i} ({ref})" for i, ref in sorted(refs_by_idx.items())))
+                + ", ".join(f"{bn}:{i} ({ref})" for (bn, i), ref in sorted(refs_by_idx.items())))
         ref = next(iter(refs_by_idx.values()))           # the one texture, original casing
         w, h = resolve_dims(ref)                         # may raise ValueError; propagates as-is
         tile_texels = w if (turn_uu // 16384) % 2 == 0 else h   # the along-run advance's landed axis
@@ -608,8 +609,8 @@ def _run_align(level: Level, targets, turn_uu: int, fit_perimeter: bool,
     prev_c = _across_root_sign(_cross(data[idx0][1], _unit(_sub(_mid(xe0), _mid(ee0)))))
 
     frames = []                                          # (base_w, tu_w, tv_w) per face, walk order
-    for pos, (idx, ee, xe) in enumerate(walk):
-        wv, n = data[idx]
+    for pos, ((bn, idx), ee, xe) in enumerate(walk):
+        wv, n = data[(bn, idx)]
         m_in, m_out = _mid(ee), _mid(xe)
         t_hat = _unit(_sub(m_out, m_in))
         if pos == 0:
@@ -633,10 +634,11 @@ def _run_align(level: Level, targets, turn_uu: int, fit_perimeter: bool,
         rel = _add(_scale(tu_w, u_in / _dot(tu_w, tu_w)), _scale(tv_w, v_in / _dot(tv_w, tv_w)))
         base_w = _sub(m_in, rel)
         frames.append((base_w, tu_w, tv_w))
+        actor = level.actors[bn]
         _write_world_frame(actor, actor.brush.polys[idx], base_w, tu_w, tv_w, (0, 0))
 
     _report_seam_shear(walk, frames)
-    return [brush_name]
+    return sorted({bn for bn, _ in data})
 
 
 def _report_seam_shear(walk, frames) -> None:

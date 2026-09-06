@@ -141,10 +141,11 @@ The touched faces → stdout as `BRUSH:idx` selectors, a summary → stderr.
   across it, the phase carried across every seam. It wraps a cylinder (U advances by each facet's
   chord `2·r·sin(π/N)`, V along the axis), walks a wall run, or follows a flat/curved **bend**.
   Coplanar sets are allowed (a curved track bed). `run` **derives its own walk order** from the
-  geometry and poly index, so the order faces are passed in has no bearing on the result. It must be
-  one brush and one un-forking strip: a set that **branches** (a face with 3+ neighbours — a
-  cylinder's cap touches every side) or is **disconnected** exits 2 naming the faces, with the hint
-  to exclude caps via `brush poly find <brush> --item Side`. V runs **down** (a UE1 texture's `V=0`
+  geometry, so the order faces are passed in has no bearing on the result — and spans any number of
+  brushes (a straight corridor brush run into a corner brush walks as one continuous run). It must be
+  one un-forking strip: a set that **branches** (a face with 3+ neighbours — a cylinder's cap touches
+  every side) or is **disconnected** exits 2 naming the faces, with the hint to exclude caps via
+  `brush poly find <brush> --item Side`. V runs **down** (a UE1 texture's `V=0`
   row is its top). On a subtractive brush's inner wall U reads mirrored (the same polarity-blindness
   as `wall`/`floor`), so a run and the walls around it stay consistent.
 - **`--turn UU`** (`run` only) rotates the texture uniformly in each face's own run frame, in unreal

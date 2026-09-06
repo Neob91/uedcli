@@ -25,8 +25,8 @@ def _D(*xyz):
     return tuple(Decimal(str(c)) for c in xyz)
 
 
-def _brush(name, brush, loc=(0, 0, 0), rot=None):
-    a = make_brush_actor(name, brush, location=tuple(Decimal(str(c)) for c in loc))
+def _brush(name, brush, loc=(0, 0, 0), rot=None, csg="add"):
+    a = make_brush_actor(name, brush, location=tuple(Decimal(str(c)) for c in loc), csg=csg)
     if rot is not None:
         a.props.append(("Rotation", f"(Pitch={rot[0]},Yaw={rot[1]},Roll={rot[2]})"))
     return a
@@ -56,13 +56,25 @@ def _assert_seam_continuous(a1, p1, a2, p2, *, eps=1e-3):
         assert abs(u1[1] - u2[1]) < eps, f"V discontinuity at {s}: {u1} vs {u2}"
 
 
-def _brush_from_quads(name, quads, loc=(0, 0, 0)):
+def _brush_from_quads(name, quads, loc=(0, 0, 0), csg="add"):
     """A brush actor at `loc` whose polys are the given quads (each a list of four (x,y,z) verts) —
-    for hand-assembled run fixtures no builder emits (a varying cross section, a T-junction)."""
+    for hand-assembled run fixtures no builder emits (a varying cross section, a T-junction, a
+    multi-brush chain split across actors)."""
     from uedcli.model import Brush, Polygon
     from uedcli.builders import make_brush_actor
     polys = [Polygon(vertices=[tuple(float(c) for c in v) for v in q]) for q in quads]
-    return make_brush_actor(name, Brush("Model", polys), location=tuple(Decimal(str(c)) for c in loc))
+    return make_brush_actor(name, Brush("Model", polys),
+                            location=tuple(Decimal(str(c)) for c in loc), csg=csg)
+
+
+def _split_into_actors(source_actor, poly_idxs, prefix):
+    """Rebuild each of `source_actor`'s polys at `poly_idxs` as its own single-poly brush actor
+    (named f"{prefix}{n}"), reusing the SAME world vertices — `source_actor` in every caller here
+    sits at loc=(0,0,0) with no rotation, so local verts == world verts already. Splits one brush's
+    closed/curved run across many actors without hand-deriving new geometry (a bend or a full ring
+    is easy to get subtly wrong by hand; the source brush's own builder already got it right)."""
+    return [_brush_from_quads(f"{prefix}{n}", [[tuple(v) for v in source_actor.brush.polys[i].vertices]])
+            for n, i in enumerate(poly_idxs)]
 
 
 def _run_seam_shear(actor, idxs):
@@ -354,12 +366,87 @@ def test_run_rejects_cap_face_with_the_item_side_hint():
     assert f"Tower:{caps[0]}" in msg                     # the cap is among the named offenders
 
 
-def test_run_rejects_multi_brush():
-    a = _brush("C1", cylinder(256, 128, 8), loc=(0, 0, 0))
-    b = _brush("C2", cylinder(256, 128, 8), loc=(500, 0, 0))
+def test_run_two_brushes_sharing_an_edge_walks_as_one_run():
+    # A run spans any number of brushes now (the one-brush guard is gone) — adjacency is a pure
+    # world-point edge match, brush-identity-blind (§ design note "cross-brush edge matching").
+    a = _brush_from_quads("A", [[(0, 0, 0), (64, 0, 0), (64, 64, 0), (0, 64, 0)]])
+    b = _brush_from_quads("B", [[(64, 0, 0), (128, 0, 0), (128, 64, 0), (64, 64, 0)]])
     lv = _level(a, b)
-    with pytest.raises(polyalign.PolyAlignError, match="ONE brush"):
-        polyalign.align(lv, ["C1:0", "C2:0"], "run")
+    touched = polyalign.align(lv, ["A:0", "B:0"], "run")
+    assert touched == ["A", "B"]
+    _assert_seam_continuous(a, a.brush.polys[0], b, b.brush.polys[0])
+
+
+def test_run_disconnected_multi_brush_still_rejected_by_connectivity():
+    # Two brushes that do NOT share an edge: no longer caught by a brush-count guard, but still
+    # caught by the existing connectivity check (step 5) — now naming the actual offending brush.
+    a = _brush_from_quads("A", [[(0, 0, 0), (64, 0, 0), (64, 64, 0), (0, 64, 0)]])
+    b = _brush_from_quads("B", [[(500, 0, 0), (564, 0, 0), (564, 64, 0), (500, 64, 0)]])
+    with pytest.raises(polyalign.PolyAlignError, match="not one connected run") as e:
+        polyalign.align(_level(a, b), ["A:0", "B:0"], "run")
+    assert "B:0" in str(e.value)                          # named by its real brush, not a stale one
+
+
+def test_run_branch_check_names_the_offending_brush_across_actors():
+    # A T-junction split across FOUR separate brush actors (one poly each) — the branch check and its
+    # --item Side hint must name the actually-branching brush, not assume a single shared brush_name.
+    center = _brush_from_quads("Center", [[(0, 0, 0), (64, 0, 0), (64, 64, 0), (0, 64, 0)]])
+    n1 = _brush_from_quads("N1", [[(64, 0, 0), (128, 0, 0), (128, 64, 0), (64, 64, 0)]])
+    n2 = _brush_from_quads("N2", [[(0, 64, 0), (64, 64, 0), (64, 128, 0), (0, 128, 0)]])
+    n3 = _brush_from_quads("N3", [[(0, -64, 0), (64, -64, 0), (64, 0, 0), (0, 0, 0)]])
+    lv = _level(center, n1, n2, n3)
+    with pytest.raises(polyalign.PolyAlignError, match="cannot branch") as e:
+        polyalign.align(lv, ["Center:0", "N1:0", "N2:0", "N3:0"], "run")
+    msg = str(e.value)
+    assert "--item Side" in msg
+    assert "Center:0" in msg                              # the branching face, named by its own brush
+
+
+def test_run_fit_perimeter_closes_a_ring_split_across_many_brushes():
+    # The racetrack case this was built for: a closed run whose faces are on DIFFERENT brush actors
+    # (here, each Side face of a small cylinder split into its own single-poly actor) still closes to
+    # a whole number of tiles, exactly like the single-brush closed-ring case.
+    src = _brush("Ring", cylinder(200, 100, 6), loc=(0, 0, 0))
+    for p in src.brush.polys:
+        p.texture = "Pkg.Tex"
+    sides = polyalign.find_faces(src, "Ring", item="Side")
+    actors = _split_into_actors(src, sides, "Seg")
+    for a in actors:
+        a.brush.polys[0].texture = "Pkg.Tex"
+    lv = _level(*actors)
+    tokens = [f"{a.name}:0" for a in actors]
+    touched = polyalign.align(lv, tokens, "run", fit_perimeter=True, resolve_dims=lambda ref: (256, 256))
+    assert touched == sorted(a.name for a in actors)
+    first, last = actors[0], actors[-1]
+    shared = _shared_world_points(first, first.brush.polys[0], last, last.brush.polys[0])
+    assert len(shared) == 2
+    s = shared[0]
+    gap = polyalign.face_uv(last, last.brush.polys[0], s)[0] - polyalign.face_uv(first, first.brush.polys[0], s)[0]
+    assert abs(gap % 256) < 1e-3                          # whole number of TILES: exact meet
+
+
+def test_run_turn_multi_brush_shear_report_fires_at_the_boundary(capsys):
+    # A non-quarter --turn across a brush boundary still shears and still reports it — the seam-shear
+    # report is brush-agnostic (it reads `walk`'s edge tuples, never brush identity).
+    src, sides = _flat_bend()
+    actors = _split_into_actors(src, sides, "Seg")
+    lv = _level(*actors)
+    polyalign.align(lv, [f"{a.name}:0" for a in actors], "run", turn=8192)
+    err = capsys.readouterr().err
+    assert "worst seam shear" in err
+    assert "dU=0.00 dV=0.00" not in err                   # 8192 on a flat bend shears both axes
+
+
+def test_run_mixed_csg_polarity_continuous_across_brush_boundary():
+    # One CSG_Add brush run into one CSG_Subtract brush: the across-sign propagation (never trusted
+    # from a face's raw normal sign, always continuity-propagated) stays continuous across the
+    # boundary — pins the rationale doc's "invariance under n̂ → −n̂" claim specifically cross-brush.
+    a = _brush_from_quads("Add", [[(0, 0, 0), (64, 0, 0), (64, 64, 0), (0, 64, 0)]], csg="add")
+    b = _brush_from_quads("Sub", [[(64, 0, 0), (128, 0, 0), (128, 64, 0), (64, 64, 0)]], csg="subtract")
+    lv = _level(a, b)
+    touched = polyalign.align(lv, ["Add:0", "Sub:0"], "run")
+    assert touched == ["Add", "Sub"]
+    _assert_seam_continuous(a, a.brush.polys[0], b, b.brush.polys[0])
 
 
 # --------------------------------------------------------------------- run §4.2 pins

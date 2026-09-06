@@ -67,6 +67,17 @@ poly index and keeps the open seam at `sides[-1] | sides[0]`, where `--ring` put
 choice reverses U on every existing wrap; nothing in the shipped suite caught that, so it has its own
 pin.
 
+**Multi-brush.** Every step above keys off `(brush, poly)` pairs, not a bare poly index, and none of
+the algorithms care: adjacency is a world-point edge match (`_edges_coincide`), already
+brush-identity-blind before this even mattered, and branch/connectivity/non-quad/root-and-direction
+all just walk whatever graph that adjacency produces. The one genuinely new code path is cross-brush
+edge matching itself — `wall`/`floor`'s existing multi-actor precedent only proves the world-space
+math (`_world_verts` per actor), never edge-coincidence matching, since those modes have no set
+relationship to begin with. The root/phase tiebreak extends unchanged: sorting `(brush, poly)` tuples
+sorts by brush name first, an arbitrary-but-deterministic choice in the same spirit as the
+poly-index tiebreak above — it only moves where phase zero and the initial across-axis sign land,
+never correctness.
+
 ## `run`: the frame
 
 Orthogonal axes; phase measured on the centreline (the seam midpoints). Per face the run tangent is

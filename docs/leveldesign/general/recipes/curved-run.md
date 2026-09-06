@@ -30,7 +30,8 @@ brush poly find Tower --item Side | brush poly align run -
 
 - `align run` **derives its own walk order**, so the order faces arrive in has no bearing on the
   result — a `brush poly find … | align run -` pipe is safe however `find` orders its output.
-- It must be one un-forking strip of one brush. A set that **branches** (a face touching 3+ others —
+- It must be one un-forking strip — any number of brushes, so a straight corridor run into a corner
+  brush walks as one continuous run. A set that **branches** (a face touching 3+ others —
   a cylinder's cap touches every side) or is **disconnected** exits 2 naming the faces, with the hint
   to filter with `--item Side`.
 - `--turn UU` rotates the whole run's texture (16384 = 90°). A cylinder wrap stays exact at any angle;
