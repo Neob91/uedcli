@@ -936,11 +936,30 @@ def preview_textures(actors, args, solved) -> "preview.TextureData":
     return preview.TextureData(by_ref=by_ref, masked=masked)
 
 
+def _is_hidden_ed(actor, project) -> tuple[bool, str | None]:
+    """`actor`'s effective bHiddenEd (instance override else class default), plus a stderr note
+    when the class default couldn't be resolved. Unresolvable degrades to not-hidden (matching this
+    file's schema-unavailable convention below) rather than raising — but unlike a genuinely
+    ambiguous case, this one is silent-by-default in the COMMON no-project workflow (LevelInfo etc.
+    carry no instance override, so the class-default lookup runs for nearly every point actor), so
+    the note is not optional here."""
+    instance = {k.casefold(): v for k, v in actor.props}
+    if "bhiddened" in instance:
+        return instance["bhiddened"].strip() == "True", None
+    try:
+        defaults = resources.class_defaults(actor.cls, project)
+    except (SchemaError, config.ConfigError) as e:
+        return False, (f"point actor {actor.name!r}: schema unavailable ({actor.cls}) — cannot "
+                       f"check its class-default bHiddenEd, assuming visible ({e})")
+    return str(defaults.get(("bhiddened", 0), "False")).strip() == "True", None
+
+
 def _preview_point_data(actors, args, show: set[str]) -> dict:
     """Resolve per-point-actor render data for the preview. `show` is the validated `--show` member set.
     Brush actors are skipped (their geometry needs no schema — which is why a pure-brush `--faces wire`
-    preview works with no game install). A point actor whose schema is unresolvable degrades to an
-    unscaled labelled marker + a one-line stderr note, NEVER a traceback."""
+    preview works with no game install). A `bHiddenEd` point actor (instance or class default, e.g.
+    `LevelInfo`) is dropped, matching UnrealEd's editor viewport. A point actor whose schema is
+    unresolvable degrades to an unscaled labelled marker + a one-line stderr note, NEVER a traceback."""
     point_actors = [a for a in actors if a.brush is None]
     if not point_actors:
         return {}
@@ -951,9 +970,21 @@ def _preview_point_data(actors, args, show: set[str]) -> dict:
         project = resources.resolve_project(args)
     except ProjectError:
         project = None
+    notes: list[str] = []
+    visible = []
+    for a in point_actors:
+        hidden, note = _is_hidden_ed(a, project)
+        if note:
+            notes.append(note)
+        if not hidden:
+            visible.append(a)
+    point_actors = visible
+    if not point_actors:
+        for line in notes:
+            print(line, file=sys.stderr)
+        return {}
     resolver = resources.texture_resolver(project)
     data: dict = {}
-    notes: list[str] = []
     for a in point_actors:
         try:
             pr, n = _resolve_point_render(a, project, resolver=resolver,

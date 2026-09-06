@@ -202,6 +202,10 @@ match what UnrealEd's viewports show so a diagram reads like the editor.
   values are uedcli's own white-bg re-tuning; `test_preview.py` pins the classify→palette→render
   wiring (a subtracted brush renders in the `subtract` pair, a point actor is never painted
   CSG-additive), not the literal RGB numbers.
+- `bHiddenEd=True` point actors are not drawn — matches UnrealEd, which never renders a
+  hidden-in-editor actor in its viewports (no runtime toggle; the property must be unset to see
+  it). Checked against the instance value, else the actor's class default (`LevelInfo`'s class
+  default is `bHiddenEd=True`, so it is skipped like any other hidden actor).
 - Point-actor sprites + radii/reach overlays ✅ source — sizes are source-exact from the UE1 v200
   tree (`spikes/2026-07-21-unrealed-sprite-radii-rendering.md`), pinned in `test_engine_facts.py`:
   - DT_Sprite footprint = `DrawScale·USize × DrawScale·VSize` (1 texel = 1 UU at DrawScale 1),
