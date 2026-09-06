@@ -88,6 +88,7 @@ def _find(args, src) -> int:
     if args.json:
         import json
         rows = [{
+            "ref": m.pair.brush_a, "ref_poly": m.pair.poly_a,
             "candidate": m.candidate, "poly": m.poly,
             "plane": m.pair.plane.plane,
             "normal_ref": list(m.pair.plane.normal_a),
@@ -103,7 +104,8 @@ def _find(args, src) -> int:
         for m in matches:
             print(f"{m.candidate}:{m.poly}")
         for m in matches:
-            print(f"{args.relative_to} <-> {m.candidate}:{m.poly}  plane={m.pair.plane.plane} "
+            print(f"{m.pair.brush_a}:{m.pair.poly_a} <-> {m.candidate}:{m.poly}  "
+                  f"plane={m.pair.plane.plane} "
                   f"gap={relation._fmt(abs(m.pair.plane.distance))} "
                   f"footprint={m.pair.footprint_2d}", file=sys.stderr)
     return 0
