@@ -429,7 +429,7 @@ def test_find_candidates_ranks_and_caps_per_candidate():
     near = _brush("Near", cube(64, 64, 8), loc=(0, 0, 8))     # flush on top
     far = _brush("Far", cube(64, 64, 8), loc=(0, 0, 100))     # same axis, far gap
     level = _level(ref, near, far)
-    matches = relation.find_candidates(level, "Wall", ["Near", "Far"], top=1)
+    matches = relation.find_candidates(level, "Wall", ["Near", "Far"], top=1).matches
     assert {m.candidate for m in matches} <= {"Near", "Far"}
     near_matches = [m for m in matches if m.candidate == "Near"]
     assert len(near_matches) == 1
@@ -441,7 +441,7 @@ def test_find_candidates_max_gap_filters_out_far():
     near = _brush("Near", cube(64, 64, 8), loc=(0, 0, 8))
     far = _brush("Far", cube(64, 64, 8), loc=(0, 0, 100))
     level = _level(ref, near, far)
-    matches = relation.find_candidates(level, "Wall", ["Near", "Far"], max_gap=1.0)
+    matches = relation.find_candidates(level, "Wall", ["Near", "Far"], max_gap=1.0).matches
     assert {m.candidate for m in matches} == {"Near"}
 
 
@@ -450,7 +450,7 @@ def test_find_candidates_min_gap_filters_out_near():
     near = _brush("Near", cube(64, 64, 8), loc=(0, 0, 8))
     far = _brush("Far", cube(64, 64, 8), loc=(0, 0, 100))
     level = _level(ref, near, far)
-    matches = relation.find_candidates(level, "Wall", ["Near", "Far"], min_gap=70.0)
+    matches = relation.find_candidates(level, "Wall", ["Near", "Far"], min_gap=70.0).matches
     assert {m.candidate for m in matches} == {"Far"}
 
 
@@ -458,9 +458,9 @@ def test_find_candidates_footprint_filter():
     ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
     small = _brush("Small", cube(8, 8, 8), loc=(0, 0, 8))     # small footprint, contained
     level = _level(ref, small)
-    contained = relation.find_candidates(level, "Wall", ["Small"], footprint={"contains"})
+    contained = relation.find_candidates(level, "Wall", ["Small"], footprint={"contains"}).matches
     assert len(contained) == 1
-    none_only = relation.find_candidates(level, "Wall", ["Small"], footprint={"none"})
+    none_only = relation.find_candidates(level, "Wall", ["Small"], footprint={"none"}).matches
     assert none_only == []
 
 
@@ -470,7 +470,7 @@ def test_find_candidates_plane_filter():
     parallel = _brush("Parallel", cube(64, 64, 8), loc=(0, 0, 20))
     level = _level(ref, coplanar, parallel)
     coplanar_only = relation.find_candidates(
-        level, "Wall", ["Coplanar", "Parallel"], plane="coplanar")
+        level, "Wall", ["Coplanar", "Parallel"], plane="coplanar").matches
     assert {m.candidate for m in coplanar_only} == {"Coplanar"}
 
 
@@ -479,6 +479,125 @@ def test_find_candidates_min_gap_exceeds_max_gap_raises():
     level = _level(a)
     with pytest.raises(relation.RelationError):
         relation.find_candidates(level, "Wall", [], min_gap=10.0, max_gap=1.0)
+
+
+def test_find_candidates_near_miss_count_surfaces_hidden_footprint_none_pairs():
+    # Near is offset diagonally (both X and Y) from Wall -- every parallel-face pair has
+    # footprint_2d "none" (their projected footprints genuinely don't overlap on either axis),
+    # and the true in-plane gap on the closest pairs is well within --max-gap. The implicit
+    # footprint=none exclusion hides these from `matches`, but they must be counted in
+    # near_miss_count so a caller isn't left thinking nothing is nearby at all.
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    near = _brush("Near", cube(64, 64, 8), loc=(100, 100, 0))
+    level = _level(ref, near)
+    result = relation.find_candidates(level, "Wall", ["Near"], max_gap=200.0)
+    assert result.matches == []
+    assert result.near_miss_count > 0
+
+
+def test_find_candidates_near_miss_count_is_distinct_candidate_faces_not_pairs():
+    # Regression: near_miss_count must count DISTINCT (candidate, poly_b) faces, not raw
+    # ref-vs-candidate PAIRS -- a single candidate face can pair with more than one ref face
+    # (e.g. a cube's own +X face is "parallel" to a ref's own +X AND -X faces), which would
+    # otherwise double- (or worse) count the same near candidate face. Each of Near's 6 faces
+    # pairs with 2 of Wall's (same axis, either direction) -- 12 raw qualifying pairs total --
+    # but the count must read exactly 6 distinct Near faces, not 12 raw pairs.
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    near = _brush("Near", cube(64, 64, 8), loc=(100, 100, 0))
+    level = _level(ref, near)
+    result = relation.find_candidates(level, "Wall", ["Near"], max_gap=200.0)
+    assert result.near_miss_count == 6
+
+
+def test_find_candidates_near_miss_count_zero_when_footprint_explicit():
+    # Once the caller explicitly names a --footprint set (even one that includes "none"), the
+    # implicit rule isn't "hiding" anything -- near_miss_count must read 0, not double-count.
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    near = _brush("Near", cube(64, 64, 8), loc=(100, 0, 0))
+    level = _level(ref, near)
+    result = relation.find_candidates(level, "Wall", ["Near"], max_gap=200.0, footprint={"none"})
+    assert len(result.matches) == 1
+    assert result.near_miss_count == 0
+
+
+def test_find_candidates_near_miss_count_ignores_perpendicular_only_alignment():
+    # Regression for a real false-positive: Far is 1000uu away from Wall along X only, so its
+    # Y/Z-normal faces sit at the SAME Y/Z position as Wall's (only X differs) -- those pairs'
+    # `plane.distance` (measured along THEIR OWN normal, Y or Z) reads near 0, even though the
+    # true in-plane (X) separation is ~1000uu. A near-miss check that only looked at
+    # `plane.distance` would wrongly call this "nearby"; it must also require the actual
+    # footprint gap to be within --max-gap.
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    far = _brush("Far", cube(64, 64, 8), loc=(1000, 0, 0))
+    level = _level(ref, far)
+    result = relation.find_candidates(level, "Wall", ["Far"], max_gap=1.0)
+    assert result.matches == []
+    assert result.near_miss_count == 0
+
+
+def test_passes_gap_and_plane_max_gap_zero_tolerates_float_dust():
+    # A pair whose true gap is exactly 0 but carries float residual (e.g. from a rotated
+    # placement) must still pass --max-gap 0 -- this is the exact false-negative a real subagent
+    # hit: measure reported "-0.000uu" (genuinely flush) but find --max-gap 0 found nothing.
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    top_a = _face_by_normal(ref.brush, (0.0, 0.0, 1.0))
+    near = _brush("Near", cube(64, 64, 8), loc=(0, 0, 8))
+    bottom_b = _face_by_normal(near.brush, (0.0, 0.0, -1.0))
+    rel = relation.plane_relationship(ref, top_a, near, bottom_b)
+    dusty = relation.PlaneRelation(
+        plane=rel.plane, normal_a=rel.normal_a, normal_b=rel.normal_b,
+        distance=-1e-9)   # true zero, with float dust
+    pair = relation.PairFace(brush_a="Wall", poly_a=0, brush_b="Near", poly_b=0,
+                              plane=dusty, footprint_2d="contains_a_in_b",
+                              deltas=relation.Deltas(centroid_u=0, centroid_v=0,
+                                                      edge_u_label="U-min", edge_u=0,
+                                                      edge_v_label="V-min", edge_v=0),
+                              footprint_gap=0.0)
+    assert relation._passes_gap_and_plane(pair, max_gap=0.0, min_gap=None, plane=None)
+
+
+def test_footprint_bbox_gap_zero_when_overlapping():
+    assert relation._footprint_bbox_gap([(0, 0), (10, 0), (10, 10), (0, 10)],
+                                         [(5, 5), (15, 5), (15, 15), (5, 15)]) == 0.0
+
+
+def test_footprint_bbox_gap_single_axis_separation():
+    # Same V range, U ranges separated by exactly 4 (10 to 14).
+    a = [(0, 0), (10, 0), (10, 10), (0, 10)]
+    b = [(14, 0), (24, 0), (24, 10), (14, 10)]
+    assert relation._footprint_bbox_gap(a, b) == 4.0
+
+
+def test_find_candidates_near_miss_disabled_without_max_gap():
+    # With no --max-gap given at all, there's no bound to judge "near" against -- near_miss_count
+    # must stay 0 rather than treating every footprint=none pair (however far apart) as a miss.
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    near = _brush("Near", cube(64, 64, 8), loc=(100, 100, 0))    # the genuinely-near case
+    level = _level(ref, near)
+    result = relation.find_candidates(level, "Wall", ["Near"])   # max_gap omitted
+    assert result.matches == []
+    assert result.near_miss_count == 0
+
+
+def test_find_candidates_near_miss_respects_min_gap():
+    # Of Near's 6 faces, 2 (poly_b 4 and 5) only pair with ref faces at near-zero perpendicular
+    # distance (0 and -8) -- --min-gap 10 must exclude those two from near_miss_count (they fail
+    # a real predicate, not just the implicit footprint rule), while the other 4 faces (whose
+    # best pairing distance is >= 10) still qualify.
+    ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
+    near = _brush("Near", cube(64, 64, 8), loc=(100, 100, 0))
+    level = _level(ref, near)
+    unbounded = relation.find_candidates(level, "Wall", ["Near"], max_gap=200.0)
+    assert unbounded.near_miss_count == 6
+    with_min_gap = relation.find_candidates(level, "Wall", ["Near"], max_gap=200.0, min_gap=10.0)
+    assert with_min_gap.near_miss_count == 4
+
+
+def test_footprint_bbox_gap_diagonal_separation():
+    # U ranges separated by 3, V ranges separated by 4 -> hypot(3,4) = 5.
+    a = [(0, 0), (10, 0), (10, 10), (0, 10)]
+    b = [(13, 14), (23, 14), (23, 24), (13, 24)]
+    assert relation._footprint_bbox_gap(a, b) == 5.0
 
 
 def test_compute_set_translation_gap_only():

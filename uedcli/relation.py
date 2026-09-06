@@ -3,6 +3,7 @@ no editor, no native CSG. See dev/docs/superpowers/specs/2026-09-05-brush-relati
 from __future__ import annotations
 
 import itertools
+import math
 from dataclasses import dataclass
 
 from . import polyalign
@@ -15,6 +16,9 @@ Vec3 = tuple[float, float, float]
 
 _PARALLEL_EPS = 1e-3   # 1 - |n.n'| below this => same plane orientation
 _PLANE_EPS = 0.5       # |distance| below this => coplanar rather than merely parallel
+_GAP_EPS = 1e-6        # float-dust tolerance on --max-gap/--min-gap comparisons (not a semantic
+                        # threshold like _PLANE_EPS -- absorbs residual noise so a genuinely flush
+                        # pair, e.g. -0.000uu from a rotated placement, still passes --max-gap 0)
 
 
 @dataclass(frozen=True)
@@ -285,6 +289,13 @@ class PairFace:
     plane: PlaneRelation
     footprint_2d: str
     deltas: Deltas
+    footprint_gap: float   # 2-D bbox-to-bbox gap between the projected footprints; 0 whenever
+                            # footprint_2d != "none" (they already overlap/touch). For "none", the
+                            # true in-plane separation -- NOT the same axis as `plane.distance`
+                            # (perpendicular to the shared plane), so a pair can read
+                            # `plane.distance == 0` yet be footprint_gap == 900 (parallel faces
+                            # that happen to align on the perpendicular axis but sit far apart
+                            # in-plane). See find_candidates' near_miss_count.
 
 
 @dataclass(frozen=True)
@@ -328,6 +339,26 @@ def _candidate_sort_key(pair: PairFace) -> tuple:
     )
 
 
+def _interval_gap(a_lo: float, a_hi: float, b_lo: float, b_hi: float) -> float:
+    """0 if [a_lo,a_hi] and [b_lo,b_hi] overlap, else the positive separation between them."""
+    return max(0.0, b_lo - a_hi, a_lo - b_hi)
+
+
+def _footprint_bbox_gap(poly_a: list[Vec2], poly_b: list[Vec2]) -> float:
+    """The exact closest-point distance between the two footprints' axis-aligned bounding boxes
+    in the shared U/V plane -- 0 when they overlap on both axes (footprint_2d != "none"), else the
+    real in-plane separation. Deliberately NOT `plane.distance` (that's perpendicular to this
+    plane and can read near-zero for a pair that is actually far apart in-plane, e.g. two parallel
+    walls on perpendicular-aligned but far-apart brushes)."""
+    us_a = [p[0] for p in poly_a]
+    vs_a = [p[1] for p in poly_a]
+    us_b = [p[0] for p in poly_b]
+    vs_b = [p[1] for p in poly_b]
+    u_gap = _interval_gap(min(us_a), max(us_a), min(us_b), max(us_b))
+    v_gap = _interval_gap(min(vs_a), max(vs_a), min(vs_b), max(vs_b))
+    return math.hypot(u_gap, v_gap)
+
+
 def _pairs_between(actor_a, idxs_a: set, actor_b, idxs_b: set) -> list:
     """Every (idx_a, idx_b) poly pair between `actor_a`'s `idxs_a` and `actor_b`'s `idxs_b` with a
     defined plane relationship, as `PairFace` objects ranked best-first (`_candidate_sort_key`).
@@ -351,9 +382,10 @@ def _pairs_between(actor_a, idxs_a: set, actor_b, idxs_b: set) -> list:
             uv_b = project_to_plane(world_b, rel.normal_a, origin=world_a[0])
             footprint_2d = classify_footprint_2d(uv_a, uv_b)
             deltas = compute_deltas(uv_a, uv_b)
+            footprint_gap = _footprint_bbox_gap(uv_a, uv_b) if footprint_2d == "none" else 0.0
             candidates.append(PairFace(
                 brush_a=actor_a.name, poly_a=idx_a, brush_b=actor_b.name, poly_b=idx_b,
-                plane=rel, footprint_2d=footprint_2d, deltas=deltas,
+                plane=rel, footprint_2d=footprint_2d, deltas=deltas, footprint_gap=footprint_gap,
             ))
     candidates.sort(key=_candidate_sort_key)
     return candidates
@@ -479,51 +511,84 @@ class FindMatch:
     pair: PairFace   # REF is always pair.brush_a/poly_a; the candidate is pair.brush_b/poly_b
 
 
-def _passes_predicates(pair: PairFace, *, max_gap, min_gap, footprint, plane) -> bool:
+def _passes_gap_and_plane(pair: PairFace, *, max_gap, min_gap, plane) -> bool:
+    """The `--max-gap`/`--min-gap`/`--plane` predicates only -- footprint is a separate concern
+    (see `_passes_predicates`), split out so the near-miss count in `find_candidates` can ask
+    "would this pair qualify on gap/plane alone?" independent of the implicit footprint=none
+    exclusion."""
     if plane is not None and pair.plane.plane != plane:
         return False
     gap = abs(pair.plane.distance)
-    if max_gap is not None and gap > max_gap:
+    if max_gap is not None and gap > max_gap + _GAP_EPS:
         return False
-    if min_gap is not None and gap < min_gap:
+    if min_gap is not None and gap < min_gap - _GAP_EPS:
+        return False
+    return True
+
+
+def _passes_predicates(pair: PairFace, *, max_gap, min_gap, footprint, plane) -> bool:
+    if not _passes_gap_and_plane(pair, max_gap=max_gap, min_gap=min_gap, plane=plane):
         return False
     if footprint is not None:
         allowed: set = set()
         for f in footprint:
             allowed |= _FOOTPRINT_FILTER_ALIASES.get(f, {f})
-        if pair.footprint_2d not in allowed:
-            return False
-    elif pair.footprint_2d == "none":
-        return False   # a same-plane pair with NO footprint overlap is never a meaningful match
-                        # unless the caller explicitly asked for footprint=none
-    return True
+        return pair.footprint_2d in allowed
+    return pair.footprint_2d != "none"   # a same-plane pair with NO footprint overlap is never a
+                                          # meaningful match unless the caller explicitly asked for
+                                          # footprint=none (see find_candidates' near_miss_count for
+                                          # surfacing that this rule fired)
+
+
+@dataclass(frozen=True)
+class FindResult:
+    matches: list          # list[FindMatch], best pair first per candidate
+    near_miss_count: int   # pairs that qualify on gap/plane alone but were excluded ONLY by the
+                            # implicit footprint=none rule (0 whenever --footprint was given
+                            # explicitly, since then there's no implicit rule to surface)
 
 
 def find_candidates(level, ref_token: str, candidate_names: list, *,
                      max_gap: float | None = None, min_gap: float | None = None,
                      footprint: set | None = None, plane: str | None = None,
-                     top: int | None = 1) -> list:
+                     top: int | None = 1) -> FindResult:
     """`brush relation find` -- rank every brush in `candidate_names` (already resolved to
     canonical brush-actor names by the caller) against `ref_token` (bare `Name` or `Name:idx`),
-    keeping only poly pairs that satisfy every given predicate. Returns `FindMatch` objects, best
-    pair first per candidate, `top` capping how many pairs per candidate are kept. Raises
-    `RelationError` naming the offender for a bad `ref_token`, a bad `top`, or an inverted gap range."""
+    keeping only poly pairs that satisfy every given predicate. `top` caps how many pairs per
+    candidate are kept. Raises `RelationError` naming the offender for a bad `ref_token`, a bad
+    `top`, or an inverted gap range."""
     if top is not None and top < 1:
         raise RelationError(f"--top must be a positive integer or 'all', got {top!r}")
     if min_gap is not None and max_gap is not None and min_gap > max_gap:
         raise RelationError(f"--min-gap ({min_gap}) must not exceed --max-gap ({max_gap})")
     ref_name, ref_actor, ref_idxs = _resolve_measure_selector(level, ref_token)
     results = []
+    near_miss_faces: set[tuple[str, int]] = set()   # (candidate, poly_b) -- a FACE can be the
+                                                      # near side of several ref-face pairings; the
+                                                      # reported count is distinct faces, not pairs
     for cand_name in candidate_names:
         cand_actor = level.actors[cand_name]
         cand_idxs = set(range(len(cand_actor.brush.polys)))
         pairs = _pairs_between(ref_actor, ref_idxs, cand_actor, cand_idxs)
-        pairs = [p for p in pairs
-                 if _passes_predicates(p, max_gap=max_gap, min_gap=min_gap,
-                                        footprint=footprint, plane=plane)]
-        shown = pairs if top is None else pairs[:top]
+        kept = [p for p in pairs
+                if _passes_predicates(p, max_gap=max_gap, min_gap=min_gap,
+                                       footprint=footprint, plane=plane)]
+        if footprint is None and max_gap is not None:
+            # Near-miss detection needs a distance to call "close" -- with no --max-gap there is
+            # no such bound to judge the in-plane footprint gap against, so it stays off rather
+            # than inventing one.
+            near_miss_faces.update(
+                (cand_name, p.poly_b) for p in pairs
+                if p.footprint_2d == "none"
+                # satisfied all OTHER params (plane, perpendicular gap)...
+                and _passes_gap_and_plane(p, max_gap=max_gap, min_gap=min_gap, plane=plane)
+                # ...AND almost satisfied the one it's failing (footprint): the footprints
+                # themselves are actually close in-plane, not just aligned on the unrelated
+                # perpendicular axis.
+                and p.footprint_gap <= max_gap + _GAP_EPS)
+        shown = kept if top is None else kept[:top]
         results.extend(FindMatch(candidate=cand_name, poly=p.poly_b, pair=p) for p in shown)
-    return results
+    return FindResult(matches=results, near_miss_count=len(near_miss_faces))
 
 
 # --------------------------------------------------------------------- brush relation set
