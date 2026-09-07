@@ -4,6 +4,13 @@
 Emits JSON (`--json out.json`) and a short summary: which nodes were box-tested, the frame each
 call ran under, the box, and the call's return value + `FScreenBounds`. `--last` prints the FINAL
 test outcome per node, i.e. the `NF_BoxOccluded` state the shadow-ray walker then reads.
+
+`ret` is `BoundVisible`'s own return, which under `bUseZones` is only HALF the box-occlusion
+decision: the `FSpanBuffer*` argument is NULL there and `OccludeBsp` runs the span test itself
+afterwards, once per active zone. `2026-09-07-gather-box-verdict/harness/box_verdict_probe.py`
+breaks on the three outcome sites and emits `VERDICT hit=<n> path=geo|zone|accept` lines; when a log
+carries them, each record also gets `verdict` and the derived `visible` — the real per-node
+outcome. Without them `visible` falls back to `bool(ret)`, which over-reports visibility.
 """
 from __future__ import annotations
 
@@ -20,6 +27,7 @@ FR_RE = re.compile(
     r"FX15=(\S+) FY15=(\S+) F_d0=(\S+) proj=\[([^\]]*)\] rproj=(\S+) clip=\[([^\]]*)\] zone=(\d+)")
 OUT_RE = re.compile(r"^OUT hit=(\d+) ret=(-?\d+) sb=\[([^\]]*)\]")
 EXIT_RE = re.compile(r"^EXIT hit=\d+ path=(\w+)")
+VERDICT_RE = re.compile(r"^VERDICT hit=(\d+) path=(\w+)")
 
 
 def _f(s):
@@ -27,11 +35,16 @@ def _f(s):
 
 
 def parse(path: Path) -> list[dict]:
-    recs, cur = [], None
+    recs, cur, by_hit = [], None, {}
     for line in path.read_text(errors="replace").splitlines():
         if m := IN_RE.match(line):
             cur = {"hit": int(m.group(1)), "frame": m.group(2), "span": m.group(3),
                    "node": int(m.group(4))}
+        elif m := VERDICT_RE.match(line):
+            # A verdict site is reached AFTER the call's OUT line, i.e. with no record open — so
+            # this arm has to sit above the `cur is None` guard, and pairs by hit number instead.
+            if (r := by_hit.get(int(m.group(1)))) is not None:
+                r.setdefault("verdict", m.group(2))
         elif cur is None:
             continue
         elif m := BOX_RE.match(line):
@@ -54,8 +67,21 @@ def parse(path: Path) -> list[dict]:
                 cur["ret"] = int(m.group(2))
                 cur["sb"] = _f(m.group(3))
                 recs.append(cur)
+                by_hit[cur["hit"]] = cur
                 cur = None
+    for r in recs:
+        # An unzoned accept takes `0x10019450 je`, which has no site of its own, so it carries no
+        # verdict line; a log from a probe without the verdict sites at all degrades to
+        # `BoundVisible`'s return, which over-reports visibility (see `has_verdicts`).
+        r["probed"] = "verdict" in r
+        r["visible"] = r.setdefault("verdict", "accept" if r["ret"] else "geo") == "accept"
     return recs
+
+
+def has_verdicts(recs: list[dict]) -> bool:
+    """Whether these records come from a probe that captured the outcome sites, i.e. whether
+    `visible` is the real box-occlusion verdict rather than `BoundVisible`'s return alone."""
+    return any(r["probed"] for r in recs)
 
 
 def main() -> int:
@@ -67,9 +93,11 @@ def main() -> int:
     last: dict[int, dict] = {}
     for r in gather:
         last[r["node"]] = r
-    print("final per-node outcome in the gather pass (ret 0 => NF_BoxOccluded set):")
+    print(f"outcome sites captured: {has_verdicts(gather)}")
+    print("final per-node outcome in the gather pass (verdict != accept => NF_BoxOccluded set):")
     for n in sorted(last):
-        print(f"  node {n:5d}  ret={last[n]['ret']}  zone={last[n]['zone']}  sb={last[n]['sb']}")
+        print(f"  node {n:5d}  verdict={last[n]['verdict']:6s} ret={last[n]['ret']}  "
+              f"zone={last[n]['zone']}  sb={last[n]['sb']}")
     for i, a in enumerate(sys.argv):
         if a == "--json":
             Path(sys.argv[i + 1]).write_text(json.dumps(gather, indent=1))

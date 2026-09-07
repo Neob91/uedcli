@@ -241,13 +241,19 @@ Island 123) — so the permeating flood is where the campaign's leverage is.
   orphan slot as a difference, which is what sent the N=29 item down the vertex-ring path. The
   step-6 frustum-cone reject the N=26 work left open is ported too
   (`dev/docs/board/done/port-occludebsp-frustum-cone-subtree-reject/`).
-- **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-spotlight22-light-runs-differ-on-4/` — the
-  rasterizer port it was parked on is DONE and landed (`ClipBspSurf`, its clipper, the per-vertex
-  transform and the fixed-point scanline setup, `dev/docs/spikes/2026-09-06-raster-clipbspsurf-port/`)
-  and it changes nothing here: the same four lightmap runs still differ. Fill rule, texture
-  `PolyFlags` and flipped node rings are all ruled out by measurement. What is left is the
-  front-to-back VISIT ORDER — the three surfaces trade accept/reject consistently — and the next step
-  is a live capture of `OccludeBsp`'s node order for spotlight22.
+- **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-leaf-20-permeating-light-over-included/` — NOT
+  a rasterizer or span-buffer problem. The "four divergent Spotlight22 lightmap runs" this was parked
+  on for days were a `FLightMapIndex` decode bug in `lmdiag.py` (it read `VClamp` as `iLightActors`);
+  read correctly, native and UED22 agree on all 210 runs, and the gather's box tests match a live
+  editor capture call for call — same set, same order, same rectangles, same verdicts. The whole
+  divergence is ONE over-included per-leaf permeating light (leaf 20 gets Spotlight22), i.e.
+  `permeating_lights.rs`'s known "extra, never missing" beam-clip margin, and its single extra
+  `Model.Lights` entry shifts every later offset.
+  Spike: `dev/docs/spikes/2026-09-07-gather-box-verdict/`, which also closes
+  `gather-still-over-occludes-45-of-1218-box-tests` the same way (that probe captured
+  `BoundVisible`'s return, not `OccludeBsp`'s post-zone-loop verdict). **Before trusting any
+  lightmap-run or `Model.Lights` diff, use the fixed `lmdiag.py` and check region 1 too with
+  `2026-09-07-gather-box-verdict/harness/leaf_perm_diff.py`.**
 - **NYC_Bar**: N=59 is FIXED (`dev/docs/board/done/nyc-bar-n-59-brush-region-zone-and-ued22/`) —
   its last three residuals (world-node `NF_IsFront`/`NF_IsBack`, the mover models' `LightMap`, and
   the mover `Polys`' `iLink`/`iBrushPoly`) were one thing: the moving-brush half of

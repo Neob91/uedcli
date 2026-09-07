@@ -479,6 +479,14 @@ pub fn bake(model: &mut Model, lights: &[LightInput]) -> Result<(), BuildError> 
         .collect();
     if std::env::var("UEDCLI_VISGATE_DUMP").is_ok() {
         crate::visible_surfs::dump_debug_counters();
+        for (li, (l, g)) in lights.iter().zip(gathers.iter()).enumerate() {
+            let mut s: Vec<i32> = g.surfs.iter().copied().collect();
+            s.sort_unstable();
+            eprintln!(
+                "VISGATE_LIGHT li={li} loc=[{},{},{}] radius={} special={} gathered={} surfs={s:?}",
+                l.location.x, l.location.y, l.location.z, l.radius, l.special_lit, s.len()
+            );
+        }
     }
     // `URender::OccludeBsp`'s render-bound box test writes `NF_BoxOccluded` straight into
     // `Model.Nodes[].NodeFlags` and the bit PERSISTS: it is never cleared between lights, only

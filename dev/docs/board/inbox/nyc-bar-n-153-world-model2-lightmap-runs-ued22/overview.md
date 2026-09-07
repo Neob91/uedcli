@@ -27,9 +27,15 @@ Found 2026-09-06 pushing the ladder after the permeating-beam-plane fix
 - Records 46/49/50/62 differ only in `DataOffset` and `iLightActors` INDEX, which is the same shift.
 
 So native decides one light illuminates three surfaces UED22 leaves dark. Same FAMILY as
-`unatco-n-116-world-model2-light-runs-differ-on` and
-`wanchai-n45-spotlight22-light-runs-differ-on-4`, but here native is a strict superset rather than
+`unatco-n-116-world-model2-light-runs-differ-on`, and here native is a strict superset rather than
 trading decisions.
+
+**The `wanchai-n45-spotlight22-light-runs-differ-on-4` sibling this used to cite is withdrawn**
+(2026-09-07): those runs were a `FLightMapIndex` decode bug, and that level's real divergence is a
+per-leaf permeating light. This item's evidence is independent of that tool — `LightBits` differs by
+112 bytes, which no offset misread can produce — but re-derive the `iLightActors` figures with the
+fixed `lmdiag.py` before building on them. Spike:
+`dev/docs/spikes/2026-09-07-gather-box-verdict/`.
 
 ## NOT the OceanLab N=48 / UNATCO N=163 cause (measured 2026-09-07)
 

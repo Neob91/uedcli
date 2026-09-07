@@ -1029,12 +1029,17 @@ fn traverse(
         return true;
     }
     let head = &model.nodes[ni as usize];
+    // `UEDCLI_VISGATE_TRACE_SURF=-1` traces EVERY node the face visits, in visit order — see
+    // [`trace_target`].
+    if let Some((fi, -1)) = trace {
+        eprintln!("VISGATE_VISIT face={fi} node={ni} surf={}", head.i_surf);
+    }
     // Step 1: zone-mask subtree prune, checked at the chain HEAD before anything else. `zone_mask`
     // is the OR of every zone reachable at or below this node (self + both children + the REST of
     // the coplanar chain, `zones::build_zone_mask` folds in `i_plane` too), so a miss here rules out
     // both children AND every chain member — safe to stop here without recursing at all.
     if use_zones && (*active_mask & head.zone_mask) == 0 {
-        if trace.is_some_and(|(_, s)| s == head.i_surf) {
+        if trace.is_some_and(|(_, s)| s < 0 || s == head.i_surf) {
             eprintln!(
                 "VISGATE_TRACE node={} surf={} PRUNED (zone_mask {:#x} & active {:#x} == 0)",
                 ni as usize, head.i_surf, head.zone_mask, *active_mask
@@ -1100,7 +1105,7 @@ fn traverse(
     // near subtree has run — the editor's own placement. It abandons this node's surface, the rest
     // of its chain, and `far_child`.
     if cone_rejects(&model.nodes[ni as usize].plane, is_front, &face.view_sides) {
-        if trace.is_some_and(|(_, s)| s == model.nodes[ni as usize].i_surf) {
+        if trace.is_some_and(|(_, s)| s < 0 || s == model.nodes[ni as usize].i_surf) {
             eprintln!("VISGATE_TRACE node={ni} PRUNED (frustum-cone reject)");
         }
         return true;
@@ -1124,14 +1129,14 @@ fn traverse(
             // A later chain member's own (narrower) zone_mask can rule out the REMAINING chain
             // without touching `far_child`, which is visited unconditionally below regardless of
             // where in the chain this fires.
-            if trace.is_some_and(|(_, s)| s == n.i_surf) {
+            if trace.is_some_and(|(_, s)| s < 0 || s == n.i_surf) {
                 eprintln!("VISGATE_TRACE node={nu} surf={} PRUNED (zone_mask {:#x} & active {:#x} == 0)", n.i_surf, n.zone_mask, *active_mask);
             }
             break;
         }
 
         if n.i_surf >= 0 && (n.i_surf as usize) < model.surfs.len() && n.num_vertices >= 3 {
-            let is_target = trace.is_some_and(|(_fi, s)| s == n.i_surf);
+            let is_target = trace.is_some_and(|(_fi, s)| s < 0 || s == n.i_surf);
             let surf = &model.surfs[n.i_surf as usize];
             let poly_flags = surf.poly_flags;
             let near_zone = n.i_zone[is_front as usize];
@@ -1183,7 +1188,9 @@ fn traverse(
                     DBG_RASTERIZED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let opaque = SUBTRACT_OCCLUSION && occludes(poly_flags);
                     let buf = spans.get_or_empty(near_key);
-                    if is_target {
+                    // Per-row dump only for a NAMED surf — the whole-traversal mode (`s == -1`)
+                    // would print every row of every rasterized node.
+                    if trace.is_some_and(|(_, s)| s == n.i_surf) {
                         for &(y, wx0, wx1) in &rows {
                             eprintln!(
                                 "VISGATE_TRACE node={nu} PRE row y={y} window=[{wx0},{wx1}) buf_row={:?}",
@@ -1239,6 +1246,14 @@ fn traverse(
                         // (marked by native, clear in UED22 at the first `illuminateSurf`) on the
                         // wrong side of `linecheck::is_csg` for three `PF_BrightCorners` surfaces.
                         if !spans.get_or_empty(near_key).any_visible() {
+                            if trace.is_some() {
+                                eprintln!(
+                                    "VISGATE_TRACE node={nu} surf={} RETIRED zone={near_zone} \
+                                     active_after={:#x}",
+                                    n.i_surf,
+                                    *active_mask & !(1u64 << (near_zone as u64 & 63))
+                                );
+                            }
                             if !use_zones {
                                 return false;
                             }
@@ -1297,6 +1312,13 @@ fn traverse(
 /// in the zone buffer). Not on any hot path (env lookups only fire when both vars are set); left in
 /// place as a reusable probe rather than stripped after use, matching the existing `DBG_*` counters'
 /// precedent.
+///
+/// **`UEDCLI_VISGATE_TRACE_SURF=-1` widens it to the WHOLE traversal**: every visited node in visit
+/// order (`VISGATE_VISIT`), every filter verdict, every zone retire, and the final gather set — the
+/// per-row span dump stays surf-specific, since it would otherwise print every row of every
+/// rasterized node. Added to settle whether native's walk reaches a surface at all, which is what
+/// showed that WanChai N=45's "four divergent light runs" could not exist
+/// (`spikes/2026-09-07-gather-box-verdict/`).
 fn trace_target() -> Option<(i32, Vec3)> {
     let surf: i32 = std::env::var("UEDCLI_VISGATE_TRACE_SURF").ok()?.parse().ok()?;
     let loc = std::env::var("UEDCLI_VISGATE_TRACE_LOC").ok()?;
@@ -1406,7 +1428,13 @@ pub fn get_visible_surfs(model: &Model, light_loc: Vec3) -> Gather {
         traverse(model, 0, &light_loc, face, use_zones, &mut active_mask, &mut spans, &mut out, &mut boxes, trace.map(|(s, _)| (fi, s)), trace_portals);
     }
     if let Some((surf, _)) = trace {
-        eprintln!("VISGATE_TRACE result: surf {surf} {}", if out.contains(&surf) { "ACCEPTED" } else { "REJECTED" });
+        if surf < 0 {
+            let mut all: Vec<i32> = out.iter().copied().collect();
+            all.sort_unstable();
+            eprintln!("VISGATE_TRACE result: {} surfs {all:?}", all.len());
+        } else {
+            eprintln!("VISGATE_TRACE result: surf {surf} {}", if out.contains(&surf) { "ACCEPTED" } else { "REJECTED" });
+        }
     }
     Gather { surfs: out, box_tests: boxes.log }
 }

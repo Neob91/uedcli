@@ -5,7 +5,17 @@
 Replaces `2026-09-03-incremental-actor-parity/harness/lightrun_diff.py` for anything that needs the
 SURF: that one mis-decodes `FBspSurf` (it reads `iBrushPoly` where `iLightMap` is), so its `surf=`
 column names the wrong surface. Its run comparison is fine.
+
+**Its own run comparison was NOT** until 2026-09-07: `FLightMapIndex` is
+`i32 DataOffset, f32 Pan[3], ci UClamp, ci VClamp, f32 UScale, f32 VScale, i32 iLightActors`
+(`uedcli/native/umodel.py`), so `model_dump`'s per-record tuple is
+`(raw16, u_size, v_size, tail12)` and the run start is the LAST i32 of `tail`, not field [2]
+(`VClamp`). Reading `VClamp` as the run start invented WanChai N=45's four "divergent spotlight22
+runs", which sent a session after a span-buffer bug that does not exist — with the real field the
+level's runs match UED22 exactly and its whole divergence is one over-included permeating light
+(`spikes/2026-09-07-gather-box-verdict/spike.md`; `leaf_perm_diff.py` next door).
 """
+import struct
 import sys
 sys.path.insert(0, '.')
 H = 'dev/docs/spikes/2026-09-03-incremental-actor-parity/harness'
@@ -27,8 +37,15 @@ def load(path):
 
 
 def runs(d, lights):
+    """Per lightmap record: its light run, and whether the record is dark (`iLightActors < 0`) or
+    merely empty (a run holding only the terminator). Those two are different bytes and different
+    `Model.Lights` lengths, so they must not both read as `()`."""
     out = {}
-    for i, (raw, tex, la, tail) in enumerate(d["lightmap"]):
+    for i, (raw, u_size, v_size, tail) in enumerate(d["lightmap"]):
+        la = struct.unpack_from("<i", tail, 8)[0]
+        if la < 0:
+            out[i] = "dark"
+            continue
         r = []
         j = la
         while 0 <= j < len(lights) and lights[j] != "None":

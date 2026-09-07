@@ -1033,3 +1033,62 @@ def test_only_edit_paste_gets_a_brush_into_csg(golden, expect_csg):
             f"{golden}: an IMPORTED brush now participates in CSG (nodes={nodes}, surfs={surfs}). "
             f"That would be GOOD news — re-run the spike probe and revisit the drive design, "
             f"which uses EDIT PASTE only because this was impossible")
+
+
+def test_flightmapindex_stores_ilightactors_as_its_last_i32():
+    """`FLightMapIndex`'s field order, which decides where a surf's light RUN starts.
+
+    Serial form (`uedcli/native/umodel.py`, matching what the editor writes):
+
+        i32 DataOffset, f32 Pan[3], ci UClamp, ci VClamp, f32 UScale, f32 VScale, i32 iLightActors
+
+    So a reader that splits the record as "16 raw bytes, two compact indices, 12 raw bytes" — which
+    the ladder harness's `model_dump.py` does — finds `iLightActors` in the LAST 4 bytes of that
+    12-byte tail, NOT in the second compact index. `lmdiag.py` read the compact index (`VClamp`, a
+    lumel count) as the run start, which invented four divergent WanChai N=45 light runs that do not
+    exist and sent a session after a span-buffer bug. Spike:
+    `dev/docs/spikes/2026-09-07-gather-box-verdict/`.
+    """
+    from uedcli.native.umodel import LightMapIndex, _enc_lightmap_index, _parse_lightmap_index
+
+    rec = LightMapIndex(data_offset=7, i_light_actors=52, pan=(1.0, 2.0, 3.0),
+                        u_scale=4.0, v_scale=5.0, u_size=11, v_size=13)
+    buf = _enc_lightmap_index(rec)
+    assert _parse_lightmap_index(buf, 0)[0] == rec, "FLightMapIndex must round-trip"
+    assert struct.unpack_from("<i", buf, len(buf) - 4)[0] == 52, "iLightActors is the last i32"
+    assert struct.unpack_from("<i", buf, 0)[0] == 7, "DataOffset is the first i32"
+    # The model_dump split: raw16 | ci u_size | ci v_size | tail12.
+    assert buf[16] == 11 and buf[17] == 13, "both clamps are 1-byte compact indices at this size"
+    assert struct.unpack_from("<i", buf[18:], 8)[0] == 52, "the tail's last i32, not the ci"
+
+
+def test_the_box_occlusion_verdict_capture_pairs_each_call_with_its_outcome():
+    """`URender::OccludeBsp`'s box-occlusion step has THREE outcomes, not two.
+
+    `URender::BoundVisible`'s return is only the geometric half: under `bUseZones` its
+    `FSpanBuffer*` argument is NULL and `OccludeBsp` runs the span test itself afterwards, once per
+    active zone (`render.dll 0x10019456`-`0x10019518`), setting `NF_BoxOccluded` at `0x10019526`
+    when every zone says no. The committed capture (the spike's `box_verdict_probe.py`) breaks on
+    all three sites; native's gather agrees with it on all 1218 OceanLab N=48 calls, and 54 of those
+    are zone rejections a return-value-only capture cannot see — which is what a prior board item
+    read as native over-occluding.
+
+    Also pins the key rule the comparison needs: the two log formats spell one f32 differently
+    (native's shortest-roundtrip `234.255` vs gdb's `%.9g` `234.255005`), so calls must be keyed on
+    the f32 BITS — `round(v, 2)` splits that light's 45 calls into 45 "native-only" plus 45
+    "editor-only" keys.
+    """
+    log = (Path(__file__).resolve().parents[2] / "dev/docs/spikes/2026-09-07-gather-box-verdict"
+           / "logs/box-verdict-n48.log").read_text(errors="replace")
+    tally = {p: len(re.findall(rf"^VERDICT hit=\d+ path={p}$", log, re.M))
+             for p in ("geo", "zone", "accept")}
+    assert tally == {"geo": 382, "zone": 54, "accept": 617}, tally
+    assert len(re.findall(r"^IN hit=\d+ ", log, re.M)) == 1233
+    # `cmovne eax, 0` at `0x100193ba` NULLs the span argument whenever `bUseZones` — so on the
+    # zoned calls `BoundVisible` cannot answer the span question at all. (gdb's `%#x` prints a
+    # NULL pointer as a bare `0`.)
+    zoned = len(re.findall(r"^IN hit=\d+ .* span=0 ", log, re.M))
+    assert zoned == 921 and zoned + 312 == 1233, zoned
+
+    assert struct.pack("<f", 234.255) == struct.pack("<f", 234.255005)
+    assert round(234.255, 2) != round(234.255005, 2)
