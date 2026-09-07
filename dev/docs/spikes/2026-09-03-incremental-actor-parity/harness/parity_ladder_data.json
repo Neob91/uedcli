@@ -40,9 +40,9 @@
       "highest_n": 44,
       "total_actors": 2288,
       "status": "blocked",
-      "blocker": "N=45 Spotlight22: Model.Lights 687 vs 686 — same 4 lightmap light-runs differ, byte-for-byte unchanged. URender::ClipBspSurf + the fixed-point scanline rasterizer are now FULLY PORTED from disassembly (replacing the old empirical pixel-centre stand-in) and a real zone-portal occlusion bug was fixed along the way — but measurement shows the rasterizer was never the cause here (only 2 of ~1300 accept/reject decisions moved). Remaining lead: front-to-back visit ORDER — native's zone-1 span buffer drains before node 59 on all six faces; next probe is a live breakpoint at 0x100198a0 logging iNode/IsFront/ValidLines.",
-      "board": "wanchai-n45-spotlight22-light-runs-differ-on-4",
-      "updated": "2026-09-06T16:40:00Z"
+      "blocker": "N=45: RETRACTED rasterizer/span-buffer theory -- it was a wrong field read in the diff tool (VClamp read as iLightActors); re-measured, native and UED22 agree on all 210 lightmap runs. The REAL cause: world leaf 20 gets an extra permeating-light entry (spotlight22) UED22 doesn't have -- the SAME leaf-permeating-light gap already blocking Island N=123, OceanLab N=93, and UNATCO N=226. WanChai N=45 is the CHEAPEST of all four reproducers (91 leaves, 11 lights, 45 actors). This is now the campaign's single highest-leverage open item -- a fix likely closes all four at once.",
+      "board": "wanchai-n45-leaf-20-permeating-light-over-included",
+      "updated": "2026-09-07T07:45:00Z"
     },
     {
       "slug": "island",
