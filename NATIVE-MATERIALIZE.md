@@ -213,9 +213,11 @@ Tests must NOT block the parity work. For this project specifically:
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
 Ceilings, all re-verified from N=1 against the current binary (2026-09-07): **UNATCO 225,
-NYC_Bar 152, Island 122, OceanLab 92, WanChai 44.** Three of the five next blockers are now the SAME
-shape — one leaf gets a permeating-light run entry UED22 leaves out (UNATCO 226, OceanLab 93,
-Island 123) — so the permeating flood is where the campaign's leverage is.
+NYC_Bar 152, OceanLab 157+, Island 179+, WanChai 57.** Two of the five next blockers are the SAME
+shape — one leaf gets a permeating-light run entry UED22 leaves out (UNATCO 226, WanChai 58) — so
+the permeating flood is where the campaign's leverage is. OceanLab and Island are both still walking
+forward past the last number a sweep confirmed; their real ceilings are higher than the figures
+above.
 
 - **UNATCO**: N=163 is FIXED
   (`dev/docs/board/done/unatco-n-163-world-model2-lights-and-lightbits/`) — the 7 extra
@@ -297,7 +299,7 @@ Island 123) — so the permeating flood is where the campaign's leverage is.
   `iLightActors` run UED22 leaves at -1 (`Lights` 484 vs 478, `LightBits` 6003 vs 5891), with the
   leaf permeating region clean —
   `dev/docs/board/inbox/nyc-bar-n-153-world-model2-lightmap-runs-ued22/`.
-- **Island, N=123**: N=6, N=10 and N=93 are all FIXED. N=6 was the Vectors pool — native keeps
+- **Island**: N=6, N=10 and N=93 are all FIXED. N=6 was the Vectors pool — native keeps
   the incremental pool across the repartition instead of rebuilding it from the surviving surfs
   (`dev/docs/spikes/2026-09-06-island-n6-vector-pool/`,
   `dev/docs/board/done/island-n6-vector-pool-order/`). N=10 was `Brush1359`'s `Region` iLeaf, the
@@ -327,8 +329,9 @@ Island 123) — so the permeating flood is where the campaign's leverage is.
   too** — the crossing VERTEX, not the gates: `SplitWithPlaneFast` takes it from
   `FLinePlaneIntersection`, whose f32 differs from `alpha = dp/(dp-ds)` in the last ulps, and a
   crossing landing exactly on a grid coordinate collapses the next hop's clip edge (see the WanChai
-  bullet above). Island is byte-exact **N=1..123**.
-- **OceanLab, N=48**: N=46 is FIXED
+  bullet above). Island is byte-exact **N=1..179 and still walking** — the OceanLab N=153/N=155
+  fixes below carried it past 123 with no Island-specific work.
+- **OceanLab**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the
   original chain node and append every fragment as a new node, so the post-Pass-D `bspCleanup`
@@ -351,7 +354,20 @@ Island 123) — so the permeating flood is where the campaign's leverage is.
   (node 512) unshadowed three surfaces' edge lumels. With the retire ported — plus step 6, the
   frustum-cone subtree reject — native runs exactly the editor's 1218 box tests and ends with
   exactly its flag set. **N=93 is FIXED too** — one leaf's permeating-light run, the crossing-vertex
-  rounding in the WanChai bullet above. Byte-exact **N=1..93** (was 47).
+  rounding in the WanChai bullet above. **N=153 and N=155 are FIXED too**
+  (`dev/docs/board/done/oceanlab-n-153-world-model2-split-vertex-29-ulp/`,
+  `dev/docs/board/done/oceanlab-n-155-zone-connectivity-misses-zone-0/`,
+  `dev/docs/spikes/2026-09-07-oceanlab-n153-temp-brush-rsp/`), both faithful ports of routines the
+  campaign had already decoded but never wired up. N=153: `bspBrushCSG` builds the temp brush BSP
+  with `RebuildSimplePolys=1` (`0x35b85`), so a COPLANAR face SHARES the splitter's surf and
+  allocates no `pBase`/`vNormal`/texture axis of its own; native gave each face its own surf, which
+  let a coplanar sibling's authored texture axis (`3f3504e6`,`3f350508`) into the temp `Vectors`
+  pool ahead of a later face's normal (`3f3504f4`,`3f3504f4`) — and `bspAddVector(exact)` deduped
+  the normal onto the axis. Every world edge that asymmetric plane cuts lands 29 ULP off
+  (`152.0002` vs `151.99976`). N=155: Pass F (`FEditorVisibility::BuildConnectivity`, `0xa7960`) is
+  a NODE walk over `PF_Portal` surfs reading `Node.iZone[0]/[1]`, zone 0 included; native walked the
+  Pass-B portal FRAGMENT list filtered by the zone-barrier set and skipped every pair touching zone
+  0, leaving zones 0 and 1 mutually unconnected. Byte-exact **N=1..157 and still walking** (was 93).
 - **Standing stopgaps, all levels**:
   `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/` — repartition dedups points
   with a linear pool scan; the editor descends and appends on a miss (`AddThing(..., !FastRebuild)`

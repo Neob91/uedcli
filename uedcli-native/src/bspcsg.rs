@@ -1819,12 +1819,27 @@ fn build_brush_temp_bsp(temp_polys: &[FPoly]) -> Result<Model, BuildError> {
         .iter()
         .cloned()
         .map(|mut p| {
-            p.i_link = -1; // fresh surf per brush face (temp identity is irrelevant)
+            // `RebuildSimplePolys=1` (below) makes `split_poly_list` assign every temp face's link
+            // itself, so whatever the brush poly carried is overwritten; `src` (the mover build's
+            // source-poly recorder) has no meaning here.
+            p.i_link = -1;
+            p.src = -1;
             p
         })
         .collect();
     // Temp-brush convex partition: LAME/0/0 (Score = 100*Splits, stride NumPolys/4) — the byte-verified
     // engine config; its splitter choice selects which brush face clips each straddling world face.
+    //
+    // `RebuildSimplePolys=1` (`bspBrushCSG 0x35b85 push 1`, findbestsplit-params-decode.md Evidence
+    // 4): COPLANAR faces SHARE the splitter's surf (`iLink = Surfs.Num()-1`) instead of each
+    // allocating its own.  A shared surf allocates no second `pBase`/`vNormal`/texture-axis vector,
+    // so the temp pools stay as short as the editor's — and the pools are what the world-face
+    // descent splits against.  With a surf per face, OceanLab `Brush431`'s 45° face normal
+    // (`3f3504f4`,`3f3504f4`) landed AFTER a coplanar sibling's authored texture axis
+    // (`3f3504e6`,`3f350508`) had entered the pool and deduped onto it at
+    // `THRESH_NORMALS_ARE_SAME`; splitting a world edge against that asymmetric plane put the cut
+    // vertex 29 ULP off (`152.0002` vs the editor's `151.99976`).
+    let mut rsp_links: Vec<i32> = Vec::new();
     split_poly_list(
         &mut tm,
         -1,
@@ -1835,7 +1850,7 @@ fn build_brush_temp_bsp(temp_polys: &[FPoly]) -> Result<Model, BuildError> {
         TEMP_PORTAL_BIAS,
         Opt::Lame,
         &mut 0,
-        None,
+        Some(&mut rsp_links),
     )?;
     for n in tm.nodes.iter_mut() {
         n.node_flags &= !NF_IS_NEW;
@@ -4088,6 +4103,68 @@ mod tests {
         assert_eq!(bsp_add_vector(&mut model, normal, true), 0,
                    "the later normal must reuse the texture axis's slot");
         assert_eq!(model.vectors.len(), 1);
+    }
+
+    /// OceanLab N=153 (`spikes/2026-09-07-oceanlab-n153-temp-brush-rsp/`): `bspBrushCSG` builds the
+    /// temp brush BSP with `RebuildSimplePolys=1` (`0x35b85 push 1`), so a COPLANAR face shares the
+    /// splitter's surf and allocates no `pBase`/`vNormal`/texture-axis of its own. Native gave each
+    /// face its own surf, which let a coplanar sibling's authored texture axis into the temp Vectors
+    /// pool ahead of a later face's normal — and `bspAddVector(exact)` then deduped that normal onto
+    /// the axis, 29 ULP off. The world faces this temp tree clips inherit the error.
+    #[test]
+    fn temp_brush_coplanars_share_the_splitters_surf() {
+        // Two coplanar faces on x=0, then one 45° face behind them.
+        let mut face0 = FPoly::new(vec![
+            Vec3::new(0.0, 0.0, 0.0),
+            Vec3::new(0.0, 10.0, 0.0),
+            Vec3::new(0.0, 10.0, 10.0),
+            Vec3::new(0.0, 0.0, 10.0),
+        ]);
+        face0.normal = Vec3::new(1.0, 0.0, 0.0);
+        face0.texture_u = Vec3::new(0.0, 1.0, 0.0);
+        face0.texture_v = Vec3::new(0.0, 0.0, 1.0);
+
+        let mut face1 = FPoly::new(vec![
+            Vec3::new(0.0, 20.0, 0.0),
+            Vec3::new(0.0, 30.0, 0.0),
+            Vec3::new(0.0, 30.0, 10.0),
+            Vec3::new(0.0, 20.0, 10.0),
+        ]);
+        face1.normal = Vec3::new(1.0, 0.0, 0.0);
+        // The real OceanLab `Brush431` axis: a hair off 1/√2 on BOTH components, and asymmetric.
+        face1.texture_u = Vec3::new(
+            0.0,
+            f32::from_bits(0x3f35_04e6),
+            f32::from_bits(0x3f35_0508),
+        );
+        face1.texture_v = Vec3::new(0.0, 0.0, 1.0);
+
+        let mut face2 = FPoly::new(vec![
+            Vec3::new(-10.0, 0.0, 0.0),
+            Vec3::new(-10.0, 10.0, -10.0),
+            Vec3::new(-20.0, 10.0, -10.0),
+            Vec3::new(-20.0, 0.0, 0.0),
+        ]);
+        // `CalcNormal` of that brush's 45° face: both components the SAME bits.
+        let face2_normal = Vec3::new(
+            0.0,
+            f32::from_bits(0x3f35_04f4),
+            f32::from_bits(0x3f35_04f4),
+        );
+        face2.normal = face2_normal;
+        face2.texture_u = Vec3::new(1.0, 0.0, 0.0);
+        face2.texture_v = Vec3::new(0.0, 0.0, 1.0);
+
+        let tm = build_brush_temp_bsp(&[face0, face1, face2]).unwrap();
+        assert_eq!(
+            tm.surfs.len(),
+            2,
+            "the coplanar pair must share one surf, so 3 faces make 2 surfs"
+        );
+        assert_eq!(
+            tm.vectors[tm.surfs[1].v_normal as usize], face2_normal,
+            "the 45° face's plane normal must be its own value, not a coplanar sibling's texture axis"
+        );
     }
 
     /// Decode one mover-build fixture (`dev/docs/spikes/2026-09-02-unbuilt-structure-parity/harness/extract_mover_fixtures.py` format):

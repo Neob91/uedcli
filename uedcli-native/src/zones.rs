@@ -1223,7 +1223,18 @@ pub fn assign_leaves_and_zones(model: &mut Model) {
     // all-zero there, which is what put the old reading in — but that map is not in-repo to re-check,
     // and an all-zero pan is exactly what a map with no `Pan U=/V=` on any poly would store.
 
-    // Pass F: Zones array + Connectivity (self-bit; OR across zone portals).
+    model.zones = build_connectivity(model, num_zones);
+}
+
+/// Pass F, `FEditorVisibility::BuildConnectivity` (`Editor.dll 0xa7960`, decoded in
+/// `re-raw-zones/passesEFG-8850-7960-7e60.md`): seed every zone seeing itself, then walk the NODES —
+/// a node whose surf carries `PF_Portal` connects its own two sides,
+/// `Zones[iZone[1]] |= 1<<iZone[0]` and the mirror (`0x100a79f7` tests the flag, `0x100a7a23` ORs).
+/// The edges come from `Node.iZone[0]/[1]`, NOT from the Pass-B portal fragment list, and zone 0 is
+/// not special-cased.  Native used to walk `portals` filtered by the zone-barrier set and skip any
+/// pair touching zone 0, which left OceanLab N=155's zones 0 and 1 mutually unconnected where UED22
+/// connects them.  `Visibility` is never written by the editor and stays all-ones.
+fn build_connectivity(model: &Model, num_zones: i32) -> Vec<Zone> {
     let mut zones: Vec<Zone> = (0..num_zones)
         .map(|z| Zone {
             actor_ref: 0,
@@ -1231,17 +1242,17 @@ pub fn assign_leaves_and_zones(model: &mut Model) {
             visibility: u64::MAX,
         })
         .collect();
-    for p in &portals {
-        if barriers.contains(&pair(p.a, p.b)) {
-            let za = model.leaves[p.a as usize].i_zone;
-            let zb = model.leaves[p.b as usize].i_zone;
-            if za > 0 && zb > 0 && (za as usize) < zones.len() && (zb as usize) < zones.len() {
-                zones[za as usize].connectivity |= 1u64 << (zb as u64 & 63);
-                zones[zb as usize].connectivity |= 1u64 << (za as u64 & 63);
-            }
+    for n in &model.nodes {
+        if n.i_surf < 0 || (model.surfs[n.i_surf as usize].poly_flags & PF_PORTAL) == 0 {
+            continue;
+        }
+        let (z0, z1) = (n.i_zone[0], n.i_zone[1]);
+        if z0 >= 0 && z1 >= 0 && (z0 as usize) < zones.len() && (z1 as usize) < zones.len() {
+            zones[z1 as usize].connectivity |= 1u64 << (z0 as u64 & 63);
+            zones[z0 as usize].connectivity |= 1u64 << (z1 as u64 & 63);
         }
     }
-    model.zones = zones;
+    zones
 }
 
 /// Pass E, `BuildZoneMasks`: node `ZoneMask` = OR of `1<<iZone` over self + children + coplanar
@@ -1298,8 +1309,8 @@ fn build_zone_mask(model: &mut Model, ni: i32) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{assign_leaves, fill_ring_verts, fix_ring};
-    use crate::model::{BspNode, Model, Plane};
+    use super::{assign_leaves, build_connectivity, fill_ring_verts, fix_ring, PF_PORTAL};
+    use crate::model::{BspNode, BspSurf, Model, Plane};
 
     /// Pass A must visit `i_front` before `i_back` at every branch -- confirmed 2026-08-31 by
     /// re-deriving `DX.dx`'s real editor-built golden `iLeaf` numbering (0 of 26 nodes mismatch
@@ -1661,5 +1672,32 @@ mod tests {
         let mut leaves: Vec<i32> = out.iter().map(|(l, _)| *l).collect();
         leaves.sort();
         assert_eq!(leaves, vec![0, 1], "a straddling face lands one fragment in each leaf");
+    }
+
+    /// Pass F, `FEditorVisibility::BuildConnectivity` (`Editor.dll 0xa7960`, decoded in
+    /// `re-raw-zones/passesEFG-8850-7960-7e60.md`): the edges are a NODE walk over `PF_Portal`
+    /// surfs, reading `Node.iZone[0]/[1]` — zone 0 included. OceanLab N=155 needs zone 0 and 1
+    /// mutually connected; native's old portal-fragment walk skipped every pair touching zone 0.
+    #[test]
+    fn portal_node_connects_zone_zero_to_its_other_side() {
+        let surf = |poly_flags: u32| BspSurf {
+            texture_ref: 0, poly_flags, p_base: 0, v_normal: 0, v_texture_u: 0, v_texture_v: 0,
+            i_actor: 0, i_brush_poly: 0, pan: [0, 0], i_light_map: -1,
+        };
+        let node = |i_surf: i32, i_zone: [i32; 2]| BspNode {
+            i_surf,
+            i_zone,
+            ..BspNode::leaf(Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 }, -1, -1, 0)
+        };
+        let mut m = Model::default();
+        m.surfs.push(surf(PF_PORTAL));
+        m.surfs.push(surf(0));
+        m.nodes.push(node(0, [0, 1]));   // a portal straddling zone 0 and zone 1
+        m.nodes.push(node(1, [1, 2]));   // not a portal: contributes no edge
+
+        let zones = build_connectivity(&m, 3);
+        assert_eq!(zones[0].connectivity, 0b011, "zone 0 must see itself and zone 1");
+        assert_eq!(zones[1].connectivity, 0b011, "zone 1 must see itself and zone 0");
+        assert_eq!(zones[2].connectivity, 0b100, "a non-portal surf connects nothing");
     }
 }
