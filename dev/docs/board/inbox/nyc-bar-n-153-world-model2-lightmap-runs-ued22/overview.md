@@ -31,6 +31,17 @@ So native decides one light illuminates three surfaces UED22 leaves dark. Same F
 `wanchai-n45-spotlight22-light-runs-differ-on-4`, but here native is a strict superset rather than
 trading decisions.
 
+## NOT the OceanLab N=48 / UNATCO N=163 cause (measured 2026-09-07)
+
+Those two were one bug — the gather never retired a zone whose span buffer had emptied, so it marked
+`NF_BoxOccluded` on nodes UED22 never box-tests
+(`oceanlab-n48-world-model2-lightbits-differ-on`). Rebuilt and gated here before and after that fix:
+**N=153 is unchanged, N=152 still passes.**
+
+Also recorded: N=153 fails on TWO bodies, not one — `model model2` and `model
+model_deusexmover9`. The mover body was already failing on master before the box-occlusion work
+(checked by rebuilding N=153 against `HEAD`), so it belongs to this item, not to that change.
+
 ## Repro
 
     ladder_run.py --dx dev/games/deusex/Maps/02_NYC_Bar.dx --from 153 --to 153 --keep-native

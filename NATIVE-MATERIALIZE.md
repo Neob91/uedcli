@@ -212,11 +212,12 @@ Tests must NOT block the parity work. For this project specifically:
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
-- **UNATCO, N=163**: `dev/docs/board/inbox/unatco-n-163-world-model2-lights-and-lightbits/` — native
-  emits 7 extra `Model.Lights` entries and 217 extra `LightBits` bytes, shifting every one of the 346
-  `LightMap` records by `+7`/`+217`; `leaves` and every geometry array are byte-exact and
-  `lightrun_diff.py` finds 0 differing decoded runs, so the extras sit outside the per-lightmap runs.
-  Byte-exact **N=1..162** (was 115). N=116 needed no fix and was never a real divergence
+- **UNATCO**: N=163 is FIXED
+  (`dev/docs/board/done/unatco-n-163-world-model2-lights-and-lightbits/`) — the 7 extra
+  `Model.Lights` entries and 217 extra `LightBits` bytes came from the missing ZONE RETIRE described
+  under OceanLab below, not from anything UNATCO-specific. Byte-exact **N=1..163** (was 162); the
+  forward walk past it is still running, so this level has no recorded next blocker right now.
+  N=116 needed no fix and was never a real divergence
   (`dev/docs/board/done/unatco-n-116-world-model2-light-runs-differ-on/`): the 941-against-940
   `Model.Lights` bail came from a STALE wheel. Cargo decides freshness by mtime, so a crate restored
   with older timestamps is not rebuilt — six builds labelled with six different commits all ran one
@@ -231,10 +232,9 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   `brush_marshal`'s per-brush texture dedup ordinal as an object ref, because
   `unbuilt._patch_native_surf_refs` only overwrote `texture_ref` when the poly named a texture.
   Diagnosing a `Verts` diff: run `harness/ring_diff.py` FIRST — `model_dump.py` reports every
-  orphan slot as a difference, which is what sent the N=29 item down the vertex-ring path. Also
-  open, found by the earlier N=26 work:
-  `dev/docs/board/inbox/port-occludebsp-frustum-cone-subtree-reject/` — native still box-tests 51
-  subtrees per UNATCO N=26 build that UED22's step-6 frustum-cone reject discards.
+  orphan slot as a difference, which is what sent the N=29 item down the vertex-ring path. The
+  step-6 frustum-cone reject the N=26 work left open is ported too
+  (`dev/docs/board/done/port-occludebsp-frustum-cone-subtree-reject/`).
 - **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-spotlight22-light-runs-differ-on-4/` — the
   rasterizer port it was parked on is DONE and landed (`ClipBspSurf`, its clipper, the per-vertex
   transform and the fixed-point scanline setup, `dev/docs/spikes/2026-09-06-raster-clipbspsurf-port/`)
@@ -308,9 +308,23 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   across three earlier fixes this session: a native texture resolver no longer guessing a package
   when none is loaded, the point-dedup repartition fix below, and the gather pass's plane test now
   gating the raytrace loop —
-  `dev/docs/board/done/oceanlab-n44-world-model2-lights-array-has-2/`). Bails at **N=48** on the
-  world `Model2`'s `LightBits` alone — 28 bytes over 3 lightmaps, every geometry array byte-exact —
-  `dev/docs/board/inbox/oceanlab-n48-world-model2-lightbits-differ-on/`.
+  `dev/docs/board/done/oceanlab-n44-world-model2-lights-array-has-2/`). N=48 is FIXED too
+  (`dev/docs/board/done/oceanlab-n48-world-model2-lightbits-differ-on/`,
+  `dev/docs/spikes/2026-09-07-oceanlab-n48-lightbits/`) — and so, by the same fix, is UNATCO N=163.
+  The gather never retired a zone whose span buffer had emptied (`URender::OccludeBsp`
+  `render.dll 0x1001a737`–`0x1001a7e5`: `FSpanBuffer::ValidLines <= 0` drops the zone from the
+  active set, and an empty set ends the face's traversal), so native kept descending into subtrees
+  the editor had abandoned and wrote `NF_BoxOccluded` on nodes UED22 never box-tests. That bit is
+  gate-excluded but NOT inert: a `PF_BrightCorners` shadow ray passes `ExtraNodeFlags = 0x14`, so a
+  marked node stops being solid and stops shadowing. Live probe at the first `illuminateSurf`:
+  UED22 carries the bit on `{32, 80, 160, 352}`; native carried it on twelve nodes, one of which
+  (node 512) unshadowed three surfaces' edge lumels. With the retire ported — plus step 6, the
+  frustum-cone subtree reject — native runs exactly the editor's 1218 box tests and ends with
+  exactly its flag set. Byte-exact **N=1..48** (was 47); the forward walk past it is still running.
+  Still open, measured in the same pass:
+  `dev/docs/board/inbox/gather-still-over-occludes-45-of-1218-box-tests/` — 49 of 1173 shared box
+  tests still disagree, every one native-hidden/editor-visible, i.e. span-buffer over-fill, the
+  WanChai N=45 family with a much smaller reproducer.
 - **Standing stopgaps, all levels**:
   `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/` — repartition dedups points
   with a linear pool scan; the editor descends and appends on a miss (`AddThing(..., !FastRebuild)`

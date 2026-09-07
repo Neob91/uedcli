@@ -170,6 +170,52 @@ struct Face {
     x_axis: Vec3,
     y_axis: Vec3,
     z_axis: Vec3,
+    /// `FSceneNode::ViewSides[4]` (`+0xfc`/`+0x108`/`+0x114`/`+0x120`) — see [`view_sides`].
+    view_sides: [Vec3; 4],
+}
+
+fn face(x_axis: Vec3, y_axis: Vec3, z_axis: Vec3) -> Face {
+    let view_sides = view_sides(&x_axis, &y_axis, &z_axis);
+    Face { x_axis, y_axis, z_axis, view_sides }
+}
+
+/// `FVector::UnsafeNormal` (`core.dll 0x1002e0c0`): the squared length accumulates
+/// `(X*X + Y*Y) + Z*Z` in f32, the reciprocal square root is taken at double precision, and each
+/// component is scaled by that value rounded back to f32.
+fn unsafe_normal(v: &Vec3) -> Vec3 {
+    let sq = (v.x * v.x + v.y * v.y) + v.z * v.z;
+    let scale = (1.0f64 / (sq as f64).sqrt()) as f32;
+    Vec3::new(v.x * scale, v.y * scale, v.z * scale)
+}
+
+/// `FSceneNode::ViewSides[4]` — the four unit frustum-corner rays in WORLD space, built exactly as
+/// `FSceneNode::ComputeRenderSize` builds them (`Engine.dll 0x1013295d`–`0x101329fb`): a double loop
+/// over `S = {-1, +1}` writing slot `2*i + j` (offsets `0xfc`, `0x108`, `0x114`, `0x120` — the
+/// `12 * (2*i + 21 + j)` the disassembly computes) from the view-space corner
+/// `(S[i] * FX15, S[j] * FY15, Proj.Z)`, `UnsafeNormal`ised and then `TransformVectorBy(Uncoords)`
+/// into world space.
+///
+/// `Uncoords` is the transpose of the view `FCoords` whose axes are this [`Face`]'s, so
+/// `TransformVectorBy` (`core.dll 0x1002dd50`, `(V.X*A.X + V.Y*A.Y) + V.Z*A.Z` per axis) reduces to
+/// `V.x*x_axis + V.y*y_axis + V.z*z_axis`, summed in that same per-component order.
+///
+/// `FX15`/`FY15` are `FSceneNode+0xc8`/`+0xcc` — the same [`FRAME_CXY`] `BoundVisible` projects
+/// about, not `+0xc0`'s `512.500061`.
+fn view_sides(x_axis: &Vec3, y_axis: &Vec3, z_axis: &Vec3) -> [Vec3; 4] {
+    const SIGNS: [f32; 2] = [-1.0, 1.0];
+    let mut out = [Vec3::new(0.0, 0.0, 0.0); 4];
+    for i in 0..2 {
+        for j in 0..2 {
+            let v = unsafe_normal(&Vec3::new(
+                SIGNS[i] * FRAME_CXY, SIGNS[j] * FRAME_CXY, FRAME_PROJ_Z));
+            out[2 * i + j] = Vec3::new(
+                (v.x * x_axis.x + v.y * y_axis.x) + v.z * z_axis.x,
+                (v.x * x_axis.y + v.y * y_axis.y) + v.z * z_axis.y,
+                (v.x * x_axis.z + v.y * y_axis.z) + v.z * z_axis.z,
+            );
+        }
+    }
+    out
 }
 
 /// Rotator order, matching the editor's own gather sequence: `(0x4000,0,0)`=+Z, `(0xc000,0,0)`=−Z,
@@ -179,18 +225,35 @@ fn faces() -> [Face; 6] {
     const S: f32 = 8.74227766e-08;
     [
         // +Z
-        Face { x_axis: Vec3::new(0.0, 1.0, 0.0), y_axis: Vec3::new(1.0, 0.0, S), z_axis: Vec3::new(-S, 0.0, 1.0) },
+        face(Vec3::new(0.0, 1.0, 0.0), Vec3::new(1.0, 0.0, S), Vec3::new(-S, 0.0, 1.0)),
         // -Z
-        Face { x_axis: Vec3::new(0.0, 1.0, 0.0), y_axis: Vec3::new(-1.0, 0.0, 0.0), z_axis: Vec3::new(0.0, 0.0, -1.0) },
+        face(Vec3::new(0.0, 1.0, 0.0), Vec3::new(-1.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0)),
         // +X
-        Face { x_axis: Vec3::new(0.0, 1.0, 0.0), y_axis: Vec3::new(0.0, 0.0, -1.0), z_axis: Vec3::new(1.0, 0.0, 0.0) },
+        face(Vec3::new(0.0, 1.0, 0.0), Vec3::new(0.0, 0.0, -1.0), Vec3::new(1.0, 0.0, 0.0)),
         // -X
-        Face { x_axis: Vec3::new(S, -1.0, 0.0), y_axis: Vec3::new(0.0, 0.0, -1.0), z_axis: Vec3::new(-1.0, -S, 0.0) },
+        face(Vec3::new(S, -1.0, 0.0), Vec3::new(0.0, 0.0, -1.0), Vec3::new(-1.0, -S, 0.0)),
         // -Y
-        Face { x_axis: Vec3::new(1.0, 0.0, 0.0), y_axis: Vec3::new(0.0, 0.0, -1.0), z_axis: Vec3::new(0.0, -1.0, 0.0) },
+        face(Vec3::new(1.0, 0.0, 0.0), Vec3::new(0.0, 0.0, -1.0), Vec3::new(0.0, -1.0, 0.0)),
         // +Y
-        Face { x_axis: Vec3::new(-1.0, -S, 0.0), y_axis: Vec3::new(0.0, 0.0, -1.0), z_axis: Vec3::new(-S, 1.0, 0.0) },
+        face(Vec3::new(-1.0, -S, 0.0), Vec3::new(0.0, 0.0, -1.0), Vec3::new(-S, 1.0, 0.0)),
     ]
+}
+
+/// `URender::OccludeBsp`'s frustum-cone subtree reject (`render.dll 0x1001979b`–`0x10019884`):
+/// with `sign = IsFront ? +1 : −1`, the node is abandoned — its own surface, the rest of its
+/// coplanar chain and its FAR child all skipped — when all four
+/// `sign * (Node->Plane | Frame->ViewSides[k])` are `> 0`, i.e. the whole view frustum leads away
+/// from the node's plane. `FPlane::operator|(FVector)` (`core.dll 0x10017d90`) is the
+/// 3-component dot, W excluded.
+///
+/// The near child is NOT pruned: the editor descends it before this test (the test sits on the
+/// resume path at `0x10019670`, after the near subtree has already run), and the reject's
+/// `jmp 0x100193df` pops the node's own stack record — the one holding the far child.
+fn cone_rejects(plane: &Plane, is_front: bool, view_sides: &[Vec3; 4]) -> bool {
+    let sign = if is_front { 1.0f32 } else { -1.0f32 };
+    view_sides
+        .iter()
+        .all(|v| sign * ((plane.x * v.x + plane.y * v.y) + plane.z * v.z) > 0.0)
 }
 
 #[inline]
@@ -961,9 +1024,9 @@ fn traverse(
     boxes: &mut BoxOcclusion,
     trace: Option<(usize, i32)>, // (face index, target surf) — see `trace_target`
     trace_portals: bool,        // see `trace_portals`
-) {
+) -> bool {
     if ni < 0 {
-        return;
+        return true;
     }
     let head = &model.nodes[ni as usize];
     // Step 1: zone-mask subtree prune, checked at the chain HEAD before anything else. `zone_mask`
@@ -977,7 +1040,7 @@ fn traverse(
                 ni as usize, head.i_surf, head.zone_mask, *active_mask
             );
         }
-        return;
+        return true;
     }
     // Step 4: render-bound box occlusion (`render.dll 0x1001932c`–`0x1001952a`), before either
     // child is descended into — a rejected node's whole subtree is skipped. Runs only for a node
@@ -1017,7 +1080,7 @@ fn traverse(
         }
         boxes.record(ni, visible);
         if !visible {
-            return;
+            return true;
         }
     }
     let d = plane_dot(&head.plane, light_loc);
@@ -1028,7 +1091,20 @@ fn traverse(
         if is_front { (head.i_back, head.i_front) } else { (head.i_front, head.i_back) };
 
     // Near child, full subtree, first (front-to-back).
-    traverse(model, near_child, light_loc, face, use_zones, active_mask, spans, out, boxes, trace, trace_portals);
+    if !traverse(model, near_child, light_loc, face, use_zones, active_mask, spans, out, boxes,
+                 trace, trace_portals) {
+        return false;
+    }
+
+    // Step 6: the frustum-cone reject ([`cone_rejects`]), on the chain HEAD only and only once the
+    // near subtree has run — the editor's own placement. It abandons this node's surface, the rest
+    // of its chain, and `far_child`.
+    if cone_rejects(&model.nodes[ni as usize].plane, is_front, &face.view_sides) {
+        if trace.is_some_and(|(_, s)| s == model.nodes[ni as usize].i_surf) {
+            eprintln!("VISGATE_TRACE node={ni} PRUNED (frustum-cone reject)");
+        }
+        return true;
+    }
 
     // Own surface, then every remaining `i_plane` coplanar chain member's surface — `far_child` is
     // visited only AFTER the whole chain (below), never interleaved with it. A chain MEMBER carries
@@ -1148,6 +1224,29 @@ fn traverse(
                                 *active_mask |= 1u64 << (far_zone as u64 & 63);
                             }
                         }
+                        // Step 13 — ZONE RETIRE (`render.dll 0x1001a737`–`0x1001a7e5`, decoded
+                        // 2026-09-07): once this surface's subtraction has emptied the NEAR zone's
+                        // span buffer (`FSpanBuffer::ValidLines`, `+8`, `<= 0`), that zone drops out
+                        // of the active set, and when the set empties the WHOLE face traversal ends
+                        // (`je 0x100193f6`, the post-traversal wrap-up). Only this accepted path
+                        // reaches it — a node whose buffer was already empty jumps straight to the
+                        // chain advance (`0x10019965`), and a rasterized-but-fully-occluded one
+                        // takes the `NF_PolyOccluded` exit (`0x10019c26`).
+                        //
+                        // Without it native keeps descending into subtrees the editor has already
+                        // abandoned, box-testing — and so `NF_BoxOccluded`-marking — nodes the
+                        // editor never reaches. That is what put OceanLab N=48's world node 512
+                        // (marked by native, clear in UED22 at the first `illuminateSurf`) on the
+                        // wrong side of `linecheck::is_csg` for three `PF_BrightCorners` surfaces.
+                        if !spans.get_or_empty(near_key).any_visible() {
+                            if !use_zones {
+                                return false;
+                            }
+                            *active_mask &= !(1u64 << (near_zone as u64 & 63));
+                            if *active_mask == 0 {
+                                return false;
+                            }
+                        }
                     } else {
                         DBG_EMPTY_AFTER_TEST.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         if trace_portals && use_zones && poly_flags & PF_PORTAL != 0 {
@@ -1186,7 +1285,8 @@ fn traverse(
     }
 
     // Far child, full subtree, last — only after the whole coplanar chain above.
-    traverse(model, far_child, light_loc, face, use_zones, active_mask, spans, out, boxes, trace, trace_portals);
+    traverse(model, far_child, light_loc, face, use_zones, active_mask, spans, out, boxes, trace,
+             trace_portals)
 }
 
 /// TEMP root-cause diagnostic (`getvisiblesurfs-wanchai-run-gap-root-cause`, 2026-08-30): when
@@ -1301,6 +1401,8 @@ pub fn get_visible_surfs(model: &Model, light_loc: Vec3) -> Gather {
         let seed_key = if use_zones { view_zone } else { SHARED_KEY };
         spans.bufs.insert(seed_key, SpanBuf::full());
         let mut active_mask: u64 = if use_zones { 1u64 << (view_zone as u64 & 63) } else { u64::MAX };
+        // The return value is the editor's "any active zone left" signal — `false` means this face's
+        // traversal is over, which is exactly what falling out of the loop body does.
         traverse(model, 0, &light_loc, face, use_zones, &mut active_mask, &mut spans, &mut out, &mut boxes, trace.map(|(s, _)| (fi, s)), trace_portals);
     }
     if let Some((surf, _)) = trace {
@@ -1749,7 +1851,7 @@ mod tests {
             let v = |i: usize| Vec3::new(f(i), f(i + 1), f(i + 2));
             let rect: Vec<i32> = col[19..23].iter().map(|c| c.parse().unwrap()).collect();
             let path = col[23];
-            let face = Face { x_axis: v(3), y_axis: v(6), z_axis: v(9) };
+            let face = face(v(3), v(6), v(9));
             let b = FBox { min: v(12), max: v(15), valid: 1 };
             let got = bound_visible(&b, &v(0), &face, None);
             let want = match path {
@@ -1825,5 +1927,61 @@ mod tests {
                 c.row_before, c.incoming, c.row_after
             );
         }
+    }
+
+    /// LIVE-CAPTURED `FSceneNode::ViewSides[4]` (`+0xfc`/`+0x108`/`+0x114`/`+0x120`), read off the
+    /// six 1024x1024 gather frames of a real OceanLab N=48 golden build
+    /// (`spikes/2026-09-07-oceanlab-n48-lightbits/logs/frame-probe-n48.log`, gdb at the
+    /// `render.dll 0x100193d5` call site). Same face order as [`faces`]. Printed at 9 significant
+    /// digits by the probe, so the test compares at that precision — enough to separate the three
+    /// distinct f32 values (`0.57735014`, `0.577350199`, `0.577350259`) the editor's own
+    /// `UnsafeNormal` + `TransformVectorBy` rounding produces, which is what pins the arithmetic
+    /// rather than just the geometry.
+    #[test]
+    fn view_sides_match_the_live_editor_gather_frames() {
+        let live: [[[f32; 3]; 4]; 6] = [
+            // +Z
+            [[-0.577350318, -0.577350259, 0.57735014], [0.577350199, -0.577350259, 0.577350259],
+             [-0.577350318, 0.577350259, 0.57735014], [0.577350199, 0.577350259, 0.577350259]],
+            // -Z
+            [[0.577350259, -0.577350259, -0.577350199], [-0.577350259, -0.577350259, -0.577350199],
+             [0.577350259, 0.577350259, -0.577350199], [-0.577350259, 0.577350259, -0.577350199]],
+            // +X
+            [[0.577350199, -0.577350259, 0.577350259], [0.577350199, -0.577350259, -0.577350259],
+             [0.577350199, 0.577350259, 0.577350259], [0.577350199, 0.577350259, -0.577350259]],
+            // -X
+            [[-0.577350259, 0.577350199, 0.577350259], [-0.577350259, 0.577350199, -0.577350259],
+             [-0.57735014, -0.577350318, 0.577350259], [-0.57735014, -0.577350318, -0.577350259]],
+            // -Y
+            [[-0.577350259, -0.577350199, 0.577350259], [-0.577350259, -0.577350199, -0.577350259],
+             [0.577350259, -0.577350199, 0.577350259], [0.577350259, -0.577350199, -0.577350259]],
+            // +Y
+            [[0.577350199, 0.577350259, 0.577350259], [0.577350199, 0.577350259, -0.577350259],
+             [-0.577350318, 0.57735014, 0.577350259], [-0.577350318, 0.57735014, -0.577350259]],
+        ];
+        for (fi, face) in faces().iter().enumerate() {
+            for k in 0..4 {
+                let got = [face.view_sides[k].x, face.view_sides[k].y, face.view_sides[k].z];
+                for c in 0..3 {
+                    assert_eq!(
+                        format!("{:.9}", got[c]), format!("{:.9}", live[fi][k][c]),
+                        "face {fi} ViewSides[{k}].{c}: {} vs live {}", got[c], live[fi][k][c]
+                    );
+                }
+            }
+        }
+    }
+
+    /// A node's own surface subtraction can empty the near zone's span buffer; the editor then
+    /// retires that zone (`render.dll 0x1001a737`) and, with none left, ends the face traversal
+    /// (`je 0x100193f6`). [`traverse`]'s `false` return is that signal.
+    #[test]
+    fn an_emptied_span_buffer_ends_the_unzoned_traversal() {
+        let mut buf = SpanBuf::full();
+        assert!(buf.any_visible());
+        let rows: Vec<(i32, i32, i32)> = (0..RES).map(|y| (y, 0, RES)).collect();
+        let accepted = test_and_maybe_subtract(&mut buf, &rows, true);
+        assert_eq!(accepted.len(), RES as usize, "a full-screen span must be accepted whole");
+        assert!(!buf.any_visible(), "subtracting the whole screen must leave ValidLines == 0");
     }
 }
