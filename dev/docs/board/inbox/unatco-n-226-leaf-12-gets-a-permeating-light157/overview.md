@@ -21,9 +21,22 @@ to N=225 (`oceanlab-n48-world-model2-lightbits-differ-on`).
 - The per-surf half is clean: `lightbits` is byte-identical (211650 bytes) and
   `harness/lightbits_diff.py` reports **0 differing records**.
 
-Same shape as `oceanlab-n-93-leaf-96-gets-a-permeating` (found in the same pass) and
-`island-n-123-world-model2-leaf-permeating-light`: native's permeating flood reaches a leaf UED22's
-does not. Three independent reproducers of one gap — attack them together.
+## Its two siblings are fixed; this one survived that fix (2026-09-07)
+
+`oceanlab-n-93-leaf-96-gets-a-permeating` and `island-n-123-world-model2-leaf-permeating-light` were
+the same shape and are both closed: the beam clip took its crossing vertex from
+`alpha = dp/(dp-ds)` where `SplitWithPlaneFast` calls `FLinePlaneIntersection`, and a crossing
+landing exactly on a grid coordinate collapsed the next hop's clip edge to zero length
+(`wanchai-n45-leaf-20-permeating-light-over-included`, spike
+`dev/docs/spikes/2026-09-07-gather-box-verdict/`). **Re-measured after that fix, this one is
+unchanged** — leaf 12 still carries `Light157` (`Model.Lights` 2953 vs 2952, per-surf runs 0
+differing), so it is a second, independent case.
+
+The method that cracked WanChai applies directly: capture the editor's own flood with
+`2026-09-07-gather-box-verdict/harness/actor_visibility_probe.py` and diff it with
+`perm_flood_diff.py` to find the one crossing native takes that the editor does not — WanChai's
+capture had 10 of 11 lights already identical, so the diff is narrow. UNATCO N=226 is bigger
+(147 leaves) but the probe cost scales with the flood, not the level.
 
 ## Repro
 

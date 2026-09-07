@@ -180,6 +180,13 @@ fn plane_dot(normal: &Vec3, w: f32, v: &Vec3) -> f32 {
 /// cross product is rounding noise). There the editor has no "interior" to prefer either: it clips
 /// by whatever `FPlane` produced, and so does this.
 fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> {
+    clip_beam_traced(light, clip, target, false)
+}
+
+/// [`clip_beam`], plus a per-edge dump of what `split_with_plane_fast` decided and by how much —
+/// the margins that say whether a crossing is a near-tie against the `0.25` epsilon or a clear
+/// call. Used by the `UEDCLI_PERM_TRACE_EDGE` probe, never on the default path.
+fn clip_beam_traced(light: &Vec3, clip: &[Vec3], target: &[Vec3], trace: bool) -> Option<Vec<Vec3>> {
     let mut poly = target.to_vec();
     let n = clip.len();
     for j in 0..n {
@@ -189,15 +196,59 @@ fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> 
         let a = clip[(j + n - 1) % n];
         let b = clip[j];
         let Some(normal) = safe_normal(&(b.sub(light)).cross(&(a.sub(light)))) else {
+            if trace {
+                eprintln!("PERM_EDGE j={j} DEGENERATE (no constraint)");
+            }
             continue; // degenerate edge (through the light or zero-length): no constraint
         };
-        poly = split_with_plane_fast(&poly, &normal, plane_w(light, &normal))?;
+        let w = plane_w(light, &normal);
+        if trace {
+            let dots: Vec<f32> = poly.iter().map(|v| plane_dot(&normal, w, v)).collect();
+            let lo = dots.iter().copied().fold(f32::INFINITY, f32::min);
+            let hi = dots.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+            let branch = match (hi > THRESH_SPLIT_POLY_WITH_PLANE,
+                                lo < -THRESH_SPLIT_POLY_WITH_PLANE) {
+                (_, false) => "SP_Front(whole)",
+                (false, true) => "SP_Back(reject)",
+                (true, true) => "SP_Split",
+            };
+            eprintln!("PERM_EDGE j={j} verts={} dot_min={lo} dot_max={hi} -> {branch}", poly.len());
+        }
+        poly = split_with_plane_fast(&poly, &normal, w)?;
     }
     if poly.len() >= 3 {
         Some(poly)
     } else {
         None
     }
+}
+
+/// `FLinePlaneIntersection(P1, P2, Plane)` — `Engine.dll 0x101507c0`, disassembled 2026-09-07. The
+/// crossing point [`split_with_plane_fast`] emits (`0x1015214b` calls it with `P1 = Vertex[i-1]`,
+/// `P2 = Vertex[i]`).
+///
+/// ```text
+/// D   = P2 - P1
+/// Sc  = (W - ((P1.y*N.y + P1.x*N.x) + P1.z*N.z)) / ((D.x*N.x + D.y*N.y) + D.z*N.z)
+/// out = Sc*D + P1
+/// ```
+///
+/// Algebraically this is the `alpha = dp / (dp - ds)` this port used to compute — `dp` and `ds`
+/// being the two `PlaneDot`s — but NOT in f32: the editor re-derives the numerator from `P1` with
+/// its own summation order and takes the denominator from the DIFFERENCE vector dotted with the
+/// normal, where `dp - ds` subtracts two separately-rounded dots. The two disagree in the last few
+/// ulps, and a clip vertex landing exactly on a grid coordinate rather than 1.2e-4 off it collapses
+/// the next hop's clip edge to zero length — which [`clip_beam`] then skips as degenerate while the
+/// editor still clips by it. That is WanChai N=45's whole divergence: leaf 20 picked up Spotlight22
+/// through a beam the editor had already narrowed (spike
+/// `dev/docs/spikes/2026-09-07-gather-box-verdict/`). Pinned by
+/// [`tests::the_beam_clip_reproduces_the_editors_own_crossing_vertices`].
+fn line_plane_intersection(p1: &Vec3, p2: &Vec3, normal: &Vec3, w: f32) -> Vec3 {
+    let d = Vec3::new(p2.x - p1.x, p2.y - p1.y, p2.z - p1.z);
+    let num = w - ((p1.y * normal.y + p1.x * normal.x) + p1.z * normal.z);
+    let den = (d.x * normal.x + d.y * normal.y) + d.z * normal.z;
+    let sc = num / den;
+    Vec3::new(sc * d.x + p1.x, sc * d.y + p1.y, sc * d.z + p1.z)
 }
 
 /// Port of `FPoly::SplitWithPlaneFast` (`Engine.dll 0x10151f90`, disassembled 2026-08-31, image
@@ -217,7 +268,9 @@ fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> 
 /// `SP_Front` when `!negative`). A poly with every vertex inside the epsilon band of the plane
 /// (`SP_Coplanar`, neither flag set) is treated here as kept-whole — the real caller's `ActorVisibility`
 /// (`Editor.dll`, not yet disassembled for this call site) may differ; the one remaining unconfirmed
-/// branch of the two the board item flagged.
+/// branch of the two the board item flagged. The crossing vertex itself comes from
+/// [`line_plane_intersection`], not from an `alpha` between the two `PlaneDot`s — which matters to
+/// the last ulp.
 fn split_with_plane_fast(poly: &[Vec3], normal: &Vec3, w: f32) -> Option<Vec<Vec3>> {
     let n = poly.len();
     if n == 0 {
@@ -240,12 +293,7 @@ fn split_with_plane_fast(poly: &[Vec3], normal: &Vec3, w: f32) -> Option<Vec<Vec
         let (ds, dp) = (dots[i], dots[(i + n - 1) % n]);
         let (cur_front, prev_front) = (ds >= 0.0, dp >= 0.0);
         if cur_front != prev_front {
-            let t = dp / (dp - ds);
-            out.push(Vec3::new(
-                prev.x + t * (cur.x - prev.x),
-                prev.y + t * (cur.y - prev.y),
-                prev.z + t * (cur.z - prev.z),
-            ));
+            out.push(line_plane_intersection(&prev, &cur, normal, w));
         }
         if cur_front {
             out.push(cur);
@@ -273,6 +321,7 @@ fn actor_visibility(
     marks: &mut HashMap<i32, Vec<i32>>,
     seen: &mut HashSet<(i32, i32)>,
     depth: u32,
+    trace: bool,
 ) {
     if depth > 4096 || leaf < 0 {
         return; // corrupt/cyclic-graph guard; never hang (repo convention, see linecheck.rs)
@@ -292,24 +341,57 @@ fn actor_visibility(
     // Mark (dedup on (leaf, light); traversal continues past an already-marked leaf).
     if seen.insert((leaf, light_idx)) {
         marks.entry(leaf).or_default().push(light_idx);
+        if trace {
+            eprintln!("PERM_MARK light={light_idx} leaf={leaf} depth={depth}");
+        }
     }
     // Flood through every outward face of this leaf.
     let Some(faces) = leaf_faces else { return };
     for f in faces {
         let d = light_loc.sub(&f.base).dot(&f.normal);
         if !(d < 0.0 && d > -radius) {
+            if trace {
+                eprintln!(
+                    "PERM_FACE light={light_idx} depth={depth} {leaf}->{} d={d} DROP(face gate)",
+                    f.to_leaf
+                );
+            }
             continue;
+        }
+        // `UEDCLI_PERM_TRACE_EDGE=<from>-<to>` additionally dumps this one crossing's per-edge
+        // clip margins, which is what says whether a divergence is a near-tie or a clear call.
+        let edge_trace = trace
+            && std::env::var("UEDCLI_PERM_TRACE_EDGE")
+                .is_ok_and(|w| w == format!("{leaf}-{}", f.to_leaf));
+        if edge_trace {
+            eprintln!(
+                "PERM_EDGE_DUMP {leaf}->{} clip={:?} face={:?}", f.to_leaf, clip, f.verts);
         }
         let next_poly = match clip {
             None => f.verts.clone(),
-            Some(cp) => match clip_beam(light_loc, cp, &f.verts) {
+            Some(cp) => match clip_beam_traced(light_loc, cp, &f.verts, edge_trace) {
                 Some(v) => v,
-                None => continue,
+                None => {
+                    if trace {
+                        eprintln!(
+                            "PERM_FACE light={light_idx} depth={depth} {leaf}->{} d={d} \
+                             DROP(beam clip: {} clip verts x {} face verts)",
+                            f.to_leaf, cp.len(), f.verts.len()
+                        );
+                    }
+                    continue;
+                }
             },
         };
+        if trace {
+            eprintln!(
+                "PERM_FACE light={light_idx} depth={depth} {leaf}->{} d={d} KEEP(beam {} verts)",
+                f.to_leaf, next_poly.len()
+            );
+        }
         actor_visibility(
             f.to_leaf, false, Some(&next_poly), light_idx, light_loc, radius, portals, marks, seen,
-            depth + 1,
+            depth + 1, trace,
         );
     }
 }
@@ -325,17 +407,28 @@ pub fn write_permeating_region(model: &mut Model, lights: &[LightInput]) {
         return;
     }
     let portals = leaf_portal_map(model);
+    // `UEDCLI_PERM_TRACE=<light index>` logs that one light's whole flood — every leaf marked and
+    // every face crossing kept or dropped, with the gate that dropped it — so it can be diffed
+    // against a live `FEditorVisibility::ActorVisibility` capture. `all` traces every light.
+    let want_trace = std::env::var("UEDCLI_PERM_TRACE").ok();
     let mut marks: HashMap<i32, Vec<i32>> = HashMap::new();
     let mut seen: HashSet<(i32, i32)> = HashSet::new();
     for (li, l) in lights.iter().enumerate() {
         let seed = bsp_descend_to_leaf(model, &l.location);
+        let trace = want_trace.as_deref().is_some_and(|w| w == "all" || w == li.to_string());
+        if trace {
+            eprintln!(
+                "PERM_LIGHT li={li} loc=[{},{},{}] radius={} seed_leaf={seed}",
+                l.location.x, l.location.y, l.location.z, l.world_radius()
+            );
+        }
         if seed < 0 {
             continue; // spawned in solid: contributes nothing (seed's own radius gate is skipped,
                        // but a solid seed never resolves to a leaf at all).
         }
         actor_visibility(
             seed, true, None, li as i32, &l.location, l.world_radius(), &portals, &mut marks,
-            &mut seen, 0,
+            &mut seen, 0, trace,
         );
     }
     for leaf_idx in 0..model.leaves.len() {
@@ -572,5 +665,55 @@ mod tests {
         let mut m = Model::default();
         write_permeating_region(&mut m, &[]);
         assert!(m.lights.is_empty());
+    }
+
+    /// The beam clip must reproduce the editor's own crossing vertices to the last ulp, because a
+    /// clip vertex landing exactly on a grid coordinate collapses the NEXT hop's clip edge to zero
+    /// length and [`clip_beam`] then skips that edge as degenerate.
+    ///
+    /// These are WanChai N=45's real numbers for Spotlight22's `leaf 57 -> leaf 24` crossing, and
+    /// the expected output is what a live `FEditorVisibility::ActorVisibility` capture shows the
+    /// editor passing into leaf 24 (`dev/docs/spikes/2026-09-07-gather-box-verdict/`,
+    /// `logs/actor-visibility-wanchai-n45.log`). Vertex 3's `x` is the whole thing: `1343.99988`
+    /// against the `1344.0` that `alpha = dp / (dp - ds)` produces — the same point in exact
+    /// arithmetic, a different f32. With `1344.0`, leaf 24's beam has a zero-length edge, the next
+    /// clip drops a constraint, and leaf 20 picks up a light UED22 leaves out.
+    #[test]
+    fn the_beam_clip_reproduces_the_editors_own_crossing_vertices() {
+        let light = Vec3::new(1132.843140, -1010.845642, -150.857758);
+        let clip = [
+            Vec3::new(1344.0, -895.9999, -320.0),
+            Vec3::new(1344.0, -895.9999, -128.0),
+            Vec3::new(960.0, -895.9999, -128.0),
+            Vec3::new(960.0, -895.9999, -320.0),
+        ];
+        let face = [
+            Vec3::new(1344.0, -512.0, -128.0),
+            Vec3::new(1408.0, -512.0, -128.0),
+            Vec3::new(1408.0, -896.0, -128.0),
+            Vec3::new(1344.0, -896.0, -128.0),
+        ];
+        let got = clip_beam(&light, &clip, &face).expect("the crossing survives the beam");
+        let want = [
+            Vec3::new(1344.0, -512.0, -128.0),
+            Vec3::new(1408.0, -512.0, -128.0),
+            Vec3::new(1408.0, -861.19104, -128.0),
+            Vec3::new(1343.99988, -896.0, -128.0),
+            Vec3::new(1344.0, -896.0, -128.0),
+        ];
+        let show = |p: &[Vec3]| {
+            p.iter().map(|v| format!("[{},{},{}]", v.x, v.y, v.z)).collect::<Vec<_>>().join(" ")
+        };
+        assert_eq!(got.len(), want.len(), "got {}", show(&got));
+        for (i, (g, w)) in got.iter().zip(want.iter()).enumerate() {
+            assert!(
+                g.x.to_bits() == w.x.to_bits()
+                    && g.y.to_bits() == w.y.to_bits()
+                    && g.z.to_bits() == w.z.to_bits(),
+                "vertex {i} differs from the live editor capture:\n  got  {}\n  want {}",
+                show(&got),
+                show(&want)
+            );
+        }
     }
 }

@@ -241,19 +241,30 @@ Island 123) — so the permeating flood is where the campaign's leverage is.
   orphan slot as a difference, which is what sent the N=29 item down the vertex-ring path. The
   step-6 frustum-cone reject the N=26 work left open is ported too
   (`dev/docs/board/done/port-occludebsp-frustum-cone-subtree-reject/`).
-- **WanChai, N=45**: `dev/docs/board/inbox/wanchai-n45-leaf-20-permeating-light-over-included/` — NOT
-  a rasterizer or span-buffer problem. The "four divergent Spotlight22 lightmap runs" this was parked
-  on for days were a `FLightMapIndex` decode bug in `lmdiag.py` (it read `VClamp` as `iLightActors`);
-  read correctly, native and UED22 agree on all 210 runs, and the gather's box tests match a live
-  editor capture call for call — same set, same order, same rectangles, same verdicts. The whole
-  divergence is ONE over-included per-leaf permeating light (leaf 20 gets Spotlight22), i.e.
-  `permeating_lights.rs`'s known "extra, never missing" beam-clip margin, and its single extra
-  `Model.Lights` entry shifts every later offset.
-  Spike: `dev/docs/spikes/2026-09-07-gather-box-verdict/`, which also closes
-  `gather-still-over-occludes-45-of-1218-box-tests` the same way (that probe captured
-  `BoundVisible`'s return, not `OccludeBsp`'s post-zone-loop verdict). **Before trusting any
-  lightmap-run or `Model.Lights` diff, use the fixed `lmdiag.py` and check region 1 too with
-  `2026-09-07-gather-box-verdict/harness/leaf_perm_diff.py`.**
+- **WanChai N=45, OceanLab N=93, Island N=123 are all FIXED** (2026-09-07,
+  `dev/docs/spikes/2026-09-07-gather-box-verdict/`) — one f32 rearrangement in the permeating-light
+  beam clip. `FPoly::SplitWithPlaneFast` takes its crossing vertex from `FLinePlaneIntersection`
+  (`Engine.dll 0xa07c0`), not from an `alpha` between the two `PlaneDot`s; the two agree in exact
+  arithmetic and differ in the last ulps, and a crossing landing exactly on a grid coordinate
+  collapses the next hop's clip edge to zero length, which `clip_beam` then skips as degenerate while
+  the editor still clips by it. Root-caused against a live `FEditorVisibility::ActorVisibility`
+  capture: before the fix 10 of WanChai N=45's 11 lights already matched the editor leaf for leaf and
+  crossing for crossing; after it, all 11 do.
+  Two long-standing items closed as MIS-MEASUREMENTS in the same pass, both worth knowing before
+  trusting a lighting diff:
+  - `lmdiag.py` read `FLightMapIndex.VClamp` where `iLightActors` is, inventing WanChai's "four
+    divergent Spotlight22 runs" and a multi-day rasterizer port that was never needed. Fixed.
+    `Model.Lights` is TWO arrays: `lmdiag.py` covers region 2 (per-surf runs) only — check region 1
+    (per-leaf permeating lists) too, with
+    `2026-09-07-gather-box-verdict/harness/leaf_perm_diff.py`.
+  - the box-test probe captured `URender::BoundVisible`'s return, which under `bUseZones` is half the
+    decision (`0x100193ba` NULLs the span pointer; `OccludeBsp` runs the span test per active zone
+    afterwards). Captured properly, native's box occlusion matches the editor on every call of
+    OceanLab N=48 and WanChai N=45 — same set, same ORDER, same rectangles, same verdicts.
+- **UNATCO, N=226**: `dev/docs/board/inbox/unatco-n-226-leaf-12-gets-a-permeating-light157/` — a
+  SECOND, independent case of the same shape, NOT closed by the above: leaf 12 still carries
+  `Light157` where UED22 leaves it out (measured after the fix; `Model.Lights` 2953 vs 2952, per-surf
+  runs 0 differing).
 - **NYC_Bar**: N=59 is FIXED (`dev/docs/board/done/nyc-bar-n-59-brush-region-zone-and-ued22/`) —
   its last three residuals (world-node `NF_IsFront`/`NF_IsBack`, the mover models' `LightMap`, and
   the mover `Polys`' `iLink`/`iBrushPoly`) were one thing: the moving-brush half of
@@ -307,9 +318,11 @@ Island 123) — so the permeating flood is where the campaign's leverage is.
   of the beam clip is gone too and did not move it: `clip_beam` now takes `FPlane(A,B,C)`'s own
   winding-derived orientation instead of forcing it by a sign-sum over the clip poly
   (`dev/docs/spikes/2026-09-07-permeating-beam-plane-winding/`) — provably the same thing on convex
-  clip polys, different only on degenerate edges, and no level's ceiling moved. Next step is a
-  `winedbg` dump of `AddPortal`'s 580 fragments —
-  `dev/docs/board/inbox/island-n-123-world-model2-leaf-permeating-light/`.
+  clip polys, different only on degenerate edges, and no level's ceiling moved. **N=123 is now FIXED
+  too** — the crossing VERTEX, not the gates: `SplitWithPlaneFast` takes it from
+  `FLinePlaneIntersection`, whose f32 differs from `alpha = dp/(dp-ds)` in the last ulps, and a
+  crossing landing exactly on a grid coordinate collapses the next hop's clip edge (see the WanChai
+  bullet above). Island is byte-exact **N=1..123**.
 - **OceanLab, N=48**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the
@@ -332,12 +345,8 @@ Island 123) — so the permeating flood is where the campaign's leverage is.
   UED22 carries the bit on `{32, 80, 160, 352}`; native carried it on twelve nodes, one of which
   (node 512) unshadowed three surfaces' edge lumels. With the retire ported — plus step 6, the
   frustum-cone subtree reject — native runs exactly the editor's 1218 box tests and ends with
-  exactly its flag set. Byte-exact **N=1..92** (was 47); bails at **N=93** on one leaf's
-  permeating-light run — `dev/docs/board/inbox/oceanlab-n-93-leaf-96-gets-a-permeating/`, the same
-  shape as UNATCO N=226 and Island N=123. Still open, measured in the same pass:
-  `dev/docs/board/inbox/gather-still-over-occludes-45-of-1218-box-tests/` — 49 of 1173 shared box
-  tests still disagree, every one native-hidden/editor-visible, i.e. span-buffer over-fill, the
-  WanChai N=45 family with a much smaller reproducer.
+  exactly its flag set. **N=93 is FIXED too** — one leaf's permeating-light run, the crossing-vertex
+  rounding in the WanChai bullet above. Byte-exact **N=1..93** (was 47).
 - **Standing stopgaps, all levels**:
   `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/` — repartition dedups points
   with a linear pool scan; the editor descends and appends on a miss (`AddThing(..., !FastRebuild)`

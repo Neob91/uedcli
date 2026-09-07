@@ -1092,3 +1092,41 @@ def test_the_box_occlusion_verdict_capture_pairs_each_call_with_its_outcome():
 
     assert struct.pack("<f", 234.255) == struct.pack("<f", 234.255005)
     assert round(234.255, 2) != round(234.255005, 2)
+
+
+def test_splitwithplanefast_takes_its_crossing_from_flineplaneintersection():
+    """WHICH f32 rearrangement the permeating-light beam clip's crossing vertex comes from.
+
+    `FPoly::SplitWithPlaneFast` (`Engine.dll 0xa1f90`) does not interpolate by
+    `alpha = dp / (dp - ds)`; at `0xa214b` it calls `FLinePlaneIntersection` (`0xa07c0`) with
+    `P1 = Vertex[i-1]`, `P2 = Vertex[i]`, which computes
+
+        D   = P2 - P1
+        Sc  = (W - ((P1.y*N.y + P1.x*N.x) + P1.z*N.z)) / ((D.x*N.x + D.y*N.y) + D.z*N.z)
+        out = Sc*D + P1
+
+    The same point in exact arithmetic, a different f32: the numerator is re-derived from `P1` and
+    the denominator comes from the DIFFERENCE vector dotted with the normal, where `dp - ds`
+    subtracts two separately-rounded dots. WanChai N=45 turned on it — one crossing vertex landed on
+    `1344.0` instead of `1343.99988`, which collapsed the next hop's clip edge to zero length, and
+    `clip_beam` skips a degenerate edge where the editor still clips by it, so one leaf picked up a
+    permeating light UED22 leaves out. Spike: `dev/docs/spikes/2026-09-07-gather-box-verdict/`.
+
+    `uedcli-native`'s `permeating_lights::line_plane_intersection` is that function; its own
+    `the_beam_clip_reproduces_the_editors_own_crossing_vertices` pins the live-captured output.
+    """
+    text = (UED22 / "Engine.dll").read_bytes()
+    for va, want, what in [
+        (0x1015214B, "e870e6ffff", "SplitWithPlaneFast calls FLinePlaneIntersection (rel32 to 0xa07c0)"),
+        (0x101507C9, "f30f104004", "load P2.y"),
+        (0x101507CE, "f30f5c4104", "D.y = P2.y - P1.y"),
+        (0x101507DF, "f30f5c39", "D.x = P2.x - P1.x"),
+        (0x101507E8, "f30f5c7108", "D.z = P2.z - P1.z"),
+        (0x10150820, "f30f5ce9", "subss - numerator = Plane.W - (P1 | N)"),
+        (0x1015083E, "f30f5ee9", "divss - Sc = numerator / (D | N)"),
+        (0x10150845, "f30f59c7", "out.x = Sc * D.x ..."),
+        (0x10150849, "f30f5801", "... + P1.x"),
+    ]:
+        off = _rva_to_offset(text, va - _IMAGE_BASE)
+        got = text[off:off + len(want) // 2].hex()
+        assert got == want, f"Engine.dll {va:#x} ({what}): want {want}, found {got}"
