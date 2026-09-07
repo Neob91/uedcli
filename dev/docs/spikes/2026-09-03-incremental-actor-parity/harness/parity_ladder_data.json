@@ -26,12 +26,12 @@
       "slug": "oceanlab",
       "name": "OceanLab",
       "codename": "14_OceanLab_Lab",
-      "highest_n": 197,
+      "highest_n": 202,
       "total_actors": 2745,
-      "status": "advancing",
-      "blocker": "N=153/N=155 both FIXED: (1) build_brush_temp_bsp now builds the per-brush temp BSP with RebuildSimplePolys, so a coplanar face shares the splitter's surf instead of allocating its own texture axes into the shared Vectors pool ahead of a normal that then dedups onto the wrong axis; (2) zone connectivity (Zones[].Connectivity) now comes from a node walk over PF_Portal surfs (BuildConnectivity), not a portal-fragment list filtered by the zone-barrier set, which was skipping every pair touching zone 0. A live background sweep is still climbing past N=168 with no new bail found yet.",
-      "board": null,
-      "updated": "2026-09-07T09:45:00Z"
+      "status": "blocked",
+      "blocker": "BODY model model2 -- world Model2.points holds a 2-ULP-off value pair native/UED22 disagree on (same array length, 3776=3776, so a value divergence not a reordering). Real effort spent, root cause NOT found: ruled out the brush483/brush1423 transform, a direct FLinePlaneIntersection crossing against the obvious x=-256 plane, and every split_with_plane crossing near that point (~5500 live-instrumented hits, none matched). Likely a different point-pooling/insertion-order gap from the already-fixed MergeNearPoints/pBase class -- needs the same live-editor-probe effort (winedbg) that produced today's other breakthroughs. No exclusion proposed.",
+      "board": "oceanlab-n-203-world-model2-split-vertex-ulp",
+      "updated": "2026-09-07T11:20:00Z"
     },
     {
       "slug": "wanchai",
@@ -48,12 +48,12 @@
       "slug": "island",
       "name": "UNATCO Island",
       "codename": "01_NYC_UNATCOIsland",
-      "highest_n": 298,
+      "highest_n": 331,
       "total_actors": 3653,
-      "status": "advancing",
-      "blocker": "N=123's leaf-26 bug is FIXED by the FLinePlaneIntersection formula fix; also benefited from OceanLab's N=153/155 temp-brush-BSP and zone-connectivity fixes with no Island-specific work needed. A live background sweep is still climbing past N=217 (of 298 queued) with no new bail found yet.",
+      "status": "blocked",
+      "blocker": "BODY model model2 differs at N=332 -- under investigation now (dispatched, not yet diagnosed). N=1..298 previously confirmed clean via a full sweep (carried by OceanLab's N=153/155 temp-brush-BSP and zone-connectivity fixes with no Island-specific work); the sweep continued past that on its own and found this new, real divergence at N=332.",
       "board": null,
-      "updated": "2026-09-07T09:45:00Z"
+      "updated": "2026-09-07T11:20:00Z"
     }
   ]
 }

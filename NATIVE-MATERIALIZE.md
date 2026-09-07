@@ -206,17 +206,18 @@ Tests must NOT block the parity work. For this project specifically:
 - Native engine: `uedcli-native/` (Rust), `uedcli/native/` (Python bridge), `uedcli/apply.py`
   (`_materialize_native`).
 - Parity harness: `dev/docs/spikes/2026-09-03-incremental-actor-parity/harness/` (`parity_gate.py`,
-  `actor_parity.py`, `ladder_run.py`).
+  `actor_parity.py`, `ladder_run.py`, `prune_ref_cache.py` — caps the cached-editor-ref cache at a
+  size budget, LRU-by-creation-time, always keeps each level's highest-N ref; run it if `_scratch/`
+  disk usage becomes a problem, never by hand-deleting refs).
 
 ## Open blockers per level (2026-09-07) — read before pushing that level further
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
 Ceilings, all re-verified from N=1 against the current binary (2026-09-07): **UNATCO 225,
-NYC_Bar 152, OceanLab 197+, Island 298, WanChai 57.** Two of the five next blockers are the SAME
+NYC_Bar 152, OceanLab 202, Island 331, WanChai 57.** Two of the five next blockers are the SAME
 shape — one leaf gets a permeating-light run entry UED22 leaves out (UNATCO 226, WanChai 58) — so
-the permeating flood is where the campaign's leverage is. OceanLab is still walking forward past the
-number above; Island has no known blocker at all — it ran out of cached editor refs at 298.
+the permeating flood is where the campaign's leverage is.
 
 - **UNATCO**: N=163 is FIXED
   (`dev/docs/board/done/unatco-n-163-world-model2-lights-and-lightbits/`) — the 7 extra
@@ -328,9 +329,16 @@ number above; Island has no known blocker at all — it ran out of cached editor
   too** — the crossing VERTEX, not the gates: `SplitWithPlaneFast` takes it from
   `FLinePlaneIntersection`, whose f32 differs from `alpha = dp/(dp-ds)` in the last ulps, and a
   crossing landing exactly on a grid coordinate collapses the next hop's clip edge (see the WanChai
-  bullet above). Island is byte-exact **N=1..298**, as far as its cached refs reach; the OceanLab
-  N=153/N=155 fixes below carried it past 123 with no Island-specific work, and it has no known
-  blocker — the next N needs a fresh editor ref, not a fix.
+  bullet above). Island then ran clean past 298 (where it previously ran out of cached refs) up to
+  byte-exact **N=1..331**; the OceanLab N=153/N=155 fixes below carried it past 123 with no
+  Island-specific work. Bails at **N=332** on a NEW, different-mechanism case of the same shape
+  (`dev/docs/board/inbox/island-n-332-leaf-273-permeating-light-vertex-tie/`): leaf 273 carries
+  `Light124` where UED22 leaves it out, root-caused to a genuine vertex COINCIDENCE — a portal
+  vertex shared exactly with an adjacent portal, where one `FLinePlaneIntersection` crossing lands
+  a hair below the shared point in native and a hair above it in a live editor capture, same
+  formula and same inputs, opposite sign of a sub-ULP residual. Suspected x87-vs-SSE
+  double-rounding; unconfirmed, not fixed as of this writing (agent was still working when this
+  doc was last touched — check the board item's current state before trusting this gloss).
 - **OceanLab**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the
@@ -367,7 +375,14 @@ number above; Island has no known blocker at all — it ran out of cached editor
   (`152.0002` vs `151.99976`). N=155: Pass F (`FEditorVisibility::BuildConnectivity`, `0xa7960`) is
   a NODE walk over `PF_Portal` surfs reading `Node.iZone[0]/[1]`, zone 0 included; native walked the
   Pass-B portal FRAGMENT list filtered by the zone-barrier set and skipped every pair touching zone
-  0, leaving zones 0 and 1 mutually unconnected. Byte-exact **N=1..197 and still walking** (was 93).
+  0, leaving zones 0 and 1 mutually unconnected. Byte-exact **N=1..202** (was 93); bails at **N=203**
+  on the world `Model2`'s `points` array — a genuine 2-ULP value pair (`x` off by
+  `2·2^-15`), not an index/order shift (full multiset diff confirms). Neither the raw brush
+  transform nor a single-hop `line_plane_intersection` against the obvious candidate plane
+  reproduces either side's stored value, and live crossing-vertex instrumentation found no
+  `split_with_plane` crossing that emits the divergent bits directly — likely the same point-pooling
+  bug CLASS as the fixed N=13/WanChai-N40 `MergeNearPoints` issue, but not the same cause; not
+  closed. `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`.
 - **Standing stopgaps, all levels**:
   `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/` — repartition dedups points
   with a linear pool scan; the editor descends and appends on a miss (`AddThing(..., !FastRebuild)`
