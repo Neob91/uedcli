@@ -337,8 +337,11 @@ the permeating flood is where the campaign's leverage is.
   vertex shared exactly with an adjacent portal, where one `FLinePlaneIntersection` crossing lands
   a hair below the shared point in native and a hair above it in a live editor capture, same
   formula and same inputs, opposite sign of a sub-ULP residual. Suspected x87-vs-SSE
-  double-rounding; unconfirmed, not fixed as of this writing (agent was still working when this
-  doc was last touched — check the board item's current state before trusting this gloss).
+  double-rounding, unconfirmed — the disassembly-verified formula reproduces native's own output
+  bit-for-bit by hand, so this is not a wrong formula to correct, only an unresolved
+  register-level effect. Not fixed; no mask added. Island's ladder cannot advance past N=332 until
+  this closes — see the board item for the full trace and the next step (single-step the editor's
+  real `SafeNormal`/`FLinePlaneIntersection` under `gdb` at this exact crossing).
 - **OceanLab**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the
