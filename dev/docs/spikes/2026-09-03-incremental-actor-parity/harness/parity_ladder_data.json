@@ -15,12 +15,12 @@
       "slug": "unatco",
       "name": "UNATCO HQ",
       "codename": "03_NYC_UNATCOHQ",
-      "highest_n": 115,
+      "highest_n": 162,
       "total_actors": 1437,
       "status": "blocked",
-      "blocker": "BODY model model2 — world Model.Lights RUNS differ on 13 of 214 lightmaps, both directions (native-only lights, UED-only lights, one lightmap empty vs seven). Same family as the WanChai N=45/OceanLab N=44 lighting-gather work, not yet fixed here. N=29's blocker is FIXED: _patch_native_surf_refs now assigns texture_ref=0 for an untextured surf instead of leaving the marshaller's per-brush texture dedup ordinal in place (Brush516's untextured poly 2 got ordinal 2, shipped as a bogus object ref).",
-      "board": "unatco-n-116-world-model2-light-runs-differ-on",
-      "updated": "2026-09-06T13:55:00Z"
+      "blocker": "BODY model model2 — lights 2166 vs 2159, lightbits 182862 vs 182645, every LightMap record shifted; leaves and all geometry byte-exact; 0 differing decoded per-lightmap runs, so the extras sit outside the runs the diff tool checks. Likely same family as NYC_Bar N=153 (not yet cross-checked). N=116's blocker was NOT what it looked like: one extra permeating-light run on leaf 9, a near-tie in the ported beam-visibility flood that flips PASS/FAIL between two builds of IDENTICAL source (codegen noise, not a source difference) -- the canonical build pipeline lands on UED22's side, so this level is unblocked, but the underlying near-tie is real and unresolved, same class as Island N=123's still-open mystery. Filed as its own priority item: native-ext-binary-not-stable-across-builds.",
+      "board": "unatco-n-163-world-model2-lights-and-lightbits",
+      "updated": "2026-09-07T04:15:00Z"
     },
     {
       "slug": "oceanlab",
