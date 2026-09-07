@@ -26,34 +26,34 @@
       "slug": "oceanlab",
       "name": "OceanLab",
       "codename": "14_OceanLab_Lab",
-      "highest_n": 92,
+      "highest_n": 127,
       "total_actors": 2745,
-      "status": "blocked",
-      "blocker": "BODY model model2 — leaf 96 gets a permeating-light run (Light111) UED22 leaves empty; lightbits byte-identical, 0 differing per-surf records. Same family as Island N=123 and UNATCO N=226 -- three independent reproducers of one open gap now. N=48's LightBits bug is FIXED: OccludeBsp never retired a zone from the active set when its span buffer ran out of ValidLines, so native kept descending into abandoned subtrees and over-marked NF_BoxOccluded, which a PF_BrightCorners shadow ray's IsCsg test reads. Live-verified box-test count now matches the editor exactly (1218 vs 1218).",
-      "board": "oceanlab-n-93-leaf-96-gets-a-permeating",
-      "updated": "2026-09-07T06:30:00Z"
+      "status": "advancing",
+      "blocker": "N=93's leaf-96 bug is FIXED by the FLinePlaneIntersection formula fix (see WanChai/UNATCO/Island) -- a live background sweep is still climbing past N=127 with no new bail found yet.",
+      "board": null,
+      "updated": "2026-09-07T08:10:00Z"
     },
     {
       "slug": "wanchai",
       "name": "WanChai Market",
       "codename": "06_HongKong_WanChai_Market",
-      "highest_n": 44,
+      "highest_n": 57,
       "total_actors": 2288,
       "status": "blocked",
-      "blocker": "N=45: RETRACTED rasterizer/span-buffer theory -- it was a wrong field read in the diff tool (VClamp read as iLightActors); re-measured, native and UED22 agree on all 210 lightmap runs. The REAL cause: world leaf 20 gets an extra permeating-light entry (spotlight22) UED22 doesn't have -- the SAME leaf-permeating-light gap already blocking Island N=123, OceanLab N=93, and UNATCO N=226. WanChai N=45 is the CHEAPEST of all four reproducers (91 leaves, 11 lights, 45 actors). This is now the campaign's single highest-leverage open item -- a fix likely closes all four at once.",
-      "board": "wanchai-n45-leaf-20-permeating-light-over-included",
-      "updated": "2026-09-07T07:45:00Z"
+      "blocker": "N=58: leaf 51 gets an extra permeating-light entry -- same shape as N=45 but a DIFFERENT cause: the crossing itself is fine, what differs is the beam polygon carried into the leaf. N=45's real bug is FIXED (BREAKTHROUGH): FPoly::SplitWithPlaneFast's crossing vertex comes from FLinePlaneIntersection's exact formula (Sc = (W - dot(P1,N)) / dot(D,N); out = Sc*D + P1), not native's mathematically-equivalent alpha = dp/(dp-ds) -- same real number, different f32 rounding, which on WanChai collapsed a downstream clip edge to zero length and let a beam through a boundary it should have stopped at. This is the SAME root cause already fixed for Island/OceanLab/UNATCO's shared leaf-permeating class -- WanChai N=45 was its cheapest reproducer.",
+      "board": "wanchai-n58-leaf-51-permeating-light-over-included",
+      "updated": "2026-09-07T08:10:00Z"
     },
     {
       "slug": "island",
       "name": "UNATCO Island",
       "codename": "01_NYC_UNATCOIsland",
-      "highest_n": 122,
+      "highest_n": 157,
       "total_actors": 3653,
-      "status": "blocked",
-      "blocker": "BODY model model2 — leaf 26 gets a permeating-light run UED22 leaves empty. The portal-graph theory was WRONG: native's portal builder is now a faithful port of UnrealEd's MakePortals (SplitWithNode VeryPrecise, SP_Coplanar discard) and UED22's own log confirms native produces the identical portal/leaf/node counts (580/163/427) before and after — the graph was never the problem. Every decoded step of the beam-clip algorithm (SplitWithPlaneFast, ActorVisibility's clip loop, the seed descent, the re-entry radius gate) is faithful and, as decoded, predicts UED22 SHOULD mark leaf 26 too. Next step: a winedbg dump of AddPortal's 580 fragments -- nothing cheaper discriminates.",
-      "board": "island-n-123-world-model2-leaf-permeating-light",
-      "updated": "2026-09-07T03:05:00Z"
+      "status": "advancing",
+      "blocker": "N=123's leaf-26 bug is FIXED by the FLinePlaneIntersection formula fix (see WanChai/UNATCO/OceanLab) -- a live background sweep is still climbing past N=157 with no new bail found yet.",
+      "board": null,
+      "updated": "2026-09-07T08:10:00Z"
     }
   ]
 }
