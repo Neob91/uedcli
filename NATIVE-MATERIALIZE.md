@@ -208,15 +208,21 @@ Tests must NOT block the parity work. For this project specifically:
 - Parity harness: `dev/docs/spikes/2026-09-03-incremental-actor-parity/harness/` (`parity_gate.py`,
   `actor_parity.py`, `ladder_run.py`).
 
-## Open blockers per level (2026-09-06) — read before pushing that level further
+## Open blockers per level (2026-09-07) — read before pushing that level further
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
+
+Ceilings, all re-verified from N=1 against the current binary (2026-09-07): **UNATCO 225,
+NYC_Bar 152, Island 122, OceanLab 92, WanChai 44.** Three of the five next blockers are now the SAME
+shape — one leaf gets a permeating-light run entry UED22 leaves out (UNATCO 226, OceanLab 93,
+Island 123) — so the permeating flood is where the campaign's leverage is.
 
 - **UNATCO**: N=163 is FIXED
   (`dev/docs/board/done/unatco-n-163-world-model2-lights-and-lightbits/`) — the 7 extra
   `Model.Lights` entries and 217 extra `LightBits` bytes came from the missing ZONE RETIRE described
-  under OceanLab below, not from anything UNATCO-specific. Byte-exact **N=1..163** (was 162); the
-  forward walk past it is still running, so this level has no recorded next blocker right now.
+  under OceanLab below, not from anything UNATCO-specific. Byte-exact **N=1..225** (was 162); bails
+  at **N=226** on one leaf's permeating-light run —
+  `dev/docs/board/inbox/unatco-n-226-leaf-12-gets-a-permeating-light157/`.
   N=116 needed no fix and was never a real divergence
   (`dev/docs/board/done/unatco-n-116-world-model2-light-runs-differ-on/`): the 941-against-940
   `Model.Lights` bail came from a STALE wheel. Cargo decides freshness by mtime, so a crate restored
@@ -320,8 +326,9 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   UED22 carries the bit on `{32, 80, 160, 352}`; native carried it on twelve nodes, one of which
   (node 512) unshadowed three surfaces' edge lumels. With the retire ported — plus step 6, the
   frustum-cone subtree reject — native runs exactly the editor's 1218 box tests and ends with
-  exactly its flag set. Byte-exact **N=1..48** (was 47); the forward walk past it is still running.
-  Still open, measured in the same pass:
+  exactly its flag set. Byte-exact **N=1..92** (was 47); bails at **N=93** on one leaf's
+  permeating-light run — `dev/docs/board/inbox/oceanlab-n-93-leaf-96-gets-a-permeating/`, the same
+  shape as UNATCO N=226 and Island N=123. Still open, measured in the same pass:
   `dev/docs/board/inbox/gather-still-over-occludes-45-of-1218-box-tests/` — 49 of 1173 shared box
   tests still disagree, every one native-hidden/editor-visible, i.e. span-buffer over-fill, the
   WanChai N=45 family with a much smaller reproducer.
