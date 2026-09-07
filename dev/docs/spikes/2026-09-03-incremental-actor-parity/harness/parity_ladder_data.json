@@ -26,12 +26,12 @@
       "slug": "oceanlab",
       "name": "OceanLab",
       "codename": "14_OceanLab_Lab",
-      "highest_n": 127,
+      "highest_n": 168,
       "total_actors": 2745,
       "status": "advancing",
-      "blocker": "N=93's leaf-96 bug is FIXED by the FLinePlaneIntersection formula fix (see WanChai/UNATCO/Island) -- a live background sweep is still climbing past N=127 with no new bail found yet.",
+      "blocker": "N=153/N=155 both FIXED: (1) build_brush_temp_bsp now builds the per-brush temp BSP with RebuildSimplePolys, so a coplanar face shares the splitter's surf instead of allocating its own texture axes into the shared Vectors pool ahead of a normal that then dedups onto the wrong axis; (2) zone connectivity (Zones[].Connectivity) now comes from a node walk over PF_Portal surfs (BuildConnectivity), not a portal-fragment list filtered by the zone-barrier set, which was skipping every pair touching zone 0. A live background sweep is still climbing past N=168 with no new bail found yet.",
       "board": null,
-      "updated": "2026-09-07T08:10:00Z"
+      "updated": "2026-09-07T09:45:00Z"
     },
     {
       "slug": "wanchai",
@@ -48,12 +48,12 @@
       "slug": "island",
       "name": "UNATCO Island",
       "codename": "01_NYC_UNATCOIsland",
-      "highest_n": 157,
+      "highest_n": 217,
       "total_actors": 3653,
       "status": "advancing",
-      "blocker": "N=123's leaf-26 bug is FIXED by the FLinePlaneIntersection formula fix (see WanChai/UNATCO/OceanLab) -- a live background sweep is still climbing past N=157 with no new bail found yet.",
+      "blocker": "N=123's leaf-26 bug is FIXED by the FLinePlaneIntersection formula fix; also benefited from OceanLab's N=153/155 temp-brush-BSP and zone-connectivity fixes with no Island-specific work needed. A live background sweep is still climbing past N=217 (of 298 queued) with no new bail found yet.",
       "board": null,
-      "updated": "2026-09-07T08:10:00Z"
+      "updated": "2026-09-07T09:45:00Z"
     }
   ]
 }
