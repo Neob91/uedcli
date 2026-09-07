@@ -116,13 +116,24 @@ The port reproduces all 24 live-captured `ViewSides` components on all six gathe
 | UNATCO | byte-exact N=1..162, bails at 163 | N=163 PASSes — same cause, verified by rebuilding both sides |
 | NYC_Bar | bails at 153 | unchanged (still `model2` + `model_deusexmover9`; the mover body was already failing on master, checked by rebuilding N=153 against `HEAD`) |
 
-## What is still open
+## Nothing is left open — the residual this section used to claim was a measurement artifact
 
-`compare_box_tests.py` after the fix: the two sides now run the SAME NUMBER of tests (1218) but not
-the same set — 45 native-only keys, 45 editor-only keys, and 49 of 1173 matched keys disagree, every
-one `native = hidden, editor = visible`. That residual over-occlusion is span-buffer/rasterizer
-fidelity, the same family as `wanchai-n45-spotlight22-light-runs-differ-on-4`, and it changes no
-`NF_BoxOccluded` outcome on OceanLab N=48.
+*(Corrected 2026-09-07, `dev/docs/spikes/2026-09-07-gather-box-verdict/`.)* This section reported
+that after the fix the two sides ran 1218 tests each but disagreed on 49 of 1173 matched keys, with
+45 native-only and 45 editor-only keys, and read that as span-buffer over-fill. Both halves were the
+comparison's, not native's:
+
+- `compare_box_tests.py` keyed calls on `round(v, 2)` of each light coordinate. One light's Y is the
+  f32 `234.255005`; native prints it shortest-roundtrip as `234.255` and the probe prints `%.9g`, so
+  one light became two keys and all 45 of its calls were counted on both sides.
+- `frame_probe_viewsides.py` breaks after `URender::BoundVisible` returns, which under `bUseZones`
+  is half the decision — `0x100193ba`'s `cmovne eax, 0` NULLs the `FSpanBuffer*`, and `OccludeBsp`
+  runs the span test itself afterwards, per active zone. The 49 were exactly the zoned span
+  rejections that capture cannot see.
+
+With the outcome sites captured (`box_verdict_probe.py`) and an f32-bit key, native matches the live
+editor on **all 1218 calls of OceanLab N=48 — same set, same order, same screen rectangles, same
+verdicts** (791 accept, 373 geo, 54 zone), and likewise on all 207 of WanChai N=45.
 
 ## Pinned
 

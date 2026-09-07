@@ -1,14 +1,16 @@
 # Porting `ClipBspSurf` + the scanline rasterizer — done, and it is NOT what blocks WanChai N=45
 
 **Result: the gather's polygon pipeline is now a faithful port, and the WanChai N=45 divergence is
-unchanged by it.** The board item
-`inbox/wanchai-n45-spotlight22-light-runs-differ-on-4` scoped the fix as "the rasterizer, and it is
-not small" (2-4 focused days). The rasterizer is now ported — `URender::ClipBspSurf`
-(`render.dll 0x10013cf0`), its clipper (`0x10013b70`), the per-vertex transform (`0x1001adb0`) and
-the fixed-point scanline setup (`0x1001b470`), all disassembled in full — and WanChai N=45 fails on
-exactly the same four lightmap runs, with the same three over- and one under-inclusion. So the
-scoping was wrong: the empirically-tuned pixel-centre stand-in was already producing the editor's
-answer everywhere it mattered, and the real cause is somewhere else in the gather.
+unchanged by it.** The board item `wanchai-n45-spotlight22-light-runs-differ-on-4` scoped the fix as
+"the rasterizer, and it is not small" (2-4 focused days). The rasterizer is now ported —
+`URender::ClipBspSurf` (`render.dll 0x10013cf0`), its clipper (`0x10013b70`), the per-vertex
+transform (`0x1001adb0`) and the fixed-point scanline setup (`0x1001b470`), all disassembled in full
+— and N=45 fails exactly as before. So the scoping was wrong: the empirically-tuned pixel-centre
+stand-in was already producing the editor's answer everywhere it mattered.
+
+**Correction, 2026-09-07:** the divergence this spike was chasing does not exist. The four
+"divergent lightmap runs" were an `FLightMapIndex` decode bug in `harness/lmdiag.py`; N=45's real
+blocker is a per-leaf permeating light, in a different module. See the retraction below.
 
 ## What the disassembly says
 
@@ -139,46 +141,35 @@ Two decisions out of ~1300 move. The empirically-tuned `x0 = ceil(lo−0.5)` / `
 rule was, in practice, the editor's answer — which also means the port is not wildly wrong: a wrong
 winding or a wrong screen basis would have moved thousands.
 
-## Why N=45 is still blocked, and where to look next
+## RETRACTED: the "four divergent runs" were a decode bug, and N=45 is not a gather problem
 
-Unchanged: `Model.Lights` 687 vs 686, four runs differing, three over- and one under-inclusion.
+*(Corrected 2026-09-07, `dev/docs/spikes/2026-09-07-gather-box-verdict/`.)* This section used to
+tabulate four divergent WanChai N=45 lightmap runs (Spotlight22 over-included on surfs 6 and 54,
+missing on 37) and point the next probe at `OccludeBsp`'s visit order. **None of those runs differ.**
 
-| LightMap | surf | node | native run | UED22 run |
-|---|---|---|---|---|
-| 25 | 1 | 25-28 | `spotlight21, light189` | `light189` |
-| 29 | 6 | 51 | `spotlight22, spotlight21, spotlight20, light189` | `spotlight21, spotlight20, light189` |
-| 34 | 37 | 59 | *(empty)* | `spotlight22, light189` |
-| 77 | 54 | 29 | `spotlight22, light189` | `light189` |
+`harness/lmdiag.py` walked `Model.Lights` from field `[2]` of `model_dump`'s lightmap tuple. That
+field is `VClamp`: `FLightMapIndex` is `i32 DataOffset, f32 Pan[3], ci UClamp, ci VClamp, f32 UScale,
+f32 VScale, i32 iLightActors`, so the run start is the LAST i32 of the record. With the real field,
+native and UED22 agree on **all 210 runs** at N=45. `lmdiag.py` is fixed.
 
-(`harness/lmdiag.py`. NOTE: `2026-09-03-incremental-actor-parity/harness/lightrun_diff.py` mis-decodes
-`FBspSurf` — it reads `iBrushPoly` as `iLightMap` — so its `surf=` column is wrong; the run
-comparison itself is fine.)
+The inconsistency that exposed it: a whole-traversal native trace
+(`UEDCLI_VISGATE_TRACE_SURF=-1`) shows Spotlight22's gather never visits surf 6, 37 or 54 at all,
+yet the "runs" listed it on 6 and 54 — and `light::bake` cannot list a light its gather omitted. A
+run set larger than its own gather set is impossible.
 
-Traces (`UEDCLI_VISGATE_TRACE_SURF=37`):
+The gather is in fact exact here: native's box tests match a live editor capture on all 207 WanChai
+N=45 calls — same set, same order, same screen rectangles, same verdicts — so the visit-order probe
+this section called for is not needed either.
 
-- For **spotlight22**, node 59 is `reachable=false` on all six faces — zone 1's span buffer is
-  ENTIRELY drained (`ValidLines <= 0`) before the walk gets there.
-- For **light189**, node 59 IS reached, rasterizes a huge footprint (208–403 rows, ~200k–380k px)
-  and accepts ZERO of it — every pixel already claimed.
+What actually blocks N=45 is `Model.Lights` **region 1**, the per-leaf permeating lists, which
+`lmdiag.py` does not read at all: leaf 20 gets Spotlight22 where UED22 lists only Light189, and that
+single extra entry shifts every later offset. Board:
+`wanchai-n45-leaf-20-permeating-light-over-included`; differ:
+`2026-09-07-gather-box-verdict/harness/leaf_perm_diff.py`.
 
-So native claims the whole screen with nearer surfaces where UED22 leaves node 59 a gap. Two
-candidates ruled out, two still open:
-
-- **Ruled out — the fill rule.** The port above.
-- **Ruled out — texture `PolyFlags`.** No N=45 texture carries any.
-- **Open — front-to-back ORDER.** The three surfaces trade places consistently: native accepts 6 and
-  54 and rejects 37; UED22 does the reverse. That is what an order swap between nodes 29/51 and 59
-  looks like — whoever is visited while the buffer still has room wins. Candidates: the near/far
-  child choice at their common ancestor, the coplanar-chain `IsFront` re-derivation, or the
-  `d > 0.0` vs `>= 0` boundary.
-- **Open — an occluder native subtracts that the editor does not**, beyond the `occludes` rule now
-  fixed.
-
-The decisive next probe is a live capture of `OccludeBsp`'s node VISIT ORDER for spotlight22 —
-break at `0x100198a0` (the per-node filter re-entry) and log `iNode`, `IsFront`, and the zone
-buffer's `ValidLines` — and diff it against native's traversal. `harness/raster_probe.py` here is a
-working template for exactly that (gdb attach, `render.dll` rebased through `/proc/<pid>/maps`,
-breakpoint command lists guarded against bad pointers).
+What this spike measured about the rasterizer itself still stands — the port is faithful, and the
+fill rule, texture `PolyFlags` and flipped node rings are all still ruled out. Only the conclusion
+about what remains was wrong.
 
 ## The node-ring winding invariant, measured
 
