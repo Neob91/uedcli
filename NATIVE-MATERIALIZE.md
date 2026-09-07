@@ -216,13 +216,14 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   emits 7 extra `Model.Lights` entries and 217 extra `LightBits` bytes, shifting every one of the 346
   `LightMap` records by `+7`/`+217`; `leaves` and every geometry array are byte-exact and
   `lightrun_diff.py` finds 0 differing decoded runs, so the extras sit outside the per-lightmap runs.
-  Byte-exact **N=1..162** (was 115). N=116 did NOT need a fix
-  (`dev/docs/board/done/unatco-n-116-world-model2-light-runs-differ-on/`): leaf 9's permeating-light
-  decision is a near-tie inside CODEGEN noise — two builds of the identical native `src/` give `.so`s
-  5 472 bytes apart and disagree about it, 941 `Model.Lights` against UED22's 940 (the two crate
-  directories differ only in non-source files). The canonical build is on UED22's side, so the level walks
-  on; the hazard is `dev/docs/board/inbox/native-ext-binary-not-stable-across-builds/` and the
-  faithful fix is the one `island-n-123-world-model2-leaf-permeating-light` is stuck on. The N=29
+  Byte-exact **N=1..162** (was 115). N=116 needed no fix and was never a real divergence
+  (`dev/docs/board/done/unatco-n-116-world-model2-light-runs-differ-on/`): the 941-against-940
+  `Model.Lights` bail came from a STALE wheel. Cargo decides freshness by mtime, so a crate restored
+  with older timestamps is not rebuilt — six builds labelled with six different commits all ran one
+  binary. Fixed in `bin/_venv.sh`; `dev/docs/board/done/native-ext-binary-not-stable-across-builds/`,
+  `dev/docs/spikes/2026-09-07-native-ext-build-staleness/`. Codegen was ruled out by measurement:
+  `-C opt-level=1 -C codegen-units=1` and `-C target-cpu=native` leave the whole leaf-9 margin trace
+  byte-identical, and four from-scratch builds are sha256-equal. The N=29
   blocker is FIXED
   (`dev/docs/board/done/unatco-n-29-world-model2-vert-rings-reference/`) — the divergence was one
   surf's `Texture` ref, not the vertex rings (all 91 live node rings were coordinate-identical; the

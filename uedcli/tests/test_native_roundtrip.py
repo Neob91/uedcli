@@ -726,3 +726,18 @@ def test_zone_actor_is_decided_by_ancestry_not_by_the_class_name_suffix():
 
     built, _csg = build_world_model(level, index=_index())
     assert resolve_zone_actors(level, built, index=_index()) == {1: "WaterZone1"}
+
+
+def test_native_ext_build_refreshes_crate_mtimes_before_cargo_sees_them():
+    """Cargo decides freshness by MTIME, so a crate restored with older timestamps (`git archive`
+    stamps the commit time; `tar -x`/`cp -p`/`rsync -t` preserve the stored ones) is taken as up to
+    date and the wheel keeps the PREVIOUS build's code. On 2026-09-07 that shipped a stale
+    `uedcli_native` and produced a false UNATCO N=116 ladder bail — six builds of six different
+    commits emitted one byte-identical package (board
+    `native-ext-binary-not-stable-across-builds`). `ensure_native_ext` gates on a CONTENT hash, so
+    the mtimes must be made to agree with it before cargo runs."""
+    venv_sh = Path(__file__).resolve().parents[2] / "bin" / "_venv.sh"
+    body = venv_sh.read_text()
+    touch = body.index('-exec touch {} +')
+    assert touch < body.index("maturin build --release"), \
+        "the mtime refresh must run BEFORE the maturin build it protects"

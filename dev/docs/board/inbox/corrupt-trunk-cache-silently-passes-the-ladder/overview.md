@@ -45,9 +45,11 @@ editor-hours). Copy the sidecar whenever you copy a ref.
 
 ## The NATIVE side goes stale the same way — see `native-ext-binary-not-stable-across-builds`
 
-A ladder bail can also come from the native half being a differently-compiled binary of the same
-source: UNATCO N=116 was filed as a level blocker and turned out to be exactly that. `verify_refs.py`
-says nothing about which `uedcli_native` build produced the native `.dx`.
+A ladder bail can also come from the native half being a STALE wheel — cargo's mtime freshness check
+skips the rebuild when a crate is restored with older timestamps. UNATCO N=116 was filed as a level
+blocker and turned out to be exactly that (fixed in `bin/_venv.sh`). `verify_refs.py` still says
+nothing about which `uedcli_native` build produced the native `.dx`; `ladder_run.py` now prints its
+sha256.
 
 `ladder_run.py` should also MOVE a failing `ref_N<n>.dx` aside (`ref_N<n>.failed.dx`) rather than
 leave it in the cache, so a later `--force-ref` cannot destroy the evidence.

@@ -85,6 +85,23 @@ def run_level(dx_path: Path, *, game: str, start: int, stop: int | None,
     return res
 
 
+def _native_ext_sha256() -> str:
+    """Identify the compiled extension that produced the native half of every result below.
+
+    A ladder bail is only attributable if you know which build made it: on 2026-09-07 a stale wheel
+    (cargo's mtime freshness check skipping a rebuild) produced a false UNATCO N=116 bail, and
+    nothing in the log said which binary ran (board `native-ext-binary-not-stable-across-builds`).
+    """
+    import hashlib
+    import importlib.util
+
+    spec = importlib.util.find_spec("uedcli_native")
+    for path in list(spec.submodule_search_locations or []):
+        for so in sorted(Path(path).glob("*.so")):
+            return f"{hashlib.sha256(so.read_bytes()).hexdigest()[:16]} {so}"
+    return "not found"
+
+
 def main() -> int:
     ap_ = argparse.ArgumentParser(description=__doc__.splitlines()[0],
                                   formatter_class=argparse.RawDescriptionHelpFormatter, epilog=__doc__)
@@ -102,6 +119,7 @@ def main() -> int:
     ap_.add_argument("--timeout", type=float, default=3600.0, help="editor ref-build timeout, seconds")
     ap_.add_argument("--json", help="write the summary as JSON to this path")
     args = ap_.parse_args()
+    print(f"uedcli_native: {_native_ext_sha256()}", flush=True)
 
     results: list[LevelResult] = []
     for dx in args.dxs:

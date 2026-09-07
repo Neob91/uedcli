@@ -1,0 +1,217 @@
+--- uedcli-native/src/permeating_lights.rs	2026-09-06 23:45:51.011125247 +0000
++++ _scratch/reprodet/T/src/permeating_lights.rs	2026-09-07 00:55:24.425434586 +0000
+@@ -67,6 +67,62 @@
+ use crate::zones::{collect_leaf_portals, Portal};
+ use std::collections::{HashMap, HashSet};
+ 
++// ---- TEMPORARY margin probe (spike 2026-09-07-native-ext-binary-stability) -------------------
++use std::cell::RefCell;
++pub struct TraceState {
++    pub target: i32,
++    pub path: Vec<i32>,
++    pub margins: Vec<(&'static str, f32)>,
++}
++thread_local! {
++    pub static TRACE: RefCell<Option<TraceState>> = const { RefCell::new(None) };
++}
++fn trace_on() -> bool {
++    TRACE.with(|t| t.borrow().is_some())
++}
++fn trace_push(label: &'static str, m: f32) -> usize {
++    TRACE.with(|t| {
++        let mut b = t.borrow_mut();
++        let s = b.as_mut().unwrap();
++        s.margins.push((label, m));
++        s.margins.len()
++    })
++}
++fn trace_truncate(n: usize) {
++    TRACE.with(|t| {
++        if let Some(s) = t.borrow_mut().as_mut() {
++            s.margins.truncate(n)
++        }
++    });
++}
++fn trace_try(light_idx: i32, from_leaf: i32, outcome: &str) {
++    TRACE.with(|t| {
++        let b = t.borrow();
++        let s = b.as_ref().unwrap();
++        let tight = s.margins.iter().map(|&(_, m)| m.abs()).fold(f32::INFINITY, f32::min);
++        eprintln!(
++            "PERMTRY leaf={} light={} from={} outcome={} path={:?} tightest={:e} margins={:?}",
++            s.target, light_idx, from_leaf, outcome, s.path, tight, s.margins
++        );
++    });
++}
++
++fn trace_report(light_idx: i32) {
++    TRACE.with(|t| {
++        let b = t.borrow();
++        let s = b.as_ref().unwrap();
++        let tight = s
++            .margins
++            .iter()
++            .map(|&(_, m)| m.abs())
++            .fold(f32::INFINITY, f32::min);
++        eprintln!(
++            "PERMMARGIN leaf={} light={} path={:?} tightest={:e} margins={:?}",
++            s.target, light_idx, s.path, tight, s.margins
++        );
++    });
++}
++
+ /// One outward-oriented face from a leaf: `to_leaf` is the neighbour reached by crossing it,
+ /// `base`/`normal` describe the plane (normal pointing AWAY from the source leaf), `verts` is the
+ /// polygon in that same outward orientation.
+@@ -225,6 +281,17 @@
+     let dots: Vec<f32> = poly.iter().map(|v| plane_dot(normal, w, v)).collect();
+     let positive = dots.iter().any(|&d| d > THRESH_SPLIT_POLY_WITH_PLANE);
+     let negative = dots.iter().any(|&d| d < -THRESH_SPLIT_POLY_WITH_PLANE);
++    if trace_on() {
++        let mx = dots.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
++        let mn = dots.iter().cloned().fold(f32::INFINITY, f32::min);
++        trace_push("pos", mx - THRESH_SPLIT_POLY_WITH_PLANE);
++        trace_push("neg", mn + THRESH_SPLIT_POLY_WITH_PLANE);
++        if positive && negative {
++            for &d in dots.iter() {
++                trace_push("cross", d);
++            }
++        }
++    }
+     if !negative {
+         return Some(poly.to_vec()); // SP_Front (or SP_Coplanar) -- kept whole, unclipped.
+     }
+@@ -273,6 +340,41 @@
+     seen: &mut HashSet<(i32, i32)>,
+     depth: u32,
+ ) {
++    if !trace_on() {
++        return actor_visibility_inner(
++            leaf, is_seed, clip, light_idx, light_loc, radius, portals, marks, seen, depth,
++        );
++    }
++    let n = TRACE.with(|t| {
++        let mut b = t.borrow_mut();
++        let s = b.as_mut().unwrap();
++        s.path.push(leaf);
++        s.margins.len()
++    });
++    actor_visibility_inner(
++        leaf, is_seed, clip, light_idx, light_loc, radius, portals, marks, seen, depth,
++    );
++    TRACE.with(|t| {
++        let mut b = t.borrow_mut();
++        let s = b.as_mut().unwrap();
++        s.path.pop();
++        s.margins.truncate(n);
++    });
++}
++
++#[allow(clippy::too_many_arguments)]
++fn actor_visibility_inner(
++    leaf: i32,
++    is_seed: bool,
++    clip: Option<&[Vec3]>,
++    light_idx: i32,
++    light_loc: &Vec3,
++    radius: f32,
++    portals: &HashMap<i32, Vec<FacePoly>>,
++    marks: &mut HashMap<i32, Vec<i32>>,
++    seen: &mut HashSet<(i32, i32)>,
++    depth: u32,
++) {
+     if depth > 4096 || leaf < 0 {
+         return; // corrupt/cyclic-graph guard; never hang (repo convention, see linecheck.rs)
+     }
+@@ -284,33 +386,76 @@
+         let qualifies = leaf_faces.map_or(false, |faces| {
+             faces.iter().any(|f| f.verts.iter().any(|v| r2 > v.sub(light_loc).dot(&v.sub(light_loc))))
+         });
++        if trace_on() {
++            let best = leaf_faces.map_or(f32::NEG_INFINITY, |faces| {
++                faces
++                    .iter()
++                    .flat_map(|f| f.verts.iter())
++                    .map(|v| r2 - v.sub(light_loc).dot(&v.sub(light_loc)))
++                    .fold(f32::NEG_INFINITY, f32::max)
++            });
++            trace_push("radius", best);
++        }
+         if !qualifies {
++            if trace_on() && TRACE.with(|t| t.borrow().as_ref().unwrap().target == leaf) {
++                trace_try(light_idx, leaf, "radius-fail");
++            }
+             return;
+         }
+     }
+     // Mark (dedup on (leaf, light); traversal continues past an already-marked leaf).
+     if seen.insert((leaf, light_idx)) {
+         marks.entry(leaf).or_default().push(light_idx);
++        if trace_on() && TRACE.with(|t| t.borrow().as_ref().unwrap().target == leaf) {
++            trace_report(light_idx);
++        }
+     }
+     // Flood through every outward face of this leaf.
+     let Some(faces) = leaf_faces else { return };
++    let face_mark = if trace_on() {
++        TRACE.with(|t| t.borrow().as_ref().unwrap().margins.len())
++    } else {
++        0
++    };
+     for f in faces {
++        if trace_on() {
++            trace_truncate(face_mark);
++        }
++        let watched = trace_on() && TRACE.with(|t| t.borrow().as_ref().unwrap().target == f.to_leaf);
+         let d = light_loc.sub(&f.base).dot(&f.normal);
++        if trace_on() {
++            trace_push("d<0", -d);
++            trace_push("d>-R", d + radius);
++        }
+         if !(d < 0.0 && d > -radius) {
++            if watched {
++                trace_try(light_idx, leaf, "d-gate");
++            }
+             continue;
+         }
+         let next_poly = match clip {
+             None => f.verts.clone(),
+             Some(cp) => match clip_beam(light_loc, cp, &f.verts) {
+                 Some(v) => v,
+-                None => continue,
++                None => {
++                    if watched {
++                        trace_try(light_idx, leaf, "clip-none");
++                    }
++                    continue;
++                }
+             },
+         };
++        if watched {
++            trace_try(light_idx, leaf, "crossed");
++        }
+         actor_visibility(
+             f.to_leaf, false, Some(&next_poly), light_idx, light_loc, radius, portals, marks, seen,
+             depth + 1,
+         );
+     }
++    if trace_on() {
++        trace_truncate(face_mark);
++    }
+ }
+ 
+ /// Compute and write `Model.Lights` region 1 (the per-leaf permeating light lists) plus each
+@@ -323,6 +468,13 @@
+     if model.leaves.is_empty() || model.nodes.is_empty() {
+         return;
+     }
++    if let Ok(v) = std::env::var("UEDCLI_PERM_MARGIN") {
++        if let Ok(t) = v.trim().parse::<i32>() {
++            TRACE.with(|c| {
++                *c.borrow_mut() = Some(TraceState { target: t, path: Vec::new(), margins: Vec::new() })
++            });
++        }
++    }
+     let portals = leaf_portal_map(model);
+     let mut marks: HashMap<i32, Vec<i32>> = HashMap::new();
+     let mut seen: HashSet<(i32, i32)> = HashSet::new();
