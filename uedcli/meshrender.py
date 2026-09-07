@@ -86,22 +86,24 @@ def frame_triangles(mesh, frame: int = 0):
     return tris
 
 
-def resolve_skins(mesh, pkg, defaults, package_paths, *, class_fqcn: str) -> dict:
+def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str) -> dict:
     """`material index -> (w, h, rgb bytes, b_masked, mask bytes)` for the mesh, decoded through
     `utexture`.
 
     Two sources, class-wins: the mesh's OWN `Textures` (via `Materials[i].TextureIndex`) are the
     fallback skin set, then the CLASS's `MultiSkins[i]` (per material index) / `Skin` override — the
-    class is the authority, since DX characters carry no mesh-side skins. `package_paths` is the
-    composed `.u` set (`ClassIndex.package_paths`); a ref present but undecodable raises `PreviewError`
-    naming it (spec §4), a ref with no package/name simply leaves that material flat grey.
+    class is the authority, since DX characters carry no mesh-side skins. `search_files` is the FULL
+    composed search path (all package extensions) — NOT the `.u`-only `ClassIndex.package_paths`: a
+    skin can live in a `.utx` (`Effects.BioCell_SFX`), never on the `.u` set, and the full path also
+    covers deco skins that live in a deco `.u`. A ref present but undecodable raises `PreviewError`
+    naming it (spec §4); a ref with no package/name simply leaves that material flat grey.
 
     `b_masked` is the texture's own `bMasked` render-policy flag, carried out as a fact for callers
     that alpha-test (`level photo --native`): the engine ORs a texture's PolyFlags onto every surface
     it is applied to, so a bMasked skin masks even with no PF_Masked triangle flag. `mask` is the
     decoded per-texel mask (`DecodedTexture.mask`, `width*height` bytes, 1=opaque/0=transparent) —
     the real alpha data the rasterizer's mask test needs, not a synthesized stand-in."""
-    resolver = utexture.TextureResolver(list(package_paths))
+    resolver = utexture.TextureResolver(list(search_files))
     skins: dict = {}
     mats = mesh.materials or [(0, i) for i in range(max(1, len(mesh.textures)))]
     for mi, (_flags, tex_idx) in enumerate(mats):

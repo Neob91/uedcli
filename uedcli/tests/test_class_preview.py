@@ -38,6 +38,9 @@ def preview(monkeypatch, capsys, tmp_path):
     idx = _ued22_index()
     monkeypatch.setattr(resources, "resolve_project", lambda args: object())
     monkeypatch.setattr(resources, "class_index", lambda project=None: idx)
+    # Skins resolve over the FULL composed path; offline, the corpus `.u` set is the stand-in (a
+    # superset in production, and where the corpus meshes' skins live).
+    monkeypatch.setattr(resources, "mesh_search_files", lambda project: list(idx.package_paths()))
     monkeypatch.setattr(resources, "class_defaults",
                         lambda fqcn, project=None: uprops.resolve_class_defaults(
                             fqcn, resolver=idx.resolver()))

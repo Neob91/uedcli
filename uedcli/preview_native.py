@@ -174,7 +174,7 @@ def _mover_world_polys(level, index) -> list[tuple[list, object, object]]:
     return out
 
 
-def _mesh_actor_polys(actor, index) -> tuple[list, dict, object, tuple[str, str] | None]:
+def _mesh_actor_polys(actor, index, search_files) -> tuple[list, dict, object, tuple[str, str] | None]:
     """One DT_Mesh actor's frame-0 triangles (mesh-local, NOT yet world-transformed -- the caller
     does that after computing the actor's winding/degenerate check once) plus its resolved skins,
     its decoded mesh and the mesh ASSET ref: `(triangles, skins, mesh, ref)` where `triangles` is
@@ -220,7 +220,10 @@ def _mesh_actor_polys(actor, index) -> tuple[list, dict, object, tuple[str, str]
     try:
         _display, mesh, pkg = meshfacts.decode_mesh(ref, class_fqcn=actor.cls,
                                                      resolver=index.resolver())
-        skins = meshrender.resolve_skins(mesh, pkg, defaults, index.package_paths(),
+        # Skins resolve over the FULL composed path (`search_files`), not `index.package_paths()`
+        # (`.u` only): a mesh skin can live in a `.utx` (e.g. `Effects.BioCell_SFX`), which is never
+        # on the `.u` set. `search_files` is a superset, so deco-`.u` skins still resolve.
+        skins = meshrender.resolve_skins(mesh, pkg, defaults, search_files,
                                          class_fqcn=actor.cls)
     except meshfacts.MeshFactError as e:
         raise NativePreviewError(str(e)) from e
@@ -417,7 +420,7 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
     for actor in level.actors.values():
         if actor.brush is not None:
             continue                                     # brushes/movers handled above
-        tris, skins, mesh, mesh_ref = _mesh_actor_polys(actor, index)
+        tris, skins, mesh, mesh_ref = _mesh_actor_polys(actor, index, search_files)
         if not tris:
             continue
         # `L` + `translation` are the WHOLE placement formula, computed ONCE per actor: the

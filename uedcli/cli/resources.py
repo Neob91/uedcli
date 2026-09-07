@@ -59,6 +59,16 @@ def composed_load_set(project) -> list[str]:
             "package paths; create it with a [games.<name>] paths dir list")
     return search_path_package_names(config.composed_search_files(project, user_config))
 
+def mesh_search_files(project) -> list[str]:
+    """The composed search-path FILE paths a mesh's skins resolve over — the FULL path (all package
+    extensions), since a skin can live in a `.utx` (`Effects.BioCell_SFX`), never on the `.u`-only
+    `ClassIndex.package_paths`. A MOCKABLE seam so `class preview` tests run offline, like
+    `class_index`/`class_defaults`. Absent games config → clean exit 2."""
+    user_config = config.load_user_config()
+    if user_config is None:                 # absent games config → clean exit 2, never AttributeError
+        raise CommandError(NO_GAMES_CONFIG)
+    return [f for f, _ in config.composed_search_files(project, user_config)]
+
 def composed_dirs(project) -> list[str]:
     """The WHOLE composed config dir set (host) that becomes the editor/game/build `/resources/<n>`
     mounts for materialize/preview (one uniform set — dev/docs/direction/containers.md 2026-07-14, no content-vs-code

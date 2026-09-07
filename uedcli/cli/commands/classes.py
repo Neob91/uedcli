@@ -207,7 +207,10 @@ def _run_preview(args, idx, project) -> int:
                   rotation.uu_field(args.rotate[2])) if args.rotate is not None else (0, 0, 0))
     try:
         _display, mesh, pkg = meshfacts.decode_mesh(ref, class_fqcn=fqcn, resolver=idx.resolver())
-        skins = meshrender.resolve_skins(mesh, pkg, defaults, idx.package_paths(), class_fqcn=fqcn)
+        # Skins over the FULL composed path, not idx.package_paths() (`.u` only): a skin can live in
+        # a `.utx` (e.g. `Effects.BioCell_SFX`), never on the `.u` set. See meshrender.resolve_skins.
+        skins = meshrender.resolve_skins(mesh, pkg, defaults, resources.mesh_search_files(project),
+                                         class_fqcn=fqcn)
         img, azimuth = meshrender.render_class(mesh, skins, rotate_uu=rotate_uu, size=args.size)
     except meshfacts.MeshFactError as e:
         raise CommandError(str(e))
