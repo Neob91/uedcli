@@ -213,10 +213,10 @@ Tests must NOT block the parity work. For this project specifically:
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
 Ceilings, all re-verified from N=1 against the current binary (2026-09-07): **UNATCO 225,
-NYC_Bar 152, OceanLab 197+, Island 298, WanChai 57.** Two of the five next blockers are the SAME
+NYC_Bar 152, OceanLab 202, Island 298, WanChai 57.** Two of the five next blockers are the SAME
 shape — one leaf gets a permeating-light run entry UED22 leaves out (UNATCO 226, WanChai 58) — so
-the permeating flood is where the campaign's leverage is. OceanLab is still walking forward past the
-number above; Island has no known blocker at all — it ran out of cached editor refs at 298.
+the permeating flood is where the campaign's leverage is. Island has no known blocker at all — it ran
+out of cached editor refs at 298.
 
 - **UNATCO**: N=163 is FIXED
   (`dev/docs/board/done/unatco-n-163-world-model2-lights-and-lightbits/`) — the 7 extra
@@ -367,7 +367,14 @@ number above; Island has no known blocker at all — it ran out of cached editor
   (`152.0002` vs `151.99976`). N=155: Pass F (`FEditorVisibility::BuildConnectivity`, `0xa7960`) is
   a NODE walk over `PF_Portal` surfs reading `Node.iZone[0]/[1]`, zone 0 included; native walked the
   Pass-B portal FRAGMENT list filtered by the zone-barrier set and skipped every pair touching zone
-  0, leaving zones 0 and 1 mutually unconnected. Byte-exact **N=1..197 and still walking** (was 93).
+  0, leaving zones 0 and 1 mutually unconnected. Byte-exact **N=1..202** (was 93); bails at **N=203**
+  on the world `Model2`'s `points` array — a genuine 2-ULP value pair (`x` off by
+  `2·2^-15`), not an index/order shift (full multiset diff confirms). Neither the raw brush
+  transform nor a single-hop `line_plane_intersection` against the obvious candidate plane
+  reproduces either side's stored value, and live crossing-vertex instrumentation found no
+  `split_with_plane` crossing that emits the divergent bits directly — likely the same point-pooling
+  bug CLASS as the fixed N=13/WanChai-N40 `MergeNearPoints` issue, but not the same cause; not
+  closed. `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`.
 - **Standing stopgaps, all levels**:
   `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/` — repartition dedups points
   with a linear pool scan; the editor descends and appends on a miss (`AddThing(..., !FastRebuild)`
