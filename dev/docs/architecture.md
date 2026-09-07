@@ -877,8 +877,9 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direc
     the per-surf world UV frame is computed Python-side from the AUTHORED
     `Origin`/`TextureU/V`/`Pan` (`base_w = Location + R·(Origin − PrePivot)`, `axes_w = R·axes` —
     the built surf's synthesized texture vectors are never read, and Pan doesn't survive the
-    build), textures decode natively (`utexture.py`; a ref that does not decode → magenta/black
-    checkerboard + one stderr warning per distinct ref NAMING the decoder's case; no texture →
+    build), textures decode natively (`utexture.py`; a ref that does not decode → a named exit-2
+    naming the decoder's case, no image written — the earlier magenta/black checkerboard fallback
+    was removed by owner ruling 2026-09-06; no texture set →
     flat grey), movers render
     directly as world-transformed extra polys at their base pose, and `uedcli_native.
     render_frame` rasterizes (camera BASIS passed from Python's `euler_to_matrix_uu` — Rust never

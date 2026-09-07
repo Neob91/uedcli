@@ -29,7 +29,7 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
   headless game container** (booted once ~90s, then REUSED across photo runs; self-terminates after
   10 min idle) and captures **truly-lit first-person frames** (real lighting/sky/textures). Pitch is
   clamped host-side to ±89.9°; movers render at rest pose. First batch ~1–3 min (boot + travel);
-  later batches skip the boot. It is the default because it shows lighting/meshes/sky and the offline
+  later batches skip the boot. It is the default because it shows lighting and sky, and the offline
   draft mis-renders overlapping-subtract geometry silently.
   - **Prerequisites.** Docker, and the game's own files on the composed package search path (its
     `System/` and content), configured under `~/.uedcli/config.toml` `[games.*].paths`. On a fresh
@@ -55,10 +55,18 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
     like the real editor**: a face renders only from the side its surface normal faces, unless it
     carries `PF_TwoSided` or `PF_Portal` (sheets, banners, chain-link, water portals — the same
     exemption UnrealEd itself uses), in which case it renders from either side. Movers render at
-    base pose, culled the same way; point actors, meshes, sky, lighting, and translucency do NOT
-    render (translucent/masked faces render opaque). Scaled, mirrored, and sheared brushes render
+    base pose, culled the same way. **Mesh actors render**: an actor whose effective `DrawType` is
+    `DT_Mesh` (decorations, items, weapons, characters) is drawn at animation frame 0, skinned the
+    way [`class preview`](../class/preview.md) skins it; a `bHidden` actor is skipped, since the
+    shot shows what the player would see. Other point actors (sprite-drawn ones such as lights and
+    path nodes), sky, lighting, and translucency do NOT render
+    (translucent/masked faces render opaque). Scaled, mirrored, and sheared brushes render
     (the transform is baked into the geometry, and the texture frame follows it too — texels
     stretch/shear with the surface).
+  - **Unresolvable refs abort the shot.** A texture or mesh reference that cannot be found or
+    decoded exits 2 naming the actor and the ref, and writes no image — no placeholder, no partial
+    shot. (It used to render a magenta/black checkerboard in place of the texture and carry on with
+    a warning.)
   - **`--faces wire`** — a content-free **brush wireframe** from the same posed camera: every brush
     edge drawn (see-through, no hidden-line removal), coloured by CSG op — **add** blue, **subtract**
     gold, **semisolid** coral, **nonsolid** green, **mover** magenta. Point actors draw as their

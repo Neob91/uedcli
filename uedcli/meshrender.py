@@ -46,13 +46,19 @@ class PreviewError(Exception):
 
 
 def frame_triangles(mesh, frame: int = 0):
-    """Triangles for one animation frame as `(v0, v1, v2, uv0, uv1, uv2, material_index)`.
+    """Triangles for one animation frame as
+    `(v0, v1, v2, uv0, uv1, uv2, material_index, poly_flags)`.
 
     A `ULodMesh`'s renderable geometry is in Faces/Wedges (its `Tris` is empty) — Faces index Wedges,
     Wedges index Verts and carry the UV; a plain `UMesh` keeps geometry in `Tris`. `Verts` holds every
     frame back-to-back, so frame `f` starts at `f*FrameVerts`, and each frame begins with
     `SpecialVerts` attachment vertices that are NOT model geometry (a wedge's `iVertex` is relative to
-    `frame_base + SpecialVerts`; omitting the shift shreds any mesh with attachments)."""
+    `frame_base + SpecialVerts`; omitting the shift shreds any mesh with attachments).
+
+    `poly_flags` comes from a DIFFERENT field depending on mesh kind: a LodMesh's
+    `Materials[material_index].PolyFlags`, a plain Mesh's own per-triangle `FMeshTri.PolyFlags` —
+    they are not interchangeable (`dev/docs/board/.../native-mesh-rendering-in-level-photo-native/
+    spec.md`)."""
     base = frame * mesh.frame_verts + mesh.special_verts
     tris = []
     if mesh.faces:
@@ -69,24 +75,32 @@ def frame_triangles(mesh, frame: int = 0):
                 vs.append(mesh.verts[k])
                 uvs.append((u, v))
             if len(vs) == 3:
-                tris.append((vs[0], vs[1], vs[2], uvs[0], uvs[1], uvs[2], mat))
+                flags = mesh.materials[mat][0] if 0 <= mat < len(mesh.materials) else 0
+                tris.append((vs[0], vs[1], vs[2], uvs[0], uvs[1], uvs[2], mat, flags))
     else:                                            # plain UMesh: geometry lives in Tris
-        for (iv, uv, _flags, tex) in mesh.tris:
+        for (iv, uv, flags, tex) in mesh.tris:
             vs = [mesh.verts[base + i] for i in iv if base + i < len(mesh.verts)]
             if len(vs) == 3:
                 tris.append((vs[0], vs[1], vs[2],
-                             (uv[0], uv[1]), (uv[2], uv[3]), (uv[4], uv[5]), tex))
+                             (uv[0], uv[1]), (uv[2], uv[3]), (uv[4], uv[5]), tex, flags))
     return tris
 
 
 def resolve_skins(mesh, pkg, defaults, package_paths, *, class_fqcn: str) -> dict:
-    """`material index -> (w, h, rgb bytes)` for the mesh, decoded through `utexture`.
+    """`material index -> (w, h, rgb bytes, b_masked, mask bytes)` for the mesh, decoded through
+    `utexture`.
 
     Two sources, class-wins: the mesh's OWN `Textures` (via `Materials[i].TextureIndex`) are the
     fallback skin set, then the CLASS's `MultiSkins[i]` (per material index) / `Skin` override — the
     class is the authority, since DX characters carry no mesh-side skins. `package_paths` is the
     composed `.u` set (`ClassIndex.package_paths`); a ref present but undecodable raises `PreviewError`
-    naming it (spec §4), a ref with no package/name simply leaves that material flat grey."""
+    naming it (spec §4), a ref with no package/name simply leaves that material flat grey.
+
+    `b_masked` is the texture's own `bMasked` render-policy flag, carried out as a fact for callers
+    that alpha-test (`level photo --native`): the engine ORs a texture's PolyFlags onto every surface
+    it is applied to, so a bMasked skin masks even with no PF_Masked triangle flag. `mask` is the
+    decoded per-texel mask (`DecodedTexture.mask`, `width*height` bytes, 1=opaque/0=transparent) —
+    the real alpha data the rasterizer's mask test needs, not a synthesized stand-in."""
     resolver = utexture.TextureResolver(list(package_paths))
     skins: dict = {}
     mats = mesh.materials or [(0, i) for i in range(max(1, len(mesh.textures)))]
@@ -102,7 +116,7 @@ def resolve_skins(mesh, pkg, defaults, package_paths, *, class_fqcn: str) -> dic
         if isinstance(got, utexture.TextureError):
             raise PreviewError(f"cannot preview {class_fqcn}: mesh skin {ref} did not decode "
                                f"[{got.case}]: {got.detail}")
-        skins[mi] = (got.width, got.height, got.rgb)
+        skins[mi] = (got.width, got.height, got.rgb, bool(got.b_masked), got.mask)
     for (prop, idx), val in defaults.items():        # class MultiSkins/Skin override per material idx
         if prop not in ("multiskins", "skin"):
             continue
@@ -113,7 +127,8 @@ def resolve_skins(mesh, pkg, defaults, package_paths, *, class_fqcn: str) -> dic
         if isinstance(got, utexture.TextureError):
             raise PreviewError(f"cannot preview {class_fqcn}: class {prop} {ref} did not decode "
                                f"[{got.case}]: {got.detail}")
-        skins[idx if prop == "multiskins" else 0] = (got.width, got.height, got.rgb)
+        skins[idx if prop == "multiskins" else 0] = (got.width, got.height, got.rgb,
+                                                     bool(got.b_masked), got.mask)
     return skins
 
 
@@ -175,7 +190,7 @@ def render_class(mesh, skins: dict, *, rotate_uu=(0, 0, 0), size: int = DEFAULT_
     img = Image.new("RGB", (size, size), _BG)
     px = img.load()
     zbuf = [1e30] * (size * size)
-    for (a, b, c, ua, ub, uc, mat) in tris:
+    for (a, b, c, ua, ub, uc, mat, _flags) in tris:
         va, vb, vc = view(a), view(b), view(c)
         e1 = tuple(vb[i] - va[i] for i in range(3))
         e2 = tuple(vc[i] - va[i] for i in range(3))
@@ -209,7 +224,7 @@ def render_class(mesh, skins: dict, *, rotate_uu=(0, 0, 0), size: int = DEFAULT_
                     continue
                 zbuf[idx] = depth
                 if skin:
-                    tw, th, rgb = skin
+                    tw, th, rgb, _b_masked, _mask = skin  # thumbnails draw opaque: no alpha test here
                     u = (w2 * ua[0] + w1 * ub[0] + w0 * uc[0]) * tw / 256.0
                     v = (w2 * ua[1] + w1 * ub[1] + w0 * uc[1]) * th / 256.0
                     o = ((int(v) % th) * tw + (int(u) % tw)) * 3

@@ -621,8 +621,8 @@ class TextureResolver:
     `resolve(ref)` returns a **typed result**: a `DecodedTexture`, or a `TextureError` naming
     the case and the offending value. It never returns `None` and it never raises for a content
     problem — a corrupt package, a hostile mip count and an unknown name all come back as cases.
-    The caller chooses the disposition: `level photo --native` degrades to a checkerboard and
-    warns, a per-ref request exits 2 naming the ref.
+    The caller decides what to do with a `TextureError`; `level photo --native` and a per-ref
+    request both exit 2 naming the ref.
 
     A bare (unqualified) ref is refused (`unqualified-ref`) rather than scanned for across
     packages — a cross-package stem scan is ambiguous, and `assemble._patch_surf_refs` requires

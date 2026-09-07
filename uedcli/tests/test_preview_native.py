@@ -3,6 +3,7 @@ with no editor/container; tests that carve geometry need the `uedcli_native` ext
 (skipped when absent, same as the CSG differential suite)."""
 from __future__ import annotations
 
+import glob
 import hashlib
 import math
 import os
@@ -13,6 +14,7 @@ import pytest
 
 from uedcli import preview_native as pn
 from uedcli.builders import cube, make_brush_actor
+from uedcli.classindex import ClassIndex
 from uedcli.model import Actor, Level
 from uedcli.preview_shots import Shot, parse_shot
 from uedcli.rotation import world_vertices
@@ -23,6 +25,18 @@ IDX = StubClassIndex()          # the offline class resolver `movers.is_mover` n
 uedcli_native = pytest.importorskip("uedcli_native")
 
 FIXTURES = Path(__file__).parent / "fixtures"
+
+# Real ClassIndex over the committed UED22 corpus, needed ONLY by the DT_Mesh actor tests below —
+# `StubClassIndex`/`IDX` above has no `.resolver()`/`.package_paths()`, so a real mesh-actor build
+# (class defaults, `Mesh` decode, skin resolve) needs the same offline corpus `test_class_preview.py`
+# uses, not the stub.
+UED22 = Path(__file__).resolve().parents[2] / "uned" / "UED22"
+MESH_CLASS = "DeusEx.CrateUnbreakableLarge"          # DT_Mesh; SAME class test_class_preview.py uses
+
+
+def _ued22_index() -> ClassIndex:
+    files = [(os.path.splitext(os.path.basename(f))[0], f) for f in glob.glob(str(UED22 / "*.u"))]
+    return ClassIndex.from_files(files)
 
 
 def _level(*actors: Actor) -> Level:
@@ -185,36 +199,43 @@ def test_backface_cull_end_to_end_through_the_full_pipeline():
     assert centre_px(200.0, 180.0) == _BACKGROUND_RGB   # +X side, looking -X: the back, now culled
 
 
-# --------------------------------------------------------------- checkerboard + warning
+# --------------------------------------------------------------- unresolvable texture → error
 
 
-def test_unresolvable_ref_checkerboards_and_warns_once(capsys):
-    """A whole-frame render DEGRADES: one texture it cannot read must not stop the preview.
+def test_unresolvable_ref_raises_named_error():
+    """A whole-frame render REFUSES outright: no checkerboard, no partial image (spec §4.5
+    revision, owner ruling) — one unreadable texture fails the whole `--native` shot.
 
-    The warning carries the decoder's named case, so a reader can tell a wrong ref from a
-    layout we cannot decode yet without re-running anything — and it is printed ONCE per
-    distinct ref, not once per face.
+    The error carries the decoder's named case, so a reader can tell a wrong ref from a
+    layout we cannot decode yet without re-running anything.
     """
     room = cube_room(texture="Missing.Tex")
-    polys, table = pn.build_scene(_level(room), [], IDX)
-    err = capsys.readouterr().err
-    assert err.count("Missing.Tex") == 1         # ONE warning per distinct ref
-    assert "unknown-package" in err              # the decoder's case, not a generic "missing"
-    assert len(table) == 1                       # the shared checkerboard slot
-    w, h, data, mask = table[0]
-    assert data[:3] == b"\xff\x00\xff"           # magenta/black checks
-    assert mask == b"\x01" * (w * h)             # checkerboard is fully opaque
-    assert all(p[5] == 0 for p in polys)
+    with pytest.raises(pn.NativePreviewError, match=r"Missing\.Tex") as excinfo:
+        pn.build_scene(_level(room), [], IDX)
+    assert "unknown-package" in str(excinfo.value)   # the decoder's case, not a generic "missing"
 
 
-def test_bare_ref_is_unresolvable(capsys):
+def test_bare_ref_is_unresolvable():
     """A bare ref is refused by name — `unqualified-ref`, not "not found" — because the fix is
-    to qualify it, not to go looking for the texture."""
+    to qualify it, not to go looking for the texture. Raises, same as any other unresolvable ref."""
     room = cube_room(texture="barename")
-    polys, table = pn.build_scene(_level(room), [], IDX)
-    err = capsys.readouterr().err
-    assert "barename" in err and "unqualified-ref" in err
-    assert len(table) == 1                       # checkerboard
+    with pytest.raises(pn.NativePreviewError, match=r"barename") as excinfo:
+        pn.build_scene(_level(room), [], IDX)
+    assert "unqualified-ref" in str(excinfo.value)
+
+
+def test_undecodable_present_ref_raises_too():
+    """The decode layer (a texture the ref DID resolve to, but whose data won't decode) raises
+    exactly like the ref layer above — `index_for` doesn't distinguish the two `TextureError`
+    layers, it raises on any of them."""
+    class _Resolver:
+        def resolve(self, ref):
+            return pn.TextureError(ref, "corrupt-body", "mip 0 truncated")
+
+    table = pn._TextureTable(_Resolver())
+    with pytest.raises(pn.NativePreviewError, match=r"Real\.Tex") as excinfo:
+        table.index_for("Real.Tex")
+    assert "corrupt-body" in str(excinfo.value)
 
 
 def test_real_fixture_texture_resolves():
@@ -354,6 +375,185 @@ def test_movers_are_out_of_world_csg_but_rendered():
     assert len(polys) == 6 + 6                   # room faces + mover extra_polys
 
 
+# --------------------------------------------------------------- DT_Mesh actors (real corpus)
+
+
+def test_build_scene_includes_a_dt_mesh_actor():
+    """A DT_Mesh actor (`MESH_CLASS`, resolved through the real UED22 corpus — `StubClassIndex` can't
+    resolve class defaults/mesh/skins) adds its frame-0 triangles on top of the world-CSG baseline.
+    Room has no texture set, so its 6 baseline polys carry no ambiguity against the new textured mesh
+    triangles; the room is rebuilt fresh for each call since `build_scene` is not asserted pure over
+    its brush input."""
+    index = _ued22_index()
+    baseline_polys, baseline_textures = pn.build_scene(_level(cube_room()), [], index)
+    assert baseline_polys and not baseline_textures      # untextured room: polys exist, no textures
+
+    crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    polys, textures = pn.build_scene(_level(cube_room(), crate), [], index)
+
+    assert polys[:len(baseline_polys)] == baseline_polys  # baseline untouched, mesh triangles appended
+    new_polys = polys[len(baseline_polys):]
+    assert new_polys                                       # the crate actually contributed triangles
+    for verts_flat, *_ in new_polys:
+        assert len(verts_flat) == 9    # exactly 3 verts * 3 floats -- one mesh triangle per RenderPoly
+    assert textures                                         # the crate's skin decoded into the table
+
+
+def _mesh_default(prop: str, index) -> str:
+    """One class default of `MESH_CLASS`, read off the real corpus (its `Mesh` ref, for instance
+    overrides that need a REAL mesh on a class that has none of its own)."""
+    from uedcli import uprops
+    return uprops.resolve_class_defaults(MESH_CLASS, resolver=index.resolver())[(prop, 0)]
+
+
+def _mesh_poly_count(actor, index) -> int:
+    """How many polys `actor` adds on top of the bare-room baseline."""
+    baseline, _ = pn.build_scene(_level(cube_room()), [], index)
+    polys, _ = pn.build_scene(_level(cube_room(), actor), [], index)
+    return len(polys) - len(baseline)
+
+
+def test_drawtype_instance_override_decides_what_renders():
+    """`DrawType` resolves instance-override-else-class-default, like `Mesh` right beside it and like
+    `cli/rendering.py::_resolve_point_render` — reading only the class default rendered a DT_None
+    instance of a mesh class and skipped a DT_Mesh instance of a non-mesh class."""
+    index = _ued22_index()
+    off = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)),
+                props=[("DrawType", "DT_None")])
+    assert _mesh_poly_count(off, index) == 0
+
+    on = Actor(name="Laser", cls="DeusEx.LaserEmitter",          # DT_None class, no Mesh default
+               location=(Decimal(0), Decimal(0), Decimal(0)),
+               props=[("DrawType", "DT_Mesh"), ("Mesh", _mesh_default("mesh", index))])
+    assert _mesh_poly_count(on, index) > 0
+
+
+def test_bhidden_mesh_actor_does_not_render():
+    """`level photo` shows what the PLAYER sees, so a `bHidden` actor contributes nothing. (The
+    editor flag `bHiddenEd` is `actor diagram`'s, and stays untouched here.)"""
+    index = _ued22_index()
+    hidden = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)),
+                   props=[("bHidden", "True")])
+    assert _mesh_poly_count(hidden, index) == 0
+    shown = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    assert _mesh_poly_count(shown, index) > 0
+
+
+def test_mesh_material_with_no_texture_renders_flat_grey(monkeypatch):
+    """A material with NOTHING assigned is not a failure: the triangle still renders, in the flat
+    default grey (`tex_index -1`) an untextured BSP face already gets. Only a texture that IS
+    assigned and won't decode is an error, and `resolve_skins` raises that one by name."""
+    from uedcli import meshrender
+    index = _ued22_index()
+    monkeypatch.setattr(meshrender, "resolve_skins", lambda *a, **k: {})   # no material textured
+    baseline, _ = pn.build_scene(_level(cube_room()), [], index)
+    crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    polys, textures = pn.build_scene(_level(cube_room(), crate), [], index)
+    new_polys = polys[len(baseline):]
+    assert new_polys                                     # the crate still contributed triangles
+    assert all(p[5] == -1 for p in new_polys)            # ...all flat grey
+    assert not textures                                  # nothing registered in the table
+
+
+def test_mesh_skin_dedup_keys_on_class_and_mesh_ref():
+    """`resolve_skins` is CLASS-dependent (a class's `MultiSkins`/`Skin` defaults override the
+    mesh's own textures), so the skin cache key must carry the class AND the mesh asset ref. Two
+    classes sharing one mesh with different skins used to collide on `(mesh.name, material)` and
+    the second silently rendered the first's skin."""
+    t = pn._TextureTable(resolver=None)                  # index_for_decoded never touches it
+    px = b"\xff\x00\x00"
+    mask = b"\x01"
+    a = t.index_for_decoded("DeusEx.CrateA", ("DeusExDeco", "Crate"), 0, 1, 1, px, False, mask)
+    assert t.index_for_decoded("DeusEx.CrateA", ("DeusExDeco", "Crate"), 0, 1, 1, px, False, mask) == a
+    # a DIFFERENT class over the SAME mesh gets its own slot (the C1 bug)
+    assert t.index_for_decoded("DeusEx.CrateB", ("DeusExDeco", "Crate"), 0, 1, 1, px, False, mask) != a
+    # a same-NAMED mesh from another package is a different asset
+    assert t.index_for_decoded("DeusEx.CrateA", ("OtherPkg", "Crate"), 0, 1, 1, px, False, mask) != a
+    assert t.index_for_decoded("DeusEx.CrateA", ("DeusExDeco", "Crate"), 1, 1, 1, px, False, mask) != a
+
+
+def test_bmasked_mesh_skin_masks_without_the_triangle_flag(monkeypatch):
+    """A `bMasked` mesh SKIN masks its triangles even with no `PF_Masked` triangle flag — the same
+    rule a bMasked surface texture already gets (`unrealed/quirks.md`: the engine ORs a texture's
+    PolyFlags onto every surface it is applied to). `resolve_skins` carries the flag out of the
+    decode; `index_for_decoded` records it; `is_bmasked` reports it."""
+    t = pn._TextureTable(resolver=None)
+    px = b"\xff\x00\x00"
+    mask = b"\x01"
+    plain = t.index_for_decoded("DeusEx.CrateA", ("DeusExDeco", "Crate"), 0, 1, 1, px, False, mask)
+    masked = t.index_for_decoded("DeusEx.CrateA", ("DeusExDeco", "Grate"), 0, 1, 1, px, True, mask)
+    assert t.is_bmasked(plain) is False and t.is_bmasked(masked) is True
+
+    # END TO END: the flag reaches the render-poly tuple's `masked` field through build_scene.
+    from uedcli import meshrender
+    index = _ued22_index()
+    monkeypatch.setattr(meshrender, "resolve_skins",   # the crate mesh has one material, index 0
+                        lambda *a, **k: {0: (1, 1, px, True, mask)})
+    baseline, _ = pn.build_scene(_level(cube_room()), [], index)
+    crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    polys, _ = pn.build_scene(_level(cube_room(), crate), [], index)
+    new_polys = polys[len(baseline):]
+    assert new_polys and all(p[6] is True for p in new_polys)
+    assert all(not (p[7] & pn.PF_MASKED) for p in new_polys)   # ...with NO triangle flag set
+
+
+def test_mesh_skin_carries_the_real_per_texel_mask_not_synthesized_opaque(monkeypatch):
+    """`index_for_decoded` used to synthesize an ALL-OPAQUE mask (`b"\\x01" * (w*h)`) regardless of
+    the skin's real alpha data, so the rasterizer's `masked && mask[texel] == 0` test never cut
+    anything — a bMasked mesh skin (e.g. `Plant`, `SecurityCamera`'s lens) rendered as a solid
+    opaque block instead of being alpha-tested. The table entry must carry the texture's OWN
+    decoded mask (with at least one transparent texel) verbatim, matching what `index_for` already
+    does for world/mover textures (`got.mask`)."""
+    t = pn._TextureTable(resolver=None)
+    px = b"\xff\x00\x00\xff\x00\x00"
+    real_mask = b"\x01\x00"                               # texel 1 is transparent -- NOT all-opaque
+    idx = t.index_for_decoded("DeusEx.CrateA", ("DeusExDeco", "Crate"), 0, 2, 1, px, True, real_mask)
+    w, h, rgb, mask = t.table[idx]
+    assert mask == real_mask
+    assert mask != b"\x01" * (w * h)                      # the old synthesized-opaque bug
+
+    # END TO END: resolve_skins' decoded mask reaches the texture table through build_scene.
+    from uedcli import meshrender
+    index = _ued22_index()
+    px1 = b"\xff\x00\x00"
+    real_mask2 = b"\x00"                                   # one texel, fully transparent
+    monkeypatch.setattr(meshrender, "resolve_skins",       # the crate mesh has one material, index 0
+                        lambda *a, **k: {0: (1, 1, px1, True, real_mask2)})
+    _polys, table = pn.build_scene(
+        _level(cube_room(), Actor(name="Crate", cls=MESH_CLASS,
+                                   location=(Decimal(0), Decimal(0), Decimal(0)))),
+        [], index)
+    assert table and table[-1][3] == real_mask2
+
+
+def test_two_instances_of_one_mesh_class_share_one_texture_slot():
+    """The dedup the class key must NOT break: two placed actors of the SAME class and mesh still
+    register one texture-table entry per material, not one per actor."""
+    index = _ued22_index()
+    one = Actor(name="Crate1", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    two = Actor(name="Crate2", cls=MESH_CLASS, location=(Decimal(200), Decimal(0), Decimal(0)))
+    _p1, t1 = pn.build_scene(_level(cube_room(), one), [], index)
+    _p2, t2 = pn.build_scene(_level(cube_room(), one, two), [], index)
+    assert t1 and len(t2) == len(t1)
+
+
+def test_build_scene_unresolvable_mesh_ref_raises_naming_the_actor():
+    """The actor's own `Mesh=` override points at a package not on the search path — a REALISTIC
+    "mesh not on the search path" scenario writes a syntactically well-formed ref
+    (`LodMesh'Pkg.Name'`), which `parse_mesh_ref` parses fine; the failure surfaces one level down,
+    inside `meshfacts.decode_mesh` (package not found), converted to `NativePreviewError` by
+    `_mesh_actor_polys`'s `except meshfacts.MeshFactError` branch — NOT the `ref is None` branch (a
+    bare unquoted string like "NoSuchPackage.Bogus" fails to parse at all and is not how a real T3D
+    Mesh override reads)."""
+    index = _ued22_index()
+    crate = Actor(name="Crate", cls=MESH_CLASS,
+                  location=(Decimal(0), Decimal(0), Decimal(0)),
+                  props=[("Mesh", "LodMesh'NoSuchPackage.Bogus'")])
+    lvl = _level(cube_room(), crate)
+    with pytest.raises(pn.NativePreviewError, match=r"NoSuchPackage\.Bogus"):
+        pn.build_scene(lvl, [], index)
+
+
 # --------------------------------------------------------------- invisible faces
 
 
@@ -462,9 +662,15 @@ def _case_c_level() -> Level:
     return _level(room, pillar)
 
 
-def _synthetic_scene(tmp_path=None):
+def _synthetic_scene(monkeypatch, tmp_path=None):
     """Case-c level with a synthetic asymmetric 4-texel texture injected straight into the
-    table (no package file needed): the resolver misses, then the table is patched."""
+    table (no package file needed): an unresolvable ref now raises instead of degrading, so the
+    resolver is patched to hand back a 1x1 placeholder, then the table is patched with the real
+    asymmetric pixels."""
+    from types import SimpleNamespace
+    monkeypatch.setattr(pn.TextureResolver, "resolve",
+                        lambda self, ref: SimpleNamespace(width=1, height=1, rgb=b"\x00\x00\x00",
+                                                          mask=b"\x01", b_masked=False))
     lvl = _case_c_level()
     polys, table = pn.build_scene(lvl, [], IDX)
     asym = (2, 2, bytes([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0]), bytes([1, 1, 1, 1]))
@@ -472,7 +678,7 @@ def _synthetic_scene(tmp_path=None):
     return polys, table
 
 
-def test_golden_image_byte_exact(capsys):
+def test_golden_image_byte_exact(monkeypatch):
     """Two exact-trig poses (0°/90°) at 320×240, byte-exact pixel buffers on the dev
     platform (Linux/x86_64 — spike 40). On mismatch prints the differing-byte count.
     Bless/regenerate: UEDCLI_BLESS_GOLDEN=1 bin/test -k golden. Blessed 2026-07-16 AFTER
@@ -488,9 +694,8 @@ def test_golden_image_byte_exact(capsys):
     tessellation (coarse 18 nodes/12 surfs → bspcsg 16/10), so the pixel buffer moves; the case-c
     surf SET still matches the editor golden (`test_csg_native_differential`), and the anchor U/V/Pan
     + camera-trig pins are unaffected (only the CSG core feeding fragments changed)."""
-    capsys.readouterr()                          # swallow the checkerboard warning
     import uedcli_native
-    polys, table = _synthetic_scene()
+    polys, table = _synthetic_scene(monkeypatch)
     frames = []
     for pitch, yaw in ((0.0, 0.0), (0.0, 90.0)):
         fwd, right, up = pn.camera_basis(pitch, yaw)

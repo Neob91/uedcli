@@ -48,9 +48,6 @@ DEFAULT_SIZE = (1280, 960)
 
 _CSG_OPER = {"CSG_Add": 1, "CSG_Subtract": 2}
 
-# The unresolvable-texture checkerboard (spec §4.5): magenta/black 8-px checks, 64².
-_CHECKER_SIZE, _CHECKER_CELL = 64, 8
-
 
 class NativePreviewError(Exception):
     """User-facing native-photo failure (→ stderr + exit 2, never a traceback)."""
@@ -177,30 +174,73 @@ def _mover_world_polys(level, index) -> list[tuple[list, object, object]]:
     return out
 
 
+def _mesh_actor_polys(actor, index) -> tuple[list, dict, object, tuple[str, str] | None]:
+    """One DT_Mesh actor's frame-0 triangles (mesh-local, NOT yet world-transformed -- the caller
+    does that after computing the actor's winding/degenerate check once) plus its resolved skins,
+    its decoded mesh and the mesh ASSET ref: `(triangles, skins, mesh, ref)` where `triangles` is
+    `frame_triangles(mesh)`'s own 8-tuple list, `skins` is
+    `{material_index: (w, h, rgb, b_masked)}`, `mesh`
+    is the decoded `umesh.Mesh` the caller needs for `apply_mesh_linear`/`mesh_actor_linear`, and
+    `ref` is `meshfacts.parse_mesh_ref`'s `(package_stem, mesh_name)` -- returned rather than
+    recomputed by the caller, and half of the skin cache key (`_TextureTable.index_for_decoded`).
+    Returns `([], {}, None, None)` for a non-DT_Mesh actor, a `bHidden` one, or one
+    with no resolvable Mesh (not an error -- matches `class preview`'s own "not every actor has a
+    mesh" disposition, `classes.py::_run_preview`). Converts `meshfacts.MeshFactError`/
+    `meshrender.PreviewError` to `NativePreviewError` at this boundary -- matching how
+    `classes.py::_run_preview` converts the SAME two exceptions to `CommandError` locally, and how
+    `level.py`'s `--native` call site only ever catches `NativePreviewError` (no dispatch.py change
+    needed, unlike an earlier draft of this plan)."""
+    from . import meshfacts, meshrender
+    from .uprops import resolve_class_defaults
+
+    defaults = resolve_class_defaults(actor.cls, resolver=index.resolver())
+    instance = {k.casefold(): v for k, v in actor.props}
+
+    def field(name: str):
+        """The actor's own value for `name` (casefolded key), else its class default — the SAME
+        instance-else-default resolution `cli/rendering.py::_resolve_point_render` uses for these
+        very properties. A placed actor may override `DrawType` (a DT_Mesh instance of an otherwise
+        non-drawing class, or a DT_None instance of a mesh class); reading only the class default
+        renders the wrong set."""
+        return instance[name] if name in instance else defaults.get((name, 0))
+
+    if (field("drawtype") or "").strip() != "DT_Mesh":
+        return [], {}, None, None
+    if str(field("bhidden") or "False").strip() == "True":
+        # `bHidden` is GAMEPLAY visibility, and `level photo` shows what the player sees — a hidden
+        # actor contributes nothing (same disposition as a non-DT_Mesh one, not an error). The
+        # EDITOR flag `bHiddenEd` is deliberately NOT read here: that one belongs to
+        # `actor diagram`, which applies it in `cli/rendering.py::_is_hidden_ed`.
+        return [], {}, None, None
+    mesh_prop = instance.get("mesh") or defaults.get(("mesh", 0))   # empty override → class default
+    ref = meshfacts.parse_mesh_ref(mesh_prop)
+    if ref is None:
+        raise NativePreviewError(
+            f"actor {actor.name}: DrawType is DT_Mesh but Mesh ({mesh_prop!r}) is unresolvable")
+    try:
+        _display, mesh, pkg = meshfacts.decode_mesh(ref, class_fqcn=actor.cls,
+                                                     resolver=index.resolver())
+        skins = meshrender.resolve_skins(mesh, pkg, defaults, index.package_paths(),
+                                         class_fqcn=actor.cls)
+    except meshfacts.MeshFactError as e:
+        raise NativePreviewError(str(e)) from e
+    except meshrender.PreviewError as e:
+        raise NativePreviewError(str(e)) from e
+    return meshrender.frame_triangles(mesh), skins, mesh, ref
+
+
 # --------------------------------------------------------------------- textures
 
-def _checkerboard() -> tuple[int, int, bytes, bytes]:
-    """The unresolvable-ref placeholder: magenta/black checks — the miss is visible in the
-    render itself (spec §4.5). Fully opaque (all-1 mask) so a PF_Masked face pointing at an
-    unresolvable texture still shows the whole checkerboard rather than being cut to nothing."""
-    data = bytearray()
-    for y in range(_CHECKER_SIZE):
-        for x in range(_CHECKER_SIZE):
-            on = ((x // _CHECKER_CELL) + (y // _CHECKER_CELL)) % 2 == 0
-            data += b"\xff\x00\xff" if on else b"\x00\x00\x00"
-    return (_CHECKER_SIZE, _CHECKER_SIZE, bytes(data), b"\x01" * (_CHECKER_SIZE * _CHECKER_SIZE))
-
-
 class _TextureTable:
-    """Distinct texture refs → table indices; unresolvable refs share one checkerboard slot
-    and warn ONCE per distinct ref (spec §4.5)."""
+    """Distinct texture refs → table indices. An unresolvable ref raises `NativePreviewError`
+    (no placeholder, no partial image — spec §4.5)."""
 
     def __init__(self, resolver: TextureResolver) -> None:
         self._resolver = resolver
         self.table: list[tuple[int, int, bytes, bytes]] = []
         self.bmasked: list[bool] = []                    # per-index: is the texture itself bMasked
         self._by_ref: dict[str, int] = {}
-        self._checker_index: int | None = None
+        self._by_decoded: dict = {}
 
     def is_bmasked(self, idx: int) -> bool:
         """Does the texture at table `idx` carry `bMasked` (masks index-0 regardless of the surface
@@ -215,23 +255,43 @@ class _TextureTable:
             return self._by_ref[key]
         got = self._resolver.resolve(ref)
         if isinstance(got, TextureError):
-            # A whole-frame render degrades rather than refusing — one odd texture must not
-            # stop a map preview. The named case goes into the warning so the user can tell a
-            # typo (`unknown-package`) from a real decode gap (`unverified-format`) without
-            # re-running anything. A per-ref request exits 2 instead; the decoder reports, the
-            # caller disposes.
-            print(f"WARNING: texture {ref!r} did not decode [{got.case}]: {got.detail}; "
-                  f"rendering a checkerboard", file=sys.stderr)
-            if self._checker_index is None:
-                self._checker_index = len(self.table)
-                self.table.append(_checkerboard())
-                self.bmasked.append(False)
-            idx = self._checker_index
-        else:
-            idx = len(self.table)
-            self.table.append((got.width, got.height, got.rgb, got.mask))
-            self.bmasked.append(bool(got.b_masked))
+            raise NativePreviewError(
+                f"texture {ref!r} did not decode [{got.case}]: {got.detail}")
+        idx = len(self.table)
+        self.table.append((got.width, got.height, got.rgb, got.mask))
+        self.bmasked.append(bool(got.b_masked))
         self._by_ref[key] = idx
+        return idx
+
+    def index_for_decoded(self, class_fqcn: str, mesh_ref: tuple[str, str], material_index: int,
+                          w: int, h: int, rgb: bytes, b_masked: bool, mask: bytes) -> int:
+        """Register an already-decoded texture (a mesh skin `resolve_skins` resolved) and return
+        its table index -- deduped by (class_fqcn, mesh_ref, material_index), NOT by which ACTOR
+        triggered the resolve, so many placed instances of the same decoration/crate share one
+        table entry instead of one each.
+
+        The CLASS is part of the key because `resolve_skins` is class-dependent: a class's
+        `MultiSkins`/`Skin` defaults OVERRIDE the mesh's own textures, so two classes sharing one
+        mesh resolve to different skins. Measured over the committed UED22 corpus: of the 325 mesh
+        assets stock DT_Mesh classes reference, 34 carry more than one distinct class skin set, and
+        the body mesh `DeusExCharacters.GM_Trench` alone carries 16. Keying on the mesh alone made
+        whichever class resolved second silently render the first one's skin.
+        `mesh_ref` is `(package_stem, mesh_name)` -- the mesh ASSET identity, so two same-named
+        meshes in different packages stay distinct.
+
+        `b_masked` is the skin texture's own `bMasked` flag (`resolve_skins` carries it), so
+        `is_bmasked` reports a mesh skin exactly as it reports a surface texture. `mask` is the
+        real per-texel mask `resolve_skins` decoded (`DecodedTexture.mask`, `w*h` bytes,
+        1=opaque/0=transparent) -- matching `index_for`'s own `got.mask`, not a synthesized
+        all-opaque stand-in, so the rasterizer's `masked && mask[texel] == 0` alpha test actually
+        cuts a masked mesh skin."""
+        cache_key = (class_fqcn, mesh_ref, material_index)
+        if cache_key in self._by_decoded:
+            return self._by_decoded[cache_key]
+        idx = len(self.table)
+        self.table.append((w, h, rgb, mask))
+        self.bmasked.append(bool(b_masked))
+        self._by_decoded[cache_key] = idx
         return idx
 
 
@@ -350,6 +410,74 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
 
     for world_verts, actor, poly in _mover_world_polys(level, index):
         add_poly(world_verts, actor, poly)
+
+    from .transform import DegenerateTransformError, flip_winding, reject_degenerate
+    from . import meshworld
+
+    for actor in level.actors.values():
+        if actor.brush is not None:
+            continue                                     # brushes/movers handled above
+        tris, skins, mesh, mesh_ref = _mesh_actor_polys(actor, index)
+        if not tris:
+            continue
+        # `L` + `translation` are the WHOLE placement formula, computed ONCE per actor: the
+        # per-vertex `apply_mesh_linear` below then costs one matvec, where the equivalent
+        # `mesh_vertex_to_world` would re-parse `Rotation` and rebuild both rotation matrices for
+        # every vertex of every triangle (pinned equivalent in `test_meshworld.py`).
+        L = meshworld.mesh_actor_linear(mesh, actor)
+        translation = meshworld.mesh_actor_translation(actor)
+        try:
+            reject_degenerate(L, actor.name)
+        except DegenerateTransformError as e:
+            raise NativePreviewError(str(e)) from e
+        flip = flip_winding(L)
+
+        for (v0, v1, v2, uv0, uv1, uv2, material_index, poly_flags) in tris:
+            if poly_flags & PF_INVISIBLE:
+                continue                                  # dropped Python-side, matches add_poly
+            if flip:
+                v0, v2 = v2, v0
+                uv0, uv2 = uv2, uv0
+            w0 = meshworld.apply_mesh_linear(v0, mesh_origin=mesh.origin, L=L,
+                                             translation=translation)
+            w1 = meshworld.apply_mesh_linear(v1, mesh_origin=mesh.origin, L=L,
+                                             translation=translation)
+            w2 = meshworld.apply_mesh_linear(v2, mesh_origin=mesh.origin, L=L,
+                                             translation=translation)
+            skin = skins.get(material_index)
+            if skin is None:
+                # This material has NO texture assigned — flat grey, the same disposition an
+                # untextured BSP face already gets (`add_poly`'s unowned branch,
+                # `index_for(None) -> -1`, `render.rs`'s DEFAULT_GREY). Distinct from a texture
+                # that IS assigned but won't decode, which `resolve_skins` refuses by name.
+                # There is nothing to map UV onto, so the UV solve is skipped entirely and a
+                # neutral frame goes out — `render.rs` never samples it at `tex_index == -1`.
+                tex_index = -1
+                base, axis_u, axis_v = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)
+                pan = (0.0, 0.0)
+            else:
+                tw, th, rgb, b_masked, mask = skin
+                # Dedup key is (actor.cls, mesh_ref, material_index), NOT (actor.name, ...) -- many
+                # placed instances of the same decoration/crate share one texture-table slot,
+                # matching `_TextureTable.index_for`'s own content-identity dedup intent for
+                # world/mover polys. The class is IN the key because skins are class-dependent
+                # (`index_for_decoded`).
+                tex_index = textures.index_for_decoded(actor.cls, mesh_ref, material_index,
+                                                       tw, th, rgb, b_masked, mask)
+                u0 = (uv0[0] * tw / 256.0, uv0[1] * th / 256.0)
+                u1 = (uv1[0] * tw / 256.0, uv1[1] * th / 256.0)
+                u2 = (uv2[0] * tw / 256.0, uv2[1] * th / 256.0)
+                frame = meshworld.solve_uv_frame(w0, w1, w2, u0, u1, u2)
+                if frame is None:
+                    continue          # degenerate triangle, skip (matches render.rs's own
+                                      # zero-area poly skip)
+                base, axis_u, axis_v, pan = frame
+            # Same masking rule as `add_poly`: the triangle's own PF_Masked flag OR the skin
+            # texture's own bMasked (`resolve_skins` carries it out of the decode).
+            masked = bool(poly_flags & PF_MASKED) or textures.is_bmasked(tex_index)
+            verts_flat = [c for v in (w0, w1, w2) for c in (float(v[0]), float(v[1]), float(v[2]))]
+            polys.append((verts_flat, list(base), list(axis_u), list(axis_v), list(pan),
+                         tex_index, masked, poly_flags))
 
     return polys, textures.table
 
