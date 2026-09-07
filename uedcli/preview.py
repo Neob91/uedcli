@@ -1859,14 +1859,21 @@ def _framing(pts, region, size, view, iso_angle, pad: int = _FRAME_PAD, *, gutte
     draw = max(1, size - 2 * pad - 2 * gutter)   # uniform-scale budget after the reserves
     scale = draw / span
 
+    # TOP maps world +Y DOWNWARD to match UnrealEd's top viewport (screen y-down); FRONT/SIDE/ISO keep
+    # +v (height/depth) UP. Without this, the top view was a vertical mirror of the editor — N/S swapped
+    # (owner report 2026-09-07). Facing is unaffected (it's the 3D Newell normal dotted with _DEPTH).
+    flip_v = (view != "top")
+
     def to_px(p):
         x = int((p[0] - minx) / span * draw) + pad + gutter
-        y = size - 1 - gutter - (int((p[1] - miny) / span * draw) + pad)
+        t = int((p[1] - miny) / span * draw) + pad
+        y = (size - 1 - gutter - t) if flip_v else (gutter + t)
         return x, y
 
     def to_pxf(p):
         x = (p[0] - minx) / span * draw + pad + gutter
-        y = size - 1 - gutter - ((p[1] - miny) / span * draw + pad)
+        t = (p[1] - miny) / span * draw + pad
+        y = (size - 1 - gutter - t) if flip_v else (gutter + t)
         return (x, y)
 
     def world_to_pxf(p3):
