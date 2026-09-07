@@ -86,7 +86,15 @@ def frame_triangles(mesh, frame: int = 0):
     return tris
 
 
-def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str) -> dict:
+# Procedural (bitmap-less) skin placeholder — a 1x1 opaque RED texel. A FireTexture / WetTexture /
+# etc. is generated per-frame and has no stored bitmap the draft rasterizer can sample; the engine
+# renders it live. Owner ruling (2026-09-07): show it as solid RED (a visible "not-rendered-yet"
+# marker), not a hard-fail and not a silent grey. Real procedural rendering is a tracked follow-up
+# (board `native-draft-rasterizer-procedural-mesh-skins`).
+PROCEDURAL_RED = (1, 1, b"\xff\x00\x00", False, b"\x01")
+
+
+def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_index=None) -> dict:
     """`material index -> (w, h, rgb bytes, b_masked, mask bytes)` for the mesh, decoded through
     `utexture`.
 
@@ -95,15 +103,31 @@ def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str) -> dict
     class is the authority, since DX characters carry no mesh-side skins. `search_files` is the FULL
     composed search path (all package extensions) — NOT the `.u`-only `ClassIndex.package_paths`: a
     skin can live in a `.utx` (`Effects.BioCell_SFX`), never on the `.u` set, and the full path also
-    covers deco skins that live in a deco `.u`. A ref present but undecodable raises `PreviewError`
-    naming it (spec §4); a ref with no package/name simply leaves that material flat grey.
+    covers deco skins that live in a deco `.u`. `class_index` WIDENS the resolver from the exact
+    `Texture` class to every `Engine.Texture` descendant, so a procedural skin (a FireTexture etc.)
+    resolves to `no-mip-data` rather than `unknown-texture`.
+
+    A procedural (`no-mip-data`) skin renders as solid RED (`PROCEDURAL_RED`) — the draft rasterizer
+    has no bitmap to sample. Any OTHER undecodable ref still raises `PreviewError` naming it
+    (spec §4); a ref with no package/name simply leaves that material flat grey.
 
     `b_masked` is the texture's own `bMasked` render-policy flag, carried out as a fact for callers
     that alpha-test (`level photo --native`): the engine ORs a texture's PolyFlags onto every surface
     it is applied to, so a bMasked skin masks even with no PF_Masked triangle flag. `mask` is the
     decoded per-texel mask (`DecodedTexture.mask`, `width*height` bytes, 1=opaque/0=transparent) —
     the real alpha data the rasterizer's mask test needs, not a synthesized stand-in."""
-    resolver = utexture.TextureResolver(list(search_files))
+    resolver = utexture.TextureResolver(list(search_files), class_index=class_index)
+
+    def skin_tuple(got, what: str):
+        """`got` → the skin tuple. A procedural texture (`no-mip-data`) becomes solid RED; any other
+        `TextureError` raises `PreviewError` naming `what` and the case."""
+        if isinstance(got, utexture.TextureError):
+            if got.case == "no-mip-data":
+                return PROCEDURAL_RED
+            raise PreviewError(f"cannot preview {class_fqcn}: {what} did not decode "
+                               f"[{got.case}]: {got.detail}")
+        return (got.width, got.height, got.rgb, bool(got.b_masked), got.mask)
+
     skins: dict = {}
     mats = mesh.materials or [(0, i) for i in range(max(1, len(mesh.textures)))]
     for mi, (_flags, tex_idx) in enumerate(mats):
@@ -114,23 +138,15 @@ def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str) -> dict
             continue
         parts = path.split(".")
         ref = f"{parts[0]}.{parts[-1]}"              # Package.Name (drop any Group segment)
-        got = resolver.resolve(ref)
-        if isinstance(got, utexture.TextureError):
-            raise PreviewError(f"cannot preview {class_fqcn}: mesh skin {ref} did not decode "
-                               f"[{got.case}]: {got.detail}")
-        skins[mi] = (got.width, got.height, got.rgb, bool(got.b_masked), got.mask)
+        skins[mi] = skin_tuple(resolver.resolve(ref), f"mesh skin {ref}")
     for (prop, idx), val in defaults.items():        # class MultiSkins/Skin override per material idx
         if prop not in ("multiskins", "skin"):
             continue
         ref = _skin_ref(val)
         if ref is None:
             continue
-        got = resolver.resolve(ref)
-        if isinstance(got, utexture.TextureError):
-            raise PreviewError(f"cannot preview {class_fqcn}: class {prop} {ref} did not decode "
-                               f"[{got.case}]: {got.detail}")
-        skins[idx if prop == "multiskins" else 0] = (got.width, got.height, got.rgb,
-                                                     bool(got.b_masked), got.mask)
+        skins[idx if prop == "multiskins" else 0] = skin_tuple(resolver.resolve(ref),
+                                                               f"class {prop} {ref}")
     return skins
 
 

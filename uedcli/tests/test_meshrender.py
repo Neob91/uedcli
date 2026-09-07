@@ -1,5 +1,7 @@
 from types import SimpleNamespace
 
+import pytest
+
 from uedcli import meshrender, utexture
 
 
@@ -60,7 +62,14 @@ def _skin_resolver(monkeypatch, *, b_masked):
     decoded = SimpleNamespace(width=2, height=1, rgb=b"\xff\x00\x00\x00\xff\x00",
                               mask=b"\x01\x00", b_masked=b_masked)
     monkeypatch.setattr(utexture, "TextureResolver",
-                        lambda paths: SimpleNamespace(resolve=lambda ref: decoded))
+                        lambda paths, class_index=None: SimpleNamespace(resolve=lambda ref: decoded))
+
+
+def _skin_error(monkeypatch, case: str):
+    """Point `resolve_skins`'s internal resolver at a `TextureError` of `case`."""
+    err = utexture.TextureError("SkinPkg.GrateTex", case, f"stub {case}")
+    monkeypatch.setattr(utexture, "TextureResolver",
+                        lambda paths, class_index=None: SimpleNamespace(resolve=lambda ref: err))
 
 
 def test_resolve_skins_carries_the_textures_bmasked_flag(monkeypatch):
@@ -83,3 +92,20 @@ def test_resolve_skins_class_override_carries_bmasked_too(monkeypatch):
     defaults = {("multiskins", 1): "Texture'SkinPkg.Group.GrateTex'"}
     skins = meshrender.resolve_skins(_SkinMesh(), _SkinPkg(), defaults, [], class_fqcn="Pkg.Class")
     assert skins[1][3] is True
+
+
+def test_resolve_skins_procedural_skin_renders_red(monkeypatch):
+    """A procedural (bitmap-less) skin decodes to `no-mip-data` and renders as solid RED, not a
+    hard-fail (owner ruling 2026-09-07). Needs the widened resolver (class_index) so an
+    `Engine.Texture` descendant resolves to `no-mip-data` at all, not `unknown-texture`."""
+    _skin_error(monkeypatch, "no-mip-data")
+    skins = meshrender.resolve_skins(_SkinMesh(), _SkinPkg(), {}, [], class_fqcn="Pkg.Class")
+    assert skins == {0: meshrender.PROCEDURAL_RED}
+
+
+def test_resolve_skins_genuine_undecodable_skin_still_raises(monkeypatch):
+    """A non-procedural undecodable skin still hard-fails, naming it and the case (spec §4) — only
+    procedural is substituted, never a real error."""
+    _skin_error(monkeypatch, "unknown-texture")
+    with pytest.raises(meshrender.PreviewError, match="unknown-texture"):
+        meshrender.resolve_skins(_SkinMesh(), _SkinPkg(), {}, [], class_fqcn="Pkg.Class")

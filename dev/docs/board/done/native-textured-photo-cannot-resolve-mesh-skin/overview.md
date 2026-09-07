@@ -17,5 +17,6 @@ Fix: `meshrender.resolve_skins` now takes the FULL composed `search_files` (supe
 `preview_native.build_scene` and via a new mockable `resources.mesh_search_files` seam for
 `class preview`. Regression: `test_preview_native.py::test_mesh_skins_resolve_over_full_search_files_not_u_only`.
 
-Distinct follow-up: procedural (bitmap-less) skins still hard-fail — see
-`native-draft-rasterizer-procedural-mesh-skins`.
+Also widened the skin resolver with the `class_index` so a procedural skin (an `Engine.Texture`
+descendant) resolves to `no-mip-data` and renders as solid RED (owner ruling), not a hard-fail.
+Distinct follow-up — real procedural rendering: `native-draft-rasterizer-procedural-mesh-skins`.

@@ -224,7 +224,7 @@ def _mesh_actor_polys(actor, index, search_files) -> tuple[list, dict, object, t
         # (`.u` only): a mesh skin can live in a `.utx` (e.g. `Effects.BioCell_SFX`), which is never
         # on the `.u` set. `search_files` is a superset, so deco-`.u` skins still resolve.
         skins = meshrender.resolve_skins(mesh, pkg, defaults, search_files,
-                                         class_fqcn=actor.cls)
+                                         class_fqcn=actor.cls, class_index=index)
     except meshfacts.MeshFactError as e:
         raise NativePreviewError(str(e)) from e
     except meshrender.PreviewError as e:

@@ -210,7 +210,7 @@ def _run_preview(args, idx, project) -> int:
         # Skins over the FULL composed path, not idx.package_paths() (`.u` only): a skin can live in
         # a `.utx` (e.g. `Effects.BioCell_SFX`), never on the `.u` set. See meshrender.resolve_skins.
         skins = meshrender.resolve_skins(mesh, pkg, defaults, resources.mesh_search_files(project),
-                                         class_fqcn=fqcn)
+                                         class_fqcn=fqcn, class_index=idx)
         img, azimuth = meshrender.render_class(mesh, skins, rotate_uu=rotate_uu, size=args.size)
     except meshfacts.MeshFactError as e:
         raise CommandError(str(e))

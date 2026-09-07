@@ -6,20 +6,18 @@ summary = "native draft rasterizer: support procedural (bitmap-less) mesh skins"
 
 # native draft rasterizer: procedural mesh skins hard-fail
 
-`level photo --native --faces textured` (and `class preview`) exit 2 on a mesh whose skin is a
-**procedural** texture — one with no stored bitmap, generated per-frame by the engine (FireTexture,
-WaterTexture, WetTexture, an FX/electricity skin, etc.). Example: `DeusEx.BioelectricCell`'s skin
-`Effects.BioCell_SFX` (group `Electricity`, no bitmap). `resolve_skins` → `TextureResolver.resolve`
-correctly refuses it (no bitmap to sample), and per the no-fallback convention the whole render
-exits 2 naming it.
+A **procedural** mesh skin — no stored bitmap, generated per-frame by the engine (FireTexture,
+WaterTexture, WetTexture, an FX/electricity skin, etc.) — has nothing for the draft rasterizer to
+sample. Example: `DeusEx.BioelectricCell`'s skin `Effects.BioCell_SFX` (group `Electricity`).
 
-This blocks textured `--native` on most DX levels, since FX-skinned decos are common. Owner ruling
-(2026-09-07): keep the hard-fail (RED) — NO flat-grey / DefaultTexture substitution — and track real
-procedural-texture support here instead.
+Current behaviour (owner ruling 2026-09-07): such a skin renders as solid **RED**
+(`meshrender.PROCEDURAL_RED`) — a visible "not-rendered-yet" marker — NOT a hard-fail and NOT a
+silent grey. `resolve_skins` substitutes red only on the `no-mip-data` case (needs the widened
+`class_index` resolver so a procedural `Engine.Texture` descendant reaches that case); every other
+undecodable ref still exits 2 naming it.
 
-Scope: teach the native rasterizer to render procedural textures to a representative still (decode
-the procedural class's source — palette / fill / a synthesized frame). Until then textured `--native`
-stays unusable where such skins appear; `--faces wire` is the working `--native` photo there.
+Scope of THIS item: replace the red placeholder with a representative still — decode the procedural
+class's source (palette / fill / a synthesized frame) so FX skins render approximately, not as red.
 
 Related: `done/native-textured-photo-cannot-resolve-mesh-skin` (the package-path half, fixed);
 `inbox/native-photo-renders-untextured-faces-flat-grey` (missing world texture → DefaultTexture, a

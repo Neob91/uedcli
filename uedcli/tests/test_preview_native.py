@@ -553,7 +553,7 @@ def test_mesh_skins_resolve_over_full_search_files_not_u_only(monkeypatch):
     index = _ued22_index()
     seen: dict = {}
 
-    def spy(mesh, pkg, defaults, search_files, *, class_fqcn):
+    def spy(mesh, pkg, defaults, search_files, *, class_fqcn, class_index=None):
         seen["sf"] = search_files
         return {}
 
