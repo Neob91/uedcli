@@ -206,17 +206,18 @@ Tests must NOT block the parity work. For this project specifically:
 - Native engine: `uedcli-native/` (Rust), `uedcli/native/` (Python bridge), `uedcli/apply.py`
   (`_materialize_native`).
 - Parity harness: `dev/docs/spikes/2026-09-03-incremental-actor-parity/harness/` (`parity_gate.py`,
-  `actor_parity.py`, `ladder_run.py`).
+  `actor_parity.py`, `ladder_run.py`, `prune_ref_cache.py` — caps the cached-editor-ref cache at a
+  size budget, LRU-by-creation-time, always keeps each level's highest-N ref; run it if `_scratch/`
+  disk usage becomes a problem, never by hand-deleting refs).
 
 ## Open blockers per level (2026-09-07) — read before pushing that level further
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
 Ceilings, all re-verified from N=1 against the current binary (2026-09-07): **UNATCO 225,
-NYC_Bar 152, OceanLab 202, Island 298, WanChai 57.** Two of the five next blockers are the SAME
+NYC_Bar 152, OceanLab 202, Island 331, WanChai 57.** Two of the five next blockers are the SAME
 shape — one leaf gets a permeating-light run entry UED22 leaves out (UNATCO 226, WanChai 58) — so
-the permeating flood is where the campaign's leverage is. Island has no known blocker at all — it ran
-out of cached editor refs at 298.
+the permeating flood is where the campaign's leverage is.
 
 - **UNATCO**: N=163 is FIXED
   (`dev/docs/board/done/unatco-n-163-world-model2-lights-and-lightbits/`) — the 7 extra
@@ -328,9 +329,16 @@ out of cached editor refs at 298.
   too** — the crossing VERTEX, not the gates: `SplitWithPlaneFast` takes it from
   `FLinePlaneIntersection`, whose f32 differs from `alpha = dp/(dp-ds)` in the last ulps, and a
   crossing landing exactly on a grid coordinate collapses the next hop's clip edge (see the WanChai
-  bullet above). Island is byte-exact **N=1..298**, as far as its cached refs reach; the OceanLab
-  N=153/N=155 fixes below carried it past 123 with no Island-specific work, and it has no known
-  blocker — the next N needs a fresh editor ref, not a fix.
+  bullet above). Island then ran clean past 298 (where it previously ran out of cached refs) up to
+  byte-exact **N=1..331**; the OceanLab N=153/N=155 fixes below carried it past 123 with no
+  Island-specific work. Bails at **N=332** on a NEW, different-mechanism case of the same shape
+  (`dev/docs/board/inbox/island-n-332-leaf-273-permeating-light-vertex-tie/`): leaf 273 carries
+  `Light124` where UED22 leaves it out, root-caused to a genuine vertex COINCIDENCE — a portal
+  vertex shared exactly with an adjacent portal, where one `FLinePlaneIntersection` crossing lands
+  a hair below the shared point in native and a hair above it in a live editor capture, same
+  formula and same inputs, opposite sign of a sub-ULP residual. Suspected x87-vs-SSE
+  double-rounding; unconfirmed, not fixed as of this writing (agent was still working when this
+  doc was last touched — check the board item's current state before trusting this gloss).
 - **OceanLab**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the
