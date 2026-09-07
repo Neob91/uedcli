@@ -212,9 +212,18 @@ Tests must NOT block the parity work. For this project specifically:
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
-- **UNATCO, N=116**: `dev/docs/board/inbox/unatco-n-116-world-model2-light-runs-differ-on/` — the
-  world `Model2`'s per-lightmap light RUNS differ on 13 of 214 lightmaps, both directions; same
-  family as the WanChai N=45 item. Byte-exact N=1..115 (was 28): the N=29 blocker is FIXED
+- **UNATCO, N=163**: `dev/docs/board/inbox/unatco-n-163-world-model2-lights-and-lightbits/` — native
+  emits 7 extra `Model.Lights` entries and 217 extra `LightBits` bytes, shifting every one of the 346
+  `LightMap` records by `+7`/`+217`; `leaves` and every geometry array are byte-exact and
+  `lightrun_diff.py` finds 0 differing decoded runs, so the extras sit outside the per-lightmap runs.
+  Byte-exact **N=1..162** (was 115). N=116 did NOT need a fix
+  (`dev/docs/board/done/unatco-n-116-world-model2-light-runs-differ-on/`): leaf 9's permeating-light
+  decision is a near-tie inside CODEGEN noise — two builds of the identical native source (one
+  missing `uedcli-native/.cargo/config.toml`) give `.so`s 5 472 bytes apart and disagree about it,
+  941 `Model.Lights` against UED22's 940. The canonical build is on UED22's side, so the level walks
+  on; the hazard is `dev/docs/board/inbox/native-ext-binary-not-stable-across-builds/` and the
+  faithful fix is the one `island-n-123-world-model2-leaf-permeating-light` is stuck on. The N=29
+  blocker is FIXED
   (`dev/docs/board/done/unatco-n-29-world-model2-vert-rings-reference/`) — the divergence was one
   surf's `Texture` ref, not the vertex rings (all 91 live node rings were coordinate-identical; the
   391 differing `FVert`s were gate-excluded orphan slots). An untextured poly shipped

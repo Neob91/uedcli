@@ -21,6 +21,10 @@ So this is a shadow-RASTER divergence, not a gather or a geometry one — same f
 fixed-point scanline setup), but here the light SET per surf already agrees and only the lumel bits
 differ.
 
+Confirmed real 2026-09-07: re-run with `--force-ref`, so scored against a freshly built reference,
+N=48 still FAILs on `BODY model model2`. It is not the bad-reference class of
+`unatco-n-116-world-model2-light-runs-differ-on`.
+
 ## Repro
 
     ladder_run.py --dx <…>/Maps/14_OceanLab_Lab.dx --from 48 --to 48 --keep-native

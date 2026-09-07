@@ -42,3 +42,12 @@ built before it lacks those two names, and NYC_Bar N=48 — the level's first mo
 stamps the builder's digest into a `ref_N<n>.recipe` sidecar and `verify_refs.py` compares it; refs
 predating the stamp are reported as unknown rather than deleted (rebuilding a whole cache costs
 editor-hours). Copy the sidecar whenever you copy a ref.
+
+## The NATIVE side goes stale the same way — see `native-ext-binary-not-stable-across-builds`
+
+A ladder bail can also come from the native half being a differently-compiled binary of the same
+source: UNATCO N=116 was filed as a level blocker and turned out to be exactly that. `verify_refs.py`
+says nothing about which `uedcli_native` build produced the native `.dx`.
+
+`ladder_run.py` should also MOVE a failing `ref_N<n>.dx` aside (`ref_N<n>.failed.dx`) rather than
+leave it in the cache, so a later `--force-ref` cannot destroy the evidence.
