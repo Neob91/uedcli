@@ -404,8 +404,8 @@ def register(sub) -> None:
         help="print EFFECTIVE property values: the stored value if present, else the class "
              "default decoded offline from the game packages, else the type's zero — one line "
              "per KEY, in argument order (a whole static array prints as one (0=V,1=W,…) "
-             "line; a whole struct prints every member). With no KEYs, dumps the actor's "
-             "STORED props (plus Location) as round-trippable KEY=VALUE lines")
+             "line; a whole struct prints every member). With no KEYs, use --stored or "
+             "--effective to dump the whole actor")
     prg.add_argument("name",
                      help="actor to read (case-insensitive), or - to read a newline-separated "
                           "name list from stdin and dump EVERY piped actor. Piped output is "
@@ -414,10 +414,21 @@ def register(sub) -> None:
                           "(or --kv) output")
     prg.add_argument("tokens", nargs="*", metavar="KEY[.PATH]",
                      help="properties/paths to read (dot-paths as in set; e.g. Location.X, "
-                          "MultiSkins.2, Rotation.Yaw). Omit to dump all stored props. NOTE: a "
-                          "Rotation/angle reads back in raw rotator UNITS (16384 = 90°), the T3D "
-                          "storage form — NOT degrees (the degree-based verb is `actor rotate`); "
-                          "`prop set` takes the same units, so get/set round-trip")
+                          "MultiSkins.2, Rotation.Yaw). Mutually exclusive with --stored/"
+                          "--effective. NOTE: a Rotation/angle reads back in raw rotator UNITS "
+                          "(16384 = 90°), the T3D storage form — NOT degrees (the degree-based "
+                          "verb is `actor rotate`); `prop set` takes the same units, so get/set "
+                          "round-trip")
+    prgdump = prg.add_mutually_exclusive_group()
+    prgdump.add_argument("--stored", action="store_true",
+                         help="with no KEYs: dump the actor's STORED props (plus Location) as "
+                              "round-trippable KEY=VALUE lines — what's actually authored on "
+                              "this actor, nothing inherited")
+    prgdump.add_argument("--effective", action="store_true",
+                         help="with no KEYs: dump EVERY property the class schema knows (own + "
+                              "inherited), each resolved the same way a keyed KEY is (stored, "
+                              "else class default, else zero) — the whole-actor view of what a "
+                              "keyed `get` already does per-key")
     prgfmt = prg.add_mutually_exclusive_group()
     prgfmt.add_argument("--kv", action="store_true",
                         help="print KEY=VALUE lines (canonical spelling) instead of bare values — "

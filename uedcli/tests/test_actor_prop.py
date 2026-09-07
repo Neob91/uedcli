@@ -83,11 +83,13 @@ def _level(*, props=None, location=None):
     return lv
 
 
-def _run(level, propsub, tokens=(), *, kv=False, schema=None, defaults=None):
+def _run(level, propsub, tokens=(), *, kv=False, json=False, stored=False, effective=False,
+         schema=None, defaults=None):
     """Invoke `actor prop <propsub>` against `level` with every seam mocked. Returns
     (rc, saved_kwargs|None, actor)."""
     args = SimpleNamespace(cmd="actor", sub="prop", propsub=propsub, name="widget0",
-                           tokens=list(tokens), kv=kv)
+                           tokens=list(tokens), kv=kv, json=json, stored=stored,
+                           effective=effective)
     src = mock.Mock()
     src.load.return_value = level
     with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
@@ -598,13 +600,13 @@ def test_get_bool_default_and_zero(capsys):
     assert capsys.readouterr().out.splitlines() == ["True", "False"]
 
 
-# ── get: dump-all (stored view) ──────────────────────────────────────────────────
+# ── get: dump-all (--stored / --effective / no-mode error) ───────────────────────
 
 
 def test_dump_all_location_first_stored_order_dot_spelling(capsys):
     level = _level(props=[("Group", "cells"), ("MultiSkins(2)", "X"), ("Rotation", "(Yaw=1)")],
                    location=(Decimal(1), Decimal(2), Decimal(3)))
-    rc, _s, _a = _run(level, "get", [])
+    rc, _s, _a = _run(level, "get", [], stored=True)
     assert rc == 0
     assert capsys.readouterr().out.splitlines() == [
         "Location=(X=1,Y=2,Z=3)",
@@ -616,20 +618,64 @@ def test_dump_all_location_first_stored_order_dot_spelling(capsys):
 
 def test_dump_all_skips_mover_bookkeeping_and_errors_on_alien(capsys):
     level = _level(props=[("KeyPos(1)", "(X=1)"), ("Group", "cells")])
-    rc, _s, _a = _run(level, "get", [])
+    rc, _s, _a = _run(level, "get", [], stored=True)
     assert rc == 0
     assert capsys.readouterr().out.splitlines() == ["Location=(X=0,Y=0,Z=0)", "Group=cells"]
     level2 = _level(props=[("WeirdProp", "1")])
-    rc2, _s, _a = _run(level2, "get", [])
+    rc2, _s, _a = _run(level2, "get", [], stored=True)
     assert rc2 == 2                                      # ruling R4: hard error
     assert "WeirdProp" in capsys.readouterr().err
 
 
 def test_dump_all_kv_flag_is_legal_noop(capsys):
     level = _level(props=[("Group", "cells")])
-    rc, _s, _a = _run(level, "get", [], kv=True)
+    rc, _s, _a = _run(level, "get", [], kv=True, stored=True)
     assert rc == 0
     assert "Group=cells" in capsys.readouterr().out
+
+
+def test_get_no_keys_no_mode_errors(capsys):
+    # neither KEYs nor --stored/--effective: don't guess which view is wanted
+    rc, _s, _a = _run(_level(), "get", [])
+    assert rc == 2
+    err = capsys.readouterr().err
+    assert "--stored" in err and "--effective" in err
+
+
+def test_get_keys_with_stored_or_effective_errors(capsys):
+    rc, _s, _a = _run(_level(), "get", ["Group"], stored=True)
+    assert rc == 2
+    assert "cannot combine" in capsys.readouterr().err
+    rc2, _s, _a = _run(_level(), "get", ["Group"], effective=True)
+    assert rc2 == 2
+
+
+def test_effective_all_resolves_every_schema_prop_not_just_stored(capsys):
+    # unlike --stored, --effective includes props the actor never authored, resolved via
+    # class default (LightBrightness/LightPeriod/Mass/bHidden/CsgOper/Rotation here), and a
+    # partial stored struct renders its FULL merged form (unlike --stored's partial-stays-partial).
+    level = _level(props=[("Group", "cells"), ("Rotation", "(Yaw=1)")],
+                   location=(Decimal(1), Decimal(2), Decimal(3)))
+    rc, _s, _a = _run(level, "get", [], effective=True)
+    assert rc == 0
+    out = dict(ln.split("=", 1) for ln in capsys.readouterr().out.splitlines())
+    assert out["Group"] == "cells"                        # stored value kept
+    assert out["LightBrightness"] == "64"                 # class default, not stored
+    assert out["Rotation"] == "(Pitch=4096,Yaw=1,Roll=0)"  # merged with class default, not partial
+    assert out["Tag"] == "None"                            # class-default-less NameProperty: zero
+    assert "Name" not in out and "KeyPos" not in out       # hard-rejected keys stay off the surface
+    assert "bSelected" not in out                          # engine-computed (is_computed_key):
+                                                            # --stored never carries it either
+
+
+def test_effective_all_json(capsys):
+    level = _level(props=[("Group", "cells")])
+    rc, _s, _a = _run(level, "get", [], effective=True, json=True, defaults={})
+    assert rc == 0
+    import json as json_mod
+    out = json_mod.loads(capsys.readouterr().out)
+    assert out["Group"] == "cells"
+    assert out["Mass"] == "0"                              # no class default → type zero
 
 
 # ── actor resolution ─────────────────────────────────────────────────────────────
@@ -670,10 +716,10 @@ def _nest_fixtures():
     return schema, members_for, defaults
 
 
-def _run_nest(level, propsub, tokens=(), *, kv=False):
+def _run_nest(level, propsub, tokens=(), *, kv=False, stored=False, effective=False):
     schema, members_for, defaults = _nest_fixtures()
     args = SimpleNamespace(cmd="actor", sub="prop", propsub=propsub, name="widget0",
-                           tokens=list(tokens), kv=kv)
+                           tokens=list(tokens), kv=kv, stored=stored, effective=effective)
     src = mock.Mock()
     src.load.return_value = level
     with mock.patch("uedcli.cli.level_sources.resolve_level_source", return_value=src), \
@@ -722,9 +768,9 @@ def test_unindexed_array_line_is_element_zero(capsys):
     rc2, _s, actor2 = _run(level2, "unset", ["MultiSkins.0"])
     assert rc2 == 0 and actor2.props == []
     level3 = _level(props=[("MultiSkins", "Texture'T.A'")])
-    rc3, _a3 = _run_nest(level3, "get", [])[0], None
+    rc3, _a3 = _run_nest(level3, "get", [], stored=True)[0], None
     del rc3, _a3
-    rc4, _s, _a = _run(level3, "get", [])
+    rc4, _s, _a = _run(level3, "get", [], stored=True)
     assert rc4 == 0
     assert "MultiSkins.0=Texture'T.A'" in capsys.readouterr().out  # dump-all round-trippable
 

@@ -358,6 +358,30 @@ def dump_all_lines(actor, ctx: ClassCtx, typed_fields: dict) -> list[str]:
     return lines
 
 
+def effective_all_lines(actor, ctx: ClassCtx, typed_fields: dict) -> list[str]:
+    """`get --effective`: every property the class schema knows (own + inherited), each resolved
+    stored -> class default -> zero, as KEY=VALUE lines — the whole-actor counterpart to a keyed
+    `get`. Typed fields are unconditionally included (unlike dump-all's `dump_always` gate): a
+    typed field's None state IS itself a resolvable default (e.g. an uncarried scale is
+    IDENTITY), so it always has an effective value. Hard-rejected keys (Name/Brush/mover-key
+    geometry) are not on the `actor prop` surface and stay excluded."""
+    lines: list[str] = []
+    for tf in typed_fields.values():
+        key, val = tf.get(None, getattr(actor, tf.attr))
+        lines.append(f"{key}={val}")
+    for prop in ctx.schema().values():
+        base = prop.name.casefold()
+        if base in HARD_REJECT or base in typed_fields:
+            continue                                 # the typed field printed it above
+        if is_computed_key(base):
+            continue                                 # engine bookkeeping normalize already
+                                                       # strips from the stored view (Region,
+                                                       # Level, PawnList, TimeSeconds, …)
+        rp = ResolvedPath(prop=prop, index=None, members=(), canonical=prop.name)
+        lines.append(f"{prop.name}={effective_value(actor, rp, ctx)}")
+    return lines
+
+
 # ── find --prop: effective-value matching ────────────────────────────────────────────────────
 
 def _canon_scalar(leaf: Prop, enum_names: tuple[str, ...], text: str):

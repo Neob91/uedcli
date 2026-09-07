@@ -79,6 +79,7 @@ from .edit import (                                  # noqa: F401
     _stored_map,
     _validate_query_value,
     dump_all_lines,
+    effective_all_lines,
     effective_match,
     effective_value,
     get_lines,

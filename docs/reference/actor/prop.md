@@ -5,10 +5,19 @@ get / set / unset
 `actor prop get <name|-> [KEY…] [--kv | --json]` — print the EFFECTIVE value of each KEY, one per
 line, in the order given: the stored value if set, else the class default (decoded offline from the
 game packages), else the type's zero. A whole static array prints as one `(0=V,1=W,…)` line; a whole
-struct prints every member. With **no KEYs**, dumps the actor's STORED props (plus
-`Location`). `--kv` prints round-trippable `KEY=VALUE` lines (feeds back into `actor prop set`);
-`--json` emits a `{key: value}` object (values as strings). The name may be `-` to read a stdin name
-list and dump every piped actor (output is then `<name>\t<key>=<value>`).
+struct prints every member. `--kv` prints round-trippable `KEY=VALUE` lines (feeds back into `actor
+prop set`); `--json` emits a `{key: value}` object (values as strings). The name may be `-` to read a
+stdin name list and dump every piped actor (output is then `<name>\t<key>=<value>`).
+
+With **no KEYs**, pass one of:
+
+- `--stored` — dump the actor's STORED props (plus `Location`) as round-trippable `KEY=VALUE`
+  lines: what's actually authored on this actor, nothing inherited.
+- `--effective` — dump EVERY property the class schema knows (own + inherited), each resolved the
+  same way a keyed `KEY` is: stored, else class default, else zero.
+
+`KEY…` and `--stored`/`--effective` are mutually exclusive; `actor prop get <name>` with none of the
+three is an error (it doesn't guess which view you want).
 
 `actor prop set <name> KEY[.PATH]=VALUE…` — set properties in one atomic, schema-validated edit.
 `KEY=VALUE` replaces the whole value (static array: tuple form `KEY=(0=V,3=W)`, clearing unmentioned

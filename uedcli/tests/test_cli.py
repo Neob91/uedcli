@@ -238,8 +238,14 @@ def test_parser_actor_prop_subcommands():
     assert ns.propsub == "unset" and ns.tokens == ["LightHue"]
     ns = p.parse_args(["actor", "prop", "get", "Light1", "LightBrightness", "--kv"])
     assert ns.propsub == "get" and ns.tokens == ["LightBrightness"] and ns.kv
-    ns = p.parse_args(["actor", "prop", "get", "Light1"])           # dump-all form
-    assert ns.tokens == [] and not ns.kv
+    ns = p.parse_args(["actor", "prop", "get", "Light1"])           # no KEYs, no mode flag yet
+    assert ns.tokens == [] and not ns.kv and not ns.stored and not ns.effective
+    ns = p.parse_args(["actor", "prop", "get", "Light1", "--stored"])
+    assert ns.stored and not ns.effective
+    ns = p.parse_args(["actor", "prop", "get", "Light1", "--effective"])
+    assert ns.effective and not ns.stored
+    with pytest.raises(SystemExit):                                  # --stored/--effective exclusive
+        p.parse_args(["actor", "prop", "get", "Light1", "--stored", "--effective"])
     with pytest.raises(SystemExit):                                  # old flags removed
         p.parse_args(["actor", "prop", "Light1", "--set", "A=1"])
 

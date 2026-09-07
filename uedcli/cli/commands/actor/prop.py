@@ -45,6 +45,15 @@ def run(args) -> int:
     # resources.enum_names) are what tests mock.
     try:
         if args.propsub == "get":
+            stored = getattr(args, "stored", False)
+            effective = getattr(args, "effective", False)
+            if args.tokens and (stored or effective):
+                print("cannot combine KEY names with --stored/--effective", file=sys.stderr)
+                return 2
+            if not args.tokens and not stored and not effective:
+                print("actor prop get: give KEY names, or --stored, or --effective",
+                      file=sys.stderr)
+                return 2
             toks = [propedit.parse_token(t, expect_value=False) for t in args.tokens]
             want_json = getattr(args, "json", False)
             # JSON always renders the KV-form (KEY=VALUE) lines so each splits into a
@@ -61,8 +70,13 @@ def run(args) -> int:
                     # a dump over several keys stays parseable (spec §8); a single CLI name
                     # keeps today's bare (or `--kv`) output.
                     lines = propedit.get_lines(actor, toks, ctx, propedit.TYPED_FIELDS, kv=kv)
-                else:                            # dump-all: the stored view (spec §2.3)
+                elif stored:                     # dump-all: the stored view (spec §2.3)
                     lines = propedit.dump_all_lines(actor, ctx, propedit.TYPED_FIELDS)
+                elif effective:                  # dump-all: the effective (resolved) view
+                    lines = propedit.effective_all_lines(actor, ctx, propedit.TYPED_FIELDS)
+                else:
+                    raise AssertionError("unreachable: neither --stored nor --effective, "
+                                         "but the upfront check should have rejected this")
                 per_actor.append((name, lines))
             if want_json:
                 import json
