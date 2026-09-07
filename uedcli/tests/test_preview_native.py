@@ -39,6 +39,13 @@ def _ued22_index() -> ClassIndex:
     return ClassIndex.from_files(files)
 
 
+def _mesh_sf(index) -> list[str]:
+    """A realistic `search_files` for the mesh tests. Skins resolve over the FULL composed path, not
+    the `.u`-only `package_paths` — in production that path is a superset of `package_paths`, and the
+    corpus skins (e.g. `DeusExDeco.CrateUnbreakableLargeTex1`) live in these corpus `.u` files."""
+    return list(index.package_paths())
+
+
 def _level(*actors: Actor) -> Level:
     lvl = Level()
     for a in actors:
@@ -389,7 +396,7 @@ def test_build_scene_includes_a_dt_mesh_actor():
     assert baseline_polys and not baseline_textures      # untextured room: polys exist, no textures
 
     crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
-    polys, textures = pn.build_scene(_level(cube_room(), crate), [], index)
+    polys, textures = pn.build_scene(_level(cube_room(), crate), _mesh_sf(index), index)
 
     assert polys[:len(baseline_polys)] == baseline_polys  # baseline untouched, mesh triangles appended
     new_polys = polys[len(baseline_polys):]
@@ -409,7 +416,7 @@ def _mesh_default(prop: str, index) -> str:
 def _mesh_poly_count(actor, index) -> int:
     """How many polys `actor` adds on top of the bare-room baseline."""
     baseline, _ = pn.build_scene(_level(cube_room()), [], index)
-    polys, _ = pn.build_scene(_level(cube_room(), actor), [], index)
+    polys, _ = pn.build_scene(_level(cube_room(), actor), _mesh_sf(index), index)
     return len(polys) - len(baseline)
 
 
@@ -532,9 +539,30 @@ def test_two_instances_of_one_mesh_class_share_one_texture_slot():
     index = _ued22_index()
     one = Actor(name="Crate1", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
     two = Actor(name="Crate2", cls=MESH_CLASS, location=(Decimal(200), Decimal(0), Decimal(0)))
-    _p1, t1 = pn.build_scene(_level(cube_room(), one), [], index)
-    _p2, t2 = pn.build_scene(_level(cube_room(), one, two), [], index)
+    _p1, t1 = pn.build_scene(_level(cube_room(), one), _mesh_sf(index), index)
+    _p2, t2 = pn.build_scene(_level(cube_room(), one, two), _mesh_sf(index), index)
     assert t1 and len(t2) == len(t1)
+
+
+def test_mesh_skins_resolve_over_full_search_files_not_u_only(monkeypatch):
+    """Regression: a mesh skin can live in a `.utx` (`Effects.BioCell_SFX`), never on the `.u`-only
+    `index.package_paths()`. `build_scene` must hand `resolve_skins` the FULL `search_files` — passing
+    `package_paths` raised "no package named 'Effects' on the composed search path" for any deco whose
+    skin is a `.utx` texture."""
+    from uedcli import meshrender
+    index = _ued22_index()
+    seen: dict = {}
+
+    def spy(mesh, pkg, defaults, search_files, *, class_fqcn, class_index=None):
+        seen["sf"] = search_files
+        return {}
+
+    monkeypatch.setattr(meshrender, "resolve_skins", spy)
+    sf = ["/nonexistent/Effects.utx", *index.package_paths()]      # a `.utx` NOT on the `.u` set
+    crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    pn.build_scene(_level(cube_room(), crate), sf, index)
+    assert seen["sf"] == sf                                        # full path forwarded verbatim
+    assert seen["sf"] != list(index.package_paths())              # NOT the `.u`-only set
 
 
 def test_build_scene_unresolvable_mesh_ref_raises_naming_the_actor():

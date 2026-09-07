@@ -80,8 +80,9 @@ class ClassIndex:
 
     def package_paths(self) -> list[str]:
         """Every indexed `.u` file path — the composed package set the class arm operates over.
-        `class preview` builds a `utexture.TextureResolver` over these to decode a mesh's skins from
-        the SAME path the mesh itself decoded from (DX deco skins live in the deco `.u`)."""
+        NOT for mesh-skin resolution: a skin can live in a `.utx` (`Effects.BioCell_SFX`), never on
+        the `.u` set, so skins resolve over the FULL composed path (`config.composed_search_files`)
+        instead — see `meshrender.resolve_skins`."""
         return list(self._paths.values())
 
     def packages(self) -> list[tuple[str, str]]:
