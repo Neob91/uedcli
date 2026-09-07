@@ -15,23 +15,23 @@
       "slug": "unatco",
       "name": "UNATCO HQ",
       "codename": "03_NYC_UNATCOHQ",
-      "highest_n": 162,
+      "highest_n": 225,
       "total_actors": 1437,
       "status": "blocked",
-      "blocker": "BODY model model2 — lights 2166 vs 2159, lightbits 182862 vs 182645, every LightMap record shifted; leaves and all geometry byte-exact; 0 differing decoded per-lightmap runs, so the extras sit outside the runs the diff tool checks. Likely same family as NYC_Bar N=153 (not yet cross-checked). N=116's blocker was NOT what it looked like: one extra permeating-light run on leaf 9, a near-tie in the ported beam-visibility flood that flips PASS/FAIL between two builds of IDENTICAL source (codegen noise, not a source difference) -- the canonical build pipeline lands on UED22's side, so this level is unblocked, but the underlying near-tie is real and unresolved, same class as Island N=123's still-open mystery. Filed as its own priority item: native-ext-binary-not-stable-across-builds.",
-      "board": "unatco-n-163-world-model2-lights-and-lightbits",
-      "updated": "2026-09-07T04:15:00Z"
+      "blocker": "BODY model model2 — leaf 12 gets a permeating-light run (Light157) UED22 leaves empty; lightbits byte-identical, 0 differing per-surf records. Same family as Island N=123 and OceanLab N=93 -- three independent reproducers of one open gap now. N=163's blocker (lights/lightbits shift) is FIXED: OccludeBsp never retired a zone from the active set when its span buffer ran out of ValidLines, so native kept descending into subtrees the editor had abandoned and over-marked NF_BoxOccluded, which a PF_BrightCorners shadow ray's IsCsg test reads. Live-verified: box-test count now matches the editor exactly (1218 vs 1218).",
+      "board": "unatco-n-226-leaf-12-gets-a-permeating-light157",
+      "updated": "2026-09-07T06:30:00Z"
     },
     {
       "slug": "oceanlab",
       "name": "OceanLab",
       "codename": "14_OceanLab_Lab",
-      "highest_n": 47,
+      "highest_n": 92,
       "total_actors": 2745,
       "status": "blocked",
-      "blocker": "BODY model model2 — world Model2's LightBits differ on 3 lightmaps, 28 bytes total; every geometry array is byte-exact. N=46's Bounds/LeafHulls bug is FIXED: Pass D's zone SPLIT must KILL the original chain node and append every fragment as a new node, so the post-Pass-D bspCleanup promotes the dead node's coplanar successor (inheriting its children, mirrored on opposite facing); native was reusing the original node in place, which left it heading two chains.",
-      "board": "oceanlab-n48-world-model2-lightbits-differ-on",
-      "updated": "2026-09-06T19:15:00Z"
+      "blocker": "BODY model model2 — leaf 96 gets a permeating-light run (Light111) UED22 leaves empty; lightbits byte-identical, 0 differing per-surf records. Same family as Island N=123 and UNATCO N=226 -- three independent reproducers of one open gap now. N=48's LightBits bug is FIXED: OccludeBsp never retired a zone from the active set when its span buffer ran out of ValidLines, so native kept descending into abandoned subtrees and over-marked NF_BoxOccluded, which a PF_BrightCorners shadow ray's IsCsg test reads. Live-verified box-test count now matches the editor exactly (1218 vs 1218).",
+      "board": "oceanlab-n-93-leaf-96-gets-a-permeating",
+      "updated": "2026-09-07T06:30:00Z"
     },
     {
       "slug": "wanchai",
