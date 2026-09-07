@@ -1863,15 +1863,24 @@ def _framing(pts, region, size, view, iso_angle, pad: int = _FRAME_PAD, *, gutte
     # +v (height/depth) UP. Without this, the top view was a vertical mirror of the editor — N/S swapped
     # (owner report 2026-09-07). Facing is unaffected (it's the 3D Newell normal dotted with _DEPTH).
     flip_v = (view != "top")
+    # FRONT flips the HORIZONTAL axis too: its screen-right is world −X, not +X. Screen-right for an
+    # upright ortho view = screen_up × into_screen (rule calibrated on the confirmed TOP view:
+    # (−Y) × (−Z) = +X, top's known screen-right). Front looks along +Y (_DEPTH["front"], from
+    # disassembled URender::OccludeBsp) with +Z up, so screen-right = (+Z) × (+Y) = −X. Without this,
+    # front was a left-right mirror of the editor. SIDE ((+Z) × (+X) = +Y) is already correct, and TOP
+    # has no horizontal flip. Facing is unaffected (3D Newell normal dotted with _DEPTH).
+    flip_h = (view == "front")
 
     def to_px(p):
-        x = int((p[0] - minx) / span * draw) + pad + gutter
+        sx = int((p[0] - minx) / span * draw)
+        x = (size - 1 - gutter - pad - sx) if flip_h else (sx + pad + gutter)
         t = int((p[1] - miny) / span * draw) + pad
         y = (size - 1 - gutter - t) if flip_v else (gutter + t)
         return x, y
 
     def to_pxf(p):
-        x = (p[0] - minx) / span * draw + pad + gutter
+        sx = (p[0] - minx) / span * draw
+        x = (size - 1 - gutter - pad - sx) if flip_h else (sx + pad + gutter)
         t = (p[1] - miny) / span * draw + pad
         y = (size - 1 - gutter - t) if flip_v else (gutter + t)
         return (x, y)

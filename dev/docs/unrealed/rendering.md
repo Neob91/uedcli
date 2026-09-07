@@ -185,6 +185,14 @@ Established live over a 6-round spike (2026-07-06,
 `actor diagram` (`preview.py`) is our own stdlib rasterizer, not the editor; its colours and sizes
 match what UnrealEd's viewports show so a diagram reads like the editor.
 
+- Ortho axis conventions, matched to UnrealEd's own viewports (`_framing`). Screen-right for an
+  upright ortho view = `screen_up × into_screen`, calibrated on the confirmed TOP view and applied
+  with each view's `_DEPTH` into-screen direction (from disassembled `URender::OccludeBsp`):
+  - **TOP** (OrthXY, into-screen −Z): +X → right, +Y → **down**.
+  - **FRONT** (OrthXZ, into-screen +Y, looking south): +X → **left**, +Z → up.
+  - **SIDE** (OrthYZ, into-screen +X, looking east): +Y → right, +Z → up.
+  - **ISO** is uedcli's own synthetic view; UnrealEd's 4th pane is 3D perspective, so no editor iso
+    convention exists to match.
 - Brush wire colours by CSG classification. uedcli reproduces UED's legend (hue preserved,
   luminance re-tuned for our light-grey background, since UED tunes for grey/black): added-solid =
   blue, subtracted = yellow/gold, semi-solid = warm coral, non-solid = green, mover =
