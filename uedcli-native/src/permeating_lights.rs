@@ -167,10 +167,18 @@ fn plane_dot(normal: &Vec3, w: f32, v: &Vec3) -> f32 {
 /// keeps the front half. The plane is **normalized** — that is what makes `SplitWithPlaneFast`'s
 /// `0.25` a real 0.25-world-unit epsilon rather than an effectively-zero one.
 ///
-/// The one deliberate departure is the ORIENTATION. The editor inherits it from its portal poly's
-/// vertex winding; `leaf_portal_map` re-winds the reverse direction of every `zones::Portal`, so the
-/// plane is oriented explicitly instead: flip it when `clip`'s own remaining (convex) vertices fall
-/// on the negative side, which reproduces the editor's "keep the beam interior" for either winding.
+/// The plane is used with the ORIENTATION `FPlane(A,B,C)` gives it and nothing else. `core.dll
+/// 0xb440` is `((B-A) ^ (C-A)).SafeNormal()` (disassembled 2026-09-07, pinned in
+/// `test_engine_facts.py`), so the sign follows the clip poly's own vertex winding, which native
+/// now reproduces: `zones::build_infinite_fpoly` winds every portal quad so its winding normal is
+/// `-Normal` (`Axis1 x Axis2 = -N`), clipping preserves that, and `leaf_portal_map` re-winds the
+/// reverse direction exactly as `FPortal::GetPolyForLeaf`'s `Reverse()` does. With the light on the
+/// clip poly's negative-`Normal` side (the caller's `d < 0` gate) that orientation is the beam
+/// INTERIOR on every well-formed edge — so the sign-sum heuristic this replaces agreed with it
+/// everywhere the geometry was well-formed, and differed only on DEGENERATE edges (measured on
+/// NYC_Bar N=152: 7 of 7166 edges, every one a clip-poly edge under 2.5e-4 units long, where the
+/// cross product is rounding noise). There the editor has no "interior" to prefer either: it clips
+/// by whatever `FPlane` produced, and so does this.
 fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> {
     let mut poly = target.to_vec();
     let n = clip.len();
@@ -180,16 +188,9 @@ fn clip_beam(light: &Vec3, clip: &[Vec3], target: &[Vec3]) -> Option<Vec<Vec3>> 
         }
         let a = clip[(j + n - 1) % n];
         let b = clip[j];
-        let Some(mut normal) = safe_normal(&(b.sub(light)).cross(&(a.sub(light)))) else {
+        let Some(normal) = safe_normal(&(b.sub(light)).cross(&(a.sub(light)))) else {
             continue; // degenerate edge (through the light or zero-length): no constraint
         };
-        let mut sign_sum = 0.0f32;
-        for &v in clip {
-            sign_sum += normal.dot(&v.sub(light));
-        }
-        if sign_sum < 0.0 {
-            normal = Vec3::new(-normal.x, -normal.y, -normal.z);
-        }
         poly = split_with_plane_fast(&poly, &normal, plane_w(light, &normal))?;
     }
     if poly.len() >= 3 {
@@ -360,13 +361,19 @@ mod tests {
     use crate::fpoly::FPoly;
     use crate::light::LightInput;
 
-    /// A 100-unit-square beam at `z = 100` seen from a light at the origin.
+    /// A 100-unit-square beam at `z = 100` seen from a light at the origin, wound the way a real
+    /// portal poly reaches [`clip_beam`]: `FacePoly.verts`' winding normal is always MINUS
+    /// `FacePoly.normal` (`build_infinite_fpoly` spans its quad with `Axis1 x Axis2 = -N`, and
+    /// `leaf_portal_map` reverses both together), and the caller's `d < 0` gate puts the light on
+    /// the negative-`normal` side -- i.e. on the PLUS-winding side, here `-z`. So this quad winds
+    /// clockwise seen from `+z` (winding normal `-z`). `clip_beam` takes the orientation
+    /// `FPlane(A,B,C)` gives it, so the winding is what makes its planes face the beam interior.
     fn beam_clip_poly() -> Vec<Vec3> {
         vec![
             Vec3::new(-100.0, -100.0, 100.0),
-            Vec3::new(100.0, -100.0, 100.0),
-            Vec3::new(100.0, 100.0, 100.0),
             Vec3::new(-100.0, 100.0, 100.0),
+            Vec3::new(100.0, 100.0, 100.0),
+            Vec3::new(100.0, -100.0, 100.0),
         ]
     }
 
@@ -400,6 +407,25 @@ mod tests {
             Vec3::new(50.0, -50.0, 200.0),
         ];
         assert_eq!(clip_beam(&light, &beam_clip_poly(), &target), Some(target));
+    }
+
+    // The clip poly's WINDING is what orients each beam plane -- `clip_beam` uses `FPlane(A,B,C)`'s
+    // own sign and nothing else, so reversing the clip poly points every plane outward and the same
+    // interior target is rejected whole (`SP_Back`). This pins the departure that was here until
+    // 2026-09-07: a sign-sum over `clip`'s vertices that forced "interior positive" for either
+    // winding, which the editor does not do.
+    #[test]
+    fn clip_beam_orientation_comes_from_the_clip_polys_winding() {
+        let light = Vec3::new(0.0, 0.0, 0.0);
+        let target = vec![
+            Vec3::new(-50.0, -50.0, 200.0),
+            Vec3::new(-50.0, 50.0, 200.0),
+            Vec3::new(50.0, 50.0, 200.0),
+            Vec3::new(50.0, -50.0, 200.0),
+        ];
+        let mut reversed = beam_clip_poly();
+        reversed.reverse();
+        assert_eq!(clip_beam(&light, &reversed, &target), None);
     }
 
     // `split_with_plane_fast` regression tests. Before the 2026-08-31 fix, `clip_beam` used a plain

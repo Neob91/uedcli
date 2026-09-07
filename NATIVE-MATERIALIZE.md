@@ -291,8 +291,12 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   **580 portals / 163 leaves / 427 nodes**, exactly what native builds. The flood's every gate,
   `SplitWithPlaneFast` and `ActorVisibility`'s clip loop are re-verified instruction-exact; the
   decisive constraint reduces to a 1.90-unit clearance between the 27→26 portal quad and node 344's
-  plane, measured on model points that are byte-identical in both builds. Next step is a `winedbg`
-  dump of `AddPortal`'s 580 fragments —
+  plane, measured on model points that are byte-identical in both builds. The last unfaithful piece
+  of the beam clip is gone too and did not move it: `clip_beam` now takes `FPlane(A,B,C)`'s own
+  winding-derived orientation instead of forcing it by a sign-sum over the clip poly
+  (`dev/docs/spikes/2026-09-07-permeating-beam-plane-winding/`) — provably the same thing on convex
+  clip polys, different only on degenerate edges, and no level's ceiling moved. Next step is a
+  `winedbg` dump of `AddPortal`'s 580 fragments —
   `dev/docs/board/inbox/island-n-123-world-model2-leaf-permeating-light/`.
 - **OceanLab, N=48**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,

@@ -64,10 +64,12 @@ the UnrealScript ordering work used) and diff all 580 against native's. That set
 editor's node-344 (32,27) fragment or the node-351 (27,26) fragment differs, or whether
 `ActorVisibility` has an undecoded behaviour.
 
-A second, smaller thing the port unblocks (not the fix — the heuristic takes no flip on the decisive
-beam): `permeating_lights::clip_beam` still orients each beam plane by sign-sum instead of by the
-clip poly's winding, justified by native's portal polys having had no winding guarantee. They now do.
-Dropping it moves every permeating-light decision on every level, so it wants its own pass.
+The follow-up this item flagged — `clip_beam` orienting each beam plane by sign-sum instead of by the
+clip poly's winding — is **DONE** (`dev/docs/spikes/2026-09-07-permeating-beam-plane-winding/`) and,
+as predicted here, does not move leaf 26. It also did not move any level's ceiling: the two
+orientations are provably the same wherever the clip poly is convex and the light is off its plane,
+and they differed on 7 of 7166 clip edges on NYC_Bar N=152, all of them degenerate (sub-2.5e-4-unit)
+edges.
 
 ## Repro
 

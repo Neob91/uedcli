@@ -492,7 +492,7 @@ def test_permeating_light_beam_planes_are_normalized_and_stop_clipping_at_14_ver
     `FEditorVisibility::ActorVisibility` (`Editor.dll 0xa6d00`) narrows each portal polygon against
     the beam from the light through the polygon it entered by: per clip edge it builds
     `FPlane(Actor->Location, ClipPoly->Vertex[j], ClipPoly->Vertex[jPrev])` and keeps
-    `FPoly::SplitWithPlaneFast`'s front half. Two facts the port needs:
+    `FPoly::SplitWithPlaneFast`'s front half. Three facts the port needs:
 
     1. **The plane is NORMALIZED.** `FPlane(A,B,C)` (`core.dll 0xb440`) cross-multiplies `B-A` and
        `C-A` and then calls `FVector::SafeNormal` (`0x51090`), which returns `FVector(0,0,0)` below
@@ -500,13 +500,28 @@ def test_permeating_light_beam_planes_are_normalized_and_stop_clipping_at_14_ver
        `THRESH_SPLIT_POLY_WITH_PLANE` that `SplitWithPlaneFast` compares each vertex against is
        divided by the cross product's length (order 1e4 for room-scale geometry) and stops gating
        anything — the clip keeps slivers the editor rejects whole, and the flood over-reaches.
-    2. **The clip STOPS at 14 vertices, it does not truncate.** `0x100a7083` tests the working
+
+    2. **The cross product is `(B-A) ^ (C-A)`, in that order** — so the plane's ORIENTATION is
+       whatever the clip poly's own vertex winding gives, with no interior test anywhere. The three
+       args arrive as three by-value FVectors at `[ebp+8]`/`[ebp+0x14]`/`[ebp+0x20]`; the ctor
+       subtracts `A` from both `B` and `C` component-wise and forms `x = Dy*Ez - Dz*Ey` with
+       `D = B-A`, `E = C-A`. Native's `permeating_lights::clip_beam` used to negate this plane
+       whenever the clip poly's own vertices fell negative; that is not in the binary, and it
+       differed from it on degenerate (near-zero-length) clip edges.
+    3. **The clip STOPS at 14 vertices, it does not truncate.** `0x100a7083` tests the working
        poly's `NumVertices >= 14` at the TOP of each edge and jumps out of the loop, recursing with
        the poly it has.
 
-    Spike: `dev/docs/spikes/2026-09-06-permeating-beam-plane-normalize/`.
+    Spikes: `dev/docs/spikes/2026-09-06-permeating-beam-plane-normalize/` (1, 3),
+    `dev/docs/spikes/2026-09-07-permeating-beam-plane-winding/` (2).
     """
     for dll, va, want, what in [
+        ("core.dll", 0x1000B446, "f30f106518", "FPlane(A,B,C): movss xmm4,[ebp+0x18] — B.y"),
+        ("core.dll", 0x1000B458, "f30f5c650c", "FPlane(A,B,C): subss xmm4,[ebp+0xc] — D.y = B.y-A.y"),
+        ("core.dll", 0x1000B467, "f30f5c750c", "FPlane(A,B,C): subss xmm6,[ebp+0xc] — E.y = C.y-A.y"),
+        ("core.dll", 0x1000B48B, "f30f59c6", "FPlane(A,B,C): mulss xmm0,xmm6 — D.z*E.y"),
+        ("core.dll", 0x1000B490, "f30f59cb", "FPlane(A,B,C): mulss xmm1,xmm3 — D.y*E.z"),
+        ("core.dll", 0x1000B49E, "f30f5cc8", "FPlane(A,B,C): subss xmm1,xmm0 — (D^E).x, i.e. (B-A)^(C-A)"),
         ("core.dll", 0x1000B4C8, "e8c35b0400", "call 0x10051090 — FVector::SafeNormal in FPlane(A,B,C)"),
         ("core.dll", 0x100510BC, "f30f1005400a0a10", "movss xmm0, [0x100a0a40] — SMALL_NUMBER"),
         ("core.dll", 0x100510C4, "0f2fc2761c", "comiss xmm0, xmm2 / jbe — zero vector below it"),

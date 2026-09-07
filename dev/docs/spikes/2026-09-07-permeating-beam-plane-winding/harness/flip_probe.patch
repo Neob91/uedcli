@@ -1,0 +1,56 @@
+Temporary instrumentation of `uedcli-native/src/permeating_lights.rs` used to measure how often the
+retired sign-sum heuristic disagreed with `FPlane(A,B,C)`'s own orientation, and why. Apply on top of
+the landed code (which no longer has the heuristic) to re-measure; NOT applied in the tree.
+
+`PROBEWIND` checks the portal-winding invariant the fix rests on: every stored portal poly's winding
+normal must oppose `Portal.normal`. `PROBEFLIP` fires where the retired heuristic would have negated
+the plane, and prints the offending clip edge's length -- which is what showed every disagreement to
+be a degenerate (sub-2.5e-4-unit) edge.
+
+--- a/uedcli-native/src/permeating_lights.rs
++++ b/uedcli-native/src/permeating_lights.rs
+@@ leaf_portal_map, right after `let normal = Vec3::new(p.normal[0], ...);`
++        {
++            let wn = verts[1].sub(&verts[0]).cross(&verts[2].sub(&verts[0]));
++            if wn.dot(&normal) >= 0.0 {
++                PROBE_WIND_BAD.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++            } else {
++                PROBE_WIND_OK.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++            }
++        }
+
+@@ above `fn clip_beam`
++pub(crate) static PROBE_EDGES: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
++pub(crate) static PROBE_FLIPS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
++pub(crate) static PROBE_WIND_OK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
++pub(crate) static PROBE_WIND_BAD: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+@@ in clip_beam, between `let Some(normal) = safe_normal(...)` and the split call
++        let mut sign_sum = 0.0f32;
++        for &v in clip {
++            sign_sum += normal.dot(&v.sub(light));
++        }
++        PROBE_EDGES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++        if sign_sum < 0.0 {
++            let k = PROBE_FLIPS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++            if k < 40 {
++                let terms: Vec<f32> = clip.iter().map(|v| normal.dot(&v.sub(light))).collect();
++                let edge = b.sub(&a);
++                let elen = (edge.dot(&edge)).sqrt();
++                eprintln!(
++                    "PROBEFLIP j={j} sign_sum={sign_sum:e} terms={terms:?} edgelen={elen:e} clip={clip:?}"
++                );
++            }
++        }
+
+@@ end of write_permeating_region
++    eprintln!(
++        "PROBE clip_beam edges={} sign_sum_flips={} wind_ok={} wind_bad={}",
++        PROBE_EDGES.load(std::sync::atomic::Ordering::Relaxed),
++        PROBE_FLIPS.load(std::sync::atomic::Ordering::Relaxed),
++        PROBE_WIND_OK.load(std::sync::atomic::Ordering::Relaxed),
++        PROBE_WIND_BAD.load(std::sync::atomic::Ordering::Relaxed)
++    );
+
+Run: rebuild the wheel (`bin/uedcli --help` triggers `ensure_native_ext`), then
+`actor_parity.py --dx <map> native <N>` and read the `PROBE*` lines off stderr.
