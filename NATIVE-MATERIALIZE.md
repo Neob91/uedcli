@@ -218,9 +218,9 @@ Each is scoped/root-caused, none masked. Pick one up by reading its board item f
   `lightrun_diff.py` finds 0 differing decoded runs, so the extras sit outside the per-lightmap runs.
   Byte-exact **N=1..162** (was 115). N=116 did NOT need a fix
   (`dev/docs/board/done/unatco-n-116-world-model2-light-runs-differ-on/`): leaf 9's permeating-light
-  decision is a near-tie inside CODEGEN noise — two builds of the identical native source (one
-  missing `uedcli-native/.cargo/config.toml`) give `.so`s 5 472 bytes apart and disagree about it,
-  941 `Model.Lights` against UED22's 940. The canonical build is on UED22's side, so the level walks
+  decision is a near-tie inside CODEGEN noise — two builds of the identical native `src/` give `.so`s
+  5 472 bytes apart and disagree about it, 941 `Model.Lights` against UED22's 940 (the two crate
+  directories differ only in non-source files). The canonical build is on UED22's side, so the level walks
   on; the hazard is `dev/docs/board/inbox/native-ext-binary-not-stable-across-builds/` and the
   faithful fix is the one `island-n-123-world-model2-leaf-permeating-light` is stuck on. The N=29
   blocker is FIXED

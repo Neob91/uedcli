@@ -15,8 +15,8 @@ BINARY of the same source.
 
 ## What was actually measured
 
-Building the crate two ways — the canonical layout (what `bin/_venv.sh` builds) and a copy of the
-same `src/` missing `uedcli-native/.cargo/config.toml` — yields two `.so`s 5,472 bytes apart, each
+Building the crate two ways — the canonical layout (what `bin/_venv.sh` builds) and a copy holding
+the same `src/` but none of the crate's non-source files — yields two `.so`s 5,472 bytes apart, each
 deterministic on its own (three runs each, byte-identical output; two independently rebuilt N=116
 references also agree with each other). Their UNATCO N=116 packages differ, and ONLY in the lighting:
 

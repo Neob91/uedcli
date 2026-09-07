@@ -14,9 +14,12 @@ Measured 2026-09-07 while closing `unatco-n-116-world-model2-light-runs-differ-o
 - Canonical layout (an exact copy of the crate directory, which is what `bin/_venv.sh` builds):
   `uedcli_native.abi3.so` = **1 650 840** bytes. UNATCO N=116 gates **PASS**.
 - The same `src/`, same `Cargo.toml`/`Cargo.lock`/`pyproject.toml`, same build image and flags, in a
-  directory missing `uedcli-native/.cargo/config.toml`: **1 645 752** bytes. UNATCO N=116 gates
-  **FAIL** — `Model.Lights` 941 against UED22's 940, one extra permeating light on leaf 9, every
-  later `iPermeating` and `iLightActors` shifted by one. Every geometry array stays byte-exact.
+  directory that additionally lacks `.cargo/config.toml`, `.gitignore` and the empty
+  `uedcli-native/uedcli-native/`: **1 645 368** bytes. UNATCO N=116 gates **FAIL** — `Model.Lights`
+  941 against UED22's 940, one extra permeating light on leaf 9, every later `iPermeating` and
+  `iLightActors` shifted by one. Every geometry array stays byte-exact.
+- Removing only `.cargo/config.toml` from the canonical copy gives a THIRD size, **1 645 752**, so
+  more than one of those three non-source files reaches codegen. None of them should.
 
 Each build is itself deterministic: two from-scratch builds of the same directory are sha256-equal,
 and three native builds from one binary produce byte-identical packages. So this is not a race in
@@ -38,7 +41,7 @@ Two things follow, and the second is the expensive one:
 
 ## What a build here needs
 
-- Find what in `.cargo/config.toml` reaches codegen at all — the committed file only sets
+- Find what in those three files reaches codegen at all — `.cargo/config.toml` only sets
   `[env] RUST_TEST_THREADS = "1"`, which should not — and pin the answer with a test, because until
   it is known, "same source" does not imply "same parity result".
 - Record the wheel's sha256 beside every ladder result (`ref_N<n>.recipe` already does this for the
@@ -47,8 +50,8 @@ Two things follow, and the second is the expensive one:
 
 ## Repro
 
-    tar -C uedcli-native --exclude=./target -cf - . | tar -C /tmp/exact -xf -   # PASS
-    rm -rf /tmp/exact/.cargo                                                    # rebuild -> FAIL
+    tar -C uedcli-native --exclude=./target -cf - . | tar -C <exact> -xf -    # PASS
+    # <slim>: only Cargo.toml, Cargo.lock, pyproject.toml, src/, fixtures/, testdata/  -> FAIL
 
 Build each with `maturin build --release` in the `uedcli-rust-build` image, unpack the wheel, put it
 first on `sys.path`, then `actor_parity.py --dx 03_NYC_UNATCOHQ.dx native 116` and `parity_gate.py`.
