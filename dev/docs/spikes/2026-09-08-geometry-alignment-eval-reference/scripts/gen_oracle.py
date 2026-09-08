@@ -1,11 +1,12 @@
-"""Write the flat, per-task, machine-checkable oracle straight from spec.py
--- no diff-text parsing. Each task's `entries` list (kind: anchor/update/
-create/delete) IS the oracle; this just adds base_trunk and writes it out.
+"""Write the flat, per-task, machine-checkable oracle straight from each
+specs/<id>.py -- no diff-text parsing. Each task's `entries` list (kind:
+anchor/update/create/delete) IS the oracle; this just adds base_trunk and
+writes it out.
 """
 import json, pathlib, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from spec import TASKS
+from registry import TASKS
 
 OUT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference/oracle")
 

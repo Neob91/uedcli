@@ -72,18 +72,247 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
   <p class="eyebrow">uedcli · reference solutions · batch 1 of 5 · UNATCO HQ</p>
   <h1 class="lede">Reference solutions to validate &mdash; per-aspect, diff-generated.</h1>
   <p class="sub">Each task is collapsed by default &mdash; open one and the previous one closes. Inside, each aspect of the change is its own collapsible scenario, showing the fully-correct outcome with just that aspect's actors highlighted. Click any picture to enlarge; arrows cycle through that scenario's images; the enlarged view always shows its caption.</p>
-  <p class="pipeline"><b>Every picture is generated, never hand-built:</b> each scenario is backed by a REAL <code>diff -u</code> (not a custom format) between the baseline and the fully-correct trunk, over each actor's normalized state (brush corners, or Location). Grading is separate from this display grouping: a flat per-task oracle (<code>oracle/&lt;task&gt;.json</code>) classifies each actor as an ANCHOR (the task's own exact delta, e.g. "+48 east"), a DEPENDENT (must match its OWN anchor's actual delta — the wall volume it's physically attached to, verified per-actor, not one shared number), or UNCHANGED. <code>check_trunk.py</code> grades any trunk against it.</p>
+  <p class="pipeline"><b>Every picture is generated, never hand-built:</b> each scenario is backed by a REAL <code>diff -u</code> (not a custom format) between the baseline and the fully-correct trunk, over each actor's normalized state (brush corners, or Location). Grading is separate from this display grouping: a flat per-task oracle (<code>oracle/&lt;task&gt;.json</code>) classifies each actor as an <code>update</code> (an absolute target — a task-pinned delta, or "= baseline"), an <code>anchor</code> (must match a SPECIFIC other actor's actual delta — the wall volume it's physically attached to, verified per-actor, not one shared number), or (documented, not yet needed) <code>create</code>/<code>delete</code>. <code>check_trunk.py</code> grades any trunk against it.</p>
   <p class="orient">Orientation, top-down plans (matching UnrealEd's own axis convention): <b>East = right</b> edge of the image, <b>West = left</b>, <b>North = up</b>, <b>South = down</b>. A small compass is burned into the top-left corner of every plan below as a direct check.</p>
   <div class="taskblk">
+      <button class="taskhead" onclick="toggleTask(this)">
+        <span class="tchev">&#9656;</span><h2>Task 2 — Raise the ceiling</h2>
+      </button>
+      <div class="taskbody" hidden>
+        <div class="task"><span class="t">REQUEST:</span> &ldquo;Manderley&rsquo;s office feels cramped. Raise its ceiling by 48 units.&rdquo;</div>
+        <div class="beforeblk">
+          <div class="diagrams"><figure class="dg"><img src="img/unatco_ceiling/before_side.png" alt="Side view (elevation) of the office before any change — the ceiling is flat at z=416, spanning both wall volumes (Brush418 south, Brush420 north)." onclick="openLB('unatco_ceiling__before',0)"><figcaption>Side view (elevation) of the office before any change — the ceiling is flat at z=416, spanning both wall volumes (Brush418 south, Brush420 north).</figcaption></figure><figure class="dg"><img src="img/unatco_ceiling/before_top.png" alt="Top-down plan of the same office, for footprint context." onclick="openLB('unatco_ceiling__before',1)"><figcaption>Top-down plan of the same office, for footprint context.</figcaption></figure></div>
+          <div class="striplabel">360° panorama tour, before any edit</div>
+          <div class="carousel"><img class="cthumb" src="img/unatco_ceiling/pan_before_0.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__before',0)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__before',0)"><img class="cthumb" src="img/unatco_ceiling/pan_before_1.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__before',1)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__before',1)"><img class="cthumb" src="img/unatco_ceiling/pan_before_2.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__before',2)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__before',2)"><img class="cthumb" src="img/unatco_ceiling/pan_before_3.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__before',3)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__before',3)"><img class="cthumb" src="img/unatco_ceiling/pan_before_4.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__before',4)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__before',4)"><img class="cthumb" src="img/unatco_ceiling/pan_before_5.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__before',5)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__before',5)"><img class="cthumb" src="img/unatco_ceiling/pan_before_6.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__before',6)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__before',6)"><img class="cthumb" src="img/unatco_ceiling/pan_before_7.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__before',7)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__before',7)"></div>
+        </div>
+        <h3 class="scenh">Per-aspect scenarios — click to expand</h3>
+        <div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Ceiling (both halves of the room)</span>
+      </button>
+      <div class="scenbody" hidden>
+        <p class="sdesc">Like the east wall, the ceiling spans two wall volumes sharing one surface. Both must rise together, or the ceiling gets a step in it.</p>
+        <div class="carousel"><img class="cthumb" src="img/unatco_ceiling/ceil.png" alt="[CORRECT] Like the east wall, the ceiling spans two wall volumes sharing one surface. Both must rise together, or the ceiling gets a step in it. (highlighted: Brush418, Brush420)" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__ceil',0)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__ceil',0)"></div>
+        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/unatco_ceiling/ceil.diff">diffs/unatco_ceiling/ceil.diff</a>)</summary>
+          <pre class="diffpre">--- before/t2_ceil
++++ after/t2_ceil
+@@ -1,9 +1,9 @@
+ Brush418: 8 vertices
+ coord                        polys            refs
+-(128,-288,416)               0,3,5               3
+-(448,-288,416)               0,3,4               3
+-(448,64,416)                 0,2,4               3
+-(128,64,416)                 0,2,5               3
++(128,-288,464)               0,3,5               3
++(448,-288,464)               0,3,4               3
++(448,64,464)                 0,2,4               3
++(128,64,464)                 0,2,5               3
+ (128,64,240)                 1,2,5               3
+ (448,64,240)                 1,2,4               3
+ (448,-288,240)               1,3,4               3
+@@ -11,10 +11,10 @@
+ 
+ Brush420: 8 vertices
+ coord                        polys            refs
+-(-96,64,416)                 0,3,5               3
+-(448,64,416)                 0,3,4               3
+-(448,304,416)                0,2,4               3
+-(-96,304,416)                0,2,5               3
++(-96,64,464)                 0,3,5               3
++(448,64,464)                 0,3,4               3
++(448,304,464)                0,2,4               3
++(-96,304,464)                0,2,5               3
+ (-96,304,240)                1,2,5               3
+ (448,304,240)                1,2,4               3
+ (448,64,240)                 1,3,4               3
+</pre>
+        </details>
+      </div></div><div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Ceiling-mounted fixtures (light panels, trim)</span>
+      </button>
+      <div class="scenbody" hidden>
+        <p class="sdesc">Three recessed light panels and two corner trim caps are set into the ceiling, split across both wall volumes: most sit over the south half (Brush418), one panel sits over the north half (Brush420). Each rises with its own half.</p>
+        <div class="carousel"><img class="cthumb" src="img/unatco_ceiling/fixtures.png" alt="[CORRECT] Three recessed light panels and two corner trim caps are set into the ceiling, split across both wall volumes: most sit over the south half (Brush418), one panel sits over the north half (Brush420). Each rises with its own half. (highlighted: Brush285, Brush295, Brush284, Brush132, Brush74)" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__fixtures',0)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__fixtures',0)"><img class="cthumb" src="img/unatco_ceiling/pan_after_0.png" alt="Photo, camera tilted upward, showing the raised ceiling with one of the light panels visible." loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__fixtures',1)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__fixtures',1)"></div>
+        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/unatco_ceiling/fixtures.diff">diffs/unatco_ceiling/fixtures.diff</a>)</summary>
+          <pre class="diffpre">--- before/t2_fixtures
++++ after/t2_fixtures
+@@ -1,78 +1,78 @@
+ Brush285: 16 vertices
+ coord                        polys            refs
+-(283.313585,48,412)          0,1,8               3
+-(283.313585,48,416)          0,1,9               3
+-(288,43.313581,416)          0,7,9               3
+-(288,43.313581,412)          0,7,8               3
+-(276.686165,48,412)          1,2,8               3
+-(276.686165,48,416)          1,2,9               3
+-(272,43.313581,412)          2,3,8               3
+-(272,43.313581,416)          2,3,9               3
+-(272,36.686223,412)          3,4,8               3
+-(272,36.686223,416)          3,4,9               3
+-(276.686165,32,412)          4,5,8               3
+-(276.686165,32,416)          4,5,9               3
+-(283.313585,32,412)          5,6,8               3
+-(283.313585,32,416)          5,6,9               3
+-(288,36.686223,412)          6,7,8               3
+-(288,36.686223,416)          6,7,9               3
++(283.313585,48,460)          0,1,8               3
++(283.313585,48,464)          0,1,9               3
++(288,43.313581,464)          0,7,9               3
++(288,43.313581,460)          0,7,8               3
++(276.686165,48,460)          1,2,8               3
++(276.686165,48,464)          1,2,9               3
++(272,43.313581,460)          2,3,8               3
++(272,43.313581,464)          2,3,9               3
++(272,36.686223,460)          3,4,8               3
++(272,36.686223,464)          3,4,9               3
++(276.686165,32,460)          4,5,8               3
++(276.686165,32,464)          4,5,9               3
++(283.313585,32,460)          5,6,8               3
++(283.313585,32,464)          5,6,9               3
++(288,36.686223,460)          6,7,8               3
++(288,36.686223,464)          6,7,9               3
+ 
+ Brush295: 16 vertices
+ coord                        polys            refs
+-(283.313585,-208,412)        0,1,8               3
+-(283.313585,-208,416)        0,1,9               3
+-(288,-212.686419,416)        0,7,9               3
+-(288,-212.686419,412)        0,7,8               3
+-(276.686165,-208,412)        1,2,8               3
+-(276.686165,-208,416)        1,2,9               3
+-(272,-212.686419,412)        2,3,8               3
+-(272,-212.686419,416)        2,3,9               3
+-(272,-219.313777,412)        3,4,8               3
+-(272,-219.313777,416)        3,4,9               3
+-(276.686165,-224,412)        4,5,8               3
+-(276.686165,-224,416)        4,5,9               3
+-(283.313585,-224,412)        5,6,8               3
+-(283.313585,-224,416)        5,6,9               3
+-(288,-219.313777,412)        6,7,8               3
+-(288,-219.313777,416)        6,7,9               3
++(283.313585,-208,460)        0,1,8               3
++(283.313585,-208,464)        0,1,9               3
++(288,-212.686419,464)        0,7,9               3
++(288,-212.686419,460)        0,7,8               3
++(276.686165,-208,460)        1,2,8               3
++(276.686165,-208,464)        1,2,9               3
++(272,-212.686419,460)        2,3,8               3
++(272,-212.686419,464)        2,3,9               3
++(272,-219.313777,460)        3,4,8               3
++(272,-219.313777,464)        3,4,9               3
++(276.686165,-224,460)        4,5,8               3
++(276.686165,-224,464)        4,5,9               3
++(283.313585,-224,460)        5,6,8               3
++(283.313585,-224,464)        5,6,9               3
++(288,-219.313777,460)        6,7,8               3
++(288,-219.313777,464)        6,7,9               3
+ 
+ Brush284: 16 vertices
+ coord                        polys            refs
+-(43.313585,188,412)          0,1,8               3
+-(43.313585,188,416)          0,1,9               3
+-(48,183.313581,416)          0,7,9               3
+-(48,183.313581,412)          0,7,8               3
+-(36.686165,188,412)          1,2,8               3
+-(36.686165,188,416)          1,2,9               3
+-(32,183.313581,412)          2,3,8               3
+-(32,183.313581,416)          2,3,9               3
+-(32,176.686223,412)          3,4,8               3
+-(32,176.686223,416)          3,4,9               3
+-(36.686165,172,412)          4,5,8               3
+-(36.686165,172,416)          4,5,9               3
+-(43.313585,172,412)          5,6,8               3
+-(43.313585,172,416)          5,6,9               3
+-(48,176.686223,412)          6,7,8               3
+-(48,176.686223,416)          6,7,9               3
++(43.313585,188,460)          0,1,8               3
++(43.313585,188,464)          0,1,9               3
++(48,183.313581,464)          0,7,9               3
++(48,183.313581,460)          0,7,8               3
++(36.686165,188,460)          1,2,8               3
++(36.686165,188,464)          1,2,9               3
++(32,183.313581,460)          2,3,8               3
++(32,183.313581,464)          2,3,9               3
++(32,176.686223,460)          3,4,8               3
++(32,176.686223,464)          3,4,9               3
++(36.686165,172,460)          4,5,8               3
++(36.686165,172,464)          4,5,9               3
++(43.313585,172,460)          5,6,8               3
++(43.313585,172,464)          5,6,9               3
++(48,176.686223,460)          6,7,8               3
++(48,176.686223,464)          6,7,9               3
+ 
+ Brush132: 8 vertices
+ coord                        polys            refs
+-(448,48,416)                 0,3,5               3
+-(448,-64,416)                0,3,4               3
+-(452,-64,416)                0,2,4               3
+-(452,48,416)                 0,2,5               3
+-(452,48,414)                 1,2,5               3
+-(452,-64,414)                1,2,4               3
+-(448,-64,414)                1,3,4               3
+-(448,48,414)                 1,3,5               3
++(448,48,464)                 0,3,5               3
++(448,-64,464)                0,3,4               3
++(452,-64,464)                0,2,4               3
++(452,48,464)                 0,2,5               3
++(452,48,462)                 1,2,5               3
++(452,-64,462)                1,2,4               3
++(448,-64,462)                1,3,4               3
++(448,48,462)                 1,3,5               3
+ 
+ Brush74: 8 vertices
+ coord                        polys            refs
+-(448,64,416)                 0,3,5               3
+-(448,-48,416)                0,3,4               3
+-(452,-48,416)                0,2,4               3
+-(452,64,416)                 0,2,5               3
+-(452,64,414)                 1,2,5               3
+-(452,-48,414)                1,2,4               3
+-(448,-48,414)                1,3,4               3
+-(448,64,414)                 1,3,5               3
++(448,64,464)                 0,3,5               3
++(448,-48,464)                0,3,4               3
++(452,-48,464)                0,2,4               3
++(452,64,464)                 0,2,5               3
++(452,64,462)                 1,2,5               3
++(452,-48,462)                1,2,4               3
++(448,-48,462)                1,3,4               3
++(448,64,462)                 1,3,5               3
+</pre>
+        </details>
+      </div></div><div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Niche ceiling</span>
+      </button>
+      <div class="scenbody" hidden>
+        <p class="sdesc">The niche is its own separate room with its own ceiling. It's expected to keep its own height and not match the office's new one.</p>
+        <div class="carousel"><img class="cthumb" src="img/unatco_ceiling/niche.png" alt="[CORRECT] The niche is its own separate room with its own ceiling. It's expected to keep its own height and not match the office's new one. (highlighted: Brush663)" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__niche',0)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__niche',0)"><img class="cthumb" src="img/unatco_ceiling/pan_after_0.png" alt="Photo, camera tilted upward — the height step at the boundary with the niche is visible in the top-right." loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__niche',1)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__niche',1)"></div>
+        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/unatco_ceiling/niche.diff">diffs/unatco_ceiling/niche.diff</a>)</summary>
+          <p class="nochange">Zero-line diff — this aspect asserts these actors are UNCHANGED from the baseline, and they are.</p><pre class="diffpre"></pre>
+        </details>
+      </div></div><div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Overhead room lights</span>
+      </button>
+      <div class="scenbody" hidden>
+        <p class="sdesc">Every light sits the same distance below its ceiling, room-wide — a fixed convention, not a mount to the ceiling surface. They must stay put.</p>
+        <div class="carousel"><img class="cthumb" src="img/unatco_ceiling/lights.png" alt="[CORRECT] Every light sits the same distance below its ceiling, room-wide — a fixed convention, not a mount to the ceiling surface. They must stay put. (highlighted: Light156, Light103, Light318, Light86, Light120)" loading="lazy" tabindex="0" onclick="openLB('unatco_ceiling__lights',0)" onkeydown="if(event.key==='Enter')openLB('unatco_ceiling__lights',0)"></div>
+        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/unatco_ceiling/lights.diff">diffs/unatco_ceiling/lights.diff</a>)</summary>
+          <p class="nochange">Zero-line diff — this aspect asserts these actors are UNCHANGED from the baseline, and they are.</p><pre class="diffpre"></pre>
+        </details>
+      </div></div>
+      </div></div><div class="taskblk">
       <button class="taskhead" onclick="toggleTask(this)">
         <span class="tchev">&#9656;</span><h2>Task 1 — Widen the office</h2>
       </button>
       <div class="taskbody" hidden>
         <div class="task"><span class="t">REQUEST:</span> &ldquo;Manderley&rsquo;s office is too narrow. Widen it eastward by 48 units &mdash; move its east wall out.&rdquo;</div>
         <div class="beforeblk">
-          <div class="diagrams"><figure class="dg"><img src="img/v4_before_top.png" alt="Top-down plan of the office before any change. It's built from TWO separate wall volumes that share one east wall (the south half is brush Brush418, the north half is brush Brush420) — a detail invisible to a player, but important for widening the wall correctly." onclick="openLB('t1__before',0)"><figcaption>Top-down plan of the office before any change. It's built from TWO separate wall volumes that share one east wall (the south half is brush Brush418, the north half is brush Brush420) — a detail invisible to a player, but important for widening the wall correctly.</figcaption></figure><figure class="dg"><img src="img/v4_before_side.png" alt="Side view (elevation) of the same office before any change, for height context." onclick="openLB('t1__before',1)"><figcaption>Side view (elevation) of the same office before any change, for height context.</figcaption></figure></div>
+          <div class="diagrams"><figure class="dg"><img src="img/unatco_widen/before_top.png" alt="Top-down plan of the office before any change. It's built from TWO separate wall volumes that share one east wall (the south half is brush Brush418, the north half is brush Brush420) — a detail invisible to a player, but important for widening the wall correctly." onclick="openLB('unatco_widen__before',0)"><figcaption>Top-down plan of the office before any change. It's built from TWO separate wall volumes that share one east wall (the south half is brush Brush418, the north half is brush Brush420) — a detail invisible to a player, but important for widening the wall correctly.</figcaption></figure><figure class="dg"><img src="img/unatco_widen/before_side.png" alt="Side view (elevation) of the same office before any change, for height context." onclick="openLB('unatco_widen__before',1)"><figcaption>Side view (elevation) of the same office before any change, for height context.</figcaption></figure></div>
           <div class="striplabel">360° panorama tour, before any edit</div>
-          <div class="carousel"><img class="cthumb" src="img/v4pan_before_0.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',0)" onkeydown="if(event.key==='Enter')openLB('t1__before',0)"><img class="cthumb" src="img/v4pan_before_1.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',1)" onkeydown="if(event.key==='Enter')openLB('t1__before',1)"><img class="cthumb" src="img/v4pan_before_2.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',2)" onkeydown="if(event.key==='Enter')openLB('t1__before',2)"><img class="cthumb" src="img/v4pan_before_3.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',3)" onkeydown="if(event.key==='Enter')openLB('t1__before',3)"><img class="cthumb" src="img/v4pan_before_4.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',4)" onkeydown="if(event.key==='Enter')openLB('t1__before',4)"><img class="cthumb" src="img/v4pan_before_5.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',5)" onkeydown="if(event.key==='Enter')openLB('t1__before',5)"><img class="cthumb" src="img/v4pan_before_6.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',6)" onkeydown="if(event.key==='Enter')openLB('t1__before',6)"><img class="cthumb" src="img/v4pan_before_7.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',7)" onkeydown="if(event.key==='Enter')openLB('t1__before',7)"></div>
+          <div class="carousel"><img class="cthumb" src="img/unatco_widen/pan_before_0.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__before',0)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__before',0)"><img class="cthumb" src="img/unatco_widen/pan_before_1.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__before',1)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__before',1)"><img class="cthumb" src="img/unatco_widen/pan_before_2.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__before',2)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__before',2)"><img class="cthumb" src="img/unatco_widen/pan_before_3.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__before',3)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__before',3)"><img class="cthumb" src="img/unatco_widen/pan_before_4.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__before',4)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__before',4)"><img class="cthumb" src="img/unatco_widen/pan_before_5.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__before',5)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__before',5)"><img class="cthumb" src="img/unatco_widen/pan_before_6.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__before',6)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__before',6)"><img class="cthumb" src="img/unatco_widen/pan_before_7.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__before',7)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__before',7)"></div>
         </div>
         <h3 class="scenh">Per-aspect scenarios — click to expand</h3>
         <div class="scen">
@@ -92,8 +321,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="scenbody" hidden>
         <p class="sdesc">The office is built from two wall volumes sharing one wall. Both must move out together, or the wall gets a step in it.</p>
-        <div class="carousel"><img class="cthumb" src="img/t1_wall.png" alt="[CORRECT] The office is built from two wall volumes sharing one wall. Both must move out together, or the wall gets a step in it. (highlighted: Brush418, Brush420)" loading="lazy" tabindex="0" onclick="openLB('t1_wall',0)" onkeydown="if(event.key==='Enter')openLB('t1_wall',0)"></div>
-        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/t1_wall.diff">diffs/t1_wall.diff</a>)</summary>
+        <div class="carousel"><img class="cthumb" src="img/unatco_widen/wall.png" alt="[CORRECT] The office is built from two wall volumes sharing one wall. Both must move out together, or the wall gets a step in it. (highlighted: Brush418, Brush420)" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__wall',0)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__wall',0)"></div>
+        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/unatco_widen/wall.diff">diffs/unatco_widen/wall.diff</a>)</summary>
           <pre class="diffpre">--- before/t1_wall
 +++ after/t1_wall
 @@ -1,21 +1,21 @@
@@ -134,8 +363,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="scenbody" hidden>
         <p class="sdesc">The wall's own hardware is split across both wall volumes: the switch/recess/most trims sit on the south half (Brush418), the pilaster and its light sit on the north half (Brush420). Each moves with its OWN wall, not a single shared delta.</p>
-        <div class="carousel"><img class="cthumb" src="img/t1_fixtures.png" alt="[CORRECT] The wall's own hardware is split across both wall volumes: the switch/recess/most trims sit on the south half (Brush418), the pilaster and its light sit on the north half (Brush420). Each moves with its OWN wall, not a single shared delta. (highlighted: Brush670, Brush161, Brush132, Brush203, Brush74, Brush152, Switch6, Brush869, Light14)" loading="lazy" tabindex="0" onclick="openLB('t1_fixtures',0)" onkeydown="if(event.key==='Enter')openLB('t1_fixtures',0)"></div>
-        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/t1_fixtures.diff">diffs/t1_fixtures.diff</a>)</summary>
+        <div class="carousel"><img class="cthumb" src="img/unatco_widen/fixtures.png" alt="[CORRECT] The wall's own hardware is split across both wall volumes: the switch/recess/most trims sit on the south half (Brush418), the pilaster and its light sit on the north half (Brush420). Each moves with its OWN wall, not a single shared delta. (highlighted: Brush670, Brush161, Brush132, Brush203, Brush74, Brush152, Switch6, Brush869, Light14)" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__fixtures',0)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__fixtures',0)"></div>
+        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/unatco_widen/fixtures.diff">diffs/unatco_widen/fixtures.diff</a>)</summary>
           <pre class="diffpre">--- before/t1_fixtures
 +++ after/t1_fixtures
 @@ -1,116 +1,116 @@
@@ -357,8 +586,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="scenbody" hidden>
         <p class="sdesc">A wall-mounted display shelf has a real hidden safe built into its back, entirely on the north wall volume (Brush420). The whole unit and its contents must move together with it.</p>
-        <div class="carousel"><img class="cthumb" src="img/t1_safe.png" alt="[CORRECT] A wall-mounted display shelf has a real hidden safe built into its back, entirely on the north wall volume (Brush420). The whole unit and its contents must move together with it. (highlighted: Brush766, Brush364, Brush873, Brush592, Light149, Vase3, Vase4, BookClosed1, NanoKey0, WeaponModRecoil0)" loading="lazy" tabindex="0" onclick="openLB('t1_safe',0)" onkeydown="if(event.key==='Enter')openLB('t1_safe',0)"><img class="cthumb" src="img/v7photo_safe_before.png" alt="Before: the trophy shelf — a vase, a polished rock, a closed book, and a nanokey on display." loading="lazy" tabindex="0" onclick="openLB('t1_safe',1)" onkeydown="if(event.key==='Enter')openLB('t1_safe',1)"><img class="cthumb" src="img/v7photo_safe_fixed.png" alt="Correct: the whole shelf unit, including the hidden safe built into its back, moved out together with the wall." loading="lazy" tabindex="0" onclick="openLB('t1_safe',2)" onkeydown="if(event.key==='Enter')openLB('t1_safe',2)"><img class="cthumb" src="img/v7photo_safe_side.png" alt="Side view showing the shelf is a real wooden cabinet built into the wall, with actual depth." loading="lazy" tabindex="0" onclick="openLB('t1_safe',3)" onkeydown="if(event.key==='Enter')openLB('t1_safe',3)"><img class="cthumb" src="img/v7photo_safe_behind.png" alt="The space directly behind the safe: a sealed, empty dead-end — nothing else back there." loading="lazy" tabindex="0" onclick="openLB('t1_safe',4)" onkeydown="if(event.key==='Enter')openLB('t1_safe',4)"></div>
-        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/t1_safe.diff">diffs/t1_safe.diff</a>)</summary>
+        <div class="carousel"><img class="cthumb" src="img/unatco_widen/safe.png" alt="[CORRECT] A wall-mounted display shelf has a real hidden safe built into its back, entirely on the north wall volume (Brush420). The whole unit and its contents must move together with it. (highlighted: Brush766, Brush364, Brush873, Brush592, Light149, Vase3, Vase4, BookClosed1, NanoKey0, WeaponModRecoil0)" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__safe',0)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__safe',0)"><img class="cthumb" src="img/unatco_widen/photo_safe_before.png" alt="Before: the trophy shelf — a vase, a polished rock, a closed book, and a nanokey on display." loading="lazy" tabindex="0" onclick="openLB('unatco_widen__safe',1)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__safe',1)"><img class="cthumb" src="img/unatco_widen/photo_safe_fixed.png" alt="Correct: the whole shelf unit, including the hidden safe built into its back, moved out together with the wall." loading="lazy" tabindex="0" onclick="openLB('unatco_widen__safe',2)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__safe',2)"><img class="cthumb" src="img/unatco_widen/photo_safe_side.png" alt="Side view showing the shelf is a real wooden cabinet built into the wall, with actual depth." loading="lazy" tabindex="0" onclick="openLB('unatco_widen__safe',3)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__safe',3)"><img class="cthumb" src="img/unatco_widen/photo_safe_behind.png" alt="The space directly behind the safe: a sealed, empty dead-end — nothing else back there." loading="lazy" tabindex="0" onclick="openLB('unatco_widen__safe',4)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__safe',4)"></div>
+        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/unatco_widen/safe.diff">diffs/unatco_widen/safe.diff</a>)</summary>
           <pre class="diffpre">--- before/t1_safe
 +++ after/t1_safe
 @@ -1,55 +1,55 @@
@@ -463,8 +692,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="scenbody" hidden>
         <p class="sdesc">Two flagpoles stand in opposite corners of the room, anchored to DIFFERENT wall volumes: FlagPole3 to the north wall (Brush420), FlagPole4 to the south wall (Brush418). Each must move with its own corner's wall.</p>
-        <div class="carousel"><img class="cthumb" src="img/t1_flags.png" alt="[CORRECT] Two flagpoles stand in opposite corners of the room, anchored to DIFFERENT wall volumes: FlagPole3 to the north wall (Brush420), FlagPole4 to the south wall (Brush418). Each must move with its own corner's wall. (highlighted: FlagPole3, FlagPole4)" loading="lazy" tabindex="0" onclick="openLB('t1_flags',0)" onkeydown="if(event.key==='Enter')openLB('t1_flags',0)"><img class="cthumb" src="img/v7photo_flags_after.png" alt="Photo confirming a flag sits flush back in its corner after the move." loading="lazy" tabindex="0" onclick="openLB('t1_flags',1)" onkeydown="if(event.key==='Enter')openLB('t1_flags',1)"></div>
-        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/t1_flags.diff">diffs/t1_flags.diff</a>)</summary>
+        <div class="carousel"><img class="cthumb" src="img/unatco_widen/flags.png" alt="[CORRECT] Two flagpoles stand in opposite corners of the room, anchored to DIFFERENT wall volumes: FlagPole3 to the north wall (Brush420), FlagPole4 to the south wall (Brush418). Each must move with its own corner's wall. (highlighted: FlagPole3, FlagPole4)" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__flags',0)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__flags',0)"><img class="cthumb" src="img/unatco_widen/photo_flags_after.png" alt="Photo confirming a flag sits flush back in its corner after the move." loading="lazy" tabindex="0" onclick="openLB('unatco_widen__flags',1)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__flags',1)"></div>
+        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/unatco_widen/flags.diff">diffs/unatco_widen/flags.diff</a>)</summary>
           <pre class="diffpre">--- before/t1_flags
 +++ after/t1_flags
 @@ -1,3 +1,3 @@
@@ -481,8 +710,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="scenbody" hidden>
         <p class="sdesc">This niche is a genuinely separate small room built against the south wall volume (Brush418), not part of the wall itself. It must move so it stays flush against it.</p>
-        <div class="carousel"><img class="cthumb" src="img/t1_niche.png" alt="[CORRECT] This niche is a genuinely separate small room built against the south wall volume (Brush418), not part of the wall itself. It must move so it stays flush against it. (highlighted: Brush663, Brush1, Brush138, Brush140, Brush148, Brush164, Brush168, Brush1158, Brush1550, Brush1551, OrdersTrigger5, Light6)" loading="lazy" tabindex="0" onclick="openLB('t1_niche',0)" onkeydown="if(event.key==='Enter')openLB('t1_niche',0)"></div>
-        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/t1_niche.diff">diffs/t1_niche.diff</a>)</summary>
+        <div class="carousel"><img class="cthumb" src="img/unatco_widen/niche.png" alt="[CORRECT] This niche is a genuinely separate small room built against the south wall volume (Brush418), not part of the wall itself. It must move so it stays flush against it. (highlighted: Brush663, Brush1, Brush138, Brush140, Brush148, Brush164, Brush168, Brush1158, Brush1550, Brush1551, OrdersTrigger5, Light6)" loading="lazy" tabindex="0" onclick="openLB('unatco_widen__niche',0)" onkeydown="if(event.key==='Enter')openLB('unatco_widen__niche',0)"></div>
+        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/unatco_widen/niche.diff">diffs/unatco_widen/niche.diff</a>)</summary>
           <pre class="diffpre">--- before/t1_niche
 +++ after/t1_niche
 @@ -1,141 +1,141 @@
@@ -740,237 +969,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 </pre>
         </details>
       </div></div>
-      </div></div><div class="taskblk">
-      <button class="taskhead" onclick="toggleTask(this)">
-        <span class="tchev">&#9656;</span><h2>Task 2 — Raise the ceiling</h2>
-      </button>
-      <div class="taskbody" hidden>
-        <div class="task"><span class="t">REQUEST:</span> &ldquo;Manderley&rsquo;s office feels cramped. Raise its ceiling by 48 units.&rdquo;</div>
-        <div class="beforeblk">
-          <div class="diagrams"><figure class="dg"><img src="img/v4_before_side.png" alt="Side view (elevation) of the office before any change — the ceiling is flat at z=416, spanning both wall volumes (Brush418 south, Brush420 north)." onclick="openLB('t2__before',0)"><figcaption>Side view (elevation) of the office before any change — the ceiling is flat at z=416, spanning both wall volumes (Brush418 south, Brush420 north).</figcaption></figure><figure class="dg"><img src="img/v4_before_top.png" alt="Top-down plan of the same office, for footprint context." onclick="openLB('t2__before',1)"><figcaption>Top-down plan of the same office, for footprint context.</figcaption></figure></div>
-          <div class="striplabel">360° panorama tour, before any edit</div>
-          <div class="carousel"><img class="cthumb" src="img/v6pan_beforeceil_0.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',0)" onkeydown="if(event.key==='Enter')openLB('t2__before',0)"><img class="cthumb" src="img/v6pan_beforeceil_1.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',1)" onkeydown="if(event.key==='Enter')openLB('t2__before',1)"><img class="cthumb" src="img/v6pan_beforeceil_2.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',2)" onkeydown="if(event.key==='Enter')openLB('t2__before',2)"><img class="cthumb" src="img/v6pan_beforeceil_3.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',3)" onkeydown="if(event.key==='Enter')openLB('t2__before',3)"><img class="cthumb" src="img/v6pan_beforeceil_4.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',4)" onkeydown="if(event.key==='Enter')openLB('t2__before',4)"><img class="cthumb" src="img/v6pan_beforeceil_5.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',5)" onkeydown="if(event.key==='Enter')openLB('t2__before',5)"><img class="cthumb" src="img/v6pan_beforeceil_6.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',6)" onkeydown="if(event.key==='Enter')openLB('t2__before',6)"><img class="cthumb" src="img/v6pan_beforeceil_7.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',7)" onkeydown="if(event.key==='Enter')openLB('t2__before',7)"></div>
-        </div>
-        <h3 class="scenh">Per-aspect scenarios — click to expand</h3>
-        <div class="scen">
-      <button class="scenhead" onclick="toggleScen(this)">
-        <span class="chev">&#9656;</span><span class="stitle">Ceiling (both halves of the room)</span>
-      </button>
-      <div class="scenbody" hidden>
-        <p class="sdesc">Like the east wall, the ceiling spans two wall volumes sharing one surface. Both must rise together, or the ceiling gets a step in it.</p>
-        <div class="carousel"><img class="cthumb" src="img/t2_ceil.png" alt="[CORRECT] Like the east wall, the ceiling spans two wall volumes sharing one surface. Both must rise together, or the ceiling gets a step in it. (highlighted: Brush418, Brush420)" loading="lazy" tabindex="0" onclick="openLB('t2_ceil',0)" onkeydown="if(event.key==='Enter')openLB('t2_ceil',0)"></div>
-        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/t2_ceil.diff">diffs/t2_ceil.diff</a>)</summary>
-          <pre class="diffpre">--- before/t2_ceil
-+++ after/t2_ceil
-@@ -1,9 +1,9 @@
- Brush418: 8 vertices
- coord                        polys            refs
--(128,-288,416)               0,3,5               3
--(448,-288,416)               0,3,4               3
--(448,64,416)                 0,2,4               3
--(128,64,416)                 0,2,5               3
-+(128,-288,464)               0,3,5               3
-+(448,-288,464)               0,3,4               3
-+(448,64,464)                 0,2,4               3
-+(128,64,464)                 0,2,5               3
- (128,64,240)                 1,2,5               3
- (448,64,240)                 1,2,4               3
- (448,-288,240)               1,3,4               3
-@@ -11,10 +11,10 @@
- 
- Brush420: 8 vertices
- coord                        polys            refs
--(-96,64,416)                 0,3,5               3
--(448,64,416)                 0,3,4               3
--(448,304,416)                0,2,4               3
--(-96,304,416)                0,2,5               3
-+(-96,64,464)                 0,3,5               3
-+(448,64,464)                 0,3,4               3
-+(448,304,464)                0,2,4               3
-+(-96,304,464)                0,2,5               3
- (-96,304,240)                1,2,5               3
- (448,304,240)                1,2,4               3
- (448,64,240)                 1,3,4               3
-</pre>
-        </details>
-      </div></div><div class="scen">
-      <button class="scenhead" onclick="toggleScen(this)">
-        <span class="chev">&#9656;</span><span class="stitle">Ceiling-mounted fixtures (light panels, trim)</span>
-      </button>
-      <div class="scenbody" hidden>
-        <p class="sdesc">Three recessed light panels and two corner trim caps are set into the ceiling, split across both wall volumes: most sit over the south half (Brush418), one panel sits over the north half (Brush420). Each rises with its own half.</p>
-        <div class="carousel"><img class="cthumb" src="img/t2_fixtures.png" alt="[CORRECT] Three recessed light panels and two corner trim caps are set into the ceiling, split across both wall volumes: most sit over the south half (Brush418), one panel sits over the north half (Brush420). Each rises with its own half. (highlighted: Brush285, Brush295, Brush284, Brush132, Brush74)" loading="lazy" tabindex="0" onclick="openLB('t2_fixtures',0)" onkeydown="if(event.key==='Enter')openLB('t2_fixtures',0)"><img class="cthumb" src="img/v6pan_C_0.png" alt="Photo, camera tilted upward, showing the raised ceiling with one of the light panels visible." loading="lazy" tabindex="0" onclick="openLB('t2_fixtures',1)" onkeydown="if(event.key==='Enter')openLB('t2_fixtures',1)"></div>
-        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/t2_fixtures.diff">diffs/t2_fixtures.diff</a>)</summary>
-          <pre class="diffpre">--- before/t2_fixtures
-+++ after/t2_fixtures
-@@ -1,78 +1,78 @@
- Brush285: 16 vertices
- coord                        polys            refs
--(283.313585,48,412)          0,1,8               3
--(283.313585,48,416)          0,1,9               3
--(288,43.313581,416)          0,7,9               3
--(288,43.313581,412)          0,7,8               3
--(276.686165,48,412)          1,2,8               3
--(276.686165,48,416)          1,2,9               3
--(272,43.313581,412)          2,3,8               3
--(272,43.313581,416)          2,3,9               3
--(272,36.686223,412)          3,4,8               3
--(272,36.686223,416)          3,4,9               3
--(276.686165,32,412)          4,5,8               3
--(276.686165,32,416)          4,5,9               3
--(283.313585,32,412)          5,6,8               3
--(283.313585,32,416)          5,6,9               3
--(288,36.686223,412)          6,7,8               3
--(288,36.686223,416)          6,7,9               3
-+(283.313585,48,460)          0,1,8               3
-+(283.313585,48,464)          0,1,9               3
-+(288,43.313581,464)          0,7,9               3
-+(288,43.313581,460)          0,7,8               3
-+(276.686165,48,460)          1,2,8               3
-+(276.686165,48,464)          1,2,9               3
-+(272,43.313581,460)          2,3,8               3
-+(272,43.313581,464)          2,3,9               3
-+(272,36.686223,460)          3,4,8               3
-+(272,36.686223,464)          3,4,9               3
-+(276.686165,32,460)          4,5,8               3
-+(276.686165,32,464)          4,5,9               3
-+(283.313585,32,460)          5,6,8               3
-+(283.313585,32,464)          5,6,9               3
-+(288,36.686223,460)          6,7,8               3
-+(288,36.686223,464)          6,7,9               3
- 
- Brush295: 16 vertices
- coord                        polys            refs
--(283.313585,-208,412)        0,1,8               3
--(283.313585,-208,416)        0,1,9               3
--(288,-212.686419,416)        0,7,9               3
--(288,-212.686419,412)        0,7,8               3
--(276.686165,-208,412)        1,2,8               3
--(276.686165,-208,416)        1,2,9               3
--(272,-212.686419,412)        2,3,8               3
--(272,-212.686419,416)        2,3,9               3
--(272,-219.313777,412)        3,4,8               3
--(272,-219.313777,416)        3,4,9               3
--(276.686165,-224,412)        4,5,8               3
--(276.686165,-224,416)        4,5,9               3
--(283.313585,-224,412)        5,6,8               3
--(283.313585,-224,416)        5,6,9               3
--(288,-219.313777,412)        6,7,8               3
--(288,-219.313777,416)        6,7,9               3
-+(283.313585,-208,460)        0,1,8               3
-+(283.313585,-208,464)        0,1,9               3
-+(288,-212.686419,464)        0,7,9               3
-+(288,-212.686419,460)        0,7,8               3
-+(276.686165,-208,460)        1,2,8               3
-+(276.686165,-208,464)        1,2,9               3
-+(272,-212.686419,460)        2,3,8               3
-+(272,-212.686419,464)        2,3,9               3
-+(272,-219.313777,460)        3,4,8               3
-+(272,-219.313777,464)        3,4,9               3
-+(276.686165,-224,460)        4,5,8               3
-+(276.686165,-224,464)        4,5,9               3
-+(283.313585,-224,460)        5,6,8               3
-+(283.313585,-224,464)        5,6,9               3
-+(288,-219.313777,460)        6,7,8               3
-+(288,-219.313777,464)        6,7,9               3
- 
- Brush284: 16 vertices
- coord                        polys            refs
--(43.313585,188,412)          0,1,8               3
--(43.313585,188,416)          0,1,9               3
--(48,183.313581,416)          0,7,9               3
--(48,183.313581,412)          0,7,8               3
--(36.686165,188,412)          1,2,8               3
--(36.686165,188,416)          1,2,9               3
--(32,183.313581,412)          2,3,8               3
--(32,183.313581,416)          2,3,9               3
--(32,176.686223,412)          3,4,8               3
--(32,176.686223,416)          3,4,9               3
--(36.686165,172,412)          4,5,8               3
--(36.686165,172,416)          4,5,9               3
--(43.313585,172,412)          5,6,8               3
--(43.313585,172,416)          5,6,9               3
--(48,176.686223,412)          6,7,8               3
--(48,176.686223,416)          6,7,9               3
-+(43.313585,188,460)          0,1,8               3
-+(43.313585,188,464)          0,1,9               3
-+(48,183.313581,464)          0,7,9               3
-+(48,183.313581,460)          0,7,8               3
-+(36.686165,188,460)          1,2,8               3
-+(36.686165,188,464)          1,2,9               3
-+(32,183.313581,460)          2,3,8               3
-+(32,183.313581,464)          2,3,9               3
-+(32,176.686223,460)          3,4,8               3
-+(32,176.686223,464)          3,4,9               3
-+(36.686165,172,460)          4,5,8               3
-+(36.686165,172,464)          4,5,9               3
-+(43.313585,172,460)          5,6,8               3
-+(43.313585,172,464)          5,6,9               3
-+(48,176.686223,460)          6,7,8               3
-+(48,176.686223,464)          6,7,9               3
- 
- Brush132: 8 vertices
- coord                        polys            refs
--(448,48,416)                 0,3,5               3
--(448,-64,416)                0,3,4               3
--(452,-64,416)                0,2,4               3
--(452,48,416)                 0,2,5               3
--(452,48,414)                 1,2,5               3
--(452,-64,414)                1,2,4               3
--(448,-64,414)                1,3,4               3
--(448,48,414)                 1,3,5               3
-+(448,48,464)                 0,3,5               3
-+(448,-64,464)                0,3,4               3
-+(452,-64,464)                0,2,4               3
-+(452,48,464)                 0,2,5               3
-+(452,48,462)                 1,2,5               3
-+(452,-64,462)                1,2,4               3
-+(448,-64,462)                1,3,4               3
-+(448,48,462)                 1,3,5               3
- 
- Brush74: 8 vertices
- coord                        polys            refs
--(448,64,416)                 0,3,5               3
--(448,-48,416)                0,3,4               3
--(452,-48,416)                0,2,4               3
--(452,64,416)                 0,2,5               3
--(452,64,414)                 1,2,5               3
--(452,-48,414)                1,2,4               3
--(448,-48,414)                1,3,4               3
--(448,64,414)                 1,3,5               3
-+(448,64,464)                 0,3,5               3
-+(448,-48,464)                0,3,4               3
-+(452,-48,464)                0,2,4               3
-+(452,64,464)                 0,2,5               3
-+(452,64,462)                 1,2,5               3
-+(452,-48,462)                1,2,4               3
-+(448,-48,462)                1,3,4               3
-+(448,64,462)                 1,3,5               3
-</pre>
-        </details>
-      </div></div><div class="scen">
-      <button class="scenhead" onclick="toggleScen(this)">
-        <span class="chev">&#9656;</span><span class="stitle">Niche ceiling</span>
-      </button>
-      <div class="scenbody" hidden>
-        <p class="sdesc">The niche is its own separate room with its own ceiling. It's expected to keep its own height and not match the office's new one.</p>
-        <div class="carousel"><img class="cthumb" src="img/t2_niche.png" alt="[CORRECT] The niche is its own separate room with its own ceiling. It's expected to keep its own height and not match the office's new one. (highlighted: Brush663)" loading="lazy" tabindex="0" onclick="openLB('t2_niche',0)" onkeydown="if(event.key==='Enter')openLB('t2_niche',0)"><img class="cthumb" src="img/v6pan_C_0.png" alt="Photo, camera tilted upward — the height step at the boundary with the niche is visible in the top-right." loading="lazy" tabindex="0" onclick="openLB('t2_niche',1)" onkeydown="if(event.key==='Enter')openLB('t2_niche',1)"></div>
-        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/t2_niche.diff">diffs/t2_niche.diff</a>)</summary>
-          <p class="nochange">Zero-line diff — this aspect asserts these actors are UNCHANGED from the baseline, and they are.</p><pre class="diffpre"></pre>
-        </details>
-      </div></div><div class="scen">
-      <button class="scenhead" onclick="toggleScen(this)">
-        <span class="chev">&#9656;</span><span class="stitle">Overhead room lights</span>
-      </button>
-      <div class="scenbody" hidden>
-        <p class="sdesc">Every light sits the same distance below its ceiling, room-wide — a fixed convention, not a mount to the ceiling surface. They must stay put.</p>
-        <div class="carousel"><img class="cthumb" src="img/t2_lights.png" alt="[CORRECT] Every light sits the same distance below its ceiling, room-wide — a fixed convention, not a mount to the ceiling surface. They must stay put. (highlighted: Light156, Light103, Light318, Light86, Light120)" loading="lazy" tabindex="0" onclick="openLB('t2_lights',0)" onkeydown="if(event.key==='Enter')openLB('t2_lights',0)"></div>
-        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="diffs/t2_lights.diff">diffs/t2_lights.diff</a>)</summary>
-          <p class="nochange">Zero-line diff — this aspect asserts these actors are UNCHANGED from the baseline, and they are.</p><pre class="diffpre"></pre>
-        </details>
       </div></div>
-      </div></div>
-  <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified, each assigned its OWN anchor by verified geometry (some fixtures split across both wall volumes). Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same pipeline. Diagrams: <code>actor diagram</code>, full-office framing throughout. Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>.</p>
+  <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified, each assigned its OWN anchor by verified geometry (some fixtures split across both wall volumes). Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same pipeline. Diagrams: <code>actor diagram</code>, cropped to the room this task edits (not the whole level). Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>.</p>
 </div>
 
 <div id="lb" class="lb" hidden>
@@ -983,7 +983,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 </div>
 
 <script>
-const CAROUSELS = {"t1__before": [{"src": "img/v4pan_before_0.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_1.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_2.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_3.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_4.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_5.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_6.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_7.png", "cap": "Panorama frame, before any edit."}], "t1_wall": [{"src": "img/t1_wall.png", "cap": "[CORRECT] The office is built from two wall volumes sharing one wall. Both must move out together, or the wall gets a step in it. (highlighted: Brush418, Brush420)"}], "t1_fixtures": [{"src": "img/t1_fixtures.png", "cap": "[CORRECT] The wall's own hardware is split across both wall volumes: the switch/recess/most trims sit on the south half (Brush418), the pilaster and its light sit on the north half (Brush420). Each moves with its OWN wall, not a single shared delta. (highlighted: Brush670, Brush161, Brush132, Brush203, Brush74, Brush152, Switch6, Brush869, Light14)"}], "t1_safe": [{"src": "img/t1_safe.png", "cap": "[CORRECT] A wall-mounted display shelf has a real hidden safe built into its back, entirely on the north wall volume (Brush420). The whole unit and its contents must move together with it. (highlighted: Brush766, Brush364, Brush873, Brush592, Light149, Vase3, Vase4, BookClosed1, NanoKey0, WeaponModRecoil0)"}, {"src": "img/v7photo_safe_before.png", "cap": "Before: the trophy shelf \u2014 a vase, a polished rock, a closed book, and a nanokey on display."}, {"src": "img/v7photo_safe_fixed.png", "cap": "Correct: the whole shelf unit, including the hidden safe built into its back, moved out together with the wall."}, {"src": "img/v7photo_safe_side.png", "cap": "Side view showing the shelf is a real wooden cabinet built into the wall, with actual depth."}, {"src": "img/v7photo_safe_behind.png", "cap": "The space directly behind the safe: a sealed, empty dead-end \u2014 nothing else back there."}], "t1_flags": [{"src": "img/t1_flags.png", "cap": "[CORRECT] Two flagpoles stand in opposite corners of the room, anchored to DIFFERENT wall volumes: FlagPole3 to the north wall (Brush420), FlagPole4 to the south wall (Brush418). Each must move with its own corner's wall. (highlighted: FlagPole3, FlagPole4)"}, {"src": "img/v7photo_flags_after.png", "cap": "Photo confirming a flag sits flush back in its corner after the move."}], "t1_niche": [{"src": "img/t1_niche.png", "cap": "[CORRECT] This niche is a genuinely separate small room built against the south wall volume (Brush418), not part of the wall itself. It must move so it stays flush against it. (highlighted: Brush663, Brush1, Brush138, Brush140, Brush148, Brush164, Brush168, Brush1158, Brush1550, Brush1551, OrdersTrigger5, Light6)"}], "t2__before": [{"src": "img/v6pan_beforeceil_0.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_1.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_2.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_3.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_4.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_5.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_6.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_7.png", "cap": "Panorama frame, before any edit."}], "t2_ceil": [{"src": "img/t2_ceil.png", "cap": "[CORRECT] Like the east wall, the ceiling spans two wall volumes sharing one surface. Both must rise together, or the ceiling gets a step in it. (highlighted: Brush418, Brush420)"}], "t2_fixtures": [{"src": "img/t2_fixtures.png", "cap": "[CORRECT] Three recessed light panels and two corner trim caps are set into the ceiling, split across both wall volumes: most sit over the south half (Brush418), one panel sits over the north half (Brush420). Each rises with its own half. (highlighted: Brush285, Brush295, Brush284, Brush132, Brush74)"}, {"src": "img/v6pan_C_0.png", "cap": "Photo, camera tilted upward, showing the raised ceiling with one of the light panels visible."}], "t2_niche": [{"src": "img/t2_niche.png", "cap": "[CORRECT] The niche is its own separate room with its own ceiling. It's expected to keep its own height and not match the office's new one. (highlighted: Brush663)"}, {"src": "img/v6pan_C_0.png", "cap": "Photo, camera tilted upward \u2014 the height step at the boundary with the niche is visible in the top-right."}], "t2_lights": [{"src": "img/t2_lights.png", "cap": "[CORRECT] Every light sits the same distance below its ceiling, room-wide \u2014 a fixed convention, not a mount to the ceiling surface. They must stay put. (highlighted: Light156, Light103, Light318, Light86, Light120)"}]};
+const CAROUSELS = {"unatco_ceiling__before": [{"src": "img/unatco_ceiling/pan_before_0.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_ceiling/pan_before_1.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_ceiling/pan_before_2.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_ceiling/pan_before_3.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_ceiling/pan_before_4.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_ceiling/pan_before_5.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_ceiling/pan_before_6.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_ceiling/pan_before_7.png", "cap": "Panorama frame, before any edit."}], "unatco_ceiling__ceil": [{"src": "img/unatco_ceiling/ceil.png", "cap": "[CORRECT] Like the east wall, the ceiling spans two wall volumes sharing one surface. Both must rise together, or the ceiling gets a step in it. (highlighted: Brush418, Brush420)"}], "unatco_ceiling__fixtures": [{"src": "img/unatco_ceiling/fixtures.png", "cap": "[CORRECT] Three recessed light panels and two corner trim caps are set into the ceiling, split across both wall volumes: most sit over the south half (Brush418), one panel sits over the north half (Brush420). Each rises with its own half. (highlighted: Brush285, Brush295, Brush284, Brush132, Brush74)"}, {"src": "img/unatco_ceiling/pan_after_0.png", "cap": "Photo, camera tilted upward, showing the raised ceiling with one of the light panels visible."}], "unatco_ceiling__niche": [{"src": "img/unatco_ceiling/niche.png", "cap": "[CORRECT] The niche is its own separate room with its own ceiling. It's expected to keep its own height and not match the office's new one. (highlighted: Brush663)"}, {"src": "img/unatco_ceiling/pan_after_0.png", "cap": "Photo, camera tilted upward \u2014 the height step at the boundary with the niche is visible in the top-right."}], "unatco_ceiling__lights": [{"src": "img/unatco_ceiling/lights.png", "cap": "[CORRECT] Every light sits the same distance below its ceiling, room-wide \u2014 a fixed convention, not a mount to the ceiling surface. They must stay put. (highlighted: Light156, Light103, Light318, Light86, Light120)"}], "unatco_widen__before": [{"src": "img/unatco_widen/pan_before_0.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_widen/pan_before_1.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_widen/pan_before_2.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_widen/pan_before_3.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_widen/pan_before_4.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_widen/pan_before_5.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_widen/pan_before_6.png", "cap": "Panorama frame, before any edit."}, {"src": "img/unatco_widen/pan_before_7.png", "cap": "Panorama frame, before any edit."}], "unatco_widen__wall": [{"src": "img/unatco_widen/wall.png", "cap": "[CORRECT] The office is built from two wall volumes sharing one wall. Both must move out together, or the wall gets a step in it. (highlighted: Brush418, Brush420)"}], "unatco_widen__fixtures": [{"src": "img/unatco_widen/fixtures.png", "cap": "[CORRECT] The wall's own hardware is split across both wall volumes: the switch/recess/most trims sit on the south half (Brush418), the pilaster and its light sit on the north half (Brush420). Each moves with its OWN wall, not a single shared delta. (highlighted: Brush670, Brush161, Brush132, Brush203, Brush74, Brush152, Switch6, Brush869, Light14)"}], "unatco_widen__safe": [{"src": "img/unatco_widen/safe.png", "cap": "[CORRECT] A wall-mounted display shelf has a real hidden safe built into its back, entirely on the north wall volume (Brush420). The whole unit and its contents must move together with it. (highlighted: Brush766, Brush364, Brush873, Brush592, Light149, Vase3, Vase4, BookClosed1, NanoKey0, WeaponModRecoil0)"}, {"src": "img/unatco_widen/photo_safe_before.png", "cap": "Before: the trophy shelf \u2014 a vase, a polished rock, a closed book, and a nanokey on display."}, {"src": "img/unatco_widen/photo_safe_fixed.png", "cap": "Correct: the whole shelf unit, including the hidden safe built into its back, moved out together with the wall."}, {"src": "img/unatco_widen/photo_safe_side.png", "cap": "Side view showing the shelf is a real wooden cabinet built into the wall, with actual depth."}, {"src": "img/unatco_widen/photo_safe_behind.png", "cap": "The space directly behind the safe: a sealed, empty dead-end \u2014 nothing else back there."}], "unatco_widen__flags": [{"src": "img/unatco_widen/flags.png", "cap": "[CORRECT] Two flagpoles stand in opposite corners of the room, anchored to DIFFERENT wall volumes: FlagPole3 to the north wall (Brush420), FlagPole4 to the south wall (Brush418). Each must move with its own corner's wall. (highlighted: FlagPole3, FlagPole4)"}, {"src": "img/unatco_widen/photo_flags_after.png", "cap": "Photo confirming a flag sits flush back in its corner after the move."}], "unatco_widen__niche": [{"src": "img/unatco_widen/niche.png", "cap": "[CORRECT] This niche is a genuinely separate small room built against the south wall volume (Brush418), not part of the wall itself. It must move so it stays flush against it. (highlighted: Brush663, Brush1, Brush138, Brush140, Brush148, Brush164, Brush168, Brush1158, Brush1550, Brush1551, OrdersTrigger5, Light6)"}]};
 let lbScen = null, lbIdx = 0;
 
 function toggleTask(btn){

@@ -1,14 +1,15 @@
-"""For every scenario in spec.py: dump each member actor's normalized state
-(brush vertex list for brushes, effective Location for point actors) from
-the baseline and the gold trunk, and write a REAL unified diff (diff -u) --
-this is the human-readable artifact on the reference page. No custom JSON
-ops vocabulary; if a subagent's trunk is dumped the same way, this is
-directly comparable the same way any two revisions are.
+"""For every scenario in every specs/<id>.py: dump each member actor's
+normalized state (brush vertex list for brushes, effective Location for
+point actors) from the baseline and the gold trunk, and write a REAL unified
+diff (diff -u) to diffs/<task_id>/<scenario_id>.diff -- this is the
+human-readable artifact on the reference page. No custom JSON ops
+vocabulary; if a subagent's trunk is dumped the same way, this is directly
+comparable the same way any two revisions are.
 """
 import difflib, os, pathlib, subprocess, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from spec import TASKS
+from registry import TASKS
 from build_gold import WT, PY, BASE_TRUNKS_DIR
 
 ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference")
@@ -32,17 +33,19 @@ def dump_members(project: pathlib.Path, members: list[str]) -> str:
     return "\n".join(lines)
 
 def gen_task_diffs(task_id: str):
-    spec = TASKS[task_id]
-    baseline = BASE_TRUNKS_DIR / spec["base_trunk"]
+    task = TASKS[task_id]
+    baseline = BASE_TRUNKS_DIR / task["base_trunk"]
     gold = GOLD_CACHE / task_id
-    for scen_id, scen in spec["scenarios"].items():
+    out_dir = DIFFS / task_id
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for scen_id, scen in task["scenarios"].items():
         before = dump_members(baseline, scen["members"])
         after = dump_members(gold, scen["members"])
         diff_lines = list(difflib.unified_diff(
             before.splitlines(keepends=True), after.splitlines(keepends=True),
-            fromfile=f"before/{scen_id}", tofile=f"after/{scen_id}"))
-        (DIFFS / f"{scen_id}.diff").write_text("".join(diff_lines))
-        print("wrote", f"{scen_id}.diff", f"({len(diff_lines)} lines)")
+            fromfile=f"before/{task_id}/{scen_id}", tofile=f"after/{task_id}/{scen_id}"))
+        (out_dir / f"{scen_id}.diff").write_text("".join(diff_lines))
+        print("wrote", f"{task_id}/{scen_id}.diff", f"({len(diff_lines)} lines)")
 
 if __name__ == "__main__":
     DIFFS.mkdir(parents=True, exist_ok=True)

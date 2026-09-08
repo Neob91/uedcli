@@ -1,13 +1,13 @@
-"""Build the gold (fully-correct) trunk for a task from spec.py: apply every
-`update(target="corners")` entry's own op, then move every `anchor` entry by
-its target anchor's task delta (since in the gold trunk the anchor's actual
-delta IS the task delta). `update(target="unchanged")` entries get no
-operation -- they stay exactly as the baseline left them.
+"""Build the gold (fully-correct) trunk for a task from its specs/<id>.py:
+apply every `update(target="corners")` entry's own op, then move every
+`anchor` entry by its target anchor's task delta (since in the gold trunk
+the anchor's actual delta IS the task delta). `update(target="unchanged")`
+entries get no operation -- they stay exactly as the baseline left them.
 """
 import os, shutil, subprocess, sys, pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from spec import TASKS
+from registry import TASKS
 
 WT = "/workspace/uedcli/.claude/worktrees/geom-eval"
 PY = "/workspace/uedcli/.venv/bin/python"

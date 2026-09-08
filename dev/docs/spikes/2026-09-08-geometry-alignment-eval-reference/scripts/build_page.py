@@ -1,65 +1,45 @@
-"""Build index.html from spec.py (titles/notes/view/members) plus the real
-.diff files under diffs/ and a small set of hand-captured supplementary
-photos already committed under img/ that no diff drives."""
-import base64, pathlib, sys
+"""Build index.html from every specs/<id>.py's `before`/`scenarios` (titles,
+notes, view, members, extra_photos) plus the real .diff files under diffs/.
+No task metadata lives in this file -- add a new task by adding a new
+specs/<file>.py, not by editing this script."""
+import json, pathlib, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from spec import TASKS
+from registry import TASKS
 
 ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference")
 DEST_IMG = ROOT / "img"
 DIFFS = ROOT / "diffs"
 
-used = set()
-def img(name):
-    used.add(name)
-    return f"img/{name}.png"
-
-EXTRA_PHOTOS = {
- "t1_safe": [("v7photo_safe_before","Before: the trophy shelf — a vase, a polished rock, a closed book, and a nanokey on display."),
-             ("v7photo_safe_fixed","Correct: the whole shelf unit, including the hidden safe built into its back, moved out together with the wall."),
-             ("v7photo_safe_side","Side view showing the shelf is a real wooden cabinet built into the wall, with actual depth."),
-             ("v7photo_safe_behind","The space directly behind the safe: a sealed, empty dead-end — nothing else back there.")],
- "t1_flags": [("v7photo_flags_after","Photo confirming a flag sits flush back in its corner after the move.")],
- "t2_fixtures": [("v6pan_C_0","Photo, camera tilted upward, showing the raised ceiling with one of the light panels visible.")],
- "t2_niche": [("v6pan_C_0","Photo, camera tilted upward — the height step at the boundary with the niche is visible in the top-right.")],
-}
-
-TASK_META = {
- "t1": dict(title="Task 1 — Widen the office",
-   req="&ldquo;Manderley&rsquo;s office is too narrow. Widen it eastward by 48 units &mdash; move its east wall out.&rdquo;",
-   before_diags=[("v4_before_top","Top-down plan of the office before any change. It's built from TWO separate wall volumes that share one east wall (the south half is brush Brush418, the north half is brush Brush420) — a detail invisible to a player, but important for widening the wall correctly."),
-                 ("v4_before_side","Side view (elevation) of the same office before any change, for height context.")],
-   before_photos=[f"v4pan_before_{i}" for i in range(8)]),
- "t2": dict(title="Task 2 — Raise the ceiling",
-   req="&ldquo;Manderley&rsquo;s office feels cramped. Raise its ceiling by 48 units.&rdquo;",
-   before_diags=[("v4_before_side","Side view (elevation) of the office before any change — the ceiling is flat at z=416, spanning both wall volumes (Brush418 south, Brush420 north)."),
-                 ("v4_before_top","Top-down plan of the same office, for footprint context.")],
-   before_photos=[f"v6pan_beforeceil_{i}" for i in range(8)]),
-}
+used = set()  # (task_id, name) pairs actually referenced, for the missing-file check
+def img(task_id, name):
+    used.add((task_id, name))
+    return f"img/{task_id}/{name}.png"
 
 ALL_CAROUSELS = {}
 
-def scenario_images(scen_id, note, members):
+def scenario_images(task_id, scen_id, note, members):
     imgs = [(scen_id, f"[CORRECT] {note} (highlighted: {', '.join(members)})")]
-    imgs += EXTRA_PHOTOS.get(scen_id, [])
+    imgs += TASKS[task_id]["scenarios"][scen_id].get("extra_photos", [])
     return imgs
 
-def carousel_html(scen_id, images):
+def carousel_html(task_id, scen_id, images):
+    key = f"{task_id}__{scen_id}"
     items, thumbs = [], ""
     for i, (name, cap) in enumerate(images):
-        items.append({"src": img(name), "cap": cap})
-        thumbs += (f'<img class="cthumb" src="{img(name)}" alt="{cap}" loading="lazy" tabindex="0" '
-                   f'onclick="openLB(\'{scen_id}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{scen_id}\',{i})">')
-    ALL_CAROUSELS[scen_id] = items
+        items.append({"src": img(task_id, name), "cap": cap})
+        thumbs += (f'<img class="cthumb" src="{img(task_id, name)}" alt="{cap}" loading="lazy" tabindex="0" '
+                   f'onclick="openLB(\'{key}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{key}\',{i})">')
+    ALL_CAROUSELS[key] = items
     return thumbs
 
-def scenario_card(scen_id, scen):
-    images = scenario_images(scen_id, scen["note"], scen["members"])
-    thumbs = carousel_html(scen_id, images)
-    diff_text = (DIFFS / f"{scen_id}.diff").read_text()
+def scenario_card(task_id, scen_id, scen):
+    images = scenario_images(task_id, scen_id, scen["note"], scen["members"])
+    thumbs = carousel_html(task_id, scen_id, images)
+    diff_path = DIFFS / task_id / f"{scen_id}.diff"
+    diff_text = diff_path.read_text()
     diff_note = "" if diff_text.strip() else "<p class=\"nochange\">Zero-line diff — this aspect asserts these actors are UNCHANGED from the baseline, and they are.</p>"
-    diff_rel = f"diffs/{scen_id}.diff"
+    diff_rel = f"diffs/{task_id}/{scen_id}.diff"
     return f"""<div class="scen">
       <button class="scenhead" onclick="toggleScen(this)">
         <span class="chev">&#9656;</span><span class="stitle">{scen['title']}</span>
@@ -72,22 +52,22 @@ def scenario_card(scen_id, scen):
         </details>
       </div></div>"""
 
-def task_block(task_id, spec):
-    meta = TASK_META[task_id]
-    diag_html = "".join(f'<figure class="dg"><img src="{img(n)}" alt="{c}" onclick="openLB(\'{task_id}__before\',{i})"><figcaption>{c}</figcaption></figure>'
-                         for i, (n, c) in enumerate(meta["before_diags"]))
+def task_block(task_id, task):
+    before = task["before"]
+    diag_html = "".join(f'<figure class="dg"><img src="{img(task_id, n)}" alt="{c}" onclick="openLB(\'{task_id}__before\',{i})"><figcaption>{c}</figcaption></figure>'
+                         for i, (n, c) in enumerate(before["diags"]))
     bid = f"{task_id}__before"
-    ALL_CAROUSELS[bid] = [{"src": img(n), "cap": "Panorama frame, before any edit."} for n in meta["before_photos"]]
-    before_thumbs = "".join(f'<img class="cthumb" src="{img(n)}" alt="panorama" loading="lazy" tabindex="0" '
+    ALL_CAROUSELS[bid] = [{"src": img(task_id, n), "cap": "Panorama frame, before any edit."} for n in before["photos"]]
+    before_thumbs = "".join(f'<img class="cthumb" src="{img(task_id, n)}" alt="panorama" loading="lazy" tabindex="0" '
                              f'onclick="openLB(\'{bid}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{bid}\',{i})">'
-                             for i, n in enumerate(meta["before_photos"]))
-    scen_html = "".join(scenario_card(scen_id, scen) for scen_id, scen in spec["scenarios"].items())
+                             for i, n in enumerate(before["photos"]))
+    scen_html = "".join(scenario_card(task_id, scen_id, scen) for scen_id, scen in task["scenarios"].items())
     return f"""<div class="taskblk">
       <button class="taskhead" onclick="toggleTask(this)">
-        <span class="tchev">&#9656;</span><h2>{meta['title']}</h2>
+        <span class="tchev">&#9656;</span><h2>{task['title']}</h2>
       </button>
       <div class="taskbody" hidden>
-        <div class="task"><span class="t">REQUEST:</span> {meta['req']}</div>
+        <div class="task"><span class="t">REQUEST:</span> {task['req']}</div>
         <div class="beforeblk">
           <div class="diagrams">{diag_html}</div>
           <div class="striplabel">360° panorama tour, before any edit</div>
@@ -97,9 +77,7 @@ def task_block(task_id, spec):
         {scen_html}
       </div></div>"""
 
-BODY = "".join(task_block(tid, spec) for tid, spec in TASKS.items())
-
-import json
+BODY = "".join(task_block(tid, task) for tid, task in TASKS.items())
 CAROUSEL_JSON = json.dumps(ALL_CAROUSELS)
 
 HTML = r"""<!doctype html>
@@ -176,10 +154,10 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
   <p class="eyebrow">uedcli · reference solutions · batch 1 of 5 · UNATCO HQ</p>
   <h1 class="lede">Reference solutions to validate &mdash; per-aspect, diff-generated.</h1>
   <p class="sub">Each task is collapsed by default &mdash; open one and the previous one closes. Inside, each aspect of the change is its own collapsible scenario, showing the fully-correct outcome with just that aspect's actors highlighted. Click any picture to enlarge; arrows cycle through that scenario's images; the enlarged view always shows its caption.</p>
-  <p class="pipeline"><b>Every picture is generated, never hand-built:</b> each scenario is backed by a REAL <code>diff -u</code> (not a custom format) between the baseline and the fully-correct trunk, over each actor's normalized state (brush corners, or Location). Grading is separate from this display grouping: a flat per-task oracle (<code>oracle/&lt;task&gt;.json</code>) classifies each actor as an ANCHOR (the task's own exact delta, e.g. "+48 east"), a DEPENDENT (must match its OWN anchor's actual delta — the wall volume it's physically attached to, verified per-actor, not one shared number), or UNCHANGED. <code>check_trunk.py</code> grades any trunk against it.</p>
+  <p class="pipeline"><b>Every picture is generated, never hand-built:</b> each scenario is backed by a REAL <code>diff -u</code> (not a custom format) between the baseline and the fully-correct trunk, over each actor's normalized state (brush corners, or Location). Grading is separate from this display grouping: a flat per-task oracle (<code>oracle/&lt;task&gt;.json</code>) classifies each actor as an <code>update</code> (an absolute target — a task-pinned delta, or "= baseline"), an <code>anchor</code> (must match a SPECIFIC other actor's actual delta — the wall volume it's physically attached to, verified per-actor, not one shared number), or (documented, not yet needed) <code>create</code>/<code>delete</code>. <code>check_trunk.py</code> grades any trunk against it.</p>
   <p class="orient">Orientation, top-down plans (matching UnrealEd's own axis convention): <b>East = right</b> edge of the image, <b>West = left</b>, <b>North = up</b>, <b>South = down</b>. A small compass is burned into the top-left corner of every plan below as a direct check.</p>
   __BODY__
-  <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified, each assigned its OWN anchor by verified geometry (some fixtures split across both wall volumes). Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same pipeline. Diagrams: <code>actor diagram</code>, full-office framing throughout. Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>.</p>
+  <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified, each assigned its OWN anchor by verified geometry (some fixtures split across both wall volumes). Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same pipeline. Diagrams: <code>actor diagram</code>, cropped to the room this task edits (not the whole level). Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>.</p>
 </div>
 
 <div id="lb" class="lb" hidden>
@@ -245,6 +223,6 @@ document.getElementById('lb').addEventListener('click', e => {
 """
 (ROOT / "index.html").write_text(HTML.replace("__BODY__", BODY).replace("__CAROUSEL_JSON__", CAROUSEL_JSON))
 
-missing = [n for n in sorted(used) if not (DEST_IMG / f"{n}.png").exists()]
+missing = [f"{t}/{n}" for t, n in sorted(used) if not (DEST_IMG / t / f"{n}.png").exists()]
 print("wrote", ROOT / "index.html")
 print("images used:", len(used), "missing:", missing)
