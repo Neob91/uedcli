@@ -31,9 +31,9 @@ def build_gold(task_id: str, out_dir: pathlib.Path):
 
     # group dependents by their actual delta (== their anchor's task_delta) to move in batches
     by_delta = {}
-    for actor, anchor in spec["dependents"]:
-        d = tuple(anchor_delta[anchor])
-        by_delta.setdefault(d, []).append(actor)
+    for dep in spec["dependents"]:
+        d = tuple(anchor_delta[dep["anchor"]])
+        by_delta.setdefault(d, []).append(dep["actor"])
     for delta, actors in by_delta.items():
         args = [PY, "-m", "uedcli", "actor", "move", *actors, "--by", ",".join(str(c) for c in delta)]
         subprocess.run(args, cwd=WT, env=env, check=True, capture_output=True)

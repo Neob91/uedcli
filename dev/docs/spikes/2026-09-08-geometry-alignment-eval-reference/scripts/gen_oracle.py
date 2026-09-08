@@ -2,7 +2,9 @@
 -- no diff-text parsing. This is what a grading script consumes: for each
 actor, either an absolute task_delta (anchors) to check directly, an
 anchor-relative expectation (dependents: must match THAT anchor's actual
-delta in the trunk being graded) or an unchanged assertion.
+delta in the trunk being graded) or an unchanged assertion. Every entry
+carries its `why` through unchanged, for a human reviewing a mechanical
+FAILURE to judge whether the underlying intent was satisfied some other way.
 """
 import json, pathlib, sys
 
@@ -17,9 +19,9 @@ if __name__ == "__main__":
         oracle = dict(
             task=task_id,
             base_trunk=spec["base_trunk"],
-            anchors=[dict(actor=a["actor"], task_delta=a["task_delta"], at=a["at"]) for a in spec["anchors"]],
-            dependents=[dict(actor=actor, anchor=anchor) for actor, anchor in spec["dependents"]],
-            unchanged=list(spec["unchanged"]),
+            anchors=[dict(actor=a["actor"], task_delta=a["task_delta"], at=a["at"], why=a["why"]) for a in spec["anchors"]],
+            dependents=[dict(actor=d["actor"], anchor=d["anchor"], why=d["why"]) for d in spec["dependents"]],
+            unchanged=[dict(actor=u["actor"], why=u["why"]) for u in spec["unchanged"]],
         )
         (OUT / f"{task_id}.json").write_text(json.dumps(oracle, indent=2) + "\n")
         print("wrote", f"{task_id}.json", "->",

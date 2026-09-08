@@ -3,33 +3,68 @@ delta on these), which are DEPENDENTS (must match a SPECIFIC anchor's actual
 delta -- verified per-actor by geometry, not assumed uniform), and which must
 stay UNCHANGED. Scenario grouping (for the human page) is layered on top and
 does not affect grading, which always walks this flat per-actor structure.
+
+Every entry carries a `why` -- what the entry is actually FOR, in plain
+language. Grading cares about the RESULT, not how an agent got there:
+`why` isn't consumed by the mechanical check, it's for a human (or a
+follow-up review) reading a FAILURE, to judge whether the underlying intent
+was satisfied some other way the mechanical check didn't anticipate (e.g. a
+different but equally valid construction), rather than auto-failing it.
+
+`op` on anchors/dependents is deliberately narrow today (only `move` exists,
+since both current tasks are pure translations) but is a real field, not an
+assumption -- a future task needing `rotate`/`duplicate`/`resize`/`delete`
+adds a new op kind and a corresponding check in check_trunk.py, without
+restructuring this file's shape.
 """
 
 TASKS = {
  "t1": dict(
    base_trunk="unatco_gt",
    anchors=[
-     dict(actor="Brush418", kind="brush_vertex_move",
-          at=[[448,-288,416],[448,64,416],[448,64,240],[448,-288,240]], task_delta=[48,0,0]),
-     dict(actor="Brush420", kind="brush_vertex_move",
-          at=[[448,64,416],[448,304,416],[448,304,240],[448,64,240]], task_delta=[48,0,0]),
+     dict(actor="Brush418", op="move", kind="brush_vertex_move",
+          at=[[448,-288,416],[448,64,416],[448,64,240],[448,-288,240]], task_delta=[48,0,0],
+          why="south wall of Manderley's office; the task's own east-widen target"),
+     dict(actor="Brush420", op="move", kind="brush_vertex_move",
+          at=[[448,64,416],[448,304,416],[448,304,240],[448,64,240]], task_delta=[48,0,0],
+          why="north wall of Manderley's office, shares the east wall with Brush418 at the y=64 seam -- must widen the same amount or the wall steps"),
    ],
-   # (actor, anchor) -- anchor verified from real geometry (which subtract's
-   # y-range the actor actually sits in), not assumed uniform across a scenario.
+   # anchor verified from real geometry (which wall volume's y-range the
+   # actor actually sits in), not assumed uniform across a scenario.
    dependents=[
-     ("Brush670","Brush418"), ("Brush161","Brush418"), ("Brush132","Brush418"),
-     ("Brush203","Brush418"), ("Brush74","Brush418"), ("Brush152","Brush418"),
-     ("Switch6","Brush418"),
-     ("Brush869","Brush420"), ("Light14","Brush420"),
-     ("Brush766","Brush420"), ("Brush364","Brush420"), ("Brush873","Brush420"),
-     ("Brush592","Brush420"), ("Light149","Brush420"), ("Vase3","Brush420"),
-     ("Vase4","Brush420"), ("BookClosed1","Brush420"), ("NanoKey0","Brush420"),
-     ("WeaponModRecoil0","Brush420"),
-     ("FlagPole3","Brush420"), ("FlagPole4","Brush418"),
-     ("Brush663","Brush418"), ("Brush1","Brush418"), ("Brush138","Brush418"),
-     ("Brush140","Brush418"), ("Brush148","Brush418"), ("Brush164","Brush418"),
-     ("Brush168","Brush418"), ("Brush1158","Brush418"), ("Brush1550","Brush418"),
-     ("Brush1551","Brush418"), ("OrdersTrigger5","Brush418"), ("Light6","Brush418"),
+     dict(actor="Brush670", anchor="Brush418", op="move", why="switch recess, cut into the south wall"),
+     dict(actor="Brush161", anchor="Brush418", op="move", why="south wall trim board"),
+     dict(actor="Brush132", anchor="Brush418", op="move", why="south wall trim board"),
+     dict(actor="Brush203", anchor="Brush418", op="move", why="south wall trim board"),
+     dict(actor="Brush74", anchor="Brush418", op="move", why="south wall trim board"),
+     dict(actor="Brush152", anchor="Brush418", op="move", why="south wall fixture"),
+     dict(actor="Switch6", anchor="Brush418", op="move", why="the wall light switch itself, mounted in Brush670's recess"),
+     dict(actor="Brush869", anchor="Brush420", op="move", why="decorative pilaster on the north wall"),
+     dict(actor="Light14", anchor="Brush420", op="move", why="the pilaster's own light"),
+     dict(actor="Brush766", anchor="Brush420", op="move", why="wall cavity holding the trophy shelf + hidden safe, cut into the north wall"),
+     dict(actor="Brush364", anchor="Brush420", op="move", why="the safe's own interior geometry inside the cavity"),
+     dict(actor="Brush873", anchor="Brush420", op="move", why="the safe's own back panel inside the cavity -- moving the cavity without this orphans it mid-room (the original bug this eval caught)"),
+     dict(actor="Brush592", anchor="Brush420", op="move", why="the display shelf inside the cavity"),
+     dict(actor="Light149", anchor="Brush420", op="move", why="the shelf's own light"),
+     dict(actor="Vase3", anchor="Brush420", op="move", why="display item on the shelf"),
+     dict(actor="Vase4", anchor="Brush420", op="move", why="display item on the shelf"),
+     dict(actor="BookClosed1", anchor="Brush420", op="move", why="display item on the shelf"),
+     dict(actor="NanoKey0", anchor="Brush420", op="move", why="display item on the shelf"),
+     dict(actor="WeaponModRecoil0", anchor="Brush420", op="move", why="display item on the shelf"),
+     dict(actor="FlagPole3", anchor="Brush420", op="move", why="ceremonial flagpole anchored to the north wall's corner (~48u off two adjacent walls, not flush-mounted)"),
+     dict(actor="FlagPole4", anchor="Brush418", op="move", why="ceremonial flagpole anchored to the south wall's corner"),
+     dict(actor="Brush663", anchor="Brush418", op="move", why="the display niche -- a genuinely separate small room built against the south wall, must stay flush against it"),
+     dict(actor="Brush1", anchor="Brush418", op="move", why="niche interior detail brush"),
+     dict(actor="Brush138", anchor="Brush418", op="move", why="niche interior detail brush"),
+     dict(actor="Brush140", anchor="Brush418", op="move", why="niche interior detail brush"),
+     dict(actor="Brush148", anchor="Brush418", op="move", why="niche interior detail brush"),
+     dict(actor="Brush164", anchor="Brush418", op="move", why="niche interior detail brush"),
+     dict(actor="Brush168", anchor="Brush418", op="move", why="niche interior detail brush"),
+     dict(actor="Brush1158", anchor="Brush418", op="move", why="niche interior detail brush"),
+     dict(actor="Brush1550", anchor="Brush418", op="move", why="niche interior detail brush"),
+     dict(actor="Brush1551", anchor="Brush418", op="move", why="niche interior detail brush"),
+     dict(actor="OrdersTrigger5", anchor="Brush418", op="move", why="scripted trigger inside the niche"),
+     dict(actor="Light6", anchor="Brush418", op="move", why="the niche's own light"),
    ],
    unchanged=[],
    # scenario grouping for the human-readable page -- display only
@@ -53,16 +88,28 @@ TASKS = {
  "t2": dict(
    base_trunk="unatco_gt",
    anchors=[
-     dict(actor="Brush418", kind="brush_vertex_move",
-          at=[[128,-288,416],[448,-288,416],[448,64,416],[128,64,416]], task_delta=[0,0,48]),
-     dict(actor="Brush420", kind="brush_vertex_move",
-          at=[[-96,64,416],[448,64,416],[448,304,416],[-96,304,416]], task_delta=[0,0,48]),
+     dict(actor="Brush418", op="move", kind="brush_vertex_move",
+          at=[[128,-288,416],[448,-288,416],[448,64,416],[128,64,416]], task_delta=[0,0,48],
+          why="south wall's ceiling face; the task's own raise-ceiling target"),
+     dict(actor="Brush420", op="move", kind="brush_vertex_move",
+          at=[[-96,64,416],[448,64,416],[448,304,416],[-96,304,416]], task_delta=[0,0,48],
+          why="north wall's ceiling face, shares the ceiling with Brush418 at the y=64 seam -- must rise the same amount or the ceiling steps"),
    ],
    dependents=[
-     ("Brush285","Brush418"), ("Brush295","Brush418"), ("Brush132","Brush418"), ("Brush74","Brush418"),
-     ("Brush284","Brush420"),
+     dict(actor="Brush285", anchor="Brush418", op="move", why="recessed ceiling light panel over the south half"),
+     dict(actor="Brush295", anchor="Brush418", op="move", why="recessed ceiling light panel over the south half"),
+     dict(actor="Brush132", anchor="Brush418", op="move", why="ceiling trim cap over the south half"),
+     dict(actor="Brush74", anchor="Brush418", op="move", why="ceiling trim cap over the south half"),
+     dict(actor="Brush284", anchor="Brush420", op="move", why="recessed ceiling light panel over the north half"),
    ],
-   unchanged=["Brush663","Light156","Light103","Light318","Light86","Light120"],
+   unchanged=[
+     dict(actor="Brush663", why="the niche is its own separate room with its own ceiling -- expected to keep its own height, not match the office's new one"),
+     dict(actor="Light156", why="room light -- every light sits a fixed distance below its ceiling room-wide, not mounted to the surface"),
+     dict(actor="Light103", why="room light, same fixed-height convention"),
+     dict(actor="Light318", why="room light, same fixed-height convention"),
+     dict(actor="Light86", why="room light, same fixed-height convention"),
+     dict(actor="Light120", why="room light, same fixed-height convention"),
+   ],
    scenarios={
      "t2_ceil": dict(title="Ceiling (both halves of the room)", view="side",
        note="Like the east wall, the ceiling spans two wall volumes sharing one surface. Both must rise together, or the ceiling gets a step in it.",

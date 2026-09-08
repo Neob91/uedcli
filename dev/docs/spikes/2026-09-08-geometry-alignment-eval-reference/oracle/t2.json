@@ -30,7 +30,8 @@
           64,
           416
         ]
-      ]
+      ],
+      "why": "south wall's ceiling face; the task's own raise-ceiling target"
     },
     {
       "actor": "Brush420",
@@ -60,37 +61,61 @@
           304,
           416
         ]
-      ]
+      ],
+      "why": "north wall's ceiling face, shares the ceiling with Brush418 at the y=64 seam -- must rise the same amount or the ceiling steps"
     }
   ],
   "dependents": [
     {
       "actor": "Brush285",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "recessed ceiling light panel over the south half"
     },
     {
       "actor": "Brush295",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "recessed ceiling light panel over the south half"
     },
     {
       "actor": "Brush132",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "ceiling trim cap over the south half"
     },
     {
       "actor": "Brush74",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "ceiling trim cap over the south half"
     },
     {
       "actor": "Brush284",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "recessed ceiling light panel over the north half"
     }
   ],
   "unchanged": [
-    "Brush663",
-    "Light156",
-    "Light103",
-    "Light318",
-    "Light86",
-    "Light120"
+    {
+      "actor": "Brush663",
+      "why": "the niche is its own separate room with its own ceiling -- expected to keep its own height, not match the office's new one"
+    },
+    {
+      "actor": "Light156",
+      "why": "room light -- every light sits a fixed distance below its ceiling room-wide, not mounted to the surface"
+    },
+    {
+      "actor": "Light103",
+      "why": "room light, same fixed-height convention"
+    },
+    {
+      "actor": "Light318",
+      "why": "room light, same fixed-height convention"
+    },
+    {
+      "actor": "Light86",
+      "why": "room light, same fixed-height convention"
+    },
+    {
+      "actor": "Light120",
+      "why": "room light, same fixed-height convention"
+    }
   ]
 }

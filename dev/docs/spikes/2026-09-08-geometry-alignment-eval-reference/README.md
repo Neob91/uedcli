@@ -52,6 +52,12 @@ value" table can't tell "the flagpole is broken" apart from "the wall itself mov
 amount," and can't validate an equally-good alternative solution that got the relationship right at
 a slightly different absolute position.
 
+Grading only cares about the RESULT, not how an agent got there — every entry in `spec.py` also
+carries a `why`: what it's actually FOR, in plain language, not consumed by the mechanical check.
+`check_trunk.py` prints it under every FAILURE line. A mechanical failure isn't an automatic fail —
+it's a prompt to check whether the underlying intent was satisfied some other way the mechanical
+check didn't anticipate (a different, equally valid construction), before concluding it's wrong.
+
 ## Base trunks
 
 `unatco_gt` (untouched UNATCO baseline) lives in job-scratch, not this repo. Set

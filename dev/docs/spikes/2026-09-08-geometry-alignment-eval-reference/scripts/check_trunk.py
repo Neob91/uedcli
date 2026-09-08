@@ -63,7 +63,7 @@ def check_trunk(oracle_path: pathlib.Path, baseline: pathlib.Path, subject: path
         d = anchor_delta([tuple(c) for c in a["at"]], subject_corners)
         ok = close(d, tuple(a["task_delta"]))
         results.append(dict(actor=a["actor"], role="anchor", delta=d, expected=a["task_delta"],
-                             verdict="correct" if ok else "anchor_wrong"))
+                             verdict="correct" if ok else "anchor_wrong", why=a["why"]))
 
     anchor_actual_delta = {r["actor"]: r["delta"] for r in results}
 
@@ -79,14 +79,15 @@ def check_trunk(oracle_path: pathlib.Path, baseline: pathlib.Path, subject: path
         else:
             verdict = "touched_wrong"
         results.append(dict(actor=dep["actor"], role=f"dependent(of {dep['anchor']})",
-                             delta=d, expected=anchor_d, verdict=verdict))
+                             delta=d, expected=anchor_d, verdict=verdict, why=dep["why"]))
 
-    for actor in oracle["unchanged"]:
-        base_pos = read_position(baseline, actor)
-        sub_pos = read_position(subject, actor)
+    for u in oracle["unchanged"]:
+        base_pos = read_position(baseline, u["actor"])
+        sub_pos = read_position(subject, u["actor"])
         d = sub(sub_pos, base_pos)
         verdict = "correct" if close(d, (0, 0, 0)) else "touched_when_should_not_be"
-        results.append(dict(actor=actor, role="unchanged", delta=d, expected=(0, 0, 0), verdict=verdict))
+        results.append(dict(actor=u["actor"], role="unchanged", delta=d, expected=(0, 0, 0),
+                             verdict=verdict, why=u["why"]))
 
     return results
 
@@ -97,5 +98,12 @@ if __name__ == "__main__":
     for r in results:
         mark = "OK " if r["verdict"] == "correct" else "FAIL"
         print(f"{mark} {r['actor']:20} {r['role']:22} delta={r['delta']} expected={r['expected']} -> {r['verdict']}")
+        if r["verdict"] != "correct":
+            # Grading cares about outcome, not method: a mechanical FAILURE isn't
+            # necessarily wrong -- surface the intent so a reviewer can judge
+            # whether it was satisfied some other way this check didn't anticipate.
+            print(f"     intent: {r['why']}")
     print(f"\n{len(results)-n_bad}/{len(results)} correct")
+    if n_bad:
+        print(f"{n_bad} failure(s) above need review against their stated intent, not an automatic fail.")
     sys.exit(1 if n_bad else 0)

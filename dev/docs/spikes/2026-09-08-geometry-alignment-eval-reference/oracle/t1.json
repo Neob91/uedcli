@@ -30,7 +30,8 @@
           -288,
           240
         ]
-      ]
+      ],
+      "why": "south wall of Manderley's office; the task's own east-widen target"
     },
     {
       "actor": "Brush420",
@@ -60,141 +61,175 @@
           64,
           240
         ]
-      ]
+      ],
+      "why": "north wall of Manderley's office, shares the east wall with Brush418 at the y=64 seam -- must widen the same amount or the wall steps"
     }
   ],
   "dependents": [
     {
       "actor": "Brush670",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "switch recess, cut into the south wall"
     },
     {
       "actor": "Brush161",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "south wall trim board"
     },
     {
       "actor": "Brush132",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "south wall trim board"
     },
     {
       "actor": "Brush203",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "south wall trim board"
     },
     {
       "actor": "Brush74",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "south wall trim board"
     },
     {
       "actor": "Brush152",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "south wall fixture"
     },
     {
       "actor": "Switch6",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "the wall light switch itself, mounted in Brush670's recess"
     },
     {
       "actor": "Brush869",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "decorative pilaster on the north wall"
     },
     {
       "actor": "Light14",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "the pilaster's own light"
     },
     {
       "actor": "Brush766",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "wall cavity holding the trophy shelf + hidden safe, cut into the north wall"
     },
     {
       "actor": "Brush364",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "the safe's own interior geometry inside the cavity"
     },
     {
       "actor": "Brush873",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "the safe's own back panel inside the cavity -- moving the cavity without this orphans it mid-room (the original bug this eval caught)"
     },
     {
       "actor": "Brush592",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "the display shelf inside the cavity"
     },
     {
       "actor": "Light149",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "the shelf's own light"
     },
     {
       "actor": "Vase3",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "display item on the shelf"
     },
     {
       "actor": "Vase4",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "display item on the shelf"
     },
     {
       "actor": "BookClosed1",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "display item on the shelf"
     },
     {
       "actor": "NanoKey0",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "display item on the shelf"
     },
     {
       "actor": "WeaponModRecoil0",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "display item on the shelf"
     },
     {
       "actor": "FlagPole3",
-      "anchor": "Brush420"
+      "anchor": "Brush420",
+      "why": "ceremonial flagpole anchored to the north wall's corner (~48u off two adjacent walls, not flush-mounted)"
     },
     {
       "actor": "FlagPole4",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "ceremonial flagpole anchored to the south wall's corner"
     },
     {
       "actor": "Brush663",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "the display niche -- a genuinely separate small room built against the south wall, must stay flush against it"
     },
     {
       "actor": "Brush1",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "niche interior detail brush"
     },
     {
       "actor": "Brush138",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "niche interior detail brush"
     },
     {
       "actor": "Brush140",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "niche interior detail brush"
     },
     {
       "actor": "Brush148",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "niche interior detail brush"
     },
     {
       "actor": "Brush164",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "niche interior detail brush"
     },
     {
       "actor": "Brush168",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "niche interior detail brush"
     },
     {
       "actor": "Brush1158",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "niche interior detail brush"
     },
     {
       "actor": "Brush1550",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "niche interior detail brush"
     },
     {
       "actor": "Brush1551",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "niche interior detail brush"
     },
     {
       "actor": "OrdersTrigger5",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "scripted trigger inside the niche"
     },
     {
       "actor": "Light6",
-      "anchor": "Brush418"
+      "anchor": "Brush418",
+      "why": "the niche's own light"
     }
   ],
   "unchanged": []
