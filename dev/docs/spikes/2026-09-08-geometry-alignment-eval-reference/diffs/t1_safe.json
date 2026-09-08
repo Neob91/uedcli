@@ -1,0 +1,43 @@
+{
+  "id": "t1_safe",
+  "task": "t1",
+  "title": "Trophy shelf with a hidden wall safe",
+  "view": "top",
+  "note": "A wall-mounted display shelf has a real hidden safe built into its back. The whole unit and its contents must move together.",
+  "ops": [
+    {
+      "kind": "actor_move",
+      "actors": [
+        "Brush766",
+        "Brush364",
+        "Brush873",
+        "Brush592",
+        "Light149",
+        "Vase3",
+        "Vase4",
+        "BookClosed1",
+        "NanoKey0",
+        "WeaponModRecoil0"
+      ],
+      "by": [
+        48,
+        0,
+        0
+      ]
+    }
+  ],
+  "base_trunk": "unatco_gt",
+  "render_from": "t1_full",
+  "highlight": [
+    "Brush766",
+    "Brush364",
+    "Brush873",
+    "Brush592",
+    "Light149",
+    "Vase3",
+    "Vase4",
+    "BookClosed1",
+    "NanoKey0",
+    "WeaponModRecoil0"
+  ]
+}

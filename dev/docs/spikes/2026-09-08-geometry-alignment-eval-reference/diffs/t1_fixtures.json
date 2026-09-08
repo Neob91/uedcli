@@ -1,0 +1,41 @@
+{
+  "id": "t1_fixtures",
+  "task": "t1",
+  "title": "Wall-mounted fixtures (switch, trim, pilaster)",
+  "view": "top",
+  "note": "The wall's own hardware \u2014 a light switch, its recessed panel, corner trim boards, and a decorative pilaster \u2014 are physically part of the wall.",
+  "ops": [
+    {
+      "kind": "actor_move",
+      "actors": [
+        "Brush670",
+        "Brush161",
+        "Brush132",
+        "Brush203",
+        "Brush74",
+        "Brush152",
+        "Brush869",
+        "Light14",
+        "Switch6"
+      ],
+      "by": [
+        48,
+        0,
+        0
+      ]
+    }
+  ],
+  "base_trunk": "unatco_gt",
+  "render_from": "t1_full",
+  "highlight": [
+    "Brush670",
+    "Brush161",
+    "Brush132",
+    "Brush203",
+    "Brush74",
+    "Brush152",
+    "Brush869",
+    "Light14",
+    "Switch6"
+  ]
+}
