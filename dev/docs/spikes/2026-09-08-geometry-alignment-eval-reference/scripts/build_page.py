@@ -1,11 +1,12 @@
-"""Build index.html from the diffs/ (source of truth for the diagrams) plus
-a small set of hand-captured supplementary photos already committed under
-img/ (EXTRA_PHOTOS below) that no diff drives -- run after
-render_from_diff.py regenerates the diff-backed pictures.
-"""
-import json, pathlib
+"""Build index.html from spec.py (titles/notes/view/members) plus the real
+.diff files under diffs/ and a small set of hand-captured supplementary
+photos already committed under img/ that no diff drives."""
+import base64, pathlib, sys
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from spec import TASKS
+
+ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference")
 DEST_IMG = ROOT / "img"
 DIFFS = ROOT / "diffs"
 
@@ -14,9 +15,6 @@ def img(name):
     used.add(name)
     return f"img/{name}.png"
 
-# extra photos beyond the diff-rendered plan, keyed by scenario id -- these
-# are hand-captured evidence (a camera angle, a "before" panorama frame),
-# not something a diff generates; they must already exist under img/.
 EXTRA_PHOTOS = {
  "t1_safe": [("v7photo_safe_before","Before: the trophy shelf — a vase, a polished rock, a closed book, and a nanokey on display."),
              ("v7photo_safe_fixed","Correct: the whole shelf unit, including the hidden safe built into its back, moved out together with the wall."),
@@ -40,16 +38,10 @@ TASK_META = {
    before_photos=[f"v6pan_beforeceil_{i}" for i in range(8)]),
 }
 
-OP_DESC = {
- "brush_vertex_move": lambda op: f"brush <code>{op['actor']}</code>: move corners {op['at']} by {tuple(op['by'])}",
- "actor_move": lambda op: f"actors <code>{', '.join(op['actors'])}</code>: move by {tuple(op['by'])}",
- "assert_unchanged": lambda op: f"actors <code>{', '.join(op['actors'])}</code>: must stay unchanged from the baseline",
-}
-
 ALL_CAROUSELS = {}
 
-def scenario_images(scen_id, d):
-    imgs = [(d["id"], f"[CORRECT] {d['note']} (highlighted: {', '.join(d['highlight'])})")]
+def scenario_images(scen_id, note, members):
+    imgs = [(scen_id, f"[CORRECT] {note} (highlighted: {', '.join(members)})")]
     imgs += EXTRA_PHOTOS.get(scen_id, [])
     return imgs
 
@@ -62,24 +54,25 @@ def carousel_html(scen_id, images):
     ALL_CAROUSELS[scen_id] = items
     return thumbs
 
-def scenario_card(d):
-    images = scenario_images(d["id"], d)
-    thumbs = carousel_html(d["id"], images)
-    ops_html = "".join(f"<li>{OP_DESC[op['kind']](op)}</li>" for op in d["ops"])
-    diff_rel = f"diffs/{d['id']}.json"
+def scenario_card(scen_id, scen):
+    images = scenario_images(scen_id, scen["note"], scen["members"])
+    thumbs = carousel_html(scen_id, images)
+    diff_text = (DIFFS / f"{scen_id}.diff").read_text()
+    diff_note = "" if diff_text.strip() else "<p class=\"nochange\">Zero-line diff — this aspect asserts these actors are UNCHANGED from the baseline, and they are.</p>"
+    diff_rel = f"diffs/{scen_id}.diff"
     return f"""<div class="scen">
       <button class="scenhead" onclick="toggleScen(this)">
-        <span class="chev">&#9656;</span><span class="stitle">{d['title']}</span>
+        <span class="chev">&#9656;</span><span class="stitle">{scen['title']}</span>
       </button>
       <div class="scenbody" hidden>
-        <p class="sdesc">{d['note']}</p>
+        <p class="sdesc">{scen['note']}</p>
         <div class="carousel">{thumbs}</div>
-        <details class="diffbox"><summary>Diff — the exact ops this picture is generated from (<a href="{diff_rel}">{diff_rel}</a>)</summary>
-          <ul class="ops">{ops_html}</ul>
+        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="{diff_rel}">{diff_rel}</a>)</summary>
+          {diff_note}<pre class="diffpre">{diff_text}</pre>
         </details>
       </div></div>"""
 
-def task_block(task_id, scenario_diffs):
+def task_block(task_id, spec):
     meta = TASK_META[task_id]
     diag_html = "".join(f'<figure class="dg"><img src="{img(n)}" alt="{c}" onclick="openLB(\'{task_id}__before\',{i})"><figcaption>{c}</figcaption></figure>'
                          for i, (n, c) in enumerate(meta["before_diags"]))
@@ -88,7 +81,7 @@ def task_block(task_id, scenario_diffs):
     before_thumbs = "".join(f'<img class="cthumb" src="{img(n)}" alt="panorama" loading="lazy" tabindex="0" '
                              f'onclick="openLB(\'{bid}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{bid}\',{i})">'
                              for i, n in enumerate(meta["before_photos"]))
-    scen_html = "".join(scenario_card(d) for d in scenario_diffs)
+    scen_html = "".join(scenario_card(scen_id, scen) for scen_id, scen in spec["scenarios"].items())
     return f"""<div class="taskblk">
       <button class="taskhead" onclick="toggleTask(this)">
         <span class="tchev">&#9656;</span><h2>{meta['title']}</h2>
@@ -104,15 +97,9 @@ def task_block(task_id, scenario_diffs):
         {scen_html}
       </div></div>"""
 
-ASPECT_IDS = {
- "t1": ["t1_wall", "t1_fixtures", "t1_safe", "t1_flags", "t1_niche"],
- "t2": ["t2_ceil", "t2_fixtures", "t2_niche", "t2_lights"],
-}
-BODY = ""
-for task_id, ids in ASPECT_IDS.items():
-    diffs = [json.loads((DIFFS / f"{i}.json").read_text()) for i in ids]
-    BODY += task_block(task_id, diffs)
+BODY = "".join(task_block(tid, spec) for tid, spec in TASKS.items())
 
+import json
 CAROUSEL_JSON = json.dumps(ALL_CAROUSELS)
 
 HTML = r"""<!doctype html>
@@ -166,8 +153,9 @@ h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;letter-spacin
 .diffbox{margin:14px 0 0;font-size:13px}
 .diffbox summary{cursor:pointer;color:var(--gold-soft);font-family:var(--mono);font-size:12px}
 .diffbox a{color:var(--cyan)}
-.ops{margin:8px 0 0;padding-left:20px;color:var(--dim);font-family:var(--mono);font-size:12px;line-height:1.7}
-.ops code{color:var(--gold-soft)}
+.diffpre{margin:10px 0 0;padding:12px;background:#0d0e08;border:1px solid var(--line);border-radius:3px;overflow-x:auto;
+  color:var(--dim);font-family:var(--mono);font-size:11.5px;line-height:1.55;white-space:pre}
+.nochange{color:var(--gold-soft);font-family:var(--mono);font-size:12px;margin:10px 0 0}
 
 .foot{color:var(--faint);font-size:13px;font-family:var(--mono);margin-top:26px;border-top:1px solid var(--line);padding-top:14px}
 code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px 5px;border-radius:2px;color:var(--gold-soft)}
@@ -188,10 +176,10 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
   <p class="eyebrow">uedcli · reference solutions · batch 1 of 5 · UNATCO HQ</p>
   <h1 class="lede">Reference solutions to validate &mdash; per-aspect, diff-generated.</h1>
   <p class="sub">Each task is collapsed by default &mdash; open one and the previous one closes. Inside, each aspect of the change is its own collapsible scenario, showing the fully-correct outcome with just that aspect's actors highlighted. Click any picture to enlarge; arrows cycle through that scenario's images; the enlarged view always shows its caption.</p>
-  <p class="pipeline"><b>Every picture is generated, never hand-built:</b> each scenario is backed by a small JSON diff (<code>diffs/&lt;id&gt;.json</code>) — the exact before→after ops for that aspect. Rendering applies the WHOLE task's diff to the untouched baseline first, then highlights just this aspect's actors, so a picture can never drift out of sync with the trunk it claims to show (open the "Diff" box in any scenario to see the exact ops, or read the JSON directly).</p>
+  <p class="pipeline"><b>Every picture is generated, never hand-built:</b> each scenario is backed by a REAL <code>diff -u</code> (not a custom format) between the baseline and the fully-correct trunk, over each actor's normalized state (brush corners, or Location). Grading is separate from this display grouping: a flat per-task oracle (<code>oracle/&lt;task&gt;.json</code>) classifies each actor as an ANCHOR (the task's own exact delta, e.g. "+48 east"), a DEPENDENT (must match its OWN anchor's actual delta — the wall volume it's physically attached to, verified per-actor, not one shared number), or UNCHANGED. <code>check_trunk.py</code> grades any trunk against it.</p>
   <p class="orient">Orientation, top-down plans (matching UnrealEd's own axis convention): <b>East = right</b> edge of the image, <b>West = left</b>, <b>North = up</b>, <b>South = down</b>. A small compass is burned into the top-left corner of every plan below as a direct check.</p>
   __BODY__
-  <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified. Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same diff-driven pipeline. Diagrams: <code>actor diagram</code>, full-office framing throughout. Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>. Grading: for each scenario, apply the same ops/assertions to a subagent's trunk actor set and compare — the diff files are the oracle.</p>
+  <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified, each assigned its OWN anchor by verified geometry (some fixtures split across both wall volumes). Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same pipeline. Diagrams: <code>actor diagram</code>, full-office framing throughout. Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>.</p>
 </div>
 
 <div id="lb" class="lb" hidden>

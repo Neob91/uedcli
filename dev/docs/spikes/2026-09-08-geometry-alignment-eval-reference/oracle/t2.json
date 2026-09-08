@@ -1,13 +1,14 @@
 {
-  "id": "t2_ceil",
   "task": "t2",
-  "title": "Ceiling (both halves of the room)",
-  "view": "side",
-  "note": "Like the east wall, the ceiling spans two wall volumes sharing one surface. Both must rise together, or the ceiling gets a step in it.",
-  "ops": [
+  "base_trunk": "unatco_gt",
+  "anchors": [
     {
-      "kind": "brush_vertex_move",
       "actor": "Brush418",
+      "task_delta": [
+        0,
+        0,
+        48
+      ],
       "at": [
         [
           128,
@@ -29,16 +30,15 @@
           64,
           416
         ]
-      ],
-      "by": [
-        0,
-        0,
-        48
       ]
     },
     {
-      "kind": "brush_vertex_move",
       "actor": "Brush420",
+      "task_delta": [
+        0,
+        0,
+        48
+      ],
       "at": [
         [
           -96,
@@ -60,18 +60,37 @@
           304,
           416
         ]
-      ],
-      "by": [
-        0,
-        0,
-        48
       ]
     }
   ],
-  "base_trunk": "unatco_gt",
-  "render_from": "t2_full",
-  "highlight": [
-    "Brush418",
-    "Brush420"
+  "dependents": [
+    {
+      "actor": "Brush285",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush295",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush132",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush74",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush284",
+      "anchor": "Brush420"
+    }
+  ],
+  "unchanged": [
+    "Brush663",
+    "Light156",
+    "Light103",
+    "Light318",
+    "Light86",
+    "Light120"
   ]
 }

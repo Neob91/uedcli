@@ -1,0 +1,201 @@
+{
+  "task": "t1",
+  "base_trunk": "unatco_gt",
+  "anchors": [
+    {
+      "actor": "Brush418",
+      "task_delta": [
+        48,
+        0,
+        0
+      ],
+      "at": [
+        [
+          448,
+          -288,
+          416
+        ],
+        [
+          448,
+          64,
+          416
+        ],
+        [
+          448,
+          64,
+          240
+        ],
+        [
+          448,
+          -288,
+          240
+        ]
+      ]
+    },
+    {
+      "actor": "Brush420",
+      "task_delta": [
+        48,
+        0,
+        0
+      ],
+      "at": [
+        [
+          448,
+          64,
+          416
+        ],
+        [
+          448,
+          304,
+          416
+        ],
+        [
+          448,
+          304,
+          240
+        ],
+        [
+          448,
+          64,
+          240
+        ]
+      ]
+    }
+  ],
+  "dependents": [
+    {
+      "actor": "Brush670",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush161",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush132",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush203",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush74",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush152",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Switch6",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush869",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "Light14",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "Brush766",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "Brush364",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "Brush873",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "Brush592",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "Light149",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "Vase3",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "Vase4",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "BookClosed1",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "NanoKey0",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "WeaponModRecoil0",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "FlagPole3",
+      "anchor": "Brush420"
+    },
+    {
+      "actor": "FlagPole4",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush663",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush1",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush138",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush140",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush148",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush164",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush168",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush1158",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush1550",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Brush1551",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "OrdersTrigger5",
+      "anchor": "Brush418"
+    },
+    {
+      "actor": "Light6",
+      "anchor": "Brush418"
+    }
+  ],
+  "unchanged": []
+}
