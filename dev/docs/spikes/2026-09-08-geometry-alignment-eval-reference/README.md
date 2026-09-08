@@ -99,6 +99,22 @@ task needing "this fixture must ROTATE with its anchor" would silently misgrade 
 change reads as delta `(0,0,0)` → `never_touched`) rather than fail loud. Not built — neither
 current task needs it; extend `read_position` (or add a parallel rotation check) when one does.
 
+## Grading and rendering a real trial
+
+`scripts/eval_trial.py <task_id> <subject_trunk> [--run-id ID] [--label TEXT]` is the concrete
+infrastructure for evaluating a subagent's (or anything's) actual output: it grades the subject
+trunk against the task's oracle (`check_trunk`, imported directly — same three-way comparison as
+above), then renders that SAME subject trunk's own diagrams (one per scenario) and photo tour
+(`scripts/render_photos.py`, the same `photo_camera` the reference uses) so the actual outcome is
+visually inspectable, not just a pass/fail number. Writes `runs/<task_id>/<run_id>/result.json`
+(full per-entry verdict list + run metadata) and `runs/<task_id>/<run_id>/img/*.png`.
+
+`scripts/build_page.py` auto-discovers every `runs/<task_id>/*/result.json` and adds a "Trial
+results" section to that task, one collapsible card per run — no registration needed, dropping a
+new run directory in is enough. Two example runs are committed (`example_pass`, `example_fail`,
+graded against a real known-bad trunk from earlier this session) as a working demo of the whole
+pipeline end to end.
+
 ## Base trunks
 
 Base trunk projects (`unatco_gt`, and future levels' extractions) and each level's

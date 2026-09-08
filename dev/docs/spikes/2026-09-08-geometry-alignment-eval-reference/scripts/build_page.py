@@ -1,7 +1,9 @@
 """Build index.html from every specs/<id>.py's `before`/`scenarios` (titles,
-notes, view, members, extra_photos) plus the real .diff files under diffs/.
-No task metadata lives in this file -- add a new task by adding a new
-specs/<file>.py, not by editing this script."""
+notes, view, members, extra_photos) plus the real .diff files under diffs/,
+plus every graded trial under runs/<task_id>/*/result.json (written by
+eval_trial.py). No task metadata lives in this file -- add a new task by
+adding a new specs/<file>.py, not by editing this script; trials appear
+automatically as eval_trial.py writes them, no registration needed."""
 import json, pathlib, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
@@ -10,11 +12,17 @@ from registry import TASKS
 ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference")
 DEST_IMG = ROOT / "img"
 DIFFS = ROOT / "diffs"
+RUNS = ROOT / "runs"
 
 used = set()  # (task_id, name) pairs actually referenced, for the missing-file check
 def img(task_id, name):
     used.add((task_id, name))
     return f"img/{task_id}/{name}.png"
+
+run_used = set()  # (task_id, run_id, name)
+def run_img(task_id, run_id, name):
+    run_used.add((task_id, run_id, name))
+    return f"runs/{task_id}/{run_id}/img/{name}.png"
 
 ALL_CAROUSELS = {}
 
@@ -52,6 +60,55 @@ def scenario_card(task_id, scen_id, scen):
         </details>
       </div></div>"""
 
+def discover_runs(task_id):
+    d = RUNS / task_id
+    if not d.exists():
+        return []
+    runs = []
+    for p in sorted(d.iterdir()):
+        rf = p / "result.json"
+        if rf.exists():
+            runs.append(json.loads(rf.read_text()))
+    runs.sort(key=lambda r: r["graded_at"], reverse=True)
+    return runs
+
+def trial_card(task_id, task, run):
+    run_id = run["run_id"]
+    key = f"{task_id}__trial__{run_id}"
+    scen_names = list(task["scenarios"].keys())
+    pan_names = [f"pan_{i}" for i in range(8)]
+    images = [(n, f"Plan — {task['scenarios'][n]['title']}") for n in scen_names] + \
+             [(n, f"Photo, panorama frame {i}") for i, n in enumerate(pan_names)]
+    items, thumbs = [], ""
+    for i, (name, cap) in enumerate(images):
+        items.append({"src": run_img(task_id, run_id, name), "cap": cap})
+        thumbs += (f'<img class="cthumb" src="{run_img(task_id, run_id, name)}" alt="{cap}" loading="lazy" tabindex="0" '
+                   f'onclick="openLB(\'{key}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{key}\',{i})">')
+    ALL_CAROUSELS[key] = items
+
+    def sort_key(r):
+        return (0 if r["verdict"] != "correct" else 1, r["actor"])
+    rows = "".join(
+        f'<tr class="{"bad" if r["verdict"] != "correct" else "ok"}">'
+        f'<td>{r["actor"]}</td><td>{r["role"]}</td><td>{r["verdict"]}</td>'
+        f'<td>{r["why"] if r["verdict"] != "correct" else ""}</td></tr>'
+        for r in sorted(run["results"], key=sort_key))
+
+    badge = "okv" if run["passed"] else "badv"
+    badge_text = "PASS" if run["passed"] else "FAIL"
+    return f"""<div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">{run['label']}</span>
+        <span class="lbl {badge}">{badge_text}</span>
+        <span class="tmeta">{run['n_correct']}/{run['n_total']} · {run['graded_at'][:19]}Z</span>
+      </button>
+      <div class="scenbody" hidden>
+        <p class="sdesc">Subject trunk: <code>{run['subject_trunk']}</code></p>
+        <div class="carousel">{thumbs}</div>
+        <table class="tresults"><thead><tr><th>actor</th><th>role</th><th>verdict</th><th>why (if failed)</th></tr></thead>
+        <tbody>{rows}</tbody></table>
+      </div></div>"""
+
 def task_block(task_id, task):
     before = task["before"]
     diag_html = "".join(f'<figure class="dg"><img src="{img(task_id, n)}" alt="{c}" onclick="openLB(\'{task_id}__before\',{i})"><figcaption>{c}</figcaption></figure>'
@@ -62,6 +119,11 @@ def task_block(task_id, task):
                              f'onclick="openLB(\'{bid}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{bid}\',{i})">'
                              for i, n in enumerate(before["photos"]))
     scen_html = "".join(scenario_card(task_id, scen_id, scen) for scen_id, scen in task["scenarios"].items())
+    runs = discover_runs(task_id)
+    trials_html = ""
+    if runs:
+        trials_html = ('<h3 class="scenh">Trial results — graded runs (auto-discovered from runs/) — click to expand</h3>'
+                        + "".join(trial_card(task_id, task, r) for r in runs))
     return f"""<div class="taskblk">
       <button class="taskhead" onclick="toggleTask(this)">
         <span class="tchev">&#9656;</span><h2>{task['title']}</h2>
@@ -75,6 +137,7 @@ def task_block(task_id, task):
         </div>
         <h3 class="scenh">Per-aspect scenarios — click to expand</h3>
         {scen_html}
+        {trials_html}
       </div></div>"""
 
 BODY = "".join(task_block(tid, task) for tid, task in TASKS.items())
@@ -134,6 +197,12 @@ h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;letter-spacin
 .diffpre{margin:10px 0 0;padding:12px;background:#0d0e08;border:1px solid var(--line);border-radius:3px;overflow-x:auto;
   color:var(--dim);font-family:var(--mono);font-size:11.5px;line-height:1.55;white-space:pre}
 .nochange{color:var(--gold-soft);font-family:var(--mono);font-size:12px;margin:10px 0 0}
+.tmeta{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-left:auto}
+.tresults{width:100%;border-collapse:collapse;margin:14px 0 0;font-size:12.5px}
+.tresults th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:4px 8px;border-bottom:1px solid var(--line)}
+.tresults td{padding:4px 8px;border-bottom:1px solid var(--line);color:var(--dim);vertical-align:top}
+.tresults tr.bad td:nth-child(1),.tresults tr.bad td:nth-child(3){color:var(--bad)}
+.tresults tr.ok td:nth-child(3){color:var(--good)}
 
 .foot{color:var(--faint);font-size:13px;font-family:var(--mono);margin-top:26px;border-top:1px solid var(--line);padding-top:14px}
 code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px 5px;border-radius:2px;color:var(--gold-soft)}
@@ -224,5 +293,6 @@ document.getElementById('lb').addEventListener('click', e => {
 (ROOT / "index.html").write_text(HTML.replace("__BODY__", BODY).replace("__CAROUSEL_JSON__", CAROUSEL_JSON))
 
 missing = [f"{t}/{n}" for t, n in sorted(used) if not (DEST_IMG / t / f"{n}.png").exists()]
+missing += [f"runs/{t}/{r}/{n}" for t, r, n in sorted(run_used) if not (RUNS / t / r / "img" / f"{n}.png").exists()]
 print("wrote", ROOT / "index.html")
-print("images used:", len(used), "missing:", missing)
+print("images used:", len(used), "+", len(run_used), "trial images; missing:", missing)

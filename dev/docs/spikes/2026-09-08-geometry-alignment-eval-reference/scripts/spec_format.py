@@ -12,6 +12,14 @@ Each specs/<task_id>.py exports one module-level `TASK` dict:
                                NOT the whole level. Per-task because a
                                different task on the same level may edit a
                                different room; `level` alone isn't enough.
+  photo_camera              -- dict(at=[x,y,z], pitch=UU) for the 8x45°
+                               `level photo --native` tour (yaw 0,8192,...,
+                               57344) rendered by scripts/render_photos.py
+                               from ANY trunk (the gold reference, or a
+                               trial's subject trunk) -- one definition per
+                               task feeds both. `pitch` in rotation units,
+                               16384=90°; use e.g. 4096 to tilt up toward a
+                               ceiling task's fixtures.
   before                   -- dict(diags=[(img_name, caption), ...],
                                photos=[img_name, ...]) for the task-level
                                "before any edit" context block on the page

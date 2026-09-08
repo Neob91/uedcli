@@ -1,0 +1,573 @@
+{
+  "task_id": "unatco_widen",
+  "run_id": "example_fail",
+  "label": "Example: north wall never widened",
+  "subject_trunk": "/home/agent/.claude/jobs/92851c21/tmp/unatco_t1wall_bad",
+  "graded_at": "2026-09-08T16:55:32.713805+00:00",
+  "n_total": 35,
+  "n_correct": 21,
+  "n_bad": 14,
+  "passed": false,
+  "results": [
+    {
+      "actor": "Brush418",
+      "role": "update(corners)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48,
+        0,
+        0
+      ],
+      "verdict": "correct",
+      "why": "south wall of Manderley's office; the task's own east-widen target"
+    },
+    {
+      "actor": "Brush420",
+      "role": "update(corners)",
+      "delta": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48,
+        0,
+        0
+      ],
+      "verdict": "wrong",
+      "why": "north wall of Manderley's office, shares the east wall with Brush418 at the y=64 seam -- must widen the same amount or the wall steps"
+    },
+    {
+      "actor": "Brush670",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "switch recess, cut into the south wall"
+    },
+    {
+      "actor": "Brush161",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "south wall trim board"
+    },
+    {
+      "actor": "Brush132",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "south wall trim board"
+    },
+    {
+      "actor": "Brush203",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "south wall trim board"
+    },
+    {
+      "actor": "Brush74",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "south wall trim board"
+    },
+    {
+      "actor": "Brush152",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "south wall fixture"
+    },
+    {
+      "actor": "Switch6",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "the wall light switch itself, mounted in Brush670's recess"
+    },
+    {
+      "actor": "Brush869",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "decorative pilaster on the north wall"
+    },
+    {
+      "actor": "Light14",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "the pilaster's own light"
+    },
+    {
+      "actor": "Brush766",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "wall cavity holding the trophy shelf + hidden safe, cut into the north wall"
+    },
+    {
+      "actor": "Brush364",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "the safe's own interior geometry inside the cavity"
+    },
+    {
+      "actor": "Brush873",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "the safe's own back panel inside the cavity -- moving the cavity without this orphans it mid-room (the original bug this eval caught)"
+    },
+    {
+      "actor": "Brush592",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "the display shelf inside the cavity"
+    },
+    {
+      "actor": "Light149",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "the shelf's own light"
+    },
+    {
+      "actor": "Vase3",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "display item on the shelf"
+    },
+    {
+      "actor": "Vase4",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "display item on the shelf"
+    },
+    {
+      "actor": "BookClosed1",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "display item on the shelf"
+    },
+    {
+      "actor": "NanoKey0",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "display item on the shelf"
+    },
+    {
+      "actor": "WeaponModRecoil0",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "display item on the shelf"
+    },
+    {
+      "actor": "FlagPole3",
+      "role": "anchor(to Brush420)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        0.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "touched_wrong",
+      "why": "ceremonial flagpole anchored to the north wall's corner (~48u off two adjacent walls, not flush-mounted)"
+    },
+    {
+      "actor": "FlagPole4",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "ceremonial flagpole anchored to the south wall's corner"
+    },
+    {
+      "actor": "Brush663",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "the display niche -- a genuinely separate small room built against the south wall, must stay flush against it"
+    },
+    {
+      "actor": "Brush1",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "niche interior detail brush"
+    },
+    {
+      "actor": "Brush138",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "niche interior detail brush"
+    },
+    {
+      "actor": "Brush140",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "niche interior detail brush"
+    },
+    {
+      "actor": "Brush148",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "niche interior detail brush"
+    },
+    {
+      "actor": "Brush164",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "niche interior detail brush"
+    },
+    {
+      "actor": "Brush168",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "niche interior detail brush"
+    },
+    {
+      "actor": "Brush1158",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "niche interior detail brush"
+    },
+    {
+      "actor": "Brush1550",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "niche interior detail brush"
+    },
+    {
+      "actor": "Brush1551",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "niche interior detail brush"
+    },
+    {
+      "actor": "OrdersTrigger5",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "scripted trigger inside the niche"
+    },
+    {
+      "actor": "Light6",
+      "role": "anchor(to Brush418)",
+      "delta": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "expected": [
+        48.0,
+        0.0,
+        0.0
+      ],
+      "verdict": "correct",
+      "why": "the niche's own light"
+    }
+  ]
+}

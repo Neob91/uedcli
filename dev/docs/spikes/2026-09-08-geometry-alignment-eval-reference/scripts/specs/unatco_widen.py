@@ -8,6 +8,7 @@ TASK = dict(
  req="&ldquo;Manderley&rsquo;s office is too narrow. Widen it eastward by 48 units &mdash; move its east wall out.&rdquo;",
  base_trunk="unatco_gt",
  frame="59,-360,200,620,140,500",
+ photo_camera=dict(at=[300,-112,330], pitch=0),
  before=dict(
    diags=[("before_top","Top-down plan of the office before any change. It's built from TWO separate wall volumes that share one east wall (the south half is brush Brush418, the north half is brush Brush420) — a detail invisible to a player, but important for widening the wall correctly."),
           ("before_side","Side view (elevation) of the same office before any change, for height context.")],

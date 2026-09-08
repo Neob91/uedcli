@@ -8,6 +8,7 @@ TASK = dict(
  req="&ldquo;Manderley&rsquo;s office feels cramped. Raise its ceiling by 48 units.&rdquo;",
  base_trunk="unatco_gt",
  frame="59,-360,200,620,140,500",
+ photo_camera=dict(at=[300,-112,330], pitch=4096),
  before=dict(
    diags=[("before_side","Side view (elevation) of the office before any change — the ceiling is flat at z=416, spanning both wall volumes (Brush418 south, Brush420 north)."),
           ("before_top","Top-down plan of the same office, for footprint context.")],
