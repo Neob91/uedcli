@@ -66,14 +66,44 @@ full actor-name list `actor diagram` draws from).
    `oracle/<task_id>.json` — the spec's `entries` list, straight through, no diff-text parsing.
 6. `scripts/build_page.py` — assembles `index.html` from every task's `before`/`scenarios` + the
    real `.diff` files + a small set of hand-captured supplementary photos in `img/<task_id>/` that
-   no diff drives (each scenario's own `extra_photos`).
+   no diff drives (each scenario's own `extra_photos`), plus an "Executions to grade" card per
+   `runs/<task_id>/*/manifest.json` (see "Grading an execution" below).
 
 Re-run in that order after editing a `specs/<id>.py`. Never hand-edit a `diffs/*.diff`, an
 `oracle/*.json`, or a picture directly.
 
-## Grading a subagent's trunk
+## Grading an execution — manual, from pictures
 
-`scripts/check_trunk.py <oracle.json> <baseline_trunk> <subject_trunk>` classifies every entry:
+Grading is done by a human looking at pictures, not a mechanical pass/fail. For one execution
+(a subagent's, or anything's, subject trunk) of a task:
+
+1. `scripts/render_manual.py <task_id> <subject_trunk> [--run-id ID] [--label TEXT]` renders it:
+   one UED-style quad view (Top/Front/Iso/Side, `actor diagram --layout quad`) per oracle entry,
+   only that entry's actor highlighted, labeled by what the task expects of it — `CREATED` /
+   `UPDATED` / `UNCHANGED` / `DELETED` — plus the 8-frame `level photo --native` panorama tour.
+   An entry whose actor is gone from the subject trunk (the `DELETED` case, or an `update`/`anchor`
+   actor a subagent wrongly deleted) is rendered as the live scene PLUS that one actor reinserted
+   from the baseline (its last known position) via `actor diagram --from-t3d`, still highlighted —
+   so its absence is visible in the picture, not just implied by a missing card. Writes
+   `runs/<task_id>/<run_id>/manifest.json` + `runs/<task_id>/<run_id>/img/{entries/<actor>,pan_N}.png`.
+2. `scripts/build_page.py` auto-discovers every `runs/<task_id>/*/manifest.json` and adds an
+   "Executions to grade" card per run — no registration needed, dropping a new run directory in is
+   enough. Each card has a 0–10 score field and a notes textarea.
+3. `scripts/serve.py [port]` (default 8756) replaces plain `python -m http.server`: same static
+   file serving, plus `GET /api/grades` and `POST /api/grade` (stdlib only, no new deps) backing
+   `grades/<task_id>/<run_id>.json`. A saved grade reloads on page refresh and stays editable at
+   any time — there's no submit-once lock.
+
+Three example runs are committed (`unatco_widen/example_pass`, `unatco_widen/example_fail` against
+a real known-bad trunk from earlier this session, `unatco_ceiling/example_pass`) as a working demo
+of the whole pipeline end to end. `grades/` itself is NOT committed — it's this reviewer's live,
+mutable state, not reference material.
+
+### The mechanical cross-check (optional, secondary)
+
+`scripts/check_trunk.py <oracle.json> <baseline_trunk> <subject_trunk>` still exists as a standalone
+mechanical classifier over the same `entries` vocabulary — useful as a second opinion, never as the
+grade of record. It classifies every entry:
 
 - **`update(target="corners")`**: the specific named corners (NOT a whole-brush centroid — an
   `update` entry typically *resizes* the brush, only one face moves, so a centroid would dilute the
@@ -98,22 +128,8 @@ the grading run.
 task needing "this fixture must ROTATE with its anchor" would silently misgrade (a rotation-only
 change reads as delta `(0,0,0)` → `never_touched`) rather than fail loud. Not built — neither
 current task needs it; extend `read_position` (or add a parallel rotation check) when one does.
-
-## Grading and rendering a real trial
-
-`scripts/eval_trial.py <task_id> <subject_trunk> [--run-id ID] [--label TEXT]` is the concrete
-infrastructure for evaluating a subagent's (or anything's) actual output: it grades the subject
-trunk against the task's oracle (`check_trunk`, imported directly — same three-way comparison as
-above), then renders that SAME subject trunk's own diagrams (one per scenario) and photo tour
-(`scripts/render_photos.py`, the same `photo_camera` the reference uses) so the actual outcome is
-visually inspectable, not just a pass/fail number. Writes `runs/<task_id>/<run_id>/result.json`
-(full per-entry verdict list + run metadata) and `runs/<task_id>/<run_id>/img/*.png`.
-
-`scripts/build_page.py` auto-discovers every `runs/<task_id>/*/result.json` and adds a "Trial
-results" section to that task, one collapsible card per run — no registration needed, dropping a
-new run directory in is enough. Two example runs are committed (`example_pass`, `example_fail`,
-graded against a real known-bad trunk from earlier this session) as a working demo of the whole
-pipeline end to end.
+`scripts/eval_trial.py` wires `check_trunk` + rendering together into the same kind of run directory
+this pipeline uses, for anyone who wants an automated verdict instead of (or alongside) a manual one.
 
 ## Base trunks
 

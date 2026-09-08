@@ -1,0 +1,110 @@
+{
+  "task_id": "unatco_ceiling",
+  "run_id": "example_pass",
+  "label": "Example: fully correct",
+  "subject_trunk": "/home/agent/.claude/jobs/92851c21/tmp/gold_ceiling",
+  "rendered_at": "2026-09-08T19:13:20.658970+00:00",
+  "entries": [
+    {
+      "actor": "Brush418",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "img": "entries/Brush418.png",
+      "why": "south wall's ceiling face; the task's own raise-ceiling target"
+    },
+    {
+      "actor": "Brush420",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "img": "entries/Brush420.png",
+      "why": "north wall's ceiling face, shares the ceiling with Brush418 at the y=64 seam -- must rise the same amount or the ceiling steps"
+    },
+    {
+      "actor": "Brush285",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "img": "entries/Brush285.png",
+      "why": "recessed ceiling light panel over the south half"
+    },
+    {
+      "actor": "Brush295",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "img": "entries/Brush295.png",
+      "why": "recessed ceiling light panel over the south half"
+    },
+    {
+      "actor": "Brush132",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "img": "entries/Brush132.png",
+      "why": "ceiling trim cap over the south half"
+    },
+    {
+      "actor": "Brush74",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "img": "entries/Brush74.png",
+      "why": "ceiling trim cap over the south half"
+    },
+    {
+      "actor": "Brush284",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "img": "entries/Brush284.png",
+      "why": "recessed ceiling light panel over the north half"
+    },
+    {
+      "actor": "Brush663",
+      "bucket": "unchanged",
+      "label": "UNCHANGED",
+      "img": "entries/Brush663.png",
+      "why": "the niche is its own separate room with its own ceiling -- expected to keep its own height, not match the office's new one"
+    },
+    {
+      "actor": "Light156",
+      "bucket": "unchanged",
+      "label": "UNCHANGED",
+      "img": "entries/Light156.png",
+      "why": "room light -- every light sits a fixed distance below its ceiling room-wide, not mounted to the surface"
+    },
+    {
+      "actor": "Light103",
+      "bucket": "unchanged",
+      "label": "UNCHANGED",
+      "img": "entries/Light103.png",
+      "why": "room light, same fixed-height convention"
+    },
+    {
+      "actor": "Light318",
+      "bucket": "unchanged",
+      "label": "UNCHANGED",
+      "img": "entries/Light318.png",
+      "why": "room light, same fixed-height convention"
+    },
+    {
+      "actor": "Light86",
+      "bucket": "unchanged",
+      "label": "UNCHANGED",
+      "img": "entries/Light86.png",
+      "why": "room light, same fixed-height convention"
+    },
+    {
+      "actor": "Light120",
+      "bucket": "unchanged",
+      "label": "UNCHANGED",
+      "img": "entries/Light120.png",
+      "why": "room light, same fixed-height convention"
+    }
+  ],
+  "panorama": [
+    "pan_0.png",
+    "pan_1.png",
+    "pan_2.png",
+    "pan_3.png",
+    "pan_4.png",
+    "pan_5.png",
+    "pan_6.png",
+    "pan_7.png"
+  ]
+}

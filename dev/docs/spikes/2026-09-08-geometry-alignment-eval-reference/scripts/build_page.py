@@ -1,9 +1,12 @@
 """Build index.html from every specs/<id>.py's `before`/`scenarios` (titles,
 notes, view, members, extra_photos) plus the real .diff files under diffs/,
-plus every graded trial under runs/<task_id>/*/result.json (written by
-eval_trial.py). No task metadata lives in this file -- add a new task by
-adding a new specs/<file>.py, not by editing this script; trials appear
-automatically as eval_trial.py writes them, no registration needed."""
+plus every rendered execution under runs/<task_id>/*/manifest.json (written
+by render_manual.py). No task metadata lives in this file -- add a new task
+by adding a new specs/<file>.py, not by editing this script; executions
+appear automatically as render_manual.py writes them, no registration
+needed. Grading is manual: each execution card POSTs a score (0-10) + note
+to serve.py's /api/grade and reloads it from /api/grades -- this script
+only lays out the form, it never computes a verdict."""
 import json, pathlib, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
@@ -19,10 +22,10 @@ def img(task_id, name):
     used.add((task_id, name))
     return f"img/{task_id}/{name}.png"
 
-run_used = set()  # (task_id, run_id, name)
-def run_img(task_id, run_id, name):
-    run_used.add((task_id, run_id, name))
-    return f"runs/{task_id}/{run_id}/img/{name}.png"
+run_used = set()  # (task_id, run_id, relpath) -- relpath already includes ".png"
+def run_img(task_id, run_id, relpath):
+    run_used.add((task_id, run_id, relpath))
+    return f"runs/{task_id}/{run_id}/img/{relpath}"
 
 ALL_CAROUSELS = {}
 
@@ -60,70 +63,87 @@ def scenario_card(task_id, scen_id, scen):
         </details>
       </div></div>"""
 
-def discover_runs(task_id):
+def discover_executions(task_id):
     d = RUNS / task_id
     if not d.exists():
         return []
     runs = []
     for p in sorted(d.iterdir()):
-        rf = p / "result.json"
-        if rf.exists():
-            runs.append(json.loads(rf.read_text()))
-    runs.sort(key=lambda r: r["graded_at"], reverse=True)
+        mf = p / "manifest.json"
+        if mf.exists():
+            runs.append(json.loads(mf.read_text()))
+    runs.sort(key=lambda r: r["rendered_at"], reverse=True)
     return runs
 
-def trial_card(task_id, task, run):
+BUCKET_ORDER = {"created": 0, "updated": 1, "unchanged": 2, "deleted": 3}
+
+def execution_card(task_id, task, run):
     run_id = run["run_id"]
-    key = f"{task_id}__trial__{run_id}"
-    scen_names = list(task["scenarios"].keys())
-    pan_names = [f"pan_{i}" for i in range(8)]
-    images = [(n, f"Plan — {task['scenarios'][n]['title']}") for n in scen_names] + \
-             [(n, f"Photo, panorama frame {i}") for i, n in enumerate(pan_names)]
-    items, thumbs = [], ""
-    for i, (name, cap) in enumerate(images):
-        items.append({"src": run_img(task_id, run_id, name), "cap": cap})
-        thumbs += (f'<img class="cthumb" src="{run_img(task_id, run_id, name)}" alt="{cap}" loading="lazy" tabindex="0" '
-                   f'onclick="openLB(\'{key}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{key}\',{i})">')
+    key = f"{task_id}__exec__{run_id}"
+    gid = f"{task_id}--{run_id}"
+
+    entries = sorted(run["entries"], key=lambda e: (BUCKET_ORDER[e["bucket"]], e["actor"]))
+    images = [(e["img"], f"{e['label']} — {e['actor']}: {e['why']}") for e in entries] + \
+             [(n, f"Photo, panorama frame {i}") for i, n in enumerate(run["panorama"])]
+    items = [{"src": run_img(task_id, run_id, relpath), "cap": cap} for relpath, cap in images]
     ALL_CAROUSELS[key] = items
 
-    def sort_key(r):
-        return (0 if r["verdict"] != "correct" else 1, r["actor"])
-    rows = "".join(
-        f'<tr class="{"bad" if r["verdict"] != "correct" else "ok"}">'
-        f'<td>{r["actor"]}</td><td>{r["role"]}</td><td>{r["verdict"]}</td>'
-        f'<td>{r["why"] if r["verdict"] != "correct" else ""}</td></tr>'
-        for r in sorted(run["results"], key=sort_key))
+    grid = "".join(
+        f'<figure class="egrid-item b-{e["bucket"]}">'
+        f'<img src="{run_img(task_id, run_id, e["img"])}" alt="{e["actor"]}" loading="lazy" tabindex="0" '
+        f'onclick="openLB(\'{key}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{key}\',{i})">'
+        f'<figcaption><span class="elbl b-{e["bucket"]}">{e["label"]}</span> {e["actor"]}'
+        f'<span class="ewhy">{e["why"]}</span></figcaption></figure>'
+        for i, e in enumerate(entries))
 
-    badge = "okv" if run["passed"] else "badv"
-    badge_text = "PASS" if run["passed"] else "FAIL"
+    pan_thumbs = "".join(
+        f'<img class="cthumb" src="{run_img(task_id, run_id, n)}" alt="panorama" loading="lazy" tabindex="0" '
+        f'onclick="openLB(\'{key}\',{len(entries)+i})" onkeydown="if(event.key===\'Enter\')openLB(\'{key}\',{len(entries)+i})">'
+        for i, n in enumerate(run["panorama"]))
+
     return f"""<div class="scen">
       <button class="scenhead" onclick="toggleScen(this)">
         <span class="chev">&#9656;</span><span class="stitle">{run['label']}</span>
-        <span class="lbl {badge}">{badge_text}</span>
-        <span class="tmeta">{run['n_correct']}/{run['n_total']} · {run['graded_at'][:19]}Z</span>
+        <span class="tmeta" data-gradebadge="{gid}">not yet graded</span>
       </button>
       <div class="scenbody" hidden>
-        <p class="sdesc">Subject trunk: <code>{run['subject_trunk']}</code></p>
-        <div class="carousel">{thumbs}</div>
-        <table class="tresults"><thead><tr><th>actor</th><th>role</th><th>verdict</th><th>why (if failed)</th></tr></thead>
-        <tbody>{rows}</tbody></table>
+        <p class="sdesc">Subject trunk: <code>{run['subject_trunk']}</code> · rendered {run['rendered_at'][:19]}Z</p>
+        <div class="striplabel">360° panorama tour, this execution's final state</div>
+        <div class="carousel">{pan_thumbs}</div>
+        <div class="striplabel">Per-actor outcome — one quad view (Top / Front / Iso / Side) per task-relevant actor, only that actor highlighted</div>
+        <div class="egrid">{grid}</div>
+        <div class="gradebox" data-task="{task_id}" data-run="{run_id}">
+          <label>Score (0–10)
+            <input type="number" min="0" max="10" step="1" class="gscore" placeholder="—">
+          </label>
+          <label class="gnotelbl">Notes
+            <textarea class="gnote" rows="3" placeholder="What's wrong, or why it's right..."></textarea>
+          </label>
+          <div class="grow">
+            <button class="gsave" onclick="saveGrade(this)">Save grade</button>
+            <span class="gstatus">not yet graded</span>
+          </div>
+        </div>
       </div></div>"""
 
 def task_block(task_id, task):
     before = task["before"]
-    diag_html = "".join(f'<figure class="dg"><img src="{img(task_id, n)}" alt="{c}" onclick="openLB(\'{task_id}__before\',{i})"><figcaption>{c}</figcaption></figure>'
-                         for i, (n, c) in enumerate(before["diags"]))
     bid = f"{task_id}__before"
-    ALL_CAROUSELS[bid] = [{"src": img(task_id, n), "cap": "Panorama frame, before any edit."} for n in before["photos"]]
+    quad_cap = "Whole-room quad view (Top / Front / Iso / Side), before any edit."
+    ALL_CAROUSELS[bid] = [{"src": img(task_id, before["quad"]), "cap": quad_cap}] + \
+                          [{"src": img(task_id, n), "cap": "Panorama frame, before any edit."} for n in before["photos"]]
+    before_quad_html = (f'<figure class="dg dg-quad"><img src="{img(task_id, before["quad"])}" alt="{quad_cap}" '
+                         f'onclick="openLB(\'{bid}\',0)"><figcaption>{before["note"]}</figcaption></figure>')
     before_thumbs = "".join(f'<img class="cthumb" src="{img(task_id, n)}" alt="panorama" loading="lazy" tabindex="0" '
-                             f'onclick="openLB(\'{bid}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{bid}\',{i})">'
+                             f'onclick="openLB(\'{bid}\',{i+1})" onkeydown="if(event.key===\'Enter\')openLB(\'{bid}\',{i+1})">'
                              for i, n in enumerate(before["photos"]))
     scen_html = "".join(scenario_card(task_id, scen_id, scen) for scen_id, scen in task["scenarios"].items())
-    runs = discover_runs(task_id)
-    trials_html = ""
+    runs = discover_executions(task_id)
+    exec_html = ('<p class="sdesc">No executions rendered yet for this task — run '
+                 '<code>scripts/render_manual.py '
+                 f'{task_id} &lt;subject_trunk&gt;</code> and rebuild the page.</p>')
     if runs:
-        trials_html = ('<h3 class="scenh">Trial results — graded runs (auto-discovered from runs/) — click to expand</h3>'
-                        + "".join(trial_card(task_id, task, r) for r in runs))
+        exec_html = "".join(execution_card(task_id, task, r) for r in runs)
     return f"""<div class="taskblk">
       <button class="taskhead" onclick="toggleTask(this)">
         <span class="tchev">&#9656;</span><h2>{task['title']}</h2>
@@ -131,13 +151,14 @@ def task_block(task_id, task):
       <div class="taskbody" hidden>
         <div class="task"><span class="t">REQUEST:</span> {task['req']}</div>
         <div class="beforeblk">
-          <div class="diagrams">{diag_html}</div>
+          <div class="diagrams">{before_quad_html}</div>
           <div class="striplabel">360° panorama tour, before any edit</div>
           <div class="carousel">{before_thumbs}</div>
         </div>
-        <h3 class="scenh">Per-aspect scenarios — click to expand</h3>
+        <h3 class="scenh">Per-aspect scenarios (reference) — click to expand</h3>
         {scen_html}
-        {trials_html}
+        <h3 class="scenh">Executions to grade — click to expand, score 0–10 + note, editable anytime</h3>
+        {exec_html}
       </div></div>"""
 
 BODY = "".join(task_block(tid, task) for tid, task in TASKS.items())
@@ -177,6 +198,7 @@ h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;letter-spacin
 .beforeblk{margin:0 0 26px;padding:14px;border:1px solid color-mix(in srgb,var(--gold) 30%,var(--line));border-radius:4px;background:var(--panel2)}
 .diagrams{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;background:#13140d;padding:8px;border-radius:3px}
 .dg{margin:0}.dg img{display:block;width:100%;height:auto;border-radius:2px;cursor:zoom-in}
+.dg-quad{max-width:560px;margin:0 auto}
 .dg figcaption{font-family:var(--mono);font-size:11px;color:var(--dim);padding:5px 2px 2px}
 .striplabel{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.06em;margin:12px 0 8px}
 
@@ -198,11 +220,31 @@ h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;letter-spacin
   color:var(--dim);font-family:var(--mono);font-size:11.5px;line-height:1.55;white-space:pre}
 .nochange{color:var(--gold-soft);font-family:var(--mono);font-size:12px;margin:10px 0 0}
 .tmeta{font-family:var(--mono);font-size:11.5px;color:var(--faint);margin-left:auto}
-.tresults{width:100%;border-collapse:collapse;margin:14px 0 0;font-size:12.5px}
-.tresults th{text-align:left;font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);padding:4px 8px;border-bottom:1px solid var(--line)}
-.tresults td{padding:4px 8px;border-bottom:1px solid var(--line);color:var(--dim);vertical-align:top}
-.tresults tr.bad td:nth-child(1),.tresults tr.bad td:nth-child(3){color:var(--bad)}
-.tresults tr.ok td:nth-child(3){color:var(--good)}
+.tmeta.graded{color:var(--good)}
+
+.egrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:0 0 4px}
+.egrid-item{margin:0;background:#13140d;border:1px solid var(--line);border-left:3px solid var(--faint);border-radius:3px;overflow:hidden}
+.egrid-item img{display:block;width:100%;height:auto;cursor:zoom-in}
+.egrid-item figcaption{font-size:11.5px;color:var(--dim);padding:6px 8px 8px}
+.egrid-item .ewhy{display:block;color:var(--faint);font-size:10.5px;margin-top:2px}
+.elbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:1px 5px;border-radius:2px;margin-right:5px}
+.egrid-item.b-created{border-left-color:var(--cyan)}.elbl.b-created{background:color-mix(in srgb,var(--cyan) 25%,transparent);color:var(--cyan)}
+.egrid-item.b-updated{border-left-color:var(--gold)}.elbl.b-updated{background:color-mix(in srgb,var(--gold) 25%,transparent);color:var(--gold-soft)}
+.egrid-item.b-unchanged{border-left-color:var(--faint)}.elbl.b-unchanged{background:color-mix(in srgb,var(--faint) 25%,transparent);color:var(--dim)}
+.egrid-item.b-deleted{border-left-color:var(--bad)}.elbl.b-deleted{background:color-mix(in srgb,var(--bad) 25%,transparent);color:var(--bad)}
+
+.gradebox{margin:18px 0 0;padding:14px 16px;border:1px solid color-mix(in srgb,var(--cyan) 35%,var(--line));border-radius:4px;background:#13140d;display:flex;flex-wrap:wrap;gap:14px 20px;align-items:flex-end}
+.gradebox label{display:flex;flex-direction:column;gap:5px;font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}
+.gradebox .gnotelbl{flex:1;min-width:220px}
+.gradebox input.gscore{width:70px;font:inherit;font-size:16px;background:var(--panel2);border:1px solid var(--line);border-radius:3px;color:var(--ink);padding:6px 8px}
+.gradebox textarea.gnote{font:inherit;font-size:13.5px;background:var(--panel2);border:1px solid var(--line);border-radius:3px;color:var(--ink);padding:8px;resize:vertical;min-height:38px}
+.gradebox .grow{display:flex;align-items:center;gap:10px}
+.gradebox .gsave{font:inherit;font-size:13px;font-weight:600;background:var(--gold);color:#1a1608;border:0;border-radius:3px;padding:8px 16px;cursor:pointer}
+.gradebox .gsave:hover{background:var(--gold-soft)}
+.gradebox .gsave:disabled{opacity:.5;cursor:default}
+.gradebox .gstatus{font-family:var(--mono);font-size:11.5px;color:var(--faint)}
+.gradebox .gstatus.saved{color:var(--good)}
+.gradebox .gstatus.error{color:var(--bad)}
 
 .foot{color:var(--faint);font-size:13px;font-family:var(--mono);margin-top:26px;border-top:1px solid var(--line);padding-top:14px}
 code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px 5px;border-radius:2px;color:var(--gold-soft)}
@@ -223,7 +265,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
   <p class="eyebrow">uedcli · reference solutions · batch 1 of 5 · UNATCO HQ</p>
   <h1 class="lede">Reference solutions to validate &mdash; per-aspect, diff-generated.</h1>
   <p class="sub">Each task is collapsed by default &mdash; open one and the previous one closes. Inside, each aspect of the change is its own collapsible scenario, showing the fully-correct outcome with just that aspect's actors highlighted. Click any picture to enlarge; arrows cycle through that scenario's images; the enlarged view always shows its caption.</p>
-  <p class="pipeline"><b>Every picture is generated, never hand-built:</b> each scenario is backed by a REAL <code>diff -u</code> (not a custom format) between the baseline and the fully-correct trunk, over each actor's normalized state (brush corners, or Location). Grading is separate from this display grouping: a flat per-task oracle (<code>oracle/&lt;task&gt;.json</code>) classifies each actor as an <code>update</code> (an absolute target — a task-pinned delta, or "= baseline"), an <code>anchor</code> (must match a SPECIFIC other actor's actual delta — the wall volume it's physically attached to, verified per-actor, not one shared number), or (documented, not yet needed) <code>create</code>/<code>delete</code>. <code>check_trunk.py</code> grades any trunk against it.</p>
+  <p class="pipeline"><b>Every picture is generated, never hand-built:</b> each reference scenario below is backed by a REAL <code>diff -u</code> (not a custom format) between the baseline and the fully-correct trunk, over each actor's normalized state (brush corners, or Location). Grading is manual: each task's <b>executions</b> section shows every task-relevant actor's actual outcome — one quad view (Top/Front/Iso/Side) per actor, labeled CREATED/UPDATED/UNCHANGED/DELETED by what the task expects of it — plus a full panorama tour, so you can score 0–10 and leave a note from the pictures alone. A DELETED actor's quad shows the final room with that actor reinserted (from its last known position) so its absence is visible, not just implied. Scores save immediately and stay editable.</p>
   <p class="orient">Orientation, top-down plans (matching UnrealEd's own axis convention): <b>East = right</b> edge of the image, <b>West = left</b>, <b>North = up</b>, <b>South = down</b>. A small compass is burned into the top-left corner of every plan below as a direct check.</p>
   __BODY__
   <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified, each assigned its OWN anchor by verified geometry (some fixtures split across both wall volumes). Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same pipeline. Diagrams: <code>actor diagram</code>, cropped to the room this task edits (not the whole level). Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>.</p>
@@ -260,6 +302,66 @@ function toggleScen(btn){
   const open = scen.classList.toggle('open');
   body.hidden = !open;
 }
+
+function applyGrade(gid, rec){
+  const box = document.querySelector(`.gradebox[data-task="${rec.task_id}"][data-run="${rec.run_id}"]`);
+  const badge = document.querySelector(`[data-gradebadge="${gid}"]`);
+  if (box){
+    box.querySelector('.gscore').value = (rec.score === null || rec.score === undefined) ? '' : rec.score;
+    box.querySelector('.gnote').value = rec.note || '';
+    setStatus(box, rec);
+  }
+  if (badge){
+    badge.textContent = (rec.score === null || rec.score === undefined) ? 'not yet graded' : `graded ${rec.score}/10`;
+    badge.classList.toggle('graded', rec.score !== null && rec.score !== undefined);
+  }
+}
+function setStatus(box, rec){
+  const s = box.querySelector('.gstatus');
+  s.classList.remove('error');
+  if (rec && rec.updated_at){
+    s.textContent = `saved ${rec.updated_at.slice(0,19)}Z`;
+    s.classList.add('saved');
+  } else {
+    s.textContent = 'not yet graded';
+    s.classList.remove('saved');
+  }
+}
+async function loadGrades(){
+  try {
+    const res = await fetch('/api/grades');
+    const grades = await res.json();
+    for (const key in grades){
+      const rec = grades[key];
+      applyGrade(`${rec.task_id}--${rec.run_id}`, rec);
+    }
+  } catch (e) { console.error('loadGrades failed', e); }
+}
+async function saveGrade(btn){
+  const box = btn.closest('.gradebox');
+  const task_id = box.dataset.task, run_id = box.dataset.run;
+  const scoreRaw = box.querySelector('.gscore').value;
+  const score = scoreRaw === '' ? null : Math.max(0, Math.min(10, parseInt(scoreRaw, 10)));
+  const note = box.querySelector('.gnote').value;
+  btn.disabled = true;
+  const s = box.querySelector('.gstatus');
+  s.textContent = 'saving…'; s.classList.remove('saved','error');
+  try {
+    const res = await fetch('/api/grade', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({task_id, run_id, score, note}),
+    });
+    if (!res.ok) throw new Error((await res.json()).error || res.statusText);
+    const rec = await res.json();
+    applyGrade(`${task_id}--${run_id}`, rec);
+  } catch (e) {
+    s.textContent = 'save failed: ' + e.message;
+    s.classList.add('error');
+  } finally {
+    btn.disabled = false;
+  }
+}
+loadGrades();
 function openLB(scenId, idx){
   lbScen = scenId; lbIdx = idx;
   renderLB();
@@ -293,6 +395,6 @@ document.getElementById('lb').addEventListener('click', e => {
 (ROOT / "index.html").write_text(HTML.replace("__BODY__", BODY).replace("__CAROUSEL_JSON__", CAROUSEL_JSON))
 
 missing = [f"{t}/{n}" for t, n in sorted(used) if not (DEST_IMG / t / f"{n}.png").exists()]
-missing += [f"runs/{t}/{r}/{n}" for t, r, n in sorted(run_used) if not (RUNS / t / r / "img" / f"{n}.png").exists()]
+missing += [f"runs/{t}/{r}/img/{n}" for t, r, n in sorted(run_used) if not (RUNS / t / r / "img" / n).exists()]
 print("wrote", ROOT / "index.html")
 print("images used:", len(used), "+", len(run_used), "trial images; missing:", missing)

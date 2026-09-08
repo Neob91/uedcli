@@ -10,8 +10,8 @@ TASK = dict(
  frame="59,-360,200,620,140,500",
  photo_camera=dict(at=[300,-112,330], pitch=4096),
  before=dict(
-   diags=[("before_side","Side view (elevation) of the office before any change — the ceiling is flat at z=416, spanning both wall volumes (Brush418 south, Brush420 north)."),
-          ("before_top","Top-down plan of the same office, for footprint context.")],
+   quad="before_quad",
+   note="The ceiling is flat at z=416, spanning both wall volumes (Brush418 south, Brush420 north) that share it at the y=64 seam.",
    photos=[f"pan_before_{i}" for i in range(8)]),
  entries=[
    dict(kind="update", actor="Brush418", target="corners", at=[[128,-288,416],[448,-288,416],[448,64,416],[128,64,416]], delta=[0,0,48],

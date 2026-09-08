@@ -20,9 +20,13 @@ Each specs/<task_id>.py exports one module-level `TASK` dict:
                                task feeds both. `pitch` in rotation units,
                                16384=90°; use e.g. 4096 to tilt up toward a
                                ceiling task's fixtures.
-  before                   -- dict(diags=[(img_name, caption), ...],
-                               photos=[img_name, ...]) for the task-level
-                               "before any edit" context block on the page
+  before                   -- dict(quad=img_name, note=str, photos=[img_name,
+                               ...]) for the task-level "before any edit"
+                               context block on the page: one UED-style quad
+                               view (Top/Front/Iso/Side) of the whole room,
+                               no highlight, plus the panorama tour. `quad`
+                               is rendered by render_manual.py's
+                               render_before(), never hand-captured.
   entries                  -- the flat list of acceptance criteria (below)
   scenarios                -- dict(scenario_id -> dict(title, view, note,
                                members=[actor,...], extra_photos=[(img,cap),...]))
