@@ -1,7 +1,8 @@
-"""Build the gold (fully-correct) trunk for a task from spec.py: apply each
-anchor's own op, then move every dependent by its ANCHOR's task_delta (since
-in the gold trunk the anchor's actual delta IS the task delta). Unchanged
-actors get no operation -- they stay exactly as the baseline left them.
+"""Build the gold (fully-correct) trunk for a task from spec.py: apply every
+`update(target="corners")` entry's own op, then move every `anchor` entry by
+its target anchor's task delta (since in the gold trunk the anchor's actual
+delta IS the task delta). `update(target="unchanged")` entries get no
+operation -- they stay exactly as the baseline left them.
 """
 import os, shutil, subprocess, sys, pathlib
 
@@ -21,23 +22,27 @@ def build_gold(task_id: str, out_dir: pathlib.Path):
     env = {**os.environ, "UEDCLI_PROJECT": str(out_dir), "UEDCLI_LEVEL": "unatco"}
 
     anchor_delta = {}
-    for a in spec["anchors"]:
-        args = [PY, "-m", "uedcli", "brush", "vertex", "move", a["actor"]]
-        for corner in a["at"]:
+    for e in spec["entries"]:
+        if e["kind"] != "update" or e.get("target") != "corners":
+            continue
+        args = [PY, "-m", "uedcli", "brush", "vertex", "move", e["actor"]]
+        for corner in e["at"]:
             args += ["--at", ",".join(str(c) for c in corner)]
-        args += ["--by", ",".join(str(c) for c in a["task_delta"])]
+        args += ["--by", ",".join(str(c) for c in e["delta"])]
         subprocess.run(args, cwd=WT, env=env, check=True, capture_output=True)
-        anchor_delta[a["actor"]] = a["task_delta"]
+        anchor_delta[e["actor"]] = e["delta"]
 
-    # group dependents by their actual delta (== their anchor's task_delta) to move in batches
+    # group `anchor` entries by their actual delta (== their target's task delta) to move in batches
     by_delta = {}
-    for dep in spec["dependents"]:
-        d = tuple(anchor_delta[dep["anchor"]])
-        by_delta.setdefault(d, []).append(dep["actor"])
+    for e in spec["entries"]:
+        if e["kind"] != "anchor":
+            continue
+        d = tuple(anchor_delta[e["to"]])
+        by_delta.setdefault(d, []).append(e["actor"])
     for delta, actors in by_delta.items():
         args = [PY, "-m", "uedcli", "actor", "move", *actors, "--by", ",".join(str(c) for c in delta)]
         subprocess.run(args, cwd=WT, env=env, check=True, capture_output=True)
-    # unchanged actors: nothing to do
+    # update(target="unchanged") entries: nothing to do
 
 if __name__ == "__main__":
     task_id = sys.argv[1]

@@ -1,10 +1,6 @@
 """Write the flat, per-task, machine-checkable oracle straight from spec.py
--- no diff-text parsing. This is what a grading script consumes: for each
-actor, either an absolute task_delta (anchors) to check directly, an
-anchor-relative expectation (dependents: must match THAT anchor's actual
-delta in the trunk being graded) or an unchanged assertion. Every entry
-carries its `why` through unchanged, for a human reviewing a mechanical
-FAILURE to judge whether the underlying intent was satisfied some other way.
+-- no diff-text parsing. Each task's `entries` list (kind: anchor/update/
+create/delete) IS the oracle; this just adds base_trunk and writes it out.
 """
 import json, pathlib, sys
 
@@ -16,14 +12,9 @@ OUT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spike
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
     for task_id, spec in TASKS.items():
-        oracle = dict(
-            task=task_id,
-            base_trunk=spec["base_trunk"],
-            anchors=[dict(actor=a["actor"], task_delta=a["task_delta"], at=a["at"], why=a["why"]) for a in spec["anchors"]],
-            dependents=[dict(actor=d["actor"], anchor=d["anchor"], why=d["why"]) for d in spec["dependents"]],
-            unchanged=[dict(actor=u["actor"], why=u["why"]) for u in spec["unchanged"]],
-        )
+        oracle = dict(task=task_id, base_trunk=spec["base_trunk"], entries=spec["entries"])
         (OUT / f"{task_id}.json").write_text(json.dumps(oracle, indent=2) + "\n")
-        print("wrote", f"{task_id}.json", "->",
-              len(oracle["anchors"]), "anchors,", len(oracle["dependents"]), "dependents,",
-              len(oracle["unchanged"]), "unchanged")
+        by_kind = {}
+        for e in spec["entries"]:
+            by_kind[e["kind"]] = by_kind.get(e["kind"], 0) + 1
+        print("wrote", f"{task_id}.json", "->", ", ".join(f"{v} {k}" for k, v in by_kind.items()))

@@ -1,14 +1,11 @@
 {
   "task": "t2",
   "base_trunk": "unatco_gt",
-  "anchors": [
+  "entries": [
     {
+      "kind": "update",
       "actor": "Brush418",
-      "task_delta": [
-        0,
-        0,
-        48
-      ],
+      "target": "corners",
       "at": [
         [
           128,
@@ -30,16 +27,18 @@
           64,
           416
         ]
+      ],
+      "delta": [
+        0,
+        0,
+        48
       ],
       "why": "south wall's ceiling face; the task's own raise-ceiling target"
     },
     {
+      "kind": "update",
       "actor": "Brush420",
-      "task_delta": [
-        0,
-        0,
-        48
-      ],
+      "target": "corners",
       "at": [
         [
           -96,
@@ -62,59 +61,77 @@
           416
         ]
       ],
+      "delta": [
+        0,
+        0,
+        48
+      ],
       "why": "north wall's ceiling face, shares the ceiling with Brush418 at the y=64 seam -- must rise the same amount or the ceiling steps"
-    }
-  ],
-  "dependents": [
+    },
     {
+      "kind": "anchor",
       "actor": "Brush285",
-      "anchor": "Brush418",
+      "to": "Brush418",
       "why": "recessed ceiling light panel over the south half"
     },
     {
+      "kind": "anchor",
       "actor": "Brush295",
-      "anchor": "Brush418",
+      "to": "Brush418",
       "why": "recessed ceiling light panel over the south half"
     },
     {
+      "kind": "anchor",
       "actor": "Brush132",
-      "anchor": "Brush418",
+      "to": "Brush418",
       "why": "ceiling trim cap over the south half"
     },
     {
+      "kind": "anchor",
       "actor": "Brush74",
-      "anchor": "Brush418",
+      "to": "Brush418",
       "why": "ceiling trim cap over the south half"
     },
     {
+      "kind": "anchor",
       "actor": "Brush284",
-      "anchor": "Brush420",
+      "to": "Brush420",
       "why": "recessed ceiling light panel over the north half"
-    }
-  ],
-  "unchanged": [
+    },
     {
+      "kind": "update",
       "actor": "Brush663",
+      "target": "unchanged",
       "why": "the niche is its own separate room with its own ceiling -- expected to keep its own height, not match the office's new one"
     },
     {
+      "kind": "update",
       "actor": "Light156",
+      "target": "unchanged",
       "why": "room light -- every light sits a fixed distance below its ceiling room-wide, not mounted to the surface"
     },
     {
+      "kind": "update",
       "actor": "Light103",
+      "target": "unchanged",
       "why": "room light, same fixed-height convention"
     },
     {
+      "kind": "update",
       "actor": "Light318",
+      "target": "unchanged",
       "why": "room light, same fixed-height convention"
     },
     {
+      "kind": "update",
       "actor": "Light86",
+      "target": "unchanged",
       "why": "room light, same fixed-height convention"
     },
     {
+      "kind": "update",
       "actor": "Light120",
+      "target": "unchanged",
       "why": "room light, same fixed-height convention"
     }
   ]
