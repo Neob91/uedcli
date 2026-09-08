@@ -1,0 +1,203 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Widen &amp; Ceiling · Reference Solutions</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+:root{--ground:#12130f;--panel:#1b1c16;--panel2:#22241c;--line:#33352a;--ink:#e7e3d4;--dim:#9a9585;--faint:#6f6a5c;
+--gold:#c9a24b;--gold-soft:#e0c274;--cyan:#57d4e0;--good:#5bbf7a;--bad:#e8574d;
+--mono:'IBM Plex Mono',ui-monospace,Menlo,monospace;--body:'IBM Plex Sans',system-ui,sans-serif;--disp:'Rajdhani',var(--body);}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--body);line-height:1.55;font-size:16px;-webkit-font-smoothing:antialiased}
+img{max-width:100%}
+.wrap{max-width:1040px;margin:0 auto;padding:clamp(20px,4vw,52px)}
+h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;letter-spacing:.01em;margin:0}
+.eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin:0 0 14px}
+.lede{font-size:clamp(26px,4vw,40px);line-height:1.08;margin:0 0 16px;letter-spacing:-.01em}
+.sub{color:var(--dim);max-width:70ch;font-size:16.5px;margin:0}
+.legend{display:flex;flex-wrap:wrap;gap:16px;margin:22px 0 0;font-family:var(--mono);font-size:12.5px;color:var(--dim)}
+
+.taskblk{margin:28px 0 0;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
+.taskhead{width:100%;text-align:left;background:var(--panel2);border:0;border-bottom:1px solid var(--line);padding:16px 20px;
+  display:flex;align-items:center;gap:12px;cursor:pointer;font:inherit;color:inherit}
+.taskhead h2{font-size:clamp(19px,2.6vw,25px);flex:1}
+.tchev{font-size:18px;color:var(--gold);transition:transform .15s;flex-shrink:0}
+.taskblk.open .tchev{transform:rotate(90deg)}
+.taskblk.open .taskhead{border-bottom-color:var(--gold)}
+.taskbody{padding:20px}
+.task{margin:0 0 20px;padding:14px 16px;border:1px solid var(--line);border-left:3px solid var(--gold);background:var(--panel2);border-radius:2px;font-size:15px;color:var(--dim)}
+.task .t{font-family:var(--mono);color:var(--gold);font-size:12px;letter-spacing:.1em}
+
+.beforeblk{margin:0 0 26px;padding:14px;border:1px solid color-mix(in srgb,var(--gold) 30%,var(--line));border-radius:4px;background:var(--panel2)}
+.diagrams{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;background:#13140d;padding:8px;border-radius:3px}
+.dg{margin:0}.dg img{display:block;width:100%;height:auto;border-radius:2px;cursor:zoom-in}
+.dg figcaption{font-family:var(--mono);font-size:11px;color:var(--dim);padding:5px 2px 2px}
+.striplabel{font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.06em;margin:12px 0 8px}
+
+.scenh{font-size:13px;font-family:var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--faint);margin:24px 0 10px;padding-top:14px;border-top:1px solid var(--line)}
+.scen{border:1px solid var(--line);border-radius:4px;margin:0 0 10px;overflow:hidden;background:var(--panel2)}
+.scenhead{width:100%;text-align:left;background:transparent;border:0;padding:12px 16px;display:flex;align-items:center;gap:10px;cursor:pointer;font:inherit;color:inherit}
+.chev{font-size:13px;color:var(--gold);transition:transform .15s;flex-shrink:0}
+.scen.open .chev{transform:rotate(90deg)}
+.stitle{font-size:15.5px;font-weight:600;flex:1}
+.scenbody{padding:0 16px 16px}
+.staterow{margin:0 0 14px;padding-top:12px;border-top:1px solid var(--line)}
+.staterow:first-child{border-top:0;padding-top:0}
+.statehead{display:flex;align-items:baseline;gap:10px;margin:0 0 8px}
+.snote{color:var(--dim);font-size:14px;margin:0}
+.carousel{display:flex;flex-wrap:wrap;gap:6px}
+.cthumb{width:130px;height:97px;object-fit:cover;border-radius:2px;border:1px solid var(--line);cursor:zoom-in;transition:border-color .12s}
+.cthumb:hover,.cthumb:focus{border-color:var(--gold);outline:none}
+
+.lbl{font-family:var(--mono);font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;padding:2px 8px;border-radius:2px;border:1px solid var(--line);white-space:nowrap;flex-shrink:0}
+.lbl.okv{color:var(--good);border-color:var(--good);font-weight:600}
+.lbl.badv{color:var(--bad);border-color:var(--bad);font-weight:600}
+.foot{color:var(--faint);font-size:13px;font-family:var(--mono);margin-top:26px;border-top:1px solid var(--line);padding-top:14px}
+code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px 5px;border-radius:2px;color:var(--gold-soft)}
+
+.lb{position:fixed;inset:0;background:rgba(6,7,4,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;padding:24px}
+.lb[hidden]{display:none}
+.lbimgwrap{position:relative;max-width:100%;max-height:78vh;display:flex;align-items:center;justify-content:center}
+.lb img{max-width:100%;max-height:78vh;border-radius:3px;box-shadow:0 8px 40px rgba(0,0,0,.6)}
+.lbcap{color:var(--ink);font-size:15px;max-width:70ch;text-align:center;margin-top:16px;padding:0 12px}
+.lbnav{position:fixed;top:0;bottom:0;width:80px;background:transparent;border:0;color:var(--ink);font-size:36px;cursor:pointer;opacity:.55;transition:opacity .12s}
+.lbnav:hover{opacity:1}
+.lbprev{left:0}.lbnext{right:0}
+.lbclose{position:fixed;top:14px;right:18px;font-family:var(--mono);font-size:12px;color:var(--dim);background:transparent;border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
+.lbcount{position:fixed;top:16px;left:18px;font-family:var(--mono);font-size:12px;color:var(--dim)}
+</style></head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">uedcli · reference solutions · batch 1 of 5 · UNATCO HQ</p>
+  <h1 class="lede">Reference solutions to validate &mdash; per-aspect scenarios, CORRECT vs INCORRECT.</h1>
+  <p class="sub">Each task is collapsed by default &mdash; open one and the previous one closes. Inside, each aspect of the change is its own collapsible scenario. Every scenario shows a fully-successful change overall, with just that aspect's actors highlighted, across CORRECT and one or more INCORRECT states &mdash; everything else in the scene stays correct, isolating the judgment to that one aspect. Click any picture to enlarge; arrows cycle through that scenario's images; the enlarged view always shows its caption.</p>
+  <div class="legend">
+    <span><span class="lbl okv">CORRECT</span> the right outcome for this aspect</span>
+    <span><span class="lbl badv">INCORRECT</span> a documented failure mode</span>
+  </div>
+  <div class="taskblk">
+      <button class="taskhead" onclick="toggleTask(this)">
+        <span class="tchev">&#9656;</span><h2>Task 1 — Widen the office</h2>
+      </button>
+      <div class="taskbody" hidden>
+        <div class="task"><span class="t">REQUEST:</span> &ldquo;Manderley&rsquo;s office is too narrow. Widen it eastward by 48 units &mdash; move its east wall out.&rdquo;</div>
+        <div class="beforeblk">
+          <div class="diagrams"><figure class="dg"><img src="img/v4_before_top.png" alt="Plan (top) — the office is TWO subtracts, Brush418 (south) + Brush420 (north), sharing the east wall at x=448." onclick="openLB('t1__before',0)"><figcaption>Plan (top) — the office is TWO subtracts, Brush418 (south) + Brush420 (north), sharing the east wall at x=448.</figcaption></figure><figure class="dg"><img src="img/v4_before_side.png" alt="Elevation (side) — same office, wall height context." onclick="openLB('t1__before',1)"><figcaption>Elevation (side) — same office, wall height context.</figcaption></figure></div>
+          <div class="striplabel">360° panorama tour, before any edit</div>
+          <div class="carousel"><img class="cthumb" src="img/v4pan_before_0.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',0)" onkeydown="if(event.key==='Enter')openLB('t1__before',0)"><img class="cthumb" src="img/v4pan_before_1.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',1)" onkeydown="if(event.key==='Enter')openLB('t1__before',1)"><img class="cthumb" src="img/v4pan_before_2.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',2)" onkeydown="if(event.key==='Enter')openLB('t1__before',2)"><img class="cthumb" src="img/v4pan_before_3.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',3)" onkeydown="if(event.key==='Enter')openLB('t1__before',3)"><img class="cthumb" src="img/v4pan_before_4.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',4)" onkeydown="if(event.key==='Enter')openLB('t1__before',4)"><img class="cthumb" src="img/v4pan_before_5.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',5)" onkeydown="if(event.key==='Enter')openLB('t1__before',5)"><img class="cthumb" src="img/v4pan_before_6.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',6)" onkeydown="if(event.key==='Enter')openLB('t1__before',6)"><img class="cthumb" src="img/v4pan_before_7.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t1__before',7)" onkeydown="if(event.key==='Enter')openLB('t1__before',7)"></div>
+        </div>
+        <h3 class="scenh">Per-aspect scenarios — click to expand</h3>
+        <div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">East wall (both subtracts)</span>
+      </button>
+      <div class="scenbody" hidden><div class="staterow"><div class="statehead"><span class="lbl okv">CORRECT</span><p class="snote">Both subtracts' east faces move together, x=448→496 — one flat wall, no step.</p></div><div class="carousel"><img class="cthumb" src="img/v4_before_top.png" alt="Before — wall at x=448." loading="lazy" tabindex="0" onclick="openLB('t1_wall',0)" onkeydown="if(event.key==='Enter')openLB('t1_wall',0)"><img class="cthumb" src="img/v7_t1_wall.png" alt="Correct — both faces now at x=496." loading="lazy" tabindex="0" onclick="openLB('t1_wall',1)" onkeydown="if(event.key==='Enter')openLB('t1_wall',1)"></div></div><div class="staterow"><div class="statehead"><span class="lbl badv">INCORRECT</span><p class="snote">Only Brush418 (south) widened; Brush420 (north) left at x=448 — a 48u notch in the wall.</p></div><div class="carousel"><img class="cthumb" src="img/v8_t1_wall_bad.png" alt="Incorrect — Brush420 left behind, wall steps in at the seam." loading="lazy" tabindex="0" onclick="openLB('t1_wall',2)" onkeydown="if(event.key==='Enter')openLB('t1_wall',2)"></div></div></div></div><div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Wall-mounted fixtures</span>
+      </button>
+      <div class="scenbody" hidden><div class="staterow"><div class="statehead"><span class="lbl okv">CORRECT</span><p class="snote">Switch recess, switch, trims and pilaster are physically part of the wall — they travel with it.</p></div><div class="carousel"><img class="cthumb" src="img/v7_t1_fixtures.png" alt="Correct — fixture cluster shifted +48 with the wall." loading="lazy" tabindex="0" onclick="openLB('t1_fixtures',0)" onkeydown="if(event.key==='Enter')openLB('t1_fixtures',0)"></div></div><div class="staterow"><div class="statehead"><span class="lbl badv">INCORRECT</span><p class="snote">Wall moved, but trims/switch/pilaster left at the old wall line — now floating in open space.</p></div><div class="carousel"><img class="cthumb" src="img/v8_t1_fixtures_bad.png" alt="Incorrect — fixtures stranded at the old wall position." loading="lazy" tabindex="0" onclick="openLB('t1_fixtures',1)" onkeydown="if(event.key==='Enter')openLB('t1_fixtures',1)"></div></div></div></div><div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Trophy shelf + hidden safe</span>
+      </button>
+      <div class="scenbody" hidden><div class="staterow"><div class="statehead"><span class="lbl okv">CORRECT</span><p class="snote">A wall safe (texture UNATCO.Metal.un_safe) built into a display case. Whole assembly + contents move as one unit.</p></div><div class="carousel"><img class="cthumb" src="img/v7photo_safe_before.png" alt="Before — vase, rock, book, nanokey on the shelf." loading="lazy" tabindex="0" onclick="openLB('t1_safe',0)" onkeydown="if(event.key==='Enter')openLB('t1_safe',0)"><img class="cthumb" src="img/v7photo_safe_fixed.png" alt="Correct — the whole assembly moved together." loading="lazy" tabindex="0" onclick="openLB('t1_safe',1)" onkeydown="if(event.key==='Enter')openLB('t1_safe',1)"><img class="cthumb" src="img/v7photo_safe_side.png" alt="Side angle — the cabinet's real depth." loading="lazy" tabindex="0" onclick="openLB('t1_safe',2)" onkeydown="if(event.key==='Enter')openLB('t1_safe',2)"><img class="cthumb" src="img/v7photo_safe_behind.png" alt="Behind it — a sealed, empty dead-end; nothing else back there." loading="lazy" tabindex="0" onclick="openLB('t1_safe',3)" onkeydown="if(event.key==='Enter')openLB('t1_safe',3)"><img class="cthumb" src="img/v7_t1_safe.png" alt="Plan — the full assembly highlighted." loading="lazy" tabindex="0" onclick="openLB('t1_safe',4)" onkeydown="if(event.key==='Enter')openLB('t1_safe',4)"></div></div><div class="staterow"><div class="statehead"><span class="lbl badv">INCORRECT</span><p class="snote">The recess's outer void moved, but its own back panel/shelf didn't — the safe panel is left floating mid-room.</p></div><div class="carousel"><img class="cthumb" src="img/v7photo_safe_broken.png" alt="Incorrect — the safe panel orphaned mid-room." loading="lazy" tabindex="0" onclick="openLB('t1_safe',5)" onkeydown="if(event.key==='Enter')openLB('t1_safe',5)"><img class="cthumb" src="img/v8_t1_safe_bad.png" alt="Plan — void moved, back-panel/shelf brushes left behind." loading="lazy" tabindex="0" onclick="openLB('t1_safe',6)" onkeydown="if(event.key==='Enter')openLB('t1_safe',6)"></div></div></div></div><div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Corner flagpoles</span>
+      </button>
+      <div class="scenbody" hidden><div class="staterow"><div class="statehead"><span class="lbl okv">CORRECT</span><p class="snote">Two flagpoles sit ~48u from two adjacent walls each — corner-anchored décor. Both travel to stay in their corners.</p></div><div class="carousel"><img class="cthumb" src="img/v7_t1_flags_before.png" alt="Before — FlagPole3 (NE) and FlagPole4 (SE)." loading="lazy" tabindex="0" onclick="openLB('t1_flags',0)" onkeydown="if(event.key==='Enter')openLB('t1_flags',0)"><img class="cthumb" src="img/v7_t1_flags_after.png" alt="Correct — both shifted +48, back in their corners." loading="lazy" tabindex="0" onclick="openLB('t1_flags',1)" onkeydown="if(event.key==='Enter')openLB('t1_flags',1)"><img class="cthumb" src="img/v7photo_flags_after.png" alt="Photo — the flag sits flush in the corner again." loading="lazy" tabindex="0" onclick="openLB('t1_flags',2)" onkeydown="if(event.key==='Enter')openLB('t1_flags',2)"></div></div><div class="staterow"><div class="statehead"><span class="lbl badv">INCORRECT</span><p class="snote">Wall moved, flagpoles left at their old spot — now stranded 96u from the wall instead of 48u.</p></div><div class="carousel"><img class="cthumb" src="img/v8_t1_flags_bad.png" alt="Incorrect — both flagpoles stranded at the old distance." loading="lazy" tabindex="0" onclick="openLB('t1_flags',3)" onkeydown="if(event.key==='Enter')openLB('t1_flags',3)"></div></div></div></div><div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Display niche (separate room)</span>
+      </button>
+      <div class="scenbody" hidden><div class="staterow"><div class="statehead"><span class="lbl okv">CORRECT</span><p class="snote">The niche is a genuinely separate room sharing the old wall. Carried +48 with the wall, it stays intact.</p></div><div class="carousel"><img class="cthumb" src="img/v7_t1_niche_before.png" alt="Before — the niche at its original position." loading="lazy" tabindex="0" onclick="openLB('t1_niche',0)" onkeydown="if(event.key==='Enter')openLB('t1_niche',0)"><img class="cthumb" src="img/v7_t1_niche_moved.png" alt="Correct — the niche slides +48 with the wall, staying flush." loading="lazy" tabindex="0" onclick="openLB('t1_niche',1)" onkeydown="if(event.key==='Enter')openLB('t1_niche',1)"></div></div><div class="staterow"><div class="statehead"><span class="lbl badv">INCORRECT</span><p class="snote">Wall widened, niche left in place: the office void now overlaps the niche room with no wall between them.</p></div><div class="carousel"><img class="cthumb" src="img/v7_t1_niche_notmoved.png" alt="Incorrect — wall at x=496, niche still at x=448-552: the rooms overlap." loading="lazy" tabindex="0" onclick="openLB('t1_niche',2)" onkeydown="if(event.key==='Enter')openLB('t1_niche',2)"></div></div></div></div>
+      </div></div><div class="taskblk">
+      <button class="taskhead" onclick="toggleTask(this)">
+        <span class="tchev">&#9656;</span><h2>Task 2 — Raise the ceiling</h2>
+      </button>
+      <div class="taskbody" hidden>
+        <div class="task"><span class="t">REQUEST:</span> &ldquo;Manderley&rsquo;s office feels cramped. Raise its ceiling by 48 units.&rdquo;</div>
+        <div class="beforeblk">
+          <div class="diagrams"><figure class="dg"><img src="img/v4_before_side.png" alt="Elevation (side) — ceiling at z=416, both subtracts share it." onclick="openLB('t2__before',0)"><figcaption>Elevation (side) — ceiling at z=416, both subtracts share it.</figcaption></figure><figure class="dg"><img src="img/v4_before_top.png" alt="Plan (top) — same office, footprint context." onclick="openLB('t2__before',1)"><figcaption>Plan (top) — same office, footprint context.</figcaption></figure></div>
+          <div class="striplabel">360° panorama tour, before any edit</div>
+          <div class="carousel"><img class="cthumb" src="img/v6pan_beforeceil_0.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',0)" onkeydown="if(event.key==='Enter')openLB('t2__before',0)"><img class="cthumb" src="img/v6pan_beforeceil_1.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',1)" onkeydown="if(event.key==='Enter')openLB('t2__before',1)"><img class="cthumb" src="img/v6pan_beforeceil_2.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',2)" onkeydown="if(event.key==='Enter')openLB('t2__before',2)"><img class="cthumb" src="img/v6pan_beforeceil_3.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',3)" onkeydown="if(event.key==='Enter')openLB('t2__before',3)"><img class="cthumb" src="img/v6pan_beforeceil_4.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',4)" onkeydown="if(event.key==='Enter')openLB('t2__before',4)"><img class="cthumb" src="img/v6pan_beforeceil_5.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',5)" onkeydown="if(event.key==='Enter')openLB('t2__before',5)"><img class="cthumb" src="img/v6pan_beforeceil_6.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',6)" onkeydown="if(event.key==='Enter')openLB('t2__before',6)"><img class="cthumb" src="img/v6pan_beforeceil_7.png" alt="panorama" loading="lazy" tabindex="0" onclick="openLB('t2__before',7)" onkeydown="if(event.key==='Enter')openLB('t2__before',7)"></div>
+        </div>
+        <h3 class="scenh">Per-aspect scenarios — click to expand</h3>
+        <div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Ceiling (both subtracts)</span>
+      </button>
+      <div class="scenbody" hidden><div class="staterow"><div class="statehead"><span class="lbl okv">CORRECT</span><p class="snote">Both subtracts' ceiling faces rise together, z=416→464 — one flat ceiling, no step.</p></div><div class="carousel"><img class="cthumb" src="img/v7_t2_ceil_before.png" alt="Before — ceiling at z=416." loading="lazy" tabindex="0" onclick="openLB('t2_ceil',0)" onkeydown="if(event.key==='Enter')openLB('t2_ceil',0)"><img class="cthumb" src="img/v7_t2_ceil_after.png" alt="Correct — both raised to z=464." loading="lazy" tabindex="0" onclick="openLB('t2_ceil',1)" onkeydown="if(event.key==='Enter')openLB('t2_ceil',1)"></div></div><div class="staterow"><div class="statehead"><span class="lbl badv">INCORRECT</span><p class="snote">Only Brush418 (south) raised; Brush420 (north) left at z=416 — a step in the ceiling at the seam.</p></div><div class="carousel"><img class="cthumb" src="img/v8_t2_ceil_bad.png" alt="Incorrect — Brush420's ceiling left low, a step at the seam." loading="lazy" tabindex="0" onclick="openLB('t2_ceil',2)" onkeydown="if(event.key==='Enter')openLB('t2_ceil',2)"></div></div></div></div><div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Ceiling-mounted fixtures</span>
+      </button>
+      <div class="scenbody" hidden><div class="staterow"><div class="statehead"><span class="lbl okv">CORRECT</span><p class="snote">Three flush light panels and two top trims are physically on the ceiling surface — they rise with it.</p></div><div class="carousel"><img class="cthumb" src="img/v7_t2_fixtures.png" alt="Correct — panels + trims risen to the new ceiling." loading="lazy" tabindex="0" onclick="openLB('t2_fixtures',0)" onkeydown="if(event.key==='Enter')openLB('t2_fixtures',0)"><img class="cthumb" src="img/v6pan_C_0.png" alt="Photo, tilted up — the raised ceiling with a panel." loading="lazy" tabindex="0" onclick="openLB('t2_fixtures',1)" onkeydown="if(event.key==='Enter')openLB('t2_fixtures',1)"></div></div><div class="staterow"><div class="statehead"><span class="lbl badv">INCORRECT</span><p class="snote">Ceiling raised, but the light panels/trims left at the old height — now floating 48u below the new ceiling.</p></div><div class="carousel"><img class="cthumb" src="img/v8_t2_fixtures_bad.png" alt="Incorrect — panels/trims stranded at the old ceiling height." loading="lazy" tabindex="0" onclick="openLB('t2_fixtures',2)" onkeydown="if(event.key==='Enter')openLB('t2_fixtures',2)"></div></div></div></div><div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Niche ceiling</span>
+      </button>
+      <div class="scenbody" hidden><div class="staterow"><div class="statehead"><span class="lbl okv">CORRECT</span><p class="snote">The niche keeps its own ceiling at z=416 — a visible step at the shared edge. Acceptable: it's a separate room.</p></div><div class="carousel"><img class="cthumb" src="img/v7_t2_niche_before.png" alt="Before — niche and office share one ceiling height." loading="lazy" tabindex="0" onclick="openLB('t2_niche',0)" onkeydown="if(event.key==='Enter')openLB('t2_niche',0)"><img class="cthumb" src="img/v7_t2_niche_after.png" alt="Correct — office rises, niche stays at z=416, a clean step." loading="lazy" tabindex="0" onclick="openLB('t2_niche',1)" onkeydown="if(event.key==='Enter')openLB('t2_niche',1)"><img class="cthumb" src="img/v6pan_C_0.png" alt="Photo, tilted up — the height step at the niche boundary, top-right." loading="lazy" tabindex="0" onclick="openLB('t2_niche',2)" onkeydown="if(event.key==='Enter')openLB('t2_niche',2)"></div></div></div></div><div class="scen">
+      <button class="scenhead" onclick="toggleScen(this)">
+        <span class="chev">&#9656;</span><span class="stitle">Overhead room lights</span>
+      </button>
+      <div class="scenbody" hidden><div class="staterow"><div class="statehead"><span class="lbl okv">CORRECT</span><p class="snote">Every light sits 88-120u below the ceiling — a room-wide fixed light height, not a flush-mount. They stay put.</p></div><div class="carousel"><img class="cthumb" src="img/v7_t2_lights.png" alt="Correct — the 5 room lights, unchanged position under the new ceiling." loading="lazy" tabindex="0" onclick="openLB('t2_lights',0)" onkeydown="if(event.key==='Enter')openLB('t2_lights',0)"></div></div><div class="staterow"><div class="statehead"><span class="lbl badv">INCORRECT</span><p class="snote">Lights raised +48 to match the ceiling — unnecessary, and breaks the room's consistent light-height convention.</p></div><div class="carousel"><img class="cthumb" src="img/v8_t2_lights_bad.png" alt="Incorrect — lights needlessly raised with the ceiling." loading="lazy" tabindex="0" onclick="openLB('t2_lights',1)" onkeydown="if(event.key==='Enter')openLB('t2_lights',1)"></div></div></div></div>
+      </div></div>
+  <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified. Remaining: NYC_Bar, WanChai Market, OceanLab, + one more. Diagrams: <code>actor diagram</code>, full-office framing throughout. Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>. Grading: a subagent may flag mid-work, but is judged on the final geometric outcome once told to follow its own recommendation — CORRECT across every scenario is the bar.</p>
+</div>
+
+<div id="lb" class="lb" hidden>
+  <button class="lbclose" onclick="closeLB()">✕ close (Esc)</button>
+  <span id="lbcount" class="lbcount"></span>
+  <button class="lbnav lbprev" onclick="lbStep(-1)" aria-label="previous">&#10094;</button>
+  <button class="lbnav lbnext" onclick="lbStep(1)" aria-label="next">&#10095;</button>
+  <div class="lbimgwrap"><img id="lbimg" alt=""></div>
+  <p id="lbcap" class="lbcap"></p>
+</div>
+
+<script>
+const CAROUSELS = {"t1__before": [{"src": "img/v4pan_before_0.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_1.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_2.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_3.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_4.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_5.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_6.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v4pan_before_7.png", "cap": "Panorama frame, before any edit."}], "t1_wall": [{"src": "img/v4_before_top.png", "cap": "[CORRECT] Before \u2014 wall at x=448."}, {"src": "img/v7_t1_wall.png", "cap": "[CORRECT] Correct \u2014 both faces now at x=496."}, {"src": "img/v8_t1_wall_bad.png", "cap": "[INCORRECT] Incorrect \u2014 Brush420 left behind, wall steps in at the seam."}], "t1_fixtures": [{"src": "img/v7_t1_fixtures.png", "cap": "[CORRECT] Correct \u2014 fixture cluster shifted +48 with the wall."}, {"src": "img/v8_t1_fixtures_bad.png", "cap": "[INCORRECT] Incorrect \u2014 fixtures stranded at the old wall position."}], "t1_safe": [{"src": "img/v7photo_safe_before.png", "cap": "[CORRECT] Before \u2014 vase, rock, book, nanokey on the shelf."}, {"src": "img/v7photo_safe_fixed.png", "cap": "[CORRECT] Correct \u2014 the whole assembly moved together."}, {"src": "img/v7photo_safe_side.png", "cap": "[CORRECT] Side angle \u2014 the cabinet's real depth."}, {"src": "img/v7photo_safe_behind.png", "cap": "[CORRECT] Behind it \u2014 a sealed, empty dead-end; nothing else back there."}, {"src": "img/v7_t1_safe.png", "cap": "[CORRECT] Plan \u2014 the full assembly highlighted."}, {"src": "img/v7photo_safe_broken.png", "cap": "[INCORRECT] Incorrect \u2014 the safe panel orphaned mid-room."}, {"src": "img/v8_t1_safe_bad.png", "cap": "[INCORRECT] Plan \u2014 void moved, back-panel/shelf brushes left behind."}], "t1_flags": [{"src": "img/v7_t1_flags_before.png", "cap": "[CORRECT] Before \u2014 FlagPole3 (NE) and FlagPole4 (SE)."}, {"src": "img/v7_t1_flags_after.png", "cap": "[CORRECT] Correct \u2014 both shifted +48, back in their corners."}, {"src": "img/v7photo_flags_after.png", "cap": "[CORRECT] Photo \u2014 the flag sits flush in the corner again."}, {"src": "img/v8_t1_flags_bad.png", "cap": "[INCORRECT] Incorrect \u2014 both flagpoles stranded at the old distance."}], "t1_niche": [{"src": "img/v7_t1_niche_before.png", "cap": "[CORRECT] Before \u2014 the niche at its original position."}, {"src": "img/v7_t1_niche_moved.png", "cap": "[CORRECT] Correct \u2014 the niche slides +48 with the wall, staying flush."}, {"src": "img/v7_t1_niche_notmoved.png", "cap": "[INCORRECT] Incorrect \u2014 wall at x=496, niche still at x=448-552: the rooms overlap."}], "t2__before": [{"src": "img/v6pan_beforeceil_0.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_1.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_2.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_3.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_4.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_5.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_6.png", "cap": "Panorama frame, before any edit."}, {"src": "img/v6pan_beforeceil_7.png", "cap": "Panorama frame, before any edit."}], "t2_ceil": [{"src": "img/v7_t2_ceil_before.png", "cap": "[CORRECT] Before \u2014 ceiling at z=416."}, {"src": "img/v7_t2_ceil_after.png", "cap": "[CORRECT] Correct \u2014 both raised to z=464."}, {"src": "img/v8_t2_ceil_bad.png", "cap": "[INCORRECT] Incorrect \u2014 Brush420's ceiling left low, a step at the seam."}], "t2_fixtures": [{"src": "img/v7_t2_fixtures.png", "cap": "[CORRECT] Correct \u2014 panels + trims risen to the new ceiling."}, {"src": "img/v6pan_C_0.png", "cap": "[CORRECT] Photo, tilted up \u2014 the raised ceiling with a panel."}, {"src": "img/v8_t2_fixtures_bad.png", "cap": "[INCORRECT] Incorrect \u2014 panels/trims stranded at the old ceiling height."}], "t2_niche": [{"src": "img/v7_t2_niche_before.png", "cap": "[CORRECT] Before \u2014 niche and office share one ceiling height."}, {"src": "img/v7_t2_niche_after.png", "cap": "[CORRECT] Correct \u2014 office rises, niche stays at z=416, a clean step."}, {"src": "img/v6pan_C_0.png", "cap": "[CORRECT] Photo, tilted up \u2014 the height step at the niche boundary, top-right."}], "t2_lights": [{"src": "img/v7_t2_lights.png", "cap": "[CORRECT] Correct \u2014 the 5 room lights, unchanged position under the new ceiling."}, {"src": "img/v8_t2_lights_bad.png", "cap": "[INCORRECT] Incorrect \u2014 lights needlessly raised with the ceiling."}]};
+let lbScen = null, lbIdx = 0;
+
+function toggleTask(btn){
+  const blk = btn.closest('.taskblk');
+  const wasOpen = blk.classList.contains('open');
+  document.querySelectorAll('.taskblk.open').forEach(b => {
+    b.classList.remove('open');
+    b.querySelector('.taskbody').hidden = true;
+  });
+  if (!wasOpen){
+    blk.classList.add('open');
+    blk.querySelector('.taskbody').hidden = false;
+  }
+}
+function toggleScen(btn){
+  const scen = btn.closest('.scen');
+  const body = scen.querySelector('.scenbody');
+  const open = scen.classList.toggle('open');
+  body.hidden = !open;
+}
+function openLB(scenId, idx){
+  lbScen = scenId; lbIdx = idx;
+  renderLB();
+  document.getElementById('lb').hidden = false;
+}
+function renderLB(){
+  const list = CAROUSELS[lbScen];
+  const item = list[lbIdx];
+  document.getElementById('lbimg').src = item.src;
+  document.getElementById('lbcap').textContent = item.cap;
+  document.getElementById('lbcount').textContent = (lbIdx+1) + ' / ' + list.length;
+}
+function lbStep(d){
+  const list = CAROUSELS[lbScen];
+  lbIdx = (lbIdx + d + list.length) % list.length;
+  renderLB();
+}
+function closeLB(){ document.getElementById('lb').hidden = true; }
+document.addEventListener('keydown', e => {
+  if (document.getElementById('lb').hidden) return;
+  if (e.key === 'Escape') closeLB();
+  if (e.key === 'ArrowLeft') lbStep(-1);
+  if (e.key === 'ArrowRight') lbStep(1);
+});
+document.getElementById('lb').addEventListener('click', e => {
+  if (e.target.id === 'lb') closeLB();
+});
+</script>
+</body></html>
