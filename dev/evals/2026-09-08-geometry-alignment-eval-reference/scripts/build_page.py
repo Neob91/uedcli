@@ -402,6 +402,14 @@ document.getElementById('lb').addEventListener('touchstart', e => {
   lbTouchX = e.touches[0].clientX;
   lbTouchY = e.touches[0].clientY;
 }, {passive: true});
+document.getElementById('lb').addEventListener('touchmove', e => {
+  // block the page (and the modal backdrop) from scrolling under a swipe;
+  // NOT blocked while zoomed, so panning a zoomed image via native
+  // touch-scroll still works
+  if (lbTouchX !== null && !document.getElementById('lbimg').classList.contains('zoomed')) {
+    e.preventDefault();
+  }
+}, {passive: false});
 document.getElementById('lb').addEventListener('touchend', e => {
   if (lbTouchX === null) return;
   // zoomed images pan via native touch-scroll -- don't hijack that as a swipe
