@@ -1,9 +1,9 @@
 """Render everything a human needs to MANUALLY grade one execution (a
 subagent's subject trunk) of a task: a panorama tour, and one UED-style quad
 view (Top/Front/Iso/Side, via `actor diagram --layout quad`) per oracle
-entry the execution ACTUALLY touched -- its full T3D block differs at all
-from the baseline, or it was created/removed (see `_entry_changed`) --
-with only that entry's actor highlighted
+entry the execution ACTUALLY touched -- its full T3D block or CSG
+order_value differs at all from the baseline, or it was created/removed
+(see `_entry_changed`) -- with only that entry's actor highlighted
 and labeled by what the task expects of it -- created / updated / unchanged
 / deleted. An entry whose actor is untouched gets no picture at all: most
 tasks have far more `entries` than an execution ever really touches, and a
@@ -43,11 +43,20 @@ BASE_TRUNKS_DIR = pathlib.Path(os.environ.get("BASE_TRUNKS_DIR", "/home/agent/.c
 
 LABELS = {"created": "CREATED", "updated": "UPDATED", "unchanged": "UNCHANGED", "deleted": "DELETED"}
 
-def _entry_changed(baseline, subject, entry) -> bool:
+def _order_value(project: pathlib.Path, level: str, actor: str) -> str | None:
+    """The actor's raw LexoRank CSG-order sidecar (maps/<level>/actors/<actor>/
+    order_value) -- NOT part of its T3D block (`actor show` never emits it;
+    it's a trunk-side file, see uedcli/trunk.py), so a pure CSG-order change
+    (`actor order`, no geometry touched) is otherwise invisible to a T3D diff."""
+    p = project / "maps" / level / "actors" / actor / "order_value"
+    return p.read_text() if p.exists() else None
+
+def _entry_changed(baseline, subject, task, entry) -> bool:
     """True if ANYTHING about `entry`'s actor differs between baseline and
-    subject -- exists in only one of the two trunks, or its full T3D block
+    subject -- exists in only one of the two trunks, its full T3D block
     (every vertex, every property, CSG op, texture -- not just position, and
-    not just the task's own expected corners) differs at all. A narrower
+    not just the task's own expected corners) differs at all, or its CSG
+    order_value differs (a reorder with no geometry change). A narrower
     position/corner-only check can call a real but unrelated change
     "unchanged" it isn't; this is ground truth, the same dump `actor show`
     always produces, byte for byte."""
@@ -58,7 +67,9 @@ def _entry_changed(baseline, subject, entry) -> bool:
         return True
     if not sub_exists:
         return False
-    return _show(baseline, [actor]) != _show(subject, [actor])
+    if _show(baseline, [actor]) != _show(subject, [actor]):
+        return True
+    return _order_value(baseline, task["level"], actor) != _order_value(subject, task["level"], actor)
 
 def _run(project, args, **kw):
     env = {**os.environ, "UEDCLI_PROJECT": str(project), "UEDCLI_LEVEL": "unatco"}
@@ -156,7 +167,7 @@ def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: st
     entries = []
     for e in task["entries"]:
         actor = e["actor"]
-        if not _entry_changed(baseline, subject, e):
+        if not _entry_changed(baseline, subject, task, e):
             continue
         bucket = render_entry(task, subject, baseline, e, entries_dir / f"{actor}.png")
         entries.append(dict(actor=actor, bucket=bucket, label=LABELS[bucket], img=f"entries/{actor}.png", what=e["what"]))
