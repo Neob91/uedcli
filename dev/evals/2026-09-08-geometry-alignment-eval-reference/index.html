@@ -89,12 +89,17 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 .lb img{max-width:100%;max-height:78vh;border-radius:3px;box-shadow:0 8px 40px rgba(0,0,0,.6);cursor:zoom-in}
 .lb img.zoomed{max-width:none;max-height:none;cursor:zoom-out}
 .lbcap{color:var(--ink);font-size:15px;max-width:70ch;text-align:center;margin-top:16px;padding:0 12px}
-.lbnav{position:fixed;top:0;bottom:0;width:80px;background:transparent;border:0;color:var(--ink);font-size:36px;cursor:pointer;opacity:.55;transition:opacity .12s}
+.lbnav{position:fixed;top:0;bottom:0;width:80px;background:transparent;border:0;color:var(--ink);font-size:36px;cursor:pointer;opacity:.7;transition:opacity .12s}
 .lbnav:hover{opacity:1}
 .lbprev{left:0}.lbnext{right:0}
 .lbclose{position:fixed;top:14px;right:18px;font-family:var(--mono);font-size:12px;color:var(--dim);background:transparent;border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
 .lbcount{position:fixed;top:16px;left:18px;font-family:var(--mono);font-size:12px;color:var(--dim)}
 .lbvariant{position:fixed;top:16px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:12px;color:var(--cyan);letter-spacing:.04em;background:rgba(6,7,4,.6);padding:5px 12px;border-radius:12px}
+.lbvnav{position:fixed;left:50%;transform:translateX(-50%);width:56px;height:44px;background:rgba(6,7,4,.55);border:1px solid var(--line);border-radius:8px;color:var(--ink);font-size:20px;line-height:1;cursor:pointer;opacity:.75;transition:opacity .12s;display:flex;align-items:center;justify-content:center}
+.lbvnav:hover{opacity:1}
+.lbvnav:disabled{opacity:.2;cursor:default}
+.lbvup{top:52px}
+.lbvdown{bottom:52px}
 </style></head>
 <body>
 <div class="wrap">
@@ -231,6 +236,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
   <span id="lbvariant" class="lbvariant"></span>
   <button class="lbnav lbprev" onclick="lbStep(-1)" aria-label="previous">&#10094;</button>
   <button class="lbnav lbnext" onclick="lbStep(1)" aria-label="next">&#10095;</button>
+  <button id="lbvup" class="lbvnav lbvup" onclick="cycleVariant(-1)" aria-label="previous view">&#9650;</button>
+  <button id="lbvdown" class="lbvnav lbvdown" onclick="cycleVariant(1)" aria-label="next view">&#9660;</button>
   <div id="lbimgwrap" class="lbimgwrap"><img id="lbimg" alt="" onclick="toggleZoom(event)"></div>
   <p id="lbcap" class="lbcap"></p>
 </div>
@@ -337,12 +344,11 @@ function renderVariant(){
   document.getElementById('lbimgwrap').scrollTo(0, 0);
   document.getElementById('lbcap').textContent = v.cap;
   const vbar = document.getElementById('lbvariant');
-  if (item.variants.length > 1){
-    vbar.hidden = false;
-    vbar.textContent = `view ${lbVariant+1}/${item.variants.length} — ↑↓ to cycle`;
-  } else {
-    vbar.hidden = true;
-  }
+  const hasVariants = item.variants.length > 1;
+  vbar.hidden = !hasVariants;
+  if (hasVariants) vbar.textContent = `view ${lbVariant+1}/${item.variants.length} — ↑↓ or swipe`;
+  document.getElementById('lbvup').disabled = !hasVariants;
+  document.getElementById('lbvdown').disabled = !hasVariants;
 }
 function lbStep(d){
   const list = CAROUSELS[lbScen];
@@ -374,6 +380,24 @@ document.addEventListener('keydown', e => {
 });
 document.getElementById('lb').addEventListener('click', e => {
   if (e.target.id === 'lb') closeLB();
+});
+let lbTouchX = null, lbTouchY = null;
+document.getElementById('lb').addEventListener('touchstart', e => {
+  if (e.touches.length !== 1) { lbTouchX = null; return; }
+  lbTouchX = e.touches[0].clientX;
+  lbTouchY = e.touches[0].clientY;
+}, {passive: true});
+document.getElementById('lb').addEventListener('touchend', e => {
+  if (lbTouchX === null) return;
+  // zoomed images pan via native touch-scroll -- don't hijack that as a swipe
+  if (document.getElementById('lbimg').classList.contains('zoomed')) { lbTouchX = null; return; }
+  const dx = e.changedTouches[0].clientX - lbTouchX;
+  const dy = e.changedTouches[0].clientY - lbTouchY;
+  lbTouchX = null;
+  const SWIPE = 40;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE) return;  // tap, not a swipe
+  if (Math.abs(dx) > Math.abs(dy)) lbStep(dx < 0 ? 1 : -1);
+  else cycleVariant(dy < 0 ? -1 : 1);
 });
 </script>
 </body></html>
