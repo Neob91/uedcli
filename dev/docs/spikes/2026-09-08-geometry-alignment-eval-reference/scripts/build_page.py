@@ -1,12 +1,11 @@
-"""Build index.html from every specs/<id>.py's `before`/`scenarios` (titles,
-notes, view, members, extra_photos) plus the real .diff files under diffs/,
-plus every rendered execution under runs/<task_id>/*/manifest.json (written
-by render_manual.py). No task metadata lives in this file -- add a new task
-by adding a new specs/<file>.py, not by editing this script; executions
-appear automatically as render_manual.py writes them, no registration
-needed. Grading is manual: each execution card POSTs a score (0-10) + note
-to serve.py's /api/grade and reloads it from /api/grades -- this script
-only lays out the form, it never computes a verdict."""
+"""Build index.html from every specs/<id>.py's `before` block plus every
+rendered execution under runs/<task_id>/*/manifest.json (written by
+render_manual.py). No task metadata lives in this file -- add a new task by
+adding a new specs/<file>.py, not by editing this script; executions appear
+automatically as render_manual.py writes them, no registration needed.
+Grading is manual: each execution card POSTs a score (0-10) + note to
+serve.py's /api/grade and reloads it from /api/grades -- this script only
+lays out the form, it never computes a verdict."""
 import json, pathlib, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
@@ -14,7 +13,6 @@ from registry import TASKS
 
 ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference")
 DEST_IMG = ROOT / "img"
-DIFFS = ROOT / "diffs"
 RUNS = ROOT / "runs"
 
 used = set()  # (task_id, name) pairs actually referenced, for the missing-file check
@@ -28,40 +26,6 @@ def run_img(task_id, run_id, relpath):
     return f"runs/{task_id}/{run_id}/img/{relpath}"
 
 ALL_CAROUSELS = {}
-
-def scenario_images(task_id, scen_id, note, members):
-    imgs = [(scen_id, f"[CORRECT] {note} (highlighted: {', '.join(members)})")]
-    imgs += TASKS[task_id]["scenarios"][scen_id].get("extra_photos", [])
-    return imgs
-
-def carousel_html(task_id, scen_id, images):
-    key = f"{task_id}__{scen_id}"
-    items, thumbs = [], ""
-    for i, (name, cap) in enumerate(images):
-        items.append({"src": img(task_id, name), "cap": cap})
-        thumbs += (f'<img class="cthumb" src="{img(task_id, name)}" alt="{cap}" loading="lazy" tabindex="0" '
-                   f'onclick="openLB(\'{key}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{key}\',{i})">')
-    ALL_CAROUSELS[key] = items
-    return thumbs
-
-def scenario_card(task_id, scen_id, scen):
-    images = scenario_images(task_id, scen_id, scen["note"], scen["members"])
-    thumbs = carousel_html(task_id, scen_id, images)
-    diff_path = DIFFS / task_id / f"{scen_id}.diff"
-    diff_text = diff_path.read_text()
-    diff_note = "" if diff_text.strip() else "<p class=\"nochange\">Zero-line diff — this aspect asserts these actors are UNCHANGED from the baseline, and they are.</p>"
-    diff_rel = f"diffs/{task_id}/{scen_id}.diff"
-    return f"""<div class="scen">
-      <button class="scenhead" onclick="toggleScen(this)">
-        <span class="chev">&#9656;</span><span class="stitle">{scen['title']}</span>
-      </button>
-      <div class="scenbody" hidden>
-        <p class="sdesc">{scen['note']}</p>
-        <div class="carousel">{thumbs}</div>
-        <details class="diffbox"><summary>Diff — real <code>diff -u</code> output this picture is generated from (<a href="{diff_rel}">{diff_rel}</a>)</summary>
-          {diff_note}<pre class="diffpre">{diff_text}</pre>
-        </details>
-      </div></div>"""
 
 def discover_executions(task_id):
     d = RUNS / task_id
@@ -137,7 +101,6 @@ def task_block(task_id, task):
     before_thumbs = "".join(f'<img class="cthumb" src="{img(task_id, n)}" alt="panorama" loading="lazy" tabindex="0" '
                              f'onclick="openLB(\'{bid}\',{i+1})" onkeydown="if(event.key===\'Enter\')openLB(\'{bid}\',{i+1})">'
                              for i, n in enumerate(before["photos"]))
-    scen_html = "".join(scenario_card(task_id, scen_id, scen) for scen_id, scen in task["scenarios"].items())
     runs = discover_executions(task_id)
     exec_html = ('<p class="sdesc">No executions rendered yet for this task — run '
                  '<code>scripts/render_manual.py '
@@ -155,8 +118,6 @@ def task_block(task_id, task):
           <div class="striplabel">360° panorama tour, before any edit</div>
           <div class="carousel">{before_thumbs}</div>
         </div>
-        <h3 class="scenh">Per-aspect scenarios (reference) — click to expand</h3>
-        {scen_html}
         <h3 class="scenh">Executions to grade — click to expand, score 0–10 + note, editable anytime</h3>
         {exec_html}
       </div></div>"""
@@ -251,8 +212,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 
 .lb{position:fixed;inset:0;background:rgba(6,7,4,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;padding:24px}
 .lb[hidden]{display:none}
-.lbimgwrap{position:relative;max-width:100%;max-height:78vh;display:flex;align-items:center;justify-content:center}
-.lb img{max-width:100%;max-height:78vh;border-radius:3px;box-shadow:0 8px 40px rgba(0,0,0,.6)}
+.lbimgwrap{position:relative;max-width:100%;max-height:78vh;display:flex;align-items:center;justify-content:center;overflow:auto}
+.lb img{max-width:100%;max-height:78vh;border-radius:3px;box-shadow:0 8px 40px rgba(0,0,0,.6);cursor:zoom-in}
+.lb img.zoomed{max-width:none;max-height:none;cursor:zoom-out}
 .lbcap{color:var(--ink);font-size:15px;max-width:70ch;text-align:center;margin-top:16px;padding:0 12px}
 .lbnav{position:fixed;top:0;bottom:0;width:80px;background:transparent;border:0;color:var(--ink);font-size:36px;cursor:pointer;opacity:.55;transition:opacity .12s}
 .lbnav:hover{opacity:1}
@@ -265,8 +227,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
   <p class="eyebrow">uedcli · reference solutions · batch 1 of 5 · UNATCO HQ</p>
   <h1 class="lede">Reference solutions to validate &mdash; per-aspect, diff-generated.</h1>
   <p class="sub">Each task is collapsed by default &mdash; open one and the previous one closes. Inside, each aspect of the change is its own collapsible scenario, showing the fully-correct outcome with just that aspect's actors highlighted. Click any picture to enlarge; arrows cycle through that scenario's images; the enlarged view always shows its caption.</p>
-  <p class="pipeline"><b>Every picture is generated, never hand-built:</b> each reference scenario below is backed by a REAL <code>diff -u</code> (not a custom format) between the baseline and the fully-correct trunk, over each actor's normalized state (brush corners, or Location). Grading is manual: each task's <b>executions</b> section shows every task-relevant actor's actual outcome — one quad view (Top/Front/Iso/Side) per actor, labeled CREATED/UPDATED/UNCHANGED/DELETED by what the task expects of it — plus a full panorama tour, so you can score 0–10 and leave a note from the pictures alone. A DELETED actor's quad shows the final room with that actor reinserted (from its last known position) so its absence is visible, not just implied. Scores save immediately and stay editable.</p>
-  <p class="orient">Orientation, top-down plans (matching UnrealEd's own axis convention): <b>East = right</b> edge of the image, <b>West = left</b>, <b>North = up</b>, <b>South = down</b>. A small compass is burned into the top-left corner of every plan below as a direct check.</p>
+  <p class="pipeline"><b>Every picture is generated, never hand-built.</b> Grading is manual: each task's <b>executions</b> section shows every task-relevant actor's actual outcome — one quad view (Top/Front/Iso/Side) per actor, labeled CREATED/UPDATED/UNCHANGED/DELETED by what the task expects of it — plus a full panorama tour, so you can score 0–10 and leave a note from the pictures alone. A DELETED actor's quad shows the final room with that actor reinserted (from its last known position) so its absence is visible, not just implied. Scores save immediately and stay editable.</p>
+  <p class="orient">Orientation (matching UnrealEd's own axis convention): in the <b>Top</b> pane of every quad view, <b>East = right</b> edge of the image, <b>West = left</b>, <b>North = up</b>, <b>South = down</b>.</p>
   __BODY__
   <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified, each assigned its OWN anchor by verified geometry (some fixtures split across both wall volumes). Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same pipeline. Diagrams: <code>actor diagram</code>, cropped to the room this task edits (not the whole level). Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>.</p>
 </div>
@@ -276,7 +238,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
   <span id="lbcount" class="lbcount"></span>
   <button class="lbnav lbprev" onclick="lbStep(-1)" aria-label="previous">&#10094;</button>
   <button class="lbnav lbnext" onclick="lbStep(1)" aria-label="next">&#10095;</button>
-  <div class="lbimgwrap"><img id="lbimg" alt=""></div>
+  <div id="lbimgwrap" class="lbimgwrap"><img id="lbimg" alt="" onclick="toggleZoom(event)"></div>
   <p id="lbcap" class="lbcap"></p>
 </div>
 
@@ -370,7 +332,10 @@ function openLB(scenId, idx){
 function renderLB(){
   const list = CAROUSELS[lbScen];
   const item = list[lbIdx];
-  document.getElementById('lbimg').src = item.src;
+  const img = document.getElementById('lbimg');
+  img.src = item.src;
+  img.classList.remove('zoomed');
+  document.getElementById('lbimgwrap').scrollTo(0, 0);
   document.getElementById('lbcap').textContent = item.cap;
   document.getElementById('lbcount').textContent = (lbIdx+1) + ' / ' + list.length;
 }
@@ -378,6 +343,10 @@ function lbStep(d){
   const list = CAROUSELS[lbScen];
   lbIdx = (lbIdx + d + list.length) % list.length;
   renderLB();
+}
+function toggleZoom(e){
+  e.stopPropagation();
+  document.getElementById('lbimg').classList.toggle('zoomed');
 }
 function closeLB(){ document.getElementById('lb').hidden = true; }
 document.addEventListener('keydown', e => {

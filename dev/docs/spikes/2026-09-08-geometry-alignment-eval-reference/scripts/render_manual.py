@@ -78,7 +78,7 @@ def _diagram_live(project, frame, highlight, out_path):
         names.append(highlight)
     args = ["actor", "diagram", *names,
             "--layout", "quad", "--faces", "wire", "--brush-colors", "csg",
-            "--frame", frame, "--size", "900", "--out", str(out_path)]
+            "--frame", frame, "--size", "1800", "--out", str(out_path)]
     if highlight:
         args += ["--highlight", highlight]
     r = _run(project, args)
@@ -96,7 +96,7 @@ def _diagram_composite(scene_project, scene_names, missing_project, missing_acto
     missing_file.write_text(_show(missing_project, [missing_actor]))
     args = ["actor", "diagram", "--from-t3d", str(scene_file), str(missing_file),
             "--layout", "quad", "--faces", "wire", "--brush-colors", "csg",
-            "--frame", frame, "--highlight", missing_actor, "--size", "900", "--out", str(out_path)]
+            "--frame", frame, "--highlight", missing_actor, "--size", "1800", "--out", str(out_path)]
     r = _run(scene_project, args)  # project irrelevant under --from-t3d, kept for a stable env
     r.check_returncode()
 

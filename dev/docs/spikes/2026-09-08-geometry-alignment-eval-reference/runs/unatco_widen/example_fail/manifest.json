@@ -3,7 +3,7 @@
   "run_id": "example_fail",
   "label": "Example: wrong wall delta, dependents dragged along",
   "subject_trunk": "/home/agent/.claude/jobs/92851c21/tmp/unatco_t1wall_bad",
-  "rendered_at": "2026-09-08T19:10:29.856193+00:00",
+  "rendered_at": "2026-09-09T08:50:39.494492+00:00",
   "entries": [
     {
       "actor": "Brush418",
