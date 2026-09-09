@@ -3,98 +3,57 @@
   "run_id": "example_pass",
   "label": "Example: fully correct",
   "subject_trunk": "/home/agent/.claude/jobs/92851c21/tmp/gold_ceiling",
-  "rendered_at": "2026-09-09T08:53:29.101619+00:00",
+  "rendered_at": "2026-09-09T09:02:01.509944+00:00",
+  "n_task_entries": 13,
   "entries": [
     {
       "actor": "Brush418",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush418.png",
-      "why": "south wall's ceiling face; the task's own raise-ceiling target"
+      "what": "south wall's ceiling face; the task's own raise-ceiling target"
     },
     {
       "actor": "Brush420",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush420.png",
-      "why": "north wall's ceiling face, shares the ceiling with Brush418 at the y=64 seam -- must rise the same amount or the ceiling steps"
+      "what": "north wall's ceiling face, shares the ceiling with Brush418 at the y=64 seam -- must rise the same amount or the ceiling steps"
     },
     {
       "actor": "Brush285",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush285.png",
-      "why": "recessed ceiling light panel over the south half"
+      "what": "recessed ceiling light panel over the south half"
     },
     {
       "actor": "Brush295",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush295.png",
-      "why": "recessed ceiling light panel over the south half"
+      "what": "recessed ceiling light panel over the south half"
     },
     {
       "actor": "Brush132",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush132.png",
-      "why": "ceiling trim cap over the south half"
+      "what": "ceiling trim cap over the south half"
     },
     {
       "actor": "Brush74",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush74.png",
-      "why": "ceiling trim cap over the south half"
+      "what": "ceiling trim cap over the south half"
     },
     {
       "actor": "Brush284",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush284.png",
-      "why": "recessed ceiling light panel over the north half"
-    },
-    {
-      "actor": "Brush663",
-      "bucket": "unchanged",
-      "label": "UNCHANGED",
-      "img": "entries/Brush663.png",
-      "why": "the niche is its own separate room with its own ceiling -- expected to keep its own height, not match the office's new one"
-    },
-    {
-      "actor": "Light156",
-      "bucket": "unchanged",
-      "label": "UNCHANGED",
-      "img": "entries/Light156.png",
-      "why": "room light -- every light sits a fixed distance below its ceiling room-wide, not mounted to the surface"
-    },
-    {
-      "actor": "Light103",
-      "bucket": "unchanged",
-      "label": "UNCHANGED",
-      "img": "entries/Light103.png",
-      "why": "room light, same fixed-height convention"
-    },
-    {
-      "actor": "Light318",
-      "bucket": "unchanged",
-      "label": "UNCHANGED",
-      "img": "entries/Light318.png",
-      "why": "room light, same fixed-height convention"
-    },
-    {
-      "actor": "Light86",
-      "bucket": "unchanged",
-      "label": "UNCHANGED",
-      "img": "entries/Light86.png",
-      "why": "room light, same fixed-height convention"
-    },
-    {
-      "actor": "Light120",
-      "bucket": "unchanged",
-      "label": "UNCHANGED",
-      "img": "entries/Light120.png",
-      "why": "room light, same fixed-height convention"
+      "what": "recessed ceiling light panel over the north half"
     }
   ],
   "panorama": [

@@ -105,7 +105,7 @@ def check_trunk(oracle_path: pathlib.Path, baseline: pathlib.Path, subject: path
                 d = named_corners_delta([tuple(c) for c in e["at"]], subject_corners)
                 ok = close(d, tuple(e["delta"]))
                 results.append(dict(actor=e["actor"], role="update(corners)", delta=d, expected=e["delta"],
-                                     verdict="correct" if ok else "wrong", why=e["why"]))
+                                     verdict="correct" if ok else "wrong", what=e["what"]))
                 anchor_actual_delta[e["actor"]] = d
             elif e.get("target") == "unchanged":
                 base_pos = read_position(baseline, e["actor"])
@@ -113,14 +113,14 @@ def check_trunk(oracle_path: pathlib.Path, baseline: pathlib.Path, subject: path
                 d = sub(sub_pos, base_pos)
                 verdict = "correct" if close(d, (0, 0, 0)) else "touched_when_should_not_be"
                 results.append(dict(actor=e["actor"], role="update(unchanged)", delta=d, expected=(0, 0, 0),
-                                     verdict=verdict, why=e["why"]))
+                                     verdict=verdict, what=e["what"]))
             else:
                 raise NotImplementedError(f"update target {e.get('target')!r} not implemented: {e}")
         except ActorMissing as ex:
             # A very plausible subagent failure mode (deleted/renamed the wrong
             # thing while editing) -- classify it, don't crash the whole run.
             results.append(dict(actor=e["actor"], role=f"update({e.get('target')})", delta=None, expected=None,
-                                 verdict="missing", why=e["why"]))
+                                 verdict="missing", what=e["what"]))
 
     # pass 2: `anchor` entries (need pass 1's actual deltas)
     for e in entries:
@@ -130,14 +130,14 @@ def check_trunk(oracle_path: pathlib.Path, baseline: pathlib.Path, subject: path
             # Its own anchor was missing/unresolved (pass 1 already reported that) --
             # nothing sensible to compare against, so this one is unresolvable too.
             results.append(dict(actor=e["actor"], role=f"anchor(to {e['to']})", delta=None, expected=None,
-                                 verdict="anchor_unresolved", why=e["why"]))
+                                 verdict="anchor_unresolved", what=e["what"]))
             continue
         try:
             base_pos = read_position(baseline, e["actor"])
             sub_pos = read_position(subject, e["actor"])
         except ActorMissing:
             results.append(dict(actor=e["actor"], role=f"anchor(to {e['to']})", delta=None, expected=None,
-                                 verdict="missing", why=e["why"]))
+                                 verdict="missing", what=e["what"]))
             continue
         d = sub(sub_pos, base_pos)
         anchor_d = anchor_actual_delta[e["to"]]
@@ -148,7 +148,7 @@ def check_trunk(oracle_path: pathlib.Path, baseline: pathlib.Path, subject: path
         else:
             verdict = "touched_wrong"
         results.append(dict(actor=e["actor"], role=f"anchor(to {e['to']})", delta=d, expected=anchor_d,
-                             verdict=verdict, why=e["why"]))
+                             verdict=verdict, what=e["what"]))
 
     for e in entries:
         if e["kind"] in ("create", "delete"):
@@ -169,7 +169,7 @@ if __name__ == "__main__":
             # Grading cares about outcome, not method: a mechanical FAILURE isn't
             # necessarily wrong -- surface the intent so a reviewer can judge
             # whether it was satisfied some other way this check didn't anticipate.
-            print(f"     intent: {r['why']}")
+            print(f"     what: {r['what']}")
     print(f"\n{len(results)-n_bad}/{len(results)} correct")
     if n_bad:
         print(f"{n_bad} failure(s) above need review against their stated intent, not an automatic fail.")

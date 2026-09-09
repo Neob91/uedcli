@@ -1,8 +1,13 @@
 """Render everything a human needs to MANUALLY grade one execution (a
 subagent's subject trunk) of a task: a panorama tour, and one UED-style quad
 view (Top/Front/Iso/Side, via `actor diagram --layout quad`) per oracle
-entry, with only that entry's actor highlighted and labeled by what the
-task expects of it -- created / updated / unchanged / deleted.
+entry the execution ACTUALLY touched (moved, created, or removed vs the
+baseline -- see `_actor_changed`), with only that entry's actor highlighted
+and labeled by what the task expects of it -- created / updated / unchanged
+/ deleted. An entry whose actor is untouched gets no picture at all: most
+tasks have far more `entries` than an execution ever really touches, and a
+card per untouched actor would just be the same "nothing happened" quad
+over and over.
 
 An entry's actor is looked up in the SUBJECT trunk. When it's not there
 (the deleted case, or an update/anchor actor a subagent wrongly deleted),
@@ -26,7 +31,7 @@ import argparse, datetime, json, os, pathlib, subprocess, sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
 from render_photos import render_photos
-from check_trunk import _actor_exists
+from check_trunk import _actor_exists, read_position, read_corners, named_corners_delta
 
 WT = "/workspace/uedcli/.claude/worktrees/geom-eval"
 PY = "/workspace/uedcli/.venv/bin/python"
@@ -34,8 +39,32 @@ ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spik
 RUNS = ROOT / "runs"
 IMG = ROOT / "img"
 BASE_TRUNKS_DIR = pathlib.Path(os.environ.get("BASE_TRUNKS_DIR", "/home/agent/.claude/jobs/92851c21/tmp"))
+EPS = 0.5  # world units; matches check_trunk.py's own tolerance
 
 LABELS = {"created": "CREATED", "updated": "UPDATED", "unchanged": "UNCHANGED", "deleted": "DELETED"}
+
+def _entry_changed(baseline, subject, entry) -> bool:
+    """True if this execution actually touched `entry`'s actor at all --
+    exists in only one of the two trunks, or its position differs beyond
+    EPS. A `update(target="corners")` entry is a brush RESIZE (only one
+    face moves), so it's judged by its own named corners, same as
+    check_trunk.py's own grading -- a whole-brush centroid would dilute a
+    genuine wrong-resize into a false "unchanged" (measured: a real
+    known-bad trunk's mis-resized wall read as unchanged under centroid,
+    hiding the exact failure this eval exists to catch)."""
+    actor = entry["actor"]
+    base_exists = _actor_exists(baseline, actor)
+    sub_exists = _actor_exists(subject, actor)
+    if base_exists != sub_exists:
+        return True
+    if not sub_exists:
+        return False
+    if entry["kind"] == "update" and entry.get("target") == "corners":
+        d = named_corners_delta([tuple(c) for c in entry["at"]], read_corners(subject, actor))
+        return any(abs(x) > EPS for x in d)
+    base_pos = read_position(baseline, actor)
+    sub_pos = read_position(subject, actor)
+    return any(abs(a - b) > EPS for a, b in zip(sub_pos, base_pos))
 
 def _run(project, args, **kw):
     env = {**os.environ, "UEDCLI_PROJECT": str(project), "UEDCLI_LEVEL": "unatco"}
@@ -132,10 +161,11 @@ def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: st
 
     entries = []
     for e in task["entries"]:
-        actor = e.get("actor", "unknown")
-        img_name = f"entries/{actor}"
+        actor = e["actor"]
+        if not _entry_changed(baseline, subject, e):
+            continue
         bucket = render_entry(task, subject, baseline, e, entries_dir / f"{actor}.png")
-        entries.append(dict(actor=actor, bucket=bucket, label=LABELS[bucket], img=f"{img_name}.png", why=e["why"]))
+        entries.append(dict(actor=actor, bucket=bucket, label=LABELS[bucket], img=f"entries/{actor}.png", what=e["what"]))
 
     render_photos(task, subject, out_dir / "img")
 
@@ -143,6 +173,7 @@ def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: st
         task_id=task_id, run_id=run_id, label=label or run_id,
         subject_trunk=str(subject),
         rendered_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        n_task_entries=len(task["entries"]),
         entries=entries,
         panorama=[f"pan_{i}.png" for i in range(8)],
     )

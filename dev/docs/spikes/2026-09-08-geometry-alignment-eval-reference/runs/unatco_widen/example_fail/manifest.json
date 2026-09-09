@@ -3,252 +3,246 @@
   "run_id": "example_fail",
   "label": "Example: wrong wall delta, dependents dragged along",
   "subject_trunk": "/home/agent/.claude/jobs/92851c21/tmp/unatco_t1wall_bad",
-  "rendered_at": "2026-09-09T08:50:39.494492+00:00",
+  "rendered_at": "2026-09-09T09:25:44.501575+00:00",
+  "n_task_entries": 35,
   "entries": [
     {
       "actor": "Brush418",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush418.png",
-      "why": "south wall of Manderley's office; the task's own east-widen target"
-    },
-    {
-      "actor": "Brush420",
-      "bucket": "updated",
-      "label": "UPDATED",
-      "img": "entries/Brush420.png",
-      "why": "north wall of Manderley's office, shares the east wall with Brush418 at the y=64 seam -- must widen the same amount or the wall steps"
+      "what": "south wall of Manderley's office; the task's own east-widen target"
     },
     {
       "actor": "Brush670",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush670.png",
-      "why": "switch recess, cut into the south wall"
+      "what": "switch recess, cut into the south wall"
     },
     {
       "actor": "Brush161",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush161.png",
-      "why": "south wall trim board"
+      "what": "south wall trim board"
     },
     {
       "actor": "Brush132",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush132.png",
-      "why": "south wall trim board"
+      "what": "south wall trim board"
     },
     {
       "actor": "Brush203",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush203.png",
-      "why": "south wall trim board"
+      "what": "south wall trim board"
     },
     {
       "actor": "Brush74",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush74.png",
-      "why": "south wall trim board"
+      "what": "south wall trim board"
     },
     {
       "actor": "Brush152",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush152.png",
-      "why": "south wall fixture"
+      "what": "south wall fixture"
     },
     {
       "actor": "Switch6",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Switch6.png",
-      "why": "the wall light switch itself, mounted in Brush670's recess"
+      "what": "the wall light switch itself, mounted in Brush670's recess"
     },
     {
       "actor": "Brush869",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush869.png",
-      "why": "decorative pilaster on the north wall"
+      "what": "decorative pilaster on the north wall"
     },
     {
       "actor": "Light14",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Light14.png",
-      "why": "the pilaster's own light"
+      "what": "the pilaster's own light"
     },
     {
       "actor": "Brush766",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush766.png",
-      "why": "wall cavity holding the trophy shelf + hidden safe, cut into the north wall"
+      "what": "wall cavity holding the trophy shelf + hidden safe, cut into the north wall"
     },
     {
       "actor": "Brush364",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush364.png",
-      "why": "the safe's own interior geometry inside the cavity"
+      "what": "the safe's own interior geometry inside the cavity"
     },
     {
       "actor": "Brush873",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush873.png",
-      "why": "the safe's own back panel inside the cavity -- moving the cavity without this orphans it mid-room (the original bug this eval caught)"
+      "what": "the safe's own back panel inside the cavity -- moving the cavity without this orphans it mid-room (the original bug this eval caught)"
     },
     {
       "actor": "Brush592",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush592.png",
-      "why": "the display shelf inside the cavity"
+      "what": "the display shelf inside the cavity"
     },
     {
       "actor": "Light149",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Light149.png",
-      "why": "the shelf's own light"
+      "what": "the shelf's own light"
     },
     {
       "actor": "Vase3",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Vase3.png",
-      "why": "display item on the shelf"
+      "what": "display item on the shelf"
     },
     {
       "actor": "Vase4",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Vase4.png",
-      "why": "display item on the shelf"
+      "what": "display item on the shelf"
     },
     {
       "actor": "BookClosed1",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/BookClosed1.png",
-      "why": "display item on the shelf"
+      "what": "display item on the shelf"
     },
     {
       "actor": "NanoKey0",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/NanoKey0.png",
-      "why": "display item on the shelf"
+      "what": "display item on the shelf"
     },
     {
       "actor": "WeaponModRecoil0",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/WeaponModRecoil0.png",
-      "why": "display item on the shelf"
+      "what": "display item on the shelf"
     },
     {
       "actor": "FlagPole3",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/FlagPole3.png",
-      "why": "ceremonial flagpole anchored to the north wall's corner (~48u off two adjacent walls, not flush-mounted)"
+      "what": "ceremonial flagpole anchored to the north wall's corner (~48u off two adjacent walls, not flush-mounted)"
     },
     {
       "actor": "FlagPole4",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/FlagPole4.png",
-      "why": "ceremonial flagpole anchored to the south wall's corner"
+      "what": "ceremonial flagpole anchored to the south wall's corner"
     },
     {
       "actor": "Brush663",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush663.png",
-      "why": "the display niche -- a genuinely separate small room built against the south wall, must stay flush against it"
+      "what": "the display niche -- a genuinely separate small room built against the south wall, must stay flush against it"
     },
     {
       "actor": "Brush1",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush1.png",
-      "why": "niche interior detail brush"
+      "what": "niche interior detail brush"
     },
     {
       "actor": "Brush138",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush138.png",
-      "why": "niche interior detail brush"
+      "what": "niche interior detail brush"
     },
     {
       "actor": "Brush140",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush140.png",
-      "why": "niche interior detail brush"
+      "what": "niche interior detail brush"
     },
     {
       "actor": "Brush148",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush148.png",
-      "why": "niche interior detail brush"
+      "what": "niche interior detail brush"
     },
     {
       "actor": "Brush164",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush164.png",
-      "why": "niche interior detail brush"
+      "what": "niche interior detail brush"
     },
     {
       "actor": "Brush168",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush168.png",
-      "why": "niche interior detail brush"
+      "what": "niche interior detail brush"
     },
     {
       "actor": "Brush1158",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush1158.png",
-      "why": "niche interior detail brush"
+      "what": "niche interior detail brush"
     },
     {
       "actor": "Brush1550",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush1550.png",
-      "why": "niche interior detail brush"
+      "what": "niche interior detail brush"
     },
     {
       "actor": "Brush1551",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Brush1551.png",
-      "why": "niche interior detail brush"
+      "what": "niche interior detail brush"
     },
     {
       "actor": "OrdersTrigger5",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/OrdersTrigger5.png",
-      "why": "scripted trigger inside the niche"
+      "what": "scripted trigger inside the niche"
     },
     {
       "actor": "Light6",
       "bucket": "updated",
       "label": "UPDATED",
       "img": "entries/Light6.png",
-      "why": "the niche's own light"
+      "what": "the niche's own light"
     }
   ],
   "panorama": [

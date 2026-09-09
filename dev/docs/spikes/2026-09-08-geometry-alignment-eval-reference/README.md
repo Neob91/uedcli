@@ -25,10 +25,9 @@ Move/resize/clip/scale all grade the same way (`update`, or `anchor` for a relat
 per-verb code needed, since none of them are structurally different from "some property or shape
 became a final value." Only existence (create/delete) is a different kind of check.
 
-Every entry carries a `why`: plain language, not consumed by the mechanical check. Grading cares
-about the RESULT, not how an agent got there — `check_trunk.py` prints `why` under every FAILURE
-line, so a mechanical fail is a prompt to check whether the intent was satisfied some other way,
-not an automatic hard fail.
+Every entry carries a `what`: plain-language identification of the actor, not consumed by the
+mechanical check. Shown next to its picture on the page; `check_trunk.py` also prints it under
+every FAILURE line, so a mechanical fail is a prompt to check the actor by name, not just a verdict.
 
 Scenario grouping (for the human page) is layered on top of `entries` and does not affect grading.
 

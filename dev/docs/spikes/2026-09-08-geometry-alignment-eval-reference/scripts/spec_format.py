@@ -63,11 +63,11 @@ vocabulary but NOT implemented in check_trunk.py (raises NotImplementedError
 if an entry ever uses one) -- add real handling only when a real task needs
 one, not speculatively.
 
-Every entry carries a `why`: plain language, not consumed by the mechanical
-check. Grading cares about the RESULT, not how an agent got there --
-check_trunk.py prints `why` under every FAILURE line, so a mechanical fail is
-a prompt to check whether the intent was satisfied some other way, not an
-automatic hard fail.
+Every entry carries a `what`: plain-language identification of the actor (what it
+is, not why it matters) -- shown on the page next to its picture, and not consumed
+by the mechanical check. check_trunk.py prints it under every FAILURE line too, so
+a mechanical fail is a prompt to check whether the actor's role was satisfied some
+other way, not an automatic hard fail.
 
 Image names in `before`/`scenarios[...].extra_photos` are relative to this
 task's own img/<task_id>/ directory (see registry.py) -- no cross-task
