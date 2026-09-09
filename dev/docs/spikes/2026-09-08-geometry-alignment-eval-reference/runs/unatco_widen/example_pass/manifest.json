@@ -3,7 +3,7 @@
   "run_id": "example_pass",
   "label": "Example: fully correct",
   "subject_trunk": "/home/agent/.claude/jobs/92851c21/tmp/gold_widen",
-  "rendered_at": "2026-09-09T09:09:50.075107+00:00",
+  "rendered_at": "2026-09-09T09:58:38.761961+00:00",
   "n_task_entries": 35,
   "entries": [
     {

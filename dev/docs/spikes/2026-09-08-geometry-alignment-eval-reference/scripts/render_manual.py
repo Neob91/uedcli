@@ -1,8 +1,9 @@
 """Render everything a human needs to MANUALLY grade one execution (a
 subagent's subject trunk) of a task: a panorama tour, and one UED-style quad
 view (Top/Front/Iso/Side, via `actor diagram --layout quad`) per oracle
-entry the execution ACTUALLY touched (moved, created, or removed vs the
-baseline -- see `_actor_changed`), with only that entry's actor highlighted
+entry the execution ACTUALLY touched -- its full T3D block differs at all
+from the baseline, or it was created/removed (see `_entry_changed`) --
+with only that entry's actor highlighted
 and labeled by what the task expects of it -- created / updated / unchanged
 / deleted. An entry whose actor is untouched gets no picture at all: most
 tasks have far more `entries` than an execution ever really touches, and a
@@ -31,7 +32,7 @@ import argparse, datetime, json, os, pathlib, subprocess, sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
 from render_photos import render_photos
-from check_trunk import _actor_exists, read_position, read_corners, named_corners_delta
+from check_trunk import _actor_exists
 
 WT = "/workspace/uedcli/.claude/worktrees/geom-eval"
 PY = "/workspace/uedcli/.venv/bin/python"
@@ -39,19 +40,17 @@ ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spik
 RUNS = ROOT / "runs"
 IMG = ROOT / "img"
 BASE_TRUNKS_DIR = pathlib.Path(os.environ.get("BASE_TRUNKS_DIR", "/home/agent/.claude/jobs/92851c21/tmp"))
-EPS = 0.5  # world units; matches check_trunk.py's own tolerance
 
 LABELS = {"created": "CREATED", "updated": "UPDATED", "unchanged": "UNCHANGED", "deleted": "DELETED"}
 
 def _entry_changed(baseline, subject, entry) -> bool:
-    """True if this execution actually touched `entry`'s actor at all --
-    exists in only one of the two trunks, or its position differs beyond
-    EPS. A `update(target="corners")` entry is a brush RESIZE (only one
-    face moves), so it's judged by its own named corners, same as
-    check_trunk.py's own grading -- a whole-brush centroid would dilute a
-    genuine wrong-resize into a false "unchanged" (measured: a real
-    known-bad trunk's mis-resized wall read as unchanged under centroid,
-    hiding the exact failure this eval exists to catch)."""
+    """True if ANYTHING about `entry`'s actor differs between baseline and
+    subject -- exists in only one of the two trunks, or its full T3D block
+    (every vertex, every property, CSG op, texture -- not just position, and
+    not just the task's own expected corners) differs at all. A narrower
+    position/corner-only check can call a real but unrelated change
+    "unchanged" it isn't; this is ground truth, the same dump `actor show`
+    always produces, byte for byte."""
     actor = entry["actor"]
     base_exists = _actor_exists(baseline, actor)
     sub_exists = _actor_exists(subject, actor)
@@ -59,12 +58,7 @@ def _entry_changed(baseline, subject, entry) -> bool:
         return True
     if not sub_exists:
         return False
-    if entry["kind"] == "update" and entry.get("target") == "corners":
-        d = named_corners_delta([tuple(c) for c in entry["at"]], read_corners(subject, actor))
-        return any(abs(x) > EPS for x in d)
-    base_pos = read_position(baseline, actor)
-    sub_pos = read_position(subject, actor)
-    return any(abs(a - b) > EPS for a, b in zip(sub_pos, base_pos))
+    return _show(baseline, [actor]) != _show(subject, [actor])
 
 def _run(project, args, **kw):
     env = {**os.environ, "UEDCLI_PROJECT": str(project), "UEDCLI_LEVEL": "unatco"}
@@ -181,12 +175,23 @@ def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: st
     return manifest
 
 def render_before(task_id: str) -> None:
+    """The task-level before block: the whole-room quad + panorama (once per
+    task), PLUS one baseline quad per entry, highlighting that entry's own
+    actor -- the "before" half of every execution's before/after toggle
+    (same frame/layout as that entry's after picture, so they're directly
+    comparable). Entries are task-level, not execution-level, so this
+    renders once and every execution of the task reuses it."""
     task = TASKS[task_id]
     baseline = BASE_TRUNKS_DIR / task["base_trunk"]
     out_dir = IMG / task_id
-    out_dir.mkdir(parents=True, exist_ok=True)
+    entries_dir = out_dir / "before_entries"
+    entries_dir.mkdir(parents=True, exist_ok=True)
     _diagram_live(baseline, task["frame"], None, out_dir / "before_quad.png")
     render_photos(task, baseline, out_dir, prefix="pan_before")
+    for e in task["entries"]:
+        actor = e["actor"]
+        highlight = actor if _actor_exists(baseline, actor) else None
+        _diagram_live(baseline, task["frame"], highlight, entries_dir / f"{actor}.png")
     print("rendered before block for", task_id, "->", out_dir)
 
 if __name__ == "__main__":

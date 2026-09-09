@@ -47,9 +47,14 @@ def execution_card(task_id, task, run):
     gid = f"{task_id}--{run_id}"
 
     entries = sorted(run["entries"], key=lambda e: (BUCKET_ORDER[e["bucket"]], e["actor"]))
-    images = [(e["img"], f"{e['label']} — {e['actor']}: {e['what']}") for e in entries] + \
-             [(n, f"Photo, panorama frame {i}") for i, n in enumerate(run["panorama"])]
-    items = [{"src": run_img(task_id, run_id, relpath), "cap": cap} for relpath, cap in images]
+    items = [{"src": run_img(task_id, run_id, e["img"]),
+              "cap": f"{e['label']} — {e['actor']}: {e['what']}",
+              "before": img(task_id, f"before_entries/{e['actor']}"),
+              "beforeCap": f"BEFORE — {e['actor']}"} for e in entries]
+    items += [{"src": run_img(task_id, run_id, n),
+               "cap": f"Photo, panorama frame {i}",
+               "before": img(task_id, f"pan_before_{i}"),
+               "beforeCap": f"BEFORE — panorama frame {i}"} for i, n in enumerate(run["panorama"])]
     ALL_CAROUSELS[key] = items
 
     grid = "".join(
@@ -220,6 +225,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 .lbnav:hover{opacity:1}
 .lbprev{left:0}.lbnext{right:0}
 .lbclose{position:fixed;top:14px;right:18px;font-family:var(--mono);font-size:12px;color:var(--dim);background:transparent;border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
+.lbbefore{position:fixed;top:14px;right:118px;font-family:var(--mono);font-size:12px;color:var(--dim);background:transparent;border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
+.lbbefore:disabled{opacity:.35;cursor:default}
+.lbbefore.active{color:var(--ground);background:var(--cyan);border-color:var(--cyan)}
 .lbcount{position:fixed;top:16px;left:18px;font-family:var(--mono);font-size:12px;color:var(--dim)}
 </style></head>
 <body>
@@ -235,6 +243,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 
 <div id="lb" class="lb" hidden>
   <button class="lbclose" onclick="closeLB()">✕ close (Esc)</button>
+  <button id="lbbefore" class="lbbefore" onclick="toggleBefore()">before/after (b)</button>
   <span id="lbcount" class="lbcount"></span>
   <button class="lbnav lbprev" onclick="lbStep(-1)" aria-label="previous">&#10094;</button>
   <button class="lbnav lbnext" onclick="lbStep(1)" aria-label="next">&#10095;</button>
@@ -324,6 +333,7 @@ async function saveGrade(btn){
   }
 }
 loadGrades();
+let lbBefore = false;
 function openLB(scenId, idx){
   lbScen = scenId; lbIdx = idx;
   renderLB();
@@ -332,12 +342,16 @@ function openLB(scenId, idx){
 function renderLB(){
   const list = CAROUSELS[lbScen];
   const item = list[lbIdx];
+  lbBefore = false;
   const img = document.getElementById('lbimg');
   img.src = item.src;
   img.classList.remove('zoomed');
   document.getElementById('lbimgwrap').scrollTo(0, 0);
   document.getElementById('lbcap').textContent = item.cap;
   document.getElementById('lbcount').textContent = (lbIdx+1) + ' / ' + list.length;
+  const btn = document.getElementById('lbbefore');
+  btn.disabled = !item.before;
+  btn.classList.remove('active');
 }
 function lbStep(d){
   const list = CAROUSELS[lbScen];
@@ -348,12 +362,24 @@ function toggleZoom(e){
   e.stopPropagation();
   document.getElementById('lbimg').classList.toggle('zoomed');
 }
+function toggleBefore(){
+  const item = CAROUSELS[lbScen][lbIdx];
+  if (!item.before) return;
+  lbBefore = !lbBefore;
+  const img = document.getElementById('lbimg');
+  img.src = lbBefore ? item.before : item.src;
+  img.classList.remove('zoomed');
+  document.getElementById('lbimgwrap').scrollTo(0, 0);
+  document.getElementById('lbcap').textContent = lbBefore ? item.beforeCap : item.cap;
+  document.getElementById('lbbefore').classList.toggle('active', lbBefore);
+}
 function closeLB(){ document.getElementById('lb').hidden = true; }
 document.addEventListener('keydown', e => {
   if (document.getElementById('lb').hidden) return;
   if (e.key === 'Escape') closeLB();
   if (e.key === 'ArrowLeft') lbStep(-1);
   if (e.key === 'ArrowRight') lbStep(1);
+  if (e.key === 'b' || e.key === 'B') toggleBefore();
 });
 document.getElementById('lb').addEventListener('click', e => {
   if (e.target.id === 'lb') closeLB();
