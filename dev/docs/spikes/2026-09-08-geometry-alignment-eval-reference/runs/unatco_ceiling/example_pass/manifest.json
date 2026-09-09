@@ -3,7 +3,7 @@
   "run_id": "example_pass",
   "label": "Example: fully correct",
   "subject_trunk": "/home/agent/.claude/jobs/92851c21/tmp/gold_ceiling",
-  "rendered_at": "2026-09-09T12:48:09.736516+00:00",
+  "rendered_at": "2026-09-09T14:01:22.307984+00:00",
   "n_task_entries": 13,
   "entries": [
     {
@@ -12,8 +12,7 @@
       "label": "UPDATED",
       "what": "south wall's ceiling face; the task's own raise-ceiling target",
       "img_before": "entries/Brush418_before.png",
-      "img_after": "entries/Brush418_after.png",
-      "img_wide": "entries/Brush418_wide.png"
+      "img_after": "entries/Brush418_after.png"
     },
     {
       "actor": "Brush420",
@@ -21,8 +20,7 @@
       "label": "UPDATED",
       "what": "north wall's ceiling face, shares the ceiling with Brush418 at the y=64 seam -- must rise the same amount or the ceiling steps",
       "img_before": "entries/Brush420_before.png",
-      "img_after": "entries/Brush420_after.png",
-      "img_wide": "entries/Brush420_wide.png"
+      "img_after": "entries/Brush420_after.png"
     },
     {
       "actor": "Brush285",
@@ -30,8 +28,7 @@
       "label": "UPDATED",
       "what": "recessed ceiling light panel over the south half",
       "img_before": "entries/Brush285_before.png",
-      "img_after": "entries/Brush285_after.png",
-      "img_wide": "entries/Brush285_wide.png"
+      "img_after": "entries/Brush285_after.png"
     },
     {
       "actor": "Brush295",
@@ -39,8 +36,7 @@
       "label": "UPDATED",
       "what": "recessed ceiling light panel over the south half",
       "img_before": "entries/Brush295_before.png",
-      "img_after": "entries/Brush295_after.png",
-      "img_wide": "entries/Brush295_wide.png"
+      "img_after": "entries/Brush295_after.png"
     },
     {
       "actor": "Brush132",
@@ -48,8 +44,7 @@
       "label": "UPDATED",
       "what": "ceiling trim cap over the south half",
       "img_before": "entries/Brush132_before.png",
-      "img_after": "entries/Brush132_after.png",
-      "img_wide": "entries/Brush132_wide.png"
+      "img_after": "entries/Brush132_after.png"
     },
     {
       "actor": "Brush74",
@@ -57,8 +52,7 @@
       "label": "UPDATED",
       "what": "ceiling trim cap over the south half",
       "img_before": "entries/Brush74_before.png",
-      "img_after": "entries/Brush74_after.png",
-      "img_wide": "entries/Brush74_wide.png"
+      "img_after": "entries/Brush74_after.png"
     },
     {
       "actor": "Brush284",
@@ -66,8 +60,7 @@
       "label": "UPDATED",
       "what": "recessed ceiling light panel over the north half",
       "img_before": "entries/Brush284_before.png",
-      "img_after": "entries/Brush284_after.png",
-      "img_wide": "entries/Brush284_wide.png"
+      "img_after": "entries/Brush284_after.png"
     }
   ],
   "panorama": [

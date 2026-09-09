@@ -50,7 +50,6 @@ def execution_card(task_id, task, run):
     items = [{"default": 1, "variants": [
                 {"src": run_img(task_id, run_id, e["img_before"]), "cap": f"BEFORE — {e['actor']}: {e['what']}"},
                 {"src": run_img(task_id, run_id, e["img_after"]), "cap": f"{e['label']} — {e['actor']}: {e['what']}"},
-                {"src": run_img(task_id, run_id, e["img_wide"]), "cap": f"{e['label']} — {e['actor']} (wide view): {e['what']}"},
               ]} for e in entries]
     items += [{"default": 0, "variants": [
                 {"src": run_img(task_id, run_id, n), "cap": f"Photo, panorama frame {i}"},
@@ -235,10 +234,10 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
   <p class="eyebrow">uedcli · reference solutions · batch 1 of 5 · UNATCO HQ</p>
   <h1 class="lede">Reference solutions to validate &mdash; per-aspect, diff-generated.</h1>
   <p class="sub">Each task is collapsed by default &mdash; open one and the previous one closes. Inside, each aspect of the change is its own collapsible scenario, showing the fully-correct outcome with just that aspect's actors highlighted. Click any picture to enlarge; arrows cycle through that scenario's images; the enlarged view always shows its caption.</p>
-  <p class="pipeline"><b>Every picture is generated, never hand-built.</b> Grading is manual: each task's <b>executions</b> section shows every task-relevant actor's actual outcome — one quad view (Top/Front/Iso/Side) per actor that was actually touched, labeled CREATED/UPDATED/UNCHANGED/DELETED by what the task expects of it — plus a full panorama tour, so you can score 0–10 and leave a note from the pictures alone. A DELETED actor's quad shows the final room with that actor reinserted (from its last known position) so its absence is visible, not just implied. The crop is computed per execution (the bbox of everything it touched, not a hand-picked frame), and each picture has 2-3 views — open one and press <b>↑/↓</b> to cycle BEFORE / AFTER / a wider AFTER with more surrounding room, ←/→ to move between actors. Scores save immediately and stay editable.</p>
+  <p class="pipeline"><b>Every picture is generated, never hand-built.</b> Grading is manual: each task's <b>executions</b> section shows every task-relevant actor's actual outcome — one quad view (Top/Front/Iso/Side) per actor that was actually touched, labeled CREATED/UPDATED/UNCHANGED/DELETED by what the task expects of it — plus a full panorama tour, so you can score 0–10 and leave a note from the pictures alone. A DELETED actor's quad shows the final room with that actor reinserted (from its last known position) so its absence is visible, not just implied. The crop is computed per execution (the bbox of everything it touched, not a hand-picked frame) and shared by EVERY picture in it, so an actor that didn't move lands in the same spot whether you're looking at it or another actor, before or after — open one and press <b>↑/↓</b> to flip BEFORE/AFTER, ←/→ to move between actors (keeping your before/after choice). Scores save immediately and stay editable.</p>
   <p class="orient">Orientation (matching UnrealEd's own axis convention): in the <b>Top</b> pane of every quad view, <b>East = right</b> edge of the image, <b>West = left</b>, <b>North = up</b>, <b>South = down</b>.</p>
   __BODY__
-  <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified, each assigned its OWN anchor by verified geometry (some fixtures split across both wall volumes). Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same pipeline. Diagrams: <code>actor diagram</code>, cropped to the room this task edits (not the whole level). Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>.</p>
+  <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified, each assigned its OWN anchor by verified geometry (some fixtures split across both wall volumes). Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same pipeline. Diagrams: <code>actor diagram</code>, cropped to what each execution actually touched (not the whole level). Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>.</p>
 </div>
 
 <div id="lb" class="lb" hidden>
@@ -336,12 +335,11 @@ loadGrades();
 let lbVariant = 0;
 function openLB(scenId, idx){
   lbScen = scenId; lbIdx = idx;
+  lbVariant = CAROUSELS[lbScen][lbIdx].default || 0;
   renderLB();
   document.getElementById('lb').hidden = false;
 }
 function renderLB(){
-  const item = CAROUSELS[lbScen][lbIdx];
-  lbVariant = item.default || 0;
   renderVariant();
   document.getElementById('lbcount').textContent = (lbIdx+1) + ' / ' + CAROUSELS[lbScen].length;
 }
@@ -364,6 +362,10 @@ function renderVariant(){
 function lbStep(d){
   const list = CAROUSELS[lbScen];
   lbIdx = (lbIdx + d + list.length) % list.length;
+  // left/right moves between actors/frames but keeps the current
+  // before/after (up/down) choice, clamped in case the new item has fewer
+  // variants than the one you were just on
+  lbVariant = Math.min(lbVariant, list[lbIdx].variants.length - 1);
   renderLB();
 }
 function cycleVariant(d){

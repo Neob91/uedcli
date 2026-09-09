@@ -1,26 +1,23 @@
 """Render everything a human needs to MANUALLY grade one execution (a
-subagent's subject trunk) of a task: a panorama tour, and THREE UED-style
-quad views (Top/Front/Iso/Side, via `actor diagram --layout quad`) per
-oracle entry the execution ACTUALLY touched -- its full T3D block or CSG
-order_value differs at all from the baseline, or it was created/removed
-(see `_entry_changed`). An entry whose actor is untouched gets no picture
-at all: most tasks have far more `entries` than an execution ever really
-touches.
+subagent's subject trunk) of a task: a panorama tour, and TWO UED-style
+quad views (Top/Front/Iso/Side, via `actor diagram --layout quad`) --
+BEFORE and AFTER -- per oracle entry the execution ACTUALLY touched -- its
+full T3D block or CSG order_value differs at all from the baseline, or it
+was created/removed (see `_entry_changed`). An entry whose actor is
+untouched gets no picture at all: most tasks have far more `entries` than
+an execution ever really touches.
 
-The crop frame is computed per EXECUTION, not hand-authored per task: the
-union bbox of every touched actor (both its baseline and subject position,
-so before/after both fit), padded. Two paddings, two frames:
-  TIGHT_PAD (64u)  -- the BEFORE and AFTER pictures, cropped close to what
-                       actually changed.
-  WIDE_PAD (256u)  -- a third AFTER picture with much more surrounding
-                       room for context. (A literal "every actor in the
-                       level" render was measured at ~103s vs ~6s for a
-                       bbox-filtered crop -- 17x slower, and at full scale
-                       (3 variants x up to 35 entries x 3 executions) would
-                       cost 3+ hours; this wide-bbox crop stays bbox-filtered
-                       and just as fast, while showing far more context.)
-Both frames stay bbox-filtered (`actor find --overlapping-bbox`), never the
-full level.
+EVERY picture for one execution -- BEFORE and AFTER, every touched actor --
+shares the SAME `--frame`: the union bbox of every touched actor (both its
+baseline and subject position, so both fit), padded by FRAME_PAD. This is
+load-bearing, not an optimization: an actor that didn't move must land at
+the exact same screen position whether you're looking at its own picture
+or another actor's, and whether you're looking at BEFORE or AFTER -- a
+per-actor or per-variant frame would shift it, making before/after (or
+actor-to-actor) comparison unreliable. Stays bbox-filtered (`actor find
+--overlapping-bbox`), never the full level (measured: a literal "every
+actor in the level" render was ~103s vs ~6s bbox-filtered -- 17x slower,
+and would cost hours at this scale).
 
 An entry's actor is looked up in whichever trunk is being rendered (subject
 for AFTER, baseline for BEFORE). When it's not there (a subagent-deleted
@@ -32,7 +29,7 @@ highlighted -- see `_render_view`.
 Also renders each task's "before" block: the baseline's own panorama + ONE
 quad view of the whole room, no highlight -- shown once per task, not per
 execution. Its frame is the union bbox of every task entry (not just
-touched ones, since there's no execution yet), TIGHT_PAD padded.
+touched ones, since there's no execution yet), FRAME_PAD padded.
 
 Usage: render_manual.py <task_id> <subject_trunk> [--run-id ID] [--label TEXT]
        render_manual.py <task_id> --before   (renders the task's before block
@@ -51,8 +48,7 @@ ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spik
 RUNS = ROOT / "runs"
 IMG = ROOT / "img"
 BASE_TRUNKS_DIR = pathlib.Path(os.environ.get("BASE_TRUNKS_DIR", "/home/agent/.claude/jobs/92851c21/tmp"))
-TIGHT_PAD = 64
-WIDE_PAD = 256
+FRAME_PAD = 64
 
 LABELS = {"created": "CREATED", "updated": "UPDATED", "unchanged": "UNCHANGED", "deleted": "DELETED"}
 
@@ -218,8 +214,7 @@ def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: st
 
     touched = [e for e in task["entries"] if _entry_changed(baseline, subject, task, e)]
     touched_actors = [e["actor"] for e in touched]
-    tight = _frame_from_actors([baseline, subject], touched_actors, TIGHT_PAD)
-    wide = _frame_from_actors([baseline, subject], touched_actors, WIDE_PAD)
+    frame = _frame_from_actors([baseline, subject], touched_actors, FRAME_PAD)
 
     entries = []
     for e in touched:
@@ -227,14 +222,11 @@ def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: st
         bucket = _bucket(e)
         before_path = entries_dir / f"{actor}_before.png"
         after_path = entries_dir / f"{actor}_after.png"
-        wide_path = entries_dir / f"{actor}_wide.png"
-        _render_view(baseline, subject, tight, actor, before_path)
-        _render_view(subject, baseline, tight, actor, after_path)
-        _render_view(subject, baseline, wide, actor, wide_path)
+        _render_view(baseline, subject, frame, actor, before_path)
+        _render_view(subject, baseline, frame, actor, after_path)
         entries.append(dict(actor=actor, bucket=bucket, label=LABELS[bucket], what=e["what"],
                              img_before=f"entries/{actor}_before.png",
-                             img_after=f"entries/{actor}_after.png",
-                             img_wide=f"entries/{actor}_wide.png"))
+                             img_after=f"entries/{actor}_after.png"))
 
     render_photos(task, subject, out_dir / "img")
 
@@ -252,14 +244,14 @@ def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: st
 def render_before(task_id: str) -> None:
     """The task-level before block: the whole-room quad + panorama, shown
     once per task (not per execution). Frame is the union bbox of every
-    task entry's baseline position, TIGHT_PAD padded -- same computed-not-
+    task entry's baseline position, FRAME_PAD padded -- same computed-not-
     hand-authored approach as an execution's own frame, just over the
     task's full entry set instead of one execution's touched subset."""
     task = TASKS[task_id]
     baseline = BASE_TRUNKS_DIR / task["base_trunk"]
     out_dir = IMG / task_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    frame = _frame_from_actors([baseline], [e["actor"] for e in task["entries"]], TIGHT_PAD)
+    frame = _frame_from_actors([baseline], [e["actor"] for e in task["entries"]], FRAME_PAD)
     _diagram_live(baseline, frame, None, out_dir / "before_quad.png")
     render_photos(task, baseline, out_dir, prefix="pan_before")
     print("rendered before block for", task_id, "->", out_dir)

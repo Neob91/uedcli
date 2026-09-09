@@ -3,7 +3,7 @@
   "run_id": "example_pass",
   "label": "Example: fully correct",
   "subject_trunk": "/home/agent/.claude/jobs/92851c21/tmp/gold_widen",
-  "rendered_at": "2026-09-09T13:17:50.761290+00:00",
+  "rendered_at": "2026-09-09T14:17:25.623014+00:00",
   "n_task_entries": 35,
   "entries": [
     {
@@ -12,8 +12,7 @@
       "label": "UPDATED",
       "what": "south wall of Manderley's office; the task's own east-widen target",
       "img_before": "entries/Brush418_before.png",
-      "img_after": "entries/Brush418_after.png",
-      "img_wide": "entries/Brush418_wide.png"
+      "img_after": "entries/Brush418_after.png"
     },
     {
       "actor": "Brush420",
@@ -21,8 +20,7 @@
       "label": "UPDATED",
       "what": "north wall of Manderley's office, shares the east wall with Brush418 at the y=64 seam -- must widen the same amount or the wall steps",
       "img_before": "entries/Brush420_before.png",
-      "img_after": "entries/Brush420_after.png",
-      "img_wide": "entries/Brush420_wide.png"
+      "img_after": "entries/Brush420_after.png"
     },
     {
       "actor": "Brush670",
@@ -30,8 +28,7 @@
       "label": "UPDATED",
       "what": "switch recess, cut into the south wall",
       "img_before": "entries/Brush670_before.png",
-      "img_after": "entries/Brush670_after.png",
-      "img_wide": "entries/Brush670_wide.png"
+      "img_after": "entries/Brush670_after.png"
     },
     {
       "actor": "Brush161",
@@ -39,8 +36,7 @@
       "label": "UPDATED",
       "what": "south wall trim board",
       "img_before": "entries/Brush161_before.png",
-      "img_after": "entries/Brush161_after.png",
-      "img_wide": "entries/Brush161_wide.png"
+      "img_after": "entries/Brush161_after.png"
     },
     {
       "actor": "Brush132",
@@ -48,8 +44,7 @@
       "label": "UPDATED",
       "what": "south wall trim board",
       "img_before": "entries/Brush132_before.png",
-      "img_after": "entries/Brush132_after.png",
-      "img_wide": "entries/Brush132_wide.png"
+      "img_after": "entries/Brush132_after.png"
     },
     {
       "actor": "Brush203",
@@ -57,8 +52,7 @@
       "label": "UPDATED",
       "what": "south wall trim board",
       "img_before": "entries/Brush203_before.png",
-      "img_after": "entries/Brush203_after.png",
-      "img_wide": "entries/Brush203_wide.png"
+      "img_after": "entries/Brush203_after.png"
     },
     {
       "actor": "Brush74",
@@ -66,8 +60,7 @@
       "label": "UPDATED",
       "what": "south wall trim board",
       "img_before": "entries/Brush74_before.png",
-      "img_after": "entries/Brush74_after.png",
-      "img_wide": "entries/Brush74_wide.png"
+      "img_after": "entries/Brush74_after.png"
     },
     {
       "actor": "Brush152",
@@ -75,8 +68,7 @@
       "label": "UPDATED",
       "what": "south wall fixture",
       "img_before": "entries/Brush152_before.png",
-      "img_after": "entries/Brush152_after.png",
-      "img_wide": "entries/Brush152_wide.png"
+      "img_after": "entries/Brush152_after.png"
     },
     {
       "actor": "Switch6",
@@ -84,8 +76,7 @@
       "label": "UPDATED",
       "what": "the wall light switch itself, mounted in Brush670's recess",
       "img_before": "entries/Switch6_before.png",
-      "img_after": "entries/Switch6_after.png",
-      "img_wide": "entries/Switch6_wide.png"
+      "img_after": "entries/Switch6_after.png"
     },
     {
       "actor": "Brush869",
@@ -93,8 +84,7 @@
       "label": "UPDATED",
       "what": "decorative pilaster on the north wall",
       "img_before": "entries/Brush869_before.png",
-      "img_after": "entries/Brush869_after.png",
-      "img_wide": "entries/Brush869_wide.png"
+      "img_after": "entries/Brush869_after.png"
     },
     {
       "actor": "Light14",
@@ -102,8 +92,7 @@
       "label": "UPDATED",
       "what": "the pilaster's own light",
       "img_before": "entries/Light14_before.png",
-      "img_after": "entries/Light14_after.png",
-      "img_wide": "entries/Light14_wide.png"
+      "img_after": "entries/Light14_after.png"
     },
     {
       "actor": "Brush766",
@@ -111,8 +100,7 @@
       "label": "UPDATED",
       "what": "wall cavity holding the trophy shelf + hidden safe, cut into the north wall",
       "img_before": "entries/Brush766_before.png",
-      "img_after": "entries/Brush766_after.png",
-      "img_wide": "entries/Brush766_wide.png"
+      "img_after": "entries/Brush766_after.png"
     },
     {
       "actor": "Brush364",
@@ -120,8 +108,7 @@
       "label": "UPDATED",
       "what": "the safe's own interior geometry inside the cavity",
       "img_before": "entries/Brush364_before.png",
-      "img_after": "entries/Brush364_after.png",
-      "img_wide": "entries/Brush364_wide.png"
+      "img_after": "entries/Brush364_after.png"
     },
     {
       "actor": "Brush873",
@@ -129,8 +116,7 @@
       "label": "UPDATED",
       "what": "the safe's own back panel inside the cavity -- moving the cavity without this orphans it mid-room (the original bug this eval caught)",
       "img_before": "entries/Brush873_before.png",
-      "img_after": "entries/Brush873_after.png",
-      "img_wide": "entries/Brush873_wide.png"
+      "img_after": "entries/Brush873_after.png"
     },
     {
       "actor": "Brush592",
@@ -138,8 +124,7 @@
       "label": "UPDATED",
       "what": "the display shelf inside the cavity",
       "img_before": "entries/Brush592_before.png",
-      "img_after": "entries/Brush592_after.png",
-      "img_wide": "entries/Brush592_wide.png"
+      "img_after": "entries/Brush592_after.png"
     },
     {
       "actor": "Light149",
@@ -147,8 +132,7 @@
       "label": "UPDATED",
       "what": "the shelf's own light",
       "img_before": "entries/Light149_before.png",
-      "img_after": "entries/Light149_after.png",
-      "img_wide": "entries/Light149_wide.png"
+      "img_after": "entries/Light149_after.png"
     },
     {
       "actor": "Vase3",
@@ -156,8 +140,7 @@
       "label": "UPDATED",
       "what": "display item on the shelf",
       "img_before": "entries/Vase3_before.png",
-      "img_after": "entries/Vase3_after.png",
-      "img_wide": "entries/Vase3_wide.png"
+      "img_after": "entries/Vase3_after.png"
     },
     {
       "actor": "Vase4",
@@ -165,8 +148,7 @@
       "label": "UPDATED",
       "what": "display item on the shelf",
       "img_before": "entries/Vase4_before.png",
-      "img_after": "entries/Vase4_after.png",
-      "img_wide": "entries/Vase4_wide.png"
+      "img_after": "entries/Vase4_after.png"
     },
     {
       "actor": "BookClosed1",
@@ -174,8 +156,7 @@
       "label": "UPDATED",
       "what": "display item on the shelf",
       "img_before": "entries/BookClosed1_before.png",
-      "img_after": "entries/BookClosed1_after.png",
-      "img_wide": "entries/BookClosed1_wide.png"
+      "img_after": "entries/BookClosed1_after.png"
     },
     {
       "actor": "NanoKey0",
@@ -183,8 +164,7 @@
       "label": "UPDATED",
       "what": "display item on the shelf",
       "img_before": "entries/NanoKey0_before.png",
-      "img_after": "entries/NanoKey0_after.png",
-      "img_wide": "entries/NanoKey0_wide.png"
+      "img_after": "entries/NanoKey0_after.png"
     },
     {
       "actor": "WeaponModRecoil0",
@@ -192,8 +172,7 @@
       "label": "UPDATED",
       "what": "display item on the shelf",
       "img_before": "entries/WeaponModRecoil0_before.png",
-      "img_after": "entries/WeaponModRecoil0_after.png",
-      "img_wide": "entries/WeaponModRecoil0_wide.png"
+      "img_after": "entries/WeaponModRecoil0_after.png"
     },
     {
       "actor": "FlagPole3",
@@ -201,8 +180,7 @@
       "label": "UPDATED",
       "what": "ceremonial flagpole anchored to the north wall's corner (~48u off two adjacent walls, not flush-mounted)",
       "img_before": "entries/FlagPole3_before.png",
-      "img_after": "entries/FlagPole3_after.png",
-      "img_wide": "entries/FlagPole3_wide.png"
+      "img_after": "entries/FlagPole3_after.png"
     },
     {
       "actor": "FlagPole4",
@@ -210,8 +188,7 @@
       "label": "UPDATED",
       "what": "ceremonial flagpole anchored to the south wall's corner",
       "img_before": "entries/FlagPole4_before.png",
-      "img_after": "entries/FlagPole4_after.png",
-      "img_wide": "entries/FlagPole4_wide.png"
+      "img_after": "entries/FlagPole4_after.png"
     },
     {
       "actor": "Brush663",
@@ -219,8 +196,7 @@
       "label": "UPDATED",
       "what": "the display niche -- a genuinely separate small room built against the south wall, must stay flush against it",
       "img_before": "entries/Brush663_before.png",
-      "img_after": "entries/Brush663_after.png",
-      "img_wide": "entries/Brush663_wide.png"
+      "img_after": "entries/Brush663_after.png"
     },
     {
       "actor": "Brush1",
@@ -228,8 +204,7 @@
       "label": "UPDATED",
       "what": "niche interior detail brush",
       "img_before": "entries/Brush1_before.png",
-      "img_after": "entries/Brush1_after.png",
-      "img_wide": "entries/Brush1_wide.png"
+      "img_after": "entries/Brush1_after.png"
     },
     {
       "actor": "Brush138",
@@ -237,8 +212,7 @@
       "label": "UPDATED",
       "what": "niche interior detail brush",
       "img_before": "entries/Brush138_before.png",
-      "img_after": "entries/Brush138_after.png",
-      "img_wide": "entries/Brush138_wide.png"
+      "img_after": "entries/Brush138_after.png"
     },
     {
       "actor": "Brush140",
@@ -246,8 +220,7 @@
       "label": "UPDATED",
       "what": "niche interior detail brush",
       "img_before": "entries/Brush140_before.png",
-      "img_after": "entries/Brush140_after.png",
-      "img_wide": "entries/Brush140_wide.png"
+      "img_after": "entries/Brush140_after.png"
     },
     {
       "actor": "Brush148",
@@ -255,8 +228,7 @@
       "label": "UPDATED",
       "what": "niche interior detail brush",
       "img_before": "entries/Brush148_before.png",
-      "img_after": "entries/Brush148_after.png",
-      "img_wide": "entries/Brush148_wide.png"
+      "img_after": "entries/Brush148_after.png"
     },
     {
       "actor": "Brush164",
@@ -264,8 +236,7 @@
       "label": "UPDATED",
       "what": "niche interior detail brush",
       "img_before": "entries/Brush164_before.png",
-      "img_after": "entries/Brush164_after.png",
-      "img_wide": "entries/Brush164_wide.png"
+      "img_after": "entries/Brush164_after.png"
     },
     {
       "actor": "Brush168",
@@ -273,8 +244,7 @@
       "label": "UPDATED",
       "what": "niche interior detail brush",
       "img_before": "entries/Brush168_before.png",
-      "img_after": "entries/Brush168_after.png",
-      "img_wide": "entries/Brush168_wide.png"
+      "img_after": "entries/Brush168_after.png"
     },
     {
       "actor": "Brush1158",
@@ -282,8 +252,7 @@
       "label": "UPDATED",
       "what": "niche interior detail brush",
       "img_before": "entries/Brush1158_before.png",
-      "img_after": "entries/Brush1158_after.png",
-      "img_wide": "entries/Brush1158_wide.png"
+      "img_after": "entries/Brush1158_after.png"
     },
     {
       "actor": "Brush1550",
@@ -291,8 +260,7 @@
       "label": "UPDATED",
       "what": "niche interior detail brush",
       "img_before": "entries/Brush1550_before.png",
-      "img_after": "entries/Brush1550_after.png",
-      "img_wide": "entries/Brush1550_wide.png"
+      "img_after": "entries/Brush1550_after.png"
     },
     {
       "actor": "Brush1551",
@@ -300,8 +268,7 @@
       "label": "UPDATED",
       "what": "niche interior detail brush",
       "img_before": "entries/Brush1551_before.png",
-      "img_after": "entries/Brush1551_after.png",
-      "img_wide": "entries/Brush1551_wide.png"
+      "img_after": "entries/Brush1551_after.png"
     },
     {
       "actor": "OrdersTrigger5",
@@ -309,8 +276,7 @@
       "label": "UPDATED",
       "what": "scripted trigger inside the niche",
       "img_before": "entries/OrdersTrigger5_before.png",
-      "img_after": "entries/OrdersTrigger5_after.png",
-      "img_wide": "entries/OrdersTrigger5_wide.png"
+      "img_after": "entries/OrdersTrigger5_after.png"
     },
     {
       "actor": "Light6",
@@ -318,8 +284,7 @@
       "label": "UPDATED",
       "what": "the niche's own light",
       "img_before": "entries/Light6_before.png",
-      "img_after": "entries/Light6_after.png",
-      "img_wide": "entries/Light6_wide.png"
+      "img_after": "entries/Light6_after.png"
     }
   ],
   "panorama": [
