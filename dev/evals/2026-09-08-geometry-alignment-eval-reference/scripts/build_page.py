@@ -11,7 +11,7 @@ import json, pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
 
-ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference")
+ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/evals/2026-09-08-geometry-alignment-eval-reference")
 DEST_IMG = ROOT / "img"
 RUNS = ROOT / "runs"
 

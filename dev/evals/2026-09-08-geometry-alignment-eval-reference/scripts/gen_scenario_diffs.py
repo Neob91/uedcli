@@ -12,7 +12,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
 from build_gold import WT, PY, BASE_TRUNKS_DIR
 
-ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference")
+ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/evals/2026-09-08-geometry-alignment-eval-reference")
 DIFFS = ROOT / "diffs"
 GOLD_CACHE = pathlib.Path(os.environ.get("DIFF_TRUNK_CACHE", "/home/agent/.claude/jobs/92851c21/tmp/diff_trunks2"))
 

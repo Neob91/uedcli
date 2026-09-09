@@ -44,7 +44,7 @@ from check_trunk import _actor_exists
 
 WT = "/workspace/uedcli/.claude/worktrees/geom-eval"
 PY = "/workspace/uedcli/.venv/bin/python"
-ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference")
+ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/evals/2026-09-08-geometry-alignment-eval-reference")
 RUNS = ROOT / "runs"
 IMG = ROOT / "img"
 BASE_TRUNKS_DIR = pathlib.Path(os.environ.get("BASE_TRUNKS_DIR", "/home/agent/.claude/jobs/92851c21/tmp"))

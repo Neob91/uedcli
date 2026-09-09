@@ -23,7 +23,7 @@ from render_from_gold import render_scenario
 from render_photos import render_photos
 from build_gold import BASE_TRUNKS_DIR
 
-ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference")
+ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/evals/2026-09-08-geometry-alignment-eval-reference")
 RUNS = ROOT / "runs"
 ORACLE = ROOT / "oracle"
 

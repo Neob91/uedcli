@@ -4,7 +4,7 @@ stays editable at any time. No DB -- a human grades a few dozen executions,
 not thousands."""
 import datetime, json, pathlib
 
-ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference")
+ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/evals/2026-09-08-geometry-alignment-eval-reference")
 GRADES = ROOT / "grades"
 
 def _path(task_id: str, run_id: str) -> pathlib.Path:

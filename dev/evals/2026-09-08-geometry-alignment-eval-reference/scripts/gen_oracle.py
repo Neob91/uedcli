@@ -8,7 +8,7 @@ import json, pathlib, sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
 
-OUT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spikes/2026-09-08-geometry-alignment-eval-reference/oracle")
+OUT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/evals/2026-09-08-geometry-alignment-eval-reference/oracle")
 
 if __name__ == "__main__":
     OUT.mkdir(parents=True, exist_ok=True)
