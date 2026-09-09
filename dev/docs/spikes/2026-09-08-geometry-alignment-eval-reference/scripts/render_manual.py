@@ -1,33 +1,44 @@
 """Render everything a human needs to MANUALLY grade one execution (a
-subagent's subject trunk) of a task: a panorama tour, and one UED-style quad
-view (Top/Front/Iso/Side, via `actor diagram --layout quad`) per oracle
-entry the execution ACTUALLY touched -- its full T3D block or CSG
+subagent's subject trunk) of a task: a panorama tour, and THREE UED-style
+quad views (Top/Front/Iso/Side, via `actor diagram --layout quad`) per
+oracle entry the execution ACTUALLY touched -- its full T3D block or CSG
 order_value differs at all from the baseline, or it was created/removed
-(see `_entry_changed`) -- with only that entry's actor highlighted
-and labeled by what the task expects of it -- created / updated / unchanged
-/ deleted. An entry whose actor is untouched gets no picture at all: most
-tasks have far more `entries` than an execution ever really touches, and a
-card per untouched actor would just be the same "nothing happened" quad
-over and over.
+(see `_entry_changed`). An entry whose actor is untouched gets no picture
+at all: most tasks have far more `entries` than an execution ever really
+touches.
 
-An entry's actor is looked up in the SUBJECT trunk. When it's not there
-(the deleted case, or an update/anchor actor a subagent wrongly deleted),
-the quad is rendered from a COMPOSITE: every other task-relevant actor from
-the subject trunk (so the picture still shows the actual final room), plus
-that one missing actor's own T3D block reinserted from the BASELINE (its
-last known position) via `actor diagram --from-t3d`, still highlighted.
-This is the only way to show "here's where it used to be" for an actor that
-no longer exists in the trunk being graded.
+The crop frame is computed per EXECUTION, not hand-authored per task: the
+union bbox of every touched actor (both its baseline and subject position,
+so before/after both fit), padded. Two paddings, two frames:
+  TIGHT_PAD (64u)  -- the BEFORE and AFTER pictures, cropped close to what
+                       actually changed.
+  WIDE_PAD (256u)  -- a third AFTER picture with much more surrounding
+                       room for context. (A literal "every actor in the
+                       level" render was measured at ~103s vs ~6s for a
+                       bbox-filtered crop -- 17x slower, and at full scale
+                       (3 variants x up to 35 entries x 3 executions) would
+                       cost 3+ hours; this wide-bbox crop stays bbox-filtered
+                       and just as fast, while showing far more context.)
+Both frames stay bbox-filtered (`actor find --overlapping-bbox`), never the
+full level.
 
-Also renders each task's "before" block: the baseline's own panorama +
-ONE quad view of the whole room, no highlight -- shown once per task, not
-per execution.
+An entry's actor is looked up in whichever trunk is being rendered (subject
+for AFTER, baseline for BEFORE). When it's not there (a subagent-deleted
+actor for AFTER, or a not-yet-existing one for BEFORE), the quad is
+rendered from a COMPOSITE: the scene as it stands in that trunk, plus the
+missing actor's own T3D block reinserted from the OTHER trunk, still
+highlighted -- see `_render_view`.
+
+Also renders each task's "before" block: the baseline's own panorama + ONE
+quad view of the whole room, no highlight -- shown once per task, not per
+execution. Its frame is the union bbox of every task entry (not just
+touched ones, since there's no execution yet), TIGHT_PAD padded.
 
 Usage: render_manual.py <task_id> <subject_trunk> [--run-id ID] [--label TEXT]
        render_manual.py <task_id> --before   (renders the task's before block
                                                from its own base_trunk)
 """
-import argparse, datetime, json, os, pathlib, subprocess, sys
+import argparse, datetime, json, os, pathlib, re, subprocess, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
@@ -40,8 +51,15 @@ ROOT = pathlib.Path("/workspace/uedcli/.claude/worktrees/geom-eval/dev/docs/spik
 RUNS = ROOT / "runs"
 IMG = ROOT / "img"
 BASE_TRUNKS_DIR = pathlib.Path(os.environ.get("BASE_TRUNKS_DIR", "/home/agent/.claude/jobs/92851c21/tmp"))
+TIGHT_PAD = 64
+WIDE_PAD = 256
 
 LABELS = {"created": "CREATED", "updated": "UPDATED", "unchanged": "UNCHANGED", "deleted": "DELETED"}
+
+def _run(project, args, **kw):
+    env = {**os.environ, "UEDCLI_PROJECT": str(project), "UEDCLI_LEVEL": "unatco"}
+    return subprocess.run([PY, "-m", "uedcli", *args], cwd=WT, env=env,
+                           capture_output=True, text=True, **kw)
 
 def _order_value(project: pathlib.Path, level: str, actor: str) -> str | None:
     """The actor's raw LexoRank CSG-order sidecar (maps/<level>/actors/<actor>/
@@ -50,6 +68,14 @@ def _order_value(project: pathlib.Path, level: str, actor: str) -> str | None:
     (`actor order`, no geometry touched) is otherwise invisible to a T3D diff."""
     p = project / "maps" / level / "actors" / actor / "order_value"
     return p.read_text() if p.exists() else None
+
+def _show(project, names):
+    """`actor show` block for `names` (possibly empty -> "")."""
+    if not names:
+        return ""
+    r = _run(project, ["actor", "show", "-"], input="\n".join(names))
+    r.check_returncode()
+    return r.stdout
 
 def _entry_changed(baseline, subject, task, entry) -> bool:
     """True if ANYTHING about `entry`'s actor differs between baseline and
@@ -71,11 +97,6 @@ def _entry_changed(baseline, subject, task, entry) -> bool:
         return True
     return _order_value(baseline, task["level"], actor) != _order_value(subject, task["level"], actor)
 
-def _run(project, args, **kw):
-    env = {**os.environ, "UEDCLI_PROJECT": str(project), "UEDCLI_LEVEL": "unatco"}
-    return subprocess.run([PY, "-m", "uedcli", *args], cwd=WT, env=env,
-                           capture_output=True, text=True, **kw)
-
 def _bucket(entry):
     k = entry["kind"]
     if k == "update":
@@ -88,21 +109,56 @@ def _bucket(entry):
         return "deleted"
     raise ValueError(f"unknown entry kind {k!r}: {entry}")
 
+_BBOX_RE = re.compile(r"min\s+([-\d.]+),([-\d.]+),([-\d.]+)\s*\n\s*max\s+([-\d.]+),([-\d.]+),([-\d.]+)")
+
+def _bbox_union_call(project, actors):
+    """Union bbox over `actors` in `project`, via ONE `actor bbox` call --
+    it already unions a multi-actor set itself, so this is ~1.5s regardless
+    of set size, vs ~1.5s PER ACTOR calling it one at a time (measured: a
+    35-actor frame went from 100s+ to a couple of seconds). `actor bbox`
+    errors hard if ANY name doesn't exist in `project`, so on failure this
+    falls back to filtering out the missing ones first (individually, only
+    on that rare path -- a create/delete entry, of which neither current
+    task has any) and retrying."""
+    if not actors:
+        return None
+    r = _run(project, ["actor", "bbox", *actors])
+    if r.returncode != 0:
+        existing = [a for a in actors if _actor_exists(project, a)]
+        if not existing:
+            return None
+        r = _run(project, ["actor", "bbox", *existing])
+        if r.returncode != 0:
+            return None
+    m = _BBOX_RE.search(r.stdout)
+    if not m:
+        return None
+    x0, y0, z0, x1, y1, z1 = map(float, m.groups())
+    return (x0, y0, z0), (x1, y1, z1)
+
+def _frame_from_actors(projects, actors, pad):
+    """A `--frame` string: the union bbox of `actors` across every project in
+    `projects` (an actor missing from one project just contributes nothing
+    from that one), padded by `pad` on every side. None if none of the
+    actors exist in any project."""
+    boxes = [b for p in projects if (b := _bbox_union_call(p, actors)) is not None]
+    if not boxes:
+        return None
+    x0 = min(b[0][0] for b in boxes) - pad
+    y0 = min(b[0][1] for b in boxes) - pad
+    z0 = min(b[0][2] for b in boxes) - pad
+    x1 = max(b[1][0] for b in boxes) + pad
+    y1 = max(b[1][1] for b in boxes) + pad
+    z1 = max(b[1][2] for b in boxes) + pad
+    return ",".join(str(round(v, 2)) for v in (x0, y0, z0, x1, y1, z1))
+
 def _scene_names(project, frame):
     r = _run(project, ["actor", "find", "--overlapping-bbox", frame])
     r.check_returncode()
     return r.stdout.split()
 
-def _show(project, names):
-    """`actor show` block for `names` (possibly empty -> "")."""
-    if not names:
-        return ""
-    r = _run(project, ["actor", "show", "-"], input="\n".join(names))
-    r.check_returncode()
-    return r.stdout
-
-def _diagram_live(project, frame, highlight, out_path):
-    names = _scene_names(project, frame)
+def _diagram_live_names(project, names, frame, highlight, out_path):
+    names = list(names)
     # --overlapping-bbox tests each actor's own bbox against `frame`; a
     # point actor mounted slightly proud of a wall (e.g. a light sconce) can
     # sit just outside it and get dropped -- always keep the highlight
@@ -118,10 +174,13 @@ def _diagram_live(project, frame, highlight, out_path):
     r = _run(project, args)
     r.check_returncode()
 
+def _diagram_live(project, frame, highlight, out_path):
+    _diagram_live_names(project, _scene_names(project, frame), frame, highlight, out_path)
+
 def _diagram_composite(scene_project, scene_names, missing_project, missing_actor, frame, out_path):
     """Render `scene_names` as they stand in `scene_project`, PLUS
     `missing_actor` reinserted from `missing_project` -- for an actor that
-    doesn't exist in `scene_project` any more."""
+    doesn't exist in `scene_project`."""
     tmp = out_path.parent / "_t3d"
     tmp.mkdir(exist_ok=True)
     scene_file = tmp / f"{out_path.stem}_scene.t3d"
@@ -134,28 +193,21 @@ def _diagram_composite(scene_project, scene_names, missing_project, missing_acto
     r = _run(scene_project, args)  # project irrelevant under --from-t3d, kept for a stable env
     r.check_returncode()
 
-def render_entry(task, subject, baseline, entry, out_path):
-    """Renders one entry's quad. Returns the bucket label. `entry["actor"]`
-    missing from BOTH trunks (an unimplemented `create` case) renders the
-    plain scene with no highlight."""
-    actor = entry.get("actor")
-    bucket = _bucket(entry)
-    frame = task["frame"]
-    if actor is None:
-        _diagram_live(subject, frame, None, out_path)
-        return bucket
-    if _actor_exists(subject, actor):
-        _diagram_live(subject, frame, actor, out_path)
-        return bucket
-    # actor absent from the subject trunk -- show the final scene with it
-    # reinserted from wherever it last existed (baseline), still highlighted
-    source = baseline if _actor_exists(baseline, actor) else None
-    if source is None:
-        _diagram_live(subject, frame, None, out_path)
-        return bucket
-    scene = [n for n in _scene_names(subject, frame) if n != actor]
-    _diagram_composite(subject, scene, source, actor, frame, out_path)
-    return bucket
+def _render_view(render_project, other_project, frame, actor, out_path):
+    """Render `actor` highlighted from `render_project`'s current state, its
+    scene bbox-filtered to `frame`. If `actor` doesn't exist there (deleted
+    for an AFTER render, not-yet-created for a BEFORE render), reinsert it
+    from `other_project` (composite) so it's still visible at its last
+    known position."""
+    names = _scene_names(render_project, frame)
+    if _actor_exists(render_project, actor):
+        _diagram_live_names(render_project, names, frame, actor, out_path)
+        return
+    if _actor_exists(other_project, actor):
+        scene = [n for n in names if n != actor]
+        _diagram_composite(render_project, scene, other_project, actor, frame, out_path)
+        return
+    _diagram_live_names(render_project, names, frame, None, out_path)
 
 def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: str | None = None) -> dict:
     task = TASKS[task_id]
@@ -164,13 +216,25 @@ def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: st
     entries_dir = out_dir / "img" / "entries"
     entries_dir.mkdir(parents=True, exist_ok=True)
 
+    touched = [e for e in task["entries"] if _entry_changed(baseline, subject, task, e)]
+    touched_actors = [e["actor"] for e in touched]
+    tight = _frame_from_actors([baseline, subject], touched_actors, TIGHT_PAD)
+    wide = _frame_from_actors([baseline, subject], touched_actors, WIDE_PAD)
+
     entries = []
-    for e in task["entries"]:
+    for e in touched:
         actor = e["actor"]
-        if not _entry_changed(baseline, subject, task, e):
-            continue
-        bucket = render_entry(task, subject, baseline, e, entries_dir / f"{actor}.png")
-        entries.append(dict(actor=actor, bucket=bucket, label=LABELS[bucket], img=f"entries/{actor}.png", what=e["what"]))
+        bucket = _bucket(e)
+        before_path = entries_dir / f"{actor}_before.png"
+        after_path = entries_dir / f"{actor}_after.png"
+        wide_path = entries_dir / f"{actor}_wide.png"
+        _render_view(baseline, subject, tight, actor, before_path)
+        _render_view(subject, baseline, tight, actor, after_path)
+        _render_view(subject, baseline, wide, actor, wide_path)
+        entries.append(dict(actor=actor, bucket=bucket, label=LABELS[bucket], what=e["what"],
+                             img_before=f"entries/{actor}_before.png",
+                             img_after=f"entries/{actor}_after.png",
+                             img_wide=f"entries/{actor}_wide.png"))
 
     render_photos(task, subject, out_dir / "img")
 
@@ -186,23 +250,18 @@ def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: st
     return manifest
 
 def render_before(task_id: str) -> None:
-    """The task-level before block: the whole-room quad + panorama (once per
-    task), PLUS one baseline quad per entry, highlighting that entry's own
-    actor -- the "before" half of every execution's before/after toggle
-    (same frame/layout as that entry's after picture, so they're directly
-    comparable). Entries are task-level, not execution-level, so this
-    renders once and every execution of the task reuses it."""
+    """The task-level before block: the whole-room quad + panorama, shown
+    once per task (not per execution). Frame is the union bbox of every
+    task entry's baseline position, TIGHT_PAD padded -- same computed-not-
+    hand-authored approach as an execution's own frame, just over the
+    task's full entry set instead of one execution's touched subset."""
     task = TASKS[task_id]
     baseline = BASE_TRUNKS_DIR / task["base_trunk"]
     out_dir = IMG / task_id
-    entries_dir = out_dir / "before_entries"
-    entries_dir.mkdir(parents=True, exist_ok=True)
-    _diagram_live(baseline, task["frame"], None, out_dir / "before_quad.png")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    frame = _frame_from_actors([baseline], [e["actor"] for e in task["entries"]], TIGHT_PAD)
+    _diagram_live(baseline, frame, None, out_dir / "before_quad.png")
     render_photos(task, baseline, out_dir, prefix="pan_before")
-    for e in task["entries"]:
-        actor = e["actor"]
-        highlight = actor if _actor_exists(baseline, actor) else None
-        _diagram_live(baseline, task["frame"], highlight, entries_dir / f"{actor}.png")
     print("rendered before block for", task_id, "->", out_dir)
 
 if __name__ == "__main__":

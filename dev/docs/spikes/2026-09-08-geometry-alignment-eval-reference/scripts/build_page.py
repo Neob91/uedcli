@@ -47,19 +47,20 @@ def execution_card(task_id, task, run):
     gid = f"{task_id}--{run_id}"
 
     entries = sorted(run["entries"], key=lambda e: (BUCKET_ORDER[e["bucket"]], e["actor"]))
-    items = [{"src": run_img(task_id, run_id, e["img"]),
-              "cap": f"{e['label']} — {e['actor']}: {e['what']}",
-              "before": img(task_id, f"before_entries/{e['actor']}"),
-              "beforeCap": f"BEFORE — {e['actor']}"} for e in entries]
-    items += [{"src": run_img(task_id, run_id, n),
-               "cap": f"Photo, panorama frame {i}",
-               "before": img(task_id, f"pan_before_{i}"),
-               "beforeCap": f"BEFORE — panorama frame {i}"} for i, n in enumerate(run["panorama"])]
+    items = [{"default": 1, "variants": [
+                {"src": run_img(task_id, run_id, e["img_before"]), "cap": f"BEFORE — {e['actor']}: {e['what']}"},
+                {"src": run_img(task_id, run_id, e["img_after"]), "cap": f"{e['label']} — {e['actor']}: {e['what']}"},
+                {"src": run_img(task_id, run_id, e["img_wide"]), "cap": f"{e['label']} — {e['actor']} (wide view): {e['what']}"},
+              ]} for e in entries]
+    items += [{"default": 0, "variants": [
+                {"src": run_img(task_id, run_id, n), "cap": f"Photo, panorama frame {i}"},
+                {"src": img(task_id, f"pan_before_{i}"), "cap": f"BEFORE — panorama frame {i}"},
+              ]} for i, n in enumerate(run["panorama"])]
     ALL_CAROUSELS[key] = items
 
     grid = "".join(
         f'<figure class="egrid-item b-{e["bucket"]}">'
-        f'<img src="{run_img(task_id, run_id, e["img"])}" alt="{e["actor"]}" loading="lazy" tabindex="0" '
+        f'<img src="{run_img(task_id, run_id, e["img_after"])}" alt="{e["actor"]}" loading="lazy" tabindex="0" '
         f'onclick="openLB(\'{key}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{key}\',{i})">'
         f'<figcaption><span class="elbl b-{e["bucket"]}">{e["label"]}</span> {e["actor"]}'
         f'<span class="ewhat">{e["what"]}</span></figcaption></figure>'
@@ -99,8 +100,9 @@ def task_block(task_id, task):
     before = task["before"]
     bid = f"{task_id}__before"
     quad_cap = "Whole-room quad view (Top / Front / Iso / Side), before any edit."
-    ALL_CAROUSELS[bid] = [{"src": img(task_id, before["quad"]), "cap": quad_cap}] + \
-                          [{"src": img(task_id, n), "cap": "Panorama frame, before any edit."} for n in before["photos"]]
+    ALL_CAROUSELS[bid] = [{"default": 0, "variants": [{"src": img(task_id, before["quad"]), "cap": quad_cap}]}] + \
+                          [{"default": 0, "variants": [{"src": img(task_id, n), "cap": "Panorama frame, before any edit."}]}
+                           for n in before["photos"]]
     before_quad_html = (f'<figure class="dg dg-quad"><img src="{img(task_id, before["quad"])}" alt="{quad_cap}" '
                          f'onclick="openLB(\'{bid}\',0)"><figcaption>{before["note"]}</figcaption></figure>')
     before_thumbs = "".join(f'<img class="cthumb" src="{img(task_id, n)}" alt="panorama" loading="lazy" tabindex="0" '
@@ -225,17 +227,15 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 .lbnav:hover{opacity:1}
 .lbprev{left:0}.lbnext{right:0}
 .lbclose{position:fixed;top:14px;right:18px;font-family:var(--mono);font-size:12px;color:var(--dim);background:transparent;border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
-.lbbefore{position:fixed;top:14px;right:118px;font-family:var(--mono);font-size:12px;color:var(--dim);background:transparent;border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
-.lbbefore:disabled{opacity:.35;cursor:default}
-.lbbefore.active{color:var(--ground);background:var(--cyan);border-color:var(--cyan)}
 .lbcount{position:fixed;top:16px;left:18px;font-family:var(--mono);font-size:12px;color:var(--dim)}
+.lbvariant{position:fixed;top:16px;left:50%;transform:translateX(-50%);font-family:var(--mono);font-size:12px;color:var(--cyan);letter-spacing:.04em;background:rgba(6,7,4,.6);padding:5px 12px;border-radius:12px}
 </style></head>
 <body>
 <div class="wrap">
   <p class="eyebrow">uedcli · reference solutions · batch 1 of 5 · UNATCO HQ</p>
   <h1 class="lede">Reference solutions to validate &mdash; per-aspect, diff-generated.</h1>
   <p class="sub">Each task is collapsed by default &mdash; open one and the previous one closes. Inside, each aspect of the change is its own collapsible scenario, showing the fully-correct outcome with just that aspect's actors highlighted. Click any picture to enlarge; arrows cycle through that scenario's images; the enlarged view always shows its caption.</p>
-  <p class="pipeline"><b>Every picture is generated, never hand-built.</b> Grading is manual: each task's <b>executions</b> section shows every task-relevant actor's actual outcome — one quad view (Top/Front/Iso/Side) per actor, labeled CREATED/UPDATED/UNCHANGED/DELETED by what the task expects of it — plus a full panorama tour, so you can score 0–10 and leave a note from the pictures alone. A DELETED actor's quad shows the final room with that actor reinserted (from its last known position) so its absence is visible, not just implied. Scores save immediately and stay editable.</p>
+  <p class="pipeline"><b>Every picture is generated, never hand-built.</b> Grading is manual: each task's <b>executions</b> section shows every task-relevant actor's actual outcome — one quad view (Top/Front/Iso/Side) per actor that was actually touched, labeled CREATED/UPDATED/UNCHANGED/DELETED by what the task expects of it — plus a full panorama tour, so you can score 0–10 and leave a note from the pictures alone. A DELETED actor's quad shows the final room with that actor reinserted (from its last known position) so its absence is visible, not just implied. The crop is computed per execution (the bbox of everything it touched, not a hand-picked frame), and each picture has 2-3 views — open one and press <b>↑/↓</b> to cycle BEFORE / AFTER / a wider AFTER with more surrounding room, ←/→ to move between actors. Scores save immediately and stay editable.</p>
   <p class="orient">Orientation (matching UnrealEd's own axis convention): in the <b>Top</b> pane of every quad view, <b>East = right</b> edge of the image, <b>West = left</b>, <b>North = up</b>, <b>South = down</b>.</p>
   __BODY__
   <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified, each assigned its OWN anchor by verified geometry (some fixtures split across both wall volumes). Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same pipeline. Diagrams: <code>actor diagram</code>, cropped to the room this task edits (not the whole level). Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>.</p>
@@ -243,8 +243,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 
 <div id="lb" class="lb" hidden>
   <button class="lbclose" onclick="closeLB()">✕ close (Esc)</button>
-  <button id="lbbefore" class="lbbefore" onclick="toggleBefore()">before/after (b)</button>
   <span id="lbcount" class="lbcount"></span>
+  <span id="lbvariant" class="lbvariant"></span>
   <button class="lbnav lbprev" onclick="lbStep(-1)" aria-label="previous">&#10094;</button>
   <button class="lbnav lbnext" onclick="lbStep(1)" aria-label="next">&#10095;</button>
   <div id="lbimgwrap" class="lbimgwrap"><img id="lbimg" alt="" onclick="toggleZoom(event)"></div>
@@ -333,45 +333,48 @@ async function saveGrade(btn){
   }
 }
 loadGrades();
-let lbBefore = false;
+let lbVariant = 0;
 function openLB(scenId, idx){
   lbScen = scenId; lbIdx = idx;
   renderLB();
   document.getElementById('lb').hidden = false;
 }
 function renderLB(){
-  const list = CAROUSELS[lbScen];
-  const item = list[lbIdx];
-  lbBefore = false;
+  const item = CAROUSELS[lbScen][lbIdx];
+  lbVariant = item.default || 0;
+  renderVariant();
+  document.getElementById('lbcount').textContent = (lbIdx+1) + ' / ' + CAROUSELS[lbScen].length;
+}
+function renderVariant(){
+  const item = CAROUSELS[lbScen][lbIdx];
+  const v = item.variants[lbVariant];
   const img = document.getElementById('lbimg');
-  img.src = item.src;
+  img.src = v.src;
   img.classList.remove('zoomed');
   document.getElementById('lbimgwrap').scrollTo(0, 0);
-  document.getElementById('lbcap').textContent = item.cap;
-  document.getElementById('lbcount').textContent = (lbIdx+1) + ' / ' + list.length;
-  const btn = document.getElementById('lbbefore');
-  btn.disabled = !item.before;
-  btn.classList.remove('active');
+  document.getElementById('lbcap').textContent = v.cap;
+  const vbar = document.getElementById('lbvariant');
+  if (item.variants.length > 1){
+    vbar.hidden = false;
+    vbar.textContent = `view ${lbVariant+1}/${item.variants.length} — ↑↓ to cycle`;
+  } else {
+    vbar.hidden = true;
+  }
 }
 function lbStep(d){
   const list = CAROUSELS[lbScen];
   lbIdx = (lbIdx + d + list.length) % list.length;
   renderLB();
 }
+function cycleVariant(d){
+  const item = CAROUSELS[lbScen][lbIdx];
+  if (item.variants.length < 2) return;
+  lbVariant = (lbVariant + d + item.variants.length) % item.variants.length;
+  renderVariant();
+}
 function toggleZoom(e){
   e.stopPropagation();
   document.getElementById('lbimg').classList.toggle('zoomed');
-}
-function toggleBefore(){
-  const item = CAROUSELS[lbScen][lbIdx];
-  if (!item.before) return;
-  lbBefore = !lbBefore;
-  const img = document.getElementById('lbimg');
-  img.src = lbBefore ? item.before : item.src;
-  img.classList.remove('zoomed');
-  document.getElementById('lbimgwrap').scrollTo(0, 0);
-  document.getElementById('lbcap').textContent = lbBefore ? item.beforeCap : item.cap;
-  document.getElementById('lbbefore').classList.toggle('active', lbBefore);
 }
 function closeLB(){ document.getElementById('lb').hidden = true; }
 document.addEventListener('keydown', e => {
@@ -379,7 +382,8 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeLB();
   if (e.key === 'ArrowLeft') lbStep(-1);
   if (e.key === 'ArrowRight') lbStep(1);
-  if (e.key === 'b' || e.key === 'B') toggleBefore();
+  if (e.key === 'ArrowUp') { e.preventDefault(); cycleVariant(-1); }
+  if (e.key === 'ArrowDown') { e.preventDefault(); cycleVariant(1); }
 });
 document.getElementById('lb').addEventListener('click', e => {
   if (e.target.id === 'lb') closeLB();
