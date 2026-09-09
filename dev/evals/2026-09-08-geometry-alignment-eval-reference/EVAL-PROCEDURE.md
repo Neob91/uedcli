@@ -72,7 +72,7 @@ chmod +x "$fake_home/bin/uedcli"
 cd "$run_dir/trunk"
 HOME="$fake_home" PATH="$fake_home/bin:$PATH" UEDCLI_LEVEL=<task.level> \
   CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
-  claude -p "<task.req>" --output-format json > "$run_dir/result.json"
+  claude -p "<task.req>" --model sonnet --output-format json > "$run_dir/result.json"
 session_id=$(python3 -c "import json,sys;print(json.load(open('$run_dir/result.json'))['session_id'])")
 ```
 
@@ -82,7 +82,7 @@ identical regardless of what was flagged:
 ```
 HOME="$fake_home" PATH="$fake_home/bin:$PATH" UEDCLI_LEVEL=<task.level> \
   CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
-  claude -p --resume "$session_id" "Go with your recommendation."
+  claude -p --resume "$session_id" --model sonnet "Go with your recommendation."
 ```
 Grade the FINAL trunk state either way — a flag mid-work is not itself a failure, an unresolved
 one (agent stops without finishing) is.

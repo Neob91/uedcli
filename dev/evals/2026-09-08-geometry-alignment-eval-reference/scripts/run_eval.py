@@ -12,7 +12,8 @@ project-level skills or CLAUDE.md), auto-resumes with this eval's standing
 scripted reply ("Go with your recommendation.") if the agent asks a
 question instead of finishing, then renders the resulting trunk and
 rebuilds the page so the run shows up in the webapp -- grading itself
-stays manual, by design.
+stays manual, by design. Model is pinned to Sonnet (CLAUDE_MODEL below),
+never whatever the CLI defaults to.
 
 Usage: run_eval.py <task_id> <skill_dir> [--run-id ID] [--label TEXT]
 
@@ -29,6 +30,7 @@ import render_manual
 VENV_PY = "/workspace/uedcli/.venv/bin/python"
 SCRIPTS_DIR = pathlib.Path(__file__).parent
 SCRIPTED_REPLY = "Go with your recommendation."
+CLAUDE_MODEL = "sonnet"  # pin the model under test -- never let it drift with whatever's default
 CLAUDE_TIMEOUT_S = 3600
 QUESTION_MARKERS = ("?", "your call", "which would you like", "should i", "shall i",
                     "let me know", "waiting on", "need your", "not sure whether")
@@ -47,7 +49,7 @@ def _run_claude(cwd: pathlib.Path, home: pathlib.Path, level: str, token: str, e
         "UEDCLI_LEVEL": level,
         "CLAUDE_CODE_OAUTH_TOKEN": token,
     }
-    r = subprocess.run(["claude", *extra_args, "--output-format", "json"],
+    r = subprocess.run(["claude", *extra_args, "--model", CLAUDE_MODEL, "--output-format", "json"],
                         cwd=str(cwd), env=env, capture_output=True, text=True, timeout=CLAUDE_TIMEOUT_S)
     if not r.stdout.strip():
         raise RuntimeError(f"claude produced no output (rc={r.returncode}): {r.stderr[-2000:]}")
