@@ -398,7 +398,10 @@ document.getElementById('lb').addEventListener('click', e => {
 });
 let lbTouchX = null, lbTouchY = null;
 document.getElementById('lb').addEventListener('touchstart', e => {
-  if (e.touches.length !== 1) { lbTouchX = null; return; }
+  // a tap that starts on a button (close/prev/next/up/down) is its own
+  // gesture -- swipe detection would preventDefault the touchmove and
+  // suppress the button's synthetic click, so leave it alone entirely
+  if (e.touches.length !== 1 || e.target.closest('button')) { lbTouchX = null; return; }
   lbTouchX = e.touches[0].clientX;
   lbTouchY = e.touches[0].clientY;
 }, {passive: true});
