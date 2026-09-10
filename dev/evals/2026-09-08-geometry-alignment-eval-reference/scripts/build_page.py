@@ -147,7 +147,6 @@ img{max-width:100%}
 h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;letter-spacing:.01em;margin:0}
 .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin:0 0 14px}
 .lede{font-size:clamp(26px,4vw,40px);line-height:1.08;margin:0 0 16px;letter-spacing:-.01em}
-.orient{font-size:13.5px;color:var(--dim);margin:0;padding:10px 14px;border:1px solid var(--line);border-left:3px solid var(--cyan);background:var(--panel2);border-radius:2px}
 
 .taskblk{margin:28px 0 0;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
 .taskhead{width:100%;text-align:left;background:var(--panel2);border:0;border-bottom:1px solid var(--line);padding:16px 20px;
@@ -211,7 +210,6 @@ h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;letter-spacin
 .gradebox .gstatus.saved{color:var(--good)}
 .gradebox .gstatus.error{color:var(--bad)}
 
-.foot{color:var(--faint);font-size:13px;font-family:var(--mono);margin-top:26px;border-top:1px solid var(--line);padding-top:14px}
 code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px 5px;border-radius:2px;color:var(--gold-soft)}
 
 .lb{position:fixed;inset:0;background:rgba(6,7,4,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;padding:24px}
@@ -234,11 +232,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 </style></head>
 <body>
 <div class="wrap">
-  <p class="eyebrow">uedcli · geometry-alignment eval · UNATCO HQ</p>
+  <p class="eyebrow">uedcli · geometry-alignment eval</p>
   <h1 class="lede">Grade subagent executions.</h1>
-  <p class="orient">Top pane: East = right, West = left, North = up, South = down.</p>
   __BODY__
-  <p class="foot">2 of 5 levels so far — NYC_Bar, WanChai Market, OceanLab, +1 more to come.</p>
 </div>
 
 <div id="lb" class="lb" hidden>
