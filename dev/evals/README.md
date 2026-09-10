@@ -24,9 +24,9 @@ things to fix:
   directly — `plugins/uedcli/skills/<name>/SKILL.md` — then run the SAME task against the SAME
   skill again (`run_eval.py`) to confirm the fix actually changed the outcome. An edit you haven't
   re-verified isn't a fix yet.
-- **Tool gap** (`uedcli` itself didn't give the agent what it needed): log it to the board
-  (`bin/board new inbox`, per this project's own `CLAUDE.md`) rather than letting it die in a
-  grading note — that's how it reaches whoever works on `uedcli` itself next.
+- **Tool gap** (`uedcli` itself didn't give the agent what it needed): flag it to the human running
+  the eval rather than letting it die in a grading note — don't log it to the board yourself. The
+  human decides whether it's board-worthy.
 
 ## Vocabulary — the closed set every uedcli geometry verb's RESULT reduces to
 
