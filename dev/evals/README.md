@@ -17,6 +17,17 @@ awkward multi-step where one verb should exist, a footgun nothing warns about). 
 gaps as they come up, not just skill failures — that's a real output of this eval, not a side
 effect.
 
+Grading isn't the end state — it's what tells you what to fix next, and which of two different
+things to fix:
+
+- **Skill gap** (the agent had the right tool but used it wrong): edit the skill under test
+  directly — `plugins/uedcli/skills/<name>/SKILL.md` — then run the SAME task against the SAME
+  skill again (`run_eval.py`) to confirm the fix actually changed the outcome. An edit you haven't
+  re-verified isn't a fix yet.
+- **Tool gap** (`uedcli` itself didn't give the agent what it needed): log it to the board
+  (`bin/board new inbox`, per this project's own `CLAUDE.md`) rather than letting it die in a
+  grading note — that's how it reaches whoever works on `uedcli` itself next.
+
 ## Vocabulary — the closed set every uedcli geometry verb's RESULT reduces to
 
 `scripts/spec_format.py` has the full definitions; in short, every task (`scripts/specs/<id>.py`)
