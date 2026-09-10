@@ -114,10 +114,15 @@ def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_i
     `per-actor-skins-override-in-native-mesh-render`) — `resolve_skins` itself is agnostic to which,
     it just reads whatever `defaults` hands it for each `("multiskins"|"skin", i)` key.
 
-    `i` here is the SAME approximation the codebase already made for `MultiSkins`/`Skin` indexing —
-    the mesh's own material-list ordinal, not `UMesh::Textures`' own index (the spike's "`Count` is
-    the mesh's TEXTURE index, not the material ordinal" finding) — the two diverge only when a
-    mesh's `Materials[i].TextureIndex != i`; reconciling that is a separate, not-yet-scoped fix.
+    `i` here is `Count` itself — the mesh's own `Textures` index, NOT the material-list ordinal
+    (board `resolve-skins-keys-by-material-ordinal-not`, closed: keying by material ordinal instead
+    shifted skins onto the wrong material for any mesh where `Materials[i].TextureIndex != i` —
+    confirmed on `DeusExCharacters.GM_Trench`, materials 3-6 of 7, each landing one slot off).
+    Resolution runs once per real texture index a MATERIAL actually references (not the full
+    `range(Textures.Num())` `DrawLodMesh` loops — an unreferenced slot's bad/procedural ref would
+    otherwise raise or decode for pixels nothing ever shows, unlike the real engine's mere pointer
+    fetch there), then each MATERIAL is re-keyed to its resolved texture via its own `TextureIndex`
+    — the shape triangles actually reference (`frame_triangles`' `material_index`).
 
     `search_files` is the FULL composed search path (all package extensions) — NOT the `.u`-only
     `ClassIndex.package_paths`: a skin can live in a `.utx` (`Effects.BioCell_SFX`), never on the
@@ -148,45 +153,48 @@ def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_i
 
     mats = mesh.materials or [(0, i) for i in range(max(1, len(mesh.textures)))]
 
-    def mesh_texture_ref(mi: int) -> str | None:
-        """`Textures[mi]`'s resolver key, or None when `mi` has no mesh material (an override-only
-        slot) or its texture index is unset/out of range."""
-        if not (0 <= mi < len(mats)):
+    def texture_ref_at(t: int) -> str | None:
+        """`Textures[t]`'s resolver key (`t` is `Count` — the mesh's own texture index), or None
+        when `t` is out of range or unset."""
+        if not (0 <= t < len(mesh.textures)):
             return None
-        tex_idx = mats[mi][1]
-        if not (0 <= tex_idx < len(mesh.textures)):
-            return None
-        path = pkg.object_path(mesh.textures[tex_idx])
+        path = pkg.object_path(mesh.textures[t])
         if not path:
             return None
         parts = path.split(".")
         return f"{parts[0]}.{parts[-1]}"              # Package.Name (drop any Group segment)
 
-    # Every slot a triangle could reference (the mesh's own materials) UNION every slot an override
-    # states (`MultiSkins(N)=` may name an index the mesh has no material for at all).
-    slots = set(range(len(mats)))
-    slots.update(idx for (prop, idx) in defaults if prop == "multiskins")
-
-    skins: dict = {}
-    for mi in slots:
-        multiskin_ref = _skin_ref(defaults.get(("multiskins", mi)))
+    # Only texture indices some MATERIAL actually references — not the full `Textures.Num()` range
+    # `DrawLodMesh` loops (a mesh can carry unreferenced texture slots; a bad/procedural ref THERE
+    # would raise or decode for pixels nothing ever shows, unlike the real engine, which only ever
+    # fetches a POINTER per slot, not a full decode).
+    resolved: dict[int, tuple] = {}
+    for t in sorted({tex_idx for _flags, tex_idx in mats if 0 <= tex_idx < len(mesh.textures)}):
+        multiskin_ref = _skin_ref(defaults.get(("multiskins", t)))
         if multiskin_ref is not None:
-            skins[mi] = skin_tuple(utexture.resolve_or_procedural_red(resolver, multiskin_ref),
-                                   f"multiskins override {multiskin_ref}")
+            resolved[t] = skin_tuple(utexture.resolve_or_procedural_red(resolver, multiskin_ref),
+                                     f"multiskins override {multiskin_ref}")
             continue
-        mesh_ref = mesh_texture_ref(mi)
-        if mi != 0 and mesh_ref is not None:
-            skins[mi] = skin_tuple(utexture.resolve_or_procedural_red(resolver, mesh_ref),
-                                   f"mesh skin {mesh_ref}")
+        mesh_ref = texture_ref_at(t)
+        if t != 0 and mesh_ref is not None:
+            resolved[t] = skin_tuple(utexture.resolve_or_procedural_red(resolver, mesh_ref),
+                                     f"mesh skin {mesh_ref}")
             continue
         skin_ref = _skin_ref(defaults.get(("skin", 0)))
         if skin_ref is not None:
-            skins[mi] = skin_tuple(utexture.resolve_or_procedural_red(resolver, skin_ref),
-                                   f"skin override {skin_ref}")
+            resolved[t] = skin_tuple(utexture.resolve_or_procedural_red(resolver, skin_ref),
+                                     f"skin override {skin_ref}")
             continue
         if mesh_ref is not None:
-            skins[mi] = skin_tuple(utexture.resolve_or_procedural_red(resolver, mesh_ref),
-                                   f"mesh skin {mesh_ref}")
+            resolved[t] = skin_tuple(utexture.resolve_or_procedural_red(resolver, mesh_ref),
+                                     f"mesh skin {mesh_ref}")
+
+    # Re-key by MATERIAL — the shape triangles reference (`frame_triangles`' `material_index`),
+    # via each material's own `TextureIndex` (its real `Count`).
+    skins: dict = {}
+    for mi, (_flags, tex_idx) in enumerate(mats):
+        if tex_idx in resolved:
+            skins[mi] = resolved[tex_idx]
     return skins
 
 

@@ -57,13 +57,14 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
     exemption UnrealEd itself uses), in which case it renders from either side. Movers render at
     base pose, culled the same way. **Mesh actors render**: an actor whose effective `DrawType` is
     `DT_Mesh` (decorations, items, weapons, characters) is drawn at animation frame 0, skinned per
-    material slot the way the real engine does: that slot's `MultiSkins` entry (actor's own, else
-    its class's default — the same defaults [`class preview`](../class/preview.md) skins with) wins
-    if set; otherwise, for any slot but the first, the mesh's own texture there wins if it has one;
-    otherwise `Skin` (actor's own, else class default) wins if set; otherwise the mesh's own texture.
-    `Skin` is a fallback for the first slot before anywhere else — not a whole-mesh override, so
-    setting only `Skin` on a multi-textured mesh recolors just its first material, not the rest.
-    A `bHidden` actor is skipped, since the
+    texture slot the way the real engine does — the mesh's OWN texture slots, which don't always
+    number the same as its visible materials: `MultiSkins(N)` (actor's own, else its class's
+    default — the same defaults [`class preview`](../class/preview.md) skins with) sets texture
+    slot N and wins if set; otherwise, for any slot but the first, the mesh's own texture there wins
+    if it has one; otherwise `Skin` (actor's own, else class default) wins if set; otherwise the
+    mesh's own texture. `Skin` is a fallback for texture slot 0 only — not a whole-mesh override, so
+    setting only `Skin` on a multi-textured mesh recolors just whatever uses that one slot, not the
+    rest. A `bHidden` actor is skipped, since the
     shot shows what the player would see. Other point actors (sprite-drawn ones such as lights and
     path nodes), sky, lighting, and translucency do NOT render
     (translucent/masked faces render opaque). Scaled, mirrored, and sheared brushes render
