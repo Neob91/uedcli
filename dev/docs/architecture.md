@@ -1186,8 +1186,12 @@ silence. A whole array renders as a one-line full-dim tuple; a whole struct rend
 unmentioned members filled from the class default (the live-probed import semantics — see
 `unrealed/t3d.md` "Partial struct/array property values" + `spikes/2026-07-18-partial-value-
 import-semantics/`). `--kv` prints round-trippable `KEY=VALUE` lines. `get <actor>` with no keys
-dumps the stored props (plus `Location`) verbatim in stored order, dot-canonical keys; a stored
-prop the schema doesn't know is a hard error (ruling R4). All keys validate before any output.
+requires `--stored` or `--effective` — bare `get <actor>` alone errors, it never guesses which view.
+`--stored` dumps the stored props (plus `Location`) verbatim in stored order, dot-canonical keys; a
+stored prop the schema doesn't know is a hard error (ruling R4). `--effective` dumps every property
+the class schema knows (own + inherited), each resolved the same way a keyed `get` is; hard-rejected
+and engine-computed (`is_computed_key`) keys stay off the surface. All keys validate before any
+output.
 
 **`actor find --prop` matches EFFECTIVE values** (same fall-through, type-canonicalized compare:
 bool ≡ 0/1, numeric `4`≡`4.0`, enum name≡ordinal, Name case-insensitive, str/object exact,
