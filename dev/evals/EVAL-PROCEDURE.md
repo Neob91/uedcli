@@ -8,8 +8,13 @@ behind it.
 ## Run one
 
 ```
-CLAUDE_CODE_OAUTH_TOKEN=<token> python scripts/run_eval.py <task_id> <skill_dir>
+python scripts/run_eval.py <task_id> <skill_dir>
 ```
+
+On a host already logged into Claude Code, that's the whole command — no token setup needed;
+`run_eval.py` pulls one straight from `~/.claude/.credentials.json`'s own `claudeAiOauth.accessToken`
+(the same credential your interactive `claude` session already uses). Set `CLAUDE_CODE_OAUTH_TOKEN`
+explicitly instead when running from a host that ISN'T already logged in (step 1 below covers that).
 
 `scripts/run_eval.py` stages an isolated run directory (the task's base trunk + the skill(s) under
 test), runs `claude -p <task req>` there with an isolated `HOME` (no ambient project-level skills,
@@ -23,10 +28,9 @@ a bad run means that skill needs work) or at a directory OF skills, e.g. a plugi
 (combined — every skill in it loads together, closer to how a real designer works, but a failure
 doesn't tell you which skill, or the combination itself, was at fault).
 
-Needs `CLAUDE_CODE_OAUTH_TOKEN` first — step 1 below (`claude setup-token`). If you have a real
-`ANTHROPIC_API_KEY` instead, `run_eval.py` doesn't use it — `--bare` is the cleaner mechanism in
-that case (see below); run the manual procedure with `--bare` swapped in for step 2, or extend
-`run_eval.py` to support it.
+If you have a real `ANTHROPIC_API_KEY` instead, `run_eval.py` doesn't use it — `--bare` is the
+cleaner mechanism in that case (see below); run the manual procedure with `--bare` swapped in for
+step 2, or extend `run_eval.py` to support it.
 
 ## What "isolated" means here, and what it doesn't
 

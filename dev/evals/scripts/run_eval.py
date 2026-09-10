@@ -25,8 +25,11 @@ at that skill's own directory instead.
 
 Usage: run_eval.py <task_id> <skill_dir> [--run-id ID] [--label TEXT]
 
-Needs CLAUDE_CODE_OAUTH_TOKEN in the environment (see EVAL-PROCEDURE.md
-step 1 -- `claude setup-token`, run in a real interactive terminal).
+Needs an OAuth token: CLAUDE_CODE_OAUTH_TOKEN if set in the environment, else
+pulled straight from ~/.claude/.credentials.json's own claudeAiOauth.accessToken
+-- so it just works on a host that's already logged into Claude Code, no
+separate `claude setup-token` step needed there. See EVAL-PROCEDURE.md step 1
+for the setup-token path on a host that ISN'T already logged in.
 """
 import argparse, datetime, html, json, os, pathlib, shutil, stat, subprocess, sys, tempfile
 
@@ -63,6 +66,26 @@ def _run_claude(cwd: pathlib.Path, home: pathlib.Path, level: str, token: str, e
         raise RuntimeError(f"claude produced no output (rc={r.returncode}): {r.stderr[-2000:]}")
     return json.loads(r.stdout)
 
+def _oauth_token() -> str:
+    """CLAUDE_CODE_OAUTH_TOKEN if set, else pulled straight from this host's OWN
+    already-authenticated Claude Code login (~/.claude/.credentials.json's
+    claudeAiOauth.accessToken) -- owner-directed: skip the separate `claude
+    setup-token` dance on a host that's already logged in."""
+    token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
+    if token:
+        return token
+    creds_path = pathlib.Path.home() / ".claude" / ".credentials.json"
+    if not creds_path.exists():
+        sys.exit("CLAUDE_CODE_OAUTH_TOKEN not set and no ~/.claude/.credentials.json found -- "
+                  "see EVAL-PROCEDURE.md step 1 (claude setup-token)")
+    try:
+        token = json.loads(creds_path.read_text())["claudeAiOauth"]["accessToken"]
+    except (json.JSONDecodeError, KeyError) as e:
+        sys.exit(f"{creds_path} doesn't have the expected claudeAiOauth.accessToken shape: {e}")
+    if not token:
+        sys.exit(f"{creds_path}'s claudeAiOauth.accessToken is empty")
+    return token
+
 def _resolve_skills(skill_dir: pathlib.Path) -> list[pathlib.Path]:
     """`skill_dir` is either ONE skill (has its own SKILL.md) or a directory OF skills (each
     immediate subdirectory has one -- e.g. a plugin's skills/ dir). Returns every skill directory
@@ -88,9 +111,7 @@ def run_eval(task_id: str, skill_dir: pathlib.Path, run_id: str) -> pathlib.Path
     if task_id not in TASKS:
         sys.exit(f"unknown task_id {task_id!r} -- known: {', '.join(sorted(TASKS))}")
     task = TASKS[task_id]
-    token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
-    if not token:
-        sys.exit("CLAUDE_CODE_OAUTH_TOKEN not set -- see EVAL-PROCEDURE.md step 1 (claude setup-token)")
+    token = _oauth_token()
     skills = _resolve_skills(skill_dir)
 
     run_root = BASE_TRUNKS_DIR / "eval_runs" / f"{task_id}_{run_id}"
