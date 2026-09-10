@@ -8,9 +8,9 @@ from uedcli.typedprops import stored_prop_map
 
 
 class _FakeMesh:
-    """Minimal stand-in exercising both frame_triangles branches."""
+    """Minimal stand-in exercising both frame_triangles branches (and, with `scale`, `render_class`)."""
     def __init__(self, *, faces=None, wedges=None, materials=None, tris=None, verts,
-                 frame_verts=0, special_verts=0):
+                 frame_verts=0, special_verts=0, scale=(1.0, 1.0, 1.0)):
         self.faces = faces or []
         self.wedges = wedges or []
         self.materials = materials or []
@@ -18,6 +18,7 @@ class _FakeMesh:
         self.verts = verts
         self.frame_verts = frame_verts
         self.special_verts = special_verts
+        self.scale = scale
 
 
 def test_frame_triangles_lodmesh_flags_come_from_materials():
@@ -301,3 +302,52 @@ def test_resolve_skins_error_names_the_ref_not_a_wrong_source_label(monkeypatch)
     with pytest.raises(meshrender.PreviewError, match="multiskins override") as exc:
         meshrender.resolve_skins(_NoMeshTexMesh(), _SkinPkg(), merged, [], class_fqcn="Pkg.Class")
     assert "class " not in str(exc.value).split(":", 1)[1].split("multiskins")[0]
+
+
+# ── PF_Translucent/PF_Modulated: no blend compositing, so skip rather than draw opaque (found live
+# on `DeusExCharacters.GM_Trench`'s eye-height "glasses lens" materials, which rendered as a solid
+# dark band across a character's face — real `PolyFlags` 0x104/0x140, PF_TwoSided|Translucent and
+# PF_TwoSided|Modulated) ──────────────────────────────────────────────────────────────────────────
+
+def test_render_class_skips_translucent_triangles(monkeypatch):
+    """A material flagged `PF_Translucent` draws nothing (no opaque compositing to fall back to) —
+    the whole image stays background, matching a mesh with no triangles rasterized at all."""
+    _skin_resolver(monkeypatch, b_masked=False)
+    mesh = _FakeMesh(
+        verts=[(-50, -50, 0), (50, -50, 0), (0, 50, 0)],
+        wedges=[(0, 0, 0), (1, 255, 0), (2, 0, 255)],
+        faces=[((0, 1, 2), 0)],
+        materials=[(meshrender.PF_TRANSLUCENT, 0)],
+    )
+    img, _azimuth = meshrender.render_class(mesh, {0: (2, 1, b"\xff\x00\x00\x00\xff\x00", False, b"\x01\x00")},
+                                            size=64)
+    assert img.getcolors() == [(64 * 64, meshrender._BG)]
+
+
+def test_render_class_skips_modulated_triangles_too(monkeypatch):
+    """Same disposition for `PF_Modulated` (screen-blend) — the other blend mode this mesh format
+    uses for glass/energy-field materials."""
+    mesh = _FakeMesh(
+        verts=[(-50, -50, 0), (50, -50, 0), (0, 50, 0)],
+        wedges=[(0, 0, 0), (1, 255, 0), (2, 0, 255)],
+        faces=[((0, 1, 2), 0)],
+        materials=[(meshrender.PF_MODULATED, 0)],
+    )
+    img, _azimuth = meshrender.render_class(mesh, {0: (2, 1, b"\xff\x00\x00\x00\xff\x00", False, b"\x01\x00")},
+                                            size=64)
+    assert img.getcolors() == [(64 * 64, meshrender._BG)]
+
+
+def test_render_class_still_draws_an_opaque_triangle_with_the_same_shape(monkeypatch):
+    """Control: the SAME mesh with `PolyFlags=0` (no translucent/modulated bit) draws normally —
+    proves the skip is flag-gated, not a side effect of the fixture shape."""
+    mesh = _FakeMesh(
+        verts=[(-50, -50, 0), (50, -50, 0), (0, 50, 0)],
+        wedges=[(0, 0, 0), (1, 255, 0), (2, 0, 255)],
+        faces=[((0, 1, 2), 0)],
+        materials=[(0, 0)],
+    )
+    img, _azimuth = meshrender.render_class(mesh, {0: (2, 1, b"\xff\x00\x00\x00\xff\x00", False, b"\x01\x00")},
+                                            size=64)
+    colors = img.getcolors()
+    assert len(colors) > 1 and any(c != meshrender._BG for _n, c in colors)

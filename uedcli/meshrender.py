@@ -34,6 +34,15 @@ ISO_YAW_DEG = 45.0
 ISO_PITCH_DEG = 20.0
 DEFAULT_SIZE = 512
 
+PF_TRANSLUCENT = 0x4
+PF_MODULATED = 0x40
+# Neither rasterizer in this module composites blend modes, so a material the real engine renders
+# translucently or modulated (glass lenses, energy fields) would otherwise show as a solid opaque
+# patch of whatever texel it samples -- visibly wrong (e.g. `GM_Trench`'s eye-height glasses-lens
+# materials rendering as a dark band across a character's face). Skipped like invisible geometry
+# until real blend compositing exists -- closer to the real (subtle/near-invisible) look than solid.
+PF_NO_OPAQUE_DRAFT = PF_TRANSLUCENT | PF_MODULATED
+
 _BG = (26, 28, 32)                 # thumbnail background
 _FLAT_GREY = (170, 172, 178)       # a material with no texture
 _LIGHT = (0.35, -0.5, 0.79)        # Lambert key light (spike render.py)
@@ -256,7 +265,9 @@ def render_class(mesh, skins: dict, *, rotate_uu=(0, 0, 0), size: int = DEFAULT_
     img = Image.new("RGB", (size, size), _BG)
     px = img.load()
     zbuf = [1e30] * (size * size)
-    for (a, b, c, ua, ub, uc, mat, _flags) in tris:
+    for (a, b, c, ua, ub, uc, mat, flags) in tris:
+        if flags & PF_NO_OPAQUE_DRAFT:
+            continue                                      # no blend compositing yet -- see the flag
         va, vb, vc = view(a), view(b), view(c)
         e1 = tuple(vb[i] - va[i] for i in range(3))
         e2 = tuple(vc[i] - va[i] for i in range(3))

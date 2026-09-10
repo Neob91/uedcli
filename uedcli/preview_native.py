@@ -39,6 +39,8 @@ from .utexture import TextureError, TextureResolver, resolve_or_procedural_red
 
 PF_INVISIBLE = 0x1
 PF_MASKED = 0x2                                       # alpha-test: palette-index-0 texels cut out
+# PF_TRANSLUCENT/PF_MODULATED/PF_NO_OPAQUE_DRAFT canonically live in meshrender (imported below) --
+# this module's mesh-actor triangle loop shares the same no-blend-compositing disposition.
 
 # The game's first-person default horizontal FOV: Engine.PlayerPawn defaultproperties
 # `DesiredFOV=75.000000` / `DefaultFOV=75.000000` (DX install `Engine/Classes/PlayerPawn.uc:4940`,
@@ -439,7 +441,7 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
         add_poly(world_verts, actor, poly)
 
     from .transform import DegenerateTransformError, flip_winding, reject_degenerate
-    from . import meshworld, typedprops
+    from . import meshrender, meshworld, typedprops
 
     for actor in level.actors.values():
         if actor.brush is not None:
@@ -468,6 +470,8 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
         for (v0, v1, v2, uv0, uv1, uv2, material_index, poly_flags) in tris:
             if poly_flags & PF_INVISIBLE:
                 continue                                  # dropped Python-side, matches add_poly
+            if poly_flags & meshrender.PF_NO_OPAQUE_DRAFT:
+                continue                                  # no blend compositing yet -- see the flag
             if flip:
                 v0, v2 = v2, v0
                 uv0, uv2 = uv2, uv0

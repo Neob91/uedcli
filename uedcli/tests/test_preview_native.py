@@ -446,6 +446,25 @@ def test_bhidden_mesh_actor_does_not_render():
     assert _mesh_poly_count(shown, index) > 0
 
 
+def test_mesh_actor_skips_translucent_and_modulated_materials():
+    """`DeusEx.JosephManderley`'s real `GM_Trench` mesh has two eye-height "glasses lens" materials
+    flagged `PF_Translucent`/`PF_Modulated` (real `PolyFlags` 0x104/0x140) -- live evidence the draft
+    rasterizer previously drew as a solid dark band across the face (no blend compositing, so it drew
+    the texel opaque). `build_scene` must drop exactly those triangles, not merely some or all of the
+    mesh."""
+    from uedcli import meshrender
+    index = _ued22_index()
+    actor = Actor(name="Manderley", cls="DeusEx.JosephManderley",
+                 location=(Decimal(0), Decimal(0), Decimal(0)))
+    tris, _skins, _mesh, _mesh_ref = pn._mesh_actor_polys(actor, index, _mesh_sf(index))
+    assert tris                                            # sanity: the mesh has triangles at all
+    translucent_tris = [t for t in tris if t[7] & meshrender.PF_NO_OPAQUE_DRAFT]
+    opaque_tris = [t for t in tris if not (t[7] & meshrender.PF_NO_OPAQUE_DRAFT)]
+    assert translucent_tris                                # sanity: the real mesh has the eye-lens materials
+
+    assert _mesh_poly_count(actor, index) == len(opaque_tris)
+
+
 def test_mesh_material_with_no_texture_renders_flat_grey(monkeypatch):
     """A material with NOTHING assigned is not a failure: the triangle still renders, in the flat
     default grey (`tex_index -1`) an untextured BSP face already gets. Only a texture that IS
