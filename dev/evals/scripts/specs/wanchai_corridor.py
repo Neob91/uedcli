@@ -6,7 +6,7 @@ TASK = dict(
  id="wanchai_corridor", level="wanchai",
  title="Widen the upper corridor",
  req="&ldquo;The corridor Brush1159 feels cramped. Widen it by 48 units &mdash; push the south wall out.&rdquo;",
- base_trunk="wanchai_gt",
+ dx_map="06_HongKong_WanChai_Market",
  photo_camera=dict(at=[-640,384,184], pitch=0),
  before=dict(
    quad="before_quad",

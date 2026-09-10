@@ -35,10 +35,8 @@ import argparse, datetime, html, json, os, pathlib, shutil, stat, subprocess, sy
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
-from build_gold import BASE_TRUNKS_DIR
+from build_gold import BASE_TRUNKS_DIR, base_trunk_for, PY as VENV_PY
 import render_manual
-
-VENV_PY = "/workspace/uedcli/.venv/bin/python"
 SCRIPTS_DIR = pathlib.Path(__file__).parent
 SCRIPTED_REPLY = "Go with your recommendation."
 CLAUDE_MODEL = "sonnet"  # pin the model under test -- never let it drift with whatever's default
@@ -118,7 +116,7 @@ def run_eval(task_id: str, skill_dir: pathlib.Path, run_id: str) -> pathlib.Path
     if run_root.exists():
         sys.exit(f"{run_root} already exists -- pick a different --run-id")
     trunk_dir = run_root / "trunk"
-    shutil.copytree(BASE_TRUNKS_DIR / task["base_trunk"], trunk_dir)
+    shutil.copytree(base_trunk_for(task), trunk_dir)
     for s in skills:
         shutil.copytree(s, trunk_dir / ".claude" / "skills" / s.name)
     skill_names = ", ".join(s.name for s in skills)

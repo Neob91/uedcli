@@ -50,8 +50,9 @@ output path is namespaced by it (`img/<id>/`, `runs/<id>/`), so ids across level
 collide.
 
 No `frame` field — the crop every picture uses is computed, not hand-picked (see "Pipeline" below).
-`level` is the one field that exists purely so a new level needs no script changes: it's used to
-find `<level>_allnames.txt` in `BASE_TRUNKS_DIR` and to set `UEDCLI_LEVEL`.
+`level`/`dx_map` are the two fields that exist purely so a new DX level needs no script changes:
+`dx_map` names the shipped map to import the baseline from (see "Base trunks" below), `level`
+names the trunk tree it's imported into and sets `UEDCLI_LEVEL`.
 
 ## Pipeline — never hand-build a picture
 
@@ -103,7 +104,12 @@ not reference material.
 
 ## Base trunks
 
-Base trunk projects (`unatco_gt`, and future levels' extractions), each level's
-`<level>_allnames.txt`, and `run_eval.py`'s own `eval_runs/` (one subject trunk per agent run) all
-live in job-scratch, not this repo — DX content isn't ours to commit. Set `BASE_TRUNKS_DIR` to
-wherever your own extraction lives before running the scripts.
+A task's `dx_map` field (its shipped map, e.g. `03_NYC_UNATCOHQ`) is imported fresh from this
+checkout's own `dev/games/deusex/Maps/<dx_map>.dx` the first time anything needs it —
+`build_gold.base_trunk_for` — a few seconds per level (measured: UNATCO ~7s, NYC_Bar ~2s, WanChai
+Market ~9s), cached after that and shared by every task on the same map. Not this repo's problem to
+commit — DX content isn't ours to commit — but not something you set up by hand either.
+
+Cached under `BASE_TRUNKS_DIR` (default `dev/evals/_scratch/base_trunks/`, gitignored); override
+it if you want the cache somewhere else. `run_eval.py`'s own `eval_runs/` (one subject trunk per
+agent run) lives alongside it, same directory.

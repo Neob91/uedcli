@@ -4,8 +4,12 @@ code (there is none) -- read this before writing a new specs/<task_id>.py.
 Each specs/<task_id>.py exports one module-level `TASK` dict:
 
   id, level, title, req   -- identity + the task prompt (as given to a subagent)
-  base_trunk               -- which baseline project (in BASE_TRUNKS_DIR) this
-                               task starts from
+  dx_map                   -- the shipped map this task's baseline is imported from
+                               (dev/games/deusex/Maps/<dx_map>.dx, no extension here) --
+                               `build_gold.base_trunk_for` imports it fresh into
+                               BASE_TRUNKS_DIR/<dx_map>/maps/<level>/ on first use (a few
+                               seconds; cached after that, shared by every task on the
+                               same dx_map)
   photo_camera              -- dict(at=[x,y,z], pitch=UU) for the 8x45°
                                `level photo --native` tour (yaw 0,8192,...,
                                57344) rendered by scripts/render_photos.py

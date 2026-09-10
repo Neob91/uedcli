@@ -6,7 +6,7 @@ TASK = dict(
  id="nyc_bar_wallnotch", level="bar",
  title="Push out the back nook",
  req="&ldquo;The nook Brush15 feels cramped. Push its south wall out by 64 units.&rdquo;",
- base_trunk="nyc_bar_gt",
+ dx_map="02_NYC_Bar",
  photo_camera=dict(at=[-640,-550,150], pitch=0),
  before=dict(
    quad="before_quad",

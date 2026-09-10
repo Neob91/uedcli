@@ -40,18 +40,12 @@ import argparse, datetime, json, os, pathlib, re, subprocess, sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
 from render_photos import render_photos
+from build_gold import base_trunk_for, PY
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WT = str(ROOT.parents[1])  # the uedcli checkout -- cwd uedcli needs for `-m uedcli` module resolution
-# The main checkout's venv specifically, not WT's -- a worktree's own .venv/ (if it has one at all)
-# has no uedcli_native built; only /workspace/uedcli/.venv does.
-PY = "/workspace/uedcli/.venv/bin/python"
 RUNS = ROOT / "runs"
 IMG = ROOT / "img"
-if "BASE_TRUNKS_DIR" not in os.environ:
-    sys.exit("BASE_TRUNKS_DIR not set -- point it at wherever your base trunk extractions live "
-             "(see README.md's \"Base trunks\" section); no default, DX content isn't ours to assume a path for")
-BASE_TRUNKS_DIR = pathlib.Path(os.environ["BASE_TRUNKS_DIR"])
 FRAME_PAD = 64
 
 LABELS = {"created": "CREATED", "updated": "UPDATED", "unchanged": "UNCHANGED", "deleted": "DELETED"}
@@ -224,7 +218,7 @@ def _render_view(render_project, other_project, level, frame, actor, out_path):
 
 def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: str | None = None) -> dict:
     task = TASKS[task_id]
-    baseline = BASE_TRUNKS_DIR / task["base_trunk"]
+    baseline = base_trunk_for(task)
     out_dir = RUNS / task_id / run_id
     entries_dir = out_dir / "img" / "entries"
     entries_dir.mkdir(parents=True, exist_ok=True)
@@ -266,7 +260,7 @@ def render_before(task_id: str) -> None:
     hand-authored approach as an execution's own frame, just over the
     task's full entry set instead of one execution's touched subset."""
     task = TASKS[task_id]
-    baseline = BASE_TRUNKS_DIR / task["base_trunk"]
+    baseline = base_trunk_for(task)
     out_dir = IMG / task_id
     out_dir.mkdir(parents=True, exist_ok=True)
     frame = _frame_from_actors([baseline], task["level"], [e["actor"] for e in task["entries"]], FRAME_PAD)

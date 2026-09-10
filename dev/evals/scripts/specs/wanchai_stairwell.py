@@ -6,7 +6,7 @@ TASK = dict(
  id="wanchai_stairwell", level="wanchai",
  title="Widen the stairwell",
  req="&ldquo;The stairwell shaft Brush1239 feels cramped. Widen it by 48 units.&rdquo;",
- base_trunk="wanchai_gt",
+ dx_map="06_HongKong_WanChai_Market",
  photo_camera=dict(at=[-640, 256, 160], pitch=-2048),
  before=dict(
    quad="before_quad",

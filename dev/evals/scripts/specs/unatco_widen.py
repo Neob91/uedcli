@@ -6,7 +6,7 @@ TASK = dict(
  id="unatco_widen", level="unatco",
  title="Task 1 — Widen the office",
  req="&ldquo;Manderley&rsquo;s office is too narrow. Widen it eastward by 48 units &mdash; move its east wall out.&rdquo;",
- base_trunk="unatco_gt",
+ dx_map="03_NYC_UNATCOHQ",
  photo_camera=dict(at=[300,-112,330], pitch=0),
  before=dict(
    quad="before_quad",

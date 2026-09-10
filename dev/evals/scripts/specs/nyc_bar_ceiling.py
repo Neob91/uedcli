@@ -6,7 +6,7 @@ TASK = dict(
  id="nyc_bar_ceiling", level="bar",
  title="Raise the bar's ceiling",
  req="&ldquo;This bar (Brush1) feels cramped. Raise its ceiling by 48 units.&rdquo;",
- base_trunk="nyc_bar_gt",
+ dx_map="02_NYC_Bar",
  photo_camera=dict(at=[-1024,0,100], pitch=4096),
  before=dict(
    quad="before_quad",

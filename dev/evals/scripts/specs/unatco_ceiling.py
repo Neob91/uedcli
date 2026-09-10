@@ -6,7 +6,7 @@ TASK = dict(
  id="unatco_ceiling", level="unatco",
  title="Task 2 — Raise the ceiling",
  req="&ldquo;Manderley&rsquo;s office feels cramped. Raise its ceiling by 48 units.&rdquo;",
- base_trunk="unatco_gt",
+ dx_map="03_NYC_UNATCOHQ",
  photo_camera=dict(at=[300,-112,330], pitch=4096),
  before=dict(
    quad="before_quad",

@@ -6,7 +6,7 @@ TASK = dict(
  id="nyc_bar_sign", level="bar",
  title="Hang a matching bar sign",
  req="&ldquo;There&rsquo;s a sign, Brush111, on the wall. Put a matching one further down that same wall.&rdquo;",
- base_trunk="nyc_bar_gt",
+ dx_map="02_NYC_Bar",
  photo_camera=dict(at=[-800,-500,150], pitch=0),
  before=dict(
    quad="before_quad",

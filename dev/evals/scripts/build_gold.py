@@ -10,17 +10,52 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
 
 WT = str(pathlib.Path(__file__).resolve().parents[3])  # the uedcli checkout -- cwd uedcli needs for `-m uedcli` module resolution
+
+def _main_checkout() -> pathlib.Path:
+    """The main checkout's root, resolved via git plumbing (never hardcoded) -- works whether
+    WT above is that main checkout or a linked worktree. `--git-common-dir` always resolves to
+    the ORIGINAL repo's .git, shared by every worktree; its parent is the main checkout root."""
+    common_dir = subprocess.run(["git", "rev-parse", "--path-format=absolute", "--git-common-dir"],
+                                 cwd=WT, capture_output=True, text=True, check=True).stdout.strip()
+    return pathlib.Path(common_dir).parent
+
+MAIN_CHECKOUT = _main_checkout()
 # The main checkout's venv specifically, not WT's -- a worktree's own .venv/ (if it has one at all)
-# has no uedcli_native built; only /workspace/uedcli/.venv does.
-PY = "/workspace/uedcli/.venv/bin/python"
-if "BASE_TRUNKS_DIR" not in os.environ:
-    sys.exit("BASE_TRUNKS_DIR not set -- point it at wherever your base trunk extractions live "
-             "(see README.md's \"Base trunks\" section); no default, DX content isn't ours to assume a path for")
-BASE_TRUNKS_DIR = pathlib.Path(os.environ["BASE_TRUNKS_DIR"])
+# has no uedcli_native built; only the main checkout's does.
+PY = str(MAIN_CHECKOUT / ".venv" / "bin" / "python")
+# The main checkout specifically, not WT's -- dev/games/ is gitignored game content, installed
+# once in the main checkout, not replicated per-worktree (same reasoning as PY above).
+DX_MAPS_DIR = MAIN_CHECKOUT / "dev" / "games" / "deusex" / "Maps"
+# _scratch/ anywhere in the tree is already gitignored -- reuse that, no new pattern needed.
+# eval_runs/ (run_eval.py's subject trunks) lives alongside the base-trunk cache, same reasoning.
+BASE_TRUNKS_DIR = pathlib.Path(os.environ.get("BASE_TRUNKS_DIR") or (pathlib.Path(WT) / "dev" / "evals" / "_scratch" / "base_trunks"))
+
+def base_trunk_for(spec: dict) -> pathlib.Path:
+    """The task's baseline trunk project. One shared per `dx_map` (sibling tasks on the same
+    level -- e.g. all 4 nyc_bar_* tasks -- share one import), cached under BASE_TRUNKS_DIR,
+    imported fresh from this checkout's OWN dev/games/deusex/Maps/<dx_map>.dx on first use (a
+    few seconds -- see dev/evals/README.md's "Base trunks" section for measured times). Never
+    re-imports once the level tree exists; delete the cache project to force a fresh import."""
+    proj = BASE_TRUNKS_DIR / spec["dx_map"]
+    if (proj / "maps" / spec["level"]).exists():
+        return proj
+    mapfile = DX_MAPS_DIR / f"{spec['dx_map']}.dx"
+    if not mapfile.exists():
+        sys.exit(f"{mapfile} not found -- dev/games/deusex isn't set up "
+                  f"(see dev/scripts/install-deusex-assets.sh)")
+    proj.mkdir(parents=True, exist_ok=True)
+    (proj / "uedcli.toml").write_text('game = "deusex"\n')
+    r = subprocess.run([PY, "-m", "uedcli", "--project", str(proj), "level", "import",
+                        str(mapfile), "--tree", f"level/{spec['level']}"],
+                        cwd=WT, capture_output=True, text=True)
+    if r.returncode != 0:
+        shutil.rmtree(proj, ignore_errors=True)  # don't leave a half-imported cache entry behind
+        sys.exit(f"level import failed for {spec['dx_map']} -> level/{spec['level']}: {r.stderr}")
+    return proj
 
 def build_gold(task_id: str, out_dir: pathlib.Path):
     spec = TASKS[task_id]
-    src = BASE_TRUNKS_DIR / spec["base_trunk"]
+    src = base_trunk_for(spec)
     if out_dir.exists():
         shutil.rmtree(out_dir)
     shutil.copytree(src, out_dir)
