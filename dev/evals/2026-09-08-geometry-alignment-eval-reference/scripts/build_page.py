@@ -77,9 +77,9 @@ def execution_card(task_id, task, run):
       </button>
       <div class="scenbody" hidden>
         <p class="sdesc">Subject trunk: <code>{run['subject_trunk']}</code> · rendered {run['rendered_at'][:19]}Z</p>
-        <div class="striplabel">360° panorama tour, this execution's final state</div>
+        <div class="striplabel">Panorama</div>
         <div class="carousel">{pan_thumbs}</div>
-        <div class="striplabel">Per-actor outcome — {len(entries)} of {run['n_task_entries']} task-relevant actors were actually touched (moved, created, or removed); one quad view (Top / Front / Iso / Side) per touched actor, only that actor highlighted</div>
+        <div class="striplabel">{len(entries)}/{run['n_task_entries']} actors touched</div>
         <div class="egrid">{grid}</div>
         <div class="gradebox" data-task="{task_id}" data-run="{run_id}">
           <label>Score (0–10)
@@ -121,10 +121,10 @@ def task_block(task_id, task):
         <div class="task"><span class="t">REQUEST:</span> {task['req']}</div>
         <div class="beforeblk">
           <div class="diagrams">{before_quad_html}</div>
-          <div class="striplabel">360° panorama tour, before any edit</div>
+          <div class="striplabel">Panorama — before</div>
           <div class="carousel">{before_thumbs}</div>
         </div>
-        <h3 class="scenh">Executions to grade — click to expand, score 0–10 + note, editable anytime</h3>
+        <h3 class="scenh">Executions</h3>
         {exec_html}
       </div></div>"""
 
@@ -147,9 +147,7 @@ img{max-width:100%}
 h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;letter-spacing:.01em;margin:0}
 .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin:0 0 14px}
 .lede{font-size:clamp(26px,4vw,40px);line-height:1.08;margin:0 0 16px;letter-spacing:-.01em}
-.sub{color:var(--dim);max-width:70ch;font-size:16.5px;margin:0}
-.orient{font-size:13.5px;color:var(--dim);margin:14px 0 0;padding:10px 14px;border:1px solid var(--line);border-left:3px solid var(--cyan);background:var(--panel2);border-radius:2px}
-.pipeline{font-size:13.5px;color:var(--dim);margin:10px 0 0;padding:10px 14px;border:1px solid var(--line);border-left:3px solid var(--gold);background:var(--panel2);border-radius:2px}
+.orient{font-size:13.5px;color:var(--dim);margin:0;padding:10px 14px;border:1px solid var(--line);border-left:3px solid var(--cyan);background:var(--panel2);border-radius:2px}
 
 .taskblk{margin:28px 0 0;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
 .taskhead{width:100%;text-align:left;background:var(--panel2);border:0;border-bottom:1px solid var(--line);padding:16px 20px;
@@ -236,13 +234,11 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 </style></head>
 <body>
 <div class="wrap">
-  <p class="eyebrow">uedcli · geometry-alignment eval · batch 1 of 5 · UNATCO HQ</p>
-  <h1 class="lede">Grade subagent executions &mdash; before/after, generated, not hand-built.</h1>
-  <p class="sub">Each task is collapsed by default &mdash; open one and the previous one closes. Inside, each execution is its own collapsible card: a panorama tour plus one quad picture per actor that execution actually touched. Click any picture to enlarge; arrows/swipe cycle between actors, up/down (or a vertical swipe) flips before/after.</p>
-  <p class="pipeline"><b>Every picture is generated, never hand-built.</b> Grading is manual: each task's <b>executions</b> section shows every task-relevant actor's actual outcome — one quad view (Top/Front/Iso/Side) per actor that was actually touched, labeled CREATED/UPDATED/UNCHANGED/DELETED by what the task expects of it — plus a full panorama tour, so you can score 0–10 and leave a note from the pictures alone. A DELETED actor's quad shows the final room with that actor reinserted (from its last known position) so its absence is visible, not just implied. The crop is computed per execution (the bbox of everything it touched, not a hand-picked frame) and shared by EVERY picture in it, so an actor that didn't move lands in the same spot whether you're looking at it or another actor, before or after — open one and press <b>↑/↓</b> to flip BEFORE/AFTER, ←/→ to move between actors (keeping your before/after choice). Scores save immediately and stay editable.</p>
-  <p class="orient">Orientation (matching UnrealEd's own axis convention): in the <b>Top</b> pane of every quad view, <b>East = right</b> edge of the image, <b>West = left</b>, <b>North = up</b>, <b>South = down</b>.</p>
+  <p class="eyebrow">uedcli · geometry-alignment eval · UNATCO HQ</p>
+  <h1 class="lede">Grade subagent executions.</h1>
+  <p class="orient">Top pane: East = right, West = left, North = up, South = down.</p>
   __BODY__
-  <p class="foot">Batch 1 = UNATCO HQ (2 tasks), swept exhaustively — every actor within a wide margin of the moved geometry individually classified, each assigned its OWN anchor by verified geometry (some fixtures split across both wall volumes). Remaining: NYC_Bar, WanChai Market, OceanLab, + one more, each with the same pipeline. Diagrams: <code>actor diagram</code>, cropped to what each execution actually touched (not the whole level). Photos: <code>level photo --native --faces textured</code>; procedural FX skins render solid <b>red</b>.</p>
+  <p class="foot">2 of 5 levels so far — NYC_Bar, WanChai Market, OceanLab, +1 more to come.</p>
 </div>
 
 <div id="lb" class="lb" hidden>
