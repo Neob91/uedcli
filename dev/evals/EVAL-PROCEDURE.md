@@ -11,12 +11,17 @@ behind it.
 CLAUDE_CODE_OAUTH_TOKEN=<token> python scripts/run_eval.py <task_id> <skill_dir>
 ```
 
-`scripts/run_eval.py` stages an isolated run directory (the task's base trunk + only the one skill
-under test), runs `claude -p <task req>` there with an isolated `HOME` (no ambient project-level
-skills, no this-checkout `CLAUDE.md`), auto-resumes with this eval's standing scripted reply ("Go
-with your recommendation.") if the agent asks a question instead of finishing, then renders the
-resulting trunk and rebuilds the page so the run shows up for grading. Model is pinned to Sonnet —
-never whatever the CLI defaults to. Grading itself stays manual, by design.
+`scripts/run_eval.py` stages an isolated run directory (the task's base trunk + the skill(s) under
+test), runs `claude -p <task req>` there with an isolated `HOME` (no ambient project-level skills,
+no this-checkout `CLAUDE.md`), auto-resumes with this eval's standing scripted reply ("Go with your
+recommendation.") if the agent asks a question instead of finishing, then renders the resulting
+trunk and rebuilds the page so the run shows up for grading. Model is pinned to Sonnet — never
+whatever the CLI defaults to. Grading itself stays manual, by design.
+
+`skill_dir` can point at ONE skill (isolated — only that skill is in scope, for clean attribution:
+a bad run means that skill needs work) or at a directory OF skills, e.g. a plugin's `skills/` dir
+(combined — every skill in it loads together, closer to how a real designer works, but a failure
+doesn't tell you which skill, or the combination itself, was at fault).
 
 Needs `CLAUDE_CODE_OAUTH_TOKEN` first — step 1 below (`claude setup-token`). If you have a real
 `ANTHROPIC_API_KEY` instead, `run_eval.py` doesn't use it — `--bare` is the cleaner mechanism in

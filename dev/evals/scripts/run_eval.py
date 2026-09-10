@@ -1,19 +1,27 @@
-"""Run a subagent against a task, with only the skill under test in scope,
-and land the result where the grading webapp picks it up automatically.
-Automates the manual procedure in ../EVAL-PROCEDURE.md -- read that first,
-it explains WHY each step exists (why isolated HOME + CLAUDE_CODE_OAUTH_TOKEN
-instead of --bare, why Docker doesn't help, the sandbox-specific CLAUDE.md
-caveat) and covers the case none of this handles: a real ANTHROPIC_API_KEY,
-where --bare is the cleaner mechanism instead.
+"""Run a subagent against a task, with only the skill(s) under test in
+scope, and land the result where the grading webapp picks it up
+automatically. Automates the manual procedure in ../EVAL-PROCEDURE.md --
+read that first, it explains WHY each step exists (why isolated HOME +
+CLAUDE_CODE_OAUTH_TOKEN instead of --bare, why Docker doesn't help, the
+sandbox-specific CLAUDE.md caveat) and covers the case none of this
+handles: a real ANTHROPIC_API_KEY, where --bare is the cleaner mechanism
+instead.
 
-Copies the task's base trunk + the one skill directory into an isolated run
-dir, runs `claude -p <task req>` there (isolated HOME, no ambient
+Copies the task's base trunk + the skill(s) under test into an isolated
+run dir, runs `claude -p <task req>` there (isolated HOME, no ambient
 project-level skills or CLAUDE.md), auto-resumes with this eval's standing
 scripted reply ("Go with your recommendation.") if the agent asks a
 question instead of finishing, then renders the resulting trunk and
 rebuilds the page so the run shows up in the webapp -- grading itself
 stays manual, by design. Model is pinned to Sonnet (CLAUDE_MODEL below),
 never whatever the CLI defaults to.
+
+`skill_dir` is either ONE skill (a directory with its own SKILL.md) or a
+directory OF skills (e.g. a plugin's skills/ dir, one SKILL.md per
+immediate subdirectory) -- every skill found gets installed, so a
+"combined toolkit" run is just pointing at the parent directory. Isolating
+to exactly one skill (the original, still-default use) is just pointing
+at that skill's own directory instead.
 
 Usage: run_eval.py <task_id> <skill_dir> [--run-id ID] [--label TEXT]
 
@@ -55,6 +63,17 @@ def _run_claude(cwd: pathlib.Path, home: pathlib.Path, level: str, token: str, e
         raise RuntimeError(f"claude produced no output (rc={r.returncode}): {r.stderr[-2000:]}")
     return json.loads(r.stdout)
 
+def _resolve_skills(skill_dir: pathlib.Path) -> list[pathlib.Path]:
+    """`skill_dir` is either ONE skill (has its own SKILL.md) or a directory OF skills (each
+    immediate subdirectory has one -- e.g. a plugin's skills/ dir). Returns every skill directory
+    to install; exits clearly if neither shape matches."""
+    if (skill_dir / "SKILL.md").exists():
+        return [skill_dir]
+    found = sorted(d for d in skill_dir.iterdir() if d.is_dir() and (d / "SKILL.md").exists())
+    if not found:
+        sys.exit(f"{skill_dir} has no SKILL.md, and none of its subdirectories do either")
+    return found
+
 def _needs_followup(result: dict) -> bool:
     """Best-effort: did the agent stop by asking something / flagging a
     decision instead of actually finishing? Not perfect -- errs toward
@@ -72,22 +91,22 @@ def run_eval(task_id: str, skill_dir: pathlib.Path, run_id: str) -> pathlib.Path
     token = os.environ.get("CLAUDE_CODE_OAUTH_TOKEN")
     if not token:
         sys.exit("CLAUDE_CODE_OAUTH_TOKEN not set -- see EVAL-PROCEDURE.md step 1 (claude setup-token)")
-    if not (skill_dir / "SKILL.md").exists():
-        sys.exit(f"{skill_dir} has no SKILL.md")
+    skills = _resolve_skills(skill_dir)
 
     run_root = BASE_TRUNKS_DIR / "eval_runs" / f"{task_id}_{run_id}"
     if run_root.exists():
         sys.exit(f"{run_root} already exists -- pick a different --run-id")
     trunk_dir = run_root / "trunk"
     shutil.copytree(BASE_TRUNKS_DIR / task["base_trunk"], trunk_dir)
-    skill_name = skill_dir.name
-    shutil.copytree(skill_dir, trunk_dir / ".claude" / "skills" / skill_name)
+    for s in skills:
+        shutil.copytree(s, trunk_dir / ".claude" / "skills" / s.name)
+    skill_names = ", ".join(s.name for s in skills)
 
     home_dir = pathlib.Path(tempfile.mkdtemp(prefix=f"geomeval_home_{task_id}_{run_id}_"))
     try:
         _make_uedcli_shim(home_dir / "bin")
         req = html.unescape(task["req"])
-        print(f"[run_eval] launching claude in {trunk_dir} (skill={skill_name})")
+        print(f"[run_eval] launching claude in {trunk_dir} (skills={skill_names})")
         result = _run_claude(trunk_dir, home_dir, task["level"], token, ["-p", req])
         session_id = result["session_id"]
         print(f"[run_eval] session {session_id}: {result.get('result', '')[:200]!r}")
@@ -106,7 +125,10 @@ def run_eval(task_id: str, skill_dir: pathlib.Path, run_id: str) -> pathlib.Path
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("task_id")
-    ap.add_argument("skill_dir", type=pathlib.Path, help="directory containing the skill's SKILL.md (and any other skill files)")
+    ap.add_argument("skill_dir", type=pathlib.Path,
+                     help="a skill directory (has its own SKILL.md), or a directory of skills "
+                          "(each immediate subdirectory has one, e.g. a plugin's skills/ dir) -- "
+                          "every skill found is installed")
     ap.add_argument("--run-id", default=None, help="defaults to a UTC timestamp")
     ap.add_argument("--label", default=None, help="shown on the page; defaults to the skill dir's name")
     args = ap.parse_args()

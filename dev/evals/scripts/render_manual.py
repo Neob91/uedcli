@@ -42,7 +42,7 @@ from registry import TASKS
 from render_photos import render_photos
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-WT = str(ROOT.parents[2])  # the uedcli checkout -- cwd uedcli needs for `-m uedcli` module resolution
+WT = str(ROOT.parents[1])  # the uedcli checkout -- cwd uedcli needs for `-m uedcli` module resolution
 # The main checkout's venv specifically, not WT's -- a worktree's own .venv/ (if it has one at all)
 # has no uedcli_native built; only /workspace/uedcli/.venv does.
 PY = "/workspace/uedcli/.venv/bin/python"
