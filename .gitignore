@@ -41,3 +41,6 @@ uned/DXORIG/
 # pattern ending in "/" matches only a real directory, not a symlink to one — and uned/DeusExAssets
 # shows operators commonly point this kind of dir at a symlink instead.
 uned/UT99Assets
+
+# Same, for `dev/scripts/install-unreal-assets.sh` (original 1998/Gold Unreal).
+uned/UnrealAssets
