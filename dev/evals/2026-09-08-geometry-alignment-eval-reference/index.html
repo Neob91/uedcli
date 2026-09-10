@@ -15,6 +15,44 @@ h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;letter-spacin
 .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin:0 0 14px}
 .lede{font-size:clamp(26px,4vw,40px);line-height:1.08;margin:0 0 16px;letter-spacing:-.01em}
 
+.layout{display:flex;align-items:flex-start}
+.mainarea{flex:1;min-width:0}
+.sidebar{width:240px;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;
+  border-right:1px solid var(--line);background:var(--panel);padding:16px 12px}
+.sbhead{margin:0 0 14px}
+.inboxbtn{width:100%;font:inherit;font-size:13px;font-weight:600;background:var(--gold);color:#1a1608;
+  border:0;border-radius:4px;padding:10px;cursor:pointer}
+.inboxbtn:hover{background:var(--gold-soft)}
+.inboxbtn:disabled{opacity:.4;cursor:default}
+.sbtask{margin:0 0 14px}
+.sbtasktitle{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0 0 6px;padding:0 6px}
+.sbexecs{list-style:none;margin:0;padding:0}
+.sbexec{width:100%;text-align:left;display:flex;align-items:center;gap:8px;background:transparent;border:0;
+  border-radius:3px;padding:6px 8px;font:inherit;font-size:12.5px;color:var(--dim);cursor:pointer}
+.sbexec:hover{background:var(--panel2);color:var(--ink)}
+.sbexec.active{background:var(--panel2);color:var(--ink);font-weight:600}
+.sbdot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex-shrink:0}
+.sbdot.graded{background:var(--good)}
+.sbtoggle{display:none;position:fixed;top:14px;left:14px;z-index:46;font:inherit;font-size:16px;
+  background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:8px 12px;cursor:pointer}
+
+#focusPane{display:none}
+body.focus-mode .taskblk{display:none}
+body.focus-mode #focusPane{display:block}
+.focusexit{font:inherit;font-size:12px;color:var(--dim);background:transparent;border:1px solid var(--line);
+  border-radius:3px;padding:6px 10px;cursor:pointer;margin:0 0 14px}
+.focusbanner{margin:0 0 20px;padding:14px 16px;border:1px solid var(--line);border-left:3px solid var(--gold);
+  background:var(--panel2);border-radius:4px;transition:border-color .3s,background-color .3s}
+.focusbanner.flash{border-left-color:var(--cyan);background:color-mix(in srgb,var(--cyan) 14%,var(--panel2))}
+.focusbanner h2{font-size:17px;margin:0 0 4px}
+.focusbanner p{margin:0;font-size:13.5px;color:var(--dim)}
+
+@media (max-width: 820px){
+  .sbtoggle{display:inline-flex}
+  .sidebar{position:fixed;top:0;bottom:0;left:-260px;z-index:45;transition:left .2s;box-shadow:4px 0 24px rgba(0,0,0,.5)}
+  .sidebar.open{left:0}
+}
+
 .taskblk{margin:28px 0 0;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
 .taskhead{width:100%;text-align:left;background:var(--panel2);border:0;border-bottom:1px solid var(--line);padding:16px 20px;
   display:flex;align-items:center;gap:12px;cursor:pointer;font:inherit;color:inherit}
@@ -84,7 +122,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 .lbimgwrap{position:relative;max-width:100%;max-height:78vh;display:flex;align-items:center;justify-content:center;overflow:auto}
 .lb img{max-width:100%;max-height:78vh;border-radius:3px;box-shadow:0 8px 40px rgba(0,0,0,.6);cursor:zoom-in}
 .lb img.zoomed{max-width:none;max-height:none;cursor:zoom-out}
-.lbcap{color:var(--ink);font-size:15px;max-width:70ch;text-align:center;margin-top:16px;padding:0 12px}
+.lbcap{color:var(--ink);font-size:15px;line-height:1.4;max-width:70ch;text-align:center;margin-top:16px;padding:0 12px;
+  height:5.6em;overflow-y:auto;display:flex;align-items:center;justify-content:center}
 .lbnav{position:fixed;top:0;bottom:0;width:80px;background:transparent;border:0;color:var(--ink);font-size:36px;cursor:pointer;opacity:.7;transition:opacity .12s}
 .lbnav:hover{opacity:1}
 .lbprev{left:0}.lbnext{right:0}
@@ -98,10 +137,21 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 .lbvdown{bottom:52px}
 </style></head>
 <body>
-<div class="wrap">
-  <p class="eyebrow">uedcli · geometry-alignment eval</p>
-  <h1 class="lede">Grade subagent executions.</h1>
-  <div class="taskblk">
+<button class="sbtoggle" onclick="document.getElementById('sidebar').classList.toggle('open')">&#9776;</button>
+<div class="layout">
+  <nav id="sidebar" class="sidebar">
+    <div class="sbhead"><button id="inboxBtn" class="inboxbtn" onclick="startInbox()">Start inbox</button></div>
+    <div id="sbtree" class="sbtree"></div>
+  </nav>
+  <div class="mainarea"><div class="wrap">
+    <p class="eyebrow">uedcli · geometry-alignment eval</p>
+    <h1 class="lede">Grade subagent executions.</h1>
+    <div id="focusPane">
+      <button class="focusexit" onclick="exitFocusMode()">&larr; Back to all</button>
+      <div id="focusBanner" class="focusbanner"><h2 id="focusTitle"></h2><p id="focusReq"></p></div>
+      <div id="focusSlot"></div>
+    </div>
+    <div class="taskblk">
       <button class="taskhead" onclick="toggleTask(this)">
         <span class="tchev">&#9656;</span><h2>Task 2 — Raise the ceiling</h2>
       </button>
@@ -220,6 +270,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
         </div>
       </div></div>
       </div></div>
+  </div></div>
 </div>
 
 <div id="lb" class="lb" hidden>
@@ -236,6 +287,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 
 <script>
 const CAROUSELS = {"unatco_ceiling__before": [{"default": 0, "variants": [{"src": "img/unatco_ceiling/before_quad.png", "cap": "Whole-room quad view (Top / Front / Iso / Side), before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_ceiling/pan_before_0.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_ceiling/pan_before_1.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_ceiling/pan_before_2.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_ceiling/pan_before_3.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_ceiling/pan_before_4.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_ceiling/pan_before_5.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_ceiling/pan_before_6.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_ceiling/pan_before_7.png", "cap": "Panorama frame, before any edit."}]}], "unatco_ceiling__exec__testrun1": [{"default": 1, "variants": [{"src": "runs/unatco_ceiling/testrun1/img/entries/Brush418_before.png", "cap": "BEFORE \u2014 Brush418: south wall's ceiling face; the task's own raise-ceiling target"}, {"src": "runs/unatco_ceiling/testrun1/img/entries/Brush418_after.png", "cap": "UPDATED \u2014 Brush418: south wall's ceiling face; the task's own raise-ceiling target"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/testrun1/img/pan_0.png", "cap": "Photo, panorama frame 0"}, {"src": "img/unatco_ceiling/pan_before_0.png", "cap": "BEFORE \u2014 panorama frame 0"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/testrun1/img/pan_1.png", "cap": "Photo, panorama frame 1"}, {"src": "img/unatco_ceiling/pan_before_1.png", "cap": "BEFORE \u2014 panorama frame 1"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/testrun1/img/pan_2.png", "cap": "Photo, panorama frame 2"}, {"src": "img/unatco_ceiling/pan_before_2.png", "cap": "BEFORE \u2014 panorama frame 2"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/testrun1/img/pan_3.png", "cap": "Photo, panorama frame 3"}, {"src": "img/unatco_ceiling/pan_before_3.png", "cap": "BEFORE \u2014 panorama frame 3"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/testrun1/img/pan_4.png", "cap": "Photo, panorama frame 4"}, {"src": "img/unatco_ceiling/pan_before_4.png", "cap": "BEFORE \u2014 panorama frame 4"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/testrun1/img/pan_5.png", "cap": "Photo, panorama frame 5"}, {"src": "img/unatco_ceiling/pan_before_5.png", "cap": "BEFORE \u2014 panorama frame 5"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/testrun1/img/pan_6.png", "cap": "Photo, panorama frame 6"}, {"src": "img/unatco_ceiling/pan_before_6.png", "cap": "BEFORE \u2014 panorama frame 6"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/testrun1/img/pan_7.png", "cap": "Photo, panorama frame 7"}, {"src": "img/unatco_ceiling/pan_before_7.png", "cap": "BEFORE \u2014 panorama frame 7"}]}], "unatco_ceiling__exec__example_pass": [{"default": 1, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/entries/Brush132_before.png", "cap": "BEFORE \u2014 Brush132: ceiling trim cap over the south half"}, {"src": "runs/unatco_ceiling/example_pass/img/entries/Brush132_after.png", "cap": "UPDATED \u2014 Brush132: ceiling trim cap over the south half"}]}, {"default": 1, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/entries/Brush284_before.png", "cap": "BEFORE \u2014 Brush284: recessed ceiling light panel over the north half"}, {"src": "runs/unatco_ceiling/example_pass/img/entries/Brush284_after.png", "cap": "UPDATED \u2014 Brush284: recessed ceiling light panel over the north half"}]}, {"default": 1, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/entries/Brush285_before.png", "cap": "BEFORE \u2014 Brush285: recessed ceiling light panel over the south half"}, {"src": "runs/unatco_ceiling/example_pass/img/entries/Brush285_after.png", "cap": "UPDATED \u2014 Brush285: recessed ceiling light panel over the south half"}]}, {"default": 1, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/entries/Brush295_before.png", "cap": "BEFORE \u2014 Brush295: recessed ceiling light panel over the south half"}, {"src": "runs/unatco_ceiling/example_pass/img/entries/Brush295_after.png", "cap": "UPDATED \u2014 Brush295: recessed ceiling light panel over the south half"}]}, {"default": 1, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/entries/Brush418_before.png", "cap": "BEFORE \u2014 Brush418: south wall's ceiling face; the task's own raise-ceiling target"}, {"src": "runs/unatco_ceiling/example_pass/img/entries/Brush418_after.png", "cap": "UPDATED \u2014 Brush418: south wall's ceiling face; the task's own raise-ceiling target"}]}, {"default": 1, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/entries/Brush420_before.png", "cap": "BEFORE \u2014 Brush420: north wall's ceiling face, shares the ceiling with Brush418 at the y=64 seam -- must rise the same amount or the ceiling steps"}, {"src": "runs/unatco_ceiling/example_pass/img/entries/Brush420_after.png", "cap": "UPDATED \u2014 Brush420: north wall's ceiling face, shares the ceiling with Brush418 at the y=64 seam -- must rise the same amount or the ceiling steps"}]}, {"default": 1, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/entries/Brush74_before.png", "cap": "BEFORE \u2014 Brush74: ceiling trim cap over the south half"}, {"src": "runs/unatco_ceiling/example_pass/img/entries/Brush74_after.png", "cap": "UPDATED \u2014 Brush74: ceiling trim cap over the south half"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/pan_0.png", "cap": "Photo, panorama frame 0"}, {"src": "img/unatco_ceiling/pan_before_0.png", "cap": "BEFORE \u2014 panorama frame 0"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/pan_1.png", "cap": "Photo, panorama frame 1"}, {"src": "img/unatco_ceiling/pan_before_1.png", "cap": "BEFORE \u2014 panorama frame 1"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/pan_2.png", "cap": "Photo, panorama frame 2"}, {"src": "img/unatco_ceiling/pan_before_2.png", "cap": "BEFORE \u2014 panorama frame 2"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/pan_3.png", "cap": "Photo, panorama frame 3"}, {"src": "img/unatco_ceiling/pan_before_3.png", "cap": "BEFORE \u2014 panorama frame 3"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/pan_4.png", "cap": "Photo, panorama frame 4"}, {"src": "img/unatco_ceiling/pan_before_4.png", "cap": "BEFORE \u2014 panorama frame 4"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/pan_5.png", "cap": "Photo, panorama frame 5"}, {"src": "img/unatco_ceiling/pan_before_5.png", "cap": "BEFORE \u2014 panorama frame 5"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/pan_6.png", "cap": "Photo, panorama frame 6"}, {"src": "img/unatco_ceiling/pan_before_6.png", "cap": "BEFORE \u2014 panorama frame 6"}]}, {"default": 0, "variants": [{"src": "runs/unatco_ceiling/example_pass/img/pan_7.png", "cap": "Photo, panorama frame 7"}, {"src": "img/unatco_ceiling/pan_before_7.png", "cap": "BEFORE \u2014 panorama frame 7"}]}], "unatco_widen__before": [{"default": 0, "variants": [{"src": "img/unatco_widen/before_quad.png", "cap": "Whole-room quad view (Top / Front / Iso / Side), before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_widen/pan_before_0.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_widen/pan_before_1.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_widen/pan_before_2.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_widen/pan_before_3.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_widen/pan_before_4.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_widen/pan_before_5.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_widen/pan_before_6.png", "cap": "Panorama frame, before any edit."}]}, {"default": 0, "variants": [{"src": "img/unatco_widen/pan_before_7.png", "cap": "Panorama frame, before any edit."}]}], "unatco_widen__exec__example_fail": [{"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/BookClosed1_before.png", "cap": "BEFORE \u2014 BookClosed1: display item on the shelf"}, {"src": "runs/unatco_widen/example_fail/img/entries/BookClosed1_after.png", "cap": "UPDATED \u2014 BookClosed1: display item on the shelf"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush1_before.png", "cap": "BEFORE \u2014 Brush1: niche interior detail brush"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush1_after.png", "cap": "UPDATED \u2014 Brush1: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush1158_before.png", "cap": "BEFORE \u2014 Brush1158: niche interior detail brush"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush1158_after.png", "cap": "UPDATED \u2014 Brush1158: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush132_before.png", "cap": "BEFORE \u2014 Brush132: south wall trim board"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush132_after.png", "cap": "UPDATED \u2014 Brush132: south wall trim board"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush138_before.png", "cap": "BEFORE \u2014 Brush138: niche interior detail brush"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush138_after.png", "cap": "UPDATED \u2014 Brush138: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush140_before.png", "cap": "BEFORE \u2014 Brush140: niche interior detail brush"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush140_after.png", "cap": "UPDATED \u2014 Brush140: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush148_before.png", "cap": "BEFORE \u2014 Brush148: niche interior detail brush"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush148_after.png", "cap": "UPDATED \u2014 Brush148: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush152_before.png", "cap": "BEFORE \u2014 Brush152: south wall fixture"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush152_after.png", "cap": "UPDATED \u2014 Brush152: south wall fixture"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush1550_before.png", "cap": "BEFORE \u2014 Brush1550: niche interior detail brush"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush1550_after.png", "cap": "UPDATED \u2014 Brush1550: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush1551_before.png", "cap": "BEFORE \u2014 Brush1551: niche interior detail brush"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush1551_after.png", "cap": "UPDATED \u2014 Brush1551: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush161_before.png", "cap": "BEFORE \u2014 Brush161: south wall trim board"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush161_after.png", "cap": "UPDATED \u2014 Brush161: south wall trim board"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush164_before.png", "cap": "BEFORE \u2014 Brush164: niche interior detail brush"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush164_after.png", "cap": "UPDATED \u2014 Brush164: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush168_before.png", "cap": "BEFORE \u2014 Brush168: niche interior detail brush"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush168_after.png", "cap": "UPDATED \u2014 Brush168: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush203_before.png", "cap": "BEFORE \u2014 Brush203: south wall trim board"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush203_after.png", "cap": "UPDATED \u2014 Brush203: south wall trim board"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush364_before.png", "cap": "BEFORE \u2014 Brush364: the safe's own interior geometry inside the cavity"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush364_after.png", "cap": "UPDATED \u2014 Brush364: the safe's own interior geometry inside the cavity"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush418_before.png", "cap": "BEFORE \u2014 Brush418: south wall of Manderley's office; the task's own east-widen target"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush418_after.png", "cap": "UPDATED \u2014 Brush418: south wall of Manderley's office; the task's own east-widen target"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush592_before.png", "cap": "BEFORE \u2014 Brush592: the display shelf inside the cavity"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush592_after.png", "cap": "UPDATED \u2014 Brush592: the display shelf inside the cavity"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush663_before.png", "cap": "BEFORE \u2014 Brush663: the display niche -- a genuinely separate small room built against the south wall, must stay flush against it"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush663_after.png", "cap": "UPDATED \u2014 Brush663: the display niche -- a genuinely separate small room built against the south wall, must stay flush against it"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush670_before.png", "cap": "BEFORE \u2014 Brush670: switch recess, cut into the south wall"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush670_after.png", "cap": "UPDATED \u2014 Brush670: switch recess, cut into the south wall"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush74_before.png", "cap": "BEFORE \u2014 Brush74: south wall trim board"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush74_after.png", "cap": "UPDATED \u2014 Brush74: south wall trim board"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush766_before.png", "cap": "BEFORE \u2014 Brush766: wall cavity holding the trophy shelf + hidden safe, cut into the north wall"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush766_after.png", "cap": "UPDATED \u2014 Brush766: wall cavity holding the trophy shelf + hidden safe, cut into the north wall"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush869_before.png", "cap": "BEFORE \u2014 Brush869: decorative pilaster on the north wall"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush869_after.png", "cap": "UPDATED \u2014 Brush869: decorative pilaster on the north wall"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Brush873_before.png", "cap": "BEFORE \u2014 Brush873: the safe's own back panel inside the cavity -- moving the cavity without this orphans it mid-room (the original bug this eval caught)"}, {"src": "runs/unatco_widen/example_fail/img/entries/Brush873_after.png", "cap": "UPDATED \u2014 Brush873: the safe's own back panel inside the cavity -- moving the cavity without this orphans it mid-room (the original bug this eval caught)"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/FlagPole3_before.png", "cap": "BEFORE \u2014 FlagPole3: ceremonial flagpole anchored to the north wall's corner (~48u off two adjacent walls, not flush-mounted)"}, {"src": "runs/unatco_widen/example_fail/img/entries/FlagPole3_after.png", "cap": "UPDATED \u2014 FlagPole3: ceremonial flagpole anchored to the north wall's corner (~48u off two adjacent walls, not flush-mounted)"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/FlagPole4_before.png", "cap": "BEFORE \u2014 FlagPole4: ceremonial flagpole anchored to the south wall's corner"}, {"src": "runs/unatco_widen/example_fail/img/entries/FlagPole4_after.png", "cap": "UPDATED \u2014 FlagPole4: ceremonial flagpole anchored to the south wall's corner"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Light14_before.png", "cap": "BEFORE \u2014 Light14: the pilaster's own light"}, {"src": "runs/unatco_widen/example_fail/img/entries/Light14_after.png", "cap": "UPDATED \u2014 Light14: the pilaster's own light"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Light149_before.png", "cap": "BEFORE \u2014 Light149: the shelf's own light"}, {"src": "runs/unatco_widen/example_fail/img/entries/Light149_after.png", "cap": "UPDATED \u2014 Light149: the shelf's own light"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Light6_before.png", "cap": "BEFORE \u2014 Light6: the niche's own light"}, {"src": "runs/unatco_widen/example_fail/img/entries/Light6_after.png", "cap": "UPDATED \u2014 Light6: the niche's own light"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/NanoKey0_before.png", "cap": "BEFORE \u2014 NanoKey0: display item on the shelf"}, {"src": "runs/unatco_widen/example_fail/img/entries/NanoKey0_after.png", "cap": "UPDATED \u2014 NanoKey0: display item on the shelf"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/OrdersTrigger5_before.png", "cap": "BEFORE \u2014 OrdersTrigger5: scripted trigger inside the niche"}, {"src": "runs/unatco_widen/example_fail/img/entries/OrdersTrigger5_after.png", "cap": "UPDATED \u2014 OrdersTrigger5: scripted trigger inside the niche"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Switch6_before.png", "cap": "BEFORE \u2014 Switch6: the wall light switch itself, mounted in Brush670's recess"}, {"src": "runs/unatco_widen/example_fail/img/entries/Switch6_after.png", "cap": "UPDATED \u2014 Switch6: the wall light switch itself, mounted in Brush670's recess"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Vase3_before.png", "cap": "BEFORE \u2014 Vase3: display item on the shelf"}, {"src": "runs/unatco_widen/example_fail/img/entries/Vase3_after.png", "cap": "UPDATED \u2014 Vase3: display item on the shelf"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/Vase4_before.png", "cap": "BEFORE \u2014 Vase4: display item on the shelf"}, {"src": "runs/unatco_widen/example_fail/img/entries/Vase4_after.png", "cap": "UPDATED \u2014 Vase4: display item on the shelf"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_fail/img/entries/WeaponModRecoil0_before.png", "cap": "BEFORE \u2014 WeaponModRecoil0: display item on the shelf"}, {"src": "runs/unatco_widen/example_fail/img/entries/WeaponModRecoil0_after.png", "cap": "UPDATED \u2014 WeaponModRecoil0: display item on the shelf"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_fail/img/pan_0.png", "cap": "Photo, panorama frame 0"}, {"src": "img/unatco_widen/pan_before_0.png", "cap": "BEFORE \u2014 panorama frame 0"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_fail/img/pan_1.png", "cap": "Photo, panorama frame 1"}, {"src": "img/unatco_widen/pan_before_1.png", "cap": "BEFORE \u2014 panorama frame 1"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_fail/img/pan_2.png", "cap": "Photo, panorama frame 2"}, {"src": "img/unatco_widen/pan_before_2.png", "cap": "BEFORE \u2014 panorama frame 2"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_fail/img/pan_3.png", "cap": "Photo, panorama frame 3"}, {"src": "img/unatco_widen/pan_before_3.png", "cap": "BEFORE \u2014 panorama frame 3"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_fail/img/pan_4.png", "cap": "Photo, panorama frame 4"}, {"src": "img/unatco_widen/pan_before_4.png", "cap": "BEFORE \u2014 panorama frame 4"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_fail/img/pan_5.png", "cap": "Photo, panorama frame 5"}, {"src": "img/unatco_widen/pan_before_5.png", "cap": "BEFORE \u2014 panorama frame 5"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_fail/img/pan_6.png", "cap": "Photo, panorama frame 6"}, {"src": "img/unatco_widen/pan_before_6.png", "cap": "BEFORE \u2014 panorama frame 6"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_fail/img/pan_7.png", "cap": "Photo, panorama frame 7"}, {"src": "img/unatco_widen/pan_before_7.png", "cap": "BEFORE \u2014 panorama frame 7"}]}], "unatco_widen__exec__example_pass": [{"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/BookClosed1_before.png", "cap": "BEFORE \u2014 BookClosed1: display item on the shelf"}, {"src": "runs/unatco_widen/example_pass/img/entries/BookClosed1_after.png", "cap": "UPDATED \u2014 BookClosed1: display item on the shelf"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush1_before.png", "cap": "BEFORE \u2014 Brush1: niche interior detail brush"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush1_after.png", "cap": "UPDATED \u2014 Brush1: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush1158_before.png", "cap": "BEFORE \u2014 Brush1158: niche interior detail brush"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush1158_after.png", "cap": "UPDATED \u2014 Brush1158: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush132_before.png", "cap": "BEFORE \u2014 Brush132: south wall trim board"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush132_after.png", "cap": "UPDATED \u2014 Brush132: south wall trim board"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush138_before.png", "cap": "BEFORE \u2014 Brush138: niche interior detail brush"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush138_after.png", "cap": "UPDATED \u2014 Brush138: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush140_before.png", "cap": "BEFORE \u2014 Brush140: niche interior detail brush"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush140_after.png", "cap": "UPDATED \u2014 Brush140: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush148_before.png", "cap": "BEFORE \u2014 Brush148: niche interior detail brush"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush148_after.png", "cap": "UPDATED \u2014 Brush148: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush152_before.png", "cap": "BEFORE \u2014 Brush152: south wall fixture"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush152_after.png", "cap": "UPDATED \u2014 Brush152: south wall fixture"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush1550_before.png", "cap": "BEFORE \u2014 Brush1550: niche interior detail brush"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush1550_after.png", "cap": "UPDATED \u2014 Brush1550: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush1551_before.png", "cap": "BEFORE \u2014 Brush1551: niche interior detail brush"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush1551_after.png", "cap": "UPDATED \u2014 Brush1551: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush161_before.png", "cap": "BEFORE \u2014 Brush161: south wall trim board"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush161_after.png", "cap": "UPDATED \u2014 Brush161: south wall trim board"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush164_before.png", "cap": "BEFORE \u2014 Brush164: niche interior detail brush"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush164_after.png", "cap": "UPDATED \u2014 Brush164: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush168_before.png", "cap": "BEFORE \u2014 Brush168: niche interior detail brush"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush168_after.png", "cap": "UPDATED \u2014 Brush168: niche interior detail brush"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush203_before.png", "cap": "BEFORE \u2014 Brush203: south wall trim board"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush203_after.png", "cap": "UPDATED \u2014 Brush203: south wall trim board"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush364_before.png", "cap": "BEFORE \u2014 Brush364: the safe's own interior geometry inside the cavity"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush364_after.png", "cap": "UPDATED \u2014 Brush364: the safe's own interior geometry inside the cavity"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush418_before.png", "cap": "BEFORE \u2014 Brush418: south wall of Manderley's office; the task's own east-widen target"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush418_after.png", "cap": "UPDATED \u2014 Brush418: south wall of Manderley's office; the task's own east-widen target"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush420_before.png", "cap": "BEFORE \u2014 Brush420: north wall of Manderley's office, shares the east wall with Brush418 at the y=64 seam -- must widen the same amount or the wall steps"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush420_after.png", "cap": "UPDATED \u2014 Brush420: north wall of Manderley's office, shares the east wall with Brush418 at the y=64 seam -- must widen the same amount or the wall steps"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush592_before.png", "cap": "BEFORE \u2014 Brush592: the display shelf inside the cavity"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush592_after.png", "cap": "UPDATED \u2014 Brush592: the display shelf inside the cavity"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush663_before.png", "cap": "BEFORE \u2014 Brush663: the display niche -- a genuinely separate small room built against the south wall, must stay flush against it"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush663_after.png", "cap": "UPDATED \u2014 Brush663: the display niche -- a genuinely separate small room built against the south wall, must stay flush against it"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush670_before.png", "cap": "BEFORE \u2014 Brush670: switch recess, cut into the south wall"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush670_after.png", "cap": "UPDATED \u2014 Brush670: switch recess, cut into the south wall"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush74_before.png", "cap": "BEFORE \u2014 Brush74: south wall trim board"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush74_after.png", "cap": "UPDATED \u2014 Brush74: south wall trim board"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush766_before.png", "cap": "BEFORE \u2014 Brush766: wall cavity holding the trophy shelf + hidden safe, cut into the north wall"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush766_after.png", "cap": "UPDATED \u2014 Brush766: wall cavity holding the trophy shelf + hidden safe, cut into the north wall"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush869_before.png", "cap": "BEFORE \u2014 Brush869: decorative pilaster on the north wall"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush869_after.png", "cap": "UPDATED \u2014 Brush869: decorative pilaster on the north wall"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Brush873_before.png", "cap": "BEFORE \u2014 Brush873: the safe's own back panel inside the cavity -- moving the cavity without this orphans it mid-room (the original bug this eval caught)"}, {"src": "runs/unatco_widen/example_pass/img/entries/Brush873_after.png", "cap": "UPDATED \u2014 Brush873: the safe's own back panel inside the cavity -- moving the cavity without this orphans it mid-room (the original bug this eval caught)"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/FlagPole3_before.png", "cap": "BEFORE \u2014 FlagPole3: ceremonial flagpole anchored to the north wall's corner (~48u off two adjacent walls, not flush-mounted)"}, {"src": "runs/unatco_widen/example_pass/img/entries/FlagPole3_after.png", "cap": "UPDATED \u2014 FlagPole3: ceremonial flagpole anchored to the north wall's corner (~48u off two adjacent walls, not flush-mounted)"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/FlagPole4_before.png", "cap": "BEFORE \u2014 FlagPole4: ceremonial flagpole anchored to the south wall's corner"}, {"src": "runs/unatco_widen/example_pass/img/entries/FlagPole4_after.png", "cap": "UPDATED \u2014 FlagPole4: ceremonial flagpole anchored to the south wall's corner"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Light14_before.png", "cap": "BEFORE \u2014 Light14: the pilaster's own light"}, {"src": "runs/unatco_widen/example_pass/img/entries/Light14_after.png", "cap": "UPDATED \u2014 Light14: the pilaster's own light"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Light149_before.png", "cap": "BEFORE \u2014 Light149: the shelf's own light"}, {"src": "runs/unatco_widen/example_pass/img/entries/Light149_after.png", "cap": "UPDATED \u2014 Light149: the shelf's own light"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Light6_before.png", "cap": "BEFORE \u2014 Light6: the niche's own light"}, {"src": "runs/unatco_widen/example_pass/img/entries/Light6_after.png", "cap": "UPDATED \u2014 Light6: the niche's own light"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/NanoKey0_before.png", "cap": "BEFORE \u2014 NanoKey0: display item on the shelf"}, {"src": "runs/unatco_widen/example_pass/img/entries/NanoKey0_after.png", "cap": "UPDATED \u2014 NanoKey0: display item on the shelf"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/OrdersTrigger5_before.png", "cap": "BEFORE \u2014 OrdersTrigger5: scripted trigger inside the niche"}, {"src": "runs/unatco_widen/example_pass/img/entries/OrdersTrigger5_after.png", "cap": "UPDATED \u2014 OrdersTrigger5: scripted trigger inside the niche"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Switch6_before.png", "cap": "BEFORE \u2014 Switch6: the wall light switch itself, mounted in Brush670's recess"}, {"src": "runs/unatco_widen/example_pass/img/entries/Switch6_after.png", "cap": "UPDATED \u2014 Switch6: the wall light switch itself, mounted in Brush670's recess"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Vase3_before.png", "cap": "BEFORE \u2014 Vase3: display item on the shelf"}, {"src": "runs/unatco_widen/example_pass/img/entries/Vase3_after.png", "cap": "UPDATED \u2014 Vase3: display item on the shelf"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/Vase4_before.png", "cap": "BEFORE \u2014 Vase4: display item on the shelf"}, {"src": "runs/unatco_widen/example_pass/img/entries/Vase4_after.png", "cap": "UPDATED \u2014 Vase4: display item on the shelf"}]}, {"default": 1, "variants": [{"src": "runs/unatco_widen/example_pass/img/entries/WeaponModRecoil0_before.png", "cap": "BEFORE \u2014 WeaponModRecoil0: display item on the shelf"}, {"src": "runs/unatco_widen/example_pass/img/entries/WeaponModRecoil0_after.png", "cap": "UPDATED \u2014 WeaponModRecoil0: display item on the shelf"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_pass/img/pan_0.png", "cap": "Photo, panorama frame 0"}, {"src": "img/unatco_widen/pan_before_0.png", "cap": "BEFORE \u2014 panorama frame 0"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_pass/img/pan_1.png", "cap": "Photo, panorama frame 1"}, {"src": "img/unatco_widen/pan_before_1.png", "cap": "BEFORE \u2014 panorama frame 1"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_pass/img/pan_2.png", "cap": "Photo, panorama frame 2"}, {"src": "img/unatco_widen/pan_before_2.png", "cap": "BEFORE \u2014 panorama frame 2"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_pass/img/pan_3.png", "cap": "Photo, panorama frame 3"}, {"src": "img/unatco_widen/pan_before_3.png", "cap": "BEFORE \u2014 panorama frame 3"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_pass/img/pan_4.png", "cap": "Photo, panorama frame 4"}, {"src": "img/unatco_widen/pan_before_4.png", "cap": "BEFORE \u2014 panorama frame 4"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_pass/img/pan_5.png", "cap": "Photo, panorama frame 5"}, {"src": "img/unatco_widen/pan_before_5.png", "cap": "BEFORE \u2014 panorama frame 5"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_pass/img/pan_6.png", "cap": "Photo, panorama frame 6"}, {"src": "img/unatco_widen/pan_before_6.png", "cap": "BEFORE \u2014 panorama frame 6"}]}, {"default": 0, "variants": [{"src": "runs/unatco_widen/example_pass/img/pan_7.png", "cap": "Photo, panorama frame 7"}, {"src": "img/unatco_widen/pan_before_7.png", "cap": "BEFORE \u2014 panorama frame 7"}]}]};
+const EXEC_META = [{"task_id": "unatco_ceiling", "run_id": "testrun1", "label": "Script smoke test", "task_title": "Task 2 \u2014 Raise the ceiling", "task_req": "&ldquo;Manderley&rsquo;s office feels cramped. Raise its ceiling by 48 units.&rdquo;"}, {"task_id": "unatco_ceiling", "run_id": "example_pass", "label": "Example: fully correct", "task_title": "Task 2 \u2014 Raise the ceiling", "task_req": "&ldquo;Manderley&rsquo;s office feels cramped. Raise its ceiling by 48 units.&rdquo;"}, {"task_id": "unatco_widen", "run_id": "example_fail", "label": "Example: wrong wall delta, dependents dragged along", "task_title": "Task 1 \u2014 Widen the office", "task_req": "&ldquo;Manderley&rsquo;s office is too narrow. Widen it eastward by 48 units &mdash; move its east wall out.&rdquo;"}, {"task_id": "unatco_widen", "run_id": "example_pass", "label": "Example: fully correct", "task_title": "Task 1 \u2014 Widen the office", "task_req": "&ldquo;Manderley&rsquo;s office is too narrow. Widen it eastward by 48 units &mdash; move its east wall out.&rdquo;"}];
+let GRADES = {};
 let lbScen = null, lbIdx = 0;
 
 function toggleTask(btn){
@@ -257,18 +310,125 @@ function toggleScen(btn){
   body.hidden = !open;
 }
 
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function buildSidebar(){
+  const tree = document.getElementById('sbtree');
+  let html = '', curTask = null;
+  for (const e of EXEC_META){
+    if (e.task_id !== curTask){
+      if (curTask !== null) html += '</ul></div>';
+      html += `<div class="sbtask"><div class="sbtasktitle">${escapeHtml(e.task_title)}</div><ul class="sbexecs">`;
+      curTask = e.task_id;
+    }
+    html += `<li><button class="sbexec" data-task="${e.task_id}" data-run="${e.run_id}" `
+          + `onclick="sidebarClick('${e.task_id}','${e.run_id}')"><span class="sbdot"></span>`
+          + `${escapeHtml(e.label)}</button></li>`;
+  }
+  if (curTask !== null) html += '</ul></div>';
+  tree.innerHTML = html;
+}
+
+// Focus mode: one execution's existing card, relocated (not cloned -- its
+// onclick handlers and data- attributes travel with it) into #focusPane.
+// focusedOrigin remembers where to put it back on exit.
+let focusedOrigin = null;   // {node, parent, next}
+let lastFocusedTaskId = null;
+let inboxActive = false;
+
+function focusExec(taskId, runId){
+  const scen = document.querySelector(`.gradebox[data-task="${taskId}"][data-run="${runId}"]`).closest('.scen');
+  if (focusedOrigin && focusedOrigin.node !== scen){
+    focusedOrigin.parent.insertBefore(focusedOrigin.node, focusedOrigin.next);
+  }
+  if (!focusedOrigin || focusedOrigin.node !== scen){
+    focusedOrigin = {node: scen, parent: scen.parentNode, next: scen.nextSibling};
+  }
+  scen.classList.add('open');
+  scen.querySelector('.scenbody').hidden = false;
+  document.getElementById('focusSlot').appendChild(scen);
+
+  const meta = EXEC_META.find(e => e.task_id === taskId && e.run_id === runId);
+  document.getElementById('focusTitle').textContent = meta.task_title;
+  document.getElementById('focusReq').innerHTML = meta.task_req;
+  const banner = document.getElementById('focusBanner');
+  if (taskId !== lastFocusedTaskId){
+    banner.classList.add('flash');
+    setTimeout(() => banner.classList.remove('flash'), 900);
+  }
+  lastFocusedTaskId = taskId;
+
+  document.querySelectorAll('.sbexec.active').forEach(b => b.classList.remove('active'));
+  const sb = document.querySelector(`.sbexec[data-task="${taskId}"][data-run="${runId}"]`);
+  if (sb) sb.classList.add('active');
+
+  scen.querySelector('.gsave').textContent = inboxActive ? 'Save & next' : 'Save grade';
+  document.body.classList.add('focus-mode');
+  document.getElementById('sidebar').classList.remove('open');
+  window.scrollTo(0, 0);
+}
+function exitFocusMode(){
+  inboxActive = false;
+  if (focusedOrigin) focusedOrigin.parent.insertBefore(focusedOrigin.node, focusedOrigin.next);
+  focusedOrigin = null;
+  lastFocusedTaskId = null;
+  document.body.classList.remove('focus-mode');
+  document.querySelectorAll('.sbexec.active').forEach(b => b.classList.remove('active'));
+}
+function sidebarClick(taskId, runId){
+  inboxActive = false;
+  focusExec(taskId, runId);
+}
+function computeUngraded(){
+  return EXEC_META.filter(e => {
+    const g = GRADES[`${e.task_id}/${e.run_id}`];
+    return !g || g.score === null || g.score === undefined;
+  });
+}
+function updateInboxButton(){
+  const n = computeUngraded().length;
+  const btn = document.getElementById('inboxBtn');
+  btn.textContent = n ? `Start inbox (${n} ungraded)` : 'All graded';
+  btn.disabled = n === 0;
+}
+function startInbox(){
+  inboxActive = true;
+  advanceInbox();
+}
+function advanceInbox(){
+  const queue = computeUngraded();
+  if (queue.length === 0){
+    inboxActive = false;
+    if (focusedOrigin) focusedOrigin.parent.insertBefore(focusedOrigin.node, focusedOrigin.next);
+    focusedOrigin = null;
+    lastFocusedTaskId = null;
+    document.querySelectorAll('.sbexec.active').forEach(b => b.classList.remove('active'));
+    document.getElementById('focusTitle').textContent = 'All caught up';
+    document.getElementById('focusReq').textContent = 'Nothing ungraded left in the queue.';
+    document.body.classList.add('focus-mode');
+    return;
+  }
+  focusExec(queue[0].task_id, queue[0].run_id);
+}
+
 function applyGrade(gid, rec){
+  GRADES[`${rec.task_id}/${rec.run_id}`] = rec;
   const box = document.querySelector(`.gradebox[data-task="${rec.task_id}"][data-run="${rec.run_id}"]`);
   const badge = document.querySelector(`[data-gradebadge="${gid}"]`);
+  const graded = rec.score !== null && rec.score !== undefined;
   if (box){
-    box.querySelector('.gscore').value = (rec.score === null || rec.score === undefined) ? '' : rec.score;
+    box.querySelector('.gscore').value = graded ? rec.score : '';
     box.querySelector('.gnote').value = rec.note || '';
     setStatus(box, rec);
   }
   if (badge){
-    badge.textContent = (rec.score === null || rec.score === undefined) ? 'not yet graded' : `graded ${rec.score}/10`;
-    badge.classList.toggle('graded', rec.score !== null && rec.score !== undefined);
+    badge.textContent = graded ? `graded ${rec.score}/10` : 'not yet graded';
+    badge.classList.toggle('graded', graded);
   }
+  const dot = document.querySelector(`.sbexec[data-task="${rec.task_id}"][data-run="${rec.run_id}"] .sbdot`);
+  if (dot) dot.classList.toggle('graded', graded);
+  updateInboxButton();
 }
 function setStatus(box, rec){
   const s = box.querySelector('.gstatus');
@@ -289,6 +449,7 @@ async function loadGrades(){
       const rec = grades[key];
       applyGrade(`${rec.task_id}--${rec.run_id}`, rec);
     }
+    updateInboxButton();  // still correct even if `grades` was empty
   } catch (e) { console.error('loadGrades failed', e); }
 }
 async function saveGrade(btn){
@@ -308,6 +469,7 @@ async function saveGrade(btn){
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
     const rec = await res.json();
     applyGrade(`${task_id}--${run_id}`, rec);
+    if (inboxActive) setTimeout(advanceInbox, 350);  // brief pause so "saved" is visible before the jump
   } catch (e) {
     s.textContent = 'save failed: ' + e.message;
     s.classList.add('error');
@@ -315,6 +477,7 @@ async function saveGrade(btn){
     btn.disabled = false;
   }
 }
+buildSidebar();
 loadGrades();
 let lbVariant = 0;
 function openLB(scenId, idx){

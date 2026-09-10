@@ -131,6 +131,15 @@ def task_block(task_id, task):
 BODY = "".join(task_block(tid, task) for tid, task in TASKS.items())
 CAROUSEL_JSON = json.dumps(ALL_CAROUSELS)
 
+# Flat, page-order list of every execution + its task context -- drives the
+# sidebar tree (grouped by task_id, first-seen order) and the inbox queue
+# (filtered to ungraded, same order) client-side.
+EXEC_META = [dict(task_id=task_id, run_id=run["run_id"], label=run["label"],
+                   task_title=task["title"], task_req=task["req"])
+             for task_id, task in TASKS.items()
+             for run in discover_executions(task_id)]
+EXEC_META_JSON = json.dumps(EXEC_META)
+
 HTML = r"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Widen &amp; Ceiling · Reference Solutions</title>
@@ -147,6 +156,44 @@ img{max-width:100%}
 h1,h2,h3{font-family:var(--disp);font-weight:600;text-wrap:balance;letter-spacing:.01em;margin:0}
 .eyebrow{font-family:var(--mono);font-size:12.5px;letter-spacing:.22em;text-transform:uppercase;color:var(--gold);margin:0 0 14px}
 .lede{font-size:clamp(26px,4vw,40px);line-height:1.08;margin:0 0 16px;letter-spacing:-.01em}
+
+.layout{display:flex;align-items:flex-start}
+.mainarea{flex:1;min-width:0}
+.sidebar{width:240px;flex-shrink:0;position:sticky;top:0;height:100vh;overflow-y:auto;
+  border-right:1px solid var(--line);background:var(--panel);padding:16px 12px}
+.sbhead{margin:0 0 14px}
+.inboxbtn{width:100%;font:inherit;font-size:13px;font-weight:600;background:var(--gold);color:#1a1608;
+  border:0;border-radius:4px;padding:10px;cursor:pointer}
+.inboxbtn:hover{background:var(--gold-soft)}
+.inboxbtn:disabled{opacity:.4;cursor:default}
+.sbtask{margin:0 0 14px}
+.sbtasktitle{font-family:var(--mono);font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:var(--faint);margin:0 0 6px;padding:0 6px}
+.sbexecs{list-style:none;margin:0;padding:0}
+.sbexec{width:100%;text-align:left;display:flex;align-items:center;gap:8px;background:transparent;border:0;
+  border-radius:3px;padding:6px 8px;font:inherit;font-size:12.5px;color:var(--dim);cursor:pointer}
+.sbexec:hover{background:var(--panel2);color:var(--ink)}
+.sbexec.active{background:var(--panel2);color:var(--ink);font-weight:600}
+.sbdot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex-shrink:0}
+.sbdot.graded{background:var(--good)}
+.sbtoggle{display:none;position:fixed;top:14px;left:14px;z-index:46;font:inherit;font-size:16px;
+  background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:4px;padding:8px 12px;cursor:pointer}
+
+#focusPane{display:none}
+body.focus-mode .taskblk{display:none}
+body.focus-mode #focusPane{display:block}
+.focusexit{font:inherit;font-size:12px;color:var(--dim);background:transparent;border:1px solid var(--line);
+  border-radius:3px;padding:6px 10px;cursor:pointer;margin:0 0 14px}
+.focusbanner{margin:0 0 20px;padding:14px 16px;border:1px solid var(--line);border-left:3px solid var(--gold);
+  background:var(--panel2);border-radius:4px;transition:border-color .3s,background-color .3s}
+.focusbanner.flash{border-left-color:var(--cyan);background:color-mix(in srgb,var(--cyan) 14%,var(--panel2))}
+.focusbanner h2{font-size:17px;margin:0 0 4px}
+.focusbanner p{margin:0;font-size:13.5px;color:var(--dim)}
+
+@media (max-width: 820px){
+  .sbtoggle{display:inline-flex}
+  .sidebar{position:fixed;top:0;bottom:0;left:-260px;z-index:45;transition:left .2s;box-shadow:4px 0 24px rgba(0,0,0,.5)}
+  .sidebar.open{left:0}
+}
 
 .taskblk{margin:28px 0 0;border:1px solid var(--line);border-radius:6px;overflow:hidden;background:var(--panel)}
 .taskhead{width:100%;text-align:left;background:var(--panel2);border:0;border-bottom:1px solid var(--line);padding:16px 20px;
@@ -217,7 +264,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 .lbimgwrap{position:relative;max-width:100%;max-height:78vh;display:flex;align-items:center;justify-content:center;overflow:auto}
 .lb img{max-width:100%;max-height:78vh;border-radius:3px;box-shadow:0 8px 40px rgba(0,0,0,.6);cursor:zoom-in}
 .lb img.zoomed{max-width:none;max-height:none;cursor:zoom-out}
-.lbcap{color:var(--ink);font-size:15px;max-width:70ch;text-align:center;margin-top:16px;padding:0 12px}
+.lbcap{color:var(--ink);font-size:15px;line-height:1.4;max-width:70ch;text-align:center;margin-top:16px;padding:0 12px;
+  height:5.6em;overflow-y:auto;display:flex;align-items:center;justify-content:center}
 .lbnav{position:fixed;top:0;bottom:0;width:80px;background:transparent;border:0;color:var(--ink);font-size:36px;cursor:pointer;opacity:.7;transition:opacity .12s}
 .lbnav:hover{opacity:1}
 .lbprev{left:0}.lbnext{right:0}
@@ -231,10 +279,22 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 .lbvdown{bottom:52px}
 </style></head>
 <body>
-<div class="wrap">
-  <p class="eyebrow">uedcli · geometry-alignment eval</p>
-  <h1 class="lede">Grade subagent executions.</h1>
-  __BODY__
+<button class="sbtoggle" onclick="document.getElementById('sidebar').classList.toggle('open')">&#9776;</button>
+<div class="layout">
+  <nav id="sidebar" class="sidebar">
+    <div class="sbhead"><button id="inboxBtn" class="inboxbtn" onclick="startInbox()">Start inbox</button></div>
+    <div id="sbtree" class="sbtree"></div>
+  </nav>
+  <div class="mainarea"><div class="wrap">
+    <p class="eyebrow">uedcli · geometry-alignment eval</p>
+    <h1 class="lede">Grade subagent executions.</h1>
+    <div id="focusPane">
+      <button class="focusexit" onclick="exitFocusMode()">&larr; Back to all</button>
+      <div id="focusBanner" class="focusbanner"><h2 id="focusTitle"></h2><p id="focusReq"></p></div>
+      <div id="focusSlot"></div>
+    </div>
+    __BODY__
+  </div></div>
 </div>
 
 <div id="lb" class="lb" hidden>
@@ -251,6 +311,8 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 
 <script>
 const CAROUSELS = __CAROUSEL_JSON__;
+const EXEC_META = __EXEC_META_JSON__;
+let GRADES = {};
 let lbScen = null, lbIdx = 0;
 
 function toggleTask(btn){
@@ -272,18 +334,125 @@ function toggleScen(btn){
   body.hidden = !open;
 }
 
+function escapeHtml(s){
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function buildSidebar(){
+  const tree = document.getElementById('sbtree');
+  let html = '', curTask = null;
+  for (const e of EXEC_META){
+    if (e.task_id !== curTask){
+      if (curTask !== null) html += '</ul></div>';
+      html += `<div class="sbtask"><div class="sbtasktitle">${escapeHtml(e.task_title)}</div><ul class="sbexecs">`;
+      curTask = e.task_id;
+    }
+    html += `<li><button class="sbexec" data-task="${e.task_id}" data-run="${e.run_id}" `
+          + `onclick="sidebarClick('${e.task_id}','${e.run_id}')"><span class="sbdot"></span>`
+          + `${escapeHtml(e.label)}</button></li>`;
+  }
+  if (curTask !== null) html += '</ul></div>';
+  tree.innerHTML = html;
+}
+
+// Focus mode: one execution's existing card, relocated (not cloned -- its
+// onclick handlers and data- attributes travel with it) into #focusPane.
+// focusedOrigin remembers where to put it back on exit.
+let focusedOrigin = null;   // {node, parent, next}
+let lastFocusedTaskId = null;
+let inboxActive = false;
+
+function focusExec(taskId, runId){
+  const scen = document.querySelector(`.gradebox[data-task="${taskId}"][data-run="${runId}"]`).closest('.scen');
+  if (focusedOrigin && focusedOrigin.node !== scen){
+    focusedOrigin.parent.insertBefore(focusedOrigin.node, focusedOrigin.next);
+  }
+  if (!focusedOrigin || focusedOrigin.node !== scen){
+    focusedOrigin = {node: scen, parent: scen.parentNode, next: scen.nextSibling};
+  }
+  scen.classList.add('open');
+  scen.querySelector('.scenbody').hidden = false;
+  document.getElementById('focusSlot').appendChild(scen);
+
+  const meta = EXEC_META.find(e => e.task_id === taskId && e.run_id === runId);
+  document.getElementById('focusTitle').textContent = meta.task_title;
+  document.getElementById('focusReq').innerHTML = meta.task_req;
+  const banner = document.getElementById('focusBanner');
+  if (taskId !== lastFocusedTaskId){
+    banner.classList.add('flash');
+    setTimeout(() => banner.classList.remove('flash'), 900);
+  }
+  lastFocusedTaskId = taskId;
+
+  document.querySelectorAll('.sbexec.active').forEach(b => b.classList.remove('active'));
+  const sb = document.querySelector(`.sbexec[data-task="${taskId}"][data-run="${runId}"]`);
+  if (sb) sb.classList.add('active');
+
+  scen.querySelector('.gsave').textContent = inboxActive ? 'Save & next' : 'Save grade';
+  document.body.classList.add('focus-mode');
+  document.getElementById('sidebar').classList.remove('open');
+  window.scrollTo(0, 0);
+}
+function exitFocusMode(){
+  inboxActive = false;
+  if (focusedOrigin) focusedOrigin.parent.insertBefore(focusedOrigin.node, focusedOrigin.next);
+  focusedOrigin = null;
+  lastFocusedTaskId = null;
+  document.body.classList.remove('focus-mode');
+  document.querySelectorAll('.sbexec.active').forEach(b => b.classList.remove('active'));
+}
+function sidebarClick(taskId, runId){
+  inboxActive = false;
+  focusExec(taskId, runId);
+}
+function computeUngraded(){
+  return EXEC_META.filter(e => {
+    const g = GRADES[`${e.task_id}/${e.run_id}`];
+    return !g || g.score === null || g.score === undefined;
+  });
+}
+function updateInboxButton(){
+  const n = computeUngraded().length;
+  const btn = document.getElementById('inboxBtn');
+  btn.textContent = n ? `Start inbox (${n} ungraded)` : 'All graded';
+  btn.disabled = n === 0;
+}
+function startInbox(){
+  inboxActive = true;
+  advanceInbox();
+}
+function advanceInbox(){
+  const queue = computeUngraded();
+  if (queue.length === 0){
+    inboxActive = false;
+    if (focusedOrigin) focusedOrigin.parent.insertBefore(focusedOrigin.node, focusedOrigin.next);
+    focusedOrigin = null;
+    lastFocusedTaskId = null;
+    document.querySelectorAll('.sbexec.active').forEach(b => b.classList.remove('active'));
+    document.getElementById('focusTitle').textContent = 'All caught up';
+    document.getElementById('focusReq').textContent = 'Nothing ungraded left in the queue.';
+    document.body.classList.add('focus-mode');
+    return;
+  }
+  focusExec(queue[0].task_id, queue[0].run_id);
+}
+
 function applyGrade(gid, rec){
+  GRADES[`${rec.task_id}/${rec.run_id}`] = rec;
   const box = document.querySelector(`.gradebox[data-task="${rec.task_id}"][data-run="${rec.run_id}"]`);
   const badge = document.querySelector(`[data-gradebadge="${gid}"]`);
+  const graded = rec.score !== null && rec.score !== undefined;
   if (box){
-    box.querySelector('.gscore').value = (rec.score === null || rec.score === undefined) ? '' : rec.score;
+    box.querySelector('.gscore').value = graded ? rec.score : '';
     box.querySelector('.gnote').value = rec.note || '';
     setStatus(box, rec);
   }
   if (badge){
-    badge.textContent = (rec.score === null || rec.score === undefined) ? 'not yet graded' : `graded ${rec.score}/10`;
-    badge.classList.toggle('graded', rec.score !== null && rec.score !== undefined);
+    badge.textContent = graded ? `graded ${rec.score}/10` : 'not yet graded';
+    badge.classList.toggle('graded', graded);
   }
+  const dot = document.querySelector(`.sbexec[data-task="${rec.task_id}"][data-run="${rec.run_id}"] .sbdot`);
+  if (dot) dot.classList.toggle('graded', graded);
+  updateInboxButton();
 }
 function setStatus(box, rec){
   const s = box.querySelector('.gstatus');
@@ -304,6 +473,7 @@ async function loadGrades(){
       const rec = grades[key];
       applyGrade(`${rec.task_id}--${rec.run_id}`, rec);
     }
+    updateInboxButton();  // still correct even if `grades` was empty
   } catch (e) { console.error('loadGrades failed', e); }
 }
 async function saveGrade(btn){
@@ -323,6 +493,7 @@ async function saveGrade(btn){
     if (!res.ok) throw new Error((await res.json()).error || res.statusText);
     const rec = await res.json();
     applyGrade(`${task_id}--${run_id}`, rec);
+    if (inboxActive) setTimeout(advanceInbox, 350);  // brief pause so "saved" is visible before the jump
   } catch (e) {
     s.textContent = 'save failed: ' + e.message;
     s.classList.add('error');
@@ -330,6 +501,7 @@ async function saveGrade(btn){
     btn.disabled = false;
   }
 }
+buildSidebar();
 loadGrades();
 let lbVariant = 0;
 function openLB(scenId, idx){
@@ -420,7 +592,9 @@ document.getElementById('lb').addEventListener('touchend', e => {
 </script>
 </body></html>
 """
-(ROOT / "index.html").write_text(HTML.replace("__BODY__", BODY).replace("__CAROUSEL_JSON__", CAROUSEL_JSON))
+(ROOT / "index.html").write_text(HTML.replace("__BODY__", BODY)
+                                  .replace("__CAROUSEL_JSON__", CAROUSEL_JSON)
+                                  .replace("__EXEC_META_JSON__", EXEC_META_JSON))
 
 missing = [f"{t}/{n}" for t, n in sorted(used) if not (DEST_IMG / t / f"{n}.png").exists()]
 missing += [f"runs/{t}/{r}/img/{n}" for t, r, n in sorted(run_used) if not (RUNS / t / r / "img" / n).exists()]
