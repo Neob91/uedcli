@@ -1130,3 +1130,52 @@ def test_splitwithplanefast_takes_its_crossing_from_flineplaneintersection():
         off = _rva_to_offset(text, va - _IMAGE_BASE)
         got = text[off:off + len(want) // 2].hex()
         assert got == want, f"Engine.dll {va:#x} ({what}): want {want}, found {got}"
+
+
+def test_aactor_getskin_is_a_bounds_checked_multiskins_accessor():
+    """`AActor::GetSkin(INT)` (`Engine.dll` RVA 0x12d270) returns `MultiSkins[Count]` for
+    `Count < 8` and NULL otherwise — it consults neither `Skin` nor the mesh, and nothing in the
+    UED22 DLL set calls it. It is here to pin the `MultiSkins` base offset (0x164) that
+    `UMesh::GetTexture` reads inline, and to catch a substrate swap that gives the accessor real
+    logic. Spike: `dev/docs/spikes/2026-09-10-multiskin-skin-precedence/`.
+    """
+    engine = (UED22 / "Engine.dll").read_bytes()
+    off = _rva_to_offset(engine, 0x12D270)
+    body = bytes.fromhex("558bec8b450883f808730b8b8481640100005dc2040033c05dc20400")
+    assert engine[off:off + len(body)] == body
+
+
+def test_umesh_gettexture_skin_precedence():
+    """THE mesh-skin precedence: `UMesh::GetTexture(Count, Owner)` (`Engine.dll` RVA 0x1129a0) is
+
+        MultiSkins[Count]  ->  (Count ? Textures[Count] : -)  ->  Skin  ->  Textures[Count]
+
+    so `MultiSkins[i]` outranks `Skin` at every slot, while `Skin` reaches slot 0 ahead of the
+    mesh's own texture but a non-zero slot only behind it. `Count` is the mesh's TEXTURE index
+    (`URender::DrawLodMesh` loops it over `Textures.Num()`), and `MultiSkins` is indexed by the
+    same number. Live-probed in a UED22 editor as well as disassembled —
+    `dev/docs/spikes/2026-09-10-multiskin-skin-precedence/`.
+
+    The body encodes the branch order, the `Count != 0` gate, and the two field offsets it reads
+    (`Skin` at Actor+0x130, `MultiSkins` at Actor+0x164), so any change to the precedence changes
+    these bytes.
+    """
+    engine = (UED22 / "Engine.dll").read_bytes()
+    off = _rva_to_offset(engine, 0x1129A0)
+    body = bytes.fromhex(
+        "558bec8b550c568b750885d2740b"          # Owner NULL-check
+        "8b84b26401000085c07533"                # eax = Owner->MultiSkins[Count]; non-NULL -> return
+        "85f67415"                              # Count == 0 -> skip the Textures probe
+        "8b81d8000000c1e6028b040685c074085e5dc20800"   # Textures[Count]; non-NULL -> return
+        "c1e602"                                # Count == 0 path
+        "85d2740a8b8230010000"                  # eax = Owner->Skin
+        "85c07509"                              # non-NULL -> return
+        "8b81d80000008b04065e5dc20800"          # return Textures[Count]
+    )
+    assert engine[off:off + len(body)] == body
+
+    # ULodMesh and USkeletalMesh do NOT override it — every mesh kind resolves skins here.
+    for name, vtable_rva in [("UMesh", 0x1FD0D4), ("ULodMesh", 0x1FD154), ("USkeletalMesh", 0x1FD1D8)]:
+        slot = _rva_to_offset(engine, vtable_rva + 0x74)   # GetTexture is vtable slot 29
+        assert struct.unpack_from("<I", engine, slot)[0] == _IMAGE_BASE + 0x1129A0, \
+            f"{name} overrides GetTexture — the single-resolution-point assumption is broken"

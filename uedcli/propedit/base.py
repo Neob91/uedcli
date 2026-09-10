@@ -40,9 +40,6 @@ _IDENT_RE = re.compile(r"^[A-Za-z_]\w*$")
 _INT_RE = re.compile(r"^-?\d+$")
 
 
-_PAREN_KEY_RE = re.compile(r"^([A-Za-z_]\w*)\((\d+)\)$")
-
-
 _PAREN_ANY_RE = re.compile(r"([A-Za-z_]\w*)\((\d+)\)")
 
 

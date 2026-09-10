@@ -110,7 +110,23 @@ ABSENT = _Absent()
 
 # ── property keys ───────────────────────────────────────────────────────────────────────────────
 
-_INDEXED_KEY = re.compile(r"^([^()]+)\((\d+)\)$")
+# Identifier-anchored (not `[^()]+`): a T3D key is always an identifier, and `propedit`'s
+# `_text_key_ident`/`_stored_map` also run this over struct-MEMBER keys from `structtext`'s
+# quote/depth-aware splitter, which is not guaranteed to hand back an identifier-shaped string —
+# the loose form would silently widen what those callers accept.
+_INDEXED_KEY = re.compile(r"^([A-Za-z_]\w*)\((\d+)\)$")
+
+
+def split_index(raw_key: str) -> tuple[str, int | None]:
+    """`Key(N)` -> (name AS WRITTEN, N); `Key` -> (name, None). The shared low-level primitive:
+    `prop_key` below wraps it with the STORAGE convention (casefold, unindexed -> index 0); a CLI
+    dot-path caller needs `None` preserved instead (it distinguishes `actor prop set MultiSkins=` —
+    the whole array — from `MultiSkins.0=` — one element) — the two conventions must NOT be
+    merged into one."""
+    m = _INDEXED_KEY.match(raw_key.strip())
+    if m is None:
+        return (raw_key.strip(), None)
+    return (m.group(1), int(m.group(2)))
 
 
 def prop_key(raw_key: str) -> tuple[str, int]:
@@ -120,15 +136,20 @@ def prop_key(raw_key: str) -> tuple[str, int]:
     form") and `uprops.resolve_class_defaults` keys that element `("keypos", 1)`; a scalar property
     is index 0. Getting this wrong is not cosmetic — every indexed element would compare against
     index 0's default."""
-    m = _INDEXED_KEY.match(raw_key.strip())
-    if m is None:
-        return (raw_key.strip().casefold(), 0)
-    return (m.group(1).strip().casefold(), int(m.group(2)))
+    name, idx = split_index(raw_key)
+    return (name.casefold(), 0 if idx is None else idx)
 
 
 def key_text(key: tuple[str, int]) -> str:
     """A `(name, index)` key back in its T3D spelling, for diagnostics: `("keypos", 1)` → `KeyPos(1)`."""
     return key[0] if key[1] == 0 else f"{key[0]}({key[1]})"
+
+
+def stored_prop_map(props: list[tuple[str, str]]) -> dict[tuple[str, int], str]:
+    """An actor's `.props` (as parsed by `model.py`) -> `{(casefold(name), idx): value}`, storage
+    convention (unindexed = index 0, matching `prop_key`/`resolve_class_defaults`'s own keying).
+    LAST occurrence wins — T3D import semantics for a duplicate line."""
+    return {prop_key(k): v for k, v in props}
 
 
 # ── struct literal parsing ──────────────────────────────────────────────────────────────────────

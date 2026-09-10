@@ -23,6 +23,36 @@ def test_a_static_array_element_keys_off_its_own_index():
     assert tp.key_text(("keypos", 1)) == "keypos(1)"
 
 
+def test_split_index_preserves_case_and_distinguishes_no_index_from_index_0():
+    """`split_index` is the shared primitive under `prop_key` (storage: unindexed -> 0) and
+    `propedit`'s CLI dot-path grammar (unindexed -> None, distinguishing a whole-array `set` from a
+    one-element `set`) — it must keep BOTH conventions expressible, so it preserves the RAW case and
+    returns `None`, not 0, for an unindexed key."""
+    assert tp.split_index("MultiSkins(2)") == ("MultiSkins", 2)
+    assert tp.split_index("Skin") == ("Skin", None)
+
+
+def test_split_index_rejects_a_non_identifier_name():
+    """Identifier-anchored, not `[^()]+` — a malformed/foreign key (e.g. from a corrupt struct
+    literal) must not silently parse as an indexed key."""
+    assert tp.split_index("not an ident(1)") == ("not an ident(1)", None)
+
+
+def test_stored_prop_map_is_sparse_per_index_and_last_line_wins():
+    """`stored_prop_map` only contains the indices an actor's OWN props actually state (never a
+    bulk/whole-array entry) — this is what makes an actor's per-index override shadow the class
+    default per-ELEMENT, not blank the whole array (`meshrender.resolve_skins`'s actor-override
+    merge, board `per-actor-skins-override-in-native-mesh-render`). A duplicate line is T3D import
+    semantics: the LAST occurrence wins."""
+    props = [("MultiSkins(0)", "Texture'A.B'"), ("Skin", "Texture'C.D'"),
+             ("MultiSkins(0)", "Texture'A.LATER'")]
+    assert tp.stored_prop_map(props) == {
+        ("multiskins", 0): "Texture'A.LATER'",
+        ("skin", 0): "Texture'C.D'",
+    }
+    assert ("multiskins", 1) not in tp.stored_prop_map(props)
+
+
 # --- struct literals ----------------------------------------------------------------------------
 
 def test_a_struct_literal_splits_on_top_level_commas_only():

@@ -99,14 +99,31 @@ def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_i
     """`material index -> (w, h, rgb bytes, b_masked, mask bytes)` for the mesh, decoded through
     `utexture`.
 
-    Two sources, class-wins: the mesh's OWN `Textures` (via `Materials[i].TextureIndex`) are the
-    fallback skin set, then the CLASS's `MultiSkins[i]` (per material index) / `Skin` override — the
-    class is the authority, since DX characters carry no mesh-side skins. `search_files` is the FULL
-    composed search path (all package extensions) — NOT the `.u`-only `ClassIndex.package_paths`: a
-    skin can live in a `.utx` (`Effects.BioCell_SFX`), never on the `.u` set, and the full path also
-    covers deco skins that live in a deco `.u`. `class_index` WIDENS the resolver from the exact
-    `Texture` class to every `Engine.Texture` descendant, so a procedural skin (a FireTexture etc.)
-    resolves to `no-mip-data` rather than `unknown-texture`.
+    Reproduces `UMesh::GetTexture(Count, Owner)` (`Engine.dll` RVA `0x1129a0`, disassembly+live-probe
+    verified — `dev/docs/unrealed/rendering.md` "Mesh material-slot skin resolution", evidence in
+    `dev/docs/spikes/2026-09-10-multiskin-skin-precedence/`), the ONE function every mesh class
+    resolves a material slot's texture through, per slot `i`:
+
+        MultiSkins[i]  ->  (i != 0 and Textures[i])  ->  Skin  ->  Textures[i]
+
+    `MultiSkins[i]` always wins; `Skin` is a SLOT-0-FIRST fallback, not a whole-mesh override — it
+    reaches a non-zero slot only when the mesh has no texture of its own there. `defaults` is
+    EFFECTIVE, not necessarily class-only: `class preview` passes plain class defaults, while `level
+    photo --native`'s per-actor mesh render passes `ChainMap(actor's own stored props, class
+    defaults)` so a placed actor's own override wins over its class's (board
+    `per-actor-skins-override-in-native-mesh-render`) — `resolve_skins` itself is agnostic to which,
+    it just reads whatever `defaults` hands it for each `("multiskins"|"skin", i)` key.
+
+    `i` here is the SAME approximation the codebase already made for `MultiSkins`/`Skin` indexing —
+    the mesh's own material-list ordinal, not `UMesh::Textures`' own index (the spike's "`Count` is
+    the mesh's TEXTURE index, not the material ordinal" finding) — the two diverge only when a
+    mesh's `Materials[i].TextureIndex != i`; reconciling that is a separate, not-yet-scoped fix.
+
+    `search_files` is the FULL composed search path (all package extensions) — NOT the `.u`-only
+    `ClassIndex.package_paths`: a skin can live in a `.utx` (`Effects.BioCell_SFX`), never on the
+    `.u` set, and the full path also covers deco skins that live in a deco `.u`. `class_index`
+    WIDENS the resolver from the exact `Texture` class to every `Engine.Texture` descendant, so a
+    procedural skin (a FireTexture etc.) resolves to `no-mip-data` rather than `unknown-texture`.
 
     A procedural (`no-mip-data`) skin renders as solid RED (`PROCEDURAL_RED`) — the draft rasterizer
     has no bitmap to sample. Any OTHER undecodable ref still raises `PreviewError` naming it
@@ -129,25 +146,47 @@ def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_i
                                f"[{got.case}]: {got.detail}")
         return (got.width, got.height, got.rgb, bool(got.b_masked), got.mask)
 
-    skins: dict = {}
     mats = mesh.materials or [(0, i) for i in range(max(1, len(mesh.textures)))]
-    for mi, (_flags, tex_idx) in enumerate(mats):
+
+    def mesh_texture_ref(mi: int) -> str | None:
+        """`Textures[mi]`'s resolver key, or None when `mi` has no mesh material (an override-only
+        slot) or its texture index is unset/out of range."""
+        if not (0 <= mi < len(mats)):
+            return None
+        tex_idx = mats[mi][1]
         if not (0 <= tex_idx < len(mesh.textures)):
-            continue
+            return None
         path = pkg.object_path(mesh.textures[tex_idx])
         if not path:
-            continue
+            return None
         parts = path.split(".")
-        ref = f"{parts[0]}.{parts[-1]}"              # Package.Name (drop any Group segment)
-        skins[mi] = skin_tuple(utexture.resolve_or_procedural_red(resolver, ref), f"mesh skin {ref}")
-    for (prop, idx), val in defaults.items():        # class MultiSkins/Skin override per material idx
-        if prop not in ("multiskins", "skin"):
+        return f"{parts[0]}.{parts[-1]}"              # Package.Name (drop any Group segment)
+
+    # Every slot a triangle could reference (the mesh's own materials) UNION every slot an override
+    # states (`MultiSkins(N)=` may name an index the mesh has no material for at all).
+    slots = set(range(len(mats)))
+    slots.update(idx for (prop, idx) in defaults if prop == "multiskins")
+
+    skins: dict = {}
+    for mi in slots:
+        multiskin_ref = _skin_ref(defaults.get(("multiskins", mi)))
+        if multiskin_ref is not None:
+            skins[mi] = skin_tuple(utexture.resolve_or_procedural_red(resolver, multiskin_ref),
+                                   f"multiskins override {multiskin_ref}")
             continue
-        ref = _skin_ref(val)
-        if ref is None:
+        mesh_ref = mesh_texture_ref(mi)
+        if mi != 0 and mesh_ref is not None:
+            skins[mi] = skin_tuple(utexture.resolve_or_procedural_red(resolver, mesh_ref),
+                                   f"mesh skin {mesh_ref}")
             continue
-        skins[idx if prop == "multiskins" else 0] = skin_tuple(
-            utexture.resolve_or_procedural_red(resolver, ref), f"class {prop} {ref}")
+        skin_ref = _skin_ref(defaults.get(("skin", 0)))
+        if skin_ref is not None:
+            skins[mi] = skin_tuple(utexture.resolve_or_procedural_red(resolver, skin_ref),
+                                   f"skin override {skin_ref}")
+            continue
+        if mesh_ref is not None:
+            skins[mi] = skin_tuple(utexture.resolve_or_procedural_red(resolver, mesh_ref),
+                                   f"mesh skin {mesh_ref}")
     return skins
 
 

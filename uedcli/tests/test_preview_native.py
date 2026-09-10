@@ -533,6 +533,27 @@ def test_mesh_skin_carries_the_real_per_texel_mask_not_synthesized_opaque(monkey
     assert table and table[-1][3] == real_mask2
 
 
+def test_index_for_decoded_actor_override_gets_its_own_slot():
+    """`actor_override` extends the dedup key (board `per-actor-skins-override-in-native-mesh-render`):
+    the SAME class/mesh/material with the SAME (empty) override still dedupes exactly as before
+    (this fix must not touch the common no-override case), but a DIFFERENT override fingerprint
+    gets its own slot — the reopened C1-shaped bug this pins."""
+    t = pn._TextureTable(resolver=None)
+    px = b"\xff\x00\x00"
+    mask = b"\x01"
+    a = t.index_for_decoded("DeusEx.CrateA", ("DeusExDeco", "Crate"), 0, 1, 1, px, False, mask)
+    # no override on either call (the default) -> same slot, same as before this fix
+    assert t.index_for_decoded("DeusEx.CrateA", ("DeusExDeco", "Crate"), 0, 1, 1, px, False, mask) == a
+    # an actor that overrides its own skin must NOT collide with one that doesn't
+    override = (("multiskins", 0), "Texture'Other.Pkg.Skin'")
+    b = t.index_for_decoded("DeusEx.CrateA", ("DeusExDeco", "Crate"), 0, 1, 1, px, False, mask,
+                            actor_override=(override,))
+    assert b != a
+    # the SAME override fingerprint still dedupes (two actors overriding to the identical skin)
+    assert t.index_for_decoded("DeusEx.CrateA", ("DeusExDeco", "Crate"), 0, 1, 1, px, False, mask,
+                               actor_override=(override,)) == b
+
+
 def test_two_instances_of_one_mesh_class_share_one_texture_slot():
     """The dedup the class key must NOT break: two placed actors of the SAME class and mesh still
     register one texture-table entry per material, not one per actor."""
@@ -542,6 +563,45 @@ def test_two_instances_of_one_mesh_class_share_one_texture_slot():
     _p1, t1 = pn.build_scene(_level(cube_room(), one), _mesh_sf(index), index)
     _p2, t2 = pn.build_scene(_level(cube_room(), one, two), _mesh_sf(index), index)
     assert t1 and len(t2) == len(t1)
+
+
+def test_actor_own_skin_override_renders_over_the_mesh_default_not_the_class():
+    """A placed actor's own `MultiSkins(N)=` beats what it would otherwise render with — the actual
+    fix (board `per-actor-skins-override-in-native-mesh-render`). `MESH_CLASS` has no class-level
+    `MultiSkins`/`Skin` default at all (verified: every slot is `None` in the real corpus), so its
+    material 0 comes from the MESH's own texture (`DeusExDeco.Skins.CrateUnbreakableLargeTex1`,
+    tier 3) today — the actor override (tier 1) must win over that."""
+    index = _ued22_index()
+    sf = [str(FIXTURES / "LUM_InfoPortraits.utx"), *_mesh_sf(index)]
+    plain = Actor(name="Crate1", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    overridden = Actor(name="Crate2", cls=MESH_CLASS, location=(Decimal(200), Decimal(0), Decimal(0)),
+                       props=[("MultiSkins(0)", "Texture'LUM_InfoPortraits.ArthurCallaway'")])
+    _p1, t1 = pn.build_scene(_level(cube_room(), plain), sf, index)
+    _p2, t2 = pn.build_scene(_level(cube_room(), overridden), sf, index)
+    assert (t1[0][0], t1[0][1]) != (64, 64)            # the mesh's own crate texture, NOT 64x64
+    assert (t2[0][0], t2[0][1]) == (64, 64)            # LUM_InfoPortraits.ArthurCallaway's real size
+
+
+def test_two_actors_one_overriding_get_distinct_skins_not_a_cache_collision():
+    """The cache-collision regression the fix's Bug 2 closes: two placed actors of the SAME class
+    and mesh, only one overriding its own skin, must NOT share a texture-table slot — sharing one
+    would silently render the non-overriding actor with the OTHER actor's overridden skin (the same
+    failure `_TextureTable.index_for_decoded`'s own docstring already names for the class-blind
+    case, reopened one layer up by making skins actor-dependent)."""
+    index = _ued22_index()
+    sf = [str(FIXTURES / "LUM_InfoPortraits.utx"), *_mesh_sf(index)]
+    plain = Actor(name="Crate1", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    overridden = Actor(name="Crate2", cls=MESH_CLASS, location=(Decimal(200), Decimal(0), Decimal(0)),
+                       props=[("MultiSkins(0)", "Texture'LUM_InfoPortraits.ArthurCallaway'")])
+    polys, table = pn.build_scene(_level(cube_room(), plain, overridden), sf, index)
+    sizes = {(w, h) for (w, h, *_rest) in table}
+    assert (64, 64) in sizes                                    # the override's texture is present
+    assert len(sizes) >= 2                                      # AND distinct from the mesh default
+    # every triangle's tex_index must point at a table entry of the RIGHT size for its owning actor —
+    # not silently reused from the other actor's slot.
+    tex_sizes = {p[5]: (table[p[5]][0], table[p[5]][1]) for p in polys if p[5] != -1}
+    assert (64, 64) in tex_sizes.values()
+    assert any(sz != (64, 64) for sz in tex_sizes.values())
 
 
 def test_mesh_skins_resolve_over_full_search_files_not_u_only(monkeypatch):

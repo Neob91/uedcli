@@ -38,7 +38,6 @@ from .base import (                                  # noqa: F401
     _INT_RE,
     _NUM_BOUND,
     _PAREN_ANY_RE,
-    _PAREN_KEY_RE,
     _VR_STRUCTS,
     _dec_finite,
     _dequote,

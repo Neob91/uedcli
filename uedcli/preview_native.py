@@ -190,11 +190,18 @@ def _mesh_actor_polys(actor, index, search_files) -> tuple[list, dict, object, t
     `classes.py::_run_preview` converts the SAME two exceptions to `CommandError` locally, and how
     `level.py`'s `--native` call site only ever catches `NativePreviewError` (no dispatch.py change
     needed, unlike an earlier draft of this plan)."""
-    from . import meshfacts, meshrender
+    from collections import ChainMap
+
+    from . import meshfacts, meshrender, typedprops
     from .uprops import resolve_class_defaults
 
     defaults = resolve_class_defaults(actor.cls, resolver=index.resolver())
     instance = {k.casefold(): v for k, v in actor.props}
+    # The actor's own MultiSkins(N)=/Skin= (if it states them) ahead of its class defaults, per
+    # index -- board item `per-actor-skins-override-in-native-mesh-render`. `resolve_skins` only
+    # ever reads two keys ("multiskins"/"skin") out of its `defaults` param via `.items()`, so a
+    # `ChainMap` (stored-wins, first-map-wins per key) needs no signature change there.
+    skin_defaults = ChainMap(typedprops.stored_prop_map(actor.props), defaults)
 
     def field(name: str):
         """The actor's own value for `name` (casefolded key), else its class default — the SAME
@@ -223,7 +230,7 @@ def _mesh_actor_polys(actor, index, search_files) -> tuple[list, dict, object, t
         # Skins resolve over the FULL composed path (`search_files`), not `index.package_paths()`
         # (`.u` only): a mesh skin can live in a `.utx` (e.g. `Effects.BioCell_SFX`), which is never
         # on the `.u` set. `search_files` is a superset, so deco-`.u` skins still resolve.
-        skins = meshrender.resolve_skins(mesh, pkg, defaults, search_files,
+        skins = meshrender.resolve_skins(mesh, pkg, skin_defaults, search_files,
                                          class_fqcn=actor.cls, class_index=index)
     except meshfacts.MeshFactError as e:
         raise NativePreviewError(str(e)) from e
@@ -271,11 +278,12 @@ class _TextureTable:
         return idx
 
     def index_for_decoded(self, class_fqcn: str, mesh_ref: tuple[str, str], material_index: int,
-                          w: int, h: int, rgb: bytes, b_masked: bool, mask: bytes) -> int:
+                          w: int, h: int, rgb: bytes, b_masked: bool, mask: bytes, *,
+                          actor_override: tuple = ()) -> int:
         """Register an already-decoded texture (a mesh skin `resolve_skins` resolved) and return
-        its table index -- deduped by (class_fqcn, mesh_ref, material_index), NOT by which ACTOR
-        triggered the resolve, so many placed instances of the same decoration/crate share one
-        table entry instead of one each.
+        its table index -- deduped by (class_fqcn, mesh_ref, material_index, actor_override), NOT
+        by which ACTOR triggered the resolve, so many placed instances of the same decoration/crate
+        STILL share one table entry -- unless one of them overrides its own skin.
 
         The CLASS is part of the key because `resolve_skins` is class-dependent: a class's
         `MultiSkins`/`Skin` defaults OVERRIDE the mesh's own textures, so two classes sharing one
@@ -283,6 +291,14 @@ class _TextureTable:
         assets stock DT_Mesh classes reference, 34 carry more than one distinct class skin set, and
         the body mesh `DeusExCharacters.GM_Trench` alone carries 16. Keying on the mesh alone made
         whichever class resolved second silently render the first one's skin.
+
+        `actor_override` is the SAME failure mode reopening one layer up, now that a placed actor's
+        own `MultiSkins`/`Skin` can also override its class's (board
+        `per-actor-skins-override-in-native-mesh-render`): a hashable fingerprint of the actor's own
+        skin-relevant stored props (`sorted((prop, idx), text)` pairs restricted to
+        `multiskins`/`skin` keys), `()` when the actor states none. An actor with no override keeps
+        today's exact 3-part key and cache-hit rate; only an actor that actually states an override
+        gets its own table slot instead of silently inheriting another actor's.
         `mesh_ref` is `(package_stem, mesh_name)` -- the mesh ASSET identity, so two same-named
         meshes in different packages stay distinct.
 
@@ -292,7 +308,7 @@ class _TextureTable:
         1=opaque/0=transparent) -- matching `index_for`'s own `got.mask`, not a synthesized
         all-opaque stand-in, so the rasterizer's `masked && mask[texel] == 0` alpha test actually
         cuts a masked mesh skin."""
-        cache_key = (class_fqcn, mesh_ref, material_index)
+        cache_key = (class_fqcn, mesh_ref, material_index, actor_override)
         if cache_key in self._by_decoded:
             return self._by_decoded[cache_key]
         idx = len(self.table)
@@ -423,7 +439,7 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
         add_poly(world_verts, actor, poly)
 
     from .transform import DegenerateTransformError, flip_winding, reject_degenerate
-    from . import meshworld
+    from . import meshworld, typedprops
 
     for actor in level.actors.values():
         if actor.brush is not None:
@@ -431,6 +447,12 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
         tris, skins, mesh, mesh_ref = _mesh_actor_polys(actor, index, search_files)
         if not tris:
             continue
+        # This actor's own skin-relevant override, once -- () for the common no-override actor
+        # (keeps `index_for_decoded`'s cache hit rate), a real fingerprint only when it states one
+        # (`per-actor-skins-override-in-native-mesh-render`'s cache-collision fix).
+        actor_skin_override = tuple(sorted(
+            (k, v) for k, v in typedprops.stored_prop_map(actor.props).items()
+            if k[0] in ("multiskins", "skin")))
         # `L` + `translation` are the WHOLE placement formula, computed ONCE per actor: the
         # per-vertex `apply_mesh_linear` below then costs one matvec, where the equivalent
         # `mesh_vertex_to_world` would re-parse `Rotation` and rebuild both rotation matrices for
@@ -474,7 +496,8 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
                 # world/mover polys. The class is IN the key because skins are class-dependent
                 # (`index_for_decoded`).
                 tex_index = textures.index_for_decoded(actor.cls, mesh_ref, material_index,
-                                                       tw, th, rgb, b_masked, mask)
+                                                       tw, th, rgb, b_masked, mask,
+                                                       actor_override=actor_skin_override)
                 u0 = (uv0[0] * tw / 256.0, uv0[1] * th / 256.0)
                 u1 = (uv1[0] * tw / 256.0, uv1[1] * th / 256.0)
                 u2 = (uv2[0] * tw / 256.0, uv2[1] * th / 256.0)

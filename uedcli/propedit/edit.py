@@ -6,9 +6,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from ..normalize import is_computed_key
+from ..typedprops import split_index, stored_prop_map
 from ..uprops import Prop
-from .base import (ClassCtx, HARD_REJECT, PropEditError, _INT_RE, _PAREN_KEY_RE, _dec_finite,
-                   _dequote)
+from .base import ClassCtx, HARD_REJECT, PropEditError, _INT_RE, _dec_finite, _dequote
 from .paths import ResolvedPath, _member_map, _text_key_ident, resolve_path
 from .structtext import (_maybe_comma_sugar, _set_member_in_text, _unset_member_in_text,
                          emit_struct_text, full_struct_text, split_struct_text, zero_value)
@@ -62,14 +62,7 @@ def _stored_map(actor) -> dict[tuple[str, int], str]:
     """The actor's stored props keyed like the defaults dict: (casefold base, index) → value.
     A plain `Key` line is index 0 (T3D treats an unindexed array line as element 0); `Key(N)`
     is element N. LAST occurrence wins (T3D import semantics for duplicate lines)."""
-    out: dict[tuple[str, int], str] = {}
-    for k, v in actor.props:
-        m = _PAREN_KEY_RE.match(k)
-        if m is not None:
-            out[(m.group(1).casefold(), int(m.group(2)))] = v
-        else:
-            out[(k.casefold(), 0)] = v
-    return out
+    return stored_prop_map(actor.props)
 
 
 def effective_value(actor, rp: ResolvedPath, ctx: ClassCtx) -> str:
@@ -335,9 +328,8 @@ def dump_all_lines(actor, ctx: ClassCtx, typed_fields: dict) -> list[str]:
         lines.append(f"{key}={val}")
     schema: dict[str, Prop] | None = None
     for k, v in actor.props:
-        base, idx = _text_key_ident(k)
-        m = _PAREN_KEY_RE.match(k)
-        base_name = m.group(1) if m is not None else k
+        base_name, idx = split_index(k)
+        base = base_name.casefold()
         if base in HARD_REJECT:
             continue
         if base in typed_fields:

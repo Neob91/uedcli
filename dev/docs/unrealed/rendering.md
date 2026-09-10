@@ -231,3 +231,30 @@ match what UnrealEd's viewports show so a diagram reads like the editor.
 ## Texture swatches → PNG
 See [`commands.md`](commands.md) "Textures → LLM-viewable images" (`UCC batchexport`).
 `Engine.DefaultTexture` is the brightest surface texture in the stripped substrate.
+
+## Mesh material-slot skin resolution (`UMesh::GetTexture`) ✅ 🔬
+
+Every mesh class (`UMesh`/`ULodMesh`/`USkeletalMesh` — none overrides it) resolves a material slot's
+texture through ONE function, `UMesh::GetTexture(Count, Owner)` (`Engine.dll` RVA `0x1129a0`), per
+slot `Count`:
+
+```
+MultiSkins[Count]  ->  (Count != 0 and Textures[Count])  ->  Skin  ->  Textures[Count]
+```
+
+`MultiSkins[i]` always wins; `Skin` is a SLOT-0-FIRST fallback, not a whole-mesh override — it
+reaches a non-zero slot only when the mesh has no texture of its own there. `Count` is the mesh's
+OWN `Textures` index (`URender::DrawLodMesh`, `render.dll` RVA `0xd050`, loops `Count` over
+`Mesh->Textures.Num()`), not the material list's ordinal — a triangle maps to `Count` via
+`Materials[tri.MaterialIndex].TextureIndex` as a separate step. `AActor::GetSkin(int)` (RVA
+`0x12d270`) is a red herring: a bounds-checked `MultiSkins[i]` accessor with no call site anywhere
+in the UED22 DLL set — `GetTexture` reads `MultiSkins` inline instead, unbounded (no `Count < 8`
+check), while `DrawLodMesh` allows up to 16 texture slots.
+
+`AActor` field offsets this rests on (from `Engine.Actor`'s own stored `ScriptText`, C-aligned from
+`DrawType@0x124`): `Texture@0x12c`, `Skin@0x130`, `Mesh@0x134`, `MultiSkins[8]@0x164`.
+
+Verified two ways: disassembly (both functions, `Engine.dll`/`render.dll`) and a live UED22 probe
+(byte-identical screenshot hashes across configs pin the slot-0 and slot-1 cases separately). Full
+evidence, disassembly listings, and the live-probe capture table: `dev/docs/spikes/2026-09-10-multiskin-skin-precedence/README.md`.
+Consumed by `uedcli/meshrender.py::resolve_skins`.

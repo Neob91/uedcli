@@ -4,8 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from ..typedprops import split_index
 from ..uprops import Prop
-from .base import ClassCtx, PropEditError, _PAREN_KEY_RE
+from .base import ClassCtx, PropEditError
 from .tokens import PropToken
 
 
@@ -104,7 +105,5 @@ def _member_map(members: list[Prop]) -> dict[str, Prop]:
 
 
 def _text_key_ident(k: str) -> tuple[str, int | None]:
-    m = _PAREN_KEY_RE.match(k)
-    if m is not None:
-        return m.group(1).casefold(), int(m.group(2))
-    return k.casefold(), None
+    name, idx = split_index(k)
+    return name.casefold(), idx
