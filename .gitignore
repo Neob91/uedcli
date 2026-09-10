@@ -29,3 +29,11 @@ dev/games/
 # uedcli/uscript/fetch_ut99.sh from archive.org. Reproducible, never committed.
 uned/UT99/
 uned/DXORIG/
+
+# The full UT99 game asset substrate `dev/scripts/install-ut99-assets.sh` populates — same
+# reasoning as uned/DeusExAssets (System/Textures/Sounds/Music/Maps content, multi-hundred-MB,
+# user-supplied, reproducible from the script). Distinct from the narrower uned/UT99/ above (that
+# one is just the uscript-compiler's UCC.exe + Core.u corpus). No trailing slash: a gitignore
+# pattern ending in "/" matches only a real directory, not a symlink to one — and uned/DeusExAssets
+# shows operators commonly point this kind of dir at a symlink instead.
+uned/UT99Assets
