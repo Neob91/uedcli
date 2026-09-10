@@ -1,0 +1,36 @@
+"""Task: widen a WanChai Market stairwell shaft -- see ../spec_format.py
+for the entry-kind vocabulary this file uses.
+"""
+
+TASK = dict(
+ id="wanchai_stairwell", level="wanchai",
+ title="Widen the stairwell",
+ req="&ldquo;The stairwell shaft Brush1239 feels cramped. Widen it by 48 units.&rdquo;",
+ base_trunk="wanchai_gt",
+ photo_camera=dict(at=[-640, 256, 160], pitch=-2048),
+ before=dict(
+   quad="before_quad",
+   note="The shaft (Brush1239) is enclosed by a wall shell split in two halves that share a seam at z=128 (Brush1234 concrete below, Brush1236 wood above) -- both must widen together or the wall steps. A stair flight sits at each end (Brush1240, Brush1241) with a landing between them (Brush1245); two wall sconces (Brush3676, Brush7) are mounted flush on the shell's open face. The shell's OTHER face has a doorway (Brush1247) into a second flight+landing beyond -- not part of this task.",
+   photos=[f"pan_before_{i}" for i in range(8)]),
+ entries=[
+   dict(kind="update", actor="Brush1239", target="corners",
+        at=[[-768,160,0],[-512,160,0],[-512,160,256],[-768,160,256]], delta=[0,-48,0],
+        what="the stairwell shaft void; the task's own widen target"),
+   dict(kind="update", actor="Brush1234", target="corners",
+        at=[[-768,144,0],[-512,144,0],[-512,144,128],[-768,144,128]], delta=[0,-48,0],
+        what="lower half of the shaft's wall shell (concrete) -- must widen with the void or the wall doesn't reach the new opening"),
+   dict(kind="update", actor="Brush1236", target="corners",
+        at=[[-768,144,128],[-512,144,128],[-512,144,256],[-768,144,256]], delta=[0,-48,0],
+        what="upper half of the wall shell (wood-paneled), shares the seam with Brush1234 at z=128 -- must widen the same amount or the wall steps"),
+
+   dict(kind="anchor", actor="Brush1240", to="Brush1239", what="stair flight sharing the shaft's width"),
+   dict(kind="anchor", actor="Brush1241", to="Brush1239", what="the other stair flight, opposite end of the shaft"),
+   dict(kind="anchor", actor="Brush1245", to="Brush1239", what="landing between the two flights, shares the shaft's width"),
+   dict(kind="anchor", actor="Brush3676", to="Brush1236", what="wall sconce mounted flush on the shell's open face"),
+   dict(kind="anchor", actor="Brush7", to="Brush1236", what="wall sconce mounted flush on the shell's open face, mirrors Brush3676"),
+
+   dict(kind="update", actor="Brush1247", target="unchanged",
+        what="doorway cut into the shell's other face, opposite this widen -- a second flight+landing continues beyond it and must not be affected"),
+   dict(kind="update", actor="Brush1072", target="unchanged",
+        what="floor slab directly above the shaft -- widening must not disturb it"),
+ ])

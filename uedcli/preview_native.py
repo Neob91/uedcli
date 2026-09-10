@@ -35,7 +35,7 @@ from .preview_shots import ResolvedShot, Shot, resolve_pose, shot_filename
 from .rotation import (actor_linear, actor_prepivot, deg_to_uu, euler_to_matrix_uu, matvec)
 from .texframe import poly_flags_int, world_uv_frame
 from .transform import DegenerateTransformError
-from .utexture import TextureError, TextureResolver
+from .utexture import TextureError, TextureResolver, resolve_or_procedural_red
 
 PF_INVISIBLE = 0x1
 PF_MASKED = 0x2                                       # alpha-test: palette-index-0 texels cut out
@@ -235,8 +235,12 @@ def _mesh_actor_polys(actor, index, search_files) -> tuple[list, dict, object, t
 # --------------------------------------------------------------------- textures
 
 class _TextureTable:
-    """Distinct texture refs → table indices. An unresolvable ref raises `NativePreviewError`
-    (no placeholder, no partial image — spec §4.5)."""
+    """Distinct texture refs → table indices. A procedural texture (`no-mip-data` — a real
+    texture the engine generates at runtime, e.g. a FireTexture/WaterTexture surface like a
+    water pool) substitutes `utexture.PROCEDURAL_RED`, matching mesh skins (see
+    `meshrender.resolve_skins`) — the same visible "not-rendered-yet" marker either way. Any
+    OTHER unresolvable ref still raises `NativePreviewError` (no placeholder, no partial image
+    — spec §4.5)."""
 
     def __init__(self, resolver: TextureResolver) -> None:
         self._resolver = resolver
@@ -256,7 +260,7 @@ class _TextureTable:
         key = ref.casefold()
         if key in self._by_ref:
             return self._by_ref[key]
-        got = self._resolver.resolve(ref)
+        got = resolve_or_procedural_red(self._resolver, ref)
         if isinstance(got, TextureError):
             raise NativePreviewError(
                 f"texture {ref!r} did not decode [{got.case}]: {got.detail}")
@@ -364,7 +368,11 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
     from .native.umodel import parse_model_body
     model = parse_model_body(body, 0, len(body))
 
-    textures = _TextureTable(TextureResolver(search_files))
+    # class_index=index widens the resolver from the exact `Texture` class to every
+    # `Engine.Texture` descendant (FireTexture, WaterTexture, ...) -- without it, ANY texture
+    # subclass used on a world surface is invisible to lookup entirely (`unknown-texture`, not
+    # even reaching decode) rather than resolving and being recognised as procedural.
+    textures = _TextureTable(TextureResolver(search_files, class_index=index))
     polys = []
 
     def add_poly(world_verts, actor, poly, surf_flags=None):

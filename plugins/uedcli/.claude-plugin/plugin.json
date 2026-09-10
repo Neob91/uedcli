@@ -1,0 +1,17 @@
+{
+  "name": "uedcli",
+  "description": "Skills for computing exact UE1/Deus Ex brush geometry relationships in uedcli instead of eyeballing renders or hand-computing coordinates",
+  "version": "0.1.0",
+  "author": {
+    "name": "uedcli project"
+  },
+  "license": "MIT",
+  "keywords": [
+    "uedcli",
+    "unrealed",
+    "deus-ex",
+    "brush",
+    "geometry",
+    "level-editing"
+  ]
+}

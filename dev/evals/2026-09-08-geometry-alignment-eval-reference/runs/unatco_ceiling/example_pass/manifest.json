@@ -1,0 +1,76 @@
+{
+  "task_id": "unatco_ceiling",
+  "run_id": "example_pass",
+  "label": "Example: fully correct",
+  "subject_trunk": "/home/agent/.claude/jobs/92851c21/tmp/gold_ceiling",
+  "rendered_at": "2026-09-09T14:01:22.307984+00:00",
+  "n_task_entries": 13,
+  "entries": [
+    {
+      "actor": "Brush418",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "what": "south wall's ceiling face; the task's own raise-ceiling target",
+      "img_before": "entries/Brush418_before.png",
+      "img_after": "entries/Brush418_after.png"
+    },
+    {
+      "actor": "Brush420",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "what": "north wall's ceiling face, shares the ceiling with Brush418 at the y=64 seam -- must rise the same amount or the ceiling steps",
+      "img_before": "entries/Brush420_before.png",
+      "img_after": "entries/Brush420_after.png"
+    },
+    {
+      "actor": "Brush285",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "what": "recessed ceiling light panel over the south half",
+      "img_before": "entries/Brush285_before.png",
+      "img_after": "entries/Brush285_after.png"
+    },
+    {
+      "actor": "Brush295",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "what": "recessed ceiling light panel over the south half",
+      "img_before": "entries/Brush295_before.png",
+      "img_after": "entries/Brush295_after.png"
+    },
+    {
+      "actor": "Brush132",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "what": "ceiling trim cap over the south half",
+      "img_before": "entries/Brush132_before.png",
+      "img_after": "entries/Brush132_after.png"
+    },
+    {
+      "actor": "Brush74",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "what": "ceiling trim cap over the south half",
+      "img_before": "entries/Brush74_before.png",
+      "img_after": "entries/Brush74_after.png"
+    },
+    {
+      "actor": "Brush284",
+      "bucket": "updated",
+      "label": "UPDATED",
+      "what": "recessed ceiling light panel over the north half",
+      "img_before": "entries/Brush284_before.png",
+      "img_after": "entries/Brush284_after.png"
+    }
+  ],
+  "panorama": [
+    "pan_0.png",
+    "pan_1.png",
+    "pan_2.png",
+    "pan_3.png",
+    "pan_4.png",
+    "pan_5.png",
+    "pan_6.png",
+    "pan_7.png"
+  ]
+}

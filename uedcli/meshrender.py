@@ -86,12 +86,13 @@ def frame_triangles(mesh, frame: int = 0):
     return tris
 
 
-# Procedural (bitmap-less) skin placeholder — a 1x1 opaque RED texel. A FireTexture / WetTexture /
-# etc. is generated per-frame and has no stored bitmap the draft rasterizer can sample; the engine
-# renders it live. Owner ruling (2026-09-07): show it as solid RED (a visible "not-rendered-yet"
-# marker), not a hard-fail and not a silent grey. Real procedural rendering is a tracked follow-up
-# (board `native-draft-rasterizer-procedural-mesh-skins`).
-PROCEDURAL_RED = (1, 1, b"\xff\x00\x00", False, b"\x01")
+# Procedural (bitmap-less) skin placeholder, as the (w, h, rgb, b_masked, mask) skin-tuple shape
+# this module returns -- derived from `utexture.PROCEDURAL_RED` (the shared substitute every
+# native-draft caller uses) so the two can never drift apart. Real procedural rendering is a
+# tracked follow-up (board `native-draft-rasterizer-procedural-mesh-skins`).
+PROCEDURAL_RED = (utexture.PROCEDURAL_RED.width, utexture.PROCEDURAL_RED.height,
+                   utexture.PROCEDURAL_RED.rgb, bool(utexture.PROCEDURAL_RED.b_masked),
+                   utexture.PROCEDURAL_RED.mask)
 
 
 def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_index=None) -> dict:
@@ -119,11 +120,11 @@ def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_i
     resolver = utexture.TextureResolver(list(search_files), class_index=class_index)
 
     def skin_tuple(got, what: str):
-        """`got` → the skin tuple. A procedural texture (`no-mip-data`) becomes solid RED; any other
-        `TextureError` raises `PreviewError` naming `what` and the case."""
+        """`got` → the skin tuple. `got` has already had `utexture.resolve_or_procedural_red`
+        applied by the caller, so a procedural (`no-mip-data`) miss already IS
+        `utexture.PROCEDURAL_RED` here. Any other `TextureError` raises `PreviewError` naming
+        `what` and the case."""
         if isinstance(got, utexture.TextureError):
-            if got.case == "no-mip-data":
-                return PROCEDURAL_RED
             raise PreviewError(f"cannot preview {class_fqcn}: {what} did not decode "
                                f"[{got.case}]: {got.detail}")
         return (got.width, got.height, got.rgb, bool(got.b_masked), got.mask)
@@ -138,15 +139,15 @@ def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_i
             continue
         parts = path.split(".")
         ref = f"{parts[0]}.{parts[-1]}"              # Package.Name (drop any Group segment)
-        skins[mi] = skin_tuple(resolver.resolve(ref), f"mesh skin {ref}")
+        skins[mi] = skin_tuple(utexture.resolve_or_procedural_red(resolver, ref), f"mesh skin {ref}")
     for (prop, idx), val in defaults.items():        # class MultiSkins/Skin override per material idx
         if prop not in ("multiskins", "skin"):
             continue
         ref = _skin_ref(val)
         if ref is None:
             continue
-        skins[idx if prop == "multiskins" else 0] = skin_tuple(resolver.resolve(ref),
-                                                               f"class {prop} {ref}")
+        skins[idx if prop == "multiskins" else 0] = skin_tuple(
+            utexture.resolve_or_procedural_red(resolver, ref), f"class {prop} {ref}")
     return skins
 
 

@@ -236,6 +236,12 @@ class StubClassIndex:
         out.update(self._ambiguous)
         return _BareMap(out, self._unknown)
 
+    def descends_from(self, fqcn: str, base_fqcn: str) -> bool:
+        """Mirrors the real `ClassIndex.descends_from`: True if `fqcn` IS `base_fqcn` or has it
+        as an ancestor (case-insensitive), via this stub's own `ancestry`."""
+        b = base_fqcn.casefold()
+        return any(a.casefold() == b for a in self.ancestry(fqcn))
+
 
 @pytest.fixture(autouse=True)
 def _stub_mover_class_index(request, monkeypatch):

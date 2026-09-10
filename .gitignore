@@ -13,6 +13,10 @@ _scratch/
 # settings.json stays tracked. (dev/docs/rules/worktrees.md)
 .claude/worktrees/
 
+# Live, mutable manual-grading state for the geometry-eval reference page --
+# reviewer scores/notes, not reference material.
+dev/evals/2026-09-08-geometry-alignment-eval-reference/grades/
+
 # The working game copy `dev/scripts/install-deusex-assets.sh` assembles, plus its
 # `.cache/<game>/{download,unpacked}` scratch. All COPYRIGHTED Deus Ex content and
 # multi-gigabyte installer artifacts — user-supplied, never committed. Both the
