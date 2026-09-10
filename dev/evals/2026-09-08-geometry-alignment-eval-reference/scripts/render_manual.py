@@ -40,7 +40,6 @@ import argparse, datetime, json, os, pathlib, re, subprocess, sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
 from render_photos import render_photos
-from check_trunk import _actor_exists
 
 WT = "/workspace/uedcli/.claude/worktrees/geom-eval"
 PY = "/workspace/uedcli/.venv/bin/python"
@@ -56,6 +55,10 @@ def _run(project, args, **kw):
     env = {**os.environ, "UEDCLI_PROJECT": str(project), "UEDCLI_LEVEL": "unatco"}
     return subprocess.run([PY, "-m", "uedcli", *args], cwd=WT, env=env,
                            capture_output=True, text=True, **kw)
+
+def _actor_exists(project: pathlib.Path, actor: str) -> bool:
+    r = _run(project, ["actor", "prop", "get", actor, "Location"])
+    return not (r.returncode != 0 and "Actor not found" in r.stderr + r.stdout)
 
 def _order_value(project: pathlib.Path, level: str, actor: str) -> str | None:
     """The actor's raw LexoRank CSG-order sidecar (maps/<level>/actors/<actor>/

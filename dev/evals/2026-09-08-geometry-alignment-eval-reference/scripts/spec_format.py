@@ -6,12 +6,6 @@ Each specs/<task_id>.py exports one module-level `TASK` dict:
   id, level, title, req   -- identity + the task prompt (as given to a subagent)
   base_trunk               -- which baseline project (in BASE_TRUNKS_DIR) this
                                task starts from
-  frame                    -- explicit world-space AABB "X0,Y0,Z0,X1,Y1,Z1"
-                               (uedcli `actor diagram --frame`) that crops
-                               every picture to the room this task edits --
-                               NOT the whole level. Per-task because a
-                               different task on the same level may edit a
-                               different room; `level` alone isn't enough.
   photo_camera              -- dict(at=[x,y,z], pitch=UU) for the 8x45°
                                `level photo --native` tour (yaw 0,8192,...,
                                57344) rendered by scripts/render_photos.py
@@ -28,11 +22,12 @@ Each specs/<task_id>.py exports one module-level `TASK` dict:
                                is rendered by render_manual.py's
                                render_before(), never hand-captured.
   entries                  -- the flat list of acceptance criteria (below)
-  scenarios                -- dict(scenario_id -> dict(title, view, note,
-                               members=[actor,...], extra_photos=[(img,cap),...]))
-                               for HUMAN-READABLE grouping on the page only;
-                               does not affect grading, which always walks
-                               `entries` flat regardless of scenario boundaries
+
+No `frame` field: the crop every picture uses is computed, not hand-picked --
+render_manual.py derives it per execution from the union bbox of whatever that
+execution actually touched (see its own docstring). A hand-authored per-task
+frame used to exist and quietly excluded actors outside it from every picture
+(a real bug, caught and fixed); don't reintroduce one.
 
 `entries` is the closed vocabulary every uedcli geometry verb's RESULT
 reduces to (move/resize/clip/scale/rotate all just produce some final
@@ -59,17 +54,15 @@ kinds:
   delete  -- an actor must no longer exist.
 
 `create`/`delete` and `update`'s full-geometry form are part of the
-vocabulary but NOT implemented in check_trunk.py (raises NotImplementedError
-if an entry ever uses one) -- add real handling only when a real task needs
-one, not speculatively.
+vocabulary but have no code path anywhere in this pipeline yet -- neither
+current task needs one; add real handling (in `render_manual.py`'s
+`_entry_changed`/`_bucket`) only when a real task does, not speculatively.
 
-Every entry carries a `what`: plain-language identification of the actor (what it
-is, not why it matters) -- shown on the page next to its picture, and not consumed
-by the mechanical check. check_trunk.py prints it under every FAILURE line too, so
-a mechanical fail is a prompt to check whether the actor's role was satisfied some
-other way, not an automatic hard fail.
+Every entry carries a `what`: plain-language identification of the actor
+(what it is, not why it matters) -- shown next to its picture on the page.
+Grading is manual (a human looking at the pictures), so `what` is purely for
+the reader; nothing mechanical consumes it.
 
-Image names in `before`/`scenarios[...].extra_photos` are relative to this
-task's own img/<task_id>/ directory (see registry.py) -- no cross-task
-namespacing needed.
+Image names in `before` are relative to this task's own img/<task_id>/
+directory (see registry.py) -- no cross-task namespacing needed.
 """

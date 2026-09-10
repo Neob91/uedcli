@@ -7,7 +7,6 @@ TASK = dict(
  title="Task 1 — Widen the office",
  req="&ldquo;Manderley&rsquo;s office is too narrow. Widen it eastward by 48 units &mdash; move its east wall out.&rdquo;",
  base_trunk="unatco_gt",
- frame="59,-360,200,620,140,500",
  photo_camera=dict(at=[300,-112,330], pitch=0),
  before=dict(
    quad="before_quad",
@@ -52,27 +51,4 @@ TASK = dict(
    dict(kind="anchor", actor="Brush1551", to="Brush418", what="niche interior detail brush"),
    dict(kind="anchor", actor="OrdersTrigger5", to="Brush418", what="scripted trigger inside the niche"),
    dict(kind="anchor", actor="Light6", to="Brush418", what="the niche's own light"),
- ],
- # scenario grouping for the human-readable page -- display only, does not affect grading
- scenarios={
-   "wall": dict(title="East wall (both halves of the room)", view="top",
-     note="The office is built from two wall volumes sharing one wall. Both must move out together, or the wall gets a step in it.",
-     members=["Brush418","Brush420"]),
-   "fixtures": dict(title="Wall-mounted fixtures (switch, trim, pilaster)", view="top",
-     note="The wall's own hardware is split across both wall volumes: the switch/recess/most trims sit on the south half (Brush418), the pilaster and its light sit on the north half (Brush420). Each moves with its OWN wall, not a single shared delta.",
-     members=["Brush670","Brush161","Brush132","Brush203","Brush74","Brush152","Switch6","Brush869","Light14"]),
-   "safe": dict(title="Trophy shelf with a hidden wall safe", view="top",
-     note="A wall-mounted display shelf has a real hidden safe built into its back, entirely on the north wall volume (Brush420). The whole unit and its contents must move together with it.",
-     members=["Brush766","Brush364","Brush873","Brush592","Light149","Vase3","Vase4","BookClosed1","NanoKey0","WeaponModRecoil0"],
-     extra_photos=[("photo_safe_before","Before: the trophy shelf — a vase, a polished rock, a closed book, and a nanokey on display."),
-                   ("photo_safe_fixed","Correct: the whole shelf unit, including the hidden safe built into its back, moved out together with the wall."),
-                   ("photo_safe_side","Side view showing the shelf is a real wooden cabinet built into the wall, with actual depth."),
-                   ("photo_safe_behind","The space directly behind the safe: a sealed, empty dead-end — nothing else back there.")]),
-   "flags": dict(title="Corner flagpoles", view="top",
-     note="Two flagpoles stand in opposite corners of the room, anchored to DIFFERENT wall volumes: FlagPole3 to the north wall (Brush420), FlagPole4 to the south wall (Brush418). Each must move with its own corner's wall.",
-     members=["FlagPole3","FlagPole4"],
-     extra_photos=[("photo_flags_after","Photo confirming a flag sits flush back in its corner after the move.")]),
-   "niche": dict(title="Display niche (a separate small room)", view="top",
-     note="This niche is a genuinely separate small room built against the south wall volume (Brush418), not part of the wall itself. It must move so it stays flush against it.",
-     members=["Brush663","Brush1","Brush138","Brush140","Brush148","Brush164","Brush168","Brush1158","Brush1550","Brush1551","OrdersTrigger5","Light6"]),
- })
+ ])

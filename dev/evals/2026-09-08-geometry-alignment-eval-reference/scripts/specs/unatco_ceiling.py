@@ -7,7 +7,6 @@ TASK = dict(
  title="Task 2 — Raise the ceiling",
  req="&ldquo;Manderley&rsquo;s office feels cramped. Raise its ceiling by 48 units.&rdquo;",
  base_trunk="unatco_gt",
- frame="59,-360,200,620,140,500",
  photo_camera=dict(at=[300,-112,330], pitch=4096),
  before=dict(
    quad="before_quad",
@@ -33,20 +32,4 @@ TASK = dict(
    dict(kind="update", actor="Light318", target="unchanged", what="room light, same fixed-height convention"),
    dict(kind="update", actor="Light86", target="unchanged", what="room light, same fixed-height convention"),
    dict(kind="update", actor="Light120", target="unchanged", what="room light, same fixed-height convention"),
- ],
- scenarios={
-   "ceil": dict(title="Ceiling (both halves of the room)", view="side",
-     note="Like the east wall, the ceiling spans two wall volumes sharing one surface. Both must rise together, or the ceiling gets a step in it.",
-     members=["Brush418","Brush420"]),
-   "fixtures": dict(title="Ceiling-mounted fixtures (light panels, trim)", view="side",
-     note="Three recessed light panels and two corner trim caps are set into the ceiling, split across both wall volumes: most sit over the south half (Brush418), one panel sits over the north half (Brush420). Each rises with its own half.",
-     members=["Brush285","Brush295","Brush284","Brush132","Brush74"],
-     extra_photos=[("pan_after_0","Photo, camera tilted upward, showing the raised ceiling with one of the light panels visible.")]),
-   "niche": dict(title="Niche ceiling", view="side",
-     note="The niche is its own separate room with its own ceiling. It's expected to keep its own height and not match the office's new one.",
-     members=["Brush663"],
-     extra_photos=[("pan_after_0","Photo, camera tilted upward — the height step at the boundary with the niche is visible in the top-right.")]),
-   "lights": dict(title="Overhead room lights", view="side",
-     note="Every light sits the same distance below its ceiling, room-wide — a fixed convention, not a mount to the ceiling surface. They must stay put.",
-     members=["Light156","Light103","Light318","Light86","Light120"]),
- })
+ ])
