@@ -612,12 +612,14 @@ document.addEventListener('keydown', e => {
   else if (e.key === 'n' || e.key === 'N'){ e.preventDefault(); box.querySelector('.gnote').focus(); }
 });
 
-// Enter in either grading field saves (and advances, if inbox mode is
-// active) -- the only way to advance; Shift+Enter still inserts a newline
-// in the notes textarea.
+// Enter in the score field saves (and advances, if inbox mode is active).
+// NOT in the notes textarea -- Enter there must always just insert a
+// newline (a mobile on-screen keyboard's return key has no Shift+Enter to
+// fall back on, so overloading Enter as submit there blocks newlines
+// entirely, not just on desktop with Shift held).
 document.addEventListener('keydown', e => {
   if (e.key !== 'Enter' || e.shiftKey) return;
-  if (!e.target.classList || !(e.target.classList.contains('gnote') || e.target.classList.contains('gscore'))) return;
+  if (!e.target.classList || !e.target.classList.contains('gscore')) return;
   e.preventDefault();
   saveGrade(e.target.closest('.gradebox').querySelector('.gsave'));
 });
