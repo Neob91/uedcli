@@ -13,9 +13,11 @@ _scratch/
 # settings.json stays tracked. (dev/docs/rules/worktrees.md)
 .claude/worktrees/
 
-# Live, mutable manual-grading state for the geometry-eval reference page --
-# reviewer scores/notes, not reference material.
-dev/evals/grades/
+# Real eval executions (subagent runs against a task) -- must never land on master. Only a
+# deliberately curated, hand-picked demo run belongs in git; every real run stays local/tunnel-only.
+# grade.json lives inside each execution dir too, so this also covers the old dev/evals/grades/
+# path's job (grader scores/notes, live mutable state, never reference material).
+dev/evals/tasks/*/executions/
 
 # The working game copy `dev/scripts/install-deusex-assets.sh` assembles, plus its
 # `.cache/<game>/{download,unpacked}` scratch. All COPYRIGHTED Deus Ex content and

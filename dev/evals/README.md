@@ -107,6 +107,9 @@ Never hand-edit a picture, a `manifest.json`, or a `grade.json` directly. The `m
 base-trunk fingerprint check, and why `patch` (not `git apply`) is used to apply `diff.patch` are all
 explained in `extract_execution.py`'s and `render_execution.py`'s own docstrings.
 
+`tasks/<task_id>/executions/` is gitignored: a real eval run must never land on master, local/tunnel
+viewing only. A curated demo run is the one deliberate exception (`git add -f`), and only when asked.
+
 ## Grading — manual, from pictures
 
 A card per execution: a panorama tour, then one BEFORE/AFTER pair of quad pictures per actor it
