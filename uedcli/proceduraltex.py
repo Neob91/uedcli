@@ -47,6 +47,22 @@ its source by a `GlassTexture` read as "an 8-bit distortion vector field". It is
 match the engine pixel for pixel, and it is not animated: one frame, derived only from what the
 file stores, so the same package always renders the same pixels.
 
+WHY THERE IS NO ELAPSED-TIME PARAMETER
+---------------------------------------
+A `t` (seconds elapsed) argument was considered so `class preview`/`level photo --native` could
+render "well into a live game" instead of an arbitrary instant. The manual confirms fire and water
+are real iterative sims that "need some warming-up time to attain a stable appearance" but — its
+own words — never reach a true steady state (sparks/drops keep perturbing the field forever). None
+of that per-tick state (spark emission timing, drop spawn/decay, wave propagation speed) is in the
+package — the body stores only the CURRENT spark/drop positions and a `t=0` `FX_Phase`/
+`UPosition`/`VPosition`, no history — so a `t` parameter would have to invent a timing/speed
+constant nowhere in the file: not a more correct frame, a differently-fabricated one.
+`_render_fire`'s closed-form fixed point already renders the diffusion's long-run pattern (see its
+own comment) rather than frame 0 — as close to "well after ignition" as an honest single frame
+gets. `_wave_field`'s radial cosine-times-decay is the same kind of long-run envelope for a
+continuously-sourced ripple; advancing it by any `t` would only rotate its phase, the same pattern
+you get from picking a different `FX_Phase`. So nothing here takes a time argument.
+
 The `FX_*` bytes have no recoverable defaults — those classes' numeric defaults are native C++
 with empty script `defaultproperties` — so a property the body omits falls to a stand-in
 constant here (`_DEFAULTS`), named and gathered in one place rather than scattered.
@@ -250,7 +266,9 @@ def _copy_texel(src: SampledTexture, su: int, sv: int,
 # position, then ONE bottom-to-top sweep carries each row's heat into the row above through a
 # 3-tap horizontal blur scaled by a per-row carry factor < 1. That is the classic Unreal-era
 # fire filter collapsed from "iterate until steady" to its fixed point, which costs one pass
-# over the image instead of one per row.
+# over the image instead of one per row. This already IS the "well after ignition" frame: no
+# separate elapsed-time parameter is needed (module docstring, "WHY THERE IS NO ELAPSED-TIME
+# PARAMETER").
 
 _CARRY_RISING = 0.955
 _CARRY_STILL = 0.900              # `bRising` false — the manual's "less upward movement"
@@ -304,7 +322,10 @@ def _render_fire(pin: ProceduralInput) -> tuple[bytes, bytes] | None:
 # stored position — the standing ripple such a source settles into. The grid is half the
 # texture's resolution because that is where the stored drop coordinates live (module
 # docstring). `FX_Frequency` sets the ripple wavelength, `FX_Radius` how far it reaches,
-# `FX_Phase` its phase, `WaveAmp` and the drop's own depth byte its amplitude.
+# `FX_Phase` its phase, `WaveAmp` and the drop's own depth byte its amplitude. No elapsed-time
+# parameter: this envelope already is the long-run pattern a continuous point source settles
+# into, and advancing it by any `t` would only rotate `FX_Phase` by an unmeasurable amount
+# (module docstring, "WHY THERE IS NO ELAPSED-TIME PARAMETER").
 
 def _wave_field(pin: ProceduralInput) -> tuple[list[float], int, int]:
     """The half-resolution displacement field, and its dimensions."""
