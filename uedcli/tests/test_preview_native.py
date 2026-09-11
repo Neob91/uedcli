@@ -382,6 +382,29 @@ def test_movers_are_out_of_world_csg_but_rendered():
     assert len(polys) == 6 + 6                   # room faces + mover extra_polys
 
 
+def test_mover_polyflags_high_bit_does_not_overflow_render_frame():
+    """Regression (SkyTown/Vortex2, original 1998 Unreal Gold maps): a DWORD `PolyFlags` with the
+    top bit(s) set (e.g. `PF_Occlude`) decodes as a NEGATIVE Python int — `mapimport.py`'s
+    `decode_fpoly` reads it as a signed i32, matched to the write side. A Mover is the only actor
+    whose poly reaches `add_poly` with no `surf_flags` (every `_node_polys`-driven CSG face has
+    one), so it is the only path that ever read this raw, unmasked value: `add_poly`'s fallback
+    OR'd `poly.flags`/`poly_flags_int(actor.props)` straight into the render-poly tuple, and
+    `render_frame`'s Rust `poly_flags: u32` field turned a negative Python int into
+    `OverflowError: out of range integral type conversion attempted` — a bare crash reaching
+    `level photo --native`, not a named error."""
+    mover = make_brush_actor("Door", cube(64, 8, 96), mover_class="Engine.Mover")
+    set_prop(mover, "PolyFlags", "-1073741824")          # 0xC0000000 as a signed i32
+    lvl = _level(cube_room(), mover)
+    polys, table = pn.build_scene(lvl, [], IDX)
+    mover_polys = polys[6:]                              # room's 6 CSG faces, then the mover's
+    assert mover_polys
+    assert all(p[7] == 0xC0000000 for p in mover_polys)  # masked to unsigned, not left negative
+
+    fwd, right, up = pn.camera_basis(0.0, 0.0)
+    uedcli_native.render_frame(mover_polys, table, ((0.0, 0.0, 500.0), fwd, right, up, 90.0),
+                               (8, 8))                    # must not raise OverflowError
+
+
 # --------------------------------------------------------------- DT_Mesh actors (real corpus)
 
 

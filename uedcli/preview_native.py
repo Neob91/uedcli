@@ -403,8 +403,13 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
         if surf_flags is not None:
             flags = surf_flags
         else:
-            flags = ((poly.flags or 0) if poly is not None else 0) | (
-                poly_flags_int(dict(actor.props)) if actor else 0)
+            # `poly.flags`/`poly_flags_int` decode `PolyFlags` as a SIGNED i32 (mapimport.py's
+            # `decode_fpoly`, matched to the write side) — a real DWORD with the top bit(s) set (an
+            # original-format Unreal map, e.g. `PF_Occlude`) comes out negative. Mask to unsigned 32-bit
+            # here, same as `brush_marshal.py`'s `poly_flags_flat`: `render_frame`'s Rust `poly_flags`
+            # field is `u32`, and an unmasked negative value is an `OverflowError` crossing the FFI.
+            flags = (((poly.flags or 0) if poly is not None else 0) | (
+                poly_flags_int(dict(actor.props)) if actor else 0)) & 0xFFFFFFFF
         if flags & PF_INVISIBLE:
             return                                       # dropped Python-side (spec §5)
         if actor is not None and poly is not None:

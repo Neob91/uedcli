@@ -329,8 +329,13 @@ def _shape_bounds(polys: list[FPoly]) -> tuple | None:
 
 def _marshal_brush_polys(polys: list[FPoly]) -> list:
     """The flat `BrushPolyTuple` list the Rust brush entry points take."""
+    # `fp.poly_flags` decodes a DWORD `PolyFlags` as a signed i32 (mapimport.py's `decode_fpoly`,
+    # matched to the write side) — an original-format map with a top-bit flag (e.g. `PF_Occlude`)
+    # comes out negative. Mask to unsigned 32-bit here, same fix as `brush_marshal.py`'s
+    # `poly_flags_flat`: the Rust side's `poly_flags` is `u32`, and an unmasked negative value is an
+    # `OverflowError` crossing the FFI.
     return [([c for v in fp.verts for c in v], fp.base, fp.normal, fp.texture_u, fp.texture_v,
-             fp.poly_flags, fp.texture_ref, fp.pan_u, fp.pan_v) for fp in polys]
+             fp.poly_flags & 0xFFFFFFFF, fp.texture_ref, fp.pan_u, fp.pan_v) for fp in polys]
 
 
 def build_mover_shape_model(polys: list[FPoly]) -> tuple[UM.Model, list[int]]:

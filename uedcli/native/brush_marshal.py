@@ -100,7 +100,11 @@ def _build_brush_input(name, actor):
     if oper is None:
         raise BuildError(f"brush {name}: unknown CsgOper {oper_name!r}")
     try:
-        poly_flags = int(raw.get("PolyFlags", "0"))
+        # Masked into the on-disk 32-bit slot: an original-format map can decode a DWORD `PolyFlags`
+        # with the top bit(s) set as a negative Python int (mapimport.py's signed `decode_fpoly`),
+        # which would otherwise reach the Rust core's `u32` field as an out-of-range `OverflowError` —
+        # same fix as `poly_flags_flat`/`pans_flat` below.
+        poly_flags = int(raw.get("PolyFlags", "0")) & 0xFFFFFFFF
     except ValueError:
         poly_flags = 0
     from .. import rotation as ROT
