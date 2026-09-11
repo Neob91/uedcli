@@ -190,6 +190,7 @@ def render_execution(task_id: str, run_id: str, *, resume: bool = False) -> dict
     manifest = dict(
         task_id=task_id, run_id=run_id, label=execution["label"],
         subject_trunk=execution["subject_trunk"], rendered_at=execution["rendered_at"],
+        llm_turns=execution.get("llm_turns", []),
         entries=entries,
         panorama=[f"panorama/pan_{i}.png" for i in range(8)],
     )

@@ -27,7 +27,11 @@ from render_common import fingerprint as _fingerprint
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TASKS_DIR = ROOT / "tasks"
 
-def extract_execution(task_id: str, subject: pathlib.Path, run_id: str, label: str | None = None) -> pathlib.Path:
+def extract_execution(task_id: str, subject: pathlib.Path, run_id: str, label: str | None = None,
+                       *, llm_turns: list[dict] | None = None) -> pathlib.Path:
+    """`llm_turns` (optional): what the agent actually said, from run_eval.py -- omitted entirely
+    for a subject trunk that didn't come from a live agent run (a hand-built trunk, build_gold.py's
+    output)."""
     if task_id not in TASKS:
         sys.exit(f"unknown task_id {task_id!r} -- known: {', '.join(sorted(TASKS))}")
     task = TASKS[task_id]
@@ -76,6 +80,7 @@ def extract_execution(task_id: str, subject: pathlib.Path, run_id: str, label: s
             subject_trunk=str(subject),
             rendered_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
             base_fingerprint=fingerprint,
+            llm_turns=llm_turns or [],
         )
         (staging / "execution.json").write_text(json.dumps(execution, indent=2) + "\n")
 

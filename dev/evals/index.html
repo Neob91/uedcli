@@ -63,6 +63,11 @@ body.focus-mode #focusPane{display:block}
 .taskbody{padding:20px}
 .task{margin:0 0 20px;padding:14px 16px;border:1px solid var(--line);border-left:3px solid var(--gold);background:var(--panel2);border-radius:2px;font-size:15px;color:var(--dim)}
 .task .t{font-family:var(--mono);color:var(--gold);font-size:12px;letter-spacing:.1em}
+.promptbox{margin:-12px 0 20px}
+.promptbox summary{cursor:pointer;font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;color:var(--faint)}
+.promptbox summary:hover{color:var(--dim)}
+.promptpre{margin:8px 0 0;padding:12px;background:#0d0e08;border:1px solid var(--line);border-radius:3px;
+  color:var(--dim);font-family:var(--mono);font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-x:auto}
 
 .beforeblk{margin:0 0 26px;padding:14px;border:1px solid color-mix(in srgb,var(--gold) 30%,var(--line));border-radius:4px;background:var(--panel2)}
 .diagrams{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;background:#13140d;padding:8px;border-radius:3px}
@@ -79,6 +84,9 @@ body.focus-mode #focusPane{display:block}
 .stitle{font-size:15.5px;font-weight:600;flex:1}
 .scenbody{padding:0 16px 16px}
 .sdesc{color:var(--dim);font-size:14px;margin:0 0 12px}
+.llmturn{margin:0 0 8px;padding:8px 12px;background:#13140d;border:1px solid var(--line);border-left:3px solid var(--cyan);
+  border-radius:2px;font-size:13.5px;color:var(--dim)}
+.llmturn .tlbl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--cyan);margin-right:6px}
 .carousel{display:flex;flex-wrap:wrap;gap:6px}
 .cthumb{width:130px;height:97px;object-fit:cover;border-radius:2px;border:1px solid var(--line);cursor:zoom-in;transition:border-color .12s}
 .cthumb:hover,.cthumb:focus{border-color:var(--gold);outline:none}
@@ -153,6 +161,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="taskbody" hidden>
         <div class="task"><span class="t">REQUEST:</span> &ldquo;This bar (Brush1) feels cramped. Raise its ceiling by 48 units.&rdquo;</div>
+        <details class="promptbox"><summary>Full prompt given to the agent</summary><pre class="promptpre">“This bar (Brush1) feels cramped. Raise its ceiling by 48 units.”
+
+Keep each of your own responses -- including if you ask a question, and your final summary -- to at most 40 words.</pre></details>
         <div class="beforeblk">
           <div class="diagrams"><figure class="dg dg-quad"><img src="tasks/nyc_bar_ceiling/before/quad.png" alt="Whole-room quad view (Top / Front / Iso / Side), before any edit." onclick="openLB('nyc_bar_ceiling__before',0)"><figcaption>Built from two volumes sharing one ceiling: the main hall (Brush1) and a side alcove (Brush15), coplanar at z=256 across their shared y=-384 seam. 13 hanging DeusEx.HKMarketLight lanterns sit below it at two fixed offsets, not recessed into it.</figcaption></figure></div>
           <div class="striplabel">Panorama — before</div>
@@ -166,6 +177,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="taskbody" hidden>
         <div class="task"><span class="t">REQUEST:</span> &ldquo;There&rsquo;s a sign, Brush111, on the wall. Put a matching one further down that same wall.&rdquo;</div>
+        <details class="promptbox"><summary>Full prompt given to the agent</summary><pre class="promptpre">“There’s a sign, Brush111, on the wall. Put a matching one further down that same wall.”
+
+Keep each of your own responses -- including if you ask a question, and your final summary -- to at most 40 words.</pre></details>
         <div class="beforeblk">
           <div class="diagrams"><figure class="dg dg-quad"><img src="tasks/nyc_bar_sign/before/quad.png" alt="Whole-room quad view (Top / Front / Iso / Side), before any edit." onclick="openLB('nyc_bar_sign__before',0)"><figcaption>The existing bar sign (Brush109/110/111) hangs on the alcove's (Brush15) west wall, the x=-1024 plane, near its south corner.</figcaption></figure></div>
           <div class="striplabel">Panorama — before</div>
@@ -179,6 +193,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="taskbody" hidden>
         <div class="task"><span class="t">REQUEST:</span> &ldquo;The bar counter Brush70 could use one more stool at its west end. Extend the counter westward and add a matching stool to continue the row.&rdquo;</div>
+        <details class="promptbox"><summary>Full prompt given to the agent</summary><pre class="promptpre">“The bar counter Brush70 could use one more stool at its west end. Extend the counter westward and add a matching stool to continue the row.”
+
+Keep each of your own responses -- including if you ask a question, and your final summary -- to at most 40 words.</pre></details>
         <div class="beforeblk">
           <div class="diagrams"><figure class="dg dg-quad"><img src="tasks/nyc_bar_stool/before/quad.png" alt="Whole-room quad view (Top / Front / Iso / Side), before any edit." onclick="openLB('nyc_bar_stool__before',0)"><figcaption>The counter (Brush70) runs X[-896,-384], already carrying 5 evenly-spaced stools (112 units apart) with no gap -- the row is full; extending the counter is the only way to add a sixth.</figcaption></figure></div>
           <div class="striplabel">Panorama — before</div>
@@ -192,6 +209,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="taskbody" hidden>
         <div class="task"><span class="t">REQUEST:</span> &ldquo;The nook Brush15 feels cramped. Push its south wall out by 64 units.&rdquo;</div>
+        <details class="promptbox"><summary>Full prompt given to the agent</summary><pre class="promptpre">“The nook Brush15 feels cramped. Push its south wall out by 64 units.”
+
+Keep each of your own responses -- including if you ask a question, and your final summary -- to at most 40 words.</pre></details>
         <div class="beforeblk">
           <div class="diagrams"><figure class="dg dg-quad"><img src="tasks/nyc_bar_wallnotch/before/quad.png" alt="Whole-room quad view (Top / Front / Iso / Side), before any edit." onclick="openLB('nyc_bar_wallnotch__before',0)"><figcaption>The back nook (Brush15) is a separate room from the main hall (Brush1), connected through a gap in the shared wall at y=-384 -- not one stepped brush. Its own far wall (y=-640) has two recess pockets (Brush16, Brush73) carved flush against it, plus counter/shelf fixtures (Brush71, Brush72) reaching into them.</figcaption></figure></div>
           <div class="striplabel">Panorama — before</div>
@@ -205,6 +225,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="taskbody" hidden>
         <div class="task"><span class="t">REQUEST:</span> &ldquo;Manderley&rsquo;s office feels cramped. Raise its ceiling by 48 units.&rdquo;</div>
+        <details class="promptbox"><summary>Full prompt given to the agent</summary><pre class="promptpre">“Manderley’s office feels cramped. Raise its ceiling by 48 units.”
+
+Keep each of your own responses -- including if you ask a question, and your final summary -- to at most 40 words.</pre></details>
         <div class="beforeblk">
           <div class="diagrams"><figure class="dg dg-quad"><img src="tasks/unatco_ceiling/before/quad.png" alt="Whole-room quad view (Top / Front / Iso / Side), before any edit." onclick="openLB('unatco_ceiling__before',0)"><figcaption>The ceiling is flat at z=416, spanning both wall volumes (Brush418 south, Brush420 north) that share it at the y=64 seam.</figcaption></figure></div>
           <div class="striplabel">Panorama — before</div>
@@ -218,6 +241,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="taskbody" hidden>
         <div class="task"><span class="t">REQUEST:</span> &ldquo;Manderley&rsquo;s office is too narrow. Widen it eastward by 48 units &mdash; move its east wall out.&rdquo;</div>
+        <details class="promptbox"><summary>Full prompt given to the agent</summary><pre class="promptpre">“Manderley’s office is too narrow. Widen it eastward by 48 units — move its east wall out.”
+
+Keep each of your own responses -- including if you ask a question, and your final summary -- to at most 40 words.</pre></details>
         <div class="beforeblk">
           <div class="diagrams"><figure class="dg dg-quad"><img src="tasks/unatco_widen/before/quad.png" alt="Whole-room quad view (Top / Front / Iso / Side), before any edit." onclick="openLB('unatco_widen__before',0)"><figcaption>Built from TWO separate wall volumes that share one east wall (the south half is Brush418, the north half is Brush420) — a detail invisible to a player, but important for widening the wall correctly.</figcaption></figure></div>
           <div class="striplabel">Panorama — before</div>
@@ -231,6 +257,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="taskbody" hidden>
         <div class="task"><span class="t">REQUEST:</span> &ldquo;The corridor Brush1159 feels cramped. Widen it by 48 units &mdash; push the south wall out.&rdquo;</div>
+        <details class="promptbox"><summary>Full prompt given to the agent</summary><pre class="promptpre">“The corridor Brush1159 feels cramped. Widen it by 48 units — push the south wall out.”
+
+Keep each of your own responses -- including if you ask a question, and your final summary -- to at most 40 words.</pre></details>
         <div class="beforeblk">
           <div class="diagrams"><figure class="dg dg-quad"><img src="tasks/wanchai_corridor/before/quad.png" alt="Whole-room quad view (Top / Front / Iso / Side), before any edit." onclick="openLB('wanchai_corridor__before',0)"><figcaption>Middle segment of a 3-part hallway (Brush1157 west, Brush1159 here, Brush1156 east). Brush1159's east wall is exactly coplanar with Brush1156's west wall (0 unit gap) -- moving only the south face's corners keeps that seam intact; translating the whole brush would break it.</figcaption></figure></div>
           <div class="striplabel">Panorama — before</div>
@@ -244,6 +273,9 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
       </button>
       <div class="taskbody" hidden>
         <div class="task"><span class="t">REQUEST:</span> &ldquo;The stairwell shaft Brush1239 feels cramped. Widen it by 48 units.&rdquo;</div>
+        <details class="promptbox"><summary>Full prompt given to the agent</summary><pre class="promptpre">“The stairwell shaft Brush1239 feels cramped. Widen it by 48 units.”
+
+Keep each of your own responses -- including if you ask a question, and your final summary -- to at most 40 words.</pre></details>
         <div class="beforeblk">
           <div class="diagrams"><figure class="dg dg-quad"><img src="tasks/wanchai_stairwell/before/quad.png" alt="Whole-room quad view (Top / Front / Iso / Side), before any edit." onclick="openLB('wanchai_stairwell__before',0)"><figcaption>The shaft (Brush1239) is enclosed by a wall shell split in two halves that share a seam at z=128 (Brush1234 concrete below, Brush1236 wood above) -- both must widen together or the wall steps. A stair flight sits at each end (Brush1240, Brush1241) with a landing between them (Brush1245); two wall sconces (Brush3676, Brush7) are mounted flush on the shell's open face. The shell's OTHER face has a doorway (Brush1247) into a second flight+landing beyond -- not part of this task.</figcaption></figure></div>
           <div class="striplabel">Panorama — before</div>

@@ -44,6 +44,19 @@ CLAUDE_MODEL = "sonnet"  # pin the model under test -- never let it drift with w
 CLAUDE_TIMEOUT_S = 3600
 QUESTION_MARKERS = ("?", "your call", "which would you like", "should i", "shall i",
                     "let me know", "waiting on", "need your", "not sure whether")
+# Appended to the task req, not part of it -- keeps the agent's own responses (the one where it
+# flags something, and its final summary) short enough to actually read while grading. build_page.py
+# imports this same constant to show the FULL prompt the agent received, so the two never drift.
+RESPONSE_LENGTH_NOTE = ("\n\nKeep each of your own responses -- including if you ask a question, "
+                         "and your final summary -- to at most 40 words.")
+
+def full_prompt(task: dict) -> str:
+    """The exact prompt text `claude -p` gets: the task's own req (HTML-unescaped -- it's stored
+    entity-encoded for the page), plus RESPONSE_LENGTH_NOTE. NOT part of the task's own req -- it's
+    a run mechanic, not something a task author writes -- but the human grading an execution should
+    still be able to see exactly what the agent was actually given, hence build_page.py imports this
+    same function rather than recomputing it."""
+    return html.unescape(task["req"]) + RESPONSE_LENGTH_NOTE
 
 def _make_uedcli_shim(bin_dir: pathlib.Path):
     bin_dir.mkdir(parents=True, exist_ok=True)
@@ -106,7 +119,11 @@ def _needs_followup(result: dict) -> bool:
     text = (result.get("result") or "").lower()
     return any(m in text for m in QUESTION_MARKERS)
 
-def run_eval(task_id: str, skill_dir: pathlib.Path, run_id: str) -> pathlib.Path:
+def run_eval(task_id: str, skill_dir: pathlib.Path, run_id: str) -> tuple[pathlib.Path, list[dict]]:
+    """Returns (trunk_dir, llm_turns) -- llm_turns is what the agent actually said, in order: a
+    `question` turn if it flagged something and got the scripted reply, then always a `final` turn
+    (the only turn, if it never flagged anything). Persisted by extract_execution.py so a grader can
+    see what the agent said, not just what it did."""
     if task_id not in TASKS:
         sys.exit(f"unknown task_id {task_id!r} -- known: {', '.join(sorted(TASKS))}")
     task = TASKS[task_id]
@@ -123,9 +140,10 @@ def run_eval(task_id: str, skill_dir: pathlib.Path, run_id: str) -> pathlib.Path
     skill_names = ", ".join(s.name for s in skills)
 
     home_dir = pathlib.Path(tempfile.mkdtemp(prefix=f"geomeval_home_{task_id}_{run_id}_"))
+    llm_turns = []
     try:
         _make_uedcli_shim(home_dir / "bin")
-        req = html.unescape(task["req"])
+        req = full_prompt(task)
         print(f"[run_eval] launching claude in {trunk_dir} (skills={skill_names})")
         result = _run_claude(trunk_dir, home_dir, task["level"], token, ["-p", req])
         session_id = result["session_id"]
@@ -133,14 +151,16 @@ def run_eval(task_id: str, skill_dir: pathlib.Path, run_id: str) -> pathlib.Path
 
         if _needs_followup(result):
             print("[run_eval] agent flagged something -- resuming with scripted reply")
+            llm_turns.append(dict(kind="question", text=result.get("result", "")))
             result = _run_claude(trunk_dir, home_dir, task["level"], token,
                                   ["-p", "--resume", session_id, SCRIPTED_REPLY])
             print(f"[run_eval] resumed: {result.get('result', '')[:200]!r}")
+        llm_turns.append(dict(kind="final", text=result.get("result", "")))
     finally:
         shutil.rmtree(home_dir, ignore_errors=True)
 
     print(f"[run_eval] done -- trunk at {trunk_dir}")
-    return trunk_dir
+    return trunk_dir, llm_turns
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -155,9 +175,9 @@ if __name__ == "__main__":
 
     run_id = args.run_id or datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     label = args.label or args.skill_dir.name
-    trunk_dir = run_eval(args.task_id, args.skill_dir, run_id)
+    trunk_dir, llm_turns = run_eval(args.task_id, args.skill_dir, run_id)
 
-    extract_execution(args.task_id, trunk_dir, run_id, label)
+    extract_execution(args.task_id, trunk_dir, run_id, label, llm_turns=llm_turns)
     manifest = render_execution(args.task_id, run_id)
     print(f"[run_eval] rendered {len(manifest['entries'])} touched entries")
 

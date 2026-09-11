@@ -76,7 +76,10 @@ names the trunk tree it's imported into and sets `UEDCLI_LEVEL`.
    real `git diff` patch (`diff.patch`), plus the 8-frame `level photo --native` panorama tour
    (unavoidably rendered now, since it's a whole-scene shot, not per-actor). Once this has run, the
    subject trunk (which can be an ephemeral job tmp dir) is never needed again — everything past
-   this point works from just the cached base trunk + `diff.patch`. Writes
+   this point works from just the cached base trunk + `diff.patch`. `run_eval.py` also passes
+   `llm_turns` — what the agent actually said, each time it asked a question and when it finished
+   (capped at 40 words per response by a note appended to the prompt, `run_eval.full_prompt`, shown
+   collapsed on the page right under the task's own request) — into `execution.json`. Writes
    `tasks/<task_id>/executions/<run_id>/{execution.json,diff.patch,panorama/pan_N.png}`.
 6. `scripts/render_execution.py <task_id> <run_id>` — a real diff of the WHOLE level, computed by
    copying the base trunk twice, applying `diff.patch` to one copy, and comparing: every actor

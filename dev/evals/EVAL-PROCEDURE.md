@@ -88,11 +88,10 @@ mkdir -p "$run_dir/trunk/.claude/skills/<skill-name>"
 cp <path-to-skill>/SKILL.md "$run_dir/trunk/.claude/skills/<skill-name>/"
 ```
 `base_trunk_for(task)` imports the task's own `dx_map` fresh into `BASE_TRUNKS_DIR` (cached after
-the first import) — there's no fixed path to `cp` from. `<task.level>` and `req` (for step 4 below)
-come from the task's own
-`tasks/<task_id>/task.json`; `req` is HTML-entity-encoded there (`&ldquo;...&rdquo;`) for the
-webapp, so unescape it (`&ldquo;`/`&rdquo;` → curly quotes, `&mdash;` → em dash, etc.) before using
-it as the actual prompt text.
+the first import) — there's no fixed path to `cp` from. `<task.level>` comes from the task's own
+`tasks/<task_id>/task.json`; the actual prompt text for step 4 below is `run_eval.full_prompt(task)`
+(`req`, HTML-unescaped since it's stored entity-encoded for the webapp, plus a fixed note keeping
+the agent's own responses short enough to read while grading) — not `task['req']` alone.
 
 **3. Put `uedcli` on PATH.** The trunk is already a self-contained uedcli project (its own
 `uedcli.toml`), so the agent just needs the CLI reachable — a wrapper resolving to this checkout's
@@ -111,7 +110,7 @@ chmod +x "$fake_home/bin/uedcli"
 cd "$run_dir/trunk"
 HOME="$fake_home" PATH="$fake_home/bin:$PATH" UEDCLI_LEVEL=<task.level> \
   CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
-  claude -p "<task.req>" --model sonnet --output-format json > "$run_dir/result.json"
+  claude -p "<full_prompt(task)>" --model sonnet --output-format json > "$run_dir/result.json"
 session_id=$(python3 -c "import json,sys;print(json.load(open('$run_dir/result.json'))['session_id'])")
 ```
 
@@ -133,7 +132,9 @@ python extract_execution.py <task_id> "$run_dir/trunk" --label "<skill-name>, <d
 python render_execution.py <task_id> <run_id>
 python build_page.py
 ```
-Then open the page and score it.
+Then open the page and score it. The `extract_execution.py` CLI doesn't have a flag for what the
+agent actually said (`run_eval.py` passes that as `llm_turns=` when calling the function directly)
+-- a manual run's execution card just won't show any of it.
 
 ## Open, not yet done
 

@@ -7,10 +7,11 @@ no registration needed. Grading is manual: each execution card POSTs a
 score (0-10) + note to serve.py's /api/grade and reloads it from
 /api/grades -- this script only lays out the form, it never computes a
 verdict."""
-import json, pathlib, sys
+import html, json, pathlib, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS, TASKS_DIR
+from run_eval import full_prompt
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -74,6 +75,12 @@ def execution_card(task_id, task, run):
         f'onclick="openLB(\'{key}\',{len(entries)+i})" onkeydown="if(event.key===\'Enter\')openLB(\'{key}\',{len(entries)+i})">'
         for i, n in enumerate(run["panorama"]))
 
+    turn_labels = {"question": "ASKED", "final": "FINAL"}
+    llm_turns_html = "".join(
+        f'<p class="llmturn"><span class="tlbl">{turn_labels.get(t["kind"], t["kind"].upper())}</span> '
+        f'{html.escape(t["text"])}</p>'
+        for t in run.get("llm_turns", []) if t.get("text"))
+
     return f"""<div class="scen">
       <button class="scenhead" onclick="toggleScen(this)">
         <span class="chev">&#9656;</span><span class="stitle">{run['label']}</span>
@@ -81,6 +88,7 @@ def execution_card(task_id, task, run):
       </button>
       <div class="scenbody" hidden>
         <p class="sdesc">Subject trunk: <code>{run['subject_trunk']}</code> · rendered {run['rendered_at'][:19]}Z</p>
+        {llm_turns_html}
         <div class="striplabel">Panorama</div>
         <div class="carousel">{pan_thumbs}</div>
         <div class="striplabel">{len(entries)} actor(s) actually differ from baseline{
@@ -122,12 +130,15 @@ def task_block(task_id, task):
                  f'{task_id} &lt;run_id&gt;</code> and rebuild the page.</p>')
     if runs:
         exec_html = "".join(execution_card(task_id, task, r) for r in runs)
+    full_prompt_html = (f'<details class="promptbox"><summary>Full prompt given to the agent</summary>'
+                         f'<pre class="promptpre">{html.escape(full_prompt(task))}</pre></details>')
     return f"""<div class="taskblk">
       <button class="taskhead" onclick="toggleTask(this)">
         <span class="tchev">&#9656;</span><h2>{task['title']}</h2>
       </button>
       <div class="taskbody" hidden>
         <div class="task"><span class="t">REQUEST:</span> {task['req']}</div>
+        {full_prompt_html}
         <div class="beforeblk">
           <div class="diagrams">{before_quad_html}</div>
           <div class="striplabel">Panorama — before</div>
@@ -215,6 +226,11 @@ body.focus-mode #focusPane{display:block}
 .taskbody{padding:20px}
 .task{margin:0 0 20px;padding:14px 16px;border:1px solid var(--line);border-left:3px solid var(--gold);background:var(--panel2);border-radius:2px;font-size:15px;color:var(--dim)}
 .task .t{font-family:var(--mono);color:var(--gold);font-size:12px;letter-spacing:.1em}
+.promptbox{margin:-12px 0 20px}
+.promptbox summary{cursor:pointer;font-family:var(--mono);font-size:11.5px;letter-spacing:.05em;color:var(--faint)}
+.promptbox summary:hover{color:var(--dim)}
+.promptpre{margin:8px 0 0;padding:12px;background:#0d0e08;border:1px solid var(--line);border-radius:3px;
+  color:var(--dim);font-family:var(--mono);font-size:12px;line-height:1.55;white-space:pre-wrap;overflow-x:auto}
 
 .beforeblk{margin:0 0 26px;padding:14px;border:1px solid color-mix(in srgb,var(--gold) 30%,var(--line));border-radius:4px;background:var(--panel2)}
 .diagrams{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:8px;background:#13140d;padding:8px;border-radius:3px}
@@ -231,6 +247,9 @@ body.focus-mode #focusPane{display:block}
 .stitle{font-size:15.5px;font-weight:600;flex:1}
 .scenbody{padding:0 16px 16px}
 .sdesc{color:var(--dim);font-size:14px;margin:0 0 12px}
+.llmturn{margin:0 0 8px;padding:8px 12px;background:#13140d;border:1px solid var(--line);border-left:3px solid var(--cyan);
+  border-radius:2px;font-size:13.5px;color:var(--dim)}
+.llmturn .tlbl{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--cyan);margin-right:6px}
 .carousel{display:flex;flex-wrap:wrap;gap:6px}
 .cthumb{width:130px;height:97px;object-fit:cover;border-radius:2px;border:1px solid var(--line);cursor:zoom-in;transition:border-color .12s}
 .cthumb:hover,.cthumb:focus{border-color:var(--gold);outline:none}
