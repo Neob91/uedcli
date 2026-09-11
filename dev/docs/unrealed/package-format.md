@@ -134,6 +134,28 @@ in the `ULevel` body after the actor-ref list and an `FURL`. Read natively from 
 undecoded — validate the count against the editor's `PATHS` for production.
 (spike: `../spikes/2026-06-27-uedcli-direction-ideas/02-level-nav-reachability.md`, native read 2026-06-27)
 
+### `FireTexture`/`WaterTexture` — the procedural classes' trailing particle arrays ✅
+
+`Fire.u`'s procedural (bitmap-less) texture classes serialize their live simulation state after
+the (empty) mip array, not just class properties. Measured across 216 real procedural exports in
+the `Textures/` trees of a Deus Ex install and an Unreal Gold one (124 `FireTexture`, 81
+`WetTexture`, 5 `WaveTexture`, 6 `IceTexture`), zero counter-examples on the shapes below:
+
+- `FireTexture`: a `TArray<FSpark>` — compact count (equals the body's own `NumSparks` on all
+  124), then 8 bytes per spark: byte 0 = the spark's `SparkType`, bytes 2/3 = X/Y (in-bounds of
+  `USize`x`VSize` on all 124). Byte 1 usually equals the texture's own `FX_Heat` (94 of 121
+  spark-bearing exports) but genuinely varies per spark on the rest (`NaliFX.fireplace`: 73 sparks
+  over six heats) — it is each spark's own heat byte, not always a copy of `FX_Heat`.
+- `WaterTexture` (`WaveTexture`/`WetTexture` base): a static-array property `Drops[]`, 8 bytes
+  each, first `NumDrops` live — byte 0 = drop type, byte 1 = depth, bytes 2/3 = X/Y. The X/Y land
+  inside `USize/2`x`VSize/2` on all 92 — the wave field is simulated at HALF the texture
+  resolution, not full.
+
+Both arrays' PIXEL RENDERING (how a spark becomes a flame plume, how a drop becomes a shaded
+ripple) is native `Fire.dll` code with no disassembly available — not reverse-engineered, only
+the on-disk data shape is. `uedcli/proceduraltex.py`'s module docstring has the full measurement
+detail and cites the reasoned-approximation rendering model separately from these measured facts.
+
 ### `UTexture` — two mip arrays, the second gated on a property ✅
 
 A `UTexture` body is a tagged-property list, the `None` terminator, and then up to two
