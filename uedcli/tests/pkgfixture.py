@@ -21,8 +21,14 @@ The shapes it builds:
                                          body still EOF-clean.
   * `mips=[(w, h, b"")]` + `trailing=`   the `FireTexture` shape: empty pixel data AND
                                          trailing bytes past the mip array.
+  * `byte_props=` / `int_props=` /       the rest of a PROCEDURAL body, which carries its whole
+    `object_props=` / `struct_array=`    appearance in properties: the `FX_*` bytes,
+    / `source_mips=`                     `USize`/`VSize`, a `SourceTexture` ref and the export
+                                         it points at, a `Drops[]` static array.
   * `palette_ref=<n>`                    a `Palette` object ref past the export table =>
                                          the missing-palette shape.
+  * `palette_count=<n>`                  a Palette body whose declared entry count disagrees
+                                         with its bytes => the won't-decode shape.
   * `declared_mip_count=`                a lying `Mips` count => the hostile-input shape.
   * `bmasked=True/False`                 a stored `bMasked` bool. The `False` arm is the one
                                          REAL CONTENT CANNOT SUPPLY: UE1 omits any property
@@ -51,7 +57,7 @@ from uedcli.native.codec import write_ci
 from uedcli.native.pkg_write import NameTable, ImportRec, ExportRec, build_package
 
 # UE1 property type nibbles (see `utexture._read_props`).
-PT_BYTE, PT_BOOL, PT_OBJECT = 1, 3, 5
+PT_BYTE, PT_INT, PT_BOOL, PT_OBJECT, PT_STRUCT = 1, 2, 3, 5, 10
 
 # RF_Public | RF_LoadForClient | RF_LoadForServer | RF_LoadForEdit — the object flags a
 # real texture export carries. Nothing in the decode path reads them; they are set so the
@@ -92,11 +98,50 @@ def _prop_bool(names: NameTable, name: str, value: bool) -> bytes:
     return _prop_head(names, name, PT_BOOL, 1, extra_bits=0x80 if value else 0)
 
 
+def _prop_int(names: NameTable, name: str, value: int) -> bytes:
+    """An IntProperty (`USize`, `VSize`, `NumSparks`, `NumDrops`)."""
+    return _prop_head(names, name, PT_INT, 4) + struct.pack("<i", value)
+
+
 def _prop_object(names: NameTable, name: str, ref: int) -> bytes:
     """An ObjectProperty (`Palette`). Its value is a compact index, so the size code must
     be derived from the ENCODED length — this is the trap named in the module docstring."""
     enc = write_ci(ref)
     return _prop_head(names, name, PT_OBJECT, len(enc)) + enc
+
+
+def _packed_array_index(index: int) -> bytes:
+    """A static-array element index in UE1's packed form: one byte below 0x80, else two with the
+    top bits `10`, else four with `11`."""
+    if index < 0x80:
+        return bytes([index])
+    if index < (1 << 14):
+        return bytes([0x80 | (index >> 8), index & 0xFF])
+    return bytes([0xC0 | (index >> 24)]) + index.to_bytes(3, "big")
+
+
+def _prop_struct_element(names: NameTable, name: str, struct_name: str,
+                         raw: bytes, index: int) -> bytes:
+    """One element of a STATIC ARRAY of StructProperty (a `WaterTexture`'s `Drops[]`).
+
+    Written out longhand rather than through `_prop_head`, because a StructProperty tag has an
+    extra field nothing else does: `name, info byte, STRUCT NAME, size, [array index], value`.
+    Element 0 serializes as a plain non-array tag (bit 7 clear, no index byte) — exactly what
+    real content does — so only elements past it carry an index.
+
+    The index itself is UE1's packed form: one byte below 0x80, else two with the top bits `10`,
+    else four with `11`. Real content reaches the two-byte form (`Effects.drtywater_a` stores
+    `Drops` indices up to 178), so the fixture has to be able to write it."""
+    assert 0 <= index < (1 << 30), f"array index {index} is outside the packed form"
+    code = _size_code(len(raw))
+    out = write_ci(names.index(name))
+    out += bytes([PT_STRUCT | (code << 4) | (0x80 if index else 0)])
+    out += write_ci(names.index(struct_name))
+    if code == 5:
+        out += bytes([len(raw)])
+    if index:
+        out += _packed_array_index(index)
+    return out + raw
 
 
 def _props_end(names: NameTable) -> bytes:
@@ -140,7 +185,12 @@ def texture_package(*, name: str = "Fixture", mips=None, palette=None,
                     palette_ref: int | None = None, trailing: bytes = b"",
                     declared_mip_count: int | None = None, bmasked: bool | None = None,
                     class_package: str = "Engine", class_name: str = "Texture",
-                    group: str | None = None, version: int = 69, licensee: int = 0) -> bytes:
+                    group: str | None = None, version: int = 69, licensee: int = 0,
+                    byte_props: dict[str, int] | None = None,
+                    int_props: dict[str, int] | None = None,
+                    object_props: dict[str, int] | None = None,
+                    struct_array: tuple[str, str, list[bytes]] | None = None,
+                    source_mips=None, palette_count: int | None = None) -> bytes:
     """Build a whole synthetic `.utx` carrying one Palette export + one Texture export.
 
     `mips` / `comp_mips` are `[(w, h, data), ...]`; `comp_mips=None` means no `bHasComp`
@@ -155,6 +205,19 @@ def texture_package(*, name: str = "Fixture", mips=None, palette=None,
     `Engine.Texture`, or e.g. `fire`/`FireTexture` for a DESCENDANT the catalog's widened
     enumerator must still see. `group` gives the texture an Outer named that (the Layer-2
     group fact); None leaves it a group-less top-level export.
+
+    `palette_count` overrides the Palette body's declared entry count, so the palette itself will
+    not decode. The rest build the PROCEDURAL shapes (`FireTexture` and friends, whose bodies
+    carry their whole appearance in properties because their mips are empty):
+
+      * `byte_props` / `int_props` / `object_props`   extra tagged properties of that type —
+        `{"RenderHeat": 200}`, `{"USize": 16, "VSize": 16}`, `{"SourceTexture": 3}`.
+      * `struct_array=(name, struct, [raw, ...])`     a STATIC ARRAY of StructProperty, one tag
+        per element (`("Drops", "ADrop", [...])`).
+      * `source_mips=[(w, h, data), ...]`             appends a THIRD export: an ordinary
+        `Engine.Texture` carrying that mip chain and sharing the palette, so a
+        `WetTexture`/`IceTexture` fixture has something real to point `SourceTexture` at. It is
+        **object ref 3** (export index 2).
     """
     if mips is None:
         mips = [(2, 2, bytes([0, 1, 2, 3]))]
@@ -166,7 +229,10 @@ def texture_package(*, name: str = "Fixture", mips=None, palette=None,
     # absolute and `dataoff` depends on the encoded table's length.
     for n in ("Core", "Package", "Class", "Engine", "Texture", "Palette", "None",
               "Format", "bHasComp", "CompFormat", "bMasked", class_package, class_name,
-              name, name + "Pal", *([group] if group is not None else [])):
+              name, name + "Pal", *([group] if group is not None else []),
+              *(byte_props or {}), *(int_props or {}), *(object_props or {}),
+              *(struct_array[:2] if struct_array else ()),
+              *([name + "Src"] if source_mips is not None else [])):
         names.index(n)
 
     imports = [ImportRec(names.index("Core"), names.index("Package"), 0, names.index("Engine"))]
@@ -183,6 +249,11 @@ def texture_package(*, name: str = "Fixture", mips=None, palette=None,
     imports.append(ImportRec(names.index("Core"), names.index("Class"), engine_ref,
                              names.index("Palette")))
     pal_class = -len(imports)
+    src_class = tex_class                             # the appended source is a plain Texture
+    if source_mips is not None and class_name != "Texture":
+        imports.append(ImportRec(names.index("Core"), names.index("Class"), engine_ref,
+                                 names.index("Texture")))
+        src_class = -len(imports)
     tex_outer = 0
     if group is not None:                            # the Outer object supplies the group fact
         imports.append(ImportRec(names.index("Core"), names.index("Package"), 0,
@@ -191,7 +262,7 @@ def texture_package(*, name: str = "Fixture", mips=None, palette=None,
 
     # export 0 => object ref 1 (the palette), export 1 => ref 2 (the texture)
     pal_body = bytearray(_props_end(names))
-    pal_body += write_ci(len(palette))
+    pal_body += write_ci(len(palette) if palette_count is None else palette_count)
     for (r, g, b, a) in palette:
         pal_body += bytes([r, g, b, a])
 
@@ -208,6 +279,16 @@ def texture_package(*, name: str = "Fixture", mips=None, palette=None,
     if comp_mips is not None:
         tex_props += _prop_bool(names, "bHasComp", True)
         tex_props += _prop_byte(names, "CompFormat", comp_format)
+    for pname, pval in (byte_props or {}).items():
+        tex_props += _prop_byte(names, pname, pval)
+    for pname, pval in (int_props or {}).items():
+        tex_props += _prop_int(names, pname, pval)
+    for pname, pval in (object_props or {}).items():
+        tex_props += _prop_object(names, pname, pval)
+    if struct_array is not None:
+        aname, sname, raws = struct_array
+        for k, raw in enumerate(raws):
+            tex_props += _prop_struct_element(names, aname, sname, raw, k)
     tex_props += _props_end(names)
 
     tex_body = bytearray(tex_props)
@@ -221,6 +302,12 @@ def texture_package(*, name: str = "Fixture", mips=None, palette=None,
         ExportRec(pal_class, 0, 0, names.index(name + "Pal"), RF_TEXTURE, bytes(pal_body)),
         ExportRec(tex_class, 0, tex_outer, names.index(name), RF_TEXTURE, bytes(tex_body)),
     ]
+    if source_mips is not None:
+        src_off = tex_off + len(tex_body)
+        src_body = bytearray(_prop_object(names, "Palette", 1) + _props_end(names))
+        src_body += _mip_array(source_mips, src_off + len(src_body), version=version)
+        exports.append(ExportRec(src_class, 0, 0, names.index(name + "Src"),
+                                 RF_TEXTURE, bytes(src_body)))
     return build_package(version=version, licensee=licensee, package_flags=0,
                          names=names, imports=imports, exports=exports, guid=FIXTURE_GUID)
 

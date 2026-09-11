@@ -30,5 +30,9 @@ uedcli class preview DeusEx.CrateUnbreakableLarge --out crate.png
   whose `Mesh` default is unresolvable, or a skin that fails to decode, **exits 2** naming it — never
   a wrong picture. With no composed package path, `class preview` **exits 2** (`no package search
   path`).
+- A **procedural** skin — `FireTexture`, `WaveTexture`, `WetTexture`, `IceTexture`, which the engine
+  paints every frame and stores no bitmap for — draws as one static draft frame generated from what
+  the package does store: an approximation of the effect, not the engine's own pixels. A procedural
+  class nothing draws is flat red.
 
 See also: [`class show`](show.md).

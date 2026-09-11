@@ -41,7 +41,11 @@ _CHAIN = pkgfixture.linear_chain(8, 8)                 # every pixel palette-ind
 
 def _packages(dirpath: str) -> list[str]:
     """Write the synthetic corpus. `Grille` and `Twin` share pixels but differ in bMasked → ONE
-    identity, two masked facts. `Wall` is grey. `Flame` is a procedural (fire.FireTexture)."""
+    identity, two masked facts. `Wall` is grey.
+
+    Two procedurals (`fire.FireTexture`), because the catalog must treat them alike and they
+    reach it down different paths: `Flame` carries no `USize`/`VSize` and no sparks, so nothing
+    can be painted for it, while `Torch` carries both and paints a real frame."""
     specs = {
         "PkgA.utx": pkgfixture.texture_package(name="Grille", mips=_CHAIN, palette=_BROWN_PAL,
                                                bmasked=True, group="Metal"),
@@ -49,6 +53,11 @@ def _packages(dirpath: str) -> list[str]:
         "Deco.utx": pkgfixture.texture_package(name="Wall", mips=_CHAIN, palette=_GREY_PAL),
         "Fx.utx": pkgfixture.texture_package(name="Flame", mips=[(4, 4, b"")],
                                              class_package="fire", class_name="FireTexture"),
+        "Fy.utx": pkgfixture.texture_package(
+            name="Torch", mips=[(16, 16, b"")], palette=_BROWN_PAL,
+            class_package="fire", class_name="FireTexture",
+            trailing=bytes([2, 13, 255, 4, 13, 0, 0, 0, 0, 13, 255, 11, 14, 0, 0, 0, 0]),
+            int_props={"USize": 16, "VSize": 16, "NumSparks": 2}),
     }
     Path(dirpath).mkdir(parents=True, exist_ok=True)
     for fname, data in specs.items():
@@ -94,7 +103,7 @@ def test_list_enumerates_every_texture_sorted(cli):
     refs = out.split()
     assert refs == sorted(refs, key=str.casefold)     # case-insensitive, like the class arm
     # Engine.u carries 32 same-package-classed Texture exports (editor icon sprites, DefaultTexture,
-    # Border, ConsoleBack, Texture0-3) alongside the 4 synthetic fixture textures above.
+    # Border, ConsoleBack, Texture0-3) alongside the 5 synthetic fixture textures above.
     assert refs == [
         "Deco.Wall", "Engine.Border", "Engine.ConsoleBack", "Engine.DefaultTexture",
         "Engine.S_Actor", "Engine.S_Ambient", "Engine.S_Ammo", "Engine.S_Camera",
@@ -104,7 +113,8 @@ def test_list_enumerates_every_texture_sorted(cli):
         "Engine.S_Light", "Engine.S_Patrol", "Engine.S_Pawn", "Engine.S_Pickup",
         "Engine.S_Player", "Engine.S_SpecialEvent", "Engine.S_Teleport", "Engine.S_Trigger",
         "Engine.S_Weapon", "Engine.S_ZoneInfo", "Engine.Texture0", "Engine.Texture1",
-        "Engine.Texture2", "Engine.Texture3", "Fx.Flame", "PkgA.Grille", "PkgB.Twin",
+        "Engine.Texture2", "Engine.Texture3", "Fx.Flame", "Fy.Torch", "PkgA.Grille",
+        "PkgB.Twin",
     ]
 
 
@@ -191,9 +201,32 @@ def test_preview_skeleton_streams_a_ready_to_fill_row(cli, tmp_path):
     assert row["colors"] == ["brown"] and Path(row["preview"]).exists()
 
 
-def test_preview_procedural_exits_2_naming_the_case(cli, tmp_path):
+def test_preview_of_an_unpaintable_procedural_exits_2_naming_the_case(cli, tmp_path):
+    """`Flame` stores no size and no sparks, so no frame can be painted for it and the per-ref
+    request fails rather than inventing one."""
     rc, out, err = cli("preview", "Fx.Flame", "--out", str(tmp_path / "f.png"))
     assert rc == 2 and out == "" and "no-mip-data" in err and "Fx.Flame" in err
+
+
+def test_preview_of_a_paintable_procedural_writes_its_generated_frame(cli, tmp_path):
+    rc, out, err = cli("preview", "Fy.Torch", "--out", str(tmp_path / "t.png"))
+    assert rc == 0, err
+    assert Path(out.split("\t")[1].strip()).exists()
+
+
+def test_a_painted_procedural_stays_name_keyed_with_no_derived_colours(cli, tmp_path):
+    """The catalog contract: a procedural is keyed by its NAME whether or not a frame could be
+    painted (`direction/asset-catalog.md` — name where content does not exist). Hashing the
+    painted pixels instead would key every shard to this renderer's output, so a generator tweak
+    would orphan the whole classified set. Colours stay empty for the same reason, on `show` and
+    on the `--skeleton` row that feeds `classify set -`."""
+    _, sj, _ = cli("show", "Fy.Torch", "--json")
+    shown = json.loads(sj)
+    assert shown["identity"] == "fy.torch"
+    assert (shown["width"], shown["height"], shown["format"]) == (None, None, None)
+    assert shown["colors"] == []
+    _, out, _ = cli("preview", "Fy.Torch", "--skeleton", "--out", str(tmp_path / "t.png"))
+    assert json.loads(out.strip())["colors"] == []
 
 
 # ── classify set / force / batch ─────────────────────────────────────────────────────────────────────

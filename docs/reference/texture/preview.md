@@ -16,6 +16,11 @@ uedcli texture preview <Package[.Group].Name>… | -  [--out FILE] [--skeleton]
   colors:[…]}` (colours pre-filled from the pixels) instead of the `<ref><TAB><path>` line — pipe
   it into `classify set -`. [`texture list`](list.md) and `search --json` never render; they
   report only an already-cached preview (null until the preview cache lands).
-- A procedural or undecodable ref **exits 2** naming the case.
+- A **procedural** texture — `FireTexture`, `WaveTexture`, `WetTexture`, `IceTexture`, which the
+  engine paints every frame and stores no bitmap for — previews as ONE representative static frame,
+  drawn from what the package does store (its palette, its saved sparks or drops, the source texture
+  a wet/ice one distorts). It is a draft approximation of the effect, not the engine's own pixels,
+  and it never animates. A procedural class nothing draws, and any undecodable ref, still **exits 2**
+  naming the case.
 
 See also: [`texture list`](list.md), [`texture classify`](classify.md).

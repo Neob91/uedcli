@@ -82,7 +82,11 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
   - **Unresolvable refs abort the shot.** A texture or mesh reference that cannot be found or
     decoded exits 2 naming the actor and the ref, and writes no image — no placeholder, no partial
     shot. (It used to render a magenta/black checkerboard in place of the texture and carry on with
-    a warning.)
+    a warning.) The one exception is a **procedural** texture — `FireTexture`, `WaveTexture`,
+    `WetTexture`, `IceTexture`, which the engine paints every frame and stores no bitmap for. Those
+    surfaces get one static draft frame generated from what the package does store, which
+    approximates the effect rather than reproducing the engine's own pixels; a procedural class
+    nothing draws renders flat red.
   - **`--faces wire`** — a content-free **brush wireframe** from the same posed camera: every brush
     edge drawn (see-through, no hidden-line removal), coloured by CSG op — **add** blue, **subtract**
     gold, **semisolid** coral, **nonsolid** green, **mover** magenta. Point actors draw as their

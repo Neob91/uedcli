@@ -18,6 +18,12 @@ it never returns None, and it never raises for a content problem: a bare (unqual
 an unknown or unreadable package, an unknown texture and an undecodable layout all come back
 as named cases. The caller chooses the disposition.
 
+A PROCEDURAL texture (`FireTexture`, `WaveTexture`, `WetTexture`, `IceTexture` — the engine paints
+them every frame and stores no bitmap) has no pixels to decode, so `proceduraltex` paints one
+static frame from what the body DOES store and `resolve` hands that back as a `DecodedTexture`
+marked `layout_source="procedural"`. One nothing can be painted for — a class with no generator, a
+body missing what its generator needs — still comes back as the `no-mip-data` case.
+
 UE1 object serial body = a tagged-property list terminated by the name "None", then
 class-specific trailing data. For UTexture that is `Mips`, a TArray<FMipmap> (each FMipmap =
 a lazy-array skip-offset [absent below file-version 63 — e.g. v61 packages], the pixel bytes,
@@ -32,6 +38,9 @@ import os
 import struct
 from dataclasses import dataclass, field
 from functools import cached_property
+
+from . import proceduraltex
+from .upackage import read_array_index
 
 # The pixel half lives in `utexture_decode.py` (one job per file). Re-exported here because the
 # names are read as `utexture.X` — by the corpus/layout/block tests among others — and this module
@@ -190,8 +199,16 @@ _PT_STRUCT = 10
 _SIZE_FIXED = {0: 1, 1: 2, 2: 4, 3: 12, 4: 16}
 
 
-def _read_props(buf, pos, end, names):
-    """Return (props_dict, pos_after_None). props maps name -> (ptype, value)."""
+def _read_props(buf, pos, end, names, *, arrays: dict | None = None):
+    """Return (props_dict, pos_after_None). props maps name -> (ptype, value).
+
+    A STATIC-ARRAY property serializes one tag per non-default element, each carrying its own
+    array index, and `props` keeps only the last of them — which is all any scalar caller wants.
+    Pass `arrays` to also collect every element: it fills as `name -> {array_index: value}`, the
+    shape a `WaterTexture`'s `Drops[]` needs. An out-param rather than a third return value
+    because committed spike harnesses call this and unpack two values, and they are frozen
+    evidence that must keep running.
+    """
     props = {}
     while pos < end:
         nidx, pos = _ci(buf, pos)
@@ -213,11 +230,13 @@ def _read_props(buf, pos, end, names):
         else:
             size = struct.unpack_from("<I", buf, pos)[0]; pos += 4
         if ptype == _PT_BOOL:
-            props[name] = (ptype, bool(array_flag)); continue
-        if array_flag:  # non-bool array element: skip the array index
-            b = buf[pos]; pos += 1
-            if b >= 0x80:
-                pos += 1 if (b & 0xC0) == 0x80 else 3
+            props[name] = (ptype, bool(array_flag))
+            if arrays is not None:
+                arrays.setdefault(name, {})[0] = (ptype, bool(array_flag))
+            continue
+        array_index = 0
+        if array_flag:                                # non-bool array element: a packed index
+            array_index, pos = read_array_index(buf, pos)
         raw = buf[pos:pos + size]; pos += size
         if ptype == _PT_BYTE:
             val = raw[0]
@@ -230,6 +249,8 @@ def _read_props(buf, pos, end, names):
         else:
             val = raw
         props[name] = (ptype, val)
+        if arrays is not None:
+            arrays.setdefault(name, {})[array_index] = (ptype, val)
     return props, pos
 
 
@@ -265,6 +286,16 @@ class TextureObj:
 
     Neither field is an error by itself; the caller classifies. `decode_texture` still raises
     where it cannot continue at all — a skip-offset mismatch, a structurally impossible count.
+
+    `trailing_data` is those trailing bytes themselves (empty when there are none, or when the
+    parse overran the declared end). For a `FireTexture` they are its `TArray<FSpark>`, the one
+    place its live spark positions are stored — `proceduraltex.parse_sparks` reads them.
+
+    `prop_arrays` is every tagged property's elements KEYED BY static-array index (a scalar
+    property is `{0: value}`). `props` keeps only the last element of an array, which is all a
+    scalar caller wants; a `WaterTexture`'s `Drops[]` needs all of them. Keyed rather than
+    ordered because UE1 omits an element equal to its default, so the indices can be sparse and a
+    plain list would slide every later element into the wrong slot.
     """
     name: str
     fmt: int
@@ -275,6 +306,8 @@ class TextureObj:
     comp_format: int = 0
     trailing_bytes: int = 0
     no_mip_data: bool = False
+    trailing_data: bytes = b""
+    prop_arrays: dict[str, dict[int, tuple]] = field(default_factory=dict)
 
 
 def _read_mip_array(pkg: Package, pos: int) -> tuple[list[Mip], int]:
@@ -315,6 +348,22 @@ def _read_mip_array(pkg: Package, pos: int) -> tuple[list[Mip], int]:
     return mips, pos
 
 
+def _int_prop(props: dict, name: str) -> int:
+    """A tagged property read as an int — an object ref (`Palette`, `SourceTexture`) or a count —
+    or `0` when it is absent or is not one.
+
+    A package is untrusted input and the tag says what TYPE its value is, so a body can label a
+    STRUCT `Palette` and every arithmetic or comparison downstream then raises `TypeError` — which
+    `resolve`'s backstop does NOT catch, so it would reach the user as a traceback."""
+    value = props.get(name, (0, 0))[1]
+    return value if isinstance(value, int) and not isinstance(value, bool) else 0
+
+
+def _whole(props: dict, name: str) -> int:
+    """`_int_prop` as a non-negative count (`USize`, `NumSparks`)."""
+    return max(0, _int_prop(props, name))
+
+
 def decode_texture(pkg: Package, i0: int) -> TextureObj:
     """Decode the UTexture export at 0-based index `i0` — props, `Mips`, and `CompMips` when
     the body's `bHasComp` property says it is there.
@@ -333,9 +382,10 @@ def decode_texture(pkg: Package, i0: int) -> TextureObj:
     buf = pkg.buf
     so, sz = e["soff"], e["ssize"]
     end = so + sz
-    props, pos = _read_props(buf, so, end, pkg.names)
+    elements: dict[str, dict] = {}
+    props, pos = _read_props(buf, so, end, pkg.names, arrays=elements)
     fmt = props.get("Format", (_PT_BYTE, 0))[1]
-    pal = props.get("Palette", (_PT_OBJECT, 0))[1]
+    pal = _int_prop(props, "Palette")
     has_comp = bool(props.get("bHasComp", (_PT_BOOL, False))[1])
     comp_format = props.get("CompFormat", (_PT_BYTE, 0))[1]
     mips, pos = _read_mip_array(pkg, pos)
@@ -345,7 +395,8 @@ def decode_texture(pkg: Package, i0: int) -> TextureObj:
     no_data = not any(m.data for m in mips) and not any(m.data for m in comp_mips)
     return TextureObj(pkg.name(e["nm"]) or "", fmt, pal, mips, props,
                       comp_mips=comp_mips, comp_format=comp_format,
-                      trailing_bytes=end - pos, no_mip_data=no_data)
+                      trailing_bytes=end - pos, no_mip_data=no_data,
+                      trailing_data=buf[pos:end], prop_arrays=elements)
 
 
 def decode_palette(pkg: Package, i0: int) -> list[tuple[int, int, int]]:
@@ -448,6 +499,11 @@ MAX_MIPS = 32                                  # 2**31 would need 32 halvings
 MAX_MIP_DIM = 1 << 16                          # 65536 px on a side
 MAX_MIP_BYTES = 1 << 28                        # 256 MB of pixel data in one mip
 
+# A PROCEDURAL texture has no stored pixels to bound it — its size is whatever its `USize`/
+# `VSize` properties claim, and we are about to GENERATE that many — so its cap is the real-content
+# ceiling above, not `MAX_MIP_DIM`. A body declaring more is left unpainted, never allocated for.
+MAX_PROCEDURAL_DIM = 2048
+
 
 @dataclass(frozen=True)
 class DecodedTexture:
@@ -500,12 +556,13 @@ class DecodedTexture:
         """Every mip level as `(width, height, rgb, mask)`, mip 0 first. Decoded on first
         access and cached on the instance (`cached_property` writes straight into `__dict__`,
         which a frozen dataclass still has)."""
-        pal = list(self._palette)
-        decode = _DECODERS[self.layout]
         out = [(self.width, self.height, self.rgb, self.mask)]
-        for m in self._levels[1:]:
-            rgb, mask = decode(m, pal)
-            out.append((m.width, m.height, rgb, mask))
+        if len(self._levels) > 1:                     # a painted frame has no pyramid to decode
+            pal = list(self._palette)
+            decode = _DECODERS[self.layout]
+            for m in self._levels[1:]:
+                rgb, mask = decode(m, pal)
+                out.append((m.width, m.height, rgb, mask))
         return tuple(out)
 
 
@@ -530,7 +587,10 @@ class TextureError:
     Decode layer:
       `corrupt-body`        the body does not parse, or does not end where it should
       `missing-palette`     the `Palette` object ref dangles, or the palette will not decode
-      `no-mip-data`         no mip in either array carries bytes (procedural textures)
+      `no-mip-data`         no mip in either array carries bytes AND no frame could be painted
+                            for it — either nothing paints that class, or the body does not
+                            carry what its generator needs (`proceduraltex`). `detail` says
+                            which
       `unverified-format`   a layout we will not guess at: no decoder for it, or its `Format`
                             code names something outside the four slots we have verified
       `unrecognised-layout` nothing explains mip 0's byte count at all
@@ -551,9 +611,25 @@ class TextureError:
 TextureResult = DecodedTexture | TextureError
 
 
-# Procedural (bitmap-less) texture placeholder -- a 1x1 opaque RED texel. A FireTexture/
-# WaterTexture/etc. is generated by the engine every frame and has no stored bitmap for the
-# draft rasterizer to sample. Shown as a visible "not-rendered-yet" marker rather than a hard
+# `DecodedTexture.layout_source` for a frame `proceduraltex` PAINTED -- distinct from the
+# detected-from-data values (`"data"`, `"format-code"`) and from `PROCEDURAL_RED`'s
+# `"synthetic"`, so a caller can tell a painted pattern from a decoded bitmap and from the
+# placeholder. The `texture` catalog verbs read it to keep a procedural texture NAME-keyed:
+# its pixels are generated by uedcli, not stored content, so hashing them would key a
+# classification shard to this renderer's output (`direction/asset-catalog.md`).
+PROCEDURAL_LAYOUT_SOURCE = "procedural"
+
+
+def is_procedural(result: TextureResult) -> bool:
+    """Did this result come from `proceduraltex` painting a frame rather than from stored
+    pixels? True only for a `DecodedTexture` a generator produced."""
+    return (isinstance(result, DecodedTexture)
+            and result.layout_source == PROCEDURAL_LAYOUT_SOURCE)
+
+
+# Placeholder for a procedural texture NO generator in `proceduraltex` paints -- a 1x1 opaque
+# RED texel. Such a texture is generated by the engine every frame and has no stored bitmap for
+# the draft rasterizer to sample. Shown as a visible "not-rendered-yet" marker rather than a hard
 # fail or a silent grey -- shared by every native-draft caller (mesh skins via
 # `meshrender.resolve_skins`; world/brush surfaces via `preview_native._TextureTable`) so a
 # procedural texture renders the same way everywhere, not red in one path and a hard fail in
@@ -678,6 +754,11 @@ class TextureResolver:
         self._dims_cache: dict[str, tuple[int, int] | TextureError] = {}
         self._defaults_cache: dict[str, dict | None] = {}
         self._defaults_pkgs: dict = {}           # uprops' own package cache, shared across classes
+        # Procedural generation resolves a texture's own SourceTexture/GlassTexture, which can be
+        # another procedural texture — so the walk re-enters this resolver and a package that
+        # points a texture at itself would recurse forever. Keyed by (package stem, export
+        # index), the exact object, not the ref spelling.
+        self._generating: set[tuple[str, int]] = set()
 
     def _package(self, stem: str) -> Package | None:
         key = stem.casefold()
@@ -753,7 +834,10 @@ class TextureResolver:
         what they do there; `resolve`'s separate `unknown-package`/`unknown-texture` are merged
         into one `not-found` (existing author-time validation already presents both identically
         — `no Texture of that name on the package path` either way); `corrupt-body` and
-        `no-mip-data` mean what they do in `_decode_export`."""
+        `no-mip-data` mean what they do in `_decode_export`.
+
+        `no-mip-data` here covers EVERY procedural texture, including the ones `resolve` paints a
+        frame for: this reports the size of stored PIXELS, and a procedural texture has none."""
         key = ref.casefold()
         if key not in self._dims_cache:
             try:
@@ -1005,6 +1089,154 @@ class TextureResolver:
                 self._defaults_cache[key] = None
         return self._defaults_cache[key]
 
+    def _import_path(self, pkg: Package, obj_ref: int) -> str | None:
+        """An IMPORT ref (`obj_ref < 0`) inside `pkg` → the `Package.Name` ref string that
+        addresses it here, or None when it points at nothing.
+
+        Qualified by the TOP of the import's outer chain — not by the one step
+        `class_fqcn_of_export` takes, because a texture import is usually nested one level deeper
+        (`genfluid` → `Lava2a` but also `Water` → `r6000w2`, where the outer is a group object).
+        A wrong qualifier is survivable for a TEXTURE: `_locate_texture` already redirects a stale
+        package hint by scanning the path for the name."""
+        name = pkg.name_of_ref(obj_ref)
+        j = -obj_ref - 1
+        if not name or obj_ref >= 0 or not 0 <= j < len(pkg.imports):
+            return None
+        outer, top, seen = pkg.imports[j][2], None, set()
+        while outer < 0 and outer not in seen:
+            seen.add(outer)
+            k = -outer - 1
+            if not 0 <= k < len(pkg.imports):
+                break
+            top = pkg.name(pkg.imports[k][3])
+            outer = pkg.imports[k][2]
+        return f"{top}.{name}" if top else None
+
+    def _palette_of(self, pkg: Package, obj_ref: int) -> list | None:
+        """A `Palette` object ref → its colours, or None when it does not resolve or will not
+        decode.
+
+        A local export decodes straight out of `pkg`; an import is looked up BY NAME in the
+        package its outer chain names, and nowhere else — palette names (`Palette9`) repeat across
+        packages, so `_locate_texture`'s scan-the-whole-path redirect would be a coin toss here.
+        An undecodable palette is None rather than an exception: a corrupt one must leave the
+        texture unpainted, not take down `resolve` as `package-unreadable`."""
+        if obj_ref > 0:
+            found = (pkg, obj_ref - 1)
+        else:
+            path = self._import_path(pkg, obj_ref)
+            found = self._find_palette(path) if path else None
+        if found is None:
+            return None
+        owner, j = found
+        if not 0 <= j < len(owner.exports) or owner.class_of_export(j) != "Palette":
+            return None
+        try:
+            return decode_palette(owner, j)
+        except (ValueError, struct.error, IndexError):
+            return None
+
+    def _find_palette(self, path: str) -> tuple[Package, int] | None:
+        """`Package.Name` → that package's `Palette` export of that name."""
+        stem, _, name = path.rpartition(".")
+        other = self._package(stem)
+        if other is None:
+            return None
+        for j in range(len(other.exports)):
+            if (other.class_of_export(j) == "Palette"
+                    and (other.name(other.exports[j]["nm"]) or "").casefold() == name.casefold()):
+                return other, j
+        return None
+
+    def _source_of(self, pkg: Package, obj_ref: int) -> TextureResult | None:
+        """A `SourceTexture`/`GlassTexture` object ref → the texture it names, decoded, or None
+        when the ref points at nothing.
+
+        A LOCAL export is decoded by INDEX, not re-addressed by name: two textures in one package
+        can share a name across groups, and a name round-trip would sample whichever
+        `_locate_texture` hit first — a silently wrong image. An import has no index here, so it
+        goes back through `resolve` (which also paints it when it is itself procedural)."""
+        if obj_ref > 0:
+            j = obj_ref - 1
+            if not 0 <= j < len(pkg.exports):
+                return None
+            name = pkg.name(pkg.exports[j]["nm"]) or ""
+            return self._decode_export(f"{pkg.stem}.{name}", pkg, j)
+        path = self._import_path(pkg, obj_ref)
+        return self.resolve(path) if path else None
+
+    def _paint_procedural(self, ref: str, pkg: Package, i: int,
+                          t: TextureObj) -> TextureResult | None:
+        """One STATIC frame for a procedural (bitmap-less) texture, or None when this export is
+        not one — in which case the caller reports `no-mip-data` as it always has.
+
+        `proceduraltex` owns the pixels; this owns the decoding around them — the declared size,
+        the real `Palette`, and the real `SourceTexture`/`GlassTexture`, each resolved through
+        this same resolver so a source that is ITSELF procedural is painted too.
+
+        A texture whose class HAS a generator but whose body does not carry what the generator
+        needs — an unset `SourceTexture`, an unreadable palette, an absurd declared size, a fire
+        with no stored sparks — also comes back as `no-mip-data`, with the reason in `detail`. It
+        is the same answer the caller already had for every procedural texture, so no ref that
+        rendered its placeholder before starts failing now; only the explanation is new."""
+        gen = proceduraltex.generator_for(pkg.class_of_export(i) or "")
+        if gen is None:
+            return None
+
+        def unpaintable(why: str) -> TextureError:
+            return TextureError(ref, "no-mip-data", f"{ref}: no mip carries pixel data, and "
+                                                    f"no frame could be painted from it — {why}")
+
+        key = ((pkg.stem or "").casefold(), i)
+        if key in self._generating:
+            return unpaintable("its SourceTexture/GlassTexture chain is circular")
+        w, h = _whole(t.props, "USize"), _whole(t.props, "VSize")
+        if not (1 <= w <= MAX_PROCEDURAL_DIM and 1 <= h <= MAX_PROCEDURAL_DIM):
+            return unpaintable(f"it declares USize x VSize {w}x{h}, outside "
+                               f"1..{MAX_PROCEDURAL_DIM}")
+        palette: list = []
+        if gen.needs_palette:
+            palette = self._palette_of(pkg, t.palette_ref) or []
+            if not palette:
+                return unpaintable(f"its Palette object ref {t.palette_ref} does not resolve to "
+                                   f"a decodable palette")
+        self._generating.add(key)
+        try:
+            sources = {}
+            for prop in gen.ref_props:
+                got = self._source_of(pkg, _int_prop(t.props, prop))
+                if got is None:
+                    return unpaintable(f"it is painted from its {prop}, which is unset")
+                if isinstance(got, TextureError):
+                    return unpaintable(f"its {prop} ({got.ref}) did not decode "
+                                       f"[{got.case}]: {got.detail}")
+                sources[prop] = proceduraltex.SampledTexture(
+                    width=got.width, height=got.height, rgb=got.rgb, mask=got.mask)
+            painted = gen.render(proceduraltex.ProceduralInput(
+                width=w, height=h, props=t.props, palette=palette,
+                sparks=proceduraltex.parse_sparks(t.trailing_data,
+                                                  _whole(t.props, "NumSparks")),
+                drops=proceduraltex.parse_drops(
+                    {k: v for k, (_pt, v) in t.prop_arrays.get("Drops", {}).items()
+                     if isinstance(v, bytes)},
+                    _whole(t.props, "NumDrops")),
+                sources=sources))
+        finally:
+            self._generating.discard(key)
+        if painted is None:
+            return unpaintable(f"{pkg.class_of_export(i)} paints from the particles the body "
+                               f"stores and it stores none")
+        rgb, mask = painted
+        # `layout` says "painted" too, rather than naming a stored layout: a wet/ice frame is
+        # copied from its source's decoded pixels, not read as P8 or as blocks. There is no mip
+        # pyramid either, so `_levels` stays empty and `.mips` is mip 0 alone.
+        return DecodedTexture(
+            ref=ref, width=w, height=h, rgb=rgb, mask=mask,
+            layout=PROCEDURAL_LAYOUT_SOURCE, layout_source=PROCEDURAL_LAYOUT_SOURCE,
+            format_code=t.fmt, array="mips",
+            b_masked=self._effective_flag(pkg, i, t, "bMasked"),
+            b_alpha_texture=self._effective_flag(pkg, i, t, "bAlphaTexture"))
+
     def _decode_export(self, ref: str, pkg: Package, i: int) -> TextureResult:
         """Decode one located `Texture` export into the typed result."""
         try:
@@ -1024,7 +1256,12 @@ class TextureResolver:
             # This check MUST come before the format gate below: a list of EMPTY mips is
             # truthy, so the gate would pass and `mip0_to_rgb` would return w*h*3 zero bytes
             # — a silent, plausible, completely black image. Procedural textures
-            # (FireTexture and friends) are exactly this shape.
+            # (FireTexture and friends) are exactly this shape, and this is the one place
+            # where "this IS a procedural texture" is known, so it is where a generator gets
+            # its chance before the miss is reported.
+            painted = self._paint_procedural(ref, pkg, i, t)
+            if painted is not None:
+                return painted
             return TextureError(ref, "no-mip-data",
                                 f"{ref}: no mip carries pixel data "
                                 f"({len(t.mips)} Mips, {len(t.comp_mips)} CompMips, all empty)")
