@@ -12,7 +12,7 @@ containers. Host needs only `python3.12` on PATH + Docker (no Rust). Owner rulin
 
 | Path | Role |
 |------------------------------|---
-| `bin/_venv.sh` | sourced helper: `ensure_venv` finds `python3.12`, creates `.venv/`, installs `Pillow`+`pytest`. `ensure_native_ext` builds `uedcli_native` in the container and pip-installs the wheel (source-hash-gated). `run_cargo_test` runs the goldens in the container. |
+| `bin/_venv.sh` | sourced helper: `ensure_venv` finds `python3.12`, creates `.venv/`, installs `Pillow`+`pytest`. `ensure_native_ext` builds `uedcli_native` in the container and pip-installs the wheel (source-hash-gated), exporting `UEDCLI_NATIVE_EXT_FRESH=1`/`0` for `uedcli.native_ext.import_native` (every `uedcli_native` call site) to refuse a confirmed-stale build rather than silently running old compiled code — owner ruling 2026-09-11. `run_cargo_test` runs the goldens in the container. |
 | `bin/uedcli` | runs the CLI host-native through the venv (`ensure_venv` + `ensure_native_ext`). |
 | `bin/test` | host-native pytest through the venv, then `run_cargo_test` — see [`rules/tests.md`](rules/tests.md). |
 | `dev-container/Dockerfile` | the Rust-BUILD image `uedcli-rust-build`: `python:3.12` + Rust (rustup) + `build-essential` + maturin. Not a run env; builds the wheel + runs cargo test. |

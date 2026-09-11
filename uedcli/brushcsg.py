@@ -191,7 +191,11 @@ def merge(actors, *, deintersect: bool):
     `Texture`/`PanU`/`PanV` back out of that source poly here.  `actor == -1` marks a Phase-1 face
     off the synthesized builder cube, which has no authored texture.
     """
-    import uedcli_native
+    from uedcli.native_ext import import_native
+    try:
+        uedcli_native = import_native()
+    except ImportError as e:
+        raise BrushCsgError(f"the uedcli_native extension is not usable: {e}") from e
     from .native.brush_marshal import BuildError, _build_brush_input
 
     world, builder = build_scaffolding(actors, deintersect=deintersect)

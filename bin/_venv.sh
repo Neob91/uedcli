@@ -56,17 +56,28 @@ _rust_build_run() {
 }
 
 ensure_native_ext() {
+  # UEDCLI_NATIVE_EXT_FRESH gates `uedcli.native_ext.import_native()` (every `uedcli_native` call
+  # site) against running a STALE build with no signal at the point of use — owner ruling,
+  # 2026-09-11. Only an explicit "0" blocks; both early-return cases below (native ext
+  # deliberately skipped, or the source dir genuinely absent) leave it UNSET rather than "0", so
+  # they read as "no verdict" (today's behavior) rather than "confirmed stale".
   [ -n "${UEDCLI_SKIP_NATIVE:-}" ] && return 0
   [ -d "$_NATIVE_DIR" ] || return 0
   local hash
   hash="$(cat "$_NATIVE_DIR/Cargo.toml" "$_NATIVE_DIR"/src/*.rs 2>/dev/null | sha256sum | cut -d' ' -f1)"
   if [ "$(cat "$_NATIVE_MARKER" 2>/dev/null || true)" = "$hash" ] \
      && "$PY" -c "import uedcli_native" >/dev/null 2>&1; then
+    export UEDCLI_NATIVE_EXT_FRESH=1
     return 0
   fi
+  # Past this point a rebuild is needed. Default to "confirmed stale" and only flip to fresh on
+  # the actual successful install below — every remaining early return (no Docker, build failure,
+  # ...) leaves the pessimistic default in place.
+  export UEDCLI_NATIVE_EXT_FRESH=0
   if ! _ensure_build_image; then
     echo "uedcli: docker not available — skipping uedcli_native build (native materialize + gate-5" \
-         "tests will be skipped)." >&2
+         "tests will be skipped; any command that needs uedcli_native will refuse to run rather" \
+         "than silently use a stale build)." >&2
     return 0
   fi
   rm -rf "$_NATIVE_DIR/target/wheels"
@@ -86,6 +97,7 @@ ensure_native_ext() {
   "$VENV/bin/pip" install --quiet --force-reinstall --no-deps "$whl" >&2 \
     || { echo "uedcli: pip install of uedcli_native failed" >&2; return 0; }
   printf '%s' "$hash" > "$_NATIVE_MARKER"
+  export UEDCLI_NATIVE_EXT_FRESH=1
 }
 
 # Rust goldens — the pure-core `cargo test`, run in the build image (needs Rust + libpython).

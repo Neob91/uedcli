@@ -27,7 +27,7 @@ from uedcli.native import umodel as UM
 from uedcli.native.actor_write import FPoly, Prop
 from uedcli.native.props import ImportRef
 from uedcli.native.level_write import URL, write_level_body
-from uedcli.native.materialize import (_trunk_to_actorspecs, _pointregion_prop,
+from uedcli.native.materialize import (NativeBuildError, _trunk_to_actorspecs, _pointregion_prop,
                                         _model_point_region)
 
 
@@ -351,7 +351,11 @@ def build_mover_shape_model(polys: list[FPoly]) -> tuple[UM.Model, list[int]]:
     `bspValidateBrush` link for one it split). Byte-verified against all 28 built mover models +
     `Polys` bodies of the UNATCO import golden (2026-09-02). Requires the `uedcli_native`
     extension (heavy compute lives in Rust)."""
-    import uedcli_native
+    from uedcli.native_ext import import_native
+    try:
+        uedcli_native = import_native()
+    except ImportError as e:
+        raise NativeBuildError(f"the uedcli_native extension is not usable: {e}") from e
     built, links = uedcli_native.build_brush_model(_marshal_brush_polys(polys))
     body = uedcli_native.serialize_model(built)
     m = UM.parse_model_body(body, 0, len(body))
@@ -471,7 +475,11 @@ def light_apply_movers(world_model, movers: list) -> None:
     """
     if world_model is None or not world_model.nodes or not movers:
         return
-    import uedcli_native
+    from uedcli.native_ext import import_native
+    try:
+        uedcli_native = import_native()
+    except ImportError as e:
+        raise NativeBuildError(f"the uedcli_native extension is not usable: {e}") from e
 
     for _actor, polys, model in movers:
         model.light_map = []

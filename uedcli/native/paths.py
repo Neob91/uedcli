@@ -160,7 +160,11 @@ def graph_from_native(out) -> PathGraph:
 
 
 def _native_build_path_graph(model_body, movers, navs, zones, level_zone, preset_args):
-    import uedcli_native
+    from uedcli.native_ext import import_native
+    try:
+        uedcli_native = import_native()
+    except ImportError as e:
+        raise PathPassError(f"the uedcli_native extension is not usable: {e}") from e
     if not hasattr(uedcli_native, "build_path_graph") or not hasattr(uedcli_native, "PresetIn"):
         raise PathPassError("the installed uedcli_native extension has no `build_path_graph` -- "
                             "rebuild it (bin/test once, or `maturin develop`)")

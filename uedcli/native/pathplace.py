@@ -46,7 +46,11 @@ def placement_from_native(out) -> Placement:
 
 
 def _native_place_path_nodes(model_body, movers, navs, zones, level_zone, starts):
-    import uedcli_native
+    from uedcli.native_ext import import_native
+    try:
+        uedcli_native = import_native()
+    except ImportError as e:
+        raise PathPlaceError(f"the uedcli_native extension is not usable: {e}") from e
     place = getattr(uedcli_native, "place_path_nodes", None)
     if place is None:
         raise PathPlaceError("the installed uedcli_native extension has no `place_path_nodes` -- "

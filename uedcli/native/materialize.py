@@ -332,7 +332,8 @@ def build_world_model(level, *, index, lights=()):
     from . import umodel as UM
     from .brush_marshal import BuildError, _build_brush_input, _in_world_csg
     try:
-        import uedcli_native
+        from uedcli.native_ext import import_native
+        uedcli_native = import_native()
     except ImportError:
         raise NativeBuildError(
             "the uedcli_native extension is not built -- the native world-BSP build needs it "

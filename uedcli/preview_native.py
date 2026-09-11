@@ -366,7 +366,8 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
     through this function, rather than a `NativePreviewError`; dispatch's top-level guard turns it
     into the same clean exit 2."""
     try:
-        import uedcli_native
+        from uedcli.native_ext import import_native
+        uedcli_native = import_native()
     except ImportError:
         raise NativePreviewError(
             "the uedcli_native extension is not built — `level photo --native` needs it "
@@ -557,7 +558,8 @@ def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
     `classindex.ClassRefError` straight through on an unresolvable class). Raises `NativePreviewError`
     if the native extension is not built."""
     try:
-        import uedcli_native
+        from uedcli.native_ext import import_native
+        uedcli_native = import_native()
     except ImportError:
         raise NativePreviewError(
             "the uedcli_native extension is not built — `actor diagram --faces textured` needs it "
@@ -622,7 +624,8 @@ def render_shots(*, level, shots: list[Shot], out_dir: Path, index,
     except OSError as e:
         raise NativePreviewError(f"cannot write to --out-dir {out_dir}: {e}") from None
 
-    import uedcli_native
+    from uedcli.native_ext import import_native
+    uedcli_native = import_native()
     from PIL import Image
     taken: set[str] = set()
     written = 0
