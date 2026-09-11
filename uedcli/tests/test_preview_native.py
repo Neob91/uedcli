@@ -14,6 +14,7 @@ import pytest
 
 from uedcli import preview_native as pn
 from uedcli.builders import cube, make_brush_actor
+from uedcli.classdefaults import ClassDefaults
 from uedcli.classindex import ClassIndex
 from uedcli.model import Actor, Level
 from uedcli.preview_shots import Shot, parse_shot
@@ -33,10 +34,24 @@ FIXTURES = Path(__file__).parent / "fixtures"
 UED22 = Path(__file__).resolve().parents[2] / "uned" / "UED22"
 MESH_CLASS = "DeusEx.CrateUnbreakableLarge"          # DT_Mesh; SAME class test_class_preview.py uses
 
+pytestmark = pytest.mark.skipif(
+    not (UED22 / "Engine.u").is_file(),
+    reason="committed UED22/Engine.u not present (build_scene's lighting needs real class schemas "
+           "-- every actor's class defaults, gather_lights' own requirement, same as materialize)")
+
 
 def _ued22_index() -> ClassIndex:
     files = [(os.path.splitext(os.path.basename(f))[0], f) for f in glob.glob(str(UED22 / "*.u"))]
     return ClassIndex.from_files(files)
+
+
+def _defaults_resolver(name: str) -> str | None:
+    p = UED22 / f"{name}.u"
+    return str(p) if p.is_file() else None
+
+
+DEFAULTS = ClassDefaults(_defaults_resolver)          # every build_scene call needs real class
+                                                       # defaults now (gather_lights walks every actor)
 
 
 def _mesh_sf(index) -> list[str]:
@@ -64,14 +79,14 @@ def test_mainscale_brush_renders_scaled():
     scaled `world_vertices` puts them — geometry cross-checked in `test_scaled_brush_preview_*`."""
     room = cube_room()
     set_prop(room, "MainScale", "(Scale=(X=2.000000),SheerAxis=SHEER_ZX)")
-    polys, _ = pn.build_scene(_level(room), [], IDX)
+    polys, _ = pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
     assert len(polys) == 6
 
 
 def test_postscale_brush_renders_scaled():
     room = cube_room()
     set_prop(room, "PostScale", "(Scale=(Z=0.500000),SheerAxis=SHEER_ZX)")
-    polys, _ = pn.build_scene(_level(room), [], IDX)
+    polys, _ = pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
     assert len(polys) == 6
 
 
@@ -79,7 +94,7 @@ def test_sheerrate_brush_renders():
     """A pure-sheer scale (det=1) now renders too — the double `L` carries the sheer off-diagonal."""
     room = cube_room()
     set_prop(room, "MainScale", "(SheerRate=0.250000,SheerAxis=SHEER_ZX)")
-    polys, _ = pn.build_scene(_level(room), [], IDX)
+    polys, _ = pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
     assert len(polys) == 6
 
 
@@ -89,12 +104,12 @@ def test_degenerate_scale_exits_2_naming_the_brush():
     room = cube_room()
     set_prop(room, "PostScale", "(Scale=(X=0.000000),SheerAxis=SHEER_ZX)")
     with pytest.raises(pn.NativePreviewError, match="Room.*non-invertible"):
-        pn.build_scene(_level(room), [], IDX)
+        pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
 
 
 def test_identity_scale_props_accepted():
     room = cube_room()                   # make_brush_actor writes (SheerAxis=SHEER_ZX) both
-    polys, _ = pn.build_scene(_level(room), [], IDX)
+    polys, _ = pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
     assert len(polys) == 6               # a carved box renders its 6 interior faces
 
 
@@ -104,7 +119,7 @@ def test_identity_scale_props_accepted():
 def test_zero_brush_trunk_is_named_error():
     lvl = _level(Actor(name="LevelInfo", cls="Engine.LevelInfo"))
     with pytest.raises(pn.NativePreviewError, match="no CSG brush actors"):
-        pn.build_scene(lvl, [], IDX)
+        pn.build_scene(lvl, [], IDX, defaults=DEFAULTS)
 
 
 def test_build_error_surfaces_cleanly():
@@ -112,7 +127,7 @@ def test_build_error_surfaces_cleanly():
     bad.brush.polys = bad.brush.polys[:1]        # an open solid: CSG core rejects/degenerates
     lvl = _level(bad)
     try:
-        pn.build_scene(lvl, [], IDX)                  # either a clean error or a degenerate build…
+        pn.build_scene(lvl, [], IDX, defaults=DEFAULTS)                  # either a clean error or a degenerate build…
     except pn.NativePreviewError as e:
         assert "native CSG build failed" in str(e) or "nothing to render" in str(e)
     # …but NEVER a raw uedcli_native.BuildError / IndexError escaping (repo rule).
@@ -123,7 +138,7 @@ def test_build_error_surfaces_cleanly():
 
 def test_out_of_range_surf_owner_renders_grey_not_indexerror():
     room = cube_room()
-    polys, table = pn.build_scene(_level(room), [], IDX)
+    polys, table = pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
     # Forge the guard input directly: node polys with hostile indices via _node_polys.
     from uedcli.native.umodel import BspNode, BspSurf, BspVert, Model
     m = Model()
@@ -132,7 +147,7 @@ def test_out_of_range_surf_owner_renders_grey_not_indexerror():
     m.surfs = [BspSurf(i_actor=999, i_brush_poly=-1)]
     m.nodes = [BspNode(plane=(0, 0, 1, 0), i_vert_pool=0, i_surf=0, num_vertices=3)]
     got = pn._node_polys(m)
-    assert got == [([m.points[0], m.points[1], m.points[2]], 999, -1, 0)]
+    assert got == [([m.points[0], m.points[1], m.points[2]], 999, -1, 0, 0)]
     # A hostile vert pool / point index never raises either — the node is skipped.
     m.nodes[0].i_vert_pool = 99
     assert pn._node_polys(m) == []
@@ -157,11 +172,11 @@ def test_out_of_range_join_does_not_crash_add_poly(monkeypatch):
 
     def hostile(model):
         out = real_node_polys(model)
-        verts, i_actor, _i_brush_poly, poly_flags = out[0]
-        return [(verts, i_actor, 99999, poly_flags)] + out[1:]
+        verts, i_actor, _i_brush_poly, poly_flags, i_surf = out[0]
+        return [(verts, i_actor, 99999, poly_flags, i_surf)] + out[1:]
 
     monkeypatch.setattr(pn, "_node_polys", hostile)
-    polys, _ = pn.build_scene(_level(room), [], IDX)
+    polys, _ = pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
     assert len(polys) == 6   # the hostile node still renders (flat grey), no crash
 
 
@@ -182,7 +197,7 @@ def test_backface_cull_end_to_end_through_the_full_pipeline():
     import uedcli_native
     from uedcli.texframe import newell
     box = make_brush_actor("Box", cube(128.0, 128.0, 128.0), csg="add")
-    polys, table = pn.build_scene(_level(box), [], IDX)
+    polys, table = pn.build_scene(_level(box), [], IDX, defaults=DEFAULTS)
     assert len(polys) == 6
     verts_flat = polys[0][0]
     verts = [tuple(verts_flat[j:j + 3]) for j in range(0, len(verts_flat), 3)]
@@ -218,7 +233,7 @@ def test_unresolvable_ref_raises_named_error():
     """
     room = cube_room(texture="Missing.Tex")
     with pytest.raises(pn.NativePreviewError, match=r"Missing\.Tex") as excinfo:
-        pn.build_scene(_level(room), [], IDX)
+        pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
     assert "unknown-package" in str(excinfo.value)   # the decoder's case, not a generic "missing"
 
 
@@ -227,7 +242,7 @@ def test_bare_ref_is_unresolvable():
     to qualify it, not to go looking for the texture. Raises, same as any other unresolvable ref."""
     room = cube_room(texture="barename")
     with pytest.raises(pn.NativePreviewError, match=r"barename") as excinfo:
-        pn.build_scene(_level(room), [], IDX)
+        pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
     assert "unqualified-ref" in str(excinfo.value)
 
 
@@ -247,7 +262,7 @@ def test_undecodable_present_ref_raises_too():
 
 def test_real_fixture_texture_resolves():
     room = cube_room(texture="LUM_InfoPortraits.ArthurCallaway")
-    polys, table = pn.build_scene(_level(room), [str(FIXTURES / "LUM_InfoPortraits.utx")], IDX)
+    polys, table = pn.build_scene(_level(room), [str(FIXTURES / "LUM_InfoPortraits.utx")], IDX, defaults=DEFAULTS)
     assert len(table) == 1
     w, h, _, mask = table[0]
     assert (w, h) == (64, 64)
@@ -257,12 +272,12 @@ def test_real_fixture_texture_resolves():
 def test_pf_masked_flag_plumbed_to_poly_tuple():
     """A face's PF_Masked bit reaches the render-poly tuple's `masked` field; a plain face is
     False. This is what tells the rasterizer to alpha-test the texture's mask for that face."""
-    polys, _ = pn.build_scene(_level(cube_room()), [], IDX)
+    polys, _ = pn.build_scene(_level(cube_room()), [], IDX, defaults=DEFAULTS)
     assert polys and all(p[6] is False for p in polys)
 
     masked = cube_room()
     set_prop(masked, "PolyFlags", str(pn.PF_MASKED))
-    polys, _ = pn.build_scene(_level(masked), [], IDX)
+    polys, _ = pn.build_scene(_level(masked), [], IDX, defaults=DEFAULTS)
     assert polys and all(p[6] is True for p in polys)
     # The raw merged flags (8th element) carry PF_MASKED too — the same value the backface cull's
     # PF_TwoSided|PF_Portal exemption reads.
@@ -278,7 +293,7 @@ def test_pf_mirrored_flag_plumbed_to_poly_tuple():
     PF_MIRRORED = 0x8000000
     room = cube_room()
     set_prop(room, "PolyFlags", str(PF_MIRRORED))
-    polys, _ = pn.build_scene(_level(room), [], IDX)
+    polys, _ = pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
     assert polys and all(p[7] & PF_MIRRORED for p in polys)
     assert polys and all(p[6] is False for p in polys)  # Mirror alone does not imply PF_Masked
 
@@ -294,10 +309,10 @@ def test_mirror_face_end_to_end_reflects_through_the_full_pipeline():
     PF_MIRRORED = 0x8000000
     mirror = ([40.0, -200.0, 200.0, 40.0, 200.0, 200.0, 40.0, 200.0, -200.0, 40.0, -200.0, -200.0],
               [40.0, -200.0, 200.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0], -1, False,
-              PF_MIRRORED)
+              PF_MIRRORED, None)
     reflectee = (
         [-100.0, -200.0, -200.0, -100.0, 200.0, -200.0, -100.0, 200.0, 200.0, -100.0, -200.0, 200.0],
-        [-100.0, -200.0, -200.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0], 0, False, 0)
+        [-100.0, -200.0, -200.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0], 0, False, 0, None)
     red = (1, 1, bytes([255, 0, 0]), bytes([1]))
     fwd, right, up = pn.camera_basis(0.0, 0.0)
     rgb = uedcli_native.render_frame([mirror, reflectee], [red],
@@ -342,7 +357,7 @@ def test_bmasked_texture_masks_through_build_scene(monkeypatch):
 
     monkeypatch.setattr(pn, "TextureResolver", _Resolver)
     room = cube_room(texture="Masked.Tex")               # bMasked texture, NO PolyFlags set
-    polys, _ = pn.build_scene(_level(room), [], IDX)
+    polys, _ = pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
     assert polys and all(p[6] is True for p in polys)
 
 
@@ -357,7 +372,7 @@ def test_rotated_brush_rust_transform_matches_world_vertices():
     set_prop(room, "Rotation", "(Pitch=4096,Yaw=12288,Roll=2048)")
     set_prop(room, "PrePivot", "(X=8.000000,Y=4.000000,Z=2.000000)")
     lvl = _level(room)
-    polys, _ = pn.build_scene(lvl, [], IDX)
+    polys, _ = pn.build_scene(lvl, [], IDX, defaults=DEFAULTS)
     got = {tuple(round(polys_c, 2) for polys_c in p[0][i:i + 3])
            for p in polys for i in range(0, len(p[0]), 3)}
     expect = {tuple(round(c, 2) for c in v) for v in world_vertices(room)}
@@ -367,7 +382,7 @@ def test_rotated_brush_rust_transform_matches_world_vertices():
 
 
 def _preview_corner_set(lvl):
-    polys, _ = pn.build_scene(lvl, [], IDX)
+    polys, _ = pn.build_scene(lvl, [], IDX, defaults=DEFAULTS)
     return {tuple(round(c, 2) for c in p[0][i:i + 3])
             for p in polys for i in range(0, len(p[0]), 3)}
 
@@ -415,7 +430,7 @@ def test_movers_are_out_of_world_csg_but_rendered():
     lvl = _level(cube_room(), mover)
     brushes, join = pn._brush_inputs(lvl, IDX)
     assert [n for n, _ in join] == ["Room"]      # mover NOT in the CSG input
-    polys, _ = pn.build_scene(lvl, [], IDX)
+    polys, _ = pn.build_scene(lvl, [], IDX, defaults=DEFAULTS)
     assert len(polys) == 6 + 6                   # room faces + mover extra_polys
 
 
@@ -432,7 +447,7 @@ def test_mover_polyflags_high_bit_does_not_overflow_render_frame():
     mover = make_brush_actor("Door", cube(64, 8, 96), mover_class="Engine.Mover")
     set_prop(mover, "PolyFlags", "-1073741824")          # 0xC0000000 as a signed i32
     lvl = _level(cube_room(), mover)
-    polys, table = pn.build_scene(lvl, [], IDX)
+    polys, table = pn.build_scene(lvl, [], IDX, defaults=DEFAULTS)
     mover_polys = polys[6:]                              # room's 6 CSG faces, then the mover's
     assert mover_polys
     assert all(p[7] == 0xC0000000 for p in mover_polys)  # masked to unsigned, not left negative
@@ -452,11 +467,11 @@ def test_build_scene_includes_a_dt_mesh_actor():
     triangles; the room is rebuilt fresh for each call since `build_scene` is not asserted pure over
     its brush input."""
     index = _ued22_index()
-    baseline_polys, baseline_textures = pn.build_scene(_level(cube_room()), [], index)
+    baseline_polys, baseline_textures = pn.build_scene(_level(cube_room()), [], index, defaults=DEFAULTS)
     assert baseline_polys and not baseline_textures      # untextured room: polys exist, no textures
 
     crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
-    polys, textures = pn.build_scene(_level(cube_room(), crate), _mesh_sf(index), index)
+    polys, textures = pn.build_scene(_level(cube_room(), crate), _mesh_sf(index), index, defaults=DEFAULTS)
 
     assert polys[:len(baseline_polys)] == baseline_polys  # baseline untouched, mesh triangles appended
     new_polys = polys[len(baseline_polys):]
@@ -475,8 +490,8 @@ def _mesh_default(prop: str, index) -> str:
 
 def _mesh_poly_count(actor, index) -> int:
     """How many polys `actor` adds on top of the bare-room baseline."""
-    baseline, _ = pn.build_scene(_level(cube_room()), [], index)
-    polys, _ = pn.build_scene(_level(cube_room(), actor), _mesh_sf(index), index)
+    baseline, _ = pn.build_scene(_level(cube_room()), [], index, defaults=DEFAULTS)
+    polys, _ = pn.build_scene(_level(cube_room(), actor), _mesh_sf(index), index, defaults=DEFAULTS)
     return len(polys) - len(baseline)
 
 
@@ -532,9 +547,9 @@ def test_mesh_material_with_no_texture_renders_flat_grey(monkeypatch):
     from uedcli import meshrender
     index = _ued22_index()
     monkeypatch.setattr(meshrender, "resolve_skins", lambda *a, **k: {})   # no material textured
-    baseline, _ = pn.build_scene(_level(cube_room()), [], index)
+    baseline, _ = pn.build_scene(_level(cube_room()), [], index, defaults=DEFAULTS)
     crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
-    polys, textures = pn.build_scene(_level(cube_room(), crate), [], index)
+    polys, textures = pn.build_scene(_level(cube_room(), crate), [], index, defaults=DEFAULTS)
     new_polys = polys[len(baseline):]
     assert new_polys                                     # the crate still contributed triangles
     assert all(p[5] == -1 for p in new_polys)            # ...all flat grey
@@ -575,9 +590,9 @@ def test_bmasked_mesh_skin_masks_without_the_triangle_flag(monkeypatch):
     index = _ued22_index()
     monkeypatch.setattr(meshrender, "resolve_skins",   # the crate mesh has one material, index 0
                         lambda *a, **k: {0: (1, 1, px, True, mask)})
-    baseline, _ = pn.build_scene(_level(cube_room()), [], index)
+    baseline, _ = pn.build_scene(_level(cube_room()), [], index, defaults=DEFAULTS)
     crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
-    polys, _ = pn.build_scene(_level(cube_room(), crate), [], index)
+    polys, _ = pn.build_scene(_level(cube_room(), crate), [], index, defaults=DEFAULTS)
     new_polys = polys[len(baseline):]
     assert new_polys and all(p[6] is True for p in new_polys)
     assert all(not (p[7] & pn.PF_MASKED) for p in new_polys)   # ...with NO triangle flag set
@@ -608,7 +623,7 @@ def test_mesh_skin_carries_the_real_per_texel_mask_not_synthesized_opaque(monkey
     _polys, table = pn.build_scene(
         _level(cube_room(), Actor(name="Crate", cls=MESH_CLASS,
                                    location=(Decimal(0), Decimal(0), Decimal(0)))),
-        [], index)
+        [], index, defaults=DEFAULTS)
     assert table and table[-1][3] == real_mask2
 
 
@@ -639,8 +654,8 @@ def test_two_instances_of_one_mesh_class_share_one_texture_slot():
     index = _ued22_index()
     one = Actor(name="Crate1", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
     two = Actor(name="Crate2", cls=MESH_CLASS, location=(Decimal(200), Decimal(0), Decimal(0)))
-    _p1, t1 = pn.build_scene(_level(cube_room(), one), _mesh_sf(index), index)
-    _p2, t2 = pn.build_scene(_level(cube_room(), one, two), _mesh_sf(index), index)
+    _p1, t1 = pn.build_scene(_level(cube_room(), one), _mesh_sf(index), index, defaults=DEFAULTS)
+    _p2, t2 = pn.build_scene(_level(cube_room(), one, two), _mesh_sf(index), index, defaults=DEFAULTS)
     assert t1 and len(t2) == len(t1)
 
 
@@ -655,8 +670,8 @@ def test_actor_own_skin_override_renders_over_the_mesh_default_not_the_class():
     plain = Actor(name="Crate1", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
     overridden = Actor(name="Crate2", cls=MESH_CLASS, location=(Decimal(200), Decimal(0), Decimal(0)),
                        props=[("MultiSkins(0)", "Texture'LUM_InfoPortraits.ArthurCallaway'")])
-    _p1, t1 = pn.build_scene(_level(cube_room(), plain), sf, index)
-    _p2, t2 = pn.build_scene(_level(cube_room(), overridden), sf, index)
+    _p1, t1 = pn.build_scene(_level(cube_room(), plain), sf, index, defaults=DEFAULTS)
+    _p2, t2 = pn.build_scene(_level(cube_room(), overridden), sf, index, defaults=DEFAULTS)
     assert (t1[0][0], t1[0][1]) != (64, 64)            # the mesh's own crate texture, NOT 64x64
     assert (t2[0][0], t2[0][1]) == (64, 64)            # LUM_InfoPortraits.ArthurCallaway's real size
 
@@ -672,7 +687,7 @@ def test_two_actors_one_overriding_get_distinct_skins_not_a_cache_collision():
     plain = Actor(name="Crate1", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
     overridden = Actor(name="Crate2", cls=MESH_CLASS, location=(Decimal(200), Decimal(0), Decimal(0)),
                        props=[("MultiSkins(0)", "Texture'LUM_InfoPortraits.ArthurCallaway'")])
-    polys, table = pn.build_scene(_level(cube_room(), plain, overridden), sf, index)
+    polys, table = pn.build_scene(_level(cube_room(), plain, overridden), sf, index, defaults=DEFAULTS)
     sizes = {(w, h) for (w, h, *_rest) in table}
     assert (64, 64) in sizes                                    # the override's texture is present
     assert len(sizes) >= 2                                      # AND distinct from the mesh default
@@ -699,7 +714,7 @@ def test_mesh_skins_resolve_over_full_search_files_not_u_only(monkeypatch):
     monkeypatch.setattr(meshrender, "resolve_skins", spy)
     sf = ["/nonexistent/Effects.utx", *index.package_paths()]      # a `.utx` NOT on the `.u` set
     crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
-    pn.build_scene(_level(cube_room(), crate), sf, index)
+    pn.build_scene(_level(cube_room(), crate), sf, index, defaults=DEFAULTS)
     assert seen["sf"] == sf                                        # full path forwarded verbatim
     assert seen["sf"] != list(index.package_paths())              # NOT the `.u`-only set
 
@@ -718,7 +733,7 @@ def test_build_scene_unresolvable_mesh_ref_raises_naming_the_actor():
                   props=[("Mesh", "LodMesh'NoSuchPackage.Bogus'")])
     lvl = _level(cube_room(), crate)
     with pytest.raises(pn.NativePreviewError, match=r"NoSuchPackage\.Bogus"):
-        pn.build_scene(lvl, [], index)
+        pn.build_scene(lvl, [], index, defaults=DEFAULTS)
 
 
 # --------------------------------------------------------------- invisible faces
@@ -727,7 +742,7 @@ def test_build_scene_unresolvable_mesh_ref_raises_naming_the_actor():
 def test_pf_invisible_faces_dropped():
     room = cube_room()
     room.brush.polys[0].flags = pn.PF_INVISIBLE
-    polys, _ = pn.build_scene(_level(room), [], IDX)
+    polys, _ = pn.build_scene(_level(room), [], IDX, defaults=DEFAULTS)
     assert len(polys) == 5
 
 
@@ -758,10 +773,32 @@ def test_render_shots_writes_pngs(tmp_path):
     lvl = _level(cube_room())
     shots = [parse_shot("at:0,0,0;rot:0,0"), parse_shot("at:0,0,0;rot:0,90;name:east")]
     n = pn.render_shots(level=lvl, shots=shots, out_dir=tmp_path / "out", size=(160, 120),
-                        index=IDX)
+                        index=IDX, defaults=DEFAULTS)
     assert n == 2
     assert (tmp_path / "out" / "shot-01.png").is_file()
     assert (tmp_path / "out" / "east.png").is_file()
+
+
+def test_render_shots_with_both_a_lit_world_surf_and_a_mesh_actor(tmp_path):
+    """Regression: `build_scene` appends world-CSG polys (carrying a real lightmap tuple field)
+    and mesh-actor triangles (carrying `None`) through TWO separate `polys.append` call sites —
+    a manual `level photo --native` run on a real level caught these silently diverging on the
+    `RenderPolyTuple` arity (one site missing the trailing lightmap field entirely), which
+    `render_frame` only rejects once BOTH kinds of poly are present in one call. Neither
+    `test_build_scene_includes_a_dt_mesh_actor` (mesh only, never crosses the FFI) nor
+    `test_render_shots_writes_pngs` (crosses the FFI, but no light and no mesh) exercises this
+    combination — this test does, so a future append site drifting out of sync fails loudly here
+    instead of silently in the field."""
+    index = _ued22_index()
+    light = Actor(name="L1", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(32)),
+                  props=[("LightRadius", "8")])
+    crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    lvl = _level(cube_room(), light, crate)
+    shots = [parse_shot("at:0,0,0;rot:0,0")]
+    n = pn.render_shots(level=lvl, shots=shots, out_dir=tmp_path / "out", size=(64, 64),
+                        index=index, defaults=DEFAULTS, search_files=_mesh_sf(index))
+    assert n == 1
+    assert (tmp_path / "out" / "shot-01.png").is_file()
 
 
 def test_render_shots_unwritable_out_dir(tmp_path):
@@ -773,7 +810,8 @@ def test_render_shots_unwritable_out_dir(tmp_path):
     try:
         with pytest.raises(pn.NativePreviewError, match="out-dir"):
             pn.render_shots(level=_level(cube_room()), index=IDX, out_dir=ro / "sub",
-                            shots=[parse_shot("at:0,0,0;rot:0,0")], size=(32, 32))
+                            shots=[parse_shot("at:0,0,0;rot:0,0")], size=(32, 32),
+                            defaults=DEFAULTS)
     finally:
         ro.chmod(0o755)
 
@@ -782,7 +820,8 @@ def test_render_shots_all_or_nothing_actor_resolution(tmp_path):
     lvl = _level(cube_room())
     shots = [parse_shot("at:0,0,0;rot:0,0"), parse_shot("at:0,0,0;look:@Nope")]
     with pytest.raises(pn.NativePreviewError, match="actor not found: Nope"):
-        pn.render_shots(level=lvl, shots=shots, out_dir=tmp_path, size=(32, 32), index=IDX)
+        pn.render_shots(level=lvl, shots=shots, out_dir=tmp_path, size=(32, 32), index=IDX,
+                        defaults=DEFAULTS)
     assert not list(tmp_path.glob("*.png"))      # nothing written
 
 
@@ -794,12 +833,12 @@ def test_pixel_probe_marker_quad_lands_at_oracle_pixel():
     pixel is hit (guards the projection + the Python-side camera basis end to end)."""
     room = cube_room("Room", 1024, 512)
     lvl = _level(room)
-    polys, table = pn.build_scene(lvl, [], IDX)
+    polys, table = pn.build_scene(lvl, [], IDX, defaults=DEFAULTS)
     # marker quad: 8uu square centred at (200, 60, -40), wound to face the camera at origin
     # (yaw=0 -> forward=+X; the ring must wind so its Newell normal points back toward -X).
     cx, cy, cz = 200.0, 60.0, -40.0
     quad = ([cx, cy - 4, cz + 4, cx, cy + 4, cz + 4, cx, cy + 4, cz - 4, cx, cy - 4, cz - 4],
-            [cx, cy, cz], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0], 0, False, 0)
+            [cx, cy, cz], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0], 0, False, 0, None)
     red = (1, 1, bytes([255, 0, 0]), bytes([1]))
     import uedcli_native
     W, H, FOV = 320, 240, 90.0
@@ -839,7 +878,7 @@ def _synthetic_scene(monkeypatch, tmp_path=None):
                         lambda self, ref: SimpleNamespace(width=1, height=1, rgb=b"\x00\x00\x00",
                                                           mask=b"\x01", b_masked=False))
     lvl = _case_c_level()
-    polys, table = pn.build_scene(lvl, [], IDX)
+    polys, table = pn.build_scene(lvl, [], IDX, defaults=DEFAULTS)
     asym = (2, 2, bytes([255, 0, 0, 0, 255, 0, 0, 0, 255, 255, 255, 0]), bytes([1, 1, 1, 1]))
     table = [asym if i == 0 else t for i, t in enumerate(table)]
     return polys, table

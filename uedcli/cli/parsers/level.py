@@ -118,13 +118,14 @@ def register(sub) -> None:
                        help="with --list-actors: print only N actors, evenly indexed across the map")
     lback = lprev.add_mutually_exclusive_group()
     lback.add_argument("--native", action="store_true",
-                       help="OPT IN to the offline draft renderer (the DEFAULT is --game): carves "
-                            "the trunk with the native CSG core and software-rasterizes textured, "
-                            "flat-shaded stills in-process. Movers render at their base pose; point "
-                            "actors, meshes, sky projection, lighting and translucency do not render "
-                            "(draft tier — translucent/masked faces render opaque)")
+                       help="the offline draft renderer (the DEFAULT — passing it is optional): "
+                            "carves the trunk with the native CSG core and software-rasterizes "
+                            "textured stills in-process, world BSP surfaces lit from a native lumel "
+                            "bake (conceptual RE, not byte parity). Movers render at their base "
+                            "pose; point actors, mesh/mover lighting, and sky projection do not "
+                            "render (draft tier)")
     lback.add_argument("--game", action="store_true",
-                       help="the faithful in-game renderer (the DEFAULT — passing it is optional): "
+                       help="OPT IN to the faithful in-game renderer (the DEFAULT is --native): "
                             "delivers the map into a WARM "
                             "per-user headless game container (booted once ~90s, then REUSED "
                             "across `level photo` runs; self-terminates after 10 min idle) and captures "

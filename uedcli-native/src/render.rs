@@ -3,8 +3,11 @@
 //! (Python computes forward/right/up via the GMath-verified `rotation.euler_to_matrix_uu`
 //! and passes it across the FFI — Rust NEVER converts FRotator angles, so the camera
 //! convention is single-sourced; plan refinement 3), near-plane polygon clip, z-buffer,
-//! perspective-correct nearest-sampled UV (mip0, wrap), and a per-face brightness factor
-//! so adjacent same-texture faces read as distinct 3-D shapes.
+//! perspective-correct nearest-sampled UV (mip0, wrap). A lightmapped world surf (`light::
+//! radiance`, board `bake-lighting-into-level-photo-native`) is shaded by nearest-sampling its
+//! baked lumel grid (clamped, not wrapped) and multiplying into the base texel; every other poly
+//! (movers/meshes, unlit surfs) keeps the flat per-face `KEY_LIGHT` brightness factor so adjacent
+//! same-texture faces still read as distinct 3-D shapes.
 //!
 //! Input is FLAT world-space textured polygons (plan refinement 2) — this module is fully
 //! independent of the Model format and the CSG/build modules: Python does all joins and
@@ -62,6 +65,27 @@ pub struct RenderPoly {
     /// backface cull (`light_in_front`'s `PF_TwoSided|PF_Portal` exemption) and by `blend_mode`
     /// (`PF_Translucent`/`PF_Modulated` — see the module doc).
     pub poly_flags: u32,
+    /// This poly's baked lit lumel grid (`light::radiance`, board item
+    /// `bake-lighting-into-level-photo-native`), `None` for a poly with no lightmap (a mover/mesh
+    /// triangle, or a world surf `light::bake` didn't lightmap) — those keep the flat `KEY_LIGHT`
+    /// hack below, unchanged.
+    pub lightmap: Option<Lightmap>,
+}
+
+/// A poly's baked lightmap in WORLD space (`light::radiance`'s `SurfRadiance`, threaded across the
+/// FFI). `rgb` is row-major (v-major then u), 3 floats per lumel, UNCLAMPED (an "overbright" value
+/// above 1.0 is possible — composited via multiply-then-clamp against the base texel, see
+/// `raster_tri`). Sampled NEAREST, no bilinear filtering (matches the base-texture sampling style;
+/// "ship it" v1, owner ruling 2026-09-11). Lumel UV does NOT wrap (unlike base-texture UV) —
+/// sampling clamps to the grid edge, since a lightmap is a one-off surface, not a tiled texture.
+#[derive(Clone)]
+pub struct Lightmap {
+    pub grid_origin: Vec3,
+    pub u_step: Vec3,
+    pub v_step: Vec3,
+    pub u_size: i32,
+    pub v_size: i32,
+    pub rgb: Vec<f32>,
 }
 
 /// A decoded texture: mip0 RGB, row-major, `data.len() == w*h*3`. `mask` is the per-texel
@@ -217,7 +241,9 @@ const KEY_LIGHT: Vec3 = Vec3 {
 
 /// One camera-space vertex ready for projection: position in the camera frame
 /// (x = depth along forward, y = along right, z = along up) + UNPANNED-frame-applied
-/// texel UV (pan already added).
+/// texel UV (pan already added) + lumel-grid UV (`lu`/`lv`, meaningless — left 0.0 — when the
+/// poly has no lightmap). Both UV frames are affine functions of world position, so both
+/// interpolate exactly the same way (perspective-correct, via `clip_near`/`raster_tri`).
 #[derive(Clone, Copy)]
 struct CamVert {
     d: f32, // depth (along forward)
@@ -225,6 +251,8 @@ struct CamVert {
     u: f32, // along up
     tu: f32,
     tv: f32,
+    lu: f32,
+    lv: f32,
 }
 
 fn newell_normal(verts: &[Vec3]) -> Vec3 {
@@ -259,6 +287,8 @@ fn clip_near(poly: &[CamVert]) -> Vec<CamVert> {
                 u: a.u + t * (b.u - a.u),
                 tu: a.tu + t * (b.tu - a.tu),
                 tv: a.tv + t * (b.tv - a.tv),
+                lu: a.lu + t * (b.lu - a.lu),
+                lv: a.lv + t * (b.lv - a.lv),
             });
         }
     }
@@ -309,19 +339,37 @@ fn render_poly(
         return;
     }
 
-    // World -> camera frame + world-frame texel UV per vertex.
+    // A lightmap whose steps are degenerate (zero-length — shouldn't happen for a real bake, but
+    // division-by-zero would produce NaN UV) is treated as absent: falls back to the flat hack.
+    let lightmap = poly.lightmap.as_ref().filter(|lm| {
+        lm.u_step.dot(&lm.u_step) > 1e-12 && lm.v_step.dot(&lm.v_step) > 1e-12
+    });
+
+    // World -> camera frame + world-frame texel UV per vertex (+ lumel-grid UV, if lit).
     let cam: Vec<CamVert> = poly
         .verts
         .iter()
         .map(|p| {
             let rel = p.sub(&camera.location);
             let dp = p.sub(&poly.uv_base);
+            let (lu, lv) = match lightmap {
+                Some(lm) => {
+                    let dp2 = p.sub(&lm.grid_origin);
+                    (
+                        dp2.dot(&lm.u_step) / lm.u_step.dot(&lm.u_step),
+                        dp2.dot(&lm.v_step) / lm.v_step.dot(&lm.v_step),
+                    )
+                }
+                None => (0.0, 0.0),
+            };
             CamVert {
                 d: rel.dot(&camera.forward),
                 r: rel.dot(&camera.right),
                 u: rel.dot(&camera.up),
                 tu: dp.dot(&poly.uv_axis_u) + poly.pan[0],
                 tv: dp.dot(&poly.uv_axis_v) + poly.pan[1],
+                lu,
+                lv,
             }
         })
         .collect();
@@ -331,7 +379,8 @@ fn render_poly(
     }
 
     // Project to screen: x right, y DOWN (row-major framebuffer).
-    // Screen vertex carries (sx, sy, 1/d, u/d, v/d) for perspective-correct interp.
+    // Screen vertex carries (sx, sy, 1/d, u/d, v/d) for perspective-correct interp; lumel UV
+    // (lu/d, lv/d) rides alongside in a parallel array, only consulted when `lightmap.is_some()`.
     let scr: Vec<[f32; 5]> = clipped
         .iter()
         .map(|v| {
@@ -343,6 +392,13 @@ fn render_poly(
                 v.tu * inv,
                 v.tv * inv,
             ]
+        })
+        .collect();
+    let lm_scr: Vec<[f32; 2]> = clipped
+        .iter()
+        .map(|v| {
+            let inv = 1.0 / v.d;
+            [v.lu * inv, v.lv * inv]
         })
         .collect();
 
@@ -367,6 +423,7 @@ fn render_poly(
             blend,
             mirror_src,
             mirror_tint,
+            lightmap.map(|lm| (lm, [lm_scr[0], lm_scr[k], lm_scr[k + 1]])),
         );
     }
 }
@@ -480,6 +537,10 @@ fn render_impl(
                     tex_index: poly.tex_index,
                     masked: poly.masked,
                     poly_flags: poly.poly_flags,
+                    // A lightmapped surf reflected in a mirror must still show lit, not flat —
+                    // carry the lightmap through unchanged (its world-space frame is unaffected
+                    // by the vertex clip above, only the poly's vertex ring shrinks).
+                    lightmap: poly.lightmap.clone(),
                 });
             }
             let secondary =
@@ -520,6 +581,7 @@ fn raster_tri(
     blend: Blend,
     mirror_src: Option<&[u8]>,
     mirror_tint: bool,
+    lightmap: Option<(&Lightmap, [[f32; 2]; 3])>,
 ) {
     let min_x = a[0].min(b[0]).min(c[0]).floor().max(0.0) as usize;
     let max_x = (a[0].max(b[0]).max(c[0]).ceil() as i64).min(w as i64 - 1);
@@ -575,11 +637,27 @@ fn raster_tri(
                 gg = t.data[ti + 1] as f32;
                 bb = t.data[ti + 2] as f32;
             }
-            let (sr, sg, sb) = (
-                (rr * shade).min(255.0),
-                (gg * shade).min(255.0),
-                (bb * shade).min(255.0),
-            );
+            // A lightmapped poly replaces the flat KEY_LIGHT `shade` scalar entirely with a
+            // per-pixel lit multiplier sampled from the baked lumel grid (nearest, clamped to the
+            // grid edge — no wrap, no bilinear filtering; see `Lightmap`'s doc).
+            let (sr, sg, sb) = if let Some((lm, luv)) = lightmap {
+                let lu = (w0 * luv[0][0] + w1 * luv[1][0] + w2 * luv[2][0]) / inv_d;
+                let lv = (w0 * luv[0][1] + w1 * luv[1][1] + w2 * luv[2][1]) / inv_d;
+                let lx = (lu.round() as i32).clamp(0, lm.u_size - 1) as usize;
+                let ly = (lv.round() as i32).clamp(0, lm.v_size - 1) as usize;
+                let li = (ly * lm.u_size as usize + lx) * 3;
+                (
+                    (rr * lm.rgb[li]).clamp(0.0, 255.0),
+                    (gg * lm.rgb[li + 1]).clamp(0.0, 255.0),
+                    (bb * lm.rgb[li + 2]).clamp(0.0, 255.0),
+                )
+            } else {
+                (
+                    (rr * shade).min(255.0),
+                    (gg * shade).min(255.0),
+                    (bb * shade).min(255.0),
+                )
+            };
             let o = pi * 3;
             match blend {
                 Blend::Opaque => {
@@ -677,6 +755,7 @@ mod tests {
             tex_index,
             masked: false,
             poly_flags: 0,
+            lightmap: None,
         }
     }
 
@@ -945,7 +1024,7 @@ mod tests {
         // Opaque: z IS written (the existing, unchanged behaviour).
         let mut img = vec![0u8; 3];
         let mut zbuf = vec![0.0f32];
-        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Opaque, None, false);
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Opaque, None, false, None);
         assert_eq!(zbuf[0], 1.0);
         assert_eq!(img, vec![128, 128, 128]); // DEFAULT_GREY (no texture), shade 1.0
 
@@ -953,7 +1032,7 @@ mod tests {
         // UNWRITTEN — mirrors `masked_transparent_texel_leaves_z_unwritten`'s precedent.
         let mut img = vec![10u8, 10, 10];
         let mut zbuf = vec![0.0f32];
-        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Translucent, None, false);
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Translucent, None, false, None);
         assert_eq!(zbuf[0], 0.0);
         assert_eq!(img, vec![138, 138, 138]); // 10 + 128
 
@@ -961,7 +1040,7 @@ mod tests {
         // point, so a dest of 200 composites to exactly 200 — an exact, rounding-free check.
         let mut img = vec![200u8, 200, 200];
         let mut zbuf = vec![0.0f32];
-        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Modulated, None, false);
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Modulated, None, false, None);
         assert_eq!(zbuf[0], 0.0);
         assert_eq!(img, vec![200, 200, 200]);
     }
@@ -1084,6 +1163,118 @@ mod tests {
             64,
         );
         assert_eq!(forward, reversed);
+    }
+
+    // ── Lightmap sampling (board `bake-lighting-into-level-photo-native`) ──────────────────────
+
+    #[test]
+    fn raster_tri_lightmap_replaces_shade_with_sampled_lumel_color() {
+        // 1x1 framebuffer, single-pixel triangle (mirrors the blend-mode tests above). Every
+        // vertex's (lu/d, lv/d) is 0 and inv_d is 1 at every vertex, so the interpolated lumel UV
+        // at the pixel is exactly (0, 0) -> lumel 0, regardless of barycentric weights.
+        let a = [0.0, 0.0, 1.0, 0.0, 0.0];
+        let b = [2.0, 0.0, 1.0, 0.0, 0.0];
+        let c = [0.0, 2.0, 1.0, 0.0, 0.0];
+        let tex = RenderTexture { w: 1, h: 1, data: vec![100, 100, 100], mask: vec![1] };
+        let lm = Lightmap {
+            grid_origin: Vec3::new(0.0, 0.0, 0.0),
+            u_step: Vec3::new(1.0, 0.0, 0.0),
+            v_step: Vec3::new(0.0, 1.0, 0.0),
+            u_size: 1,
+            v_size: 1,
+            rgb: vec![2.0, 0.5, 0.0], // double red, half green, zero blue
+        };
+        let luv = [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]];
+        let mut img = vec![0u8; 3];
+        let mut zbuf = vec![0.0f32];
+        raster_tri(
+            &mut img, &mut zbuf, 1, 1, &a, &b, &c, Some(&tex), false, 1.0, Blend::Opaque,
+            None, false, Some((&lm, luv)),
+        );
+        // base [100,100,100] * lumel [2.0,0.5,0.0] = [200,50,0] -- NOT [100,100,100] (shade=1.0
+        // would be a no-op multiply, so this proves the lightmap branch is actually taken).
+        assert_eq!(img, vec![200, 50, 0]);
+    }
+
+    #[test]
+    fn raster_tri_lightmap_clamps_overbright_and_stays_nonnegative() {
+        let a = [0.0, 0.0, 1.0, 0.0, 0.0];
+        let b = [2.0, 0.0, 1.0, 0.0, 0.0];
+        let c = [0.0, 2.0, 1.0, 0.0, 0.0];
+        let tex = RenderTexture { w: 1, h: 1, data: vec![200, 200, 200], mask: vec![1] };
+        let lm = Lightmap {
+            grid_origin: Vec3::new(0.0, 0.0, 0.0),
+            u_step: Vec3::new(1.0, 0.0, 0.0),
+            v_step: Vec3::new(0.0, 1.0, 0.0),
+            u_size: 1,
+            v_size: 1,
+            rgb: vec![2.0, 2.0, 2.0], // overbright: 200*2 = 400, must clamp to 255
+        };
+        let luv = [[0.0, 0.0], [0.0, 0.0], [0.0, 0.0]];
+        let mut img = vec![0u8; 3];
+        let mut zbuf = vec![0.0f32];
+        raster_tri(
+            &mut img, &mut zbuf, 1, 1, &a, &b, &c, Some(&tex), false, 1.0, Blend::Opaque,
+            None, false, Some((&lm, luv)),
+        );
+        assert_eq!(img, vec![255, 255, 255]);
+    }
+
+    #[test]
+    fn poly_without_lightmap_still_uses_key_light_shade_unchanged() {
+        // Regression guard: adding the lightmap field/path must not change a `None`-lightmap
+        // poly's output. Same wall/camera geometry and shade formula as `uv_texel_probe`.
+        let tex = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let img = render(&[wall(32.0, 2.0, 0)], &[tex], &cam, 64, 64);
+        let s = 0.55 + 0.45 * 0.408;
+        let o = (32 * 64 + 32) * 3;
+        assert_eq!(img[o], (255.0 * s) as u8);
+    }
+
+    #[test]
+    fn render_poly_end_to_end_uses_lightmap_when_present() {
+        // A single-lumel lightmap (u_size = v_size = 1) sidesteps sampling-boundary arithmetic
+        // entirely -- every pixel of the poly samples the same one lumel -- while still exercising
+        // the FULL `render_poly` pipeline (world->camera lu/lv computation, near-clip carrying
+        // lu/lv through, screen projection, and `raster_tri`'s lightmap branch), not just
+        // `raster_tri` in isolation.
+        let mut w = wall(32.0, 2.0, 0);
+        w.lightmap = Some(Lightmap {
+            grid_origin: Vec3::new(32.0, -1.0, 1.0), // == this wall's own uv_base
+            u_step: Vec3::new(0.0, 2.0, 0.0),
+            v_step: Vec3::new(0.0, 0.0, -2.0),
+            u_size: 1,
+            v_size: 1,
+            rgb: vec![3.0, 0.0, 0.0], // pure, tripled red
+        });
+        let tex = RenderTexture { w: 1, h: 1, data: vec![50, 50, 50], mask: vec![1] };
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let img = render(&[w], &[tex], &cam, 64, 64);
+        let o = (32 * 64 + 32) * 3;
+        // 50 * 3.0 = 150 -- NOT the flat KEY_LIGHT shade (which would give ~50*0.73 =~ 36).
+        assert_eq!((img[o], img[o + 1], img[o + 2]), (150, 0, 0));
+    }
+
+    #[test]
+    fn degenerate_lightmap_steps_fall_back_to_flat_shade_without_panicking() {
+        // A zero-length step (shouldn't happen for a real bake) must not divide-by-zero into NaN
+        // UVs -- `render_poly` filters it out and falls back to the ordinary flat shade.
+        let mut w = wall(32.0, 2.0, 0);
+        w.lightmap = Some(Lightmap {
+            grid_origin: Vec3::new(32.0, -1.0, 1.0),
+            u_step: Vec3::new(0.0, 0.0, 0.0), // degenerate
+            v_step: Vec3::new(0.0, 0.0, -2.0),
+            u_size: 1,
+            v_size: 1,
+            rgb: vec![9.0, 9.0, 9.0],
+        });
+        let tex = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let img = render(&[w], &[tex], &cam, 64, 64); // must not panic
+        let s = 0.55 + 0.45 * 0.408;
+        let o = (32 * 64 + 32) * 3;
+        assert_eq!(img[o], (255.0 * s) as u8); // flat shade, not the (9x) lumel
     }
 
     // ── PF_Mirrored planar reflection ───────────────────────────────────────────────────────

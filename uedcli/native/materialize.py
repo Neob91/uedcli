@@ -260,6 +260,29 @@ def gather_lights(level, *, defaults):
     return out
 
 
+def gather_light_colors(level, lights, *, defaults) -> list[tuple[int, int, int]]:
+    """Each `gather_lights`-listed light's effective `(LightBrightness, LightHue,
+    LightSaturation)` -- bytes 0-255, stated else the class default
+    (`dev/docs/unrealed/leveldesign/kb/lighting.md` §2: defaults 64/0/255) -- index-parallel to
+    `lights` (its own `[(name, loc, radius, special), ...]`). For `level photo --native`'s
+    radiometric lumel bake (`uedcli_native.bake_radiance`'s `colors` param, board
+    `bake-lighting-into-level-photo-native`) -- `level materialize` never calls this, since UE1
+    applies colour/brightness at render time, not bake time (only the geometric fields above are
+    baked). Same effective-value machinery as `gather_lights` above, kept alongside it rather than
+    duplicated in the caller."""
+    from .. import typedprops
+    out = []
+    for name, *_rest in lights:
+        a = level.actors[name]
+        info = defaults.for_class(a.cls or "Engine.Actor")
+        out.append((
+            _effective_int(a, info, name, "lightbrightness", typedprops),
+            _effective_int(a, info, name, "lighthue", typedprops),
+            _effective_int(a, info, name, "lightsaturation", typedprops),
+        ))
+    return out
+
+
 def _effective_location(actor, info) -> tuple:
     """The actor's effective world `Location` as floats.
 

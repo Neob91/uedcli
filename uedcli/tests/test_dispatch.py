@@ -474,7 +474,7 @@ def _preview_proj(tmp_path, actors, order, monkeypatch):
 def _preview_args(proj, tmp_path, **over):
     base = dict(cmd="level", sub="photo", shots=["at:0,0,0;rot:0,0"],
                 out_dir=str(tmp_path / "out"), native=False, game=False, size="1280x960",
-                fov=None, map=None, rebuild=False, keep_alive=False, project=str(proj),
+                fov=None, faces=None, map=None, rebuild=False, keep_alive=False, project=str(proj),
                 list_actors=None, sample=0)
     base.update(over)
     return SimpleNamespace(**base)
@@ -482,7 +482,13 @@ def _preview_args(proj, tmp_path, **over):
 
 def _patch_user_config(monkeypatch):
     from uedcli import config
-    monkeypatch.setattr(config, "load_user_config", lambda override=None: object())
+    # A real (but empty-paths) UserConfig, not a bare object() -- `level photo --native` now
+    # constructs a `ClassDefaults`/schema resolver eagerly (world-surf lighting needs it, board
+    # `bake-lighting-into-level-photo-native`), which needs `user_config.games` to exist for
+    # `select_substrate`/`composed_search_dirs`. These routing tests mock out `render_shots`
+    # itself, so the resolver never needs to actually FIND anything -- empty paths is enough.
+    fake = config.UserConfig(games={"deusex": config.Substrate(name="deusex", paths="")})
+    monkeypatch.setattr(config, "load_user_config", lambda override=None: fake)
     monkeypatch.setattr(config, "composed_search_files", lambda p, uc: [])
 
 
@@ -496,7 +502,7 @@ def test_level_preview_native_routes_shots_to_render(tmp_path, monkeypatch):
     monkeypatch.setattr("uedcli.preview_native.render_shots",
                         lambda **kw: (seen.update(kw), 2)[1])
     _patch_user_config(monkeypatch)
-    args = _preview_args(proj, tmp_path, native=True,     # --native is now opt-in (default is --game)
+    args = _preview_args(proj, tmp_path, native=True,     # native=True is now redundant with the default, kept explicit
                          shots=["at:0,0,0;rot:0,0", "at:0,0,0;look:@room;name:hero"])
     assert D.dispatch(args) == 0
     assert [s.rot for s in seen["shots"]][0] == (0.0, 0.0)
@@ -528,26 +534,27 @@ def test_level_preview_game_routes_to_preview_game(tmp_path, monkeypatch):
     assert seen["size"] == (1280, 960)
 
 
-def test_level_preview_bare_defaults_to_game_backend(tmp_path, monkeypatch):
-    # THE default flip (2026-07-17): a bare `level photo` (neither --native nor --game) routes to
-    # the in-game tier, NOT the offline rasterizer. Without this, reverting `use_game = not
-    # args.native` back to `args.game` would still pass every other photo test.
+def test_level_preview_bare_defaults_to_native_backend(tmp_path, monkeypatch):
+    # THE default flip (2026-09-11, board `bake-lighting-into-level-photo-native`): a bare `level
+    # photo` (neither --native nor --game) routes to the offline rasterizer, NOT the in-game tier
+    # (the original 2026-07-17 default, reversed once native world-surface lighting landed and the
+    # doorway mis-render bug was confirmed fixed). Without this, reverting `use_game = args.game`
+    # back to `not args.native` would still pass every other photo test.
     from uedcli import builders
     from uedcli.cli import dispatch as D
     room = builders.make_brush_actor("Room", builders.cube(600, 600, 300, "T"),
                                      location=(0, 0, 0), csg="subtract")
     proj = _preview_proj(tmp_path, {"Room": room}, ["Room"], monkeypatch)
     seen = {}
-    monkeypatch.setattr("uedcli.preview_game.render_shots",
-                        lambda **kw: (seen.update(kw), 1)[1])
     monkeypatch.setattr("uedcli.preview_native.render_shots",
+                        lambda **kw: (seen.update(kw), 1)[1])
+    monkeypatch.setattr("uedcli.preview_game.render_shots",
                         lambda **kw: (_ for _ in ()).throw(
-                            AssertionError("bare `level photo` must NOT use the --native backend")))
+                            AssertionError("bare `level photo` must NOT use the --game backend")))
     _patch_user_config(monkeypatch)
-    args = _preview_args(proj, tmp_path)                 # native=False, game=False ⇒ default game
+    args = _preview_args(proj, tmp_path)                 # native=False, game=False ⇒ default native
     assert D.dispatch(args) == 0
-    assert seen["map_path"] is None                      # trunk mode (no --map)
-    assert seen["level_name"] == "lvl" and seen["level"] is not None
+    assert seen["level"] is not None
 
 
 def test_level_preview_fov_with_game_rejected(tmp_path, capsys):
@@ -558,8 +565,8 @@ def test_level_preview_fov_with_game_rejected(tmp_path, capsys):
 
 
 def test_level_preview_game_only_flags_rejected_with_native(tmp_path, capsys):
-    # --game is the default, so --map/--rebuild/--keep-alive are only rejected when --native is
-    # explicitly opted into (they belong to the in-game tier, which --native turns off).
+    # --map/--rebuild/--keep-alive belong to the in-game tier, so they're rejected whenever the
+    # resolved backend is --native (now the default, but explicit here for clarity).
     from uedcli.cli import dispatch as D
     for over, flag in ((dict(map="x.dx"), "--map"), (dict(rebuild=True), "--rebuild"),
                        (dict(keep_alive=True), "--keep-alive")):
@@ -585,7 +592,7 @@ def test_level_preview_native_error_is_clean_exit_2(tmp_path, monkeypatch, capsy
     monkeypatch.setattr("uedcli.preview_native.render_shots",
                         lambda **kw: (_ for _ in ()).throw(NativePreviewError("boom: Named")))
     _patch_user_config(monkeypatch)
-    args = _preview_args(proj, tmp_path, native=True)     # --native is now opt-in (default is --game)
+    args = _preview_args(proj, tmp_path, native=True)     # explicit, redundant with the new default
     assert D.dispatch(args) == 2
     assert "boom: Named" in capsys.readouterr().err
 

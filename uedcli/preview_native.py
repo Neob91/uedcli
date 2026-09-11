@@ -103,12 +103,14 @@ def _brush_inputs(level, index) -> tuple[list, list[tuple[str, list]]]:
 
 # --------------------------------------------------------------------- geometry extract
 
-def _node_polys(model) -> list[tuple[list[tuple[float, float, float]], int, int, int]]:
+def _node_polys(model) -> list[tuple[list[tuple[float, float, float]], int, int, int, int]]:
     """Each BSP node's polygon from its vert pool → (world verts, i_actor, i_brush_poly,
-    poly_flags). `poly_flags` is the surf's OWN merged actor+poly `PolyFlags` (the Rust CSG core
-    ORs the brush-level flags onto it — `native/brush_marshal.py`'s marshalling docstring) — single
-    source for both preview renderers' backface-cull exemption, available even when the join below
-    is out of range (a BSP node always has a surf; only i_actor/i_brush_poly can miss).
+    poly_flags, i_surf). `poly_flags` is the surf's OWN merged actor+poly `PolyFlags` (the Rust CSG
+    core ORs the brush-level flags onto it — `native/brush_marshal.py`'s marshalling docstring) —
+    single source for both preview renderers' backface-cull exemption, available even when the join
+    below is out of range (a BSP node always has a surf; only i_actor/i_brush_poly can miss).
+    `i_surf` (= `n.i_surf`) is the surf's own index in `model.surfs` — how `build_scene` joins a
+    poly to its baked `SurfRadiance` (`bake_radiance`'s output is keyed by this same index).
     Guarded like `assemble._patch_surf_refs`: an out-of-range index never raises — the surf
     joins to no source poly and renders flat grey."""
     out = []
@@ -123,7 +125,8 @@ def _node_polys(model) -> list[tuple[list[tuple[float, float, float]], int, int,
         if any(not (0 <= i < len(model.points)) for i in idx):
             continue
         s = model.surfs[n.i_surf]
-        out.append(([model.points[i] for i in idx], s.i_actor, s.i_brush_poly, s.poly_flags))
+        out.append(
+            ([model.points[i] for i in idx], s.i_actor, s.i_brush_poly, s.poly_flags, n.i_surf))
     return out
 
 
@@ -356,15 +359,18 @@ def actor_aim_point(level, name: str) -> tuple[float, float, float]:
 
 # --------------------------------------------------------------------- orchestration
 
-def build_scene(level, search_files, index) -> tuple[list, list]:
+def build_scene(level, search_files, index, *, defaults) -> tuple[list, list]:
     """Trunk → (render polys, texture table): CSG build + node-poly extraction + source-poly
-    join + Python UV frames + mover extra_polys + native texture decode. Raises
-    NativePreviewError on every named RENDER failure path (spec §7). `index` is a
-    `classindex.ClassIndex`: movers are excluded from world CSG and rendered separately, and
-    mover-ness is decided schema-aware by `movers.is_mover` against the game's class hierarchy —
-    an unresolvable class therefore raises `classindex.ClassRefError` (naming the class) straight
-    through this function, rather than a `NativePreviewError`; dispatch's top-level guard turns it
-    into the same clean exit 2."""
+    join + Python UV frames + mover extra_polys + native texture decode + world-surf lighting
+    (board `bake-lighting-into-level-photo-native`). Raises NativePreviewError on every named
+    RENDER failure path (spec §7). `index` is a `classindex.ClassIndex`: movers are excluded from
+    world CSG and rendered separately, and mover-ness is decided schema-aware by `movers.is_mover`
+    against the game's class hierarchy — an unresolvable class therefore raises
+    `classindex.ClassRefError` (naming the class) straight through this function, rather than a
+    NativePreviewError; dispatch's top-level guard turns it into the same clean exit 2. `defaults`
+    is a `classdefaults.ClassDefaults`, needed to read light properties (their class defaults) —
+    world BSP surfaces are lit; mesh/mover actors are not (a separate, un-RE'd mechanism, board
+    item `mesh-mover-per-vertex-lighting-in-level-photo`)."""
     try:
         from uedcli.native_ext import import_native
         uedcli_native = import_native()
@@ -376,12 +382,26 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
     brushes, join = _brush_inputs(level, index)
     if not brushes:
         raise NativePreviewError("nothing to render: the trunk has no CSG brush actors")
+    # World-surf lighting inputs, gathered before the build so the bake can run right after CSG,
+    # same order as `native.materialize.build_world_model` (`bake_lighting` before
+    # `serialize_model`): `level materialize` uses `bake_lighting` alone (its structural output is
+    # already correct); `level photo --native` additionally needs `bake_radiance`'s lit RGB buffer,
+    # since its rasterizer (unlike the game) has no render-time light evaluation of its own.
+    from .native.materialize import gather_light_colors, gather_lights
+    lights = gather_lights(level, defaults=defaults)
+    lights_ffi = [(loc, radius, special) for _n, loc, radius, special in lights]
+    colors_ffi = gather_light_colors(level, lights, defaults=defaults)
     try:
         # FAITHFUL incremental `bspBrushCSG` core, same as `solve_world_surfaces` — it reproduces
         # the editor's surviving-surface set (Wanchai ratio ~1.01), where the coarse `build_geometry`
         # convex point-in-solid dropped ~69% of surfaces (board `native-preview-drops-large-geometry-
         # on-full`). Same `BrushTuple` input and `serialize_model`/`_node_polys` join path.
         built = uedcli_native.build_geometry_bspcsg(brushes)
+        uedcli_native.bake_lighting(built, lights_ffi)
+        radiance_by_surf = {}
+        for surf_index, origin, u_step, v_step, u_size, v_size, rgb in \
+                uedcli_native.bake_radiance(built, lights_ffi, colors_ffi):
+            radiance_by_surf[surf_index] = (origin, u_step, v_step, u_size, v_size, rgb)
         body = uedcli_native.serialize_model(built)
     except uedcli_native.BuildError as ex:
         raise NativePreviewError(f"native CSG build failed: {ex}") from ex
@@ -395,7 +415,7 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
     textures = _TextureTable(TextureResolver(search_files, class_index=index))
     polys = []
 
-    def add_poly(world_verts, actor, poly, surf_flags=None):
+    def add_poly(world_verts, actor, poly, surf_flags=None, lightmap=None):
         # `surf_flags` (a CSG-solved surf's OWN `poly_flags`, always real even when the join below
         # is out of range) takes priority; a mover has no surf, so it falls back to deriving the
         # merged flags itself from its authored poly + actor PolyFlags. `poly` can be None (the
@@ -431,18 +451,21 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
         # Matches `cli/rendering.py`'s `--faces` gate.
         masked = bool(flags & PF_MASKED) or textures.is_bmasked(tex_index)
         polys.append((verts_flat, list(base_w), list(tu), list(tv), list(pan), tex_index, masked,
-                     flags))
+                     flags, lightmap))
 
-    for world_verts, i_actor, i_brush_poly, poly_flags in _node_polys(model):
+    for world_verts, i_actor, i_brush_poly, poly_flags, i_surf in _node_polys(model):
+        lightmap = radiance_by_surf.get(i_surf)
         if 0 <= i_actor < len(join):
             name, source_polys = join[i_actor]
             if 0 <= i_brush_poly < len(source_polys):
                 add_poly(world_verts, level.actors[name], source_polys[i_brush_poly],
-                         surf_flags=poly_flags)
+                         surf_flags=poly_flags, lightmap=lightmap)
             else:
-                add_poly(world_verts, None, None, surf_flags=poly_flags)  # out-of-range poly (§4.4)
+                add_poly(world_verts, None, None, surf_flags=poly_flags,
+                         lightmap=lightmap)                # out-of-range poly (§4.4)
         else:
-            add_poly(world_verts, None, None, surf_flags=poly_flags)     # out-of-range owner (§4.4)
+            add_poly(world_verts, None, None, surf_flags=poly_flags,
+                     lightmap=lightmap)                    # out-of-range owner (§4.4)
 
     for world_verts, actor, poly in _mover_world_polys(level, index):
         add_poly(world_verts, actor, poly)
@@ -520,7 +543,9 @@ def build_scene(level, search_files, index) -> tuple[list, list]:
             masked = bool(poly_flags & PF_MASKED) or textures.is_bmasked(tex_index)
             verts_flat = [c for v in (w0, w1, w2) for c in (float(v[0]), float(v[1]), float(v[2]))]
             polys.append((verts_flat, list(base), list(axis_u), list(axis_v), list(pan),
-                         tex_index, masked, poly_flags))
+                         tex_index, masked, poly_flags, None))  # mesh actors: no lightmap (out of
+                                                                 # scope, board `mesh-mover-per-
+                                                                 # vertex-lighting-in-level-photo`)
 
     return polys, textures.table
 
@@ -585,7 +610,7 @@ def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
             raise NativePreviewError(f"native CSG solve failed: {ex}") from ex
         from .native.umodel import parse_model_body
         model = parse_model_body(body, 0, len(body))
-        for world_verts, i_actor, i_brush_poly, poly_flags in _node_polys(model):
+        for world_verts, i_actor, i_brush_poly, poly_flags, _i_surf in _node_polys(model):
             if 0 <= i_actor < len(join):
                 actor = join[i_actor]
                 if 0 <= i_brush_poly < len(actor.brush.polys):
@@ -602,11 +627,12 @@ def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
     return SolvedWorld(world_surfaces=world_surfaces, mover_polys=mover_polys)
 
 
-def render_shots(*, level, shots: list[Shot], out_dir: Path, index,
+def render_shots(*, level, shots: list[Shot], out_dir: Path, index, defaults,
                  size: tuple[int, int] = DEFAULT_SIZE, fov: float = DEFAULT_FOV,
                  search_files=None) -> int:
     """Render every SHOT natively into `out_dir` (created if absent). Returns the count
-    written. All actor refs resolve up front (all-or-nothing) BEFORE the build."""
+    written. All actor refs resolve up front (all-or-nothing) BEFORE the build. `defaults` is a
+    `classdefaults.ClassDefaults`, needed by `build_scene` to light world BSP surfaces."""
     resolved: list[ResolvedShot] = []
     for shot in shots:                                   # all-or-nothing resolution
         try:
@@ -614,7 +640,7 @@ def render_shots(*, level, shots: list[Shot], out_dir: Path, index,
         except ValueError as e:
             raise NativePreviewError(str(e)) from None
 
-    polys, textures = build_scene(level, search_files or [], index)
+    polys, textures = build_scene(level, search_files or [], index, defaults=defaults)
 
     try:
         out_dir.mkdir(parents=True, exist_ok=True)

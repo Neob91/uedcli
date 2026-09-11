@@ -868,6 +868,186 @@ fn bake_surf(
     })
 }
 
+// ── Radiometric lumel bake (level photo --native only; NOT used by level materialize) ─────────
+//
+// The `bake()` above reproduces UnrealEd's `shadowIlluminateBsp` OUTPUT -- a per-lumel shadow
+// MASK, byte-parity-tested. Real UnrealEd applies brightness/hue/saturation/falloff at RENDER
+// TIME from the live light actors, never baking colour into the package -- so `level materialize`
+// needs nothing here (its structural output is already correct). `level photo --native`'s
+// software rasterizer has no render-time light evaluation of its own, so this combines the
+// existing shadow mask with each light's colour into an actual lit RGB buffer per surf, for the
+// rasterizer to sample. Board item `bake-lighting-into-level-photo-native`, spec.md.
+//
+// Byte parity is explicitly NOT required for this (owner ruling 2026-09-11) -- the colour/falloff
+// formulas below are a "faithful conceptual" fit from a live probe against `level photo --game`
+// (the real in-game renderer), not a disassembly-level derivation. See
+// `dev/docs/unrealed/leveldesign/kb/lighting.md` §1.4 and
+// `dev/docs/spikes/2026-09-11-light-color-falloff-re/` for the evidence and its limits.
+//
+// **Future byte-parity swap point**: every colour/falloff decision lives in `hsv_multiplier` and
+// `falloff` below -- a future exact-parity project replaces their internals without touching
+// `radiance`'s signature or the `SurfRadiance` shape.
+
+/// A light's colour properties, kept separate from the geometric `LightInput` `bake()` uses.
+/// Index-parallel to the `lights` slice passed to `radiance()` -- `colors[i]` is `lights[i]`'s
+/// colour.
+#[derive(Debug, Clone, Copy)]
+pub struct LightColor {
+    pub brightness: u8,
+    pub hue: u8,
+    pub saturation: u8,
+}
+
+/// Standard byte-HSV -> RGB, scaled by an overbright headroom. kb/lighting.md §1.4: a plain,
+/// offset-free HSV formula fit the live probe better than a hue-pre-offset variant (`Hue=0` gave
+/// exact pure red; `Hue=32`'s predicted G/R ratio of 0.753 matched the observed 0.720, where the
+/// offset variant predicted much further off). Returns an UNCLAMPED multiplier -- can exceed 1.0
+/// in the overbright range; the caller (the rasterizer) composites onto a base texture colour and
+/// clamps the final pixel.
+fn hsv_multiplier(color: LightColor) -> [f32; 3] {
+    const OVERBRIGHT: f32 = 2.0; // kb/lighting.md §1.4: brightness scales linearly, then clamps
+    let v = color.brightness as f32 / 255.0 * OVERBRIGHT;
+    let s = 1.0 - color.saturation as f32 / 255.0; // inverted: 0 byte = full colour, 255 = white
+    if s <= 0.0 {
+        return [v, v, v];
+    }
+    let h = color.hue as f32 / 42.5; // 6 regions across the 0..255 byte wheel
+    let region = (h.floor() as i32).rem_euclid(6);
+    let remainder = h - h.floor();
+    let p = v * (1.0 - s);
+    let q = v * (1.0 - s * remainder);
+    let t = v * (1.0 - s * (1.0 - remainder));
+    match region {
+        0 => [v, t, p],
+        1 => [q, v, p],
+        2 => [p, v, t],
+        3 => [p, q, v],
+        4 => [t, p, v],
+        _ => [v, p, q],
+    }
+}
+
+/// Falloff with distance from the light, up to its radius-derived world reach. kb/lighting.md
+/// §1.4: the true curve shape was NOT cleanly pinned by the live probe (sampling-footprint noise
+/// swamped the signal) -- linear is a simple, defensible default, not a confirmed fit.
+fn falloff(distance: f32, world_radius: f32) -> f32 {
+    if world_radius <= 0.0 {
+        return 0.0;
+    }
+    (1.0 - distance / world_radius).clamp(0.0, 1.0)
+}
+
+/// One surf's lit lumel grid in WORLD space, for `level photo --native`'s rasterizer to sample.
+/// `rgb` is row-major (v-major, then u), 3 floats per lumel, UNCLAMPED. A lumel's world position
+/// is `grid_origin + u_step*u + v_step*v`.
+pub struct SurfRadiance {
+    pub surf_index: usize,
+    pub grid_origin: Vec3,
+    pub u_step: Vec3,
+    pub v_step: Vec3,
+    pub u_size: i32,
+    pub v_size: i32,
+    pub rgb: Vec<f32>,
+}
+
+/// Combine the geometric shadow mask `bake()` already wrote (`model.light_map`/`light_bits`/
+/// `lights`) with each light's colour (`colors`, index-parallel to `lights`) into a lit RGB
+/// buffer per surf. Call AFTER `bake()` has populated the model.
+pub fn radiance(model: &Model, lights: &[LightInput], colors: &[LightColor]) -> Vec<SurfRadiance> {
+    debug_assert_eq!(lights.len(), colors.len(), "colors must be index-parallel to lights");
+    // Precomputed once per light, not per surf-run entry: `hsv_multiplier`/`world_radius` are pure
+    // functions of the light alone, and a bright fixture can appear in hundreds of surf runs.
+    let light_shading: Vec<([f32; 3], f32)> =
+        lights.iter().zip(colors).map(|(l, c)| (hsv_multiplier(*c), l.world_radius())).collect();
+    let mut out = Vec::new();
+    for (si, s) in model.surfs.iter().enumerate() {
+        if s.i_light_map < 0 {
+            continue;
+        }
+        let rec = &model.light_map[s.i_light_map as usize];
+        // Two of `finalize_offsets`' three record shapes carry nothing to shade: a genuinely DARK
+        // record (`i_light_actors = -1`) and an EMPTY RUN (`i_light_actors >= 0`, but the run is a
+        // lone `-1` terminator -- every light the gather listed lit no lumel). Skipping only the
+        // dark case left an empty-run surf with a real (all-zero) `SurfRadiance`, which composites
+        // to pure BLACK in the rasterizer instead of the neutral flat-shade every other unlit
+        // surface gets -- two structurally-identical unlit walls would render as different colors
+        // purely from bake bookkeeping.
+        if rec.i_light_actors < 0 || model.lights[rec.i_light_actors as usize] < 0 {
+            continue;
+        }
+        let normal = model.vectors[s.v_normal as usize];
+        let tu = model.vectors[s.v_texture_u as usize];
+        let tv = model.vectors[s.v_texture_v as usize];
+        let base = model.points[s.p_base as usize];
+        let Some((u_dir, v_dir)) = lumel_axes(tu, tv, normal) else {
+            continue; // degenerate basis: no grid to place in world space
+        };
+        // This grid-origin/step derivation intentionally duplicates `bake_surf`'s own (the row
+        // 815-817 area) rather than sharing a helper: `bake_surf` is the byte-parity-pinned core
+        // the native-materialize campaign ladder-verifies against UED22, and refactoring it to
+        // share code with this (conceptual-RE, not byte-parity) function risks that campaign for a
+        // marginal dedup gain. If `bake_surf`'s formula ever changes, this copy must change with it
+        // -- there is no test enforcing that today.
+        let (u_size, v_size) = (rec.u_size, rec.v_size);
+        let bright_corners = s.poly_flags & PF_BRIGHT_CORNERS != 0;
+        let (step_u, step_v) = if bright_corners {
+            (bright_corners_step(rec.u_scale, u_size), bright_corners_step(rec.v_scale, v_size))
+        } else {
+            (rec.u_scale, rec.v_scale)
+        };
+        let mut grid_origin = add(
+            &add(&add(&base, &scaled(&normal, SELF_SHADOW_BIAS)), &scaled(&u_dir, rec.pan.x)),
+            &scaled(&v_dir, rec.pan.y),
+        );
+        if bright_corners {
+            grid_origin = add(&add(&grid_origin, &scaled(&v_dir, 0.25)), &scaled(&u_dir, 0.25));
+        }
+        let u_step = scaled(&u_dir, step_u);
+        let v_step = scaled(&v_dir, step_v);
+        let row_bytes = (u_size as usize + 7) / 8;
+        let plane_bytes = row_bytes * v_size as usize;
+
+        let mut rgb = vec![0.0f32; u_size as usize * v_size as usize * 3];
+        let mut plane_index = 0usize;
+        let mut pos = rec.i_light_actors as usize;
+        loop {
+            let entry = model.lights[pos];
+            if entry < 0 {
+                break;
+            }
+            let light_idx = entry as usize;
+            let light = &lights[light_idx];
+            let (color, wr) = light_shading[light_idx];
+            let plane_off = rec.data_offset as usize + plane_index * plane_bytes;
+
+            let mut row_pos = grid_origin;
+            for v in 0..v_size {
+                let mut p = row_pos;
+                for u in 0..u_size {
+                    let byte = model.light_bits[plane_off + v as usize * row_bytes + u as usize / 8];
+                    let lit = (byte >> (u as usize % 8)) & 1 != 0;
+                    if lit {
+                        let dist = p.sub(&light.location).size();
+                        let f = falloff(dist, wr);
+                        if f > 0.0 {
+                            let idx = (v as usize * u_size as usize + u as usize) * 3;
+                            rgb[idx] += color[0] * f;
+                            rgb[idx + 1] += color[1] * f;
+                            rgb[idx + 2] += color[2] * f;
+                        }
+                    }
+                    p = add(&p, &u_step);
+                }
+                row_pos = add(&row_pos, &v_step);
+            }
+            plane_index += 1;
+            pos += 1;
+        }
+        out.push(SurfRadiance { surf_index: si, grid_origin, u_step, v_step, u_size, v_size, rgb });
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1601,5 +1781,128 @@ mod tests {
         let mut unlit = m.clone();
         unlit.surfs[1].poly_flags = PF_NO_LIGHTMAP;
         assert_eq!(lightmap_emit_order(&unlit), vec![0, 2]);
+    }
+
+    // ── Radiometric lumel bake (kb/lighting.md §1.4; conceptual RE, not byte parity) ───────────
+
+    #[test]
+    fn hsv_hue0_sat0_is_pure_red() {
+        let c = hsv_multiplier(LightColor { brightness: 255, hue: 0, saturation: 0 });
+        assert!(c[0] > 0.0, "R must be lit");
+        assert_eq!(c[1], 0.0, "G must be exactly zero at Hue=0, Saturation=0 (probed live)");
+        assert_eq!(c[2], 0.0, "B must be exactly zero at Hue=0, Saturation=0 (probed live)");
+    }
+
+    #[test]
+    fn hsv_saturation_255_is_grey() {
+        let c = hsv_multiplier(LightColor { brightness: 200, hue: 90, saturation: 255 });
+        assert_eq!(c[0], c[1]);
+        assert_eq!(c[1], c[2]);
+    }
+
+    #[test]
+    fn hsv_brightness_scales_linearly() {
+        let color = |bri| hsv_multiplier(LightColor { brightness: bri, hue: 0, saturation: 0 });
+        let (lo, hi) = (color(64)[0], color(128)[0]);
+        // Doubling brightness doubles the multiplier (probed live: 64->111.7, 128->222.3, ratio
+        // 1.99) -- both points are well under the overbright ceiling, so no clamping intervenes.
+        assert!((hi / lo - 2.0).abs() < 0.01, "hi/lo = {}", hi / lo);
+    }
+
+    #[test]
+    fn hsv_hue32_predicts_the_probed_g_over_r_ratio() {
+        // Probed live (dev/docs/spikes/2026-09-11-light-color-falloff-re/harness/results.csv):
+        // Hue=32,Saturation=0,Brightness=255 -> R=249.9, G=180.0 (G/R = 0.720).
+        let c = hsv_multiplier(LightColor { brightness: 255, hue: 32, saturation: 0 });
+        let ratio = c[1] / c[0];
+        assert!((ratio - 0.720).abs() < 0.05, "predicted G/R = {ratio}, probed 0.720");
+    }
+
+    #[test]
+    fn radiance_skips_an_empty_run_the_same_as_a_dark_record() {
+        // `finalize_offsets`' "empty run" shape: `i_light_actors >= 0` (a real slot), but the run
+        // is a lone `-1` terminator -- every light the gather listed lit no lumel. `radiance()`
+        // must skip this the same way it skips a genuinely dark record (`i_light_actors == -1`),
+        // not build an all-zero `SurfRadiance` that would composite to pure black in the
+        // rasterizer instead of the neutral flat shade every other unlit surface gets.
+        let base = Vec3::new(0.0, 0.0, 0.0);
+        let normal = Vec3::new(0.0, 0.0, 1.0);
+        let tu = Vec3::new(1.0, 0.0, 0.0);
+        let tv = Vec3::new(0.0, 1.0, 0.0);
+        let model = Model {
+            points: vec![base],
+            vectors: vec![normal, tu, tv],
+            surfs: vec![BspSurf {
+                texture_ref: -1, poly_flags: 0, p_base: 0, v_normal: 0, v_texture_u: 1,
+                v_texture_v: 2, i_actor: -1, i_brush_poly: -1, pan: [0, 0], i_light_map: 0,
+            }],
+            light_map: vec![LightMapIndex {
+                data_offset: 0,
+                i_light_actors: 0, // a real slot, NOT -1 -- the empty-run shape
+                pan: Vec3::new(0.0, 0.0, 0.0),
+                u_scale: 1.0,
+                v_scale: 1.0,
+                u_size: 1,
+                v_size: 1,
+            }],
+            lights: vec![-1], // the run is a lone terminator: nothing listed reached a lumel
+            light_bits: vec![],
+            ..Model::default()
+        };
+        let light = LightInput { location: Vec3::new(-50.0, 0.0, 10.0), radius: 11,
+                                 special_lit: false };
+        let color = LightColor { brightness: 255, hue: 0, saturation: 0 };
+        let out = radiance(&model, std::slice::from_ref(&light), std::slice::from_ref(&color));
+        assert!(out.is_empty(), "an empty-run surf must produce no SurfRadiance, same as a dark one");
+    }
+
+    #[test]
+    fn falloff_is_full_at_the_light_and_zero_past_its_radius() {
+        assert_eq!(falloff(0.0, 100.0), 1.0);
+        assert_eq!(falloff(50.0, 100.0), 0.5);
+        assert_eq!(falloff(100.0, 100.0), 0.0);
+        assert_eq!(falloff(200.0, 100.0), 0.0, "past the radius: clamped to zero, not negative");
+        assert_eq!(falloff(10.0, 0.0), 0.0, "a zero-radius light never reaches (avoid div-by-0)");
+    }
+
+    #[test]
+    fn radiance_lights_the_wall_facing_the_light_brighter_than_a_far_lumel() {
+        // Same room fixture as `plus_x_wall_run`: a light on the X axis lights the +X wall.
+        let mut m = build_geometry_from_brushes(&[box_brush(
+            256.0,
+            256.0,
+            128.0,
+            Vec3::new(0.0, 0.0, 0.0),
+            CsgOper::Subtract,
+        )])
+        .unwrap();
+        let lights = [LightInput { location: Vec3::new(200.0, 0.0, 0.0), radius: 8, special_lit: false }];
+        bake(&mut m, &lights).unwrap();
+        let colors = [LightColor { brightness: 255, hue: 0, saturation: 0 }];
+        let out = radiance(&m, &lights, &colors);
+
+        let si = m
+            .surfs
+            .iter()
+            .position(|s| m.vectors[s.v_normal as usize].x == -1.0 && m.points[s.p_base as usize].x == 256.0)
+            .expect("the +X wall");
+        let sr = out
+            .iter()
+            .find(|sr| sr.surf_index == si)
+            .expect("the lit +X wall must produce a SurfRadiance");
+        assert_eq!(sr.rgb.len(), sr.u_size as usize * sr.v_size as usize * 3);
+
+        // The lumel nearest the light (closest to y=0,z=0, where the light sits) must be lit red
+        // and brighter than a corner lumel farther along the wall.
+        let center_idx = (sr.v_size as usize / 2 * sr.u_size as usize + sr.u_size as usize / 2) * 3;
+        let corner_idx = 0usize;
+        assert!(sr.rgb[center_idx] > 0.0, "the near lumel must be lit");
+        assert_eq!(sr.rgb[center_idx + 1], 0.0, "pure red light: G stays zero");
+        assert!(
+            sr.rgb[center_idx] >= sr.rgb[corner_idx],
+            "the lumel nearest the light ({}) must be at least as bright as a far corner ({})",
+            sr.rgb[center_idx],
+            sr.rgb[corner_idx]
+        );
     }
 }

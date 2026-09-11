@@ -491,16 +491,93 @@ fn bake_lighting(
     Ok(())
 }
 
-/// One flat world-space textured polygon for `render_frame` (native preview, spec §5):
-/// `(verts_flat, uv_base, uv_axis_u, uv_axis_v, pan, tex_index, masked, poly_flags)`.
+/// `bake_radiance` — `level photo --native`'s radiometric lumel bake (board item
+/// `bake-lighting-into-level-photo-native`; conceptual RE, NOT byte parity — see
+/// `dev/docs/unrealed/leveldesign/kb/lighting.md` §1.4). Call AFTER `bake_lighting` has populated
+/// `built`'s lightmap arrays. `lights` is the SAME `[(location, radius_byte, special_lit), ...]`
+/// shape `bake_lighting` takes; `colors` is index-parallel, `[(brightness, hue, saturation), ...]`
+/// (each a byte 0-255). Returns one row per lit surf: `(surf_index, grid_origin, u_step, v_step,
+/// u_size, v_size, rgb)` — `rgb` is row-major (v-major, then u), 3 floats per lumel, UNCLAMPED (an
+/// "overbright" value above 1.0 is possible); a lumel's world position is
+/// `grid_origin + u_step*u + v_step*v`. `level materialize` does not call this — its output is
+/// already correct without it (see the module doc on `light::radiance`).
+#[pyfunction]
+fn bake_radiance(
+    py: Python<'_>,
+    built: &Built,
+    lights: Vec<([f32; 3], u8, bool)>,
+    colors: Vec<(u8, u8, u8)>,
+) -> PyResult<Vec<(usize, [f32; 3], [f32; 3], [f32; 3], i32, i32, Vec<f32>)>> {
+    if lights.len() != colors.len() {
+        return Err(BuildError::new_err(format!(
+            "bake_radiance: {} lights but {} colors (must be index-parallel)",
+            lights.len(),
+            colors.len()
+        )));
+    }
+    let inputs: Vec<light::LightInput> = lights
+        .iter()
+        .map(|(loc, r, special)| light::LightInput {
+            location: model::Vec3::new(loc[0], loc[1], loc[2]),
+            radius: *r,
+            special_lit: *special,
+        })
+        .collect();
+    let color_inputs: Vec<light::LightColor> = colors
+        .iter()
+        .map(|(brightness, hue, saturation)| light::LightColor {
+            brightness: *brightness,
+            hue: *hue,
+            saturation: *saturation,
+        })
+        .collect();
+    let model = &built.model;
+    let out = py.allow_threads(|| light::radiance(model, &inputs, &color_inputs));
+    Ok(out
+        .into_iter()
+        .map(|sr| {
+            (
+                sr.surf_index,
+                [sr.grid_origin.x, sr.grid_origin.y, sr.grid_origin.z],
+                [sr.u_step.x, sr.u_step.y, sr.u_step.z],
+                [sr.v_step.x, sr.v_step.y, sr.v_step.z],
+                sr.u_size,
+                sr.v_size,
+                sr.rgb,
+            )
+        })
+        .collect())
+}
+
+/// A poly's optional baked lightmap: `(grid_origin, u_step, v_step, u_size, v_size, rgb_flat)` —
+/// the exact shape `bake_radiance` returns per surf (minus `surf_index`, which Python consumes to
+/// pick which poly gets which lightmap before calling `render_frame`). `rgb_flat` is row-major
+/// (v-major then u), 3 floats per lumel, UNCLAMPED. `None` = no lightmap (a mover/mesh triangle,
+/// or a world surf `light::bake` didn't lightmap) — that poly keeps the flat `KEY_LIGHT` shade.
+type LightmapTuple = ([f32; 3], [f32; 3], [f32; 3], i32, i32, Vec<f32>);
+
+/// One flat world-space textured polygon for `render_frame` (native preview, spec §5; lightmap
+/// field added by board item `bake-lighting-into-level-photo-native`):
+/// `(verts_flat, uv_base, uv_axis_u, uv_axis_v, pan, tex_index, masked, poly_flags, lightmap)`.
 /// `verts_flat` = the ring as x,y,z triples; the UV frame is in texel units (Python computes it
 /// from the SOURCE poly's authored axes); `tex_index` indexes the texture table, `-1` = flat
 /// default grey. `masked` = the face's PF_Masked bit: sample the texture's mask and skip
 /// transparent texels. `poly_flags` = the merged actor+poly `PolyFlags` (Python single-sources it
 /// from `BspSurf.poly_flags` for a CSG-solved surface, or `poly.flags | actor PolyFlags` for a
 /// mover) — consulted by the backface cull's `PF_TwoSided|PF_Portal` exemption and by
-/// `render::blend_mode` (`PF_Translucent`/`PF_Modulated` blend compositing).
-type RenderPolyTuple = (Vec<f32>, [f32; 3], [f32; 3], [f32; 3], [f32; 2], i32, bool, u32);
+/// `render::blend_mode` (`PF_Translucent`/`PF_Modulated` blend compositing). `lightmap` — see
+/// `LightmapTuple` above.
+type RenderPolyTuple = (
+    Vec<f32>,
+    [f32; 3],
+    [f32; 3],
+    [f32; 3],
+    [f32; 2],
+    i32,
+    bool,
+    u32,
+    Option<LightmapTuple>,
+);
 
 /// `render_frame` — the `--native` preview rasterizer (spec §5).  Flat world-space
 /// polygons + a texture table (`(w, h, rgb_bytes, mask_bytes)` mip0; `mask` is `w*h` bytes,
@@ -544,7 +621,7 @@ fn render_frame(
     }
     let rpolys: Vec<render::RenderPoly> = polys
         .into_iter()
-        .map(|(verts_flat, base, au, av, pan, tex_index, masked, poly_flags)| {
+        .map(|(verts_flat, base, au, av, pan, tex_index, masked, poly_flags, lightmap)| {
             let verts = verts_flat
                 .chunks_exact(3)
                 .map(|c| model::Vec3::new(c[0], c[1], c[2]))
@@ -558,6 +635,16 @@ fn render_frame(
                 tex_index,
                 masked,
                 poly_flags,
+                lightmap: lightmap.map(|(origin, u_step, v_step, u_size, v_size, rgb)| {
+                    render::Lightmap {
+                        grid_origin: model::Vec3::new(origin[0], origin[1], origin[2]),
+                        u_step: model::Vec3::new(u_step[0], u_step[1], u_step[2]),
+                        v_step: model::Vec3::new(v_step[0], v_step[1], v_step[2]),
+                        u_size,
+                        v_size,
+                        rgb,
+                    }
+                }),
             }
         })
         .collect();
@@ -649,6 +736,7 @@ fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(brush_lightmap_indices, m)?)?;
     m.add_function(wrap_pyfunction!(serialize_model, m)?)?;
     m.add_function(wrap_pyfunction!(bake_lighting, m)?)?;
+    m.add_function(wrap_pyfunction!(bake_radiance, m)?)?;
     m.add_function(wrap_pyfunction!(render_frame, m)?)?;
     m.add("PathError", m.py().get_type_bound::<PathError>())?;
     m.add_class::<paths_py::PresetIn>()?;

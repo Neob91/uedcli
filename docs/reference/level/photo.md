@@ -5,7 +5,7 @@ poses. A **two-tier** command behind one verb, sharing one batched **pose gramma
 never writes the trunk or a committed map.
 
 ```
-level photo SHOT… --out-dir DIR [--game | --native] [--size WxH] [--fov DEG]
+level photo SHOT… --out-dir DIR [--native | --game] [--size WxH] [--fov DEG]
               [--faces wire|textured] [--map PATH] [--rebuild] [--keep-alive]
 level photo --list-actors Package.Class [--sample N] [--game --map PATH]   # discovery mode
 ```
@@ -25,12 +25,12 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
 
 ## Backends
 
-- **`--game` (the DEFAULT)** — the faithful lit tier. Delivers the map into a **warm per-user
+- **`--game`** — OPT IN to the faithful lit tier. Delivers the map into a **warm per-user
   headless game container** (booted once ~90s, then REUSED across photo runs; self-terminates after
-  10 min idle) and captures **truly-lit first-person frames** (real lighting/sky/textures). Pitch is
+  10 min idle) and captures **truly-lit first-person frames** (real lighting/sky/textures, including
+  meshes/movers, which `--native` still renders flat). Pitch is
   clamped host-side to ±89.9°; movers render at rest pose. First batch ~1–3 min (boot + travel);
-  later batches skip the boot. It is the default because it shows lighting and sky, and the offline
-  draft mis-renders overlapping-subtract geometry silently.
+  later batches skip the boot.
   - **Prerequisites.** Docker, and the game's own files on the composed package search path (its
     `System/` and content), configured under `~/.uedcli/config.toml` `[games.*].paths`. On a fresh
     machine, `dev/scripts/setup-game-preview.sh /path/to/DeusEx` (or `--url <installer>`, or no
@@ -48,11 +48,14 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
     `--no-verify` escape — so it inherits `level materialize`'s requirement that every actor class be
     fully qualified and its package present on the search paths. An unresolvable class exits 2 naming
     the actor, before anything is built.
-- **`--native`** — the opt-in offline draft. **No container at all**: the native CSG core carves the
-  trunk in-process and a software rasterizer renders perspective stills in seconds. `--fov DEG`
-  (default 75) applies here; `--map` / `--rebuild` / `--keep-alive` are rejected with `--native`.
-  - **`--faces textured` (the default)** — solid **textured, flat-shaded** faces, **single-sided
-    like the real editor**: a face renders only from the side its surface normal faces, unless it
+- **`--native` (the DEFAULT)** — the offline draft tier. **No container at all**: the native CSG core
+  carves the trunk in-process and a software rasterizer renders perspective stills in seconds, world
+  BSP surfaces lit from a native lumel bake (conceptual RE against the real light-color/falloff
+  formula, not byte parity). `--fov DEG` (default 75) applies here; `--map` / `--rebuild` /
+  `--keep-alive` are rejected with `--native`.
+  - **`--faces textured` (the default)** — solid **textured** faces (lit world surfaces, flat-shaded
+    mesh/mover actors), **single-sided like the real editor**: a face renders only from the side its
+    surface normal faces, unless it
     carries `PF_TwoSided` or `PF_Portal` (sheets, banners, chain-link, water portals — the same
     exemption UnrealEd itself uses), in which case it renders from either side. Movers render at
     base pose, culled the same way. **Mesh actors render**: an actor whose effective `DrawType` is
@@ -75,8 +78,10 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
     reflection (a tinted-glass mirror).
     A masked material (grates, fences, foliage) alpha-tests: a transparent texel shows whatever is
     behind it instead of drawing. A `bHidden` actor is skipped, since the
-    shot shows what the player would see. Other point actors (sprite-drawn ones such as lights and
-    path nodes), sky, and lighting do NOT render. Scaled, mirrored, and sheared brushes render
+    shot shows what the player would see. World BSP surfaces (floors/walls/ceilings) are lit from a
+    native lumel bake; mesh/mover actors, other point actors (sprite-drawn ones such as lights and
+    path nodes), and sky do NOT render lit — mesh/mover lighting is a separate, un-RE'd mechanism
+    (tracked separately). Scaled, mirrored, and sheared brushes render
     (the transform is baked into the geometry, and the texture frame follows it too — texels
     stretch/shear with the surface).
   - **Unresolvable refs abort the shot.** A texture or mesh reference that cannot be found or

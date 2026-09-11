@@ -73,6 +73,50 @@ not — the lighting is baked and free at runtime. The real cost is bake time an
 per-light render-time attenuation maths. Actor lighting (runtime) is the only per-frame lighting cost,
 and it is cheap in UE1.
 
+### 1.4 The render-time color/falloff formula — conceptual RE, NOT byte-exact  🔬
+
+For `uedcli`'s native `level photo` preview (`bake-lighting-into-level-photo-native`), not for byte
+parity (that bar is explicitly out of scope for this finding — see the board item). Probed live
+against `level photo --game` (the real in-game renderer) with a single `Engine.Light` over a flat
+floor, varying one property at a time; findings recorded here are the CONCEPTUAL shape only, fit
+by eye against a handful of samples — a future byte-parity effort should re-derive this from
+disassembly, the same way the rest of this doc's `LIGHT APPLY` findings were.
+
+- **`LightBrightness` scales linearly** up to a clamp/overbright ceiling. Doubling `LightBrightness`
+  in the unsaturated range doubles the measured channel value (e.g. 64→111.7, 128→222.3 — ratio
+  1.99, matches). Above roughly half-to-two-thirds of 255 the channel saturates at a fixed ceiling
+  (texture-dependent, not literally 255 — a real-engine overbright clamp, not a uedcli artifact).
+- **`LightHue` is a standard HSV-style colour wheel, RED at 0, moving toward YELLOW as it
+  increases** — `LightHue=0` gave a pure `(R,0,0)`; `LightHue=32` (≈45° on a 360° wheel) gave `R`
+  still near-max with `G` risen to 180 and `B` still 0, exactly the red→yellow HSV region shape.
+  Only 2 points probed (0, 32) — the wheel DIRECTION is solid, the exact per-region curve was not
+  swept further (`Hue`/`Saturation` §2 already documents the wheel is continuous, no fixed slots).
+- **`LightSaturation` is confirmed inverted** (255 = white/no tint, 0 = fully saturated — matches
+  §2) but the desaturation curve is strongly NON-linear / front-loaded: `LightSaturation=128` (the
+  byte midpoint) already reads as a barely-tinted near-white `(251.8, 233.4, 206.4)`, not the
+  roughly-half-saturated colour a naive linear read of the byte would suggest — expected from a
+  standard HSV conversion (S/V blending is inherently non-linear in RGB space), not evidence of
+  anything exotic. `G` and `B` came back slightly UNEQUAL at that one sample (a plain HSV formula at
+  `Hue=0` predicts them equal); a hue-offset hypothesis was tried to explain it (the historically-
+  published UE1 SDK header's `FGetHSV` reportedly pre-rotates the hue byte before bucketing) but it
+  fits the `Hue=32` sample WORSE than the plain offset-free formula (predicted `G/R` ratio 0.753 vs
+  observed 0.720, vs. a far-off prediction with the offset applied) — dropped. The `G`≠`B` residual
+  is most likely sampling noise: the test floor's texture has a visible fine dimpled/patterned
+  albedo (confirmed separately — widening the sample box on a fixed light changed the reading by
+  20-40 units, the signature of averaging in neighbouring, differently-lit texels), enough on its
+  own to explain a ~27-unit gap. Implemented as a plain, offset-free standard byte-HSV conversion.
+- **Falloff with distance was NOT cleanly pinned.** At an unsaturated brightness (96), samples at
+  distance 25/100/400 uu gave 123/169/151 (rise then fall, not monotonic) — most likely a
+  methodology confound (a close light casts a small, steep-gradient pool on the floor, so even a
+  small sampling box mixes in laterally-adjacent, less-lit texels; widening the sample box showed
+  exactly this — the close-light reading dropped much faster with box size than the far-light one,
+  the signature of a tight vs. wide illumination footprint, not necessarily of the true on-axis
+  peak-intensity curve). The RADIUS CUTOFF itself is solid and already documented (§1.2,
+  `(LightRadius+1)×25 uu`) — both 25 uu and 400 uu are well inside a `LightRadius=64` light's
+  ≈1625 uu reach and both lit. Implemented as a simple linear falloff (full at the light, zero at
+  the radius-derived reach) — a reasonable, common choice, NOT confirmed as the real curve shape.
+- Harness + raw samples: `dev/docs/spikes/2026-09-11-light-color-falloff-re/`.
+
 ---
 
 ## 2. Light properties — full list, byte 0–255 semantics, defaults  🔬

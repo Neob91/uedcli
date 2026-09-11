@@ -584,17 +584,20 @@ def _level_paths_define(args) -> int:
 
 def _level_preview(args) -> int:
     """`level photo` — freely-posed still shots of the current level. The DEFAULT backend
-    is `--game` (the faithful tier, spec 2026-07-13): it delivers the map into a WARM per-user
-    headless-game container and captures truly-lit first-person frames (real lighting/sky/
-    meshes). `--native` is the opt-in offline DRAFT tier (spec 2026-07-16): the Rust CSG core
-    carves the trunk in-process and software-rasterizes flat-shaded stills — fast, no editor/
-    container/game, but no lighting/meshes/sky. `use_game = not args.native` picks the tier
-    (the two flags are mutually exclusive; neither given ⇒ game). All SHOT tokens validate up
+    is now `--native` (owner ruling 2026-09-11, board `bake-lighting-into-level-photo-native`):
+    the Rust CSG core carves the trunk in-process and software-rasterizes stills, with world BSP
+    surfaces lit from a native lumel bake (conceptual RE, not byte parity) — fast, no editor/
+    container/game, but mesh/mover actors stay flat-shaded and there's no sky (a separate,
+    un-RE'd mechanism, board `mesh-mover-per-vertex-lighting-in-level-photo`). `--game` is the
+    opt-in FAITHFUL tier (spec 2026-07-13): it delivers the map into a WARM per-user headless-game
+    container and captures truly-lit first-person frames (real lighting/sky/meshes) — slower
+    (container boot), but has no draft-tier gaps. `use_game = args.game` picks the tier (the two
+    flags are mutually exclusive; neither given ⇒ native). All SHOT tokens validate up
     front, all-or-nothing, before any work."""
     from ...preview_native import DEFAULT_FOV, NativePreviewError, render_shots
     from ...preview_shots import parse_shot
 
-    use_game = not args.native          # --game is the DEFAULT tier; --native is the opt-in draft
+    use_game = args.game                # --native is the DEFAULT tier; --game is the opt-in faithful one
 
     if use_game and args.fov is not None:
         print("--fov requires --native (the in-game tier renders at the game's own FOV)",
@@ -727,11 +730,17 @@ def _level_preview(args) -> int:
         return 0
 
     search_files = config.composed_search_files(project, user_config)
+    from ... import packages
+    from ...classdefaults import ClassDefaults
     try:
+        # `packages.schema_resolver(project, user_config)` directly, not `resources.
+        # schema_resolver_for(project)` -- that reloads `user_config` from disk, and this function
+        # already has it (line 659, needed for the --game backend too).
         n = render_shots(level=level, shots=shots, out_dir=Path(args.out_dir), size=size,
                          fov=args.fov if args.fov is not None else DEFAULT_FOV,
                          search_files=search_files,
-                         index=resources.mover_index(args, "level photo --native", project=project))
+                         index=resources.mover_index(args, "level photo --native", project=project),
+                         defaults=ClassDefaults(packages.schema_resolver(project, user_config)))
     except NativePreviewError as e:
         print(str(e), file=sys.stderr)
         return 2
