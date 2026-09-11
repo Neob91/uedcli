@@ -111,9 +111,8 @@ actually touched. Click a picture to enlarge; ←/→ moves between actors (swip
 your before/after choice), ↑/↓ flips before/after (swipe or the on-screen buttons on mobile). Score
 0–10 + a note, saved immediately via the API above and editable any time — no submit-once lock.
 
-An example run is committed under `tasks/unatco_widen/executions/example_pass/` as a working demo of
-the whole pipeline end to end. A `grade.json` is per-viewer live state, not reference material —
-don't hand-author one for a committed example.
+A `grade.json` is per-viewer live state, not reference material — don't hand-author one for a
+committed execution.
 
 ## Base trunks
 
