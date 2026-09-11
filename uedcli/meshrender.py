@@ -36,12 +36,11 @@ DEFAULT_SIZE = 512
 
 PF_TRANSLUCENT = 0x4
 PF_MODULATED = 0x40
-# Neither rasterizer in this module composites blend modes, so a material the real engine renders
-# translucently or modulated (glass lenses, energy fields) would otherwise show as a solid opaque
-# patch of whatever texel it samples -- visibly wrong (e.g. `GM_Trench`'s eye-height glasses-lens
-# materials rendering as a dark band across a character's face). Skipped like invisible geometry
-# until real blend compositing exists -- closer to the real (subtle/near-invisible) look than solid.
-PF_NO_OPAQUE_DRAFT = PF_TRANSLUCENT | PF_MODULATED
+# Real UE1 blend formulas for an 8-bit paletted texture with no per-texel alpha
+# (`dev/docs/unrealed/leveldesign/kb/textures.md` "Translucent"/"Modulated"): Translucent is
+# ADDITIVE (`dest + src`, clamped -- a black texel is near-invisible, a bright one glows);
+# Modulated is D3D modulate-2x (`dest * src / 128`, clamped -- 50%-grey src is neutral).
+# `GM_Trench`'s eye-height glasses-lens materials use these (real PolyFlags 0x104/0x140).
 
 _BG = (26, 28, 32)                 # thumbnail background
 _FLAT_GREY = (170, 172, 178)       # a material with no texture
@@ -237,7 +236,13 @@ def render_class(mesh, skins: dict, *, rotate_uu=(0, 0, 0), size: int = DEFAULT_
     Frame: the mesh `Scale` is applied per-axis, then the mesh-local `--rotate` FRotator pose, then
     the fixed iso camera (yaw/pitch), then auto-centred framing. With the default `rotate_uu=(0,0,0)`
     the pose is identity, so the shot is in `class show`'s extents frame (`Scale`, pre-`Origin`, the
-    translation dropped by auto-centre). Z-buffered, affine UV, Lambert shading — see the spike."""
+    translation dropped by auto-centre). Z-buffered, affine UV, Lambert shading — see the spike.
+
+    Every OPAQUE triangle draws first (z-tested + z-written, as always). `PF_Translucent`/
+    `PF_Modulated` triangles draw in a SECOND pass, back-to-front (painter's), z-TESTED against that
+    opaque buffer but never z-WRITTEN — so overlapping blended layers all test against the same
+    opaque depth and composite in draw order, nearest last. See the module-level `PF_TRANSLUCENT`/
+    `PF_MODULATED` comment for the blend formulas."""
     from PIL import Image
 
     tris = frame_triangles(mesh)
@@ -265,9 +270,9 @@ def render_class(mesh, skins: dict, *, rotate_uu=(0, 0, 0), size: int = DEFAULT_
     img = Image.new("RGB", (size, size), _BG)
     px = img.load()
     zbuf = [1e30] * (size * size)
-    for (a, b, c, ua, ub, uc, mat, flags) in tris:
-        if flags & PF_NO_OPAQUE_DRAFT:
-            continue                                      # no blend compositing yet -- see the flag
+
+    def project(t):
+        (a, b, c, *_rest) = t
         va, vb, vc = view(a), view(b), view(c)
         e1 = tuple(vb[i] - va[i] for i in range(3))
         e2 = tuple(vc[i] - va[i] for i in range(3))
@@ -279,9 +284,12 @@ def render_class(mesh, skins: dict, *, rotate_uu=(0, 0, 0), size: int = DEFAULT_
         p0 = (va[0] * k + ox, va[1] * k + oy, va[2])
         p1 = (vb[0] * k + ox, vb[1] * k + oy, vb[2])
         p2 = (vc[0] * k + ox, vc[1] * k + oy, vc[2])
+        return p0, p1, p2, shade
+
+    def draw_tri(p0, p1, p2, ua, ub, uc, mat, shade, *, blend_flags):
         area = (p1[0] - p0[0]) * (p2[1] - p0[1]) - (p2[0] - p0[0]) * (p1[1] - p0[1])
         if abs(area) < 1e-9:
-            continue
+            return
         skin = skins.get(mat)
         minx = max(0, int(min(p0[0], p1[0], p2[0])))
         maxx = min(size - 1, int(max(p0[0], p1[0], p2[0])) + 1)
@@ -298,8 +306,7 @@ def render_class(mesh, skins: dict, *, rotate_uu=(0, 0, 0), size: int = DEFAULT_
                 depth = w2 * p0[2] + w1 * p1[2] + w0 * p2[2]
                 idx = Y * size + X
                 if depth >= zbuf[idx]:
-                    continue
-                zbuf[idx] = depth
+                    continue                                # opaque geometry already nearer here
                 if skin:
                     tw, th, rgb, _b_masked, _mask = skin  # thumbnails draw opaque: no alpha test here
                     u = (w2 * ua[0] + w1 * ub[0] + w0 * uc[0]) * tw / 256.0
@@ -308,5 +315,29 @@ def render_class(mesh, skins: dict, *, rotate_uu=(0, 0, 0), size: int = DEFAULT_
                     col = (rgb[o], rgb[o + 1], rgb[o + 2])
                 else:
                     col = _FLAT_GREY
-                px[X, Y] = tuple(min(255, int(col[i] * shade)) for i in range(3))
+                shaded = tuple(min(255, int(col[i] * shade)) for i in range(3))
+                if not blend_flags:
+                    zbuf[idx] = depth                       # opaque: z-tested AND z-written
+                    px[X, Y] = shaded
+                elif blend_flags & PF_TRANSLUCENT:
+                    dest = px[X, Y]                         # additive, no z-write (see module doc)
+                    px[X, Y] = tuple(min(255, dest[i] + shaded[i]) for i in range(3))
+                else:                                       # PF_MODULATED: modulate-2x, no z-write
+                    dest = px[X, Y]
+                    px[X, Y] = tuple(min(255, (dest[i] * shaded[i]) // 128) for i in range(3))
+
+    opaque = [t for t in tris if not (t[7] & (PF_TRANSLUCENT | PF_MODULATED))]
+    blended = [t for t in tris if t[7] & (PF_TRANSLUCENT | PF_MODULATED)]
+
+    for t in opaque:
+        p0, p1, p2, shade = project(t)
+        draw_tri(p0, p1, p2, t[3], t[4], t[5], t[6], shade, blend_flags=0)
+
+    # Painter's back-to-front: farthest (largest avg depth) first, so a nearer blended layer
+    # composites on top of a farther one.
+    projected_blend = sorted(((project(t), t) for t in blended),
+                             key=lambda pt: -(pt[0][0][2] + pt[0][1][2] + pt[0][2][2]))
+    for (p0, p1, p2, shade), t in projected_blend:
+        draw_tri(p0, p1, p2, t[3], t[4], t[5], t[6], shade, blend_flags=t[7])
+
     return img, azimuth_uu(rotate_uu)

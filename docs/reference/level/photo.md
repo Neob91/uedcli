@@ -64,13 +64,14 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
     if it has one; otherwise `Skin` (actor's own, else class default) wins if set; otherwise the
     mesh's own texture. `Skin` is a fallback for texture slot 0 only — not a whole-mesh override, so
     setting only `Skin` on a multi-textured mesh recolors just whatever uses that one slot, not the
-    rest. A mesh material flagged translucent or modulated (glass lenses, energy fields) is skipped
-    entirely rather than drawn — there is no blend compositing yet, and drawing it opaque showed as
-    a solid wrong-coloured patch (e.g. a dark band across a character's eyes). A `bHidden` actor is
-    skipped, since the
+    rest. A material flagged translucent or modulated (glass lenses, energy fields) — mesh or
+    world-geometry alike — blend-composites instead of drawing opaque: translucent adds the shaded
+    texel to whatever is behind it (a dark texel is near-invisible, a bright one glows), modulated
+    multiplies it in (a modulate-2x blend — 50%-grey is neutral, darker darkens, lighter brightens).
+    A masked material (grates, fences, foliage) alpha-tests: a transparent texel shows whatever is
+    behind it instead of drawing. A `bHidden` actor is skipped, since the
     shot shows what the player would see. Other point actors (sprite-drawn ones such as lights and
-    path nodes), sky, lighting, and world-geometry translucency do NOT render
-    (translucent/masked BSP faces render opaque). Scaled, mirrored, and sheared brushes render
+    path nodes), sky, and lighting do NOT render. Scaled, mirrored, and sheared brushes render
     (the transform is baked into the geometry, and the texture frame follows it too — texels
     stretch/shear with the surface).
   - **Unresolvable refs abort the shot.** A texture or mesh reference that cannot be found or

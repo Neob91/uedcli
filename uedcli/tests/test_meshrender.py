@@ -304,15 +304,16 @@ def test_resolve_skins_error_names_the_ref_not_a_wrong_source_label(monkeypatch)
     assert "class " not in str(exc.value).split(":", 1)[1].split("multiskins")[0]
 
 
-# ── PF_Translucent/PF_Modulated: no blend compositing, so skip rather than draw opaque (found live
-# on `DeusExCharacters.GM_Trench`'s eye-height "glasses lens" materials, which rendered as a solid
-# dark band across a character's face — real `PolyFlags` 0x104/0x140, PF_TwoSided|Translucent and
+# ── PF_Translucent/PF_Modulated: real blend compositing (found live on `DeusExCharacters.GM_Trench`'s
+# eye-height "glasses lens" materials, which rendered as a solid dark band across a character's face
+# under naive opaque draw — real `PolyFlags` 0x104/0x140, PF_TwoSided|Translucent and
 # PF_TwoSided|Modulated) ──────────────────────────────────────────────────────────────────────────
 
-def test_render_class_skips_translucent_triangles(monkeypatch):
-    """A material flagged `PF_Translucent` draws nothing (no opaque compositing to fall back to) —
-    the whole image stays background, matching a mesh with no triangles rasterized at all."""
-    _skin_resolver(monkeypatch, b_masked=False)
+def test_render_class_composites_translucent_triangles_additively():
+    """A material flagged `PF_Translucent` composites ADDITIVELY over the background (`dest + src`,
+    clamped) instead of drawing a hole or overwriting it opaque. Both texels here have blue=0, so
+    additive adds nothing there — the blue channel of every drawn pixel stays exactly the
+    background's, while red/green only ever brighten."""
     mesh = _FakeMesh(
         verts=[(-50, -50, 0), (50, -50, 0), (0, 50, 0)],
         wedges=[(0, 0, 0), (1, 255, 0), (2, 0, 255)],
@@ -321,21 +322,31 @@ def test_render_class_skips_translucent_triangles(monkeypatch):
     )
     img, _azimuth = meshrender.render_class(mesh, {0: (2, 1, b"\xff\x00\x00\x00\xff\x00", False, b"\x01\x00")},
                                             size=64)
-    assert img.getcolors() == [(64 * 64, meshrender._BG)]
+    colors = img.getcolors()
+    assert len(colors) > 1 and any(c != meshrender._BG for _n, c in colors)  # not a hole
+    for _n, (r, g, b) in colors:
+        assert b == meshrender._BG[2]
+        assert r >= meshrender._BG[0] and g >= meshrender._BG[1]
 
 
-def test_render_class_skips_modulated_triangles_too(monkeypatch):
-    """Same disposition for `PF_Modulated` (screen-blend) — the other blend mode this mesh format
-    uses for glass/energy-field materials."""
+def test_render_class_composites_modulated_triangles_multiplicatively():
+    """`PF_Modulated` blends multiplicatively (modulate-2x: `dest * src / 128`, clamped) instead of
+    drawing a hole or overwriting it opaque. A flat DARK skin (well below the 128 neutral point)
+    must darken every drawn pixel below the background, never leave it untouched (a hole) and never
+    replace it outright (opaque)."""
     mesh = _FakeMesh(
         verts=[(-50, -50, 0), (50, -50, 0), (0, 50, 0)],
         wedges=[(0, 0, 0), (1, 255, 0), (2, 0, 255)],
         faces=[((0, 1, 2), 0)],
         materials=[(meshrender.PF_MODULATED, 0)],
     )
-    img, _azimuth = meshrender.render_class(mesh, {0: (2, 1, b"\xff\x00\x00\x00\xff\x00", False, b"\x01\x00")},
+    img, _azimuth = meshrender.render_class(mesh, {0: (1, 1, b"\x10\x10\x10", False, b"\x01")},
                                             size=64)
-    assert img.getcolors() == [(64 * 64, meshrender._BG)]
+    colors = img.getcolors()
+    drawn = [c for _n, c in colors if c != meshrender._BG]
+    assert drawn                                          # not a hole
+    for (r, g, b) in drawn:
+        assert r < meshrender._BG[0] and g < meshrender._BG[1] and b < meshrender._BG[2]
 
 
 def test_render_class_still_draws_an_opaque_triangle_with_the_same_shape(monkeypatch):

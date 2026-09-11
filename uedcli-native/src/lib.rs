@@ -498,7 +498,8 @@ fn bake_lighting(
 /// default grey. `masked` = the face's PF_Masked bit: sample the texture's mask and skip
 /// transparent texels. `poly_flags` = the merged actor+poly `PolyFlags` (Python single-sources it
 /// from `BspSurf.poly_flags` for a CSG-solved surface, or `poly.flags | actor PolyFlags` for a
-/// mover) — consulted by the backface cull's `PF_TwoSided|PF_Portal` exemption.
+/// mover) — consulted by the backface cull's `PF_TwoSided|PF_Portal` exemption and by
+/// `render::blend_mode` (`PF_Translucent`/`PF_Modulated` blend compositing).
 type RenderPolyTuple = (Vec<f32>, [f32; 3], [f32; 3], [f32; 3], [f32; 2], i32, bool, u32);
 
 /// `render_frame` — the `--native` preview rasterizer (spec §5).  Flat world-space

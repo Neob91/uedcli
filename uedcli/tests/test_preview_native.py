@@ -446,23 +446,23 @@ def test_bhidden_mesh_actor_does_not_render():
     assert _mesh_poly_count(shown, index) > 0
 
 
-def test_mesh_actor_skips_translucent_and_modulated_materials():
+def test_mesh_actor_keeps_translucent_and_modulated_materials_for_blend_compositing():
     """`DeusEx.JosephManderley`'s real `GM_Trench` mesh has two eye-height "glasses lens" materials
-    flagged `PF_Translucent`/`PF_Modulated` (real `PolyFlags` 0x104/0x140) -- live evidence the draft
-    rasterizer previously drew as a solid dark band across the face (no blend compositing, so it drew
-    the texel opaque). `build_scene` must drop exactly those triangles, not merely some or all of the
-    mesh."""
+    flagged `PF_Translucent`/`PF_Modulated` (real `PolyFlags` 0x104/0x140) -- these used to be
+    dropped (a stopgap, since neither rasterizer composited blend modes). Now that `render.rs`
+    composites both, `build_scene` must keep EVERY triangle, including the blend-flagged ones, and
+    hand their real `poly_flags` through so the Rust side can pick the blend mode."""
     from uedcli import meshrender
     index = _ued22_index()
     actor = Actor(name="Manderley", cls="DeusEx.JosephManderley",
                  location=(Decimal(0), Decimal(0), Decimal(0)))
     tris, _skins, _mesh, _mesh_ref = pn._mesh_actor_polys(actor, index, _mesh_sf(index))
     assert tris                                            # sanity: the mesh has triangles at all
-    translucent_tris = [t for t in tris if t[7] & meshrender.PF_NO_OPAQUE_DRAFT]
-    opaque_tris = [t for t in tris if not (t[7] & meshrender.PF_NO_OPAQUE_DRAFT)]
+    blend_flag = meshrender.PF_TRANSLUCENT | meshrender.PF_MODULATED
+    translucent_tris = [t for t in tris if t[7] & blend_flag]
     assert translucent_tris                                # sanity: the real mesh has the eye-lens materials
 
-    assert _mesh_poly_count(actor, index) == len(opaque_tris)
+    assert _mesh_poly_count(actor, index) == len(tris)      # nothing dropped, blend-flagged included
 
 
 def test_mesh_material_with_no_texture_renders_flat_grey(monkeypatch):

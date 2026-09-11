@@ -10,6 +10,13 @@
 //! independent of the Model format and the CSG/build modules: Python does all joins and
 //! computes each polygon's world UV frame (base/axes/pan, texel units); Rust only
 //! rasterizes. `cargo test`-able with no Python.
+//!
+//! `PF_Translucent`/`PF_Modulated` polys draw in a SECOND pass, back-to-front (painter's), after
+//! every opaque poly: z-TESTED against the opaque buffer but never z-WRITTEN, so overlapping
+//! blended layers all test against the same opaque depth and composite in draw order (nearest
+//! last). Blend formulas (real UE1, 8-bit paletted textures with no per-texel alpha —
+//! `dev/docs/unrealed/leveldesign/kb/textures.md` "Translucent"/"Modulated"): Translucent is
+//! ADDITIVE (`dest + src`, clamped); Modulated is D3D modulate-2x (`dest * src / 128`, clamped).
 
 use crate::light::light_in_front;
 use crate::model::Vec3;
@@ -26,9 +33,9 @@ pub struct RenderPoly {
     pub tex_index: i32,
     pub masked: bool, // PF_Masked: skip texels whose mask byte is 0 (palette-index-0 transparent)
     /// The merged actor+poly `PolyFlags` (Python single-sources it from `BspSurf.poly_flags` for a
-    /// CSG-solved surface, or `poly.flags | actor PolyFlags` for a mover). Consulted only by the
-    /// backface cull (`light_in_front`'s `PF_TwoSided|PF_Portal` exemption) — no other bit here
-    /// currently changes rendering.
+    /// CSG-solved surface, or `poly.flags | actor PolyFlags` for a mover). Consulted by the
+    /// backface cull (`light_in_front`'s `PF_TwoSided|PF_Portal` exemption) and by `blend_mode`
+    /// (`PF_Translucent`/`PF_Modulated` — see the module doc).
     pub poly_flags: u32,
 }
 
@@ -60,6 +67,29 @@ pub const BACKGROUND: [u8; 3] = [56, 56, 60];
 pub const DEFAULT_GREY: [u8; 3] = [128, 128, 128];
 /// Near-plane distance (uu): geometry behind/straddling the camera is clipped, not wrapped.
 pub const NEAR: f32 = 4.0;
+
+const PF_TRANSLUCENT: u32 = 0x0000_0004;
+const PF_MODULATED: u32 = 0x0000_0040;
+
+/// A poly's compositing mode, decided once from its `poly_flags` (`PF_Translucent` takes
+/// precedence over `PF_Modulated` if somehow both are set — the two blend modes are mutually
+/// exclusive in the real renderer).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Blend {
+    Opaque,
+    Translucent,
+    Modulated,
+}
+
+fn blend_mode(poly_flags: u32) -> Blend {
+    if poly_flags & PF_TRANSLUCENT != 0 {
+        Blend::Translucent
+    } else if poly_flags & PF_MODULATED != 0 {
+        Blend::Modulated
+    } else {
+        Blend::Opaque
+    }
+}
 
 /// Fixed world "key light" direction for the per-face brightness factor (v1 flat shading).
 /// The factor is `0.55 + 0.45·|N·L|` — the `|·|` is NOT a winding-robustness hedge (a wrong-wound
@@ -128,8 +158,123 @@ fn wrap(i: i64, n: u32) -> u32 {
     (i.rem_euclid(n as i64)) as u32
 }
 
+/// Render one polygon (facing cull, near clip, project, per-triangle raster) into `img`/`zbuf`.
+#[allow(clippy::too_many_arguments)]
+fn render_poly(
+    poly: &RenderPoly,
+    blend: Blend,
+    textures: &[RenderTexture],
+    camera: &Camera,
+    half_w: f32,
+    half_h: f32,
+    focal: f32,
+    img: &mut [u8],
+    zbuf: &mut [f32],
+    w: usize,
+    h: usize,
+) {
+    if poly.verts.len() < 3 {
+        return;
+    }
+    // Per-face brightness from the world-space face normal vs the fixed key light.
+    let n = newell_normal(&poly.verts);
+    let n_len = n.size();
+    let shade = if n_len > 1e-12 {
+        0.55 + 0.45 * (n.dot(&KEY_LIGHT).abs() / n_len)
+    } else {
+        return; // degenerate (zero-area) polygon
+    };
+
+    // Single-sided by default (real UnrealEd: `dev/docs/unrealed/leveldesign/kb/textures.md`
+    // "2-Sided renders both faces"). Reuses the editor's own disassembled facing test
+    // (`light::light_in_front`, from `URender::OccludeBsp`) with the camera standing in for
+    // the light: `PF_TwoSided`/`PF_Portal` faces are never culled, everything else needs
+    // `PlaneDot >= -1.0`.
+    let unit_n = Vec3::new(n.x / n_len, n.y / n_len, n.z / n_len);
+    if !light_in_front(&unit_n, &poly.verts[0], &camera.location, poly.poly_flags) {
+        return;
+    }
+
+    // World -> camera frame + world-frame texel UV per vertex.
+    let cam: Vec<CamVert> = poly
+        .verts
+        .iter()
+        .map(|p| {
+            let rel = p.sub(&camera.location);
+            let dp = p.sub(&poly.uv_base);
+            CamVert {
+                d: rel.dot(&camera.forward),
+                r: rel.dot(&camera.right),
+                u: rel.dot(&camera.up),
+                tu: dp.dot(&poly.uv_axis_u) + poly.pan[0],
+                tv: dp.dot(&poly.uv_axis_v) + poly.pan[1],
+            }
+        })
+        .collect();
+    let clipped = clip_near(&cam);
+    if clipped.len() < 3 {
+        return;
+    }
+
+    // Project to screen: x right, y DOWN (row-major framebuffer).
+    // Screen vertex carries (sx, sy, 1/d, u/d, v/d) for perspective-correct interp.
+    let scr: Vec<[f32; 5]> = clipped
+        .iter()
+        .map(|v| {
+            let inv = 1.0 / v.d;
+            [
+                half_w + v.r * focal * inv,
+                half_h - v.u * focal * inv,
+                inv,
+                v.tu * inv,
+                v.tv * inv,
+            ]
+        })
+        .collect();
+
+    let tex = if poly.tex_index >= 0 {
+        textures.get(poly.tex_index as usize)
+    } else {
+        None
+    };
+
+    for k in 1..scr.len() - 1 {
+        raster_tri(
+            img,
+            zbuf,
+            w,
+            h,
+            &scr[0],
+            &scr[k],
+            &scr[k + 1],
+            tex,
+            poly.masked,
+            shade,
+            blend,
+        );
+    }
+}
+
+/// World-space centroid depth along the camera's forward axis, for back-to-front sorting of
+/// blended polys (painter's algorithm — larger depth = farther).
+fn poly_depth(poly: &RenderPoly, camera: &Camera) -> f32 {
+    let n = poly.verts.len().max(1) as f32;
+    let mut c = Vec3::new(0.0, 0.0, 0.0);
+    for v in &poly.verts {
+        c.x += v.x;
+        c.y += v.y;
+        c.z += v.z;
+    }
+    c.x /= n;
+    c.y /= n;
+    c.z /= n;
+    c.sub(&camera.location).dot(&camera.forward)
+}
+
 /// Render `polys` into a `width × height` RGB framebuffer. Pure function of its inputs
-/// (no threading in v1 — spec §5 determinism).
+/// (no threading in v1 — spec §5 determinism). Opaque polys draw first (z-tested + z-written);
+/// `PF_Translucent`/`PF_Modulated` polys draw in a second pass, sorted back-to-front, z-tested
+/// but not z-written (see module doc).
 pub fn render(
     polys: &[RenderPoly],
     textures: &[RenderTexture],
@@ -149,86 +294,23 @@ pub fn render(
     // Horizontal FOV -> focal length in pixels (same focal for y: square pixels).
     let focal = half_w / (camera.fov_deg.to_radians() / 2.0).tan();
 
+    let mut blended: Vec<(&RenderPoly, Blend, f32)> = Vec::new();
     for poly in polys {
-        if poly.verts.len() < 3 {
-            continue;
+        match blend_mode(poly.poly_flags) {
+            Blend::Opaque => render_poly(
+                poly, Blend::Opaque, textures, camera, half_w, half_h, focal, &mut img, &mut zbuf,
+                w, h,
+            ),
+            mode => blended.push((poly, mode, poly_depth(poly, camera))),
         }
-        // Per-face brightness from the world-space face normal vs the fixed key light.
-        let n = newell_normal(&poly.verts);
-        let n_len = n.size();
-        let shade = if n_len > 1e-12 {
-            0.55 + 0.45 * (n.dot(&KEY_LIGHT).abs() / n_len)
-        } else {
-            continue; // degenerate (zero-area) polygon
-        };
+    }
 
-        // Single-sided by default (real UnrealEd: `dev/docs/unrealed/leveldesign/kb/textures.md`
-        // "2-Sided renders both faces"). Reuses the editor's own disassembled facing test
-        // (`light::light_in_front`, from `URender::OccludeBsp`) with the camera standing in for
-        // the light: `PF_TwoSided`/`PF_Portal` faces are never culled, everything else needs
-        // `PlaneDot >= -1.0`.
-        let unit_n = Vec3::new(n.x / n_len, n.y / n_len, n.z / n_len);
-        if !light_in_front(&unit_n, &poly.verts[0], &camera.location, poly.poly_flags) {
-            continue;
-        }
-
-        // World -> camera frame + world-frame texel UV per vertex.
-        let cam: Vec<CamVert> = poly
-            .verts
-            .iter()
-            .map(|p| {
-                let rel = p.sub(&camera.location);
-                let dp = p.sub(&poly.uv_base);
-                CamVert {
-                    d: rel.dot(&camera.forward),
-                    r: rel.dot(&camera.right),
-                    u: rel.dot(&camera.up),
-                    tu: dp.dot(&poly.uv_axis_u) + poly.pan[0],
-                    tv: dp.dot(&poly.uv_axis_v) + poly.pan[1],
-                }
-            })
-            .collect();
-        let clipped = clip_near(&cam);
-        if clipped.len() < 3 {
-            continue;
-        }
-
-        // Project to screen: x right, y DOWN (row-major framebuffer).
-        // Screen vertex carries (sx, sy, 1/d, u/d, v/d) for perspective-correct interp.
-        let scr: Vec<[f32; 5]> = clipped
-            .iter()
-            .map(|v| {
-                let inv = 1.0 / v.d;
-                [
-                    half_w + v.r * focal * inv,
-                    half_h - v.u * focal * inv,
-                    inv,
-                    v.tu * inv,
-                    v.tv * inv,
-                ]
-            })
-            .collect();
-
-        let tex = if poly.tex_index >= 0 {
-            textures.get(poly.tex_index as usize)
-        } else {
-            None
-        };
-
-        for k in 1..scr.len() - 1 {
-            raster_tri(
-                &mut img,
-                &mut zbuf,
-                w,
-                h,
-                &scr[0],
-                &scr[k],
-                &scr[k + 1],
-                tex,
-                poly.masked,
-                shade,
-            );
-        }
+    // Farthest first, so a nearer blended layer composites on top of a farther one.
+    blended.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+    for (poly, mode, _depth) in blended {
+        render_poly(
+            poly, mode, textures, camera, half_w, half_h, focal, &mut img, &mut zbuf, w, h,
+        );
     }
     img
 }
@@ -245,6 +327,7 @@ fn raster_tri(
     tex: Option<&RenderTexture>,
     masked: bool,
     shade: f32,
+    blend: Blend,
 ) {
     let min_x = a[0].min(b[0]).min(c[0]).floor().max(0.0) as usize;
     let max_x = (a[0].max(b[0]).max(c[0]).ceil() as i64).min(w as i64 - 1);
@@ -300,11 +383,32 @@ fn raster_tri(
                 gg = t.data[ti + 1] as f32;
                 bb = t.data[ti + 2] as f32;
             }
-            zbuf[pi] = inv_d;
+            let (sr, sg, sb) = (
+                (rr * shade).min(255.0),
+                (gg * shade).min(255.0),
+                (bb * shade).min(255.0),
+            );
             let o = pi * 3;
-            img[o] = (rr * shade).min(255.0) as u8;
-            img[o + 1] = (gg * shade).min(255.0) as u8;
-            img[o + 2] = (bb * shade).min(255.0) as u8;
+            match blend {
+                Blend::Opaque => {
+                    zbuf[pi] = inv_d; // z-tested AND z-written
+                    img[o] = sr as u8;
+                    img[o + 1] = sg as u8;
+                    img[o + 2] = sb as u8;
+                }
+                Blend::Translucent => {
+                    // Additive, no z-write: a black texel is near-invisible, a bright one glows.
+                    img[o] = (img[o] as f32 + sr).min(255.0) as u8;
+                    img[o + 1] = (img[o + 1] as f32 + sg).min(255.0) as u8;
+                    img[o + 2] = (img[o + 2] as f32 + sb).min(255.0) as u8;
+                }
+                Blend::Modulated => {
+                    // D3D modulate-2x, no z-write: 50%-grey src is neutral.
+                    img[o] = ((img[o] as f32 * sr) / 128.0).min(255.0) as u8;
+                    img[o + 1] = ((img[o + 1] as f32 * sg) / 128.0).min(255.0) as u8;
+                    img[o + 2] = ((img[o + 2] as f32 * sb) / 128.0).min(255.0) as u8;
+                }
+            }
         }
     }
 }
@@ -604,5 +708,158 @@ mod tests {
         w.poly_flags = PF_PORTAL;
         let img = render(&[w], &[], &cam, 64, 64);
         assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
+    }
+
+    // ── PF_Translucent/PF_Modulated blend compositing ──────────────────────────────────────
+
+    #[test]
+    fn raster_tri_blend_modes_are_z_tested_but_not_z_written() {
+        // A 1x1 framebuffer, triangle fully covering the one pixel at depth 1/d = 1.0.
+        let a = [0.0, 0.0, 1.0, 0.0, 0.0];
+        let b = [2.0, 0.0, 1.0, 0.0, 0.0];
+        let c = [0.0, 2.0, 1.0, 0.0, 0.0];
+
+        // Opaque: z IS written (the existing, unchanged behaviour).
+        let mut img = vec![0u8; 3];
+        let mut zbuf = vec![0.0f32];
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Opaque);
+        assert_eq!(zbuf[0], 1.0);
+        assert_eq!(img, vec![128, 128, 128]); // DEFAULT_GREY (no texture), shade 1.0
+
+        // Translucent: the pixel composites (additive over the existing colour) but z stays
+        // UNWRITTEN — mirrors `masked_transparent_texel_leaves_z_unwritten`'s precedent.
+        let mut img = vec![10u8, 10, 10];
+        let mut zbuf = vec![0.0f32];
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Translucent);
+        assert_eq!(zbuf[0], 0.0);
+        assert_eq!(img, vec![138, 138, 138]); // 10 + 128
+
+        // Modulated: same z-unwritten rule. src = DEFAULT_GREY (128) is the modulate-2x NEUTRAL
+        // point, so a dest of 200 composites to exactly 200 — an exact, rounding-free check.
+        let mut img = vec![200u8, 200, 200];
+        let mut zbuf = vec![0.0f32];
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Modulated);
+        assert_eq!(zbuf[0], 0.0);
+        assert_eq!(img, vec![200, 200, 200]);
+    }
+
+    #[test]
+    fn translucent_wall_composites_additively_over_opaque_background() {
+        // A full-frame opaque grey background, plus a small translucent wall in front carrying a
+        // red/green tint (blue channel 0). Additive: red/green channels must brighten, blue must
+        // stay exactly as the background left it (adding zero).
+        let bg_tex = || RenderTexture { w: 1, h: 1, data: vec![128, 128, 128], mask: vec![1] };
+        let front_tex = || RenderTexture { w: 1, h: 1, data: vec![100, 50, 0], mask: vec![1] };
+        let cam = cam_at_origin_looking_plus_x(90.0);
+
+        let bg_only = render(&[wall(100.0, 400.0, 0)], &[bg_tex()], &cam, 64, 64);
+
+        let mut front = wall(40.0, 20.0, 1);
+        front.poly_flags = PF_TRANSLUCENT;
+        let composited = render(
+            &[wall(100.0, 400.0, 0), front],
+            &[bg_tex(), front_tex()],
+            &cam,
+            64,
+            64,
+        );
+
+        let px = |img: &[u8]| {
+            let o = (32 * 64 + 32) * 3;
+            [img[o], img[o + 1], img[o + 2]]
+        };
+        let (bg_px, comp_px) = (px(&bg_only), px(&composited));
+        assert!(comp_px[0] > bg_px[0]); // red brightened
+        assert!(comp_px[1] > bg_px[1]); // green brightened
+        assert_eq!(comp_px[2], bg_px[2]); // blue unchanged (src blue = 0)
+    }
+
+    #[test]
+    fn modulated_wall_darkens_or_brightens_the_backdrop() {
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let bg_tex = || RenderTexture { w: 1, h: 1, data: vec![128, 128, 128], mask: vec![1] };
+        let bg_only = render(&[wall(100.0, 400.0, 0)], &[bg_tex()], &cam, 64, 64);
+        let px = |img: &[u8]| {
+            let o = (32 * 64 + 32) * 3;
+            [img[o], img[o + 1], img[o + 2]]
+        };
+        let bg_px = px(&bg_only);
+
+        // A BLACK (src=0) modulated wall darkens the backdrop to EXACTLY zero (0 * anything = 0
+        // regardless of shading/rounding) — an exact, rounding-free check.
+        let mut dark = wall(40.0, 20.0, 1);
+        dark.poly_flags = PF_MODULATED;
+        let dark_tex = RenderTexture { w: 1, h: 1, data: vec![0, 0, 0], mask: vec![1] };
+        let darkened = render(&[wall(100.0, 400.0, 0), dark], &[bg_tex(), dark_tex], &cam, 64, 64);
+        assert_eq!(px(&darkened), [0, 0, 0]);
+
+        // A WHITE (src=255, above the 128 neutral point) modulated wall brightens the backdrop.
+        let mut bright = wall(40.0, 20.0, 1);
+        bright.poly_flags = PF_MODULATED;
+        let bright_tex = RenderTexture { w: 1, h: 1, data: vec![255, 255, 255], mask: vec![1] };
+        let brightened =
+            render(&[wall(100.0, 400.0, 0), bright], &[bg_tex(), bright_tex], &cam, 64, 64);
+        assert!(px(&brightened)[0] > bg_px[0]);
+    }
+
+    #[test]
+    fn translucent_face_behind_nearer_opaque_geometry_is_z_tested_out() {
+        // A near OPAQUE wall in front of a farther TRANSLUCENT wall, same footprint: the
+        // translucent face must fail the z-test and contribute nothing — the composite is
+        // bit-for-bit the same as the near opaque wall rendered alone.
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let near_tex = || RenderTexture { w: 1, h: 1, data: vec![10, 20, 30], mask: vec![1] };
+        let far_tex = || RenderTexture { w: 1, h: 1, data: vec![200, 200, 200], mask: vec![1] };
+
+        let alone = render(&[wall(40.0, 20.0, 0)], &[near_tex()], &cam, 64, 64);
+
+        let mut far = wall(100.0, 20.0, 1);
+        far.poly_flags = PF_TRANSLUCENT;
+        let with_far = render(
+            &[wall(40.0, 20.0, 0), far],
+            &[near_tex(), far_tex()],
+            &cam,
+            64,
+            64,
+        );
+        assert_eq!(alone, with_far);
+    }
+
+    #[test]
+    fn blend_layer_compositing_does_not_depend_on_input_array_order() {
+        // Two overlapping blended layers (one translucent, one modulated) over an opaque
+        // background: `render()` must resolve draw order from DEPTH (back-to-front), not from
+        // where each poly sits in the input slice.
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let bg_tex = || RenderTexture { w: 1, h: 1, data: vec![128, 128, 128], mask: vec![1] };
+        let near_tex = || RenderTexture { w: 1, h: 1, data: vec![90, 90, 90], mask: vec![1] };
+        let far_tex = || RenderTexture { w: 1, h: 1, data: vec![40, 40, 40], mask: vec![1] };
+
+        let make_near = || {
+            let mut p = wall(40.0, 20.0, 1);
+            p.poly_flags = PF_TRANSLUCENT;
+            p
+        };
+        let make_far = || {
+            let mut p = wall(70.0, 20.0, 2);
+            p.poly_flags = PF_MODULATED;
+            p
+        };
+
+        let forward = render(
+            &[wall(100.0, 400.0, 0), make_near(), make_far()],
+            &[bg_tex(), near_tex(), far_tex()],
+            &cam,
+            64,
+            64,
+        );
+        let reversed = render(
+            &[make_far(), make_near(), wall(100.0, 400.0, 0)],
+            &[bg_tex(), near_tex(), far_tex()],
+            &cam,
+            64,
+            64,
+        );
+        assert_eq!(forward, reversed);
     }
 }
