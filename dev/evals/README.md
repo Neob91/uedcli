@@ -30,13 +30,14 @@ things to fix:
 
 ## Vocabulary — what an execution is graded against
 
-Grading is manual: a human looks at the pictures. What gets a picture is a real diff of the whole
-level — every actor that differs between baseline and subject, created/updated/deleted, whether the
-task mentioned it or not (see "Pipeline" step 5). `scripts/spec_format.md` has the full definitions;
-in short, a task (`tasks/<id>/task.json`) carries `entries`, a flat list of `actor`/`what` pairs —
-just an optional plain-language label, shown next to a diffed actor's picture when its name matches.
-An actor the diff catches with no matching entry still gets shown, flagged as not declared in the
-spec, for the human to look at.
+Grading is manual: a human looks at the pictures, with no per-actor prose hint about what the task
+expected — that would prime the grade instead of letting the picture speak for itself. What gets a
+picture is a real diff of the whole level — every actor that differs between baseline and subject,
+created/updated/deleted, whether the task mentioned it or not (see "Pipeline" step 5). `scripts/
+spec_format.md` has the full definitions; in short, a task (`tasks/<id>/task.json`) carries
+`entries`, a flat list of actor names — the only thing read off them is whether a diffed actor's
+name matches one, flagging it "declared" or not. An actor the diff catches with no matching entry
+still gets shown, flagged as not declared in the spec, for the human to look at.
 
 Some task files' entries also carry `kind`/`target`/`at`/`delta`/`to` — read only by
 `scripts/build_gold.py` (optional, builds a synthetic "fully correct" demo trunk), not by grading:
@@ -80,18 +81,20 @@ names the trunk tree it's imported into and sets `UEDCLI_LEVEL`.
 6. `scripts/render_execution.py <task_id> <run_id>` — a real diff of the WHOLE level, computed by
    copying the base trunk twice, applying `diff.patch` to one copy, and comparing: every actor
    whose full T3D block or CSG `order_value` differs at all, or that exists in only one copy, gets
-   a BEFORE and an AFTER quad view (Top/Front/Iso/Side), that actor highlighted, labeled
-   `CREATED`/`UPDATED`/`DELETED`. This is not filtered through the task's own `entries`: an actor
-   the task never mentioned still shows up, flagged as undeclared, because the human needs to see
-   the truth, not a subset filtered through what the task predicted. EVERY picture in the execution
-   — every actor, both BEFORE and AFTER — shares ONE crop: the union bbox of everything touched,
-   padded. This is load-bearing, not an optimization: an actor that didn't move must land at the
-   same screen position in every picture, or before/after and actor-to-actor comparison isn't
-   reliable. A `DELETED` actor's AFTER picture (or any diffed actor missing from one of the two
-   copies) is a composite: that actor's own directory physically copied in from the other copy into
-   a throwaway scratch copy, still highlighted, so its absence is visible, not just implied.
-   Re-runnable any time (e.g. after a rendering bug fix) without touching the subject trunk or an
-   existing grade — only `manifest.json` and `entries/` get replaced. Writes
+   a BEFORE (from the untouched copy) and an AFTER (from the patched copy) quad view (Top/Front/
+   Iso/Side), labeled `CREATED`/`UPDATED`/`DELETED`. This is not filtered through the task's own
+   `entries`: an actor the task never mentioned still shows up, flagged as undeclared, because the
+   human needs to see the truth, not a subset filtered through what the task predicted. EVERY
+   picture in the execution — every actor, both BEFORE and AFTER — shares ONE crop: the union bbox
+   of everything touched, padded. This is load-bearing, not an optimization: an actor that didn't
+   move must land at the same screen position in every picture, or before/after and actor-to-actor
+   comparison isn't reliable. Every picture shows the ACTUAL state of the copy it's rendered from —
+   no synthetic reinsertion of one trunk's actor into the other's scene. A `CREATED` actor's BEFORE
+   picture and a `DELETED` actor's AFTER picture carry no highlight (there's genuinely nothing
+   there to point at) rather than a composite splicing that one actor in from the other trunk, which
+   would show a state that never actually existed. Re-runnable any time (e.g. after a rendering bug
+   fix) without touching the subject trunk or an existing grade — only `manifest.json` and
+   `entries/` get replaced. Writes
    `tasks/<task_id>/executions/<run_id>/{manifest.json,entries/<actor>_{before,after}.png}`.
 7. `scripts/build_page.py` assembles `index.html` from every task's before block plus every
    `tasks/<task_id>/executions/*/manifest.json` it finds — no registration needed, dropping a new

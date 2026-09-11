@@ -21,12 +21,19 @@ can't destroy an existing grade.
    deleted by set difference) + full T3D block/order_value comparison for
    the intersection (updated) -- same comparison this pipeline always used,
    just fed two local copies instead of the original baseline/subject.
-   `what`/`declared` looked up against task.json's `entries` by actor name.
-4. Per touched actor, BEFORE (from before_copy) and AFTER (from after_copy),
-   both highlighted. A created actor doesn't exist in before_copy (physically
-   copy its directory in from after_copy, into a throwaway copy, for that one
-   picture); a deleted actor doesn't exist in after_copy (same trick, other
-   direction).
+   `declared` looked up against task.json's `entries` by actor name -- NOT
+   `what`: the grader sees only the actor's real name and CREATED/UPDATED/
+   DELETED, never the task's own prose description of what that actor is
+   "supposed" to be, which would prime the grade instead of letting the
+   picture speak for itself.
+4. Per touched actor, BEFORE (from before_copy, AS IT ACTUALLY STOOD before
+   the task -- not a preview with this one actor spliced in) and AFTER (from
+   after_copy, AS IT ACTUALLY STANDS after -- not the deleted actor spliced
+   back in). A created actor simply isn't highlighted in its own BEFORE
+   picture (it doesn't exist yet -- there is nothing there to point at); a
+   deleted actor simply isn't highlighted in its own AFTER picture, same
+   reason. No synthetic reinsertion of one trunk's actor into the other's
+   scene -- every picture shows a real, actually-existing state.
 
 Usage: render_execution.py <task_id> <run_id>
 """
@@ -72,7 +79,7 @@ def _diff_local_copies(before_copy, after_copy, task) -> list[dict]:
     assert len(base_blocks) == len(common) and len(sub_blocks) == len(common), (
         f"_ACTOR_BLOCK_RE parsed {len(base_blocks)}/{len(sub_blocks)} of {len(common)} actors -- "
         "a parse miss here silently drops actors from the diff instead of comparing them")
-    entries_by_actor = {e["actor"].casefold(): e for e in task["entries"] if e.get("actor")}
+    declared_actors = {e["actor"].casefold() for e in task["entries"] if e.get("actor")}
 
     changed = []
     for name in sorted(base_names | sub_names):
@@ -85,43 +92,26 @@ def _diff_local_copies(before_copy, after_copy, task) -> list[dict]:
             bucket = "updated"
         else:
             continue
-        entry = entries_by_actor.get(name.casefold())
-        what = entry["what"] if entry else "not declared in this task's spec -- flag this to the human"
-        changed.append(dict(actor=name, bucket=bucket, what=what, declared=entry is not None))
+        changed.append(dict(actor=name, bucket=bucket, declared=name.casefold() in declared_actors))
     return changed
 
-def _render_view_copy(render_copy, other_copy, level, frame, actor, scratch, out_path):
-    """Render `actor` highlighted from `render_copy`'s current state, its scene bbox-filtered to
-    `frame`. If `actor` doesn't exist there (deleted for an AFTER render, not-yet-created for a
-    BEFORE render), a throwaway copy of `render_copy` gets that actor's own directory physically
-    `cp -r`'d in from `other_copy` for just this one picture -- the physical-overlay approach
-    applies here too, not just to building the shared before_copy/after_copy. Always renders to
-    a temp path first and os.replace()s it into
-    `out_path` -- uedcli's own PNG writer has no tmp+rename step of its own, so without this an
-    interrupted render (the exact scenario --resume exists for) can leave a truncated PNG that a
-    later --resume run would then treat as already-done and skip forever."""
+def _render_view_copy(render_copy, level, frame, actor, scratch, out_path):
+    """Render `render_copy`'s ACTUAL current state, its scene bbox-filtered to `frame`, with
+    `actor` highlighted if (and only if) it actually exists there. No synthetic reinsertion of
+    an actor from the other trunk: a BEFORE picture must show the real state before the task
+    (a created actor gets no highlight there -- it doesn't exist yet), and an AFTER picture must
+    show the real state after (a deleted actor gets no highlight there -- it's genuinely gone).
+    A composite ("what would it look like if this ONE actor were undone") mixes a real state
+    with a hypothetical, which is exactly the ambiguity a real diff exists to avoid. Always
+    renders to a temp path first and os.replace()s it into `out_path` -- uedcli's own PNG writer
+    has no tmp+rename step of its own, so without this an interrupted render (the exact scenario
+    --resume exists for) can leave a truncated PNG that a later --resume run would then treat as
+    already-done and skip forever."""
     tmp_out = scratch / f"_pending_{out_path.name}"
-    if rc.actor_exists(render_copy, level, actor):
-        names = rc.scene_names(render_copy, level, frame)
-        rc.diagram_live_names(render_copy, level, names, frame, actor, tmp_out)
-        os.replace(tmp_out, out_path)
-        return
-    if not rc.actor_exists(other_copy, level, actor):
-        names = rc.scene_names(render_copy, level, frame)
-        rc.diagram_live_names(render_copy, level, names, frame, None, tmp_out)
-        os.replace(tmp_out, out_path)
-        return
-    throwaway = pathlib.Path(tempfile.mkdtemp(prefix=f"preview_{actor}_", dir=scratch))
-    try:
-        shutil.copytree(render_copy, throwaway, dirs_exist_ok=True)
-        src = other_copy / "maps" / level / "actors" / actor
-        dst = throwaway / "maps" / level / "actors" / actor
-        shutil.copytree(src, dst)
-        names = rc.scene_names(throwaway, level, frame)
-        rc.diagram_live_names(throwaway, level, names, frame, actor, tmp_out)
-        os.replace(tmp_out, out_path)
-    finally:
-        shutil.rmtree(throwaway, ignore_errors=True)
+    names = rc.scene_names(render_copy, level, frame)
+    highlight = actor if rc.actor_exists(render_copy, level, actor) else None
+    rc.diagram_live_names(render_copy, level, names, frame, highlight, tmp_out)
+    os.replace(tmp_out, out_path)
 
 def render_execution(task_id: str, run_id: str, *, resume: bool = False) -> dict:
     if task_id not in TASKS:
@@ -180,10 +170,10 @@ def render_execution(task_id: str, run_id: str, *, resume: bool = False) -> dict
             before_path = entries_dir / f"{actor}_before.png"
             after_path = entries_dir / f"{actor}_after.png"
             if not (resume and before_path.exists()):
-                _render_view_copy(before_copy, after_copy, level, frame, actor, scratch, before_path)
+                _render_view_copy(before_copy, level, frame, actor, scratch, before_path)
             if not (resume and after_path.exists()):
-                _render_view_copy(after_copy, before_copy, level, frame, actor, scratch, after_path)
-            entries.append(dict(actor=actor, bucket=t["bucket"], label=LABELS[t["bucket"]], what=t["what"],
+                _render_view_copy(after_copy, level, frame, actor, scratch, after_path)
+            entries.append(dict(actor=actor, bucket=t["bucket"], label=LABELS[t["bucket"]],
                                  declared=t["declared"],
                                  img_before=f"entries/{actor}_before.png",
                                  img_after=f"entries/{actor}_after.png"))

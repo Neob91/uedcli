@@ -20,10 +20,10 @@ disagree: nowhere):
   The images themselves are always `before/quad.png` + `before/pan_0.png … pan_7.png` (rendered by
   `render_manual.py --before`, never hand-captured) -- nothing in `task.json` names them, since the
   directory holds nothing else.
-- `entries` -- `actor`/`what` labels, below. Don't leave this empty even on a pure-creation task:
+- `entries` -- `actor` names, below. Don't leave this empty even on a pure-creation task:
   `render_manual.py --before` frames the whole-room "before" shot from the union bbox of `entries`'
   own actors (there's no execution yet to diff against), and an empty list gives it nothing to
-  frame around -- keep at least one `actor`/`what` entry naming something nearby, purely as a frame
+  frame around -- keep at least one `actor` entry naming something nearby, purely as a frame
   anchor.
 
 No `frame` field: the crop every picture uses is computed, not hand-picked -- `render_execution.py`
@@ -33,24 +33,28 @@ picture (a real bug, caught and fixed); don't reintroduce one.
 
 ## `entries`: what it's for, and what it's NOT for
 
-Grading is manual -- a human looks at the pictures. What gets a picture is a real diff of the whole
-trunk (baseline vs. subject, via `diff.patch` -- see `extract_execution.py`/`render_execution.py`):
-every actor that's created, deleted, or whose full T3D block/CSG `order_value` differs at all.
-`entries` does NOT gate
-this -- an agent that touches an actor the task never mentions still shows up, flagged as not
-declared in the spec, which is the point: the human needs to see the truth, not a subset filtered
-through what the task predicted.
+Grading is manual -- a human looks at the pictures, with no prose hint about what a given actor is
+"supposed" to be or do (that would prime the grade instead of letting the picture speak for itself).
+What gets a picture is a real diff of the whole trunk (baseline vs. subject, via `diff.patch` -- see
+`extract_execution.py`/`render_execution.py`): every actor that's created, deleted, or whose full
+T3D block/CSG `order_value` differs at all. `entries` does NOT gate this -- an agent that touches an
+actor the task never mentions still shows up, flagged as not declared, which is the point: the human
+needs to see the truth, not a subset filtered through what the task predicted.
 
-Each `entries` item carries `actor` (the actor's real name in the baseline, or the name it's
-expected to get) and `what` (plain-language identification of the actor -- what it is, not why it
-matters), looked up by actor name when a diffed actor happens to match one. Neither
-`render_execution.py` nor `build_page.py` reads anything else off an entry.
+The only thing `render_execution.py` reads off an `entries` item is `actor` (the actor's real name
+in the baseline, or the name it's expected to get), to decide `declared` -- whether that name
+appears in the spec at all. It never reads a description off an entry, and none is shown to the
+grader. `build_page.py` reads nothing off `entries` either.
 
 `build_gold.py` (builds the demo "fully correct" trunk for a task) is SEPARATE from grading and
 still reads `kind`/`target`/`at`/`delta`/`to`: `update(target="corners", at=[...], delta=[...])`
 moves those corners; `anchor(to=<actor>)` moves by whatever delta the gold trunk actually gave its
 anchor; `update(target="unchanged")` needs no op. Only include these fields on an entry you want
-`build_gold.py` to apply -- an entry with just `actor`/`what` (no `kind`) is a pure display label,
-and `build_gold.py` leaves that actor untouched. It has no handling for a `create`-kind entry --
-never did, it can't synthesize a new actor -- so a task whose only edit is a creation has no
+`build_gold.py` to apply -- an entry with just `actor` (no `kind`) is a pure frame anchor, and
+`build_gold.py` leaves that actor untouched. It has no handling for a `create`-kind entry -- never
+did, it can't synthesize a new actor -- so a task whose only edit is a creation has no
 `update`/`anchor` entries at all, just the frame-anchor entry described above.
+
+`what` (a plain-language identification of the actor) is still fine to carry on an entry as
+authoring documentation -- useful context for whoever is reading or maintaining `task.json` -- but
+it's just that: no script reads it, and it's never shown on the page.

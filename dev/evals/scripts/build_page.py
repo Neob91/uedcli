@@ -52,8 +52,8 @@ def execution_card(task_id, task, run):
     entries = sorted(run["entries"], key=lambda e: (BUCKET_ORDER[e["bucket"]], e["actor"]))
     undeclared_count = sum(1 for e in entries if not e["declared"])
     items = [{"default": 1, "variants": [
-                {"src": run_img(task_id, run_id, e["img_before"]), "cap": f"BEFORE — {e['actor']}: {e['what']}"},
-                {"src": run_img(task_id, run_id, e["img_after"]), "cap": f"{e['label']} — {e['actor']}: {e['what']}"},
+                {"src": run_img(task_id, run_id, e["img_before"]), "cap": f"BEFORE — {e['actor']}"},
+                {"src": run_img(task_id, run_id, e["img_after"]), "cap": f"{e['label']} — {e['actor']}"},
               ]} for e in entries]
     items += [{"default": 0, "variants": [
                 {"src": run_img(task_id, run_id, n), "cap": f"Photo, panorama frame {i}"},
@@ -66,8 +66,7 @@ def execution_card(task_id, task, run):
         f'<figure class="egrid-item b-{e["bucket"]}{"" if e["declared"] else " undeclared"}">'
         f'<img src="{run_img(task_id, run_id, e["img_after"])}" alt="{e["actor"]}" loading="lazy" tabindex="0" '
         f'onclick="openLB(\'{key}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{key}\',{i})">'
-        f'<figcaption><span class="elbl b-{e["bucket"]}">{e["label"]}</span> {e["actor"]}'
-        f'<span class="ewhat">{e["what"]}</span></figcaption></figure>'
+        f'<figcaption><span class="elbl b-{e["bucket"]}">{e["label"]}</span> {e["actor"]}</figcaption></figure>'
         for i, e in enumerate(entries))
 
     pan_thumbs = "".join(
@@ -248,7 +247,6 @@ body.focus-mode #focusPane{display:block}
 .egrid-item{margin:0;background:#13140d;border:1px solid var(--line);border-left:3px solid var(--faint);border-radius:3px;overflow:hidden}
 .egrid-item img{display:block;width:100%;height:auto;cursor:zoom-in}
 .egrid-item figcaption{font-size:11.5px;color:var(--dim);padding:6px 8px 8px}
-.egrid-item .ewhat{display:block;color:var(--faint);font-size:10.5px;margin-top:2px}
 .elbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:1px 5px;border-radius:2px;margin-right:5px}
 .egrid-item.b-created{border-left-color:var(--cyan)}.elbl.b-created{background:color-mix(in srgb,var(--cyan) 25%,transparent);color:var(--cyan)}
 .egrid-item.b-updated{border-left-color:var(--gold)}.elbl.b-updated{background:color-mix(in srgb,var(--gold) 25%,transparent);color:var(--gold-soft)}
