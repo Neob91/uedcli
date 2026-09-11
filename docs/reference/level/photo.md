@@ -68,6 +68,11 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
     world-geometry alike — blend-composites instead of drawing opaque: translucent adds the shaded
     texel to whatever is behind it (a dark texel is near-invisible, a bright one glows), modulated
     multiplies it in (a modulate-2x blend — 50%-grey is neutral, darker darkens, lighter brightens).
+    A **mirrored** face (`PF_Mirrored`) reflects: the camera is mirrored across the face's plane and
+    the scene re-rendered from there, one bounce deep (a mirror seen inside another mirror's
+    reflection draws as a plain textured face instead of recursing again). Mirrored alone never
+    shows its own texture; combined with translucent it does, blended additively over the
+    reflection (a tinted-glass mirror).
     A masked material (grates, fences, foliage) alpha-tests: a transparent texel shows whatever is
     behind it instead of drawing. A `bHidden` actor is skipped, since the
     shot shows what the player would see. Other point actors (sprite-drawn ones such as lights and

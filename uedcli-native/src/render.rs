@@ -17,6 +17,31 @@
 //! last). Blend formulas (real UE1, 8-bit paletted textures with no per-texel alpha —
 //! `dev/docs/unrealed/leveldesign/kb/textures.md` "Translucent"/"Modulated"): Translucent is
 //! ADDITIVE (`dest + src`, clamped); Modulated is D3D modulate-2x (`dest * src / 128`, clamped).
+//!
+//! `PF_Mirrored` polys get a REAL planar reflection, not a blend formula: the camera is reflected
+//! across the mirror poly's own plane and the WHOLE scene is re-rendered from that reflected
+//! camera (same width/height/fov, so screen coordinates line up pixel-for-pixel — a reflected ray
+//! through screen pixel (x,y) is the same ray on both sides of the mirror plane, a standard
+//! property of planar reflection: reflecting camera position AND basis by the same isometry
+//! preserves every dot product against the mirror point, so the two cameras agree on every
+//! surface point's projected pixel). The secondary scene is world-space CLIPPED to the real
+//! camera's side of the mirror plane first (an oblique near-clip at the mirror itself, not the
+//! usual fixed `NEAR`), so nothing "behind" the mirror (e.g. a wall it's mounted on) leaks into
+//! the reflection. A mirror poly draws OPAQUE (z-tested AND z-written) sampling the secondary
+//! buffer at the SAME pixel it occupies in the primary frame, no per-poly shading (a mirror shows
+//! already-lit imagery, not a diffuse surface). Capped at one reflection deep: inside a
+//! reflection's own render, `PF_Mirrored` polys draw as ordinary opaque textured surfaces instead
+//! of recursing — a hall-of-mirrors is a real UE1 case this draft renderer does not attempt.
+//!
+//! `PF_Mirrored` alone is a PURE mirror: the surface's own texture never shows. Combined with
+//! `PF_Translucent` — real content carries both (`02_NYC_Bar.dx` Brush117, `Terraniux.unr`
+//! `DecayedS.Floor.dmFlor2a`) — it draws the reflection AND its own texture, additively tinted on
+//! top. UNVERIFIED HEURISTIC, not an RE fact like the rest of this file's mirror math: nothing here
+//! confirms the real engine's PF_Mirrored+PF_Translucent combination actually composites this way,
+//! only that real content sets both bits together. The additive formula is borrowed from
+//! `PF_Translucent`'s own (confirmed) formula for lack of a better guess; a genuinely tinted/
+//! one-way mirror plausibly ATTENUATES the reflection (multiplicative) rather than brightens it.
+//! Needs disassembly/live-probe confirmation before this is trusted as real UE1 behavior.
 
 use crate::light::light_in_front;
 use crate::model::Vec3;
@@ -70,25 +95,112 @@ pub const NEAR: f32 = 4.0;
 
 const PF_TRANSLUCENT: u32 = 0x0000_0004;
 const PF_MODULATED: u32 = 0x0000_0040;
+const PF_MIRRORED: u32 = 0x0800_0000;
 
-/// A poly's compositing mode, decided once from its `poly_flags` (`PF_Translucent` takes
-/// precedence over `PF_Modulated` if somehow both are set — the two blend modes are mutually
-/// exclusive in the real renderer).
+/// A poly's compositing mode, decided once from its `poly_flags`, for BUCKET ROUTING (which pass
+/// draws it — opaque, mirror, or the z-tested-not-written blended pass). `PF_Mirrored` wins over
+/// either blend flag: it routes to the mirror pass regardless of `PF_Translucent`/`PF_Modulated`
+/// also being set. `PF_Translucent` alongside `PF_Mirrored` still has an effect, just not here —
+/// `render_impl` gives that combination a second, additive tint pass of its own texture on top of
+/// the reflection (module doc). Translucent takes precedence over Modulated if somehow both are
+/// set with no Mirror bit — the two blend modes are mutually exclusive in the real renderer.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Blend {
     Opaque,
     Translucent,
     Modulated,
+    Mirror,
 }
 
 fn blend_mode(poly_flags: u32) -> Blend {
-    if poly_flags & PF_TRANSLUCENT != 0 {
+    if poly_flags & PF_MIRRORED != 0 {
+        Blend::Mirror
+    } else if poly_flags & PF_TRANSLUCENT != 0 {
         Blend::Translucent
     } else if poly_flags & PF_MODULATED != 0 {
         Blend::Modulated
     } else {
         Blend::Opaque
     }
+}
+
+/// Reflect world point `p` across the plane through `plane_point` with unit normal `n`.
+fn reflect_point(p: &Vec3, plane_point: &Vec3, n: &Vec3) -> Vec3 {
+    let d = p.sub(plane_point).dot(n);
+    Vec3::new(p.x - 2.0 * d * n.x, p.y - 2.0 * d * n.y, p.z - 2.0 * d * n.z)
+}
+
+/// Reflect a direction (no translation) across a plane with unit normal `n`. Sign of `n` does not
+/// matter — both this and `reflect_point` are invariant under `n -> -n`.
+fn reflect_dir(v: &Vec3, n: &Vec3) -> Vec3 {
+    let d = v.dot(n);
+    Vec3::new(v.x - 2.0 * d * n.x, v.y - 2.0 * d * n.y, v.z - 2.0 * d * n.z)
+}
+
+/// Sutherland-Hodgman clip of a world-space poly ring against the half-space
+/// `(v - plane_point)·keep_dir >= 0`.
+fn clip_world_by_plane(verts: &[Vec3], plane_point: &Vec3, keep_dir: &Vec3) -> Vec<Vec3> {
+    let mut out = Vec::with_capacity(verts.len() + 2);
+    let side = |v: &Vec3| v.sub(plane_point).dot(keep_dir);
+    for i in 0..verts.len() {
+        let a = verts[i];
+        let b = verts[(i + 1) % verts.len()];
+        let (sa, sb) = (side(&a), side(&b));
+        if sa >= 0.0 {
+            out.push(a);
+        }
+        if (sa >= 0.0) != (sb >= 0.0) {
+            let t = sa / (sa - sb);
+            out.push(Vec3::new(
+                a.x + t * (b.x - a.x),
+                a.y + t * (b.y - a.y),
+                a.z + t * (b.z - a.z),
+            ));
+        }
+    }
+    out
+}
+
+/// A group of `RenderPoly` indices that share one mirror plane (a mirror surface fragmented by
+/// CSG still reflects as ONE plane, one secondary render). `normal` is unit-length; its sign is
+/// arbitrary (reflection is sign-invariant — see `reflect_point`/`reflect_dir`).
+struct MirrorCluster {
+    point: Vec3,
+    normal: Vec3,
+    indices: Vec<usize>,
+}
+
+/// Group every `Blend::Mirror` poly in `polys` by plane (point+normal within a loose tolerance —
+/// CSG fragments of one authored mirror face land on the exact same plane in practice, and
+/// several separate mirror brushes at the same height/orientation collapse into one reflection
+/// too). Measured against real content: `Terraniux.unr`'s 8 `DecayedS.Floor.dmFlor2a` mirror
+/// brushes (12 mirror-flagged polys total) span only 2 distinct Z levels, i.e. 2 clusters — not
+/// bounded in general, so a level with many separately-oriented mirrors would cost one full
+/// `render_impl` re-render per cluster (no cap, no warning).
+fn group_mirror_clusters(polys: &[RenderPoly]) -> Vec<MirrorCluster> {
+    let mut clusters: Vec<MirrorCluster> = Vec::new();
+    for (i, poly) in polys.iter().enumerate() {
+        if blend_mode(poly.poly_flags) != Blend::Mirror || poly.verts.len() < 3 {
+            continue;
+        }
+        let n = newell_normal(&poly.verts);
+        let len = n.size();
+        if len < 1e-9 {
+            continue; // degenerate mirror face, skip (matches render_poly's own degenerate guard)
+        }
+        let normal = Vec3::new(n.x / len, n.y / len, n.z / len);
+        let point = poly.verts[0];
+        // Same-orientation planes only (`dot`, not `abs(dot)`): two opposite-facing mirrors on the
+        // same plane (a double-sided mirror wall) are two distinct physical mirrors, not one.
+        let existing = clusters.iter_mut().find(|c| {
+            c.normal.dot(&normal) > 0.999 && point.sub(&c.point).dot(&c.normal).abs() < 0.5
+        });
+        match existing {
+            Some(c) => c.indices.push(i),
+            None => clusters.push(MirrorCluster { point, normal, indices: vec![i] }),
+        }
+    }
+    clusters
 }
 
 /// Fixed world "key light" direction for the per-face brightness factor (v1 flat shading).
@@ -172,6 +284,8 @@ fn render_poly(
     zbuf: &mut [f32],
     w: usize,
     h: usize,
+    mirror_src: Option<&[u8]>,
+    mirror_tint: bool,
 ) {
     if poly.verts.len() < 3 {
         return;
@@ -251,6 +365,8 @@ fn render_poly(
             poly.masked,
             shade,
             blend,
+            mirror_src,
+            mirror_tint,
         );
     }
 }
@@ -272,15 +388,30 @@ fn poly_depth(poly: &RenderPoly, camera: &Camera) -> f32 {
 }
 
 /// Render `polys` into a `width × height` RGB framebuffer. Pure function of its inputs
-/// (no threading in v1 — spec §5 determinism). Opaque polys draw first (z-tested + z-written);
-/// `PF_Translucent`/`PF_Modulated` polys draw in a second pass, sorted back-to-front, z-tested
-/// but not z-written (see module doc).
+/// (no threading in v1 — spec §5 determinism).
 pub fn render(
     polys: &[RenderPoly],
     textures: &[RenderTexture],
     camera: &Camera,
     width: u32,
     height: u32,
+) -> Vec<u8> {
+    render_impl(polys, textures, camera, width, height, 0)
+}
+
+/// The real `render()` body, plus `mirror_depth` (0 = the primary frame; 1 = inside one mirror's
+/// reflected re-render — see the module doc for why recursion stops there). Opaque polys draw
+/// first (z-tested + z-written); mirror polys draw next, also z-tested + z-written, each sampling
+/// its own reflected re-render of the (mirror-plane-clipped) scene; `PF_Translucent`/
+/// `PF_Modulated` polys draw last, sorted back-to-front, z-tested but not z-written (so they
+/// composite correctly over a mirror pixel too).
+fn render_impl(
+    polys: &[RenderPoly],
+    textures: &[RenderTexture],
+    camera: &Camera,
+    width: u32,
+    height: u32,
+    mirror_depth: u32,
 ) -> Vec<u8> {
     let (w, h) = (width as usize, height as usize);
     let mut img = vec![0u8; w * h * 3];
@@ -296,12 +427,70 @@ pub fn render(
 
     let mut blended: Vec<(&RenderPoly, Blend, f32)> = Vec::new();
     for poly in polys {
-        match blend_mode(poly.poly_flags) {
+        let mut mode = blend_mode(poly.poly_flags);
+        // Recursion cap (module doc): a mirror poly reached while ALREADY inside a reflected
+        // re-render draws as plain opaque texture instead of recursing again.
+        if mode == Blend::Mirror && mirror_depth > 0 {
+            mode = Blend::Opaque;
+        }
+        match mode {
             Blend::Opaque => render_poly(
                 poly, Blend::Opaque, textures, camera, half_w, half_h, focal, &mut img, &mut zbuf,
-                w, h,
+                w, h, None, false,
             ),
-            mode => blended.push((poly, mode, poly_depth(poly, camera))),
+            Blend::Mirror => {} // drawn below, once per mirror plane, after every opaque poly
+            _ => blended.push((poly, mode, poly_depth(poly, camera))),
+        }
+    }
+
+    if mirror_depth == 0 {
+        for cluster in group_mirror_clusters(polys) {
+            // Orient the plane normal toward the REAL camera, so the clip below keeps the half
+            // of the scene the mirror actually reflects (reflect_point/reflect_dir themselves
+            // don't care about this sign — only the clip's notion of "which side is real" does).
+            let mut keep_dir = cluster.normal;
+            if camera.location.sub(&cluster.point).dot(&keep_dir) < 0.0 {
+                keep_dir = Vec3::new(-keep_dir.x, -keep_dir.y, -keep_dir.z);
+            }
+            let refl_camera = Camera {
+                location: reflect_point(&camera.location, &cluster.point, &cluster.normal),
+                forward: reflect_dir(&camera.forward, &cluster.normal),
+                right: reflect_dir(&camera.right, &cluster.normal),
+                up: reflect_dir(&camera.up, &cluster.normal),
+                fov_deg: camera.fov_deg,
+            };
+            // Reflected scene = every OTHER poly (this mirror's own faces excluded — a mirror
+            // doesn't reflect itself), clipped to the real camera's side of the mirror plane so
+            // whatever the mirror is mounted against doesn't leak into the reflection.
+            let mut clipped_scene: Vec<RenderPoly> = Vec::new();
+            for (j, poly) in polys.iter().enumerate() {
+                if cluster.indices.contains(&j) {
+                    continue;
+                }
+                let cv = clip_world_by_plane(&poly.verts, &cluster.point, &keep_dir);
+                if cv.len() < 3 {
+                    continue;
+                }
+                clipped_scene.push(RenderPoly {
+                    verts: cv,
+                    uv_base: poly.uv_base,
+                    uv_axis_u: poly.uv_axis_u,
+                    uv_axis_v: poly.uv_axis_v,
+                    pan: poly.pan,
+                    tex_index: poly.tex_index,
+                    masked: poly.masked,
+                    poly_flags: poly.poly_flags,
+                });
+            }
+            let secondary =
+                render_impl(&clipped_scene, textures, &refl_camera, width, height, mirror_depth + 1);
+            for &idx in &cluster.indices {
+                let tint = polys[idx].poly_flags & PF_TRANSLUCENT != 0;
+                render_poly(
+                    &polys[idx], Blend::Mirror, textures, camera, half_w, half_h, focal, &mut img,
+                    &mut zbuf, w, h, Some(&secondary), tint,
+                );
+            }
         }
     }
 
@@ -309,7 +498,8 @@ pub fn render(
     blended.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
     for (poly, mode, _depth) in blended {
         render_poly(
-            poly, mode, textures, camera, half_w, half_h, focal, &mut img, &mut zbuf, w, h,
+            poly, mode, textures, camera, half_w, half_h, focal, &mut img, &mut zbuf, w, h, None,
+            false,
         );
     }
     img
@@ -328,6 +518,8 @@ fn raster_tri(
     masked: bool,
     shade: f32,
     blend: Blend,
+    mirror_src: Option<&[u8]>,
+    mirror_tint: bool,
 ) {
     let min_x = a[0].min(b[0]).min(c[0]).floor().max(0.0) as usize;
     let max_x = (a[0].max(b[0]).max(c[0]).ceil() as i64).min(w as i64 - 1);
@@ -407,6 +599,37 @@ fn raster_tri(
                     img[o] = ((img[o] as f32 * sr) / 128.0).min(255.0) as u8;
                     img[o + 1] = ((img[o + 1] as f32 * sg) / 128.0).min(255.0) as u8;
                     img[o + 2] = ((img[o + 2] as f32 * sb) / 128.0).min(255.0) as u8;
+                }
+                Blend::Mirror => {
+                    // Opaque like a real mirror surface (z-tested AND z-written), but the colour
+                    // comes from the reflected secondary render at this SAME pixel, not from a
+                    // decoded texture — already-lit imagery, so no `shade` multiply on the
+                    // reflection itself (see module doc for why the same pixel is the right
+                    // sample). `mirror_src` is always `Some` at the one call site that passes
+                    // `Blend::Mirror`; the texture-shaded colour is a defensive fallback, never
+                    // hit in practice.
+                    //
+                    // `mirror_tint` (module doc, `PF_Mirrored | PF_Translucent`): the poly's own
+                    // shaded texture (`sr`/`sg`/`sb`, already computed above) is additively
+                    // composited ON TOP of the reflection, in this SAME pass — not a separate
+                    // z-tested blended-list entry, which would tie (and lose) the z-test against
+                    // the identical depth this same triangle just wrote.
+                    zbuf[pi] = inv_d;
+                    let (mut mr, mut mg, mut mb) = (sr, sg, sb); // Mirror-alone fallback (mirror_src=None)
+                    if let Some(src) = mirror_src {
+                        let so = pi * 3;
+                        mr = src[so] as f32;
+                        mg = src[so + 1] as f32;
+                        mb = src[so + 2] as f32;
+                    }
+                    if mirror_tint {
+                        mr = (mr + sr).min(255.0);
+                        mg = (mg + sg).min(255.0);
+                        mb = (mb + sb).min(255.0);
+                    }
+                    img[o] = mr as u8;
+                    img[o + 1] = mg as u8;
+                    img[o + 2] = mb as u8;
                 }
             }
         }
@@ -722,7 +945,7 @@ mod tests {
         // Opaque: z IS written (the existing, unchanged behaviour).
         let mut img = vec![0u8; 3];
         let mut zbuf = vec![0.0f32];
-        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Opaque);
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Opaque, None, false);
         assert_eq!(zbuf[0], 1.0);
         assert_eq!(img, vec![128, 128, 128]); // DEFAULT_GREY (no texture), shade 1.0
 
@@ -730,7 +953,7 @@ mod tests {
         // UNWRITTEN — mirrors `masked_transparent_texel_leaves_z_unwritten`'s precedent.
         let mut img = vec![10u8, 10, 10];
         let mut zbuf = vec![0.0f32];
-        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Translucent);
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Translucent, None, false);
         assert_eq!(zbuf[0], 0.0);
         assert_eq!(img, vec![138, 138, 138]); // 10 + 128
 
@@ -738,7 +961,7 @@ mod tests {
         // point, so a dest of 200 composites to exactly 200 — an exact, rounding-free check.
         let mut img = vec![200u8, 200, 200];
         let mut zbuf = vec![0.0f32];
-        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Modulated);
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Modulated, None, false);
         assert_eq!(zbuf[0], 0.0);
         assert_eq!(img, vec![200, 200, 200]);
     }
@@ -861,5 +1084,144 @@ mod tests {
             64,
         );
         assert_eq!(forward, reversed);
+    }
+
+    // ── PF_Mirrored planar reflection ───────────────────────────────────────────────────────
+
+    #[test]
+    fn mirror_flag_takes_precedence_over_translucent() {
+        // Real DX content carries both bits together (02_NYC_Bar.dx Brush117's glass pane,
+        // 0x8880004 = Mirrored|HighShadowDetail|BrightCorners|Translucent) — Mirror must win.
+        assert!(blend_mode(PF_MIRRORED | PF_TRANSLUCENT) == Blend::Mirror);
+        assert!(blend_mode(PF_MIRRORED | PF_MODULATED) == Blend::Mirror);
+        assert!(blend_mode(PF_MIRRORED) == Blend::Mirror);
+    }
+
+    #[test]
+    fn mirror_reflects_geometry_behind_the_camera() {
+        // Mirror wall at x=40 (wall()'s normal is -X: front-facing to a camera at the origin
+        // looking +X). Reflecting the origin camera across x=40 gives a camera at x=80 looking
+        // -X, which is exactly the ray a real mirror sends back down the room: past the real
+        // camera (x=0) to whatever sits further behind it. A red "reflectee" wall at x=-100,
+        // wound to face +X (`wall_facing_away`), sits on that reflected ray and nowhere the
+        // PRIMARY camera can see it directly (it's behind the camera, so the ordinary facing
+        // cull/near-clip already drops it from every non-mirror pass).
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let mut mirror = wall(40.0, 400.0, -1);
+        mirror.poly_flags = PF_MIRRORED;
+        let mut reflectee = wall_facing_away(-100.0, 400.0, 0);
+        reflectee.poly_flags = 0;
+        let red = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
+
+        let img = render(&[mirror, reflectee], &[red], &cam, 64, 64);
+        let o = (32 * 64 + 32) * 3;
+        assert!(img[o] > 0 && img[o + 1] == 0 && img[o + 2] == 0); // red, not grey/background
+
+        // Without the mirror flag the same wall is an ordinary opaque face: its OWN (untextured,
+        // grey) surface shows, never the reflectee — proves the red pixel above really came from
+        // the reflection, not from some other path painting the mirror face red.
+        let mut opaque = wall(40.0, 400.0, -1);
+        opaque.poly_flags = 0;
+        let red2 = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
+        let img2 = render(&[opaque, wall_facing_away(-100.0, 400.0, 0)], &[red2], &cam, 64, 64);
+        let px2 = [img2[o], img2[o + 1], img2[o + 2]];
+        assert_eq!(px2[0], px2[1]); // grey (default, untextured): r == g == b
+        assert_eq!(px2[1], px2[2]);
+    }
+
+    #[test]
+    fn mirror_plus_translucent_tints_the_reflection_with_its_own_texture() {
+        // Real content combines the two bits (`02_NYC_Bar.dx` Brush117, `Terraniux.unr`
+        // `DecayedS.Floor.dmFlor2a`): the mirror shows BOTH the reflection and its own texture,
+        // additively tinted on top — distinct from Mirror alone, which never shows its texture.
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let textures = || {
+            vec![
+                RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] }, // 0: red
+                RenderTexture { w: 1, h: 1, data: vec![0, 0, 255], mask: vec![1] }, // 1: blue
+            ]
+        };
+
+        let mut mirror = wall(40.0, 400.0, 1); // tex 1 = blue tint
+        mirror.poly_flags = PF_MIRRORED;
+        let mut reflectee = wall_facing_away(-100.0, 400.0, 0); // tex 0 = red
+        reflectee.poly_flags = 0;
+        let pure = render(&[mirror, reflectee], &textures(), &cam, 64, 64);
+
+        let mut tinted = wall(40.0, 400.0, 1);
+        tinted.poly_flags = PF_MIRRORED | PF_TRANSLUCENT;
+        let mut reflectee2 = wall_facing_away(-100.0, 400.0, 0);
+        reflectee2.poly_flags = 0;
+        let tint = render(&[tinted, reflectee2], &textures(), &cam, 64, 64);
+
+        let o = (32 * 64 + 32) * 3;
+        assert_eq!(pure[o + 2], 0); // pure mirror: no blue tint, its own texture never shows
+        assert!(tint[o + 2] > 0); // tinted mirror: the blue texture IS additively visible
+        assert!(tint[o] > 0 && tint[o + 1] == 0); // the red reflection is still there underneath
+    }
+
+    #[test]
+    fn masked_mirror_lets_farther_geometry_show_through_the_transparent_texel() {
+        // Combines two independently-tested mechanisms neither exercises together: PF_Masked's
+        // alpha test (`masked_face_skips_transparent_texels`) and PF_Mirrored's reflection pass.
+        // The mask check runs BEFORE the blend match in `raster_tri`, so it applies uniformly
+        // regardless of blend mode: a transparent mirror texel writes nothing (no reflection, no
+        // z), letting farther geometry show through, same as a masked opaque face would.
+        let tex = RenderTexture {
+            w: 2, h: 1,
+            data: vec![0, 0, 0, 0, 0, 0], // colour is irrelevant: the opaque texel shows a REFLECTION
+            mask: vec![1, 0],             // left opaque, right transparent
+        };
+        let back_tex = RenderTexture { w: 1, h: 1, data: vec![0, 255, 0], mask: vec![1] }; // green
+        let reflect_tex = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] }; // red
+
+        let mut mirror = wall(32.0, 2.0, 0); // 2-uu masked mirror, matching the masked-test geometry
+        mirror.masked = true;
+        mirror.poly_flags = PF_MIRRORED;
+        let back = wall(80.0, 400.0, 1); // far green wall, full-frame fallback behind the mirror
+        let reflectee = wall_facing_away(-100.0, 400.0, 2); // red, visible only via the reflection
+
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let img = render(&[mirror, back, reflectee], &[tex, back_tex, reflect_tex], &cam, 64, 64);
+        let px = |x: usize| {
+            let o = (32 * 64 + x) * 3;
+            [img[o], img[o + 1], img[o + 2]]
+        };
+        // Left texel (opaque, mask=1): reflects -- red reflectee, not the mirror's own texture
+        // colour (irrelevant here) and not the green backdrop.
+        assert!(px(31)[0] > 0 && px(31)[1] == 0 && px(31)[2] == 0);
+        // Right texel (transparent, mask=0): skipped whole, so the farther GREEN wall shows
+        // through -- no reflection, no mirror colour. Shaded (opaque faces ARE shaded, unlike a
+        // mirror's reflection): shade for a +X-normal wall is 0.55+0.45*0.408 (`uv_texel_probe`).
+        let shade = 0.55 + 0.45 * 0.408_f32;
+        assert_eq!(px(32), [0, (255.0 * shade) as u8, 0]);
+    }
+
+    #[test]
+    fn mirror_poly_is_backface_culled_like_any_other_face() {
+        // A mirror facing away from the camera is culled (real UnrealEd: single-sided by
+        // default), same as `single_sided_back_face_is_culled` for an ordinary opaque face.
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let mut away = wall_facing_away(100.0, 400.0, -1);
+        away.poly_flags = PF_MIRRORED;
+        let img = render(&[away], &[], &cam, 32, 32);
+        assert!(img.chunks_exact(3).all(|p| p == BACKGROUND));
+    }
+
+    #[test]
+    fn facing_mirrors_do_not_hang_and_cap_recursion() {
+        // Two mirrors facing each other between the camera: without a recursion cap this would
+        // either hang or blow the stack. Rendering must complete (this test finishing at all IS
+        // the regression check) and show something other than the flat background — the module
+        // doc's documented behaviour is that a mirror reached a second time (mirror_depth > 0)
+        // draws as its own opaque texture instead of recursing again.
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let mut near_mirror = wall(20.0, 100.0, -1);
+        near_mirror.poly_flags = PF_MIRRORED;
+        let mut far_mirror = wall_facing_away(-20.0, 100.0, -1);
+        far_mirror.poly_flags = PF_MIRRORED;
+        let img = render(&[near_mirror, far_mirror], &[], &cam, 32, 32);
+        assert_eq!(img.len(), 32 * 32 * 3);
+        assert!(img.chunks_exact(3).any(|p| p != BACKGROUND));
     }
 }

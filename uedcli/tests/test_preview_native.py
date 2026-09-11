@@ -269,6 +269,43 @@ def test_pf_masked_flag_plumbed_to_poly_tuple():
     assert polys and all(p[7] & pn.PF_MASKED for p in polys)
 
 
+def test_pf_mirrored_flag_plumbed_to_poly_tuple():
+    """A face's `PF_Mirrored` bit (real UE1 value `0x8000000` — `dev/docs/unrealed/leveldesign/kb/
+    textures.md`) reaches the render-poly tuple's raw merged-flags field unchanged, same as
+    `test_pf_masked_flag_plumbed_to_poly_tuple` pins for `PF_Masked` -- Mirror needs no Python-side
+    special casing (unlike Masked's `masked` field), it is a pure Rust `render.rs` concern, so this
+    only has to prove nothing strips or masks the bit on the way through `build_scene`."""
+    PF_MIRRORED = 0x8000000
+    room = cube_room()
+    set_prop(room, "PolyFlags", str(PF_MIRRORED))
+    polys, _ = pn.build_scene(_level(room), [], IDX)
+    assert polys and all(p[7] & PF_MIRRORED for p in polys)
+    assert polys and all(p[6] is False for p in polys)  # Mirror alone does not imply PF_Masked
+
+
+def test_mirror_face_end_to_end_reflects_through_the_full_pipeline():
+    """The real regression this feature fixes, through the WHOLE chain (`render_frame`'s Rust
+    `blend_mode`/mirror pass), mirroring `test_backface_cull_end_to_end_through_the_full_pipeline`'s
+    shape: a `PF_Mirrored` face at x=40 (front -X, facing the camera) shows a reflection of a red
+    wall at x=-100 — behind the camera, so the PRIMARY view never sees it directly (the ordinary
+    facing cull/near-clip already drop it) — rather than its own (untextured, flat grey) surface."""
+    import uedcli_native
+
+    PF_MIRRORED = 0x8000000
+    mirror = ([40.0, -200.0, 200.0, 40.0, 200.0, 200.0, 40.0, 200.0, -200.0, 40.0, -200.0, -200.0],
+              [40.0, -200.0, 200.0], [0.0, 1.0, 0.0], [0.0, 0.0, -1.0], [0.0, 0.0], -1, False,
+              PF_MIRRORED)
+    reflectee = (
+        [-100.0, -200.0, -200.0, -100.0, 200.0, -200.0, -100.0, 200.0, 200.0, -100.0, -200.0, 200.0],
+        [-100.0, -200.0, -200.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0], 0, False, 0)
+    red = (1, 1, bytes([255, 0, 0]), bytes([1]))
+    fwd, right, up = pn.camera_basis(0.0, 0.0)
+    rgb = uedcli_native.render_frame([mirror, reflectee], [red],
+                                     ((0.0, 0.0, 0.0), fwd, right, up, 90.0), (64, 64))
+    o = (32 * 64 + 32) * 3
+    assert rgb[o] > 0 and rgb[o + 1] == 0 and rgb[o + 2] == 0  # red reflection, not grey/background
+
+
 def test_bmasked_texture_masks_without_the_surface_flag():
     """`_TextureTable.is_bmasked` reports the texture's own `bMasked`, so `add_poly` masks a face
     whose TEXTURE is bMasked even with no `PF_Masked` surface flag — the engine ORs a texture's
