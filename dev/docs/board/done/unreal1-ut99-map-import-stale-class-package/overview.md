@@ -1,7 +1,7 @@
 +++
 priority = "p3"
 kind = "debug"
-summary = "DONE — level import now resolves a class by name across the whole package path when the map's stated package is stale (original Unreal Gold's UnrealI vs UnrealShare); 8/8 retail maps get past the actor-class-descent gate."
+summary = "DONE — level import resolves the stale-package class redirect AND decodes v61 brush geometry; 8/8 retail Unreal Gold maps now import fully."
 +++
 
 # Unreal1/UT99 map import: stale class-package hints (UnrealI vs UnrealShare) — FIXED
@@ -21,9 +21,13 @@ a `UnrealShare` candidate on an ambiguous collision (e.g. `TriggerLight`, which 
 `Engine`) — every observed redirect lands there.
 
 Verified against all 8 maps (Bluff, DmDeck16, DmCurse, DmMorbias, DmTundra, Dig, Dark, DasaPass) from
-the retail Unreal Gold ISO: all 8 now get past the class-descent gate (none did before). Each still
-hits a separate, unrelated, already-known gap — `brush_of`'s model/BSP decode has never been extended
-to package v61 (Unreal Gold's map version) — out of scope here.
+the retail Unreal Gold ISO: all 8 now get past the class-descent gate (none did before). The separate,
+sibling gap this note used to flag as still-open — `brush_of`'s model/BSP decode never having been
+extended to package v61 (Unreal Gold's map version) — is **also fixed now**
+(`dev/docs/spikes/2026-09-11-unreal-gold-v61-model-format/`): `parse_model_body` gained a
+`version<=61` branch (a narrower `UPrimitive` prefix + Vectors/Points/Nodes/Surfs/Verts/Polys as
+separate `UDatabase` exports rather than inline arrays). With both fixes in place, `import_map` now
+completes end-to-end for all 8 retail maps (re-verified 2026-09-11, no `SchemaError` on any of them).
 
 UT99 was NOT separately re-tested (no UT99 map corpus available this session); the fix's fast path
 (`index.class_exists(fqcn)` true) is a no-op when the stated package is already correct, so DX/UT99

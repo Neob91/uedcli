@@ -19,7 +19,7 @@ import pytest
 
 from uedcli import mapimport
 from uedcli.classindex import ClassIndex
-from uedcli.upackage import SchemaError, load_package
+from uedcli.upackage import load_package
 
 from .conftest import unreal_maps_root, unreal_system_root
 
@@ -132,11 +132,12 @@ def _class_index(sys_root: Path) -> ClassIndex:
 
 
 @pytest.mark.parametrize("name", MAP_NAMES)
-def test_retail_unreal_gold_maps_pass_the_actor_class_descent_gate(name):
+def test_retail_unreal_gold_maps_import_fully(name):
     """Every map in the retail Unreal Gold corpus hits the stale-package redirect (a different
-    class each time). `level import` must get PAST the class-descent gate for all of them — the
-    unrelated, separately-tracked `brush_of` model decode gap (older package-v61 struct layout) is
-    NOT in scope here and is tolerated."""
+    class each time) and, until `dev/docs/spikes/2026-09-11-unreal-gold-v61-model-format/`, also
+    `brush_of`'s package-v61 model decode gap. Both are fixed now, so `level import` must complete
+    with no `SchemaError` at all — a regression in either fix should fail loudly here, not be
+    silently tolerated by a loose except-and-inspect check."""
     sys_root = unreal_system_root()
     maps_root = unreal_maps_root()
     dx = maps_root / f"{name}.unr"
@@ -146,15 +147,5 @@ def test_retail_unreal_gold_maps_pass_the_actor_class_descent_gate(name):
     pkg = load_package(str(dx), name=name)
     index = _class_index(sys_root)
     schema = mapimport.ImportSchema(resolver=_resolver(sys_root))
-    try:
-        mapimport.import_map(pkg, index, schema)
-    except SchemaError as e:
-        msg = str(e)
-        assert "does not descend from" not in msg, (
-            f"{name}: still hits the class-descent gate — {e}")
-        # The ONE known-acceptable residual: `brush_of`'s model decode has never been extended to
-        # package v61 (Unreal Gold's map version). Any OTHER SchemaError here — e.g. a property
-        # schema failure from render_actor resolving a wrong-package fqcn — is a real regression,
-        # not a tolerated gap, so it must fail loudly rather than being masked by a loose check.
-        assert "brush_of" in msg and "truncated map body" in msg, (
-            f"{name}: hit an unexpected SchemaError, not the known package-v61 brush_of gap — {e}")
+    t3d = mapimport.import_map(pkg, index, schema)
+    assert t3d

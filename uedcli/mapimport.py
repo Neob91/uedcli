@@ -271,7 +271,10 @@ def brush_of(pkg: Package, brush_ref: int) -> model.Brush:
     The chain is `Brush` → a PRIVATE `UModel` object → that model's `Polys` reference → a `UPolys`
     array of `FPoly`. The model body is parsed by the same `native.umodel.parse_model_body` the
     world BSP uses (it reaches EOF on a private brush model too), and `Polys` is the field the
-    writer calls `field_0x54`.
+    writer calls `field_0x54`. `parse_model_body` needs the package's real `version`: an original
+    (1998/Gold) Unreal map (v61) lays the model out differently (module docstring in `umodel.py`) —
+    on that path `field_0x54` is still the Polys ref, but it is the only part of the v61 layout this
+    function (or its production callers) reads.
 
     A brush whose model holds NO polygons yields an empty `PolyList` rather than an error: that is
     a real, if unusual, state — maps built by uedcli's own native builder keep the shape in the
@@ -290,7 +293,7 @@ def brush_of(pkg: Package, brush_ref: int) -> model.Brush:
     # does: 21 of the `Model` exports across the first twelve retail maps carry `RF_HasStack`,
     # and `parse_model_body` desyncs on every one of them if entered at the raw `soff`.
     mstart = _skip_state_frame(pkg, me)
-    m = parse_model_body(pkg.buf, mstart, me["soff"] + me["ssize"] - mstart)
+    m = parse_model_body(pkg.buf, mstart, me["soff"] + me["ssize"] - mstart, version=pkg.version)
     polys: list[model.Polygon] = []
     if m.field_0x54 != 0:
         if not (0 < m.field_0x54 <= len(pkg.exports)):

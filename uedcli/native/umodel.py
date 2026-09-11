@@ -7,7 +7,7 @@ pinned to byte-for-byte (§6 gate 5).  It serializes a `Model` (all arrays held 
 Python structures) into the UModel serial body — the from-scratch write the round-trip
 harness did not need.
 
-Serial order (ver > 61):
+Serial order (ver > 61 — DX/UT99/UnrealGold-later; the ONLY layout `write_model_body` emits):
   UPrimitive prefix (42B: ci(None) + FBox 25 + FSphere 16)
   Vectors, Points          (TArray<FVector>)
   Nodes, Surfs, Verts      (TArray, ci count)
@@ -21,6 +21,30 @@ Serial order (ver > 61):
   TArray<FBspLeaf> Leaves
   TArray e4                 (aux; empty)
   i32, i32                  (trailing)
+
+Serial order (ver <= 61 — original 1998/Gold Unreal, package v61; READ ONLY, no writer): a real
+engine data-model difference, not a narrow field tweak — confirmed against the real v61 engine
+source (`fgsfdsfgs/UE1`, `Engine/Inc/UnObj.h` + `Engine/Src/UnModel.cpp`; that repo's own
+`PACKAGE_FILE_VERSION` is 61) and empirically self-check-verified over 6173 retail brush models
+across 8 Unreal Gold `.unr`s (`dev/docs/spikes/2026-09-11-unreal-gold-v61-model-format/`):
+  UPrimitive prefix (38B: ci(None) + FBox 25 + FVector 12 — `FSphere::operator<<` drops its `W`
+                     float entirely at `Ar.Ver()<=61`, a real engine bug fixed only after v61)
+  ci Vectors, Points, Nodes, Surfs, Verts, Polys   (OBJECT REFS — each a SEPARATE export, a
+                                                     `UDatabase` subclass with its own body, not an
+                                                     inline array here; later versions collapsed
+                                                     them into the inline TArrays above)
+  TArray a8 (LightMap) / b4 (LightBits) / c0 Bounds<FBox> / cc LeafHulls<INT> / <FBspLeaf> Leaves /
+  e4 Lights            (byte-identical element encodings to the ver>61 arrays above — reused as-is)
+  ci LeafZone, ci LeafLeaf   (object refs to a UBitArray/UBitMatrix; dropped by ver>61 — absent
+                              there, so `parse_model_body` never returns them for that path)
+  i32 RootOutside, i32 Linked
+`field_0x54` doubles as the Polys ref on both paths — `brush_of` (the only production reader) never
+touches Vectors/Points/Nodes/Surfs/Verts, so those refs are recorded but their referenced exports are
+NOT recursively decoded (each is its own `UDatabase`: a `None`-terminated property list, `i32 DbNum,
+DbMax`, then `DbNum` elements — `UBspNodes`/`UVerts` each carry one more trailing field of their own,
+`NumZones`+`Zones[]` / `NumSharedSides`, so their own bodies do NOT self-check to EOF via this
+parser). A full v61 WORLD-model (Nodes/Surfs/Verts) reader is a separate, larger effort — not built
+here; see the spike for scope.
 """
 from __future__ import annotations
 
@@ -164,6 +188,19 @@ class Model:
     # core (`Built.world_soup`): a list of raw tuples assembly turns into `Polys` FPolys. Empty
     # except on a native world build. Not serialized in the model BODY (Polys is its own export).
     world_soup: list = field(default_factory=list)
+    # ver<=61 ONLY: Vectors/Points/Nodes/Surfs/Verts are separate `UDatabase`-subclass exports on
+    # that path (not inline arrays — see the module docstring), recorded here as object refs
+    # (0 = none) but never recursively decoded — no production reader needs their contents yet.
+    # `field_0x54` already doubles as the Polys ref on both paths, so it is not repeated here.
+    vectors_ref: int = 0
+    points_ref: int = 0
+    nodes_ref: int = 0
+    surfs_ref: int = 0
+    verts_ref: int = 0
+    # ver<=61 ONLY: object refs to a UBitArray/UBitMatrix, serialized right before RootOutside/
+    # Linked; ver>61 dropped both fields from the format entirely.
+    leaf_zone_ref: int = 0
+    leaf_leaf_ref: int = 0
 
 
 # --- writer (Python oracle) ------------------------------------------------
@@ -448,11 +485,57 @@ def _parse_e4(buf, pos):
     return refs, pos
 
 
-def parse_model_body(buf: bytes, offset: int, size: int) -> Model:
-    """Parse a UModel serial body to EOF; raises on any inconsistency (the self-check
-    relies on the reach-EOF assertion)."""
+def _parse_prefix(data, *, version: int):
+    """The UPrimitive prefix: ci(None) + FBox(25B) + FSphere. `FSphere::operator<<` (real v61
+    engine source, `Engine/Inc/UnMath.h`) drops its `W` float entirely at `Ar.Ver()<=61` — a real
+    engine bug, fixed only after v61 — so the prefix is 38B there, not 42B."""
+    pos = 0
+    none_idx, pos = read_ci(data, pos)
+    bbox_min, pos = _f32x3(data, pos)
+    bbox_max, pos = _f32x3(data, pos)
+    valid = data[pos]; pos += 1
+    if version <= 61:
+        sphere_xyz, pos = _f32x3(data, pos)
+        sphere = sphere_xyz + (0.0,)
+    else:
+        sphere, pos = _f32x4(data, pos)
+    return none_idx, bbox_min, bbox_max, valid, sphere, pos
+
+
+def parse_model_body(buf: bytes, offset: int, size: int, *, version: int = 69) -> Model:
+    """Parse a UModel serial body to EOF; raises on any inconsistency (the self-check relies on
+    the reach-EOF assertion). `version` is the package's `FileVersion` — every existing caller
+    passes none and gets the unchanged ver>61 (DX/UT99/UnrealGold-later) shape; pass the package's
+    real version for a v61 (original 1998/Gold Unreal) map (module docstring has both layouts)."""
     data = buf[offset:offset + size]
-    pos = _PREFIX
+    none_idx, bbox_min, bbox_max, valid, sphere, pos = _parse_prefix(data, version=version)
+    if version <= 61:
+        vectors_ref, pos = read_ci(data, pos)
+        points_ref, pos = read_ci(data, pos)
+        nodes_ref, pos = read_ci(data, pos)
+        surfs_ref, pos = read_ci(data, pos)
+        verts_ref, pos = read_ci(data, pos)
+        field_0x54, pos = read_ci(data, pos)          # Polys ref
+        light_map, pos = _parse_a8(data, pos)
+        light_bits, pos = _parse_bulk_bytes(data, pos)
+        bounds, pos = _parse_c0(data, pos)
+        leaf_hulls, pos = _parse_cc(data, pos)
+        leaves, pos = _parse_array(data, pos, _parse_leaf)
+        lights, pos = _parse_e4(data, pos)
+        leaf_zone_ref, pos = read_ci(data, pos)
+        leaf_leaf_ref, pos = read_ci(data, pos)
+        root_outside, pos = _i32(data, pos)
+        linked, pos = _i32(data, pos)
+        if pos != size:
+            raise ValueError(f"UModel body did not reach EOF: {pos} != {size}")
+        return Model(field_0x54=field_0x54, bounds=bounds, leaf_hulls=leaf_hulls,
+                     leaves=leaves, light_map=light_map, light_bits=light_bits, lights=lights,
+                     none_index=none_idx, bbox_min=bbox_min, bbox_max=bbox_max,
+                     bbox_valid=valid, sphere=sphere, root_outside=root_outside, linked=linked,
+                     vectors_ref=vectors_ref, points_ref=points_ref, nodes_ref=nodes_ref,
+                     surfs_ref=surfs_ref, verts_ref=verts_ref,
+                     leaf_zone_ref=leaf_zone_ref, leaf_leaf_ref=leaf_leaf_ref)
+
     vectors, pos = _fvector_array(data, pos)
     points, pos = _fvector_array(data, pos)
     nodes, pos = _parse_array(data, pos, _parse_node)
