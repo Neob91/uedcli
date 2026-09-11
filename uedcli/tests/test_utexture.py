@@ -316,6 +316,105 @@ def test_resolve_unknown_package_and_unknown_texture_are_different_cases():
     assert "nosuchtexture" in miss_tex.detail
 
 
+# --- the stale-package redirect (original 1998/Gold Unreal .unr maps state some refs' home
+# package as `UnrealI` when the shipped System/Textures files actually define them elsewhere —
+# `dev/docs/board/done/unreal1-ut99-map-import-stale-class-package/`, the same fact already fixed
+# for CLASS refs in `mapimport._resolve_actor_class`, now also observed on texture refs:
+# `UnrealI.Skins.JBarrel1` only decodes as `UnrealShare.Skins.JBarrel1`) ------------------------
+
+def test_resolve_redirects_a_stale_package_to_the_one_unique_match():
+    """The stated package (`UnrealI`) exists but has no `JBarrel1`; `UnrealShare` does, and it
+    is the only package on the path that does -- a unique redirect, no ambiguity to break."""
+    unreali = _write(pkgfixture.texture_package(name="Other"), "UnrealI.utx")
+    unrealshare = _write(pkgfixture.texture_package(name="JBarrel1", group="Skins"),
+                         "UnrealShare.utx")
+    r = TextureResolver([unreali, unrealshare])
+    got = r.resolve("UnrealI.Skins.JBarrel1")
+    assert isinstance(got, DecodedTexture), got
+    assert r.package_for_ref("UnrealI.Skins.JBarrel1")[0].stem == "UnrealShare"
+
+
+def test_resolve_redirect_prefers_unrealshare_on_an_ambiguous_collision():
+    """Two OTHER packages both carry a matching `JBarrel1` -- an ambiguous redirect target --
+    and `UnrealShare` wins, matching every stale-package redirect observed so far."""
+    unreali = _write(pkgfixture.texture_package(name="Other"), "UnrealI.utx")
+    decoy = _write(pkgfixture.texture_package(name="JBarrel1", group="Skins"), "SomeDeco.utx")
+    unrealshare = _write(pkgfixture.texture_package(name="JBarrel1", group="Skins"),
+                         "UnrealShare.utx")
+    r = TextureResolver([unreali, decoy, unrealshare])
+    got = r.resolve("UnrealI.Skins.JBarrel1")
+    assert isinstance(got, DecodedTexture), got
+    assert r.package_for_ref("UnrealI.Skins.JBarrel1")[0].stem == "UnrealShare"
+
+
+def test_resolve_no_redirect_when_ambiguous_without_unrealshare():
+    """Two OTHER packages both match and neither is `UnrealShare` -- not a confident redirect,
+    so the ORIGINAL stated package's error still stands (names what the ref actually said)."""
+    unreali = _write(pkgfixture.texture_package(name="Other"), "UnrealI.utx")
+    decoy1 = _write(pkgfixture.texture_package(name="JBarrel1", group="Skins"), "SomeDeco.utx")
+    decoy2 = _write(pkgfixture.texture_package(name="JBarrel1", group="Skins"), "OtherDeco.utx")
+    r = TextureResolver([unreali, decoy1, decoy2])
+    got = r.resolve("UnrealI.Skins.JBarrel1")
+    assert isinstance(got, TextureError) and got.case == "unknown-texture"
+    assert "UnrealI" in got.detail
+
+
+def test_resolve_no_redirect_when_nothing_else_matches():
+    """No other package carries the name at all -- the original `unknown-texture` stands."""
+    unreali = _write(pkgfixture.texture_package(name="Other"), "UnrealI.utx")
+    r = TextureResolver([unreali])
+    got = r.resolve("UnrealI.Skins.JBarrel1")
+    assert isinstance(got, TextureError) and got.case == "unknown-texture"
+
+
+def test_resolve_redirect_also_applies_when_the_stated_package_is_entirely_absent():
+    """The stated package need not even exist on the path -- the redirect is keyed on the
+    NAME[+GROUP] miss, the same generality as the class-ref fix (`index.class_exists`)."""
+    unrealshare = _write(pkgfixture.texture_package(name="JBarrel1", group="Skins"),
+                         "UnrealShare.utx")
+    r = TextureResolver([unrealshare])
+    got = r.resolve("UnrealI.Skins.JBarrel1")
+    assert isinstance(got, DecodedTexture), got
+
+
+def test_resolve_redirect_works_on_a_two_part_ungrouped_ref():
+    """The redirect logic is generic over `group` -- exercise the 2-part (`Package.Name`, no
+    group) form too, not just the 3-part grouped `JBarrel1` shape."""
+    unreali = _write(pkgfixture.texture_package(name="Other"), "UnrealI.utx")
+    unrealshare = _write(pkgfixture.texture_package(name="Loose"), "UnrealShare.utx")
+    r = TextureResolver([unreali, unrealshare])
+    got = r.resolve("UnrealI.Loose")
+    assert isinstance(got, DecodedTexture), got
+
+
+def test_resolve_redirect_is_case_insensitive_in_both_the_stated_and_found_package():
+    """FName/package lookups are case-insensitive throughout -- the redirect must be too, both
+    for the (unmatched) stated package spelling and the discovered candidate's."""
+    unreali = _write(pkgfixture.texture_package(name="Other"), "UnrealI.utx")
+    unrealshare = _write(pkgfixture.texture_package(name="JBarrel1", group="Skins"),
+                         "UNREALSHARE.utx")
+    r = TextureResolver([unreali, unrealshare])
+    got = r.resolve("unreali.SKINS.jbarrel1")
+    assert isinstance(got, DecodedTexture), got
+
+
+def test_exists_honors_the_stale_package_redirect():
+    unreali = _write(pkgfixture.texture_package(name="Other"), "UnrealI.utx")
+    unrealshare = _write(pkgfixture.texture_package(name="JBarrel1", group="Skins"),
+                         "UnrealShare.utx")
+    r = TextureResolver([unreali, unrealshare])
+    assert r.exists("UnrealI.Skins.JBarrel1") is True
+
+
+def test_dimensions_honors_the_stale_package_redirect():
+    unreali = _write(pkgfixture.texture_package(name="Other"), "UnrealI.utx")
+    unrealshare = _write(pkgfixture.texture_package(name="JBarrel1", group="Skins",
+                                                     mips=pkgfixture.linear_chain(8, 4)),
+                         "UnrealShare.utx")
+    r = TextureResolver([unreali, unrealshare])
+    assert r.dimensions("UnrealI.Skins.JBarrel1") == (8, 4)
+
+
 def test_resolve_case_insensitive():
     assert isinstance(_resolver().resolve("coretexwater.WATER.DirtyWater"), DecodedTexture)
 

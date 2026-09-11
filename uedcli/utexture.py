@@ -723,7 +723,8 @@ class TextureResolver:
         """`(package, export_index)` for a `Package[.Group].Name` ref, or None if it does not
         resolve to a texture export — the seam `show`/`list --json` use to read Layer-2 facts
         (group needs the export, which `DecodedTexture` does not carry). Uses the SAME widened
-        matcher and package cache as `resolve`."""
+        matcher and package cache as `resolve`, and the same stale-package redirect
+        (`_locate_texture`)."""
         parts = ref.split(".")
         if len(parts) == 2:
             pkg_stem, group, name = parts[0], None, parts[1]
@@ -731,21 +732,7 @@ class TextureResolver:
             pkg_stem, group, name = parts
         else:
             return None
-        pkg = self._package(pkg_stem)
-        if pkg is None:
-            return None
-        want = name.casefold()
-        want_group = group.casefold() if group else None
-        for i in textures(pkg, self._class_index):
-            e = pkg.exports[i]
-            if (pkg.name(e["nm"]) or "").casefold() != want:
-                continue
-            if want_group is not None:
-                outer = pkg.name_of_ref(e["outer"])
-                if outer is None or outer.casefold() != want_group:
-                    continue
-            return pkg, i
-        return None
+        return self._locate_texture(pkg_stem, group, name)
 
     def dimensions(self, ref: str) -> tuple[int, int] | TextureError:
         """Mip-0 `(USize, VSize)` for `ref`, or a `TextureError` naming why not. Cached by
@@ -789,30 +776,15 @@ class TextureResolver:
             return TextureError(ref, "unqualified-ref",
                                 f"{ref!r} is not a Package[.Group].Name reference; a package "
                                 f"qualifier is required (a bare name could match several)")
-        pkg = self._package(pkg_stem)
-        if pkg is None:
+        located = self._locate_texture(pkg_stem, group, name)
+        if located is None:
             if pkg_stem.casefold() in self._pkg_unreadable:
                 return TextureError(ref, "package-unreadable",
                                     f"package {pkg_stem!r} is on the search path but will not "
                                     f"open or parse")
             return TextureError(ref, "not-found",
                                 f"no Texture of that name on the package path")
-        want = name.casefold()
-        want_group = group.casefold() if group else None
-        i0 = None
-        for i in textures(pkg, self._class_index):
-            e = pkg.exports[i]
-            if (pkg.name(e["nm"]) or "").casefold() != want:
-                continue
-            if want_group is not None:
-                outer = pkg.name_of_ref(e["outer"])
-                if outer is None or outer.casefold() != want_group:
-                    continue
-            i0 = i
-            break
-        if i0 is None:
-            return TextureError(ref, "not-found",
-                                f"no Texture of that name on the package path")
+        pkg, i0 = located
         try:
             t = decode_texture(pkg, i0)
         except (ValueError, struct.error, IndexError, MemoryError) as exc:
@@ -855,19 +827,60 @@ class TextureResolver:
         out.sort(key=lambda t: t.ref.casefold())
         return out
 
-    def _texture_named(self, pkg: Package, name: str, group: str | None) -> bool:
-        want = name.casefold()
-        want_group = group.casefold() if group else None
+    def _find_texture(self, pkg: Package, name_cf: str, group_cf: str | None) -> int | None:
+        """0-based export index of `pkg`'s texture named `name_cf` (already casefolded) in
+        `group_cf` (casefolded, or None for "any group"), or None. The one name/group scan every
+        qualified lookup below shares."""
         for i in textures(pkg, self._class_index):
             e = pkg.exports[i]
-            if (pkg.name(e["nm"]) or "").casefold() != want:
+            if (pkg.name(e["nm"]) or "").casefold() != name_cf:
                 continue
-            if want_group is not None:
+            if group_cf is not None:
                 outer = pkg.name_of_ref(e["outer"])
-                if outer is None or outer.casefold() != want_group:
+                if outer is None or outer.casefold() != group_cf:
                     continue
-            return True
-        return False
+            return i
+        return None
+
+    def _texture_named(self, pkg: Package, name: str, group: str | None) -> bool:
+        return self._find_texture(pkg, name.casefold(), group.casefold() if group else None) is not None
+
+    def _locate_texture(self, pkg_stem: str, group: str | None, name: str) -> tuple[Package, int] | None:
+        """`(package, export_index)` for a `Package[.Group].Name` triple, tolerating a STALE
+        package hint the SAME way `mapimport._resolve_actor_class` tolerates one for class refs:
+        an original (1998/Gold) Unreal `.unr`'s own tables can name an object's package as
+        `UnrealI` when the shipped System/Textures files actually define it elsewhere
+        (`UnrealShare`, …) — genuine shipped content, not corruption
+        (`dev/docs/board/done/unreal1-ut99-map-import-stale-class-package/`), and the same redirect
+        shows up on texture refs too: `UnrealI.Skins.JBarrel1` only decodes as
+        `UnrealShare.Skins.JBarrel1`.
+
+        On an exact-package miss, searches every OTHER package on the composed path for the same
+        name[+group]. A unique hit wins outright; an ambiguous collision prefers `UnrealShare`
+        (every redirect observed so far lands there); anything else (zero hits, or an ambiguous
+        one with no `UnrealShare` match) returns None so the caller's own error still names the
+        actually-stated package."""
+        name_cf = name.casefold()
+        group_cf = group.casefold() if group else None
+        pkg = self._package(pkg_stem)
+        if pkg is not None:
+            i = self._find_texture(pkg, name_cf, group_cf)
+            if i is not None:
+                return pkg, i
+        exclude = pkg_stem.casefold()
+        candidates: dict[str, tuple[Package, int]] = {}
+        for stem_cf in self._by_stem:
+            if stem_cf == exclude:
+                continue
+            other = self._package(stem_cf)
+            if other is None:
+                continue
+            j = self._find_texture(other, name_cf, group_cf)
+            if j is not None:
+                candidates[stem_cf] = (other, j)
+        if len(candidates) == 1:
+            return next(iter(candidates.values()))
+        return candidates.get("unrealshare")
 
     def exists(self, ref: str) -> bool:
         """Author-time EXISTENCE check — does a `Texture`-classed export of this name exist on the
@@ -910,12 +923,12 @@ class TextureResolver:
             pkg_stem, group, name = parts
         else:
             return False
-        pkg = self._package(pkg_stem)
-        return pkg is not None and self._texture_named(pkg, name, group)
+        return self._locate_texture(pkg_stem, group, name) is not None
 
     def _decode_ref(self, ref: str) -> TextureResult:
         """`Package[.Group].Name` → a `DecodedTexture` or a `TextureError`. The one lookup and
-        decode path; `resolve` only adds the cache."""
+        decode path; `resolve` only adds the cache. Lookup tolerates a stale package hint
+        (`_locate_texture`) before reporting `unknown-package`/`unknown-texture`."""
         parts = ref.split(".")
         if len(parts) == 2:
             pkg_stem, group, name = parts[0], None, parts[1]
@@ -925,26 +938,18 @@ class TextureResolver:
             return TextureError(ref, "unqualified-ref",
                                 f"{ref!r} is not a Package[.Group].Name reference; a package "
                                 f"qualifier is required (a bare name could match several)")
-        pkg = self._package(pkg_stem)
-        if pkg is None:
+        located = self._locate_texture(pkg_stem, group, name)
+        if located is not None:
+            pkg, i = located
+            return self._decode_export(ref, pkg, i)
+        if self._package(pkg_stem) is None:
             if pkg_stem.casefold() in self._pkg_unreadable:
                 return TextureError(ref, "package-unreadable",
                                     f"package {pkg_stem!r} is on the search path but will not "
                                     f"open or parse")
             return TextureError(ref, "unknown-package",
                                 f"no package named {pkg_stem!r} on the composed search path")
-        want = name.casefold()
-        want_group = group.casefold() if group else None
-        for i in textures(pkg, self._class_index):
-            e = pkg.exports[i]
-            if (pkg.name(e["nm"]) or "").casefold() != want:
-                continue
-            if want_group is not None:
-                outer = pkg.name_of_ref(e["outer"])
-                if outer is None or outer.casefold() != want_group:
-                    continue
-            return self._decode_export(ref, pkg, i)
-        if want_group is not None:
+        if group is not None:
             return TextureError(ref, "unknown-texture",
                                 f"no Texture named {name!r} in group {group!r} of package "
                                 f"{pkg_stem!r}")
