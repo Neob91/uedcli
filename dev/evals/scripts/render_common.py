@@ -12,16 +12,16 @@ FRAME_PAD = 64
 
 def fingerprint(project: pathlib.Path, level: str) -> str:
     """sha256 over the sorted "relpath\\0content-sha256" lines of every file under
-    maps/<level>/actors/ -- identifies the exact base-trunk actor content a diff.patch
-    was computed against (extract_execution.py) or is being applied onto
-    (render_execution.py), so a drifted base-trunk cache is a clear error, not a
-    silent mis-apply."""
-    actors_dir = project / "maps" / level / "actors"
+    maps/<level>/ -- the exact subtree extract_execution.py's diff.patch is scoped to --
+    identifying the exact base-trunk content a patch was computed against
+    (extract_execution.py) or is being applied onto (render_execution.py), so a
+    drifted base-trunk cache is a clear error, not a silent mis-apply."""
+    level_dir = project / "maps" / level
     lines = []
-    for p in sorted(actors_dir.rglob("*")):
+    for p in sorted(level_dir.rglob("*")):
         if p.is_file():
             digest = hashlib.sha256(p.read_bytes()).hexdigest()
-            lines.append(f"{p.relative_to(actors_dir)}\0{digest}")
+            lines.append(f"{p.relative_to(level_dir)}\0{digest}")
     return hashlib.sha256("\n".join(lines).encode()).hexdigest()
 
 def run(project, level, args, **kw):
@@ -107,35 +107,3 @@ def diagram_live_names(project, level, names, frame, highlight, out_path):
 
 def diagram_live(project, level, frame, highlight, out_path):
     diagram_live_names(project, level, scene_names(project, level, frame), frame, highlight, out_path)
-
-def diagram_composite(scene_project, level, scene_names_list, missing_project, missing_actor, frame, out_path):
-    """Render `scene_names_list` as they stand in `scene_project`, PLUS
-    `missing_actor` reinserted from `missing_project` -- for an actor that
-    doesn't exist in `scene_project`."""
-    tmp = out_path.parent / "_t3d"
-    tmp.mkdir(exist_ok=True)
-    scene_file = tmp / f"{out_path.stem}_scene.t3d"
-    missing_file = tmp / f"{out_path.stem}_missing.t3d"
-    scene_file.write_text(show(scene_project, level, scene_names_list))
-    missing_file.write_text(show(missing_project, level, [missing_actor]))
-    args = ["actor", "diagram", "--from-t3d", str(scene_file), str(missing_file),
-            "--layout", "quad", "--faces", "wire", "--brush-colors", "csg",
-            "--frame", frame, "--highlight", missing_actor, "--size", "1800", "--out", str(out_path)]
-    r = run(scene_project, level, args)  # project irrelevant under --from-t3d, kept for a stable env
-    r.check_returncode()
-
-def render_view(render_project, other_project, level, frame, actor, out_path):
-    """Render `actor` highlighted from `render_project`'s current state, its
-    scene bbox-filtered to `frame`. If `actor` doesn't exist there (deleted
-    for an AFTER render, not-yet-created for a BEFORE render), reinsert it
-    from `other_project` (composite) so it's still visible at its last
-    known position."""
-    names = scene_names(render_project, level, frame)
-    if actor_exists(render_project, level, actor):
-        diagram_live_names(render_project, level, names, frame, actor, out_path)
-        return
-    if actor_exists(other_project, level, actor):
-        scene = [n for n in names if n != actor]
-        diagram_composite(render_project, level, scene, other_project, actor, frame, out_path)
-        return
-    diagram_live_names(render_project, level, names, frame, None, out_path)

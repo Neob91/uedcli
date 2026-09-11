@@ -77,13 +77,19 @@ browser/TTY, it will hang under a headless driver) prints a long-lived token. Ex
 ```
 run_dir=$(mktemp -d)
 fake_home=$(mktemp -d)
-cp -r "$BASE_TRUNKS_DIR/<task.base_trunk>" "$run_dir/trunk"
+python3 -c "
+import sys; sys.path.insert(0, 'scripts')
+import shutil
+from build_gold import base_trunk_for
+from registry import TASKS
+shutil.copytree(base_trunk_for(TASKS['<task_id>']), '$run_dir/trunk')
+"
 mkdir -p "$run_dir/trunk/.claude/skills/<skill-name>"
 cp <path-to-skill>/SKILL.md "$run_dir/trunk/.claude/skills/<skill-name>/"
 ```
-The base trunk copied into `$run_dir/trunk` is `build_gold.base_trunk_for(task)` — the task's own
-`dx_map` imported fresh into `BASE_TRUNKS_DIR` (cached after the first import), not a plain `cp`
-from a fixed path. `<task.level>` and `req` (for step 4 below) come from the task's own
+`base_trunk_for(task)` imports the task's own `dx_map` fresh into `BASE_TRUNKS_DIR` (cached after
+the first import) — there's no fixed path to `cp` from. `<task.level>` and `req` (for step 4 below)
+come from the task's own
 `tasks/<task_id>/task.json`; `req` is HTML-entity-encoded there (`&ldquo;...&rdquo;`) for the
 webapp, so unescape it (`&ldquo;`/`&rdquo;` → curly quotes, `&mdash;` → em dash, etc.) before using
 it as the actual prompt text.

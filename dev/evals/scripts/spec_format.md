@@ -34,8 +34,9 @@ picture (a real bug, caught and fixed); don't reintroduce one.
 ## `entries`: what it's for, and what it's NOT for
 
 Grading is manual -- a human looks at the pictures. What gets a picture is a real diff of the whole
-trunk (baseline vs. subject, via `diff.patch` -- see `../RESTRUCTURE-SPEC.md`): every actor that's
-created, deleted, or whose full T3D block/CSG `order_value` differs at all. `entries` does NOT gate
+trunk (baseline vs. subject, via `diff.patch` -- see `extract_execution.py`/`render_execution.py`):
+every actor that's created, deleted, or whose full T3D block/CSG `order_value` differs at all.
+`entries` does NOT gate
 this -- an agent that touches an actor the task never mentions still shows up, flagged as not
 declared in the spec, which is the point: the human needs to see the truth, not a subset filtered
 through what the task predicted.

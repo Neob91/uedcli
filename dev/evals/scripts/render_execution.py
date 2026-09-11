@@ -1,9 +1,9 @@
 """Render one already-extracted execution's per-actor pictures + manifest.json,
 using ONLY the cached base trunk + diff.patch + task.json -- the subject
-trunk never needs to exist (see ../RESTRUCTURE-SPEC.md). Re-runnable any
-time (e.g. after a rendering bug fix): only manifest.json and entries/ are
-replaced -- execution.json, diff.patch, panorama/, and grade.json are never
-touched, so a re-render can't destroy an existing grade.
+trunk never needs to exist. Re-runnable any time (e.g. after a rendering bug
+fix): only manifest.json and entries/ are replaced -- execution.json,
+diff.patch, panorama/, and grade.json are never touched, so a re-render
+can't destroy an existing grade.
 
 1. Copy the cached base trunk twice: before_copy (untouched) and after_copy.
    Verify before_copy's actor content still matches execution.json's stored
@@ -30,7 +30,7 @@ touched, so a re-render can't destroy an existing grade.
 
 Usage: render_execution.py <task_id> <run_id>
 """
-import argparse, json, pathlib, re, shutil, subprocess, sys, tempfile
+import argparse, json, os, pathlib, re, shutil, subprocess, sys, tempfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
@@ -91,18 +91,25 @@ def _diff_local_copies(before_copy, after_copy, task) -> list[dict]:
     return changed
 
 def _render_view_copy(render_copy, other_copy, level, frame, actor, scratch, out_path):
-    """Like render_common.render_view, but the "missing actor" case is a
-    physical `cp -r` of that actor's own directory into a throwaway copy of
-    `render_copy`, instead of a --from-t3d composite (see RESTRUCTURE-SPEC.md
-    -- the physical-overlay approach applies here too, not just to building
-    the shared before_copy/after_copy)."""
+    """Render `actor` highlighted from `render_copy`'s current state, its scene bbox-filtered to
+    `frame`. If `actor` doesn't exist there (deleted for an AFTER render, not-yet-created for a
+    BEFORE render), a throwaway copy of `render_copy` gets that actor's own directory physically
+    `cp -r`'d in from `other_copy` for just this one picture -- the physical-overlay approach
+    applies here too, not just to building the shared before_copy/after_copy. Always renders to
+    a temp path first and os.replace()s it into
+    `out_path` -- uedcli's own PNG writer has no tmp+rename step of its own, so without this an
+    interrupted render (the exact scenario --resume exists for) can leave a truncated PNG that a
+    later --resume run would then treat as already-done and skip forever."""
+    tmp_out = scratch / f"_pending_{out_path.name}"
     if rc.actor_exists(render_copy, level, actor):
         names = rc.scene_names(render_copy, level, frame)
-        rc.diagram_live_names(render_copy, level, names, frame, actor, out_path)
+        rc.diagram_live_names(render_copy, level, names, frame, actor, tmp_out)
+        os.replace(tmp_out, out_path)
         return
     if not rc.actor_exists(other_copy, level, actor):
         names = rc.scene_names(render_copy, level, frame)
-        rc.diagram_live_names(render_copy, level, names, frame, None, out_path)
+        rc.diagram_live_names(render_copy, level, names, frame, None, tmp_out)
+        os.replace(tmp_out, out_path)
         return
     throwaway = pathlib.Path(tempfile.mkdtemp(prefix=f"preview_{actor}_", dir=scratch))
     try:
@@ -111,7 +118,8 @@ def _render_view_copy(render_copy, other_copy, level, frame, actor, scratch, out
         dst = throwaway / "maps" / level / "actors" / actor
         shutil.copytree(src, dst)
         names = rc.scene_names(throwaway, level, frame)
-        rc.diagram_live_names(throwaway, level, names, frame, actor, out_path)
+        rc.diagram_live_names(throwaway, level, names, frame, actor, tmp_out)
+        os.replace(tmp_out, out_path)
     finally:
         shutil.rmtree(throwaway, ignore_errors=True)
 
@@ -153,9 +161,15 @@ def render_execution(task_id: str, run_id: str, *, resume: bool = False) -> dict
         frame = rc.frame_from_actors([before_copy, after_copy], level, touched_actors, rc.FRAME_PAD)
 
         entries_dir = out_dir / "entries"
+        manifest_path = out_dir / "manifest.json"
         if resume:
             entries_dir.mkdir(exist_ok=True)
         else:
+            # drop the old manifest FIRST: if this run gets interrupted partway (the memory-
+            # pressure scenario --resume exists for), a stale manifest still pointing at images
+            # entries_dir no longer has is worse than no manifest at all -- build_page.py would
+            # silently render broken image links instead of just not showing this run yet
+            manifest_path.unlink(missing_ok=True)
             if entries_dir.exists():
                 shutil.rmtree(entries_dir)
             entries_dir.mkdir()
@@ -178,7 +192,7 @@ def render_execution(task_id: str, run_id: str, *, resume: bool = False) -> dict
             wanted = {p.name for t in touched for p in (entries_dir / f"{t['actor']}_before.png",
                                                           entries_dir / f"{t['actor']}_after.png")}
             for f in entries_dir.iterdir():
-                if f.name not in wanted:
+                if f.is_file() and f.name not in wanted:
                     f.unlink()
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
@@ -189,7 +203,7 @@ def render_execution(task_id: str, run_id: str, *, resume: bool = False) -> dict
         entries=entries,
         panorama=[f"panorama/pan_{i}.png" for i in range(8)],
     )
-    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
     return manifest
 
 if __name__ == "__main__":

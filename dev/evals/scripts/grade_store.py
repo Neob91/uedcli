@@ -3,12 +3,24 @@
 page reload and stays editable at any time -- and re-rendering an
 execution (render_execution.py) never touches this file. No DB -- a human
 grades a few dozen executions, not thousands."""
-import datetime, json, pathlib
+import datetime, json, pathlib, re, sys
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from registry import TASKS
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 TASKS_DIR = ROOT / "tasks"
 
+# no "." -- letting it through would make "run_id": ".." a valid match too, defeating the point
+_RUN_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+
 def _path(task_id: str, run_id: str) -> pathlib.Path:
+    # both come straight from an HTTP request body (serve.py) -- validate before building a
+    # filesystem path from them, or "task_id": "../../../../tmp/evil" writes outside the tree
+    if task_id not in TASKS:
+        raise ValueError(f"unknown task_id {task_id!r}")
+    if not _RUN_ID_RE.fullmatch(run_id or ""):
+        raise ValueError(f"run_id must be a single path segment (letters/digits/_/-), got {run_id!r}")
     return TASKS_DIR / task_id / "executions" / run_id / "grade.json"
 
 def get(task_id: str, run_id: str) -> dict | None:

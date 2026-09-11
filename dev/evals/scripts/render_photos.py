@@ -1,6 +1,6 @@
 """Render a task's 8x45deg `level photo --native` tour from ANY trunk (the
 gold reference, or a trial's subject trunk) -- one `photo_camera` definition
-per task (specs/<id>.py) feeds both, so a trial's photos are directly
+per task (tasks/<id>/task.json) feeds both, so a trial's photos are directly
 comparable to the reference's."""
 import os, pathlib, subprocess, sys
 

@@ -1,9 +1,9 @@
 """Render a task's "before" block: the baseline's own panorama + ONE
 UED-style quad view (Top/Front/Iso/Side) of the whole room, no highlight --
 shown once per task, not per execution (execution rendering is
-extract_execution.py + render_execution.py -- see ../RESTRUCTURE-SPEC.md).
-Frame is the union bbox of every task entry with an `actor` (not just
-touched ones, since there's no execution yet), FRAME_PAD padded -- same
+extract_execution.py + render_execution.py). Frame is the union bbox of
+every task entry with an `actor` (not just touched ones, since there's no
+execution yet), FRAME_PAD padded -- same
 computed-not-hand-authored approach render_execution.py uses for an
 execution's own frame.
 

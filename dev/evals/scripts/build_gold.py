@@ -1,4 +1,4 @@
-"""Build the gold (fully-correct) trunk for a task from its specs/<id>.py:
+"""Build the gold (fully-correct) trunk for a task from its tasks/<id>/task.json:
 apply every `update(target="corners")` entry's own op, then move every
 `anchor` entry by its target anchor's task delta (since in the gold trunk
 the anchor's actual delta IS the task delta). `update(target="unchanged")`
