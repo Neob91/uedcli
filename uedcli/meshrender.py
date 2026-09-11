@@ -27,7 +27,7 @@ from __future__ import annotations
 import math
 
 from . import utexture
-from .rotation import euler_to_matrix_uu, matvec, uu_to_deg
+from .rotation import deg_to_uu, euler_to_matrix_uu, matvec, uu_to_deg
 
 # The single default shot: iso = front-three-quarter (spike defaults, spec §4 "iso").
 ISO_YAW_DEG = 45.0
@@ -226,7 +226,6 @@ def azimuth_uu(rotate_uu: tuple[int, int, int]) -> int:
     camera sits at a fixed yaw (`ISO_YAW_DEG`); posing the mesh by `--rotate`'s yaw spins the mesh
     under it, so the yaw the camera looks FROM in the mesh's own frame is `iso_yaw - rotate_yaw`. This
     is a mesh-local reading, NOT world facing — `RotOrigin` is unreconciled (spec §4)."""
-    from .rotation import deg_to_uu
     return (deg_to_uu(ISO_YAW_DEG) - rotate_uu[1]) % 65536
 
 
@@ -251,14 +250,21 @@ def render_class(mesh, skins: dict, *, rotate_uu=(0, 0, 0), size: int = DEFAULT_
                            f"(verts={len(mesh.verts)} faces={len(mesh.faces)})")
     sx, sy, sz = mesh.scale if any(mesh.scale) else (1.0, 1.0, 1.0)
     pose = euler_to_matrix_uu(int(rotate_uu[0]), int(rotate_uu[1]), int(rotate_uu[2]))
-    cy, syaw = math.cos(math.radians(ISO_YAW_DEG)), math.sin(math.radians(ISO_YAW_DEG))
-    cp, sp = math.cos(math.radians(ISO_PITCH_DEG)), math.sin(math.radians(ISO_PITCH_DEG))
+    # Camera basis via the same convention as `preview_native.py`'s `camera_basis` (forward = UE1
+    # +X, right = +Y, up = +Z), not a hand-rolled yaw/pitch composition: the old two-step trig
+    # rotated the SCENE by +camera-yaw instead of transforming it into the camera's frame (the
+    # inverse rotation), which put mesh-local +X and +Y in each other's screen roles and mirrored
+    # every render left-right (`class preview`'s baked-text bug).
+    iso_r = euler_to_matrix_uu(deg_to_uu(ISO_PITCH_DEG), deg_to_uu(ISO_YAW_DEG), 0)
+    fwd, right, up = (matvec(iso_r, (1.0, 0.0, 0.0)), matvec(iso_r, (0.0, 1.0, 0.0)),
+                      matvec(iso_r, (0.0, 0.0, 1.0)))
 
     def view(v):
         x, y, z = matvec(pose, (v[0] * sx, v[1] * sy, v[2] * sz))   # Scale, then mesh-local pose
-        x, y = x * cy - y * syaw, x * syaw + y * cy                 # camera yaw about Z
-        y, z = y * cp - z * sp, y * sp + z * cp                     # camera pitch
-        return (x, -z, y)                                           # screen x, screen y (down), depth
+        d = x * fwd[0] + y * fwd[1] + z * fwd[2]
+        r = x * right[0] + y * right[1] + z * right[2]
+        u = x * up[0] + y * up[1] + z * up[2]
+        return (r, -u, d)                                           # screen x, screen y (down), depth
 
     pts = [view(v) for t in tris for v in t[:3]]
     xs, ys = [p[0] for p in pts], [p[1] for p in pts]

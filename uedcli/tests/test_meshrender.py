@@ -349,6 +349,34 @@ def test_render_class_composites_modulated_triangles_multiplicatively():
         assert r < meshrender._BG[0] and g < meshrender._BG[1] and b < meshrender._BG[2]
 
 
+def test_render_class_iso_camera_is_not_mirrored():
+    """Regression: the iso camera step used to apply the scene's own rotation instead of the
+    inverse camera-space transform, which swapped mesh-local +X and +Y between screen roles and
+    mirrored every render left-right (baked mesh text came out backwards). Two identically-shaped
+    triangles differing only by a mesh-local Y offset (`camera_basis`'s "right", +Y) must land on
+    the matching screen side: the +Y one strictly right of the -Y one."""
+    mesh = _FakeMesh(
+        verts=[(0, 60, -10), (20, 60, -10), (0, 60, 10),      # +Y ("right")
+               (0, -60, -10), (20, -60, -10), (0, -60, 10)],  # -Y ("left")
+        wedges=[(0, 0, 0), (1, 255, 0), (2, 0, 255), (3, 0, 0), (4, 255, 0), (5, 0, 255)],
+        faces=[((0, 1, 2), 0), ((3, 4, 5), 1)],
+        materials=[(0, 0), (0, 1)],
+    )
+    red = (1, 1, b"\xff\x00\x00", False, b"\x01")
+    blue = (1, 1, b"\x00\x00\xff", False, b"\x01")
+    img, _azimuth = meshrender.render_class(mesh, {0: red, 1: blue}, size=128)
+    px = img.load()
+
+    def centroid_x(is_match):
+        xs = [x for x in range(128) for y in range(128) if is_match(px[x, y])]
+        assert xs
+        return sum(xs) / len(xs)
+
+    red_x = centroid_x(lambda c: c[0] > 0 and c[1] == 0 and c[2] == 0)
+    blue_x = centroid_x(lambda c: c[2] > 0 and c[0] == 0 and c[1] == 0)
+    assert red_x > blue_x
+
+
 def test_render_class_still_draws_an_opaque_triangle_with_the_same_shape(monkeypatch):
     """Control: the SAME mesh with `PolyFlags=0` (no translucent/modulated bit) draws normally —
     proves the skip is flag-gated, not a side effect of the fixture shape."""
