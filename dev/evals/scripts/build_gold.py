@@ -86,6 +86,9 @@ def build_gold(task_id: str, out_dir: pathlib.Path):
 
 if __name__ == "__main__":
     task_id = sys.argv[1]
-    out_dir = pathlib.Path(sys.argv[2])
+    # resolve to absolute: build_gold()'s subprocess calls run with cwd=WT, so a relative
+    # out_dir (as typed at this script's own invocation cwd) would silently resolve against
+    # the wrong directory otherwise
+    out_dir = pathlib.Path(sys.argv[2]).resolve()
     build_gold(task_id, out_dir)
     print("built gold trunk for", task_id, "->", out_dir)

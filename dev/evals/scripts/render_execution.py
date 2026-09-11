@@ -1,0 +1,207 @@
+"""Render one already-extracted execution's per-actor pictures + manifest.json,
+using ONLY the cached base trunk + diff.patch + task.json -- the subject
+trunk never needs to exist (see ../RESTRUCTURE-SPEC.md). Re-runnable any
+time (e.g. after a rendering bug fix): only manifest.json and entries/ are
+replaced -- execution.json, diff.patch, panorama/, and grade.json are never
+touched, so a re-render can't destroy an existing grade.
+
+1. Copy the cached base trunk twice: before_copy (untouched) and after_copy.
+   Verify before_copy's actor content still matches execution.json's stored
+   base_fingerprint before applying anything -- the base-trunk cache can be
+   deleted and re-imported later (build_gold.base_trunk_for), and applying
+   diff.patch onto DIFFERENT base content needs a clear error, not
+   `patch`'s default fuzzy-match silently mis-applying.
+2. Apply diff.patch onto after_copy with `patch -p2 --batch --forward -F0
+   --no-backup-if-mismatch` (git apply was tried first and resolves paths
+   against the git repo root instead of the copy's own directory when run
+   from inside this project's git worktree -- patch doesn't have that
+   problem). -F0 makes any context mismatch fail loudly rather than
+   fuzzy-apply, matching the fingerprint check's intent.
+3. Touched-actor list: actor names in before_copy vs. after_copy (created/
+   deleted by set difference) + full T3D block/order_value comparison for
+   the intersection (updated) -- same comparison this pipeline always used,
+   just fed two local copies instead of the original baseline/subject.
+   `what`/`declared` looked up against task.json's `entries` by actor name.
+4. Per touched actor, BEFORE (from before_copy) and AFTER (from after_copy),
+   both highlighted. A created actor doesn't exist in before_copy (physically
+   copy its directory in from after_copy, into a throwaway copy, for that one
+   picture); a deleted actor doesn't exist in after_copy (same trick, other
+   direction).
+
+Usage: render_execution.py <task_id> <run_id>
+"""
+import argparse, json, pathlib, re, shutil, subprocess, sys, tempfile
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from registry import TASKS
+from build_gold import base_trunk_for, BASE_TRUNKS_DIR
+import render_common as rc
+
+ROOT = pathlib.Path(__file__).resolve().parents[1]
+TASKS_DIR = ROOT / "tasks"
+
+LABELS = {"created": "CREATED", "updated": "UPDATED", "deleted": "DELETED"}
+
+def _order_value(project: pathlib.Path, level: str, actor: str) -> str | None:
+    """The actor's raw LexoRank CSG-order sidecar (maps/<level>/actors/<actor>/
+    order_value) -- NOT part of its T3D block (`actor show` never emits it),
+    so a pure CSG-order change is otherwise invisible to a T3D diff."""
+    p = project / "maps" / level / "actors" / actor / "order_value"
+    return p.read_text() if p.exists() else None
+
+def _all_actor_names(project, level) -> set[str]:
+    r = rc.run(project, level, ["actor", "find", "--json"])
+    r.check_returncode()
+    return set(json.loads(r.stdout))
+
+_ACTOR_BLOCK_RE = re.compile(r"(Begin Actor Class=\S+ Name=(\S+).*?\nEnd Actor\n)", re.DOTALL)
+
+def _split_actor_blocks(t3d_text: str) -> dict[str, str]:
+    return {m.group(2): m.group(1) for m in _ACTOR_BLOCK_RE.finditer(t3d_text)}
+
+def _diff_local_copies(before_copy, after_copy, task) -> list[dict]:
+    """Every actor that differs between before_copy and after_copy -- see module
+    docstring point 3. O(1) heavy subprocess calls (2 `actor find` + up to 2 bulk
+    `actor show -`), not O(actors)."""
+    level = task["level"]
+    base_names = _all_actor_names(before_copy, level)
+    sub_names = _all_actor_names(after_copy, level)
+    common = sorted(base_names & sub_names)
+    base_blocks = _split_actor_blocks(rc.show(before_copy, level, common))
+    sub_blocks = _split_actor_blocks(rc.show(after_copy, level, common))
+    assert len(base_blocks) == len(common) and len(sub_blocks) == len(common), (
+        f"_ACTOR_BLOCK_RE parsed {len(base_blocks)}/{len(sub_blocks)} of {len(common)} actors -- "
+        "a parse miss here silently drops actors from the diff instead of comparing them")
+    entries_by_actor = {e["actor"].casefold(): e for e in task["entries"] if e.get("actor")}
+
+    changed = []
+    for name in sorted(base_names | sub_names):
+        if name in base_names and name not in sub_names:
+            bucket = "deleted"
+        elif name in sub_names and name not in base_names:
+            bucket = "created"
+        elif (base_blocks.get(name) != sub_blocks.get(name)
+              or _order_value(before_copy, level, name) != _order_value(after_copy, level, name)):
+            bucket = "updated"
+        else:
+            continue
+        entry = entries_by_actor.get(name.casefold())
+        what = entry["what"] if entry else "not declared in this task's spec -- flag this to the human"
+        changed.append(dict(actor=name, bucket=bucket, what=what, declared=entry is not None))
+    return changed
+
+def _render_view_copy(render_copy, other_copy, level, frame, actor, scratch, out_path):
+    """Like render_common.render_view, but the "missing actor" case is a
+    physical `cp -r` of that actor's own directory into a throwaway copy of
+    `render_copy`, instead of a --from-t3d composite (see RESTRUCTURE-SPEC.md
+    -- the physical-overlay approach applies here too, not just to building
+    the shared before_copy/after_copy)."""
+    if rc.actor_exists(render_copy, level, actor):
+        names = rc.scene_names(render_copy, level, frame)
+        rc.diagram_live_names(render_copy, level, names, frame, actor, out_path)
+        return
+    if not rc.actor_exists(other_copy, level, actor):
+        names = rc.scene_names(render_copy, level, frame)
+        rc.diagram_live_names(render_copy, level, names, frame, None, out_path)
+        return
+    throwaway = pathlib.Path(tempfile.mkdtemp(prefix=f"preview_{actor}_", dir=scratch))
+    try:
+        shutil.copytree(render_copy, throwaway, dirs_exist_ok=True)
+        src = other_copy / "maps" / level / "actors" / actor
+        dst = throwaway / "maps" / level / "actors" / actor
+        shutil.copytree(src, dst)
+        names = rc.scene_names(throwaway, level, frame)
+        rc.diagram_live_names(throwaway, level, names, frame, actor, out_path)
+    finally:
+        shutil.rmtree(throwaway, ignore_errors=True)
+
+def render_execution(task_id: str, run_id: str, *, resume: bool = False) -> dict:
+    if task_id not in TASKS:
+        sys.exit(f"unknown task_id {task_id!r} -- known: {', '.join(sorted(TASKS))}")
+    task = TASKS[task_id]
+    level = task["level"]
+    out_dir = TASKS_DIR / task_id / "executions" / run_id
+    execution_path = out_dir / "execution.json"
+    if not execution_path.exists():
+        sys.exit(f"{execution_path} not found -- run extract_execution.py first")
+    execution = json.loads(execution_path.read_text())
+
+    scratch = pathlib.Path(tempfile.mkdtemp(prefix=f"render_{task_id}_{run_id}_", dir=BASE_TRUNKS_DIR.parent))
+    try:
+        before_copy, after_copy = scratch / "before", scratch / "after"
+        shutil.copytree(base_trunk_for(task), before_copy)
+
+        actual_fp = rc.fingerprint(before_copy, level)
+        if actual_fp != execution["base_fingerprint"]:
+            sys.exit(f"base trunk for {task_id} has drifted since {run_id} was extracted "
+                      f"(fingerprint {actual_fp[:12]}... != {execution['base_fingerprint'][:12]}...) "
+                      "-- delete and re-import the base trunk cache is not enough; this execution "
+                      "needs re-extracting against the CURRENT base trunk, or the base trunk cache "
+                      "needs restoring to what it was")
+
+        shutil.copytree(before_copy, after_copy)
+        patch_path = out_dir / "diff.patch"
+        r = subprocess.run(
+            ["patch", "-p2", "--batch", "--forward", "-F0", "--no-backup-if-mismatch"],
+            cwd=after_copy, input=patch_path.read_text(), capture_output=True, text=True)
+        if r.returncode != 0:
+            sys.exit(f"applying {patch_path} onto the base trunk copy failed (rc={r.returncode}): "
+                      f"{r.stdout}\n{r.stderr}")
+
+        touched = _diff_local_copies(before_copy, after_copy, task)
+        touched_actors = [t["actor"] for t in touched]
+        frame = rc.frame_from_actors([before_copy, after_copy], level, touched_actors, rc.FRAME_PAD)
+
+        entries_dir = out_dir / "entries"
+        if resume:
+            entries_dir.mkdir(exist_ok=True)
+        else:
+            if entries_dir.exists():
+                shutil.rmtree(entries_dir)
+            entries_dir.mkdir()
+
+        entries = []
+        for t in touched:
+            actor = t["actor"]
+            before_path = entries_dir / f"{actor}_before.png"
+            after_path = entries_dir / f"{actor}_after.png"
+            if not (resume and before_path.exists()):
+                _render_view_copy(before_copy, after_copy, level, frame, actor, scratch, before_path)
+            if not (resume and after_path.exists()):
+                _render_view_copy(after_copy, before_copy, level, frame, actor, scratch, after_path)
+            entries.append(dict(actor=actor, bucket=t["bucket"], label=LABELS[t["bucket"]], what=t["what"],
+                                 declared=t["declared"],
+                                 img_before=f"entries/{actor}_before.png",
+                                 img_after=f"entries/{actor}_after.png"))
+        if resume:
+            # drop stale images for an actor no longer in the touched set (e.g. diff.patch changed)
+            wanted = {p.name for t in touched for p in (entries_dir / f"{t['actor']}_before.png",
+                                                          entries_dir / f"{t['actor']}_after.png")}
+            for f in entries_dir.iterdir():
+                if f.name not in wanted:
+                    f.unlink()
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+
+    manifest = dict(
+        task_id=task_id, run_id=run_id, label=execution["label"],
+        subject_trunk=execution["subject_trunk"], rendered_at=execution["rendered_at"],
+        entries=entries,
+        panorama=[f"panorama/pan_{i}.png" for i in range(8)],
+    )
+    (out_dir / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
+    return manifest
+
+if __name__ == "__main__":
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("task_id")
+    ap.add_argument("run_id")
+    ap.add_argument("--resume", action="store_true",
+                     help="keep already-rendered entries/ images instead of wiping and redoing "
+                          "everything -- for continuing after an interrupted run, NOT the default "
+                          "(a normal re-render should pick up a rendering fix everywhere, not just "
+                          "for actors whose images happen to be missing)")
+    args = ap.parse_args()
+    manifest = render_execution(args.task_id, args.run_id, resume=args.resume)
+    print(f"rendered {len(manifest['entries'])} entries + panorama -> "
+          f"tasks/{args.task_id}/executions/{args.run_id}/manifest.json")

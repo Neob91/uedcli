@@ -1,0 +1,542 @@
+diff --git a/before/maps/unatco/actors/BookClosed1/actor.t3d b/after/maps/unatco/actors/BookClosed1/actor.t3d
+index 2059fab1..d713a1f9 100644
+--- a/before/maps/unatco/actors/BookClosed1/actor.t3d
++++ b/after/maps/unatco/actors/BookClosed1/actor.t3d
+@@ -2,5 +2,5 @@ Begin Actor Class=DeusEx.BookClosed
+     Tag=BookClosed
+     bOwned=True
+     textTag=01_Book03
+-    Location=(X=417.386780,Y=184.704102,Z=294.449219)
++    Location=(X=465.386780,Y=184.704102,Z=294.449219)
+ End Actor
+\ No newline at end of file
+diff --git a/before/maps/unatco/actors/Brush1/actor.t3d b/after/maps/unatco/actors/Brush1/actor.t3d
+index 766f73cb..64ca09a8 100644
+--- a/before/maps/unatco/actors/Brush1/actor.t3d
++++ b/after/maps/unatco/actors/Brush1/actor.t3d
+@@ -4,7 +4,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=0.999878,Y=-32.000000,Z=-56.000000)
+     Rotation=(Yaw=32768)
+     Tag=Brush
+-    Location=(X=493.000000,Y=24.000000,Z=240.000000)
++    Location=(X=541.000000,Y=24.000000,Z=240.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush1158/actor.t3d b/after/maps/unatco/actors/Brush1158/actor.t3d
+index 785b6a01..b36189c8 100644
+--- a/before/maps/unatco/actors/Brush1158/actor.t3d
++++ b/after/maps/unatco/actors/Brush1158/actor.t3d
+@@ -4,7 +4,7 @@ Begin Actor Class=Engine.Brush
+     PolyFlags=33
+     Rotation=(Yaw=32768)
+     Tag=Brush
+-    Location=(X=492.000000,Y=-8.000000,Z=281.000000)
++    Location=(X=540.000000,Y=-8.000000,Z=281.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush132/actor.t3d b/after/maps/unatco/actors/Brush132/actor.t3d
+index 90ed984c..943729af 100644
+--- a/before/maps/unatco/actors/Brush132/actor.t3d
++++ b/after/maps/unatco/actors/Brush132/actor.t3d
+@@ -4,7 +4,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=-56.000000,Y=-2.000000,Z=1.000000)
+     Rotation=(Yaw=-16384)
+     Tag=Brush
+-    Location=(X=448.000000,Y=48.000000,Z=416.000000)
++    Location=(X=496.000000,Y=48.000000,Z=416.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush138/actor.t3d b/after/maps/unatco/actors/Brush138/actor.t3d
+index eed63418..55fdfbf4 100644
+--- a/before/maps/unatco/actors/Brush138/actor.t3d
++++ b/after/maps/unatco/actors/Brush138/actor.t3d
+@@ -3,7 +3,7 @@ Begin Actor Class=Engine.Brush
+     Group="holo"
+     Rotation=(Yaw=32768)
+     Tag=Brush
+-    Location=(X=494.000000,Y=-8.000000,Z=296.000000)
++    Location=(X=542.000000,Y=-8.000000,Z=296.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush140/actor.t3d b/after/maps/unatco/actors/Brush140/actor.t3d
+index a3bd21fb..38946f42 100644
+--- a/before/maps/unatco/actors/Brush140/actor.t3d
++++ b/after/maps/unatco/actors/Brush140/actor.t3d
+@@ -5,7 +5,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=-8.000000,Y=-8.000000,Z=2.000000)
+     Rotation=(Yaw=32768)
+     Tag=Brush
+-    Location=(X=534.001221,Y=0.000000,Z=264.000000)
++    Location=(X=582.001221,Y=0.000000,Z=264.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush148/actor.t3d b/after/maps/unatco/actors/Brush148/actor.t3d
+index 915b8ad9..160dd372 100644
+--- a/before/maps/unatco/actors/Brush148/actor.t3d
++++ b/after/maps/unatco/actors/Brush148/actor.t3d
+@@ -5,7 +5,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=-2.000000,Y=-8.000000,Z=6.000000)
+     Rotation=(Yaw=32768)
+     Tag=Brush
+-    Location=(X=540.000000,Y=0.000000,Z=288.000000)
++    Location=(X=588.000000,Y=0.000000,Z=288.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush152/actor.t3d b/after/maps/unatco/actors/Brush152/actor.t3d
+index 74a42e3b..8cf9c950 100644
+--- a/before/maps/unatco/actors/Brush152/actor.t3d
++++ b/after/maps/unatco/actors/Brush152/actor.t3d
+@@ -5,7 +5,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=8.000000,Y=8.000000,Z=2.000000)
+     Rotation=(Yaw=32768)
+     Tag=Brush
+-    Location=(X=454.000000,Y=-16.000000,Z=264.000000)
++    Location=(X=502.000000,Y=-16.000000,Z=264.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush1550/actor.t3d b/after/maps/unatco/actors/Brush1550/actor.t3d
+index bea5368d..71dbc14a 100644
+--- a/before/maps/unatco/actors/Brush1550/actor.t3d
++++ b/after/maps/unatco/actors/Brush1550/actor.t3d
+@@ -5,7 +5,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=-8.000000,Y=-8.000000,Z=2.000000)
+     Rotation=(Yaw=16384)
+     Tag=Brush
+-    Location=(X=502.001282,Y=-48.000000,Z=264.000000)
++    Location=(X=550.001282,Y=-48.000000,Z=264.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush1551/actor.t3d b/after/maps/unatco/actors/Brush1551/actor.t3d
+index 97c3feb0..04cb3f77 100644
+--- a/before/maps/unatco/actors/Brush1551/actor.t3d
++++ b/after/maps/unatco/actors/Brush1551/actor.t3d
+@@ -5,7 +5,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=-2.000000,Y=-8.000000,Z=6.000000)
+     Rotation=(Yaw=16384)
+     Tag=Brush
+-    Location=(X=502.000000,Y=-53.998116,Z=288.000000)
++    Location=(X=550.000000,Y=-53.998116,Z=288.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush161/actor.t3d b/after/maps/unatco/actors/Brush161/actor.t3d
+index 26f6d570..bf95fa63 100644
+--- a/before/maps/unatco/actors/Brush161/actor.t3d
++++ b/after/maps/unatco/actors/Brush161/actor.t3d
+@@ -5,7 +5,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(Y=8.000000,Z=4.000000)
+     Rotation=(Yaw=32768)
+     Tag=Brush
+-    Location=(X=450.000000,Y=-16.000000,Z=286.000000)
++    Location=(X=498.000000,Y=-16.000000,Z=286.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush164/actor.t3d b/after/maps/unatco/actors/Brush164/actor.t3d
+index 82eb6df7..f5550a86 100644
+--- a/before/maps/unatco/actors/Brush164/actor.t3d
++++ b/after/maps/unatco/actors/Brush164/actor.t3d
+@@ -5,7 +5,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=8.000000,Y=-8.000000,Z=2.000000)
+     Rotation=(Yaw=32768)
+     Tag=Brush
+-    Location=(X=486.000000,Y=32.000000,Z=264.000000)
++    Location=(X=534.000000,Y=32.000000,Z=264.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush168/actor.t3d b/after/maps/unatco/actors/Brush168/actor.t3d
+index ee3ef77e..734cbd9c 100644
+--- a/before/maps/unatco/actors/Brush168/actor.t3d
++++ b/after/maps/unatco/actors/Brush168/actor.t3d
+@@ -5,7 +5,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=8.000000,Y=-2.000000,Z=6.000000)
+     Rotation=(Yaw=32768)
+     Tag=Brush
+-    Location=(X=486.000000,Y=38.000000,Z=288.000000)
++    Location=(X=534.000000,Y=38.000000,Z=288.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush203/actor.t3d b/after/maps/unatco/actors/Brush203/actor.t3d
+index a72b9175..13f7fad6 100644
+--- a/before/maps/unatco/actors/Brush203/actor.t3d
++++ b/after/maps/unatco/actors/Brush203/actor.t3d
+@@ -3,7 +3,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=-56.000000,Y=-2.000000,Z=1.000000)
+     Rotation=(Yaw=-16384)
+     Tag=Brush
+-    Location=(X=448.000000,Y=48.000000,Z=242.000000)
++    Location=(X=496.000000,Y=48.000000,Z=242.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush364/actor.t3d b/after/maps/unatco/actors/Brush364/actor.t3d
+index d175f6c6..81eda121 100644
+--- a/before/maps/unatco/actors/Brush364/actor.t3d
++++ b/after/maps/unatco/actors/Brush364/actor.t3d
+@@ -2,7 +2,7 @@ Begin Actor Class=Engine.Brush
+     CsgOper=CSG_Subtract
+     PrePivot=(X=1.000000,Y=-24.000000,Z=-32.000000)
+     Tag=Brush
+-    Location=(X=464.000000,Y=96.000000,Z=240.000000)
++    Location=(X=512.000000,Y=96.000000,Z=240.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush418/actor.t3d b/after/maps/unatco/actors/Brush418/actor.t3d
+index 5a8fb6ed..73e2510a 100644
+--- a/before/maps/unatco/actors/Brush418/actor.t3d
++++ b/after/maps/unatco/actors/Brush418/actor.t3d
+@@ -13,8 +13,8 @@ Begin Actor Class=Engine.Brush
+          TextureU +00000.833333,+00000.000000,+00000.000000
+          TextureV +00000.000000,+00001.375001,+00000.000000
+          Vertex   -00192.000000,-00128.000000,+00080.000000
+-         Vertex   +00192.000000,-00128.000000,+00080.000000
+-         Vertex   +00192.000000,+00128.000000,+00080.000000
++         Vertex   +00249.600023,-00128.000000,+00080.000000
++         Vertex   +00249.600023,+00128.000000,+00080.000000
+          Vertex   -00192.000000,+00128.000000,+00080.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Texture=CoreTexTextile.Textile.ClenGrayCarpt_C Flags=8912896
+@@ -23,8 +23,8 @@ Begin Actor Class=Engine.Brush
+          TextureU +00000.833333,+00000.000000,+00000.000000
+          TextureV +00000.000000,+00001.375001,+00000.000000
+          Vertex   -00192.000000,+00128.000000,-00080.000000
+-         Vertex   +00192.000000,+00128.000000,-00080.000000
+-         Vertex   +00192.000000,-00128.000000,-00080.000000
++         Vertex   +00249.600023,+00128.000000,-00080.000000
++         Vertex   +00249.600023,-00128.000000,-00080.000000
+          Vertex   -00192.000000,-00128.000000,-00080.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE
+@@ -35,8 +35,8 @@ Begin Actor Class=Engine.Brush
+          Pan      U=0 V=10
+          Vertex   -00192.000000,+00128.000000,-00080.000000
+          Vertex   -00192.000000,+00128.000000,+00080.000000
+-         Vertex   +00192.000000,+00128.000000,+00080.000000
+-         Vertex   +00192.000000,+00128.000000,-00080.000000
++         Vertex   +00249.600023,+00128.000000,+00080.000000
++         Vertex   +00249.600023,+00128.000000,-00080.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Texture=NYCBar.Wood.un_woodwall_b Flags=557056
+          Origin   +00192.000000,-00128.000000,-00298.181793
+@@ -44,8 +44,8 @@ Begin Actor Class=Engine.Brush
+          TextureU -00001.190476,+00000.000000,+00000.000000
+          TextureV +00000.000000,+00000.000000,-00001.571429
+          Pan      U=0 V=65364
+-         Vertex   +00192.000000,-00128.000000,-00080.000000
+-         Vertex   +00192.000000,-00128.000000,+00080.000000
++         Vertex   +00249.600023,-00128.000000,-00080.000000
++         Vertex   +00249.600023,-00128.000000,+00080.000000
+          Vertex   -00192.000000,-00128.000000,+00080.000000
+          Vertex   -00192.000000,-00128.000000,-00080.000000
+          End Polygon
+@@ -55,10 +55,10 @@ Begin Actor Class=Engine.Brush
+          TextureU +00000.000000,-00001.964287,+00000.000000
+          TextureV +00000.000000,+00000.000000,-00001.571429
+          Pan      U=0 V=65364
+-         Vertex   +00192.000000,+00128.000000,-00080.000000
+-         Vertex   +00192.000000,+00128.000000,+00080.000000
+-         Vertex   +00192.000000,-00128.000000,+00080.000000
+-         Vertex   +00192.000000,-00128.000000,-00080.000000
++         Vertex   +00249.600023,+00128.000000,-00080.000000
++         Vertex   +00249.600023,+00128.000000,+00080.000000
++         Vertex   +00249.600023,-00128.000000,+00080.000000
++         Vertex   +00249.600023,-00128.000000,-00080.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Texture=NYCBar.Wood.un_woodwall_b Flags=557056
+          Origin   -00192.000000,-00128.000000,-00298.181793
+diff --git a/before/maps/unatco/actors/Brush420/actor.t3d b/after/maps/unatco/actors/Brush420/actor.t3d
+index 3a4034d9..a849b56d 100644
+--- a/before/maps/unatco/actors/Brush420/actor.t3d
++++ b/after/maps/unatco/actors/Brush420/actor.t3d
+@@ -13,8 +13,8 @@ Begin Actor Class=Engine.Brush
+          TextureU +00001.416667,+00000.000000,+00000.000000
+          TextureV +00000.000000,+00000.937500,+00000.000000
+          Vertex   -00192.000000,-00128.000000,+00080.000000
+-         Vertex   +00192.000000,-00128.000000,+00080.000000
+-         Vertex   +00192.000000,+00128.000000,+00080.000000
++         Vertex   +00225.882345,-00128.000000,+00080.000000
++         Vertex   +00225.882345,+00128.000000,+00080.000000
+          Vertex   -00192.000000,+00128.000000,+00080.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Texture=CoreTexTextile.Textile.ClenGrayCarpt_C Flags=8912896
+@@ -23,8 +23,8 @@ Begin Actor Class=Engine.Brush
+          TextureU +00001.416667,+00000.000000,+00000.000000
+          TextureV +00000.000000,+00000.937500,+00000.000000
+          Vertex   -00192.000000,+00128.000000,-00080.000000
+-         Vertex   +00192.000000,+00128.000000,-00080.000000
+-         Vertex   +00192.000000,-00128.000000,-00080.000000
++         Vertex   +00225.882345,+00128.000000,-00080.000000
++         Vertex   +00225.882345,-00128.000000,-00080.000000
+          Vertex   -00192.000000,-00128.000000,-00080.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Texture=NYCBar.Wood.un_woodwall_b Flags=557056
+@@ -35,8 +35,8 @@ Begin Actor Class=Engine.Brush
+          Pan      U=0 V=65364
+          Vertex   -00192.000000,+00128.000000,-00080.000000
+          Vertex   -00192.000000,+00128.000000,+00080.000000
+-         Vertex   +00192.000000,+00128.000000,+00080.000000
+-         Vertex   +00192.000000,+00128.000000,-00080.000000
++         Vertex   +00225.882345,+00128.000000,+00080.000000
++         Vertex   +00225.882345,+00128.000000,-00080.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Texture=NYCBar.Wood.un_woodwall_b Flags=557056
+          Origin   +00192.000000,-00128.000000,-00298.181793
+@@ -44,8 +44,8 @@ Begin Actor Class=Engine.Brush
+          TextureU -00002.023810,+00000.000000,+00000.000000
+          TextureV +00000.000000,+00000.000000,-00001.571429
+          Pan      U=0 V=65364
+-         Vertex   +00192.000000,-00128.000000,-00080.000000
+-         Vertex   +00192.000000,-00128.000000,+00080.000000
++         Vertex   +00225.882345,-00128.000000,-00080.000000
++         Vertex   +00225.882345,-00128.000000,+00080.000000
+          Vertex   -00192.000000,-00128.000000,+00080.000000
+          Vertex   -00192.000000,-00128.000000,-00080.000000
+          End Polygon
+@@ -55,10 +55,10 @@ Begin Actor Class=Engine.Brush
+          TextureU +00000.000000,-00001.339286,+00000.000000
+          TextureV +00000.000000,+00000.000000,-00001.571429
+          Pan      U=0 V=65364
+-         Vertex   +00192.000000,+00128.000000,-00080.000000
+-         Vertex   +00192.000000,+00128.000000,+00080.000000
+-         Vertex   +00192.000000,-00128.000000,+00080.000000
+-         Vertex   +00192.000000,-00128.000000,-00080.000000
++         Vertex   +00225.882345,+00128.000000,-00080.000000
++         Vertex   +00225.882345,+00128.000000,+00080.000000
++         Vertex   +00225.882345,-00128.000000,+00080.000000
++         Vertex   +00225.882345,-00128.000000,-00080.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Texture=NYCBar.Wood.un_woodwall_b Flags=557056
+          Origin   -00192.000000,-00128.000000,-00298.181793
+diff --git a/before/maps/unatco/actors/Brush592/actor.t3d b/after/maps/unatco/actors/Brush592/actor.t3d
+index 57b87130..abc9aa25 100644
+--- a/before/maps/unatco/actors/Brush592/actor.t3d
++++ b/after/maps/unatco/actors/Brush592/actor.t3d
+@@ -3,7 +3,7 @@ Begin Actor Class=Engine.Brush
+     PolyFlags=32
+     PrePivot=(X=-8.000005,Y=7.999988,Z=-0.999996)
+     Tag=Brush
+-    Location=(X=480.000000,Y=176.000000,Z=302.000000)
++    Location=(X=528.000000,Y=176.000000,Z=302.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush663/actor.t3d b/after/maps/unatco/actors/Brush663/actor.t3d
+index 8e49a7ba..234b7d59 100644
+--- a/before/maps/unatco/actors/Brush663/actor.t3d
++++ b/after/maps/unatco/actors/Brush663/actor.t3d
+@@ -3,7 +3,7 @@ Begin Actor Class=Engine.Brush
+     Group="holo"
+     PrePivot=(X=51.999825,Y=56.000072,Z=76.000008)
+     Tag=Brush
+-    Location=(X=552.000000,Y=48.000000,Z=392.000000)
++    Location=(X=600.000000,Y=48.000000,Z=392.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush670/actor.t3d b/after/maps/unatco/actors/Brush670/actor.t3d
+index af56d744..0fca5caa 100644
+--- a/before/maps/unatco/actors/Brush670/actor.t3d
++++ b/after/maps/unatco/actors/Brush670/actor.t3d
+@@ -4,7 +4,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=1.000000)
+     Rotation=(Yaw=32768)
+     Tag=Brush
+-    Location=(X=449.000000,Y=-96.000000,Z=320.000000)
++    Location=(X=497.000000,Y=-96.000000,Z=320.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush74/actor.t3d b/after/maps/unatco/actors/Brush74/actor.t3d
+index 8fff7844..515bf04f 100644
+--- a/before/maps/unatco/actors/Brush74/actor.t3d
++++ b/after/maps/unatco/actors/Brush74/actor.t3d
+@@ -2,7 +2,7 @@ Begin Actor Class=Engine.Brush
+     PrePivot=(X=-55.999664,Y=-2.000244,Z=1.000031)
+     Rotation=(Yaw=-16384)
+     Tag=Carter_window
+-    Location=(X=448.000000,Y=64.000000,Z=416.000000)
++    Location=(X=496.000000,Y=64.000000,Z=416.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush766/actor.t3d b/after/maps/unatco/actors/Brush766/actor.t3d
+index 38279851..d7a5e5a9 100644
+--- a/before/maps/unatco/actors/Brush766/actor.t3d
++++ b/after/maps/unatco/actors/Brush766/actor.t3d
+@@ -2,7 +2,7 @@ Begin Actor Class=Engine.Brush
+     CsgOper=CSG_Subtract
+     PrePivot=(X=-24.000000,Y=-24.000000,Z=23.999990)
+     Tag=Brush
+-    Location=(X=448.000000,Y=144.000000,Z=304.000000)
++    Location=(X=496.000000,Y=144.000000,Z=304.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(Scale=(X=1.333334,Z=1.333334),SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush869/actor.t3d b/after/maps/unatco/actors/Brush869/actor.t3d
+index 97a5aa4a..3342bd08 100644
+--- a/before/maps/unatco/actors/Brush869/actor.t3d
++++ b/after/maps/unatco/actors/Brush869/actor.t3d
+@@ -1,7 +1,7 @@
+ Begin Actor Class=Engine.Brush
+     CsgOper=CSG_Add
+     Tag=Brush
+-    Location=(X=432.000000,Y=160.000000,Z=304.000000)
++    Location=(X=480.000000,Y=160.000000,Z=304.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/Brush873/actor.t3d b/after/maps/unatco/actors/Brush873/actor.t3d
+index 45d31d93..586d6f2d 100644
+--- a/before/maps/unatco/actors/Brush873/actor.t3d
++++ b/after/maps/unatco/actors/Brush873/actor.t3d
+@@ -2,7 +2,7 @@ Begin Actor Class=Engine.Brush
+     CsgOper=CSG_Add
+     PrePivot=(X=1.000000,Y=-24.000000,Z=-32.000000)
+     Tag=Brush
+-    Location=(X=464.000000,Y=144.000000,Z=240.000000)
++    Location=(X=512.000000,Y=144.000000,Z=240.000000)
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Begin Brush Name=Model
+diff --git a/before/maps/unatco/actors/FlagPole3/actor.t3d b/after/maps/unatco/actors/FlagPole3/actor.t3d
+index d6d96024..339a2e69 100644
+--- a/before/maps/unatco/actors/FlagPole3/actor.t3d
++++ b/after/maps/unatco/actors/FlagPole3/actor.t3d
+@@ -2,5 +2,5 @@ Begin Actor Class=DeusEx.FlagPole
+     SkinColor=SC_USA
+     Tag=FlagPole
+     bOwned=True
+-    Location=(X=400.648621,Y=258.481842,Z=296.487823)
++    Location=(X=448.648621,Y=258.481842,Z=296.487823)
+ End Actor
+\ No newline at end of file
+diff --git a/before/maps/unatco/actors/FlagPole4/actor.t3d b/after/maps/unatco/actors/FlagPole4/actor.t3d
+index 767882cd..ba6a633c 100644
+--- a/before/maps/unatco/actors/FlagPole4/actor.t3d
++++ b/after/maps/unatco/actors/FlagPole4/actor.t3d
+@@ -2,5 +2,5 @@ Begin Actor Class=DeusEx.FlagPole
+     SkinColor=SC_UNATCO
+     Tag=FlagPole
+     bOwned=True
+-    Location=(X=394.551422,Y=-250.041565,Z=296.491394)
++    Location=(X=442.551422,Y=-250.041565,Z=296.491394)
+ End Actor
+\ No newline at end of file
+diff --git a/before/maps/unatco/actors/Light14/actor.t3d b/after/maps/unatco/actors/Light14/actor.t3d
+index 94d19acf..396ff2b2 100644
+--- a/before/maps/unatco/actors/Light14/actor.t3d
++++ b/after/maps/unatco/actors/Light14/actor.t3d
+@@ -5,5 +5,5 @@ Begin Actor Class=Engine.Light
+     LightSaturation=180
+     Rotation=(Yaw=-16384)
+     Tag=Light
+-    Location=(X=452.650085,Y=167.381104,Z=268.111969)
++    Location=(X=500.650085,Y=167.381104,Z=268.111969)
+ End Actor
+\ No newline at end of file
+diff --git a/before/maps/unatco/actors/Light149/actor.t3d b/after/maps/unatco/actors/Light149/actor.t3d
+index 5b3f7035..f6cff3d5 100644
+--- a/before/maps/unatco/actors/Light149/actor.t3d
++++ b/after/maps/unatco/actors/Light149/actor.t3d
+@@ -5,5 +5,5 @@ Begin Actor Class=Engine.Light
+     LightSaturation=180
+     Rotation=(Yaw=-16384)
+     Tag=Light
+-    Location=(X=492.409241,Y=168.943359,Z=268.111969)
++    Location=(X=540.409241,Y=168.943359,Z=268.111969)
+ End Actor
+\ No newline at end of file
+diff --git a/before/maps/unatco/actors/Light6/actor.t3d b/after/maps/unatco/actors/Light6/actor.t3d
+index 952edf6b..68346b91 100644
+--- a/before/maps/unatco/actors/Light6/actor.t3d
++++ b/after/maps/unatco/actors/Light6/actor.t3d
+@@ -6,5 +6,5 @@ Begin Actor Class=Engine.Light
+     LightSaturation=100
+     Rotation=(Yaw=32768)
+     Tag=Light
+-    Location=(X=492.866974,Y=-9.072319,Z=307.783691)
++    Location=(X=540.866974,Y=-9.072319,Z=307.783691)
+ End Actor
+\ No newline at end of file
+diff --git a/before/maps/unatco/actors/NanoKey0/actor.t3d b/after/maps/unatco/actors/NanoKey0/actor.t3d
+index 938caff4..abc20cf1 100644
+--- a/before/maps/unatco/actors/NanoKey0/actor.t3d
++++ b/after/maps/unatco/actors/NanoKey0/actor.t3d
+@@ -2,5 +2,5 @@ Begin Actor Class=DeusEx.NanoKey
+     Description=Manderley's Office Key
+     KeyID=ManderleyOfficeDoor
+     Tag=NanoKey
+-    Location=(X=418.849182,Y=132.576111,Z=260.546539)
++    Location=(X=466.849182,Y=132.576111,Z=260.546539)
+ End Actor
+\ No newline at end of file
+diff --git a/before/maps/unatco/actors/OrdersTrigger5/actor.t3d b/after/maps/unatco/actors/OrdersTrigger5/actor.t3d
+index 34199b64..43ed8824 100644
+--- a/before/maps/unatco/actors/OrdersTrigger5/actor.t3d
++++ b/after/maps/unatco/actors/OrdersTrigger5/actor.t3d
+@@ -5,5 +5,5 @@ Begin Actor Class=DeusEx.OrdersTrigger
+     Tag=AnnaDoneTalking
+     bCollideActors=False
+     ordersTag=AnnaInOffice
+-    Location=(X=493.156403,Y=-3.977154,Z=280.102234)
++    Location=(X=541.156403,Y=-3.977154,Z=280.102234)
+ End Actor
+\ No newline at end of file
+diff --git a/before/maps/unatco/actors/Switch6/actor.t3d b/after/maps/unatco/actors/Switch6/actor.t3d
+index 49b3b707..36a30b5a 100644
+--- a/before/maps/unatco/actors/Switch6/actor.t3d
++++ b/after/maps/unatco/actors/Switch6/actor.t3d
+@@ -3,5 +3,5 @@ Begin Actor Class=DeusEx.Switch2
+     Group="holo"
+     Rotation=(Yaw=32768)
+     Tag=Switch2
+-    Location=(X=450.165802,Y=-87.466599,Z=327.886230)
++    Location=(X=498.165802,Y=-87.466599,Z=327.886230)
+ End Actor
+\ No newline at end of file
+diff --git a/before/maps/unatco/actors/Vase3/actor.t3d b/after/maps/unatco/actors/Vase3/actor.t3d
+index dac6e879..bccc2336 100644
+--- a/before/maps/unatco/actors/Vase3/actor.t3d
++++ b/after/maps/unatco/actors/Vase3/actor.t3d
+@@ -1,5 +1,5 @@
+ Begin Actor Class=DeusEx.Vase1
+     Tag=Vase1
+     bOwned=True
+-    Location=(X=419.023926,Y=149.586670,Z=307.277863)
++    Location=(X=467.023926,Y=149.586670,Z=307.277863)
+ End Actor
+\ No newline at end of file
+diff --git a/before/maps/unatco/actors/Vase4/actor.t3d b/after/maps/unatco/actors/Vase4/actor.t3d
+index e71b0aef..257e7d09 100644
+--- a/before/maps/unatco/actors/Vase4/actor.t3d
++++ b/after/maps/unatco/actors/Vase4/actor.t3d
+@@ -1,5 +1,5 @@
+ Begin Actor Class=DeusEx.Vase2
+     Tag=Vase2
+     bOwned=True
+-    Location=(X=418.817749,Y=127.481689,Z=298.105835)
++    Location=(X=466.817749,Y=127.481689,Z=298.105835)
+ End Actor
+\ No newline at end of file
+diff --git a/before/maps/unatco/actors/WeaponModRecoil0/actor.t3d b/after/maps/unatco/actors/WeaponModRecoil0/actor.t3d
+index 462131ad..8e649b91 100644
+--- a/before/maps/unatco/actors/WeaponModRecoil0/actor.t3d
++++ b/after/maps/unatco/actors/WeaponModRecoil0/actor.t3d
+@@ -1,4 +1,4 @@
+ Begin Actor Class=DeusEx.WeaponModRecoil
+     Tag=WeaponModRecoil
+-    Location=(X=496.843567,Y=174.866135,Z=244.520432)
++    Location=(X=544.843567,Y=174.866135,Z=244.520432)
+ End Actor
+\ No newline at end of file

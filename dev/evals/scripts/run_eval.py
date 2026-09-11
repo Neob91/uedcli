@@ -36,7 +36,8 @@ import argparse, datetime, html, json, os, pathlib, shutil, stat, subprocess, sy
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
 from build_gold import BASE_TRUNKS_DIR, base_trunk_for, PY as VENV_PY
-import render_manual
+from extract_execution import extract_execution
+from render_execution import render_execution
 SCRIPTS_DIR = pathlib.Path(__file__).parent
 SCRIPTED_REPLY = "Go with your recommendation."
 CLAUDE_MODEL = "sonnet"  # pin the model under test -- never let it drift with whatever's default
@@ -156,7 +157,8 @@ if __name__ == "__main__":
     label = args.label or args.skill_dir.name
     trunk_dir = run_eval(args.task_id, args.skill_dir, run_id)
 
-    manifest = render_manual.render_execution(args.task_id, trunk_dir, run_id, label)
+    extract_execution(args.task_id, trunk_dir, run_id, label)
+    manifest = render_execution(args.task_id, run_id)
     print(f"[run_eval] rendered {len(manifest['entries'])} touched entries")
 
     subprocess.run([VENV_PY, str(SCRIPTS_DIR / "build_page.py")], cwd=str(SCRIPTS_DIR), check=True)

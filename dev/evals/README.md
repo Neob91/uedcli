@@ -32,8 +32,8 @@ things to fix:
 
 Grading is manual: a human looks at the pictures. What gets a picture is a real diff of the whole
 level — every actor that differs between baseline and subject, created/updated/deleted, whether the
-task mentioned it or not (see "Pipeline" step 5). `scripts/spec_format.py` has the full definitions;
-in short, a task (`scripts/specs/<id>.py`) carries `entries`, a flat list of `actor`/`what` pairs —
+task mentioned it or not (see "Pipeline" step 5). `scripts/spec_format.md` has the full definitions;
+in short, a task (`tasks/<id>/task.json`) carries `entries`, a flat list of `actor`/`what` pairs —
 just an optional plain-language label, shown next to a diffed actor's picture when its name matches.
 An actor the diff catches with no matching entry still gets shown, flagged as not declared in the
 spec, for the human to look at.
@@ -45,12 +45,12 @@ whatever delta the gold trunk actually gave its anchor; `target="unchanged"` nee
 
 ## Adding a new task
 
-Add `scripts/specs/<task_id>.py` exporting one `TASK` dict (shape in `spec_format.py`) — nothing
-else changes. `registry.py` auto-discovers it; every script downstream (`build_gold.py`,
-`render_manual.py`, `build_page.py`, `run_eval.py`) reads `from registry import TASKS`, never a
-hardcoded task list. Pick a descriptive, level-prefixed `id` (e.g. `wanchai_widen_bar`) — every
-output path is namespaced by it (`img/<id>/`, `runs/<id>/`), so ids across levels/tasks can never
-collide.
+Add `tasks/<task_id>/task.json` (shape in `spec_format.md`) — nothing else changes. `registry.py`
+auto-discovers it; every script downstream (`build_gold.py`, `render_manual.py`,
+`extract_execution.py`, `render_execution.py`, `build_page.py`, `run_eval.py`) reads
+`from registry import TASKS`, never a hardcoded task list. Pick a descriptive, level-prefixed
+directory name (e.g. `wanchai_widen_bar`) — every output path is namespaced by it
+(`tasks/<id>/before/`, `tasks/<id>/executions/`), so ids across levels/tasks can never collide.
 
 No `frame` field — the crop every picture uses is computed, not hand-picked (see "Pipeline" below).
 `level`/`dx_map` are the two fields that exist purely so a new DX level needs no script changes:
@@ -59,7 +59,7 @@ names the trunk tree it's imported into and sets `UEDCLI_LEVEL`.
 
 ## Pipeline — never hand-build a picture
 
-1. `scripts/specs/<id>.py` — the single source of truth for one task (vocabulary above).
+1. `tasks/<id>/task.json` — the single source of truth for one task (vocabulary above).
 2. `scripts/build_gold.py <task_id> <out_dir>` — OPTIONAL: applies every `update` entry's own op,
    then moves each `anchor` entry by its target's task delta, onto a fresh copy of the baseline
    trunk. Produces a synthetic "fully correct" trunk — useful for a known-good demo execution, not
@@ -70,29 +70,39 @@ names the trunk tree it's imported into and sets `UEDCLI_LEVEL`.
 4. Get a subject trunk to grade: `scripts/run_eval.py <task_id> <skill_dir>` runs an isolated agent
    session and produces one (see `EVAL-PROCEDURE.md` for how and why); or point at any trunk you
    already have — a hand-built one, one from `build_gold.py`, anything.
-5. `scripts/render_manual.py <task_id> <subject_trunk> [--run-id ID] [--label TEXT]` renders that
-   execution: a real diff of the WHOLE level (`_diff_actors`) — every actor whose full T3D block or
-   CSG `order_value` differs from baseline at all, or that exists in only one trunk — gets a BEFORE
-   and an AFTER quad view (Top/Front/Iso/Side), that actor highlighted, labeled `CREATED`/
-   `UPDATED`/`DELETED`. This is not filtered through the task's own `entries`: an actor the task
-   never mentioned still shows up, flagged as undeclared, because the human needs to see the truth,
-   not a subset filtered through what the task predicted. EVERY picture in the execution — every
-   actor, both BEFORE and AFTER — shares ONE crop: the union bbox of everything touched, padded.
-   This is load-bearing, not an optimization: an actor that didn't move must land at the same screen
-   position in every picture, or before/after and actor-to-actor comparison isn't reliable. A
-   `DELETED` actor's AFTER picture (or any diffed actor missing from whichever trunk is being
-   rendered) is a composite: the live scene plus that one actor reinserted from the other trunk,
-   still highlighted, so its absence is visible, not just implied. Plus the 8-frame
-   `level photo --native` panorama tour. Writes `runs/<task_id>/<run_id>/manifest.json` +
-   `runs/<task_id>/<run_id>/img/{entries/<actor>_{before,after},pan_N}.png`.
-6. `scripts/build_page.py` assembles `index.html` from every task's before block plus every
-   `runs/<task_id>/*/manifest.json` it finds — no registration needed, dropping a new run directory
-   in is enough.
-7. `scripts/serve.py [port]` (default 8756) replaces plain `python -m http.server`: same static
+5. `scripts/extract_execution.py <task_id> <subject_trunk> [--run-id ID] [--label TEXT]` — the ONLY
+   step that touches the subject trunk. Persists the diff between the baseline and the subject as a
+   real `git diff` patch (`diff.patch`), plus the 8-frame `level photo --native` panorama tour
+   (unavoidably rendered now, since it's a whole-scene shot, not per-actor). Once this has run, the
+   subject trunk (which can be an ephemeral job tmp dir) is never needed again — everything past
+   this point works from just the cached base trunk + `diff.patch`. Writes
+   `tasks/<task_id>/executions/<run_id>/{execution.json,diff.patch,panorama/pan_N.png}`.
+6. `scripts/render_execution.py <task_id> <run_id>` — a real diff of the WHOLE level, computed by
+   copying the base trunk twice, applying `diff.patch` to one copy, and comparing: every actor
+   whose full T3D block or CSG `order_value` differs at all, or that exists in only one copy, gets
+   a BEFORE and an AFTER quad view (Top/Front/Iso/Side), that actor highlighted, labeled
+   `CREATED`/`UPDATED`/`DELETED`. This is not filtered through the task's own `entries`: an actor
+   the task never mentioned still shows up, flagged as undeclared, because the human needs to see
+   the truth, not a subset filtered through what the task predicted. EVERY picture in the execution
+   — every actor, both BEFORE and AFTER — shares ONE crop: the union bbox of everything touched,
+   padded. This is load-bearing, not an optimization: an actor that didn't move must land at the
+   same screen position in every picture, or before/after and actor-to-actor comparison isn't
+   reliable. A `DELETED` actor's AFTER picture (or any diffed actor missing from one of the two
+   copies) is a composite: that actor's own directory physically copied in from the other copy into
+   a throwaway scratch copy, still highlighted, so its absence is visible, not just implied.
+   Re-runnable any time (e.g. after a rendering bug fix) without touching the subject trunk or an
+   existing grade — only `manifest.json` and `entries/` get replaced. Writes
+   `tasks/<task_id>/executions/<run_id>/{manifest.json,entries/<actor>_{before,after}.png}`.
+7. `scripts/build_page.py` assembles `index.html` from every task's before block plus every
+   `tasks/<task_id>/executions/*/manifest.json` it finds — no registration needed, dropping a new
+   execution directory in is enough.
+8. `scripts/serve.py [port]` (default 8756) replaces plain `python -m http.server`: same static
    file serving, plus `GET /api/grades` and `POST /api/grade` (stdlib only, no new deps) backing
-   `grades/<task_id>/<run_id>.json`.
+   `tasks/<task_id>/executions/<run_id>/grade.json`.
 
-Never hand-edit a picture, a `manifest.json`, or a `grades/*.json` directly.
+Never hand-edit a picture, a `manifest.json`, or a `grade.json` directly. The `maps/<level>/`-scoping,
+base-trunk fingerprint check, and why `patch` (not `git apply`) is used to apply `diff.patch` are all
+explained in `extract_execution.py`'s and `render_execution.py`'s own docstrings.
 
 ## Grading — manual, from pictures
 
@@ -101,11 +111,9 @@ actually touched. Click a picture to enlarge; ←/→ moves between actors (swip
 your before/after choice), ↑/↓ flips before/after (swipe or the on-screen buttons on mobile). Score
 0–10 + a note, saved immediately via the API above and editable any time — no submit-once lock.
 
-Three example runs are committed (`unatco_widen/example_pass`, `unatco_widen/example_fail` against
-a real known-bad trunk from earlier this session, `unatco_ceiling/example_pass`, plus a real
-`run_eval.py` smoke-test run under `unatco_ceiling/testrun1`) as a working demo of the whole
-pipeline end to end. `grades/` itself is NOT committed — it's the reviewer's live, mutable state,
-not reference material.
+An example run is committed under `tasks/unatco_widen/executions/example_pass/` as a working demo of
+the whole pipeline end to end. A `grade.json` is per-viewer live state, not reference material —
+don't hand-author one for a committed example.
 
 ## Base trunks
 

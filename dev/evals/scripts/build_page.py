@@ -1,36 +1,37 @@
-"""Build index.html from every specs/<id>.py's `before` block plus every
-rendered execution under runs/<task_id>/*/manifest.json (written by
-render_manual.py). No task metadata lives in this file -- add a new task by
-adding a new specs/<file>.py, not by editing this script; executions appear
-automatically as render_manual.py writes them, no registration needed.
-Grading is manual: each execution card POSTs a score (0-10) + note to
-serve.py's /api/grade and reloads it from /api/grades -- this script only
-lays out the form, it never computes a verdict."""
+"""Build index.html from every tasks/<id>/task.json's `before` block plus
+every rendered execution under tasks/<id>/executions/*/manifest.json
+(written by render_execution.py). No task metadata lives in this file --
+add a new task by adding a new tasks/<id>/task.json, not by editing this
+script; executions appear automatically as render_execution.py writes them,
+no registration needed. Grading is manual: each execution card POSTs a
+score (0-10) + note to serve.py's /api/grade and reloads it from
+/api/grades -- this script only lays out the form, it never computes a
+verdict."""
 import json, pathlib, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from registry import TASKS
+from registry import TASKS, TASKS_DIR
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
-DEST_IMG = ROOT / "img"
-RUNS = ROOT / "runs"
+
+BEFORE_PHOTOS = [f"pan_{i}" for i in range(8)]
 
 used = set()  # (task_id, name) pairs actually referenced, for the missing-file check
 def img(task_id, name):
     used.add((task_id, name))
-    return f"img/{task_id}/{name}.png"
+    return f"tasks/{task_id}/before/{name}.png"
 
 run_used = set()  # (task_id, run_id, relpath) -- relpath already includes ".png"
 def run_img(task_id, run_id, relpath):
     run_used.add((task_id, run_id, relpath))
-    return f"runs/{task_id}/{run_id}/img/{relpath}"
+    return f"tasks/{task_id}/executions/{run_id}/{relpath}"
 
 ALL_CAROUSELS = {}
 CAROUSEL_GROUPS = {}  # key -> count of leading "diagram" items in ALL_CAROUSELS[key];
                       # the rest are "photo" items -- drives the lightbox's d/p group switch
 
 def discover_executions(task_id):
-    d = RUNS / task_id
+    d = TASKS_DIR / task_id / "executions"
     if not d.exists():
         return []
     runs = []
@@ -56,7 +57,7 @@ def execution_card(task_id, task, run):
               ]} for e in entries]
     items += [{"default": 0, "variants": [
                 {"src": run_img(task_id, run_id, n), "cap": f"Photo, panorama frame {i}"},
-                {"src": img(task_id, f"pan_before_{i}"), "cap": f"BEFORE — panorama frame {i}"},
+                {"src": img(task_id, f"pan_{i}"), "cap": f"BEFORE — panorama frame {i}"},
               ]} for i, n in enumerate(run["panorama"])]
     ALL_CAROUSELS[key] = items
     CAROUSEL_GROUPS[key] = len(entries)
@@ -105,19 +106,21 @@ def task_block(task_id, task):
     before = task["before"]
     bid = f"{task_id}__before"
     quad_cap = "Whole-room quad view (Top / Front / Iso / Side), before any edit."
-    ALL_CAROUSELS[bid] = [{"default": 0, "variants": [{"src": img(task_id, before["quad"]), "cap": quad_cap}]}] + \
+    ALL_CAROUSELS[bid] = [{"default": 0, "variants": [{"src": img(task_id, "quad"), "cap": quad_cap}]}] + \
                           [{"default": 0, "variants": [{"src": img(task_id, n), "cap": "Panorama frame, before any edit."}]}
-                           for n in before["photos"]]
+                           for n in BEFORE_PHOTOS]
     CAROUSEL_GROUPS[bid] = 1
-    before_quad_html = (f'<figure class="dg dg-quad"><img src="{img(task_id, before["quad"])}" alt="{quad_cap}" '
+    before_quad_html = (f'<figure class="dg dg-quad"><img src="{img(task_id, "quad")}" alt="{quad_cap}" '
                          f'onclick="openLB(\'{bid}\',0)"><figcaption>{before["note"]}</figcaption></figure>')
     before_thumbs = "".join(f'<img class="cthumb" src="{img(task_id, n)}" alt="panorama" loading="lazy" tabindex="0" '
                              f'onclick="openLB(\'{bid}\',{i+1})" onkeydown="if(event.key===\'Enter\')openLB(\'{bid}\',{i+1})">'
-                             for i, n in enumerate(before["photos"]))
+                             for i, n in enumerate(BEFORE_PHOTOS))
     runs = discover_executions(task_id)
     exec_html = ('<p class="sdesc">No executions rendered yet for this task — run '
-                 '<code>scripts/render_manual.py '
-                 f'{task_id} &lt;subject_trunk&gt;</code> and rebuild the page.</p>')
+                 '<code>scripts/extract_execution.py '
+                 f'{task_id} &lt;subject_trunk&gt;</code> then '
+                 '<code>scripts/render_execution.py '
+                 f'{task_id} &lt;run_id&gt;</code> and rebuild the page.</p>')
     if runs:
         exec_html = "".join(execution_card(task_id, task, r) for r in runs)
     return f"""<div class="taskblk">
@@ -681,7 +684,8 @@ document.addEventListener('keydown', e => {
                                   .replace("__CAROUSEL_GROUPS_JSON__", CAROUSEL_GROUPS_JSON)
                                   .replace("__EXEC_META_JSON__", EXEC_META_JSON))
 
-missing = [f"{t}/{n}" for t, n in sorted(used) if not (DEST_IMG / t / f"{n}.png").exists()]
-missing += [f"runs/{t}/{r}/img/{n}" for t, r, n in sorted(run_used) if not (RUNS / t / r / "img" / n).exists()]
+missing = [f"tasks/{t}/before/{n}" for t, n in sorted(used) if not (TASKS_DIR / t / "before" / f"{n}.png").exists()]
+missing += [f"tasks/{t}/executions/{r}/{n}" for t, r, n in sorted(run_used)
+            if not (TASKS_DIR / t / "executions" / r / n).exists()]
 print("wrote", ROOT / "index.html")
 print("images used:", len(used), "+", len(run_used), "trial images; missing:", missing)

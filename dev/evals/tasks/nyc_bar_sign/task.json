@@ -1,0 +1,23 @@
+{
+  "level": "bar",
+  "title": "Hang a matching bar sign",
+  "req": "&ldquo;There&rsquo;s a sign, Brush111, on the wall. Put a matching one further down that same wall.&rdquo;",
+  "dx_map": "02_NYC_Bar",
+  "photo_camera": {
+    "at": [
+      -800,
+      -500,
+      150
+    ],
+    "pitch": 0
+  },
+  "entries": [
+    {
+      "actor": "Brush111",
+      "what": "the existing bar sign, for reference/orientation"
+    }
+  ],
+  "before": {
+    "note": "The existing bar sign (Brush109/110/111) hangs on the alcove's (Brush15) west wall, the x=-1024 plane, near its south corner."
+  }
+}

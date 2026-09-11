@@ -1,0 +1,8 @@
+{
+  "task_id": "unatco_widen",
+  "run_id": "example_pass",
+  "label": "Example: fully correct",
+  "subject_trunk": "/workspace/uedcli/.claude/worktrees/geom-eval-restructure/dev/evals/_scratch/gold/unatco_widen_pass",
+  "rendered_at": "2026-09-11T11:48:37.933330+00:00",
+  "base_fingerprint": "b4a8a25d464e43c45feb4f311a3a0fde4651731025f0fd20791a928f521583ff"
+}

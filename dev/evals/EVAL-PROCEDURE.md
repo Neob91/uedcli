@@ -1,9 +1,9 @@
 # Running a subagent against a task, then grading it
 
-This is the missing half of the harness: `render_manual.py`/the grading webapp (see `README.md`)
-grade a trunk someone already produced. This doc covers how to actually PRODUCE one — run a
-subagent against a task with only the skill under test in scope — and the isolation rationale
-behind it.
+This is the missing half of the harness: `extract_execution.py`/`render_execution.py`/the grading
+webapp (see `README.md`) grade a trunk someone already produced. This doc covers how to actually
+PRODUCE one — run a subagent against a task with only the skill under test in scope — and the
+isolation rationale behind it.
 
 ## Run one
 
@@ -81,10 +81,12 @@ cp -r "$BASE_TRUNKS_DIR/<task.base_trunk>" "$run_dir/trunk"
 mkdir -p "$run_dir/trunk/.claude/skills/<skill-name>"
 cp <path-to-skill>/SKILL.md "$run_dir/trunk/.claude/skills/<skill-name>/"
 ```
-`<task.base_trunk>` and `<task.level>` come from the task's own `scripts/specs/<task_id>.py`. So
-does `req` for step 4 below — it's HTML-entity-encoded there (`&ldquo;...&rdquo;`) for the webapp,
-so unescape it (`&ldquo;`/`&rdquo;` → curly quotes, `&mdash;` → em dash, etc.) before using it as
-the actual prompt text.
+The base trunk copied into `$run_dir/trunk` is `build_gold.base_trunk_for(task)` — the task's own
+`dx_map` imported fresh into `BASE_TRUNKS_DIR` (cached after the first import), not a plain `cp`
+from a fixed path. `<task.level>` and `req` (for step 4 below) come from the task's own
+`tasks/<task_id>/task.json`; `req` is HTML-entity-encoded there (`&ldquo;...&rdquo;`) for the
+webapp, so unescape it (`&ldquo;`/`&rdquo;` → curly quotes, `&mdash;` → em dash, etc.) before using
+it as the actual prompt text.
 
 **3. Put `uedcli` on PATH.** The trunk is already a self-contained uedcli project (its own
 `uedcli.toml`), so the agent just needs the CLI reachable — a wrapper resolving to this checkout's
@@ -121,7 +123,8 @@ one (agent stops without finishing) is.
 **6. Grade it.** `$run_dir/trunk` is now the subject trunk, exactly like any other:
 ```
 cd scripts
-python render_manual.py <task_id> "$run_dir/trunk" --label "<skill-name>, <date>"
+python extract_execution.py <task_id> "$run_dir/trunk" --label "<skill-name>, <date>"
+python render_execution.py <task_id> <run_id>
 python build_page.py
 ```
 Then open the page and score it.
