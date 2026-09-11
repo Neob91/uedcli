@@ -1,42 +1,33 @@
 +++
 priority = "p3"
 kind = "debug"
-summary = "Unreal1/UT99 map import: stale class-package hints (UnrealI vs UnrealShare)"
+summary = "DONE — level import now resolves a class by name across the whole package path when the map's stated package is stale (original Unreal Gold's UnrealI vs UnrealShare); 8/8 retail maps get past the actor-class-descent gate."
 +++
 
-# Unreal1/UT99 map import: stale class-package hints (UnrealI vs UnrealShare)
+# Unreal1/UT99 map import: stale class-package hints (UnrealI vs UnrealShare) — FIXED
 
-`level import` on an original (1998/Gold) Unreal `.unr` fails every map tried (8/8: `Bluff`,
-`DmDeck16`, `DmCurse`, `DmMorbias`, `DmTundra`, `Dig`, `Dark`, `DasaPass`) with `SchemaError: ...
-the Level Actors array names <Actor>, whose class UnrealI.<Class> does not descend from
-Engine.Actor`. Whether a UT99 map hits the same thing is UNTESTED (no UT99 `.unr` files pulled this
-session) — UT99's own `UnrealI.u`/`UnrealShare.u` were re-exported at some point and no longer carry
-the sibling `RemapAnimVerts` issue this was found alongside, so its map import tables may equally
-have been re-qualified and not need this fallback at all.
+Root cause confirmed: a Gold map's import table states some classes' home package as `UnrealI`
+when the shipped System files define them in `UnrealShare.u`. Genuine shipped content, not
+corruption — these maps ship and play, so the real engine resolves it somehow. Working hypothesis
+(unverified beyond the fix working on the whole corpus below — no DLL RE): a global by-name class
+lookup, the same kind used to register native classes at boot. Needs a durable home in
+`dev/docs/unrealed/package-format.md` — filed as `unreal-gold-stale-class-package-redirect-needs`.
 
-Root cause: the map's own import table states the class's home package as `UnrealI`, but the
-shipped System files actually define the class in `UnrealShare.u` (`Eightball`, `ASMD`, `Barrel`,
-`Tentacle`, `NaliFruit`, `TriggerLight`, ... — a different class every map). This is genuine
-content, not corruption — every map on the authoritative archive.org Unreal Gold ISO hits it, so
-the real engine must resolve it leniently (an import whose stated package doesn't have the class
-falls back to a global by-name lookup, matching how UE1 registers native classes).
+Fixed in `mapimport._resolve_actor_class` (used by both `_is_actor_export`, the validation gate, and
+`render_actor`'s property-schema lookup — the second one is load-bearing too: without it, a class
+that passes the gate via the fallback still crashes moments later trying to read its properties from
+the wrong package). On an exact-package miss it falls back to `ClassIndex.bare_to_fqcn()`, preferring
+a `UnrealShare` candidate on an ambiguous collision (e.g. `TriggerLight`, which also exists in
+`Engine`) — every observed redirect lands there.
 
-`mapimport.py::_is_actor_export` (the pre-render validation gate) does the exact-package check
-only; it has no fallback. `ClassIndex.bare_to_fqcn()` already builds the whole-index by-name lookup
-`qualify_and_validate`/`_qualify_bare` uses for T3D's own bare `Class=` lines, so the fix is
-probably: on an exact-match miss, fall back to `bare_to_fqcn()`, preferring a match in
-`UnrealShare` on an ambiguous collision (observed: `TriggerLight` exists in both `Engine` and
-`UnrealShare`; every real redirect found so far lands in `UnrealShare`) before raising.
+Verified against all 8 maps (Bluff, DmDeck16, DmCurse, DmMorbias, DmTundra, Dig, Dark, DasaPass) from
+the retail Unreal Gold ISO: all 8 now get past the class-descent gate (none did before). Each still
+hits a separate, unrelated, already-known gap — `brush_of`'s model/BSP decode has never been extended
+to package v61 (Unreal Gold's map version) — out of scope here.
 
-Verified as a real, working fallback in a throwaway script (not committed) — monkeypatching
-`_is_actor_export` this way got `Bluff.unr` past the actor-descent gate. Not implemented in
-production code: it's a change to a validation function shared by every substrate (DX/UT99/
-Unreal1), so it needs its own scoped change + tests + review, not folded into the mesh-parsing fix
-(`RemapAnimVerts`/`OldFrameVerts`, `uedcli/umesh.py`) this was found alongside.
+UT99 was NOT separately re-tested (no UT99 map corpus available this session); the fix's fast path
+(`index.class_exists(fqcn)` true) is a no-op when the stated package is already correct, so DX/UT99
+behavior is unchanged — confirmed by the existing `mapimport.py` test suite staying green.
 
-Scope note: getting past this gate is necessary but likely not sufficient for a full level
-screenshot — `brush_of`'s model/BSP decode (`uedcli/native/umodel.py`, docstring says "Serial order
-(ver > 61)") has never been extended to package v61 (Unreal Gold's map version, older than DX's
-v69/UT99's v6x), so `level import` still won't produce brush geometry for these maps even once
-class resolution is fixed. That is a separate, larger RE gap (older BSP/model struct layout),
-not scoped here.
+Regression tests: `uedcli/tests/test_mapimport_stale_class_package.py` (fast unit coverage of the
+fallback logic + an asset-gated corpus sweep of all 8 maps).
