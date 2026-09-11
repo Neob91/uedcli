@@ -24,4 +24,5 @@ unknown versions. Note this only affects `dxpkg`'s closure path; `utexture` neve
 
 ## Answer
 
-<!-- Empty = open. -->
+Drop it. Rely on the core's structural integrity checks instead (2026-09-11, via
+`unify-ue1-package-read-primitives-into-one-rust`, which supersedes this item).

@@ -16,10 +16,10 @@ that change, logging here instead. All in `uedcli/proceduraltex.py`.
   the field to a constant `0.5*diffuse_span` shaded texel — reported as a real painted frame instead
   of falling back to the placeholder, per the module's own documented rule. No test exercises
   all-zero-depth drops (existing tests all use `depth=255`).
-- **`_compact_index` (line 169) is a third hand-rolled copy of UE1's `FCompactIndex` decoder**,
-  alongside `upackage.read_compact_index` ("the canonical copy") and `native/codec.read_ci`. Its
-  bounds check (`while pos < len(buf)`) silently returns a truncated value on a corrupt/truncated
-  buffer instead of raising, unlike the other two — an unremarked divergence.
+- ~~`_compact_index` (line 169) is a third hand-rolled copy of UE1's `FCompactIndex` decoder~~ —
+  superseded by `unify-ue1-package-read-primitives-into-one-rust`, which retires this onto the
+  unified core (fixing the silent-overrun bug as a byproduct). The other three findings below are
+  unrelated and still open.
 - **Duplicated upsample-index formula** between `_render_wave` (line 413) and `_render_wet` (line
   434): `min(hh - 1, y * hh // h) * hw` / `min(hw - 1, x * hw // w)` computed independently in both;
   a future rounding/edge fix has to be applied by hand in two places.
