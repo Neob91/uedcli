@@ -426,10 +426,41 @@ def render_prop(pkg: Package, tag: PropertyTag, fqcn: str, *,
 
 # ── one actor ────────────────────────────────────────────────────────────────────────────────
 
+def _resolve_actor_class(pkg: Package, index, cls_ref: int) -> str | None:
+    """The real FQCN behind an export's class reference, tolerating a STALE import-table package
+    hint. An original (1998/Gold) Unreal `.unr`'s own import table states some classes' home
+    package as `UnrealI` when the shipped System files actually define them in `UnrealShare.u`
+    (`Eightball`, `ASMD`, `Barrel`, `TriggerLight`, …) — genuine shipped content (every map on the
+    retail ISO hits it), not corruption: these maps ship and play, so the real engine resolves it
+    somehow. The working hypothesis (unverified beyond this observed behavior — no DLL RE) is a
+    global by-name class lookup, the same kind it uses to register native classes at boot. See
+    `dev/docs/board/done/unreal1-ut99-map-import-stale-class-package/overview.md`.
+
+    On an exact-package miss, falls back to the offline whole-search-path by-name index
+    (`ClassIndex.bare_to_fqcn`). A unique candidate wins outright; an ambiguous collision (e.g.
+    `TriggerLight` exists in both `Engine` and `UnrealShare`) prefers `UnrealShare` — every
+    redirect observed so far lands there. An unresolvable miss (0 candidates, or an ambiguous one
+    with no `UnrealShare` match) returns the original stale path unchanged, so a caller validating
+    descent still names the actual stated class in its error."""
+    fqcn = pkg.object_path(cls_ref)
+    if fqcn is None or "." not in fqcn or index.class_exists(fqcn):
+        return fqcn
+    bare = fqcn.split(".", 1)[1]
+    candidates = index.bare_to_fqcn().get(bare.casefold(), set())
+    if len(candidates) == 1:
+        return next(iter(candidates))
+    by_pkg = {c.split(".", 1)[0].casefold(): c for c in candidates}
+    return by_pkg.get("unrealshare", fqcn)
+
+
 @_decode_guard
-def render_actor(pkg: Package, export_index0: int, *, schema: ImportSchema,
+def render_actor(pkg: Package, export_index0: int, *, index, schema: ImportSchema,
                  notes: list[str] | None = None) -> str:
     """One actor export → its `Begin Actor … End Actor` T3D block.
+
+    `index` is the `classindex.ClassIndex` over the composed package search path — used only to
+    resolve the actor's class FQCN for property-schema lookup (`_resolve_actor_class`), tolerating
+    a stale import-table package hint the same way `_is_actor_export` does.
 
     The block's shape mirrors what `MAP EXPORT` writes (`unrealed/t3d.md`): the class name BARE
     (the editor never qualifies it on export; `level import` re-qualifies on ingest), then the
@@ -458,7 +489,7 @@ def render_actor(pkg: Package, export_index0: int, *, schema: ImportSchema,
     e = pkg.exports[export_index0]
     name = pkg.names[e["nm"]]
     bare = pkg.object_class_name(export_index0 + 1)
-    fqcn = pkg.object_path(e["cls"])
+    fqcn = _resolve_actor_class(pkg, index, e["cls"])
     if bare is None or fqcn is None:
         raise SchemaError(f"actor {name}: its class reference does not resolve in {pkg.name}")
     if e["ssize"] <= 0:
@@ -621,7 +652,7 @@ def import_map(pkg: Package, index, schema: ImportSchema, *,
                               f"{pkg.object_path(e['cls'])} does not descend from {ENGINE_ACTOR} "
                               "(is the right class package on the search path?)")
 
-    blocks = [render_actor(pkg, idx0, schema=schema, notes=notes) for idx0 in order]
+    blocks = [render_actor(pkg, idx0, index=index, schema=schema, notes=notes) for idx0 in order]
     return "Begin Map\n" + "\n".join(blocks) + "\nEnd Map\n"
 
 
@@ -693,6 +724,7 @@ def _bare_class(a: model.Actor) -> str:
 def _is_actor_export(pkg: Package, index, export_index0: int) -> bool:
     """Does export `export_index0` hold an `Engine.Actor` descendant? Keyed on the CLASS reference's
     fully-qualified path (the actor's own path names the actor, not its class), so a class defined
-    in any package on the search path resolves."""
-    fqcn = pkg.object_path(pkg.exports[export_index0]["cls"])
+    in any package on the search path resolves — falling back to a by-name lookup when the map's
+    stated package is stale (`_resolve_actor_class`)."""
+    fqcn = _resolve_actor_class(pkg, index, pkg.exports[export_index0]["cls"])
     return fqcn is not None and index.descends_from(fqcn, ENGINE_ACTOR)

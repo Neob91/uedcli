@@ -50,7 +50,9 @@ Everything else is imported as it stands, with its properties and brush geometry
 - **Import is strict.** Every class and every polygon texture the map references must exist on the
   package path; if one does not, the whole import **exits 2 naming it** rather than writing a tree
   with references that cannot be rebuilt. Importing a map that needs mod packages means installing
-  those packages first.
+  those packages first. A class is resolved by name across the whole package path, not only the
+  exact package the map states — some original (1998/Gold) Unreal maps state a class's package as
+  `UnrealI` when the shipped files actually define it in `UnrealShare`, and this still resolves.
 - **Folders and labels start empty** — a compiled map has no equivalent to recover.
 - **References between actors keep the source map's name.** A property pointing at another actor
   reads `Class'<sourcemap>.Other'` — a faithful record of the original, but pinned to the old map's

@@ -26,6 +26,12 @@ def unreal_system_root() -> Path:
     return Path(__file__).resolve().parents[2] / "uned" / "UnrealAssets" / "System"
 
 
+def unreal_maps_root() -> Path:
+    """The original (1998/Gold) Unreal install's `Maps/` (`.unr`), populated by
+    `dev/scripts/install-unreal-assets.sh --with-maps` — same disposition as `unreal_system_root()`."""
+    return Path(__file__).resolve().parents[2] / "uned" / "UnrealAssets" / "Maps"
+
+
 def ued22_root() -> Path:
     """`<repo>/uned/UED22` — the one package corpus that is GIT-TRACKED, so an offline test may
     assert exact counts over it. No env pointer: a fresh checkout has it.
