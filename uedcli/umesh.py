@@ -227,7 +227,8 @@ class Mesh:
     lod_min_verts: int = 0
     lod_morph: float = 0.0
     lod_z_displace: float = 0.0
-    dx_tail_verts: int = 0        # DX licensee trailing INT (== FrameVerts in every sample)
+    remap_anim_verts: list = field(default_factory=list)  # ULodMesh's TArray<WORD> RemapAnimVerts
+    old_frame_verts: int = 0      # ULodMesh's trailing INT OldFrameVerts (== FrameVerts in DX/UT retail)
     vert_stride: int = 0          # 8 = Deus Ex int16 quad, 4 = stock Unreal packed dword
 
 
@@ -303,17 +304,30 @@ def parse_mesh(pkg, j, *, vert8=None, strict_end=True):
         m.lod_min_verts, p = i32(b, p)
         m.lod_morph, p = f32(b, p)
         m.lod_z_displace, p = f32(b, p)
-        # --- Deus Ex licensee tail (5 bytes past where UT's ULodMesh ends).
-        # An empty TArray (count 0 in every mesh of every DX package sampled) plus an INT that
-        # equals FrameVerts/ModelVerts in 174/174 DeusExDeco meshes. Present on LodMesh ONLY —
-        # the 4 plain `Mesh` exports consume exactly to the end without it. Element type of the
-        # array is unknown-but-moot while the count is always 0; a non-zero count is a hard error
-        # rather than a guess, so the corpus tells us if one ever appears.
-        n_dx, p = read_compact_index(b, p)
-        if n_dx != 0:
-            raise MeshParseError(f"DX LodMesh tail array is non-empty (count={n_dx}) — element "
-                                 f"layout unknown; re-probe this mesh")
-        m.dx_tail_verts, p = i32(b, p)
+        # ULodMesh's `TArray<_WORD> RemapAnimVerts` + `INT OldFrameVerts` (confirmed against the
+        # original UT99/Unreal ULodMesh header: stephank/surreal `Engine/Inc/UnMesh.h`, "Remapping
+        # of animation vertices" / "Possibly different old per-frame vertex count"). Present on
+        # LodMesh ONLY, not plain Mesh (`test_lodmesh_tail_is_not_deusex_specific`) — empty in
+        # every DX/UT retail mesh sampled so far, but genuinely populated (per-vertex WORD indices)
+        # in original 1998 Unreal Gold meshes (Continuous-LOD data UT/DX never wrote).
+        m.remap_anim_verts, p = tarray(b, p, u16)
+        m.old_frame_verts, p = i32(b, p)
+        if m.remap_anim_verts:
+            # A non-empty RemapAnimVerts means Verts was serialized at the OLD per-frame stride
+            # (`old_frame_verts`) and each frame's logical vertex `k` (what every Wedge.iVertex
+            # actually indexes, 0..frame_verts-1) now lives at `RemapAnimVerts[k]` within that
+            # frame's OLD slice — verified against UEViewer's `ULodMesh::SerializeLodMesh1`
+            # (`NewVerts[base+k] = Verts[oldBase + RemapAnimVerts[k]]`) and confirmed visually: a
+            # real Unreal Gold humanoid mesh only resolves to a coherent body shape once rebuilt
+            # this way (unrebuilt or wedge-side-remapped, every real sample renders as scattered,
+            # disconnected triangles). Frame count comes from `anim_frames`, read earlier.
+            new_verts = [(0, 0, 0)] * (m.anim_frames * m.frame_verts)
+            for f in range(m.anim_frames):
+                base = m.frame_verts * f
+                old_base = m.old_frame_verts * f
+                for k in range(m.frame_verts):
+                    new_verts[base + k] = m.verts[old_base + m.remap_anim_verts[k]]
+            m.verts = new_verts
 
     if strict_end and p != end:
         raise MeshParseError(f"{m.name}: consumed to {p}, export ends at {end} (delta {p - end})")

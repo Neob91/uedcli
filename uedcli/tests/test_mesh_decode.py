@@ -21,7 +21,7 @@ import pytest
 from uedcli import umesh as _umesh_module
 from uedcli.upackage import load_package
 
-from .conftest import install_system_root
+from .conftest import install_system_root, unreal_system_root
 
 UED22 = Path(__file__).resolve().parents[2] / "uned" / "UED22"
 
@@ -165,4 +165,57 @@ def test_v68_old_frame_verts_mirrors_frame_verts():
             if pkg.object_class_name(j + 1) == "LodMesh"][:40]
     assert lods
     for m in lods:
-        assert m.dx_tail_verts == m.frame_verts, f"{m.name}: {m.dx_tail_verts} != {m.frame_verts}"
+        assert m.old_frame_verts == m.frame_verts, f"{m.name}: {m.old_frame_verts} != {m.frame_verts}"
+
+
+# ── original (1998/Gold) Unreal, package v68 — `RemapAnimVerts` is genuinely POPULATED, not the
+# empty-in-every-DX/UT-retail-sample case `test_v68_old_frame_verts_mirrors_frame_verts` pins.
+# Before this fix, a non-empty `RemapAnimVerts` was a hard `MeshParseError` (found live: `UnrealI.u`
+# `Titan1`/`sktrooper`/`WarlordM`/`KrallM`/`Merc` all failed to decode at all) ─────────────────────
+
+def test_unrealgold_lodmesh_parses_with_populated_remap_anim_verts():
+    """`UnrealI.u` (original Unreal Gold, package v68) has real monster/character `LodMesh`es whose
+    `RemapAnimVerts` is a genuine non-empty permutation table, not the always-empty DX/UT-retail
+    case. The decoder must consume it as a real array, not hard-fail on a non-zero count."""
+    mod = _umesh()
+    pkg = _pkg_or_skip(unreal_system_root() / "UnrealI.u")
+    ok, fails = _parse_all(mod, pkg)
+    assert not fails, f"UnrealI: {len(fails)} mesh(es) failed to decode: {fails[:3]}"
+    assert ok > 0
+
+    j = next(j for j in mod.mesh_exports(pkg) if pkg.names[pkg.exports[j]["nm"]] == "sktrooper")
+    m = mod.parse_mesh(pkg, j)
+    assert len(m.remap_anim_verts) == m.frame_verts == 235
+    assert sorted(m.remap_anim_verts) == list(range(235))    # a genuine index permutation
+    assert m.old_frame_verts == 235
+
+
+def test_unrealgold_lodmesh_verts_are_rebuilt_through_the_remap():
+    """A non-empty `RemapAnimVerts` means `Verts` was serialized at the OLD per-frame stride, and a
+    Wedge's `iVertex` indexes the REBUILT array, not the raw one (`ULodMesh::SerializeLodMesh1`,
+    `NewVerts[base+k] = Verts[oldBase + RemapAnimVerts[k]]` -- verified against UEViewer's
+    `Unreal/UnrealMesh/UnMesh1.cpp`, and visually: unrebuilt, every real sample's frame-0 triangles
+    are wildly disconnected).
+
+    Pinned quantitatively: frame-0's median triangle-edge-length / bbox-diagonal ratio must be
+    small (a real character surface's triangles are locally tight against the model's overall
+    size) -- unrebuilt this ratio was ~0.32 for `sktrooper` (edges routinely spanning a third of
+    the whole model), rebuilt it drops to ~0.05."""
+    import math
+    mod = _umesh()
+    pkg = _pkg_or_skip(unreal_system_root() / "UnrealI.u")
+    j = next(j for j in mod.mesh_exports(pkg) if pkg.names[pkg.exports[j]["nm"]] == "sktrooper")
+    m = mod.parse_mesh(pkg, j)
+    frame0 = m.verts[m.special_verts:m.special_verts + m.frame_verts]
+
+    def dist(a, b):
+        return math.sqrt(sum((a[i] - b[i]) ** 2 for i in range(3)))
+
+    edges = []
+    for iws, _mat in m.faces:
+        pts = [frame0[m.wedges[iw][0]] for iw in iws]
+        edges += [dist(pts[0], pts[1]), dist(pts[1], pts[2]), dist(pts[2], pts[0])]
+    edges.sort()
+    xs, ys, zs = [v[0] for v in frame0], [v[1] for v in frame0], [v[2] for v in frame0]
+    diag = dist((min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs)))
+    assert edges[len(edges) // 2] / diag < 0.15
