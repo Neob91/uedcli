@@ -4,7 +4,6 @@
   "label": "Script smoke test",
   "subject_trunk": "/home/agent/.claude/jobs/92851c21/tmp/eval_runs/unatco_ceiling_testrun1/trunk",
   "rendered_at": "2026-09-09T18:03:03.100774+00:00",
-  "n_task_entries": 13,
   "entries": [
     {
       "actor": "Brush418",
@@ -12,7 +11,8 @@
       "label": "UPDATED",
       "what": "south wall's ceiling face; the task's own raise-ceiling target",
       "img_before": "entries/Brush418_before.png",
-      "img_after": "entries/Brush418_after.png"
+      "img_after": "entries/Brush418_after.png",
+      "declared": true
     }
   ],
   "panorama": [

@@ -41,7 +41,7 @@ def discover_executions(task_id):
     runs.sort(key=lambda r: r["rendered_at"], reverse=True)
     return runs
 
-BUCKET_ORDER = {"created": 0, "updated": 1, "unchanged": 2, "deleted": 3}
+BUCKET_ORDER = {"created": 0, "updated": 1, "deleted": 2}
 
 def execution_card(task_id, task, run):
     run_id = run["run_id"]
@@ -49,6 +49,7 @@ def execution_card(task_id, task, run):
     gid = f"{task_id}--{run_id}"
 
     entries = sorted(run["entries"], key=lambda e: (BUCKET_ORDER[e["bucket"]], e["actor"]))
+    undeclared_count = sum(1 for e in entries if not e["declared"])
     items = [{"default": 1, "variants": [
                 {"src": run_img(task_id, run_id, e["img_before"]), "cap": f"BEFORE — {e['actor']}: {e['what']}"},
                 {"src": run_img(task_id, run_id, e["img_after"]), "cap": f"{e['label']} — {e['actor']}: {e['what']}"},
@@ -61,7 +62,7 @@ def execution_card(task_id, task, run):
     CAROUSEL_GROUPS[key] = len(entries)
 
     grid = "".join(
-        f'<figure class="egrid-item b-{e["bucket"]}">'
+        f'<figure class="egrid-item b-{e["bucket"]}{"" if e["declared"] else " undeclared"}">'
         f'<img src="{run_img(task_id, run_id, e["img_after"])}" alt="{e["actor"]}" loading="lazy" tabindex="0" '
         f'onclick="openLB(\'{key}\',{i})" onkeydown="if(event.key===\'Enter\')openLB(\'{key}\',{i})">'
         f'<figcaption><span class="elbl b-{e["bucket"]}">{e["label"]}</span> {e["actor"]}'
@@ -82,7 +83,9 @@ def execution_card(task_id, task, run):
         <p class="sdesc">Subject trunk: <code>{run['subject_trunk']}</code> · rendered {run['rendered_at'][:19]}Z</p>
         <div class="striplabel">Panorama</div>
         <div class="carousel">{pan_thumbs}</div>
-        <div class="striplabel">{len(entries)}/{run['n_task_entries']} actors touched</div>
+        <div class="striplabel">{len(entries)} actor(s) actually differ from baseline{
+            f' &mdash; {undeclared_count} not declared in the task spec' if undeclared_count else ''
+        }</div>
         <div class="egrid">{grid}</div>
         <div class="gradebox" data-task="{task_id}" data-run="{run_id}">
           <label>Score (0–10)
@@ -246,8 +249,8 @@ body.focus-mode #focusPane{display:block}
 .elbl{font-family:var(--mono);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;padding:1px 5px;border-radius:2px;margin-right:5px}
 .egrid-item.b-created{border-left-color:var(--cyan)}.elbl.b-created{background:color-mix(in srgb,var(--cyan) 25%,transparent);color:var(--cyan)}
 .egrid-item.b-updated{border-left-color:var(--gold)}.elbl.b-updated{background:color-mix(in srgb,var(--gold) 25%,transparent);color:var(--gold-soft)}
-.egrid-item.b-unchanged{border-left-color:var(--faint)}.elbl.b-unchanged{background:color-mix(in srgb,var(--faint) 25%,transparent);color:var(--dim)}
 .egrid-item.b-deleted{border-left-color:var(--bad)}.elbl.b-deleted{background:color-mix(in srgb,var(--bad) 25%,transparent);color:var(--bad)}
+.egrid-item.undeclared{outline:2px dashed var(--bad);outline-offset:-1px}
 
 .gradebox{margin:18px 0 0;padding:14px 16px;border:1px solid color-mix(in srgb,var(--cyan) 35%,var(--line));border-radius:4px;background:#13140d;display:flex;flex-wrap:wrap;gap:14px 20px;align-items:flex-end}
 .gradebox label{display:flex;flex-direction:column;gap:5px;font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint)}

@@ -12,7 +12,8 @@ TASK = dict(
    quad="before_quad",
    note="The existing bar sign (Brush109/110/111) hangs on the alcove's (Brush15) west wall, the x=-1024 plane, near its south corner.",
    photos=[f"pan_before_{i}" for i in range(8)]),
- entries=[
-   dict(kind="create", actor="Brush111",
-        what="a second matching bar sign (mount bracket + niche + sign board, same NYCBar.Misc.BarSign_Bb texture) further down the same wall, away from the existing one near the south corner"),
- ])
+ # No update/anchor entries -- this task is pure creation, nothing for build_gold.py to apply.
+ # Brush111 here is only a frame anchor for the "before" whole-room shot (render_before has no
+ # touched-actor diff to frame around yet, since there's no execution); it's also shown as a
+ # `what` label if a diffed execution happens to touch Brush111 itself.
+ entries=[dict(actor="Brush111", what="the existing bar sign, for reference/orientation")])

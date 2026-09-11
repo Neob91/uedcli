@@ -16,5 +16,4 @@ TASK = dict(
    dict(kind="update", actor="Brush70", target="corners",
         at=[[-1008,-512,16],[-1008,-448,16],[-1008,-448,48],[-1008,-512,48]], delta=[-112,0,0],
         what="bar counter's west face; must extend 112 units west to make room, without disturbing its top or east end"),
-   dict(kind="create", actor="Brush78", what="sixth stool continuing the row onto the extended counter, matching the existing stools' shape and 112-unit spacing, centered around x=-984"),
  ])

@@ -63,7 +63,7 @@ def build_gold(task_id: str, out_dir: pathlib.Path):
 
     anchor_delta = {}
     for e in spec["entries"]:
-        if e["kind"] != "update" or e.get("target") != "corners":
+        if e.get("kind") != "update" or e.get("target") != "corners":
             continue
         args = [PY, "-m", "uedcli", "brush", "vertex", "move", e["actor"]]
         for corner in e["at"]:
@@ -75,7 +75,7 @@ def build_gold(task_id: str, out_dir: pathlib.Path):
     # group `anchor` entries by their actual delta (== their target's task delta) to move in batches
     by_delta = {}
     for e in spec["entries"]:
-        if e["kind"] != "anchor":
+        if e.get("kind") != "anchor":
             continue
         d = tuple(anchor_delta[e["to"]])
         by_delta.setdefault(d, []).append(e["actor"])

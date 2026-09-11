@@ -28,28 +28,20 @@ things to fix:
   the eval rather than letting it die in a grading note — don't log it to the board yourself. The
   human decides whether it's board-worthy.
 
-## Vocabulary — the closed set every uedcli geometry verb's RESULT reduces to
+## Vocabulary — what an execution is graded against
 
-`scripts/spec_format.py` has the full definitions; in short, every task (`scripts/specs/<id>.py`)
-is a flat list of `entries`, each one of four kinds:
+Grading is manual: a human looks at the pictures. What gets a picture is a real diff of the whole
+level — every actor that differs between baseline and subject, created/updated/deleted, whether the
+task mentioned it or not (see "Pipeline" step 5). `scripts/spec_format.py` has the full definitions;
+in short, a task (`scripts/specs/<id>.py`) carries `entries`, a flat list of `actor`/`what` pairs —
+just an optional plain-language label, shown next to a diffed actor's picture when its name matches.
+An actor the diff catches with no matching entry still gets shown, flagged as not declared in the
+spec, for the human to look at.
 
-- **`update`** — an actor's `props` (or, for a brush, specific named corners, or a full T3D
-  `Begin Brush...End Brush` block for a non-delta reshape like a clip) must equal an ABSOLUTE
-  target: a task-pinned value, or `target="unchanged"` (= the baseline value).
-- **`anchor`** — an actor's delta must equal a SPECIFIC other actor's (`to`) ACTUAL delta in the
-  SAME trunk being graded — not a hardcoded number. Verified per-actor from real geometry, not
-  assumed uniform (this office is built from two wall volumes, and fixtures/flagpoles split across
-  both — each is tagged with the one it's actually attached to).
-- **`create`** / **`delete`** — documented, no code path anywhere in this pipeline yet. Neither
-  current task needs them; add real handling only when one does.
-
-Move/resize/clip/scale all grade the same way (`update`, or `anchor` for a relative case) — no
-per-verb code needed, since none of them are structurally different from "some property or shape
-became a final value." Only existence (create/delete) is a different kind of check.
-
-Every entry carries a `what`: plain-language identification of the actor, shown next to its picture
-on the page. Grading is manual — a human looking at the pictures — so `what` is purely for the
-reader; nothing mechanical consumes it.
+Some task files' entries also carry `kind`/`target`/`at`/`delta`/`to` — read only by
+`scripts/build_gold.py` (optional, builds a synthetic "fully correct" demo trunk), not by grading:
+`update(target="corners", at=[...], delta=[...])` moves those corners; `anchor(to=<actor>)` moves by
+whatever delta the gold trunk actually gave its anchor; `target="unchanged"` needs no op.
 
 ## Adding a new task
 
@@ -79,18 +71,20 @@ names the trunk tree it's imported into and sets `UEDCLI_LEVEL`.
    session and produces one (see `EVAL-PROCEDURE.md` for how and why); or point at any trunk you
    already have — a hand-built one, one from `build_gold.py`, anything.
 5. `scripts/render_manual.py <task_id> <subject_trunk> [--run-id ID] [--label TEXT]` renders that
-   execution: for every entry the execution ACTUALLY touched (its full T3D block or CSG
-   `order_value` differs from baseline at all — see `_entry_changed`), a BEFORE and an AFTER quad
-   view (Top/Front/Iso/Side), that actor highlighted, labeled by what the task expects of it —
-   `CREATED`/`UPDATED`/`UNCHANGED`/`DELETED`. An entry whose actor is untouched gets no picture at
-   all. EVERY picture in the execution — every actor, both BEFORE and AFTER — shares ONE crop: the
-   union bbox of everything touched, padded. This is load-bearing, not an optimization: an actor
-   that didn't move must land at the same screen position in every picture, or before/after and
-   actor-to-actor comparison isn't reliable. A `DELETED` actor's AFTER picture (or any entry whose
-   actor is missing from whichever trunk is being rendered) is a composite: the live scene plus that
-   one actor reinserted from the other trunk, still highlighted, so its absence is visible, not just
-   implied. Plus the 8-frame `level photo --native` panorama tour. Writes
-   `runs/<task_id>/<run_id>/manifest.json` + `runs/<task_id>/<run_id>/img/{entries/<actor>_{before,after},pan_N}.png`.
+   execution: a real diff of the WHOLE level (`_diff_actors`) — every actor whose full T3D block or
+   CSG `order_value` differs from baseline at all, or that exists in only one trunk — gets a BEFORE
+   and an AFTER quad view (Top/Front/Iso/Side), that actor highlighted, labeled `CREATED`/
+   `UPDATED`/`DELETED`. This is not filtered through the task's own `entries`: an actor the task
+   never mentioned still shows up, flagged as undeclared, because the human needs to see the truth,
+   not a subset filtered through what the task predicted. EVERY picture in the execution — every
+   actor, both BEFORE and AFTER — shares ONE crop: the union bbox of everything touched, padded.
+   This is load-bearing, not an optimization: an actor that didn't move must land at the same screen
+   position in every picture, or before/after and actor-to-actor comparison isn't reliable. A
+   `DELETED` actor's AFTER picture (or any diffed actor missing from whichever trunk is being
+   rendered) is a composite: the live scene plus that one actor reinserted from the other trunk,
+   still highlighted, so its absence is visible, not just implied. Plus the 8-frame
+   `level photo --native` panorama tour. Writes `runs/<task_id>/<run_id>/manifest.json` +
+   `runs/<task_id>/<run_id>/img/{entries/<actor>_{before,after},pan_N}.png`.
 6. `scripts/build_page.py` assembles `index.html` from every task's before block plus every
    `runs/<task_id>/*/manifest.json` it finds — no registration needed, dropping a new run directory
    in is enough.

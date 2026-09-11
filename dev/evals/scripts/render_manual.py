@@ -1,11 +1,14 @@
 """Render everything a human needs to MANUALLY grade one execution (a
 subagent's subject trunk) of a task: a panorama tour, and TWO UED-style
 quad views (Top/Front/Iso/Side, via `actor diagram --layout quad`) --
-BEFORE and AFTER -- per oracle entry the execution ACTUALLY touched -- its
-full T3D block or CSG order_value differs at all from the baseline, or it
-was created/removed (see `_entry_changed`). An entry whose actor is
-untouched gets no picture at all: most tasks have far more `entries` than
-an execution ever really touches.
+BEFORE and AFTER -- per actor that ACTUALLY differs between baseline and
+subject (see `_diff_actors`): created, deleted, or its full T3D block/CSG
+order_value differs at all. This is a real diff of the whole level, not a
+check over the task's own `entries` list -- an agent that touched
+something the task never declared still shows up here, which is the
+point: the human grader needs to see the truth, not a subset filtered
+through what the task predicted would happen. `entries` only supplies an
+optional `what` label when a diffed actor happens to match one by name.
 
 EVERY picture for one execution -- BEFORE and AFTER, every touched actor --
 shares the SAME `--frame`: the union bbox of every touched actor (both its
@@ -48,7 +51,7 @@ RUNS = ROOT / "runs"
 IMG = ROOT / "img"
 FRAME_PAD = 64
 
-LABELS = {"created": "CREATED", "updated": "UPDATED", "unchanged": "UNCHANGED", "deleted": "DELETED"}
+LABELS = {"created": "CREATED", "updated": "UPDATED", "deleted": "DELETED"}
 
 def _run(project, level, args, **kw):
     env = {**os.environ, "UEDCLI_PROJECT": str(project), "UEDCLI_LEVEL": level}
@@ -75,46 +78,57 @@ def _show(project, level, names):
     r.check_returncode()
     return r.stdout
 
-def _entry_changed(baseline, subject, task, entry) -> bool:
-    """True if ANYTHING about `entry`'s actor differs between baseline and
-    subject -- exists in only one of the two trunks, its full T3D block
-    (every vertex, every property, CSG op, texture -- not just position, and
-    not just the task's own expected corners) differs at all, or its CSG
-    order_value differs (a reorder with no geometry change). A narrower
-    position/corner-only check can call a real but unrelated change
-    "unchanged" it isn't; this is ground truth, the same dump `actor show`
-    always produces, byte for byte.
+def _all_actor_names(project, level) -> set[str]:
+    r = _run(project, level, ["actor", "find", "--json"])
+    r.check_returncode()
+    return set(json.loads(r.stdout))
 
-    A `create` entry's `actor` is an EXISTING actor used only to frame the
-    shot (see spec_format.py) -- not the new actor's own name, which is
-    unknown ahead of time, so there's nothing to diff. Always touched:
-    grading is manual, and whether something was actually added is exactly
-    what the human looks at the picture to judge."""
-    if entry["kind"] == "create":
-        return True
-    actor = entry["actor"]
+_ACTOR_BLOCK_RE = re.compile(r"(Begin Actor Class=\S+ Name=(\S+).*?\nEnd Actor\n)", re.DOTALL)
+
+def _split_actor_blocks(t3d_text: str) -> dict[str, str]:
+    """A bulk `actor show -` dump -> {name: its own T3D block}, so a whole trunk's worth of
+    actors can be diffed against another trunk's dump with ZERO further subprocess calls."""
+    return {m.group(2): m.group(1) for m in _ACTOR_BLOCK_RE.finditer(t3d_text)}
+
+def _diff_actors(baseline, subject, task) -> list[dict]:
+    """Every actor that ACTUALLY differs between baseline and subject -- created (subject only),
+    deleted (baseline only), or updated (exists in both, its full T3D block -- every vertex,
+    property, CSG op, texture, not just the task's own expected corners -- or CSG order_value
+    differs at all). This is ground truth: a real diff of the WHOLE level, not a check over the
+    task's own `entries` list, so an agent that touched something the task never declared still
+    shows up -- exactly what a human grader needs to see, not a subset filtered through what the
+    task predicted. `entries` supplies an optional `what` label when a diffed actor happens to
+    match one by name; it never gates whether something gets shown.
+
+    O(1) heavy subprocess calls regardless of level size (2 `actor find` + up to 2 bulk
+    `actor show -`), not O(actors) -- a naive per-actor diff would cost minutes on a
+    thousand-actor level."""
     level = task["level"]
-    base_exists = _actor_exists(baseline, level, actor)
-    sub_exists = _actor_exists(subject, level, actor)
-    if base_exists != sub_exists:
-        return True
-    if not sub_exists:
-        return False
-    if _show(baseline, level, [actor]) != _show(subject, level, [actor]):
-        return True
-    return _order_value(baseline, level, actor) != _order_value(subject, level, actor)
+    base_names = _all_actor_names(baseline, level)
+    sub_names = _all_actor_names(subject, level)
+    common = sorted(base_names & sub_names)
+    base_blocks = _split_actor_blocks(_show(baseline, level, common))
+    sub_blocks = _split_actor_blocks(_show(subject, level, common))
+    assert len(base_blocks) == len(common) and len(sub_blocks) == len(common), (
+        f"_ACTOR_BLOCK_RE parsed {len(base_blocks)}/{len(sub_blocks)} of {len(common)} actors -- "
+        "a parse miss here silently drops actors from the diff instead of comparing them")
+    entries_by_actor = {e["actor"].casefold(): e for e in task["entries"] if e.get("actor")}
 
-def _bucket(entry):
-    k = entry["kind"]
-    if k == "update":
-        return "unchanged" if entry.get("target") == "unchanged" else "updated"
-    if k == "anchor":
-        return "updated"
-    if k == "create":
-        return "created"
-    if k == "delete":
-        return "deleted"
-    raise ValueError(f"unknown entry kind {k!r}: {entry}")
+    changed = []
+    for name in sorted(base_names | sub_names):
+        if name in base_names and name not in sub_names:
+            bucket = "deleted"
+        elif name in sub_names and name not in base_names:
+            bucket = "created"
+        elif (base_blocks.get(name) != sub_blocks.get(name)
+              or _order_value(baseline, level, name) != _order_value(subject, level, name)):
+            bucket = "updated"
+        else:
+            continue
+        entry = entries_by_actor.get(name.casefold())
+        what = entry["what"] if entry else "not declared in this task's spec -- flag this to the human"
+        changed.append(dict(actor=name, bucket=bucket, what=what, declared=entry is not None))
+    return changed
 
 _BBOX_RE = re.compile(r"min\s+([-\d.]+),([-\d.]+),([-\d.]+)\s*\n\s*max\s+([-\d.]+),([-\d.]+),([-\d.]+)")
 
@@ -124,9 +138,8 @@ def _bbox_union_call(project, level, actors):
     of set size, vs ~1.5s PER ACTOR calling it one at a time (measured: a
     35-actor frame went from 100s+ to a couple of seconds). `actor bbox`
     errors hard if ANY name doesn't exist in `project`, so on failure this
-    falls back to filtering out the missing ones first (individually, only
-    on that rare path -- a create/delete entry, of which neither current
-    task has any) and retrying."""
+    falls back to filtering out the missing ones first (a genuinely created
+    or deleted actor won't exist in one of the two trunks) and retrying."""
     if not actors:
         return None
     r = _run(project, level, ["actor", "bbox", *actors])
@@ -224,19 +237,20 @@ def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: st
     entries_dir.mkdir(parents=True, exist_ok=True)
 
     level = task["level"]
-    touched = [e for e in task["entries"] if _entry_changed(baseline, subject, task, e)]
-    touched_actors = [e["actor"] for e in touched]
+    touched = _diff_actors(baseline, subject, task)
+    touched_actors = [t["actor"] for t in touched]
     frame = _frame_from_actors([baseline, subject], level, touched_actors, FRAME_PAD)
 
     entries = []
-    for e in touched:
-        actor = e["actor"]
-        bucket = _bucket(e)
+    for t in touched:
+        actor = t["actor"]
+        bucket = t["bucket"]
         before_path = entries_dir / f"{actor}_before.png"
         after_path = entries_dir / f"{actor}_after.png"
         _render_view(baseline, subject, level, frame, actor, before_path)
         _render_view(subject, baseline, level, frame, actor, after_path)
-        entries.append(dict(actor=actor, bucket=bucket, label=LABELS[bucket], what=e["what"],
+        entries.append(dict(actor=actor, bucket=bucket, label=LABELS[bucket], what=t["what"],
+                             declared=t["declared"],
                              img_before=f"entries/{actor}_before.png",
                              img_after=f"entries/{actor}_after.png"))
 
@@ -246,7 +260,6 @@ def render_execution(task_id: str, subject: pathlib.Path, run_id: str, label: st
         task_id=task_id, run_id=run_id, label=label or run_id,
         subject_trunk=str(subject),
         rendered_at=datetime.datetime.now(datetime.timezone.utc).isoformat(),
-        n_task_entries=len(task["entries"]),
         entries=entries,
         panorama=[f"pan_{i}.png" for i in range(8)],
     )
@@ -263,7 +276,7 @@ def render_before(task_id: str) -> None:
     baseline = base_trunk_for(task)
     out_dir = IMG / task_id
     out_dir.mkdir(parents=True, exist_ok=True)
-    frame = _frame_from_actors([baseline], task["level"], [e["actor"] for e in task["entries"]], FRAME_PAD)
+    frame = _frame_from_actors([baseline], task["level"], [e["actor"] for e in task["entries"] if e.get("actor")], FRAME_PAD)
     _diagram_live(baseline, task["level"], frame, None, out_dir / "before_quad.png")
     render_photos(task, baseline, out_dir, prefix="pan_before")
     print("rendered before block for", task_id, "->", out_dir)

@@ -25,7 +25,8 @@ Each specs/<task_id>.py exports one module-level `TASK` dict:
                                no highlight, plus the panorama tour. `quad`
                                is rendered by render_manual.py's
                                render_before(), never hand-captured.
-  entries                  -- the flat list of acceptance criteria (below)
+  entries                  -- optional `what` labels (below) -- NOT what drives
+                               what gets shown
 
 No `frame` field: the crop every picture uses is computed, not hand-picked --
 render_manual.py derives it per execution from the union bbox of whatever that
@@ -33,44 +34,40 @@ execution actually touched (see its own docstring). A hand-authored per-task
 frame used to exist and quietly excluded actors outside it from every picture
 (a real bug, caught and fixed); don't reintroduce one.
 
-`entries` is the closed vocabulary every uedcli geometry verb's RESULT
-reduces to (move/resize/clip/scale/rotate all just produce some final
-property/shape value; only existence is structurally different) -- four
-kinds:
+Grading is manual -- a human looks at the pictures. So detection is a real
+diff of the whole trunk (`render_manual.py`'s `_diff_actors`): baseline vs.
+subject, every actor, classified created/updated/deleted by whether its full
+T3D block or CSG order_value differs at all. `entries` does NOT gate this --
+an agent that touches an actor the task never mentions still shows up, which
+is the point: the human needs to see the truth, not a subset filtered through
+what the task predicted. `entries` only supplies an optional `what` label,
+looked up by actor name, for a diffed actor that happens to match one; when
+none matches, the page just says so and flags it for the human to look at.
 
-  update  -- an actor's props (or specific named corners, or a full T3D
-             `Begin Brush...End Brush` block for a non-delta reshape like a
-             clip) must equal an ABSOLUTE target: a task-pinned value
-             (target="corners", at=[...], delta=[...]), or the baseline value
-             (target="unchanged").
-  anchor  -- an actor's delta must equal a SPECIFIC other actor's (`to`)
-             ACTUAL delta in the SAME trunk being graded -- not a hardcoded
-             number, so "the flagpole is broken" stays distinguishable from
-             "the wall itself moved by the wrong amount," and an equally
-             valid alternative solution at a different absolute position
-             still grades correct. Verified per-actor from real geometry
-             (which wall/anchor an actor is actually attached to), never
-             assumed uniform across a scenario.
-  create  -- a NEW actor should exist, not present in the baseline. Grading
-             is manual (a human looking at the picture), so there's no
-             expected-geometry match to encode: `actor` names an EXISTING
-             actor near where the new one belongs, used only to frame the
-             before/after shot -- not the new actor's own name (unknown
-             ahead of time; the agent picks it). Always rendered, since
-             whether anything was actually added can't be detected without
-             a fixed name to check.
-  delete  -- an actor must no longer exist. `actor` is the real baseline
-             name here -- unlike `create`, there's a fixed actor to check.
+Each `entries` item: `actor` (the actor's real name in the baseline OR the
+name it's expected to get) and `what` (plain-language identification of the
+actor -- what it is, not why it matters). Neither `render_manual.py` nor
+`build_page.py` reads anything else off an entry.
 
-`update`'s full-geometry form (a T3D `Begin Brush...End Brush` block for a
-non-delta reshape) has no code path anywhere in this pipeline yet -- no
-current task needs one; add real handling (in `render_manual.py`'s
-`_entry_changed`/`_bucket`) only when a real task does, not speculatively.
+`build_gold.py` (builds the demo "fully correct" trunk for a task) is
+SEPARATE from grading and still reads `kind`/`target`/`at`/`delta`/`to`:
+`update(target="corners", at=[...], delta=[...])` moves those corners;
+`anchor(to=<actor>)` moves by whatever delta the gold trunk actually gave its
+anchor. Only include these fields on an entry you want `build_gold.py` to
+apply -- an entry with just `actor`/`what` (no `kind`) is a pure display
+label and `build_gold.py` leaves that actor untouched. `build_gold.py` has no
+handling for a `create`-kind entry (never did -- it can't synthesize a new
+actor).
 
-Every entry carries a `what`: plain-language identification of the actor
-(what it is, not why it matters) -- shown next to its picture on the page.
-Grading is manual (a human looking at the pictures), so `what` is purely for
-the reader; nothing mechanical consumes it.
+A newly created actor gets its `what` shown only if you happen to already
+know its real name (rare -- the agent picks it). Otherwise it just shows up
+unlabeled, correctly, with no framing workaround needed.
+
+Don't leave `entries` empty even on a pure-creation task: `render_before`
+frames the task's whole-room "before" shot from the union bbox of `entries`'
+own actors (there's no execution yet to diff), and an empty list gives it
+nothing to frame around. Keep at least one `actor`/`what` entry (no `kind`
+needed) naming something nearby, purely as a frame anchor.
 
 Image names in `before` are relative to this task's own img/<task_id>/
 directory (see registry.py) -- no cross-task namespacing needed.
