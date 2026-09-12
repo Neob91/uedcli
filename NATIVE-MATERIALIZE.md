@@ -306,7 +306,16 @@ the permeating flood is where the campaign's leverage is.
   (`dev/docs/spikes/2026-09-06-permeating-beam-plane-normalize/`). Byte-exact **N=1..152** (was 118);
   bails at **N=153** on the world `Model2`'s PER-SURF light runs — three `LightMap` records get an
   `iLightActors` run UED22 leaves at -1 (`Lights` 484 vs 478, `LightBits` 6003 vs 5891), with the
-  leaf permeating region clean —
+  leaf permeating region clean. Root-caused 2026-09-12, not yet fixed: `Light5` sits beside a closed
+  door (`DeusExMover9`, a `Mover`) standing exactly in the world-BSP opening between it and 3 stair
+  treads; native's world-level `GetVisibleSurfs`/raytrace never sees the mover's geometry, so it
+  lights the treads straight through the closed door AND (the mirror-image half, `model
+  model_deusexmover9` also fails N=153) fails to light the door's own face with the same light. This
+  is the `visible_surfs.rs` "moving-brush filter (step 3)" gap the port flagged as "assumed to never
+  fire" — confirmed here to fire. The real fix unifies the world and mover light bakes into one scene
+  (per `unbuilt.light_apply_movers`'s own docstring, UED22's `FMovingBrushTracker` mirrors each mover
+  poly into a transient world surf for the bake) — a structural change, scoped as follow-up, not a
+  local patch —
   `dev/docs/board/inbox/nyc-bar-n-153-world-model2-lightmap-runs-ued22/`.
 - **Island**: N=6, N=10 and N=93 are all FIXED. N=6 was the Vectors pool — native keeps
   the incremental pool across the repartition instead of rebuilding it from the surviving surfs

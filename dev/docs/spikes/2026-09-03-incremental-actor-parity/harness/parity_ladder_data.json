@@ -7,9 +7,9 @@
       "highest_n": 152,
       "total_actors": 487,
       "status": "blocked",
-      "blocker": "BODY model model2 — 3 world LightMap records get an iLightActors run UED22 leaves at -1 (Lights 484 vs 478, LightBits 6003 vs 5891); leaf permeating regions are clean (0/155 differ). Per-surf raytrace pass, same family as UNATCO N=116/WanChai N=45. N=151's leaf-permeating bug is FIXED: the beam-clip plane (FPlane(Light, edge)) wasn't normalized before testing against the editor's world-unit epsilon (+-0.25), so a ~1e4-magnitude cross product made the effective epsilon ~40000x too tight and let the beam survive extra portal hops.",
+      "blocker": "BODY model model2 -- 3 world LightMap records get an iLightActors run UED22 leaves at -1 (Lights 484 vs 478, LightBits 6003 vs 5891); leaf permeating region is clean. Root-caused 2026-09-12: Light5 (the first N it enters the trunk) sits beside a closed door (DeusExMover9, a Mover) standing exactly in the world-BSP opening between it and 3 stair treads. Confirmed by direct probe that native's world-level GetVisibleSurfs itself (not the per-lumel raytrace) wrongly lists the 3 treads as visible -- native's world gather never sees mover geometry, so it lights straight through the closed door. Mirror-image evidence: model model_deusexmover9 ALSO fails N=153, missing Light5 on the door's own face where UED22 has it. This is visible_surfs.rs's documented 'moving-brush filter (step 3)' gap, flagged as 'assumed to never fire' -- confirmed here to fire. Not fixed: the real fix unifies the world and mover light bakes into one scene (UED22's FMovingBrushTracker mirrors each mover poly into a transient world surf during the bake, per unbuilt.light_apply_movers's own docstring) -- a structural change, not a local patch.",
       "board": "nyc-bar-n-153-world-model2-lightmap-runs-ued22",
-      "updated": "2026-09-07T01:20:00Z"
+      "updated": "2026-09-12T00:00:00Z"
     },
     {
       "slug": "unatco",
