@@ -1,20 +1,23 @@
 """Run a subagent against a task, with only the skill(s) under test in
 scope, and land the result where the grading webapp picks it up
 automatically. Automates the manual procedure in ../EVAL-PROCEDURE.md --
-read that first, it explains WHY each step exists (why isolated HOME +
-CLAUDE_CODE_OAUTH_TOKEN instead of --bare, why Docker doesn't help, the
-sandbox-specific CLAUDE.md caveat) and covers the case none of this
-handles: a real ANTHROPIC_API_KEY, where --bare is the cleaner mechanism
-instead.
+read that first, it explains WHY each step exists (why the subject `claude
+-p` runs in Docker, why isolated HOME alone doesn't hide this sandbox's own
+/etc/claude-code/CLAUDE.md) and covers the case none of this handles: a real
+ANTHROPIC_API_KEY, where `--bare` is the cleaner mechanism instead.
 
-Copies the task's base trunk + the skill(s) under test into an isolated
-run dir, runs `claude -p <task req>` there (isolated HOME, no ambient
-project-level skills or CLAUDE.md), auto-resumes with this eval's standing
-scripted reply ("Go with your recommendation.") if the agent asks a
-question instead of finishing, then renders the resulting trunk and
-rebuilds the page so the run shows up in the webapp -- grading itself
-stays manual, by design. Model is pinned to Sonnet (CLAUDE_MODEL below),
-never whatever the CLI defaults to.
+Copies the task's base trunk + the skill(s) under test into an isolated run
+dir, runs `claude -p <task req>` against it INSIDE a throwaway Docker
+container (../docker/) -- no ambient project-level skills, no this
+checkout's own CLAUDE.md, and no leak of this host's /etc/claude-code/
+CLAUDE.md (a sandbox-specific org policy file at a fixed system path that
+isolated HOME on the bare host can't hide, since it's unrelated to HOME or
+cwd -- confirmed leaking in an earlier isolated-HOME-only version of this
+script). Auto-resumes with this eval's standing scripted reply ("Go with
+your recommendation.") if the agent asks a question instead of finishing,
+then renders the resulting trunk and rebuilds the page so the run shows up
+in the webapp -- grading itself stays manual, by design. Model is pinned to
+Sonnet (CLAUDE_MODEL below), never whatever the CLI defaults to.
 
 `skill_dir` is either ONE skill (a directory with its own SKILL.md) or a
 directory OF skills (e.g. a plugin's skills/ dir, one SKILL.md per
@@ -30,8 +33,15 @@ pulled straight from ~/.claude/.credentials.json's own claudeAiOauth.accessToken
 -- so it just works on a host that's already logged into Claude Code, no
 separate `claude setup-token` step needed there. See EVAL-PROCEDURE.md step 1
 for the setup-token path on a host that ISN'T already logged in.
+
+All bind-mount sources MUST live under this checkout (e.g. under
+dev/evals/_scratch/, never the system tempdir) -- confirmed on the sandbox
+this was built on: its own /tmp is private to the coding session and isn't
+visible to whatever actually runs `docker run`, while paths under the
+checkout are. `run_eval()` follows this itself (BASE_TRUNKS_DIR is already
+under the checkout); anything extending it should too.
 """
-import argparse, datetime, html, json, os, pathlib, shutil, stat, subprocess, sys, tempfile
+import argparse, datetime, html, json, os, pathlib, shutil, subprocess, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
@@ -39,6 +49,9 @@ from build_gold import BASE_TRUNKS_DIR, base_trunk_for, PY as VENV_PY
 from extract_execution import extract_execution
 from render_execution import render_execution
 SCRIPTS_DIR = pathlib.Path(__file__).parent
+REPO_ROOT = SCRIPTS_DIR.parents[2]
+DOCKER_DIR = SCRIPTS_DIR.parent / "docker"
+DOCKER_IMAGE = "geomeval-claude:latest"
 SCRIPTED_REPLY = "Go with your recommendation."
 CLAUDE_MODEL = "sonnet"  # pin the model under test -- never let it drift with whatever's default
 CLAUDE_TIMEOUT_S = 3600
@@ -58,22 +71,62 @@ def full_prompt(task: dict) -> str:
     same function rather than recomputing it."""
     return html.unescape(task["req"]) + RESPONSE_LENGTH_NOTE
 
-def _make_uedcli_shim(bin_dir: pathlib.Path):
-    bin_dir.mkdir(parents=True, exist_ok=True)
-    shim = bin_dir / "uedcli"
-    shim.write_text(f"#!/bin/sh\nexec {VENV_PY} -m uedcli \"$@\"\n")
-    shim.chmod(shim.stat().st_mode | stat.S_IEXEC | stat.S_IXGRP | stat.S_IXOTH)
+def _ensure_docker_image():
+    """Builds ../docker/'s image if it isn't already present. uedcli itself is NOT baked into
+    it (installed fresh from a bind-mounted source tree at container start, see
+    docker/entrypoint.sh) so a stale image still runs today's uedcli -- only the Dockerfile
+    itself (Node, claude-code, Pillow) needs a rebuild to pick up, and that rarely changes."""
+    check = subprocess.run(["docker", "image", "inspect", DOCKER_IMAGE], capture_output=True)
+    if check.returncode == 0:
+        return
+    print(f"[run_eval] building {DOCKER_IMAGE} (first run, or image was removed)...")
+    subprocess.run(["docker", "build", "-t", DOCKER_IMAGE, str(DOCKER_DIR)], check=True)
 
 def _run_claude(cwd: pathlib.Path, home: pathlib.Path, level: str, token: str, extra_args: list[str]) -> dict:
-    env = {
-        **os.environ,
-        "HOME": str(home),
-        "PATH": f"{home / 'bin'}:{os.environ['PATH']}",
-        "UEDCLI_LEVEL": level,
-        "CLAUDE_CODE_OAUTH_TOKEN": token,
-    }
-    r = subprocess.run(["claude", *extra_args, "--model", CLAUDE_MODEL, "--output-format", "json"],
-                        cwd=str(cwd), env=env, capture_output=True, text=True, timeout=CLAUDE_TIMEOUT_S)
+    """Runs `claude` inside a throwaway `--rm` container, not on the bare host -- see the module
+    docstring for why. `cwd` (the subject trunk) and `home` (this run's isolated HOME, shared
+    across the initial call and any --resume so session state survives between them) are
+    bind-mounted; uedcli's own source is bind-mounted read-only and installed fresh inside the
+    container by docker/entrypoint.sh, never baked into the image.
+
+    `--user <host-uid>:<host-gid>` (not root) so the bind-mounted `cwd`/`home` (owned by whoever
+    runs this script) stay writable -- general least-privilege, not itself the fix for the point
+    below (confirmed by testing: switching only the UID, container vs. container, changed nothing).
+
+    `--dangerously-skip-permissions` is required for the agent to run `uedcli` (or any Bash command)
+    unattended at all -- confirmed by testing, not assumed: the identical isolated-HOME + `-p` +
+    OAuth-token invocation on the bare host (no Docker) auto-approves every Bash call with zero
+    permission prompts (this is headless `-p` mode's own normal behavior), but the SAME invocation
+    inside ANY container (root or non-root UID, any claude-code version tried) instead asks for an
+    approval it has no way to grant and stalls -- most likely Claude Code's own internal Bash-tool
+    sandboxing failing to establish itself one level deeper inside a nested container, and falling
+    back to requiring a human. Owner-approved (2026-09-12) despite the flag's own `--help` caveat
+    ("recommended only for sandboxes with no internet access" -- this container has internet access,
+    needed for the API itself) specifically to match the bare host's own equally-unrestricted default,
+    which every eval run before this one already ran under.
+
+    The token is passed via `-e CLAUDE_CODE_OAUTH_TOKEN` (no `=value`) -- Docker's env-passthrough
+    form, which reads the value from THIS process's own environment rather than `docker run`'s own
+    argv. `/proc/<pid>/cmdline` (what `ps aux` reads) is world-readable by default; putting the
+    token there would leak it to any local user on a shared host for as long as the process runs.
+    `/proc/<pid>/environ` is not."""
+    cmd = [
+        "docker", "run", "--rm",
+        "--user", f"{os.getuid()}:{os.getgid()}",
+        "-v", f"{REPO_ROOT / 'uedcli'}:/uedcli-src/uedcli:ro",
+        "-v", f"{REPO_ROOT / 'pyproject.toml'}:/uedcli-src/pyproject.toml:ro",
+        "-v", f"{cwd}:/work",
+        "-v", f"{home}:/root",
+        "-w", "/work",
+        "-e", "HOME=/root",
+        "-e", f"UEDCLI_LEVEL={level}",
+        "-e", "CLAUDE_CODE_OAUTH_TOKEN",
+        DOCKER_IMAGE,
+        "claude", *extra_args, "--dangerously-skip-permissions",
+        "--model", CLAUDE_MODEL, "--output-format", "json",
+    ]
+    env = {**os.environ, "CLAUDE_CODE_OAUTH_TOKEN": token}
+    r = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=CLAUDE_TIMEOUT_S)
     if not r.stdout.strip():
         raise RuntimeError(f"claude produced no output (rc={r.returncode}): {r.stderr[-2000:]}")
     return json.loads(r.stdout)
@@ -139,10 +192,15 @@ def run_eval(task_id: str, skill_dir: pathlib.Path, run_id: str) -> tuple[pathli
         shutil.copytree(s, trunk_dir / ".claude" / "skills" / s.name)
     skill_names = ", ".join(s.name for s in skills)
 
-    home_dir = pathlib.Path(tempfile.mkdtemp(prefix=f"geomeval_home_{task_id}_{run_id}_"))
+    # Under run_root (already inside the checkout, not the system tempdir) -- a bind-mount
+    # source has to be visible to whatever actually runs `docker run`, which a bare
+    # tempfile.mkdtemp() (system /tmp) is NOT guaranteed to be; confirmed on the sandbox this
+    # was built on (see module docstring).
+    home_dir = run_root / "home"
+    home_dir.mkdir(parents=True)
+    _ensure_docker_image()
     llm_turns = []
     try:
-        _make_uedcli_shim(home_dir / "bin")
         req = full_prompt(task)
         print(f"[run_eval] launching claude in {trunk_dir} (skills={skill_names})")
         result = _run_claude(trunk_dir, home_dir, task["level"], token, ["-p", req])
