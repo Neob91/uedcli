@@ -289,9 +289,11 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
 
 .lb{position:fixed;inset:0;background:rgba(6,7,4,.94);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:50;padding:24px}
 .lb[hidden]{display:none}
-.lbimgwrap{position:relative;max-width:100%;max-height:78vh;display:flex;align-items:center;justify-content:center;overflow:auto}
+.lbimgwrap{position:relative;max-width:100%;max-height:78vh;display:flex;align-items:safe center;justify-content:safe center;overflow:auto}
 .lb img{max-width:100%;max-height:78vh;border-radius:3px;box-shadow:0 8px 40px rgba(0,0,0,.6);cursor:zoom-in}
 .lb img.zoomed{max-width:none;max-height:none;cursor:zoom-out}
+.lbzoomhint{position:fixed;bottom:14px;right:18px;font-family:var(--mono);font-size:11px;color:var(--faint);
+  background:rgba(6,7,4,.6);padding:5px 10px;border-radius:10px;pointer-events:none}
 .lbcap{color:var(--ink);font-size:15px;line-height:1.4;max-width:70ch;text-align:center;margin-top:16px;padding:0 12px;
   height:5.6em;overflow-y:auto;display:flex;align-items:center;justify-content:center}
 .lbclose{position:fixed;top:14px;right:18px;font-family:var(--mono);font-size:12px;color:var(--dim);background:transparent;border:1px solid var(--line);border-radius:3px;padding:6px 10px;cursor:pointer}
@@ -330,6 +332,7 @@ code{font-family:var(--mono);font-size:.9em;background:var(--panel2);padding:1px
   <button id="lbvdown" class="lbvnav lbvdown" onclick="cycleVariant(1)" aria-label="next view">&#9660;</button>
   <div id="lbimgwrap" class="lbimgwrap"><img id="lbimg" alt="" onclick="toggleZoom(event)"></div>
   <p id="lbcap" class="lbcap"></p>
+  <span class="lbzoomhint">pinch, or ctrl+scroll, to zoom</span>
 </div>
 
 <script>
@@ -571,7 +574,7 @@ function renderVariant(){
   const v = item.variants[lbVariant];
   const img = document.getElementById('lbimg');
   img.src = v.src;
-  img.classList.remove('zoomed');
+  resetZoom();
   document.getElementById('lbimgwrap').scrollTo(0, 0);
   document.getElementById('lbcap').textContent = v.cap;
   const vbar = document.getElementById('lbvariant');
@@ -601,9 +604,59 @@ function cycleVariant(d){
   lbVariant = (lbVariant + d + item.variants.length) % item.variants.length;
   renderVariant();
 }
+// Continuous zoom, driven by ctrl+wheel (real Ctrl+mousewheel, and Mac
+// trackpad pinch -- browsers synthesize pinch as a 'wheel' event with
+// ctrlKey:true specifically so JS can tell it apart from a plain two-finger
+// scroll). Plain wheel/two-finger-scroll is left alone so it still pans a
+// zoomed image via the wrap's native overflow:auto scrolling.
+//
+// max-width/max-height:78vh is viewport-relative, so the browser's own
+// page zoom (which recomputes vw/vh) has no visible effect here -- that's
+// why "zoom in the browser" normally does nothing on this page. This
+// intercepts the same gesture and drives an explicit pixel width instead.
+let lbFitWidth = 0, lbZoom = 1;
+document.getElementById('lbimg').addEventListener('load', function(){
+  lbFitWidth = this.getBoundingClientRect().width;
+});
+function resetZoom(){
+  lbZoom = 1;
+  const img = document.getElementById('lbimg');
+  img.style.width = ''; img.style.height = '';
+  img.style.maxWidth = ''; img.style.maxHeight = '';
+  img.classList.remove('zoomed');
+}
+function applyZoom(cx, cy){
+  const img = document.getElementById('lbimg'), wrap = document.getElementById('lbimgwrap');
+  if (lbZoom <= 1.001){ resetZoom(); wrap.scrollTo(0, 0); return; }
+  if (!lbFitWidth) lbFitWidth = img.getBoundingClientRect().width || img.naturalWidth;
+  const rect = img.getBoundingClientRect(), wrapRect = wrap.getBoundingClientRect();
+  const anchorCx = cx != null ? cx : wrapRect.left + wrapRect.width / 2;
+  const anchorCy = cy != null ? cy : wrapRect.top + wrapRect.height / 2;
+  // fraction of the CURRENT (pre-zoom-step) image that sits under the cursor
+  const fx = (anchorCx - rect.left + wrap.scrollLeft) / rect.width;
+  const fy = (anchorCy - rect.top + wrap.scrollTop) / rect.height;
+  img.style.maxWidth = 'none'; img.style.maxHeight = 'none';
+  img.style.width = (lbFitWidth * lbZoom) + 'px';
+  img.style.height = 'auto';
+  img.classList.add('zoomed');
+  // put that same point back under the cursor at the new size
+  const newRect = img.getBoundingClientRect();
+  wrap.scrollLeft = fx * newRect.width - (anchorCx - wrapRect.left);
+  wrap.scrollTop = fy * newRect.height - (anchorCy - wrapRect.top);
+}
+function zoomBy(factor, cx, cy){
+  lbZoom = Math.min(6, Math.max(1, lbZoom * factor));
+  applyZoom(cx, cy);
+}
+document.getElementById('lbimgwrap').addEventListener('wheel', e => {
+  if (document.getElementById('lb').hidden || !e.ctrlKey) return;
+  e.preventDefault();
+  zoomBy(Math.exp(-e.deltaY * 0.003), e.clientX, e.clientY);
+}, {passive: false});
 function toggleZoom(e){
   e.stopPropagation();
-  document.getElementById('lbimg').classList.toggle('zoomed');
+  if (lbZoom > 1) { lbZoom = 1; applyZoom(); }
+  else { lbZoom = 2.5; applyZoom(e.clientX, e.clientY); }
 }
 function closeLB(){ document.getElementById('lb').hidden = true; }
 document.addEventListener('keydown', e => {
@@ -625,7 +678,24 @@ document.getElementById('lb').addEventListener('click', e => {
   if (e.target.id === 'lb') closeLB();
 });
 let lbTouchX = null, lbTouchY = null;
+// Two-finger pinch, handled ourselves rather than left to the OS: this
+// modal is position:fixed, and a native page-level pinch on a fixed
+// full-screen element zooms the whole modal chrome (buttons drift off
+// screen) instead of just the picture. touchDist/touchMid measure the
+// gesture; lbPinchDist/lbPinchZoom are the reference at pinch-start so
+// zoom is computed as an absolute ratio each move (no drift from
+// accumulating many small deltas).
+let lbPinchDist = null, lbPinchZoom = 1;
+function touchDist(a, b){ return Math.hypot(b.clientX - a.clientX, b.clientY - a.clientY); }
+function touchMid(a, b){ return {x: (a.clientX + b.clientX) / 2, y: (a.clientY + b.clientY) / 2}; }
 document.getElementById('lb').addEventListener('touchstart', e => {
+  if (e.touches.length >= 2){
+    lbTouchX = null;
+    lbPinchDist = touchDist(e.touches[0], e.touches[1]);
+    lbPinchZoom = lbZoom;
+    return;
+  }
+  lbPinchDist = null;
   // a tap that starts on a button (close/prev/next/up/down) is its own
   // gesture -- swipe detection would preventDefault the touchmove and
   // suppress the button's synthetic click, so leave it alone entirely
@@ -634,6 +704,14 @@ document.getElementById('lb').addEventListener('touchstart', e => {
   lbTouchY = e.touches[0].clientY;
 }, {passive: true});
 document.getElementById('lb').addEventListener('touchmove', e => {
+  if (e.touches.length >= 2 && lbPinchDist){
+    e.preventDefault();
+    const dist = touchDist(e.touches[0], e.touches[1]);
+    const mid = touchMid(e.touches[0], e.touches[1]);
+    lbZoom = Math.min(6, Math.max(1, lbPinchZoom * (dist / lbPinchDist)));
+    applyZoom(mid.x, mid.y);
+    return;
+  }
   // block the page (and the modal backdrop) from scrolling under a swipe;
   // NOT blocked while zoomed, so panning a zoomed image via native
   // touch-scroll still works
@@ -642,6 +720,7 @@ document.getElementById('lb').addEventListener('touchmove', e => {
   }
 }, {passive: false});
 document.getElementById('lb').addEventListener('touchend', e => {
+  if (e.touches.length < 2) lbPinchDist = null;
   if (lbTouchX === null) return;
   // zoomed images pan via native touch-scroll -- don't hijack that as a swipe
   if (document.getElementById('lbimg').classList.contains('zoomed')) { lbTouchX = null; return; }
