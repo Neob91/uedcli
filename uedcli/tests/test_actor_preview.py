@@ -405,10 +405,14 @@ def test_old_highlight_poly_flag_is_gone():
 def test_zoom_factor_interpolates(tmp_path, monkeypatch):
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
     frames = {}
+    # size=256, not _prev's default 128: at the default quad pane resolution, the reserved caption
+    # strip (_QUAD_CAPTION_H) leaves too few pixels for three different --frame-tightness values to
+    # render visibly distinct pixels — this test is about the interpolation math, not tiny-pane
+    # resolution limits, so give it enough room to actually observe the difference.
     for f in (0.0, 0.5, 1.0):
         out = tmp_path / f"z{f}.png"
         assert dispatch.dispatch(_prev(proj, out, names=["WallA", "WallB"],
-                                       frame="WallB:0", frame_tightness=f)) == 0
+                                       frame="WallB:0", frame_tightness=f, size=256)) == 0
         frames[f] = out.read_bytes()
     assert frames[0.0] != frames[0.5] != frames[1.0]       # each factor frames differently
     assert frames[0.0] != frames[1.0]

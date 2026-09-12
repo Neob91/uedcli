@@ -210,6 +210,19 @@ def test_quad_view_renders_four_panes():
     assert DIVIDER in _colors(pgm) and _nonbg(pgm) > 0   # divider + content
 
 
+@pytest.mark.parametrize("size", [8, 16, 24, 32, 40])
+def test_quad_pane_caption_band_never_overruns_a_tiny_size(size):
+    # Each pane's own render shrinks to leave room for its caption strip (`cap_h` in
+    # `render_quad_pgm`); at `--size` small enough that a pane's half is <= the target caption
+    # height, `cap_h` must shrink too — pinning a real bug where the un-clamped constant left the
+    # bottom-row panes' paste offset past the buffer's own end (`bytearray[dst:dst+n] = ...` grows
+    # the buffer silently instead of raising, so the body ended up LONGER than `size*size*3`).
+    pgm = render_quad_pgm(_brush(), size=size)
+    hdr = f"P6\n{size} {size}\n255\n".encode()
+    assert pgm.startswith(hdr)
+    assert len(pgm) == len(hdr) + size * size * 3
+
+
 def test_iso_view_renders():
     pgm = render_brush_pgm(_brush(), view="iso", size=128)
     assert pgm.startswith(b"P6\n128 128\n255\n")
