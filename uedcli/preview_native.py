@@ -337,6 +337,24 @@ def camera_basis(pitch_deg: float, yaw_deg: float):
             tuple(matvec(R, (0.0, 0.0, 1.0))))           # up (+Z)
 
 
+def sky_camera_basis(pitch_deg: float, yaw_deg: float,
+                     sky_pitch_uu: int, sky_yaw_uu: int, sky_roll_uu: int):
+    """(forward, right, up) world basis for the sky sub-render's camera: the viewer's own
+    rotation divided by the sky actor's own rotation (`FCoords::operator/=(FRotator)` in the real
+    engine). NOT `matmul(viewer_r, inverse(sky_r))` — that guess has both the operand order and
+    the inverse placement backwards; see this task's derivation comment in the plan/spec for why
+    it's `matmul(transpose(inverse(sky_r)), viewer_r)`, which reduces to `sky_r · viewer_r` for an
+    orthonormal `sky_r`. Camera POSITION is handled separately by the caller (the sky actor's own
+    `Location`, with no dependency on the viewer's position at all)."""
+    from .rotation import euler_to_matrix_uu, matmul, inverse, transpose, matvec, deg_to_uu
+    viewer_r = euler_to_matrix_uu(deg_to_uu(pitch_deg), deg_to_uu(yaw_deg), 0)
+    sky_r = euler_to_matrix_uu(sky_pitch_uu, sky_yaw_uu, sky_roll_uu)
+    composed = matmul(transpose(inverse(sky_r)), viewer_r)
+    return (tuple(matvec(composed, (1.0, 0.0, 0.0))),
+            tuple(matvec(composed, (0.0, 1.0, 0.0))),
+            tuple(matvec(composed, (0.0, 0.0, 1.0))))
+
+
 # --------------------------------------------------------------------- aim points
 
 def actor_aim_point(level, name: str) -> tuple[float, float, float]:

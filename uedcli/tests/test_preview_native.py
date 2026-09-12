@@ -736,6 +736,39 @@ def test_build_scene_unresolvable_mesh_ref_raises_naming_the_actor():
         pn.build_scene(lvl, [], index, defaults=DEFAULTS)
 
 
+# --------------------------------------------------------------- sky camera basis
+
+
+def test_sky_camera_basis_viewer_identity_sky_yaw_90():
+    """Hand-worked, not re-derived from the implementation's own matrix helpers: viewer looking
+    straight down UE1 +X (pitch=0, yaw=0, the identity rotation) with a SkyZoneInfo rotated +90
+    degrees of yaw. `composed = R_sky · R_viewer = R_sky` here (viewer is the identity), and
+    `R_sky`'s own first column (= `forward`, `camera_basis`'s established convention) for a pure
+    +90-degree yaw is exactly world +Y: `(0, 1, 0)`. If an implementation instead computes
+    `R_viewer · inverse(R_sky)` (the plan's first-draft bug — wrong operand order AND wrong
+    inverse placement), this yields `(0, -1, 0)` instead — the opposite direction. See
+    `dev/docs/unrealed/rendering.md`'s `PF_FakeBackdrop` section for why it's a divide of the
+    VIEWER's rotation by the sky's, not the other way around."""
+    from uedcli.preview_native import sky_camera_basis
+    from uedcli.rotation import deg_to_uu
+    fwd, right, up = sky_camera_basis(0.0, 0.0, 0, deg_to_uu(90.0), 0)
+    assert abs(fwd[0] - 0.0) < 1e-4 and abs(fwd[1] - 1.0) < 1e-4 and abs(fwd[2] - 0.0) < 1e-4, fwd
+
+
+def test_sky_camera_basis_matches_viewer_when_sky_rotation_is_zero():
+    """A zero SkyZoneInfo.Rotation (the common authored case) must reproduce the viewer's own
+    basis exactly — composing with the identity rotation is a no-op, so THIS case alone cannot
+    distinguish a correct formula from the backwards one (see the identity+yaw-90 test above,
+    which can)."""
+    from uedcli.preview_native import camera_basis, sky_camera_basis
+    pitch_deg, yaw_deg = -15.0, 200.0
+    fwd, right, up = sky_camera_basis(pitch_deg, yaw_deg, 0, 0, 0)
+    viewer_fwd, viewer_right, viewer_up = camera_basis(pitch_deg, yaw_deg)
+    for got, want in [(fwd, viewer_fwd), (right, viewer_right), (up, viewer_up)]:
+        for g, w in zip(got, want):
+            assert abs(g - w) < 1e-6
+
+
 # --------------------------------------------------------------- invisible faces
 
 
