@@ -224,7 +224,16 @@ the permeating flood is where the campaign's leverage is.
   `Model.Lights` entries and 217 extra `LightBits` bytes came from the missing ZONE RETIRE described
   under OceanLab below, not from anything UNATCO-specific. Byte-exact **N=1..225** (was 162); bails
   at **N=226** on one leaf's permeating-light run —
-  `dev/docs/board/inbox/unatco-n-226-leaf-12-gets-a-permeating-light157/`.
+  `dev/docs/board/inbox/unatco-n-226-leaf-12-gets-a-permeating-light157/`. Root-caused 2026-09-12: a
+  live gdb capture of the editor's own flood (same method as Island N=332 below) confirms the SAME
+  unresolved mechanism — native's `FLinePlaneIntersection` lands a beam-clip crossing bit-for-bit on a
+  shared portal vertex (a true tie, collapsing the edge to zero and dropping it as a no-op constraint),
+  while the editor's own capture of the identical crossing lands ~1 ULP off it. Second confirmed
+  reproducer of the Island N=332 tie; not fixed, no mask. That investigation also found Island's
+  "x87 vs SSE" hypothesis very likely wrong — `spikes/2026-07-15-native-materialize/41-fp-model-x87-vs-sse.md`
+  already showed this build's `Engine.dll`/`Editor.dll` are SSE2-only with zero x87 control-word use —
+  so the real cause is more likely an unreplicated operation-order effect, still needing a register-level
+  gdb single-step to pin down.
   N=116 needed no fix and was never a real divergence
   (`dev/docs/board/done/unatco-n-116-world-model2-light-runs-differ-on/`): the 941-against-940
   `Model.Lights` bail came from a STALE wheel. Cargo decides freshness by mtime, so a crate restored

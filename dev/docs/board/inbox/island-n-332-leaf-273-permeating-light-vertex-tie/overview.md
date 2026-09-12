@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Island is byte-exact N=1..331 and bails at N=332: leaf 273 carries Light124 where UED22 leaves it out. Root-caused to a genuine vertex COINCIDENCE (a portal vertex shared exactly with an adjacent portal) that makes one FLinePlaneIntersection crossing land a hair below the shared point in native and a hair above it in a live editor capture -- same formula, same inputs, opposite sign of a sub-ULP residual. Not fixed; suspected x87-vs-SSE double-rounding, unconfirmed."
+summary = "Island is byte-exact N=1..331 and bails at N=332: leaf 273 carries Light124 where UED22 leaves it out. Root-caused to a genuine vertex COINCIDENCE (a portal vertex shared exactly with an adjacent portal) that makes one FLinePlaneIntersection crossing land a hair below the shared point in native and a hair above it in a live editor capture -- same formula, same inputs, opposite sign of a sub-ULP residual. Not fixed; x87-vs-SSE double-rounding is now RULED UNLIKELY (see below) -- mechanism still unconfirmed. Second reproducer found: unatco-n-226-leaf-12-gets-a-permeating-light157."
 spikes = ["dev/docs/spikes/2026-09-07-gather-box-verdict/"]
 +++
 
@@ -126,6 +126,25 @@ it is not a confirmed mechanism, only a plausible one matching the direction of 
     # exact polygons at the decisive crossing
     UEDCLI_PERM_TRACE=34 UEDCLI_PERM_TRACE_EDGE=162-275 actor_parity.py --dx <island.dx> native 332
     UEDCLI_PERM_TRACE=34 UEDCLI_PERM_TRACE_EDGE=275-273 actor_parity.py --dx <island.dx> native 332
+
+## Second reproducer + a correction to the x87-vs-SSE hypothesis (2026-09-12)
+
+`unatco-n-226-leaf-12-gets-a-permeating-light157` is the same mechanism: a live gdb capture of that
+level's `13->12` crossing shows native's `FLinePlaneIntersection` landing EXACTLY (0 ULP) on a vertex
+shared between two portal faces, while the editor's own capture of the identical crossing lands about
+1 ULP off that same vertex — not a tie there, but the same shape (native ties where the editor
+doesn't). See that item for the full trace.
+
+That session also flagged that this item's "suspected x87-vs-SSE double-rounding" framing conflicts
+with `dev/docs/spikes/2026-07-15-native-materialize/41-fp-model-x87-vs-sse.md` — a disassembly-based,
+high-confidence finding (2026-07-15) that this build's `Engine.dll`/`Editor.dll` (2022 MSVC rebuild,
+`/arch:SSE2`) contain **zero** `fldcw`/`fnstcw` and near-zero x87 arithmetic anywhere in `.text`; the
+CSG/geometry math is SSE2 scalar throughout with no 80-bit intermediates. So x87 extended-precision
+retention is very likely NOT what's happening here — the residual is more likely an unreplicated
+operation-order or register-allocation difference in the real compiled `FLinePlaneIntersection`/
+`SafeNormal` chain. This does not change the "not fixed" conclusion or the next step below; it only
+retires one candidate explanation so the eventual gdb single-step doesn't spend time confirming/
+ruling out x87 registers specifically.
 
 ## Next step for whoever picks this up
 
