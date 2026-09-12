@@ -111,6 +111,49 @@ That is a larger change touching `light.rs`, `visible_surfs.rs`, and the `unbuil
 orchestration between them — scoping and building it is follow-up work, not a local patch here. No
 mask was added; the gate is untouched.
 
+## Further static RE (2026-09-12) — the "moving-brush filter" theory does not hold as stated
+
+Disassembled the two `FMovingBrushTracker` functions the theory above rests on
+(`Engine.dll`, base `0x10000000`, no ASLR):
+
+- **`Attach`, `0x1014d250`** (called per mover poly): allocates one `FBspSurf`, appended to
+  `Model->Surfs` (three `TArray::Add`-shaped calls off the model's `+0x98` array header), and fills
+  it exactly as the `nycbar-n59-light-apply-movers` spike already described (`iBrushPoly`/lightmap
+  slot, `PolyFlags & 0x3cffffff` [+ `0x100000` on the `+0x1a8` bit-1 mover bool], `Actor` = the
+  mover). It writes **nothing** shaped like a `Model->Nodes` element (no write scaled by the 64-byte
+  `FBspNode` stride) — confirms the spike's own surf-only description, and rules out a static world
+  node ever being handed a dynamic `iSurf` by this function.
+- **`Update`, `0x1014d530`**, and its recursive helper **`0x1014ca00`**: `Update` does re-detect a
+  moved/rotated mover (compares `+0x3a0.. / +0x3c4..` against `+0xd0.. / +0xdc..`) and, on the
+  "still in old spot" path, walks `Model->Nodes` — `0x1014ca00` recurses over the WHOLE reachable
+  subtree from an `iNode` argument via the node's own `iChild[1]`/`iChild[0]`/`iPlane` fields
+  (`+0x24/+0x20/+0x28`, the same convention already documented elsewhere in this codebase), guarded
+  by `NodeFlags & 0x20` (`NF_IsNew`) as a visited bit, and per node consults a table at
+  `Model+0x50` indexed by `(iNode - Model+0x2c)*8` — if non-null, calls `0x1014be60` (looks like a
+  detach/unlink, by its shape) with that value. This DOES touch `Model->Nodes`, but only a per-node
+  scratch bit plus an association-table lookup/unlink — a stale-reference cleanup walk over the
+  existing static tree, not geometry insertion: no node's `Plane`, `iSurf`, `iChild[*]`, or
+  `NumVertices` is written here.
+
+**Net: neither function inserts real BSP structure (planes/children/surf assignment) for a mover's
+current pose.** That means the `port-urender-getvisiblesurfs`'s step-3 "moving-brush filter"
+(`Level->BrushTracker->SurfIsDynamic(iSurf)` skipping a node) still cannot fire for a STATIC world
+node under this reading — no such node's `iSurf` is ever set to a dynamic index by either function
+examined. So the leading theory at the top of this item (a shared-scene fix inside
+`visible_surfs.rs`/`light.rs` keyed on that filter) is not yet grounded in what these two functions
+actually do; the real mechanism that makes a closed mover occlude the world's light bake (and get lit
+on its own face by that same light) is still unidentified at the static-disassembly depth reached
+here.
+
+**Not attempted, and should not be, without more evidence:** a code change to
+`visible_surfs.rs`/`light.rs` inferring a mechanism from this alone would be exactly the "guess a
+plausible-sounding fix" the campaign's prime directive forbids. The next step is a live, single-step
+capture of a real UED22 `LIGHT APPLY` run on this NYC_Bar N=153 subset, breakpointed in
+`GetVisibleSurfs`/`illuminateSurf` for `Light5`, to see live what (if anything) changes about the
+gather/raytrace when `DeusExMover9` is closed — same method already used for
+`island-n-332-leaf-273-permeating-light-vertex-tie` and `unatco-n-226-leaf-12-gets-a-permeating-
+light157`. No mask added; `visible_surfs.rs`/`light.rs`/`unbuilt.py` unchanged this pass.
+
 ## Repro
 
     ladder_run.py --dx dev/games/deusex/Maps/02_NYC_Bar.dx --from 153 --to 153 --keep-native
