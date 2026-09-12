@@ -350,6 +350,20 @@ def test_highlight_whole_brush_by_name(tmp_path, monkeypatch):
     assert out.read_bytes() != plain.read_bytes()
 
 
+def test_highlight_whole_brush_draws_ued22_style_pivot_marker(tmp_path, monkeypatch):
+    from uedcli.preview import _PIVOT_RED
+    # A bare NAME (whole-brush highlight) draws the vertex/pivot markers; a poly SELECTOR does not.
+    proj = _project_with_two_brushes(tmp_path, monkeypatch)
+    whole = tmp_path / "whole.png"
+    poly = tmp_path / "poly.png"
+    assert dispatch.dispatch(_prev(proj, whole, names=["WallA"], layout="single", view="top",
+                                   annotate="none", highlight=["WallA"])) == 0
+    assert dispatch.dispatch(_prev(proj, poly, names=["WallA"], layout="single", view="top",
+                                   annotate="none", highlight=["WallA:0"])) == 0
+    assert _PIVOT_RED in _colors(_img(whole))
+    assert _PIVOT_RED not in _colors(_img(poly))
+
+
 def test_highlight_poly_naming_unknown_brush_is_clean(tmp_path, monkeypatch, capsys):
     proj = _project_with_two_brushes(tmp_path, monkeypatch)
     rc = dispatch.dispatch(_prev(proj, tmp_path / "o.png", names=["WallA"],

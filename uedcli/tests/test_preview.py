@@ -15,6 +15,7 @@ from uedcli.preview import (
     _plan_onface_texture, _plan_px_area, _poly_is_convex_2d, _rect_overlap_area,
     _resolve_decals, _text_bitmap, assign_tints,
     parse_annotation_spec, render_brush_pgm, render_brushes_pgm, render_quad_pgm,
+    _CSG_PALETTE, _PIVOT_RED, _brighten, _scene_geometry,
 )
 from uedcli.tests.conftest import read_fixture
 
@@ -80,6 +81,71 @@ def test_highlight_poly_is_the_brushes_vivid_hue_and_bolder():
     assert vivid in _colors(hi)               # highlighted poly in the brush's vivid hue
     assert vivid not in _colors(plain)
     assert (220, 0, 0) not in _colors(hi)     # red is retired
+
+
+def test_highlighted_brush_gets_ued22_style_vertex_and_pivot_markers():
+    # Brush938 has a nonzero PrePivot (see test_zoom_region_reframes). `--highlight`ing the whole
+    # actor should draw its poly vertices + local-origin dot in the brush's brightened CSG hue, and
+    # its true pivot (Location) as UED22's red `GPivotShown` widget.
+    a = _brush()
+    vivid = _brighten(_CSG_PALETTE["subtract"][0])
+    plain = render_brush_pgm(a, view="top", size=256)
+    hi = render_brush_pgm(a, view="top", size=256, highlight_actors={"Brush938"})
+    assert hi != plain
+    assert _PIVOT_RED in _colors(hi)
+    assert vivid in _colors(hi)
+    assert _PIVOT_RED not in _colors(plain)
+    assert vivid not in _colors(plain)
+
+
+def test_highlighted_pivot_markers_do_not_affect_framing():
+    # `--highlight` is documented/tested as having NO EFFECT ON FRAMING. A brush whose PrePivot sits
+    # far from its own geometry (a door hinged off-centre) must not silently re-zoom the view just
+    # because its pivot/local-origin dots would otherwise land far outside the vertex cloud — the
+    # markers themselves are excluded from the framing source (`pts`), even though they may then
+    # land outside the frame.
+    a = copy.deepcopy(_brush())
+    a.props = [(k, "(X=50000,Y=50000,Z=50000)" if k == "PrePivot" else v) for k, v in a.props]
+
+    def _bounds(highlight_actors):
+        geom = _scene_geometry([a], view="top", iso_angle=30.0, annotations=AnnotationSpec.none(),
+                               highlight_polys=set(), highlight_actors=highlight_actors, focus_cf=None,
+                               hybrid=False, tints={}, color_by_csg=False, render_data=PreviewData())
+        scale, _to_px, _to_pxf, _world_to_pxf, region = _framing(
+            geom.pts, None, 256, "top", 30.0, pad=_FRAME_PAD)
+        return scale, region
+
+    assert _bounds(set()) == _bounds({"Brush938"})   # framing identical — the far-off pivot never fed it
+
+
+def test_highlight_actors_ignores_a_partial_poly_selector():
+    # A poly-level --highlight (BRUSH:idx) must not draw the vertex/pivot markers — only a
+    # WHOLE-brush highlight (bare NAME or BRUSH:all) does (`_whole_highlighted_actors`).
+    a = _brush()
+    hi_poly_only = render_brush_pgm(a, view="top", size=256, highlight_polys={("Brush938", 0)})
+    assert _PIVOT_RED not in _colors(hi_poly_only)
+
+
+def test_local_origin_dot_diverges_from_pivot_with_prepivot_and_coincides_without():
+    a = _brush()   # nonzero PrePivot
+    n_verts = sum(len(p.vertices) for p in a.brush.polys)
+    geom = _scene_geometry([a], view="top", iso_angle=30.0, annotations=AnnotationSpec.none(),
+                           highlight_polys=set(), highlight_actors={"Brush938"}, focus_cf=None,
+                           hybrid=False, tints={}, color_by_csg=False, render_data=PreviewData())
+    assert len(geom.hi_vertex_dots) == n_verts + 1   # every poly vertex + the local-origin dot
+    assert len(geom.hi_pivot_dots) == 1
+    origin_2d, _rgb = geom.hi_vertex_dots[-1]        # the local-origin dot is appended last
+    pivot_2d = geom.hi_pivot_dots[0]
+    assert origin_2d != pivot_2d                     # PrePivot != 0: they diverge
+
+    b = copy.deepcopy(a)
+    b.props = [(k, v) for k, v in b.props if k != "PrePivot"]   # PrePivot -> default (0,0,0)
+    geom0 = _scene_geometry([b], view="top", iso_angle=30.0, annotations=AnnotationSpec.none(),
+                            highlight_polys=set(), highlight_actors={"Brush938"}, focus_cf=None,
+                            hybrid=False, tints={}, color_by_csg=False, render_data=PreviewData())
+    origin_2d0, _rgb0 = geom0.hi_vertex_dots[-1]
+    pivot_2d0 = geom0.hi_pivot_dots[0]
+    assert origin_2d0 == pivot_2d0                   # PrePivot == 0: they coincide
 
 
 def test_csg_color_paints_subtracted_brush_gold():

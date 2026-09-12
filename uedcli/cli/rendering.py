@@ -156,6 +156,14 @@ def _resolve_highlights(actors, args) -> tuple[set, set, list]:
     return polys, points, requests
 
 
+def _whole_highlighted_actors(requests: list) -> set[str]:
+    """The brush names `--highlight` named WHOLE (a bare NAME or `BRUSH:all`, never a partial poly
+    selector) — `_resolve_highlights`'s `requests`, filtered to `whole`. Drives the vertex/pivot
+    marker overlay (`preview.render_brushes_pgm`'s `highlight_actors`), which is an actor-level
+    concept and must not fire off a poly subset that merely happens to cover every index."""
+    return {name for name, _keys, whole in requests if whole}
+
+
 def _note_invisible_highlights(requests: list, shown: set) -> None:
     """Say on STDERR when a `--highlight` landed on nothing visible, naming the selectors.
 
@@ -255,6 +263,7 @@ def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None,
     faces = _preview_faces_mode(args)
     annotation_spec = preview.parse_annotation_spec(args.annotate)
     highlight_polys, highlight_points, _requests = _resolve_highlights(actors, args)
+    highlight_actors = _whole_highlighted_actors(_requests)
     try:
         from io import BytesIO
         from PIL import Image, ImageDraw
@@ -271,7 +280,8 @@ def _render_breakdown_grid(actors, args, *, render_data, shown_highlights=None,
         # (and so escalates) independently.
         return preview.render_brushes_pgm(
             actors, view=view, size=size, annotations=annotations, iso_angle=args.iso_angle, region=region,
-            highlight_polys=highlight_polys, highlight_points=highlight_points, color_by_csg=True,
+            highlight_polys=highlight_polys, highlight_points=highlight_points,
+            highlight_actors=highlight_actors, color_by_csg=True,
             render_data=render_data, focus=focus,
             brush_colors=brush_colors, faces=faces, frame_pad=_BREAKDOWN_PAD,
             shown_highlights=shown_highlights, locator=locator, cells_out=cells_out,
@@ -449,6 +459,7 @@ def render_actors_to_out(actors, args) -> int:
     try:
         annotation_spec = preview.parse_annotation_spec(args.annotate)
         highlight_polys, highlight_points, hi_requests = _resolve_highlights(actors, args)
+        highlight_actors = _whole_highlighted_actors(hi_requests)
         focus = _resolve_focus(actors, args)
         explicit_region, frame_selector = _parse_frame(getattr(args, "frame", None))
         zoom_target = (_resolve_zoom(actors, frame_selector, render_data)
@@ -518,6 +529,7 @@ def render_actors_to_out(actors, args) -> int:
                                               annotations=annotation_spec, iso_angle=args.iso_angle,
                                               region=region, highlight_polys=highlight_polys,
                                               highlight_points=highlight_points,
+                                              highlight_actors=highlight_actors,
                                               color_by_csg=True, render_data=render_data, focus=focus,
                                               brush_colors=getattr(args, "brush_colors", "csg") or "csg",
                                               faces=faces, shown_highlights=shown_highlights,
@@ -535,6 +547,7 @@ def render_actors_to_out(actors, args) -> int:
                                            iso_angle=args.iso_angle, region=region,
                                            highlight_polys=highlight_polys,
                                            highlight_points=highlight_points,
+                                           highlight_actors=highlight_actors,
                                            color_by_csg=True, render_data=render_data, focus=focus,
                                            brush_colors=getattr(args, "brush_colors", "csg") or "csg",
                                            faces=faces, shown_highlights=shown_highlights,

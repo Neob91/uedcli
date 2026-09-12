@@ -127,6 +127,20 @@ _CSG_PALETTE: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
     "mover":     ((205, 70, 235),  (105, 35, 120)),   # mover — magenta / purple
 }
 
+# UED22's `GPivotShown` widget colour (`C_BrushWire.Plane()` in `UnEdCam.cpp`) — the actor's true,
+# PrePivot-independent rotation-invariant pivot, always at Location. A DELIBERATE, narrow exception to
+# "red is not used" above: that rule is about the retired highlight-outline red (a poly highlight now
+# uses the brush's own vivid CSG hue instead), not this. This is UED22's own reserved colour for its
+# pivot widget, distinct from both the CSG palette and `_TINT_PALETTE`'s red.
+_PIVOT_RED = (255, 63, 63)
+
+
+def _brighten(rgb: tuple[int, int, int], factor: float = 1.2) -> tuple[int, int, int]:
+    """UED22's brush-vertex-handle colour is `WireColor * 1.2` (`DrawLevelBrush`, `UnEdRend.cpp`) —
+    the brush's own CSG wire hue, brightened, never a fixed neutral colour."""
+    return tuple(min(255, round(c * factor)) for c in rgb)
+
+
 # Overlay colours (faint, solid — the renderer has no alpha blend buffer). Collision = red and
 # sound = blue are UED-faithful; light is deviated to orange so it stays distinct from BOTH (UED
 # draws light in the same red as collision, which are separate toggles here). All three stay
@@ -568,6 +582,23 @@ def _filled_diamond(buf, size, cx, cy, r, rgb) -> None:
         span = r - abs(dy)
         for dx in range(-span, span + 1):
             _px(buf, size, cx + dx, cy + dy, rgb)
+
+
+def _draw_vertex_dot(buf, size, cx, cy, rgb) -> None:
+    """UED22's brush-vertex-handle glyph (`DrawLevelBrush`, `UnEdRend.cpp`): a 3x3-pixel filled square,
+    fixed screen-space size (not world-scaled). Used for a `--highlight`ed brush's poly vertices and
+    its local-origin dot — both draw identically in UED22, in the brush's own brightened wire colour."""
+    _fill(buf, size, cx - 1, cy - 1, cx + 1, cy + 1, rgb)
+
+
+def _draw_pivot_marker(buf, size, cx, cy) -> None:
+    """UED22's `GPivotShown` widget: the same 3x3 square plus a 4px crosshair, in `_PIVOT_RED` — the
+    actor's true, PrePivot-independent rotation-invariant pivot (always at Location), visually distinct
+    from an ordinary vertex/origin dot."""
+    for d in range(-4, 5):
+        _px(buf, size, cx, cy + d, _PIVOT_RED)
+        _px(buf, size, cx + d, cy, _PIVOT_RED)
+    _fill(buf, size, cx - 1, cy - 1, cx + 1, cy + 1, _PIVOT_RED)
 
 
 def _draw_selection_brackets(buf, size, cx, cy, r_px) -> None:
@@ -1559,6 +1590,11 @@ class _SceneGeom:
     pts: list            # every projected point (verts + point footprints) — the framing source
     actor_points: dict   # actor_name → its projected 2-D points (brush: surviving verts; point: its
                          # Location) — the locator-cell source
+    hi_vertex_dots: list  # (point2d, rgb) — a `--highlight`ed brush's poly vertices + its local-origin
+                          # dot (`Location - R·PrePivot`), UED22-style: same 3x3-square glyph, the
+                          # brush's own brightened CSG hue. `wire` faces mode only (see `_scene_geometry`)
+    hi_pivot_dots: list   # point2d — a `--highlight`ed brush's TRUE pivot (Location, PrePivot-independent),
+                          # drawn as UED22's red `GPivotShown` widget. `wire` faces mode only
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -1692,7 +1728,8 @@ def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_poly
 
 
 def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, focus_cf, hybrid, tints,
-                    color_by_csg, render_data, brush_colors="csg", faces="wire") -> _SceneGeom:
+                    color_by_csg, render_data, brush_colors="csg", faces="wire",
+                    highlight_actors=frozenset()) -> _SceneGeom:
     """Run the per-actor projection loop and return `_SceneGeom`. Pure (no drawing). See
     `render_brushes_pgm` for the semantics of each accumulated list.
 
@@ -1732,6 +1769,8 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
     points: list = []
     pts: list = []
     actor_points: dict = {}
+    hi_vertex_dots: list = []
+    hi_pivot_dots: list = []
     d_vec = _view_depth(iso_angle, view)
     for actor in actors:
         loc = actor.location or (Decimal(0), Decimal(0), Decimal(0))
@@ -1779,6 +1818,8 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
         is_solid = csg_key not in ("subtract", "nonsolid")
         R = actor_linear(actor)
         prepivot = actor_prepivot(actor)
+        is_hi_actor = actor.name in highlight_actors
+        vertex_rgb = _brighten(vivid) if is_hi_actor else None
         brush_cands_2d: list = []
         for idx, poly in enumerate(actor.brush.polys):
             v3 = [(float(loc[0] + w[0]), float(loc[1] + w[1]), float(loc[2] + w[2]))
@@ -1790,6 +1831,10 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
             is_hi = (actor.name, idx) in highlight_polys
             pts.extend(vs)
             brush_cands_2d.extend(vs)
+            if is_hi_actor:
+                # UED22 vertex-handle glyph (`DrawLevelBrush`): every poly vertex of a `--highlight`ed
+                # brush, same 3x3-square, the brush's own brightened wire colour.
+                hi_vertex_dots.extend((p2d, vertex_rgb) for p2d in vs)
             n = len(vs)
             depth = sum(c * dc for c, dc in zip(
                 (sum(p[0] for p in v3) / n, sum(p[1] for p in v3) / n, sum(p[2] for p in v3) / n), d_vec))
@@ -1808,6 +1853,25 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
             if show_idx:
                 poly_labels.append(
                     (_poly_centroid_2d(vs), str(idx), label_accent, depth, v3, actor.name))
+        if is_hi_actor:
+            lp = (float(loc[0]), float(loc[1]), float(loc[2]))
+            # UED22's "origin" draw (`DrawLevelBrush`): the world position of the brush's LOCAL
+            # coordinate origin, `Location - R·PrePivot` — NOT rotation-invariant, and NOT the true
+            # pivot (see below); it only coincides with Location when PrePivot=(0,0,0). Same
+            # vertex-square glyph as the poly vertices above.
+            origin_off = local_offset(R, prepivot, (Decimal(0), Decimal(0), Decimal(0)))
+            origin_world = tuple(lp[i] + float(origin_off[i]) for i in range(3))
+            origin_2d = _project(origin_world, view, iso_angle)
+            hi_vertex_dots.append((origin_2d, vertex_rgb))
+            # UED22's `GPivotShown` widget: the actor's TRUE, PrePivot-independent rotation-invariant
+            # pivot — always Location itself (`SetPivot`/`NoteSelectionChange`, `UnEdCam.cpp`).
+            pivot_2d = _project(lp, view, iso_angle)
+            hi_pivot_dots.append(pivot_2d)
+            # Deliberately NOT fed into `pts` (the framing source): `--highlight` is documented and
+            # tested as having NO EFFECT ON FRAMING (`docs/reference/actor/diagram.md`,
+            # `--highlight`'s own help text). A brush with a far-off PrePivot (a door hinged
+            # off-centre) can put its pivot/origin dots outside the frame — same "may not be visible"
+            # contract a highlighted poly already has under depth-hiding/`--frame`.
         if brush_cands_2d:
             actor_points[actor.name] = brush_cands_2d   # kept on EVERY path — the grid-cell source
     if textured:
@@ -1821,7 +1885,8 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
     return _SceneGeom(edges=edges, fills=fills, tex_faces=tex_faces, hi_edges=hi_edges,
                       vis_faces=vis_faces, hi_only_labels=hi_only_labels, poly_labels=poly_labels,
                       occluders=occluders, points=points, pts=pts,
-                      actor_points=actor_points)
+                      actor_points=actor_points, hi_vertex_dots=hi_vertex_dots,
+                      hi_pivot_dots=hi_pivot_dots)
 
 
 _FRAME_PAD = 6         # px border kept clear of the geometry on every side (shared by framing + reserve)
@@ -2256,7 +2321,7 @@ def _collect_cells(geom, hidden, faces, points, to_pxf, col_bounds, row_bounds, 
 def render_brush_pgm(actor: Actor, *, view: str = "top", size: int = 256,
                      annotations: AnnotationSpec = AnnotationSpec.all(),
                      iso_angle: float = 30.0, region=None,
-                     highlight_polys=None, highlight_points=None,
+                     highlight_polys=None, highlight_points=None, highlight_actors=None,
                      color_by_csg: bool = False, render_data=None,
                      focus: str | None = None,
                      brush_colors: str = "csg", faces: str = "wire",
@@ -2264,7 +2329,7 @@ def render_brush_pgm(actor: Actor, *, view: str = "top", size: int = 256,
                      grid_size: int | None = None, grid_caption_out: dict | None = None) -> bytes:
     return render_brushes_pgm([actor], view=view, size=size, annotations=annotations,
                               iso_angle=iso_angle, region=region, highlight_polys=highlight_polys,
-                              highlight_points=highlight_points,
+                              highlight_points=highlight_points, highlight_actors=highlight_actors,
                               color_by_csg=color_by_csg, render_data=render_data,
                               focus=focus, brush_colors=brush_colors,
                               faces=faces, locator=locator, cells_out=cells_out,
@@ -2274,7 +2339,7 @@ def render_brush_pgm(actor: Actor, *, view: str = "top", size: int = 256,
 def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 256,
                        annotations: AnnotationSpec = AnnotationSpec.all(),
                        iso_angle: float = 30.0,
-                       region=None, highlight_polys=None, highlight_points=None,
+                       region=None, highlight_polys=None, highlight_points=None, highlight_actors=None,
                        color_by_csg: bool = False, render_data=None,
                        focus: str | None = None,
                        brush_colors: str = "csg",
@@ -2298,6 +2363,11 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     `highlight_polys` is a set of `(actor_name, poly_idx)` — those polys draw
     in their brush's vivid front hue with a bolder line (facing dim ignored). `highlight_points` is a
     set of point-actor names — each gets corner brackets (a selection reticle) under its sprite/marker.
+    `highlight_actors` is a set of WHOLLY-highlighted brush names (a bare `--highlight NAME` or
+    `NAME:all`, never a partial poly selector) — each draws UED22's own vertex/pivot glyphs
+    (`DrawLevelBrush`/`GPivotShown`, `wire` faces mode only): every poly vertex + the local-origin dot
+    (`Location - R·PrePivot`) as a 3x3-square in the brush's brightened wire colour, and the TRUE
+    rotation-invariant pivot (always Location) as a red 3x3-square + 4px crosshair.
 
     On the CSG-coloured path (`color_by_csg`, the real preview) the labels use the HYBRID scheme: the
     wireframe keeps its CSG hue, but each actor's LABELS carry a distinct per-actor TINT
@@ -2359,12 +2429,14 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     on stderr (never in the image)."""
     highlight_polys = set(highlight_polys or ())
     highlight_points = set(highlight_points or ())
+    highlight_actors = set(highlight_actors or ())
     render_data = render_data or PreviewData()
     hybrid = color_by_csg                     # the real preview: per-actor tints (names not drawn)
     tints = assign_tints(actors) if hybrid else {}
     focus_cf = focus.casefold() if focus else None
     geom = _scene_geometry(actors, view=view, iso_angle=iso_angle, annotations=annotations,
-                           highlight_polys=highlight_polys, focus_cf=focus_cf, hybrid=hybrid,
+                           highlight_polys=highlight_polys, highlight_actors=highlight_actors,
+                           focus_cf=focus_cf, hybrid=hybrid,
                            tints=tints, color_by_csg=color_by_csg, render_data=render_data,
                            brush_colors=brush_colors, faces=faces)
     edges, hi_edges, poly_labels = geom.edges, geom.hi_edges, geom.poly_labels
@@ -2466,6 +2538,10 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
             # look drawn, so the note stayed silent on exactly the case it exists for.
             if landed and shown_highlights is not None:
                 shown_highlights.add(face_key)
+    for p2d, rgb in geom.hi_vertex_dots:              # `--highlight`ed brush: vertex + origin dots
+        _draw_vertex_dot(buf, size, *to_px(p2d), rgb)
+    for p2d in geom.hi_pivot_dots:                    # `--highlight`ed brush: the TRUE pivot (red)
+        _draw_pivot_marker(buf, size, *to_px(p2d))
     for actor, pr in points:                        # over-layer: markers
         _draw_point_marker(buf, size, actor, pr, view, iso_angle, to_px,
                            color=tints.get(actor.name, MARKER) if hybrid else MARKER, hybrid=hybrid)
@@ -2650,7 +2726,8 @@ def _draw_sphere(buf, size, lp, radius, view, iso_angle, to_px, scale, rgb) -> N
 def render_quad_pgm(actors, *, size: int = 512,
                     annotations: AnnotationSpec = AnnotationSpec.all(),
                     iso_angle: float = 30.0, region=None, highlight_polys=None,
-                    highlight_points=None, color_by_csg: bool = False, render_data=None,
+                    highlight_points=None, highlight_actors=None, color_by_csg: bool = False,
+                    render_data=None,
                     focus: str | None = None, brush_colors: str = "csg",
                     faces: str = "wire", shown_highlights: set | None = None,
                     locator: int | str | None = None, cells_out: dict | None = None,
@@ -2678,6 +2755,7 @@ def render_quad_pgm(actors, *, size: int = 512,
         sub = render_brushes_pgm(actors, view=view, size=half, annotations=annotations,
                                  iso_angle=iso_angle, region=region,
                                  highlight_polys=highlight_polys, highlight_points=highlight_points,
+                                 highlight_actors=highlight_actors,
                                  color_by_csg=color_by_csg, render_data=render_data,
                                  focus=focus,
                                  brush_colors=brush_colors, faces=faces,

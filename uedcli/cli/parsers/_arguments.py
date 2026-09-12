@@ -262,7 +262,13 @@ def _preview_opts(pp):
                          "culled, or outside the frame. A token "
                          "WITHOUT a colon is an ACTOR NAME: a brush actor "
                          "highlights ALL its polys; a point actor gets corner brackets (a selection "
-                         "reticle) framing its sprite/marker")
+                         "reticle) framing its sprite/marker. A whole-brush highlight (bare NAME or "
+                         "BRUSH:all) also draws UnrealEd's own vertex/pivot glyphs under --faces wire: "
+                         "every poly vertex + the local-origin dot (Location transformed the same way "
+                         "as its vertices) as a square in the brush's brightened CSG hue, and the TRUE "
+                         "pivot (always Location, independent of PrePivot) as a red square + crosshair. "
+                         "These markers do not affect framing either — a brush with a PrePivot far from "
+                         "its own geometry can put one outside the frame")
     pp.add_argument("--focus", metavar="BRUSH", default=None,
                     help="spotlight ONE brush: only it shows face indices (in its label tint); "
                          "every OTHER brush recedes — its wireframe to faint (dimmed) lines, and under "
