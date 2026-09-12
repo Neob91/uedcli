@@ -308,5 +308,5 @@ Verified by static disassembly alone (`render.dll`'s `OccludeBsp`/`DrawFrame`/`O
 own embedded UnrealScript source), independently adversarially re-reviewed. 36 facts pinned
 byte-exact in the spike's own harness; 29 as permanent pytest regressions
 (`uedcli/tests/test_engine_facts.py::test_pf_fakebackdrop_*`). Full evidence, disassembly listings,
-and the harness: `dev/docs/spikes/2026-09-12-pf-fakebackdrop-re/spike.md`. Consumed by (planned,
-not yet implemented as of this writing) `uedcli-native/src/render.rs`.
+and the harness: `dev/docs/spikes/2026-09-12-pf-fakebackdrop-re/spike.md`. Consumed by
+`uedcli-native/src/render.rs`.

@@ -77,12 +77,19 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
     recursing again). Mirrored alone never
     shows its own texture; combined with translucent it does, blended additively over the
     reflection (a tinted-glass mirror).
+    A **`PF_FakeBackdrop`** face (a skybox/skylight surface) now renders the level's sky room: when
+    the level has a `SkyZoneInfo` actor, the scene re-renders from that actor's location (rotated to
+    match it, with no parallax — camera position doesn't otherwise affect the view) and the face
+    shows that render instead of its own texture, sharing the same three-level recursion budget as
+    mirrors. With no `SkyZoneInfo` in the level, the face falls back to drawing its own texture like
+    an ordinary textured face.
     A masked material (grates, fences, foliage) alpha-tests: a transparent texel shows whatever is
     behind it instead of drawing. A `bHidden` actor is skipped, since the
     shot shows what the player would see. World BSP surfaces (floors/walls/ceilings) are lit from a
-    native lumel bake; mesh/mover actors, other point actors (sprite-drawn ones such as lights and
-    path nodes), and sky do NOT render lit — mesh/mover lighting is a separate, un-RE'd mechanism
-    (tracked separately). Scaled, mirrored, and sheared brushes render
+    native lumel bake — including the sky-room surfaces seen through a `PF_FakeBackdrop` face; mesh/
+    mover actors and other point actors (sprite-drawn ones such as lights and path nodes) do NOT
+    render lit — mesh/mover lighting is a separate, un-RE'd mechanism (tracked separately). Scaled,
+    mirrored, and sheared brushes render
     (the transform is baked into the geometry, and the texture frame follows it too — texels
     stretch/shear with the surface).
   - **Unresolvable refs abort the shot.** A texture or mesh reference that cannot be found or
