@@ -18,9 +18,9 @@
       "highest_n": 225,
       "total_actors": 1437,
       "status": "blocked",
-      "blocker": "BODY model model2 — leaf 12 gets a permeating-light run (Light157) UED22 leaves empty; lightbits byte-identical, 0 differing per-surf records. Same family as Island N=123 and OceanLab N=93 -- three independent reproducers of one open gap now. N=163's blocker (lights/lightbits shift) is FIXED: OccludeBsp never retired a zone from the active set when its span buffer ran out of ValidLines, so native kept descending into subtrees the editor had abandoned and over-marked NF_BoxOccluded, which a PF_BrightCorners shadow ray's IsCsg test reads. Live-verified: box-test count now matches the editor exactly (1218 vs 1218).",
+      "blocker": "BODY model model2 -- leaf 12 gets a permeating-light run (Light157) UED22 leaves empty. Confirmed (2026-09-12) as the SAME shared-portal-vertex sub-ULP tie as Island N=332: live gdb capture of the editor's real ActorVisibility flood independently pinpointed the identical decisive crossing (13->12) that native's own trace found -- both sides compute a beam-clip vertex that should equal a shared portal vertex; native ties exactly (0 ULP, collapses the edge, lets the beam through); the editor's live capture differs by ~1 ULP (real nonzero edge, blocks it). Not a fix -- a second independent reproducer. Also corrects Island N=332's 'x87 vs SSE' hypothesis: this build's Engine.dll/Editor.dll are SSE2-only (no x87 control-word use), so x87 extended precision is unlikely to be the cause.",
       "board": "unatco-n-226-leaf-12-gets-a-permeating-light157",
-      "updated": "2026-09-07T06:30:00Z"
+      "updated": "2026-09-12T00:00:00Z"
     },
     {
       "slug": "oceanlab",
@@ -51,9 +51,9 @@
       "highest_n": 331,
       "total_actors": 3653,
       "status": "blocked",
-      "blocker": "BODY model model2 differs at N=332 -- under investigation now (dispatched, not yet diagnosed). N=1..298 previously confirmed clean via a full sweep (carried by OceanLab's N=153/155 temp-brush-BSP and zone-connectivity fixes with no Island-specific work); the sweep continued past that on its own and found this new, real divergence at N=332.",
-      "board": null,
-      "updated": "2026-09-07T11:20:00Z"
+      "blocker": "BODY model model2 -- leaf 273 gets a permeating-light run (Light124) UED22 leaves empty. Root-caused: a genuine vertex coincidence -- a portal vertex shared exactly with an adjacent portal, where one FLinePlaneIntersection crossing lands a hair below the shared point in native and a hair above it in a live editor capture (same formula, same inputs, opposite sign of a sub-ULP residual). UNATCO N=226 (2026-09-12) independently reproduced the identical mechanism at a different crossing via live gdb capture, confirming this isn't Island-specific. The earlier 'x87 vs SSE double-rounding' hypothesis is now considered unlikely: a pre-existing spike shows this build's Engine.dll/Editor.dll are SSE2-only with zero x87 control-word use. Not fixed; needs single-stepping the editor's real FLinePlaneIntersection under gdb at the exact crossing to find the register-level cause.",
+      "board": "island-n-332-leaf-273-permeating-light-vertex-tie",
+      "updated": "2026-09-12T00:00:00Z"
     }
   ]
 }
