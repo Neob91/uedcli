@@ -735,7 +735,7 @@ fn render_frame(
         up: model::Vec3::new(up[0], up[1], up[2]),
         fov_deg: fov,
     };
-    let img = py.allow_threads(|| render::render(&rpolys, &rtex, &cam, width, height));
+    let img = py.allow_threads(|| render::render(&rpolys, &rtex, &cam, width, height, None));
     Ok(PyBytes::new_bound(py, &img).unbind())
 }
 

@@ -120,25 +120,45 @@ pub const NEAR: f32 = 4.0;
 
 const PF_TRANSLUCENT: u32 = 0x0000_0004;
 const PF_MODULATED: u32 = 0x0000_0040;
+const PF_FAKE_BACKDROP: u32 = 0x0000_0080;
 const PF_MIRRORED: u32 = 0x0800_0000;
 
+/// The sky sub-render's camera — the level's `SkyZoneInfo` actor's own `Location`, and a basis
+/// composed from the viewer's rotation divided by the sky actor's own rotation (computed
+/// Python-side, `preview_native.sky_camera_basis` — see `dev/docs/unrealed/rendering.md`'s
+/// `PF_FakeBackdrop` section for why this is a divide, not a multiply). `None` when the level has
+/// no `SkyZoneInfo` (the real engine's own NULL-SkyZone fallback: every `PF_FakeBackdrop` face
+/// then draws its own texture, unchanged from this renderer's pre-existing behavior).
+pub struct Sky {
+    pub location: Vec3,
+    pub forward: Vec3,
+    pub right: Vec3,
+    pub up: Vec3,
+}
+
 /// A poly's compositing mode, decided once from its `poly_flags`, for BUCKET ROUTING (which pass
-/// draws it — opaque, mirror, or the z-tested-not-written blended pass). `PF_Mirrored` wins over
-/// either blend flag: it routes to the mirror pass regardless of `PF_Translucent`/`PF_Modulated`
-/// also being set. `PF_Translucent` alongside `PF_Mirrored` still has an effect, just not here —
-/// `render_impl` gives that combination a second, additive tint pass of its own texture on top of
-/// the reflection (module doc). Translucent takes precedence over Modulated if somehow both are
-/// set with no Mirror bit — the two blend modes are mutually exclusive in the real renderer.
-#[derive(Clone, Copy, PartialEq, Eq)]
+/// draws it — opaque, mirror, backdrop, or the z-tested-not-written blended pass). `PF_FakeBackdrop`
+/// wins over everything else, but only when a `Sky` is actually available (no sky = the real
+/// engine's NULL-SkyZone fallback, draw the face's own texture). Failing that, `PF_Mirrored` wins
+/// over either blend flag: it routes to the mirror pass regardless of `PF_Translucent`/
+/// `PF_Modulated` also being set. `PF_Translucent` alongside `PF_Mirrored` still has an effect,
+/// just not here — `render_impl` gives that combination a second, additive tint pass of its own
+/// texture on top of the reflection (module doc). Translucent takes precedence over Modulated if
+/// somehow both are set with no Mirror bit — the two blend modes are mutually exclusive in the
+/// real renderer.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Blend {
     Opaque,
     Translucent,
     Modulated,
     Mirror,
+    Backdrop,
 }
 
-fn blend_mode(poly_flags: u32) -> Blend {
-    if poly_flags & PF_MIRRORED != 0 {
+fn blend_mode(poly_flags: u32, has_sky: bool) -> Blend {
+    if poly_flags & PF_FAKE_BACKDROP != 0 && has_sky {
+        Blend::Backdrop
+    } else if poly_flags & PF_MIRRORED != 0 {
         Blend::Mirror
     } else if poly_flags & PF_TRANSLUCENT != 0 {
         Blend::Translucent
@@ -202,10 +222,10 @@ struct MirrorCluster {
 /// brushes (12 mirror-flagged polys total) span only 2 distinct Z levels, i.e. 2 clusters — not
 /// bounded in general, so a level with many separately-oriented mirrors would cost one full
 /// `render_impl` re-render per cluster (no cap, no warning).
-fn group_mirror_clusters(polys: &[RenderPoly]) -> Vec<MirrorCluster> {
+fn group_mirror_clusters(polys: &[RenderPoly], has_sky: bool) -> Vec<MirrorCluster> {
     let mut clusters: Vec<MirrorCluster> = Vec::new();
     for (i, poly) in polys.iter().enumerate() {
-        if blend_mode(poly.poly_flags) != Blend::Mirror || poly.verts.len() < 3 {
+        if blend_mode(poly.poly_flags, has_sky) != Blend::Mirror || poly.verts.len() < 3 {
             continue;
         }
         let n = newell_normal(&poly.verts);
@@ -453,8 +473,9 @@ pub fn render(
     camera: &Camera,
     width: u32,
     height: u32,
+    sky: Option<&Sky>,
 ) -> Vec<u8> {
-    render_impl(polys, textures, camera, width, height, 0)
+    render_impl(polys, textures, camera, width, height, 0, sky)
 }
 
 /// The real `render()` body, plus `recursion_depth` (0 = the primary frame; each level of mirror
@@ -470,6 +491,7 @@ fn render_impl(
     width: u32,
     height: u32,
     recursion_depth: u32,
+    sky: Option<&Sky>,
 ) -> Vec<u8> {
     const MAX_RECURSION: u32 = 3; // real engine's FSceneNode::Recursion cap (spike 2026-09-12)
     let (w, h) = (width as usize, height as usize);
@@ -484,12 +506,13 @@ fn render_impl(
     // Horizontal FOV -> focal length in pixels (same focal for y: square pixels).
     let focal = half_w / (camera.fov_deg.to_radians() / 2.0).tan();
 
+    let has_sky = sky.is_some();
     let mut blended: Vec<(&RenderPoly, Blend, f32)> = Vec::new();
     for poly in polys {
-        let mut mode = blend_mode(poly.poly_flags);
-        // Recursion cap (module doc): a mirror poly reached at the cap depth draws as plain
-        // opaque texture instead of recursing again.
-        if mode == Blend::Mirror && recursion_depth >= MAX_RECURSION {
+        let mut mode = blend_mode(poly.poly_flags, has_sky);
+        // Recursion cap (module doc): a mirror or backdrop poly reached at the cap depth draws as
+        // plain opaque texture instead of recursing again.
+        if (mode == Blend::Mirror || mode == Blend::Backdrop) && recursion_depth >= MAX_RECURSION {
             mode = Blend::Opaque;
         }
         match mode {
@@ -497,13 +520,14 @@ fn render_impl(
                 poly, Blend::Opaque, textures, camera, half_w, half_h, focal, &mut img, &mut zbuf,
                 w, h, None, false,
             ),
-            Blend::Mirror => {} // drawn below, once per mirror plane, after every opaque poly
+            Blend::Mirror => {}   // drawn below, once per mirror plane, after every opaque poly
+            Blend::Backdrop => {} // drawn below, once for the whole sky, after the mirror clusters
             _ => blended.push((poly, mode, poly_depth(poly, camera))),
         }
     }
 
     if recursion_depth < MAX_RECURSION {
-        for cluster in group_mirror_clusters(polys) {
+        for cluster in group_mirror_clusters(polys, has_sky) {
             // Orient the plane normal toward the REAL camera, so the clip below keeps the half
             // of the scene the mirror actually reflects (reflect_point/reflect_dir themselves
             // don't care about this sign — only the clip's notion of "which side is real" does).
@@ -546,13 +570,45 @@ fn render_impl(
                 });
             }
             let secondary = render_impl(
-                &clipped_scene, textures, &refl_camera, width, height, recursion_depth + 1,
+                &clipped_scene, textures, &refl_camera, width, height, recursion_depth + 1, sky,
             );
             for &idx in &cluster.indices {
                 let tint = polys[idx].poly_flags & PF_TRANSLUCENT != 0;
                 render_poly(
                     &polys[idx], Blend::Mirror, textures, camera, half_w, half_h, focal, &mut img,
                     &mut zbuf, w, h, Some(&secondary), tint,
+                );
+            }
+        }
+    }
+
+    // Sky sub-render: ONE re-render of the whole scene from the sky camera, shared by every
+    // `Blend::Backdrop` face (there's exactly one sky, not one per mirror plane). No plane clip —
+    // a sky camera has no "wrong side" to clip away, unlike a mirror reflection. Placed AFTER the
+    // mirror clusters and BEFORE the blended sort/draw loop so a backdrop face is resolved before
+    // any translucent/modulated layer composites on top of it.
+    if let Some(sky) = sky {
+        let backdrop_indices: Vec<usize> = polys
+            .iter()
+            .enumerate()
+            .filter(|(_, p)| blend_mode(p.poly_flags, true) == Blend::Backdrop)
+            .map(|(i, _)| i)
+            .collect();
+        if !backdrop_indices.is_empty() && recursion_depth < MAX_RECURSION {
+            let sky_camera = Camera {
+                location: sky.location,
+                forward: sky.forward,
+                right: sky.right,
+                up: sky.up,
+                fov_deg: camera.fov_deg,
+            };
+            let secondary = render_impl(
+                polys, textures, &sky_camera, width, height, recursion_depth + 1, Some(sky),
+            );
+            for &idx in &backdrop_indices {
+                render_poly(
+                    &polys[idx], Blend::Backdrop, textures, camera, half_w, half_h, focal,
+                    &mut img, &mut zbuf, w, h, Some(&secondary), false,
                 );
             }
         }
@@ -712,6 +768,22 @@ fn raster_tri(
                     img[o + 1] = mg as u8;
                     img[o + 2] = mb as u8;
                 }
+                Blend::Backdrop => {
+                    // Like Blend::Mirror but with no tint pass — a backdrop face shows ONLY the
+                    // sky sub-render, never its own texture (unless mirror_src is None, the
+                    // defensive fallback below, which real callers never hit).
+                    zbuf[pi] = inv_d;
+                    let (mut mr, mut mg, mut mb) = (sr, sg, sb);
+                    if let Some(src) = mirror_src {
+                        let so = pi * 3;
+                        mr = src[so] as f32;
+                        mg = src[so + 1] as f32;
+                        mb = src[so + 2] as f32;
+                    }
+                    img[o] = mr as u8;
+                    img[o + 1] = mg as u8;
+                    img[o + 2] = mb as u8;
+                }
             }
         }
     }
@@ -767,7 +839,7 @@ mod tests {
         // 90° hfov, 200x100: focal = 100 px. A point 10 right / 5 up at depth 100
         // lands 10 px right of centre, 5 px above centre.
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[wall(100.0, 400.0, -1)], &[], &cam, 200, 100);
+        let img = render(&[wall(100.0, 400.0, -1)], &[], &cam, 200, 100, None);
         assert_eq!(img.len(), 200 * 100 * 3);
         // Wall covers the whole frame (±200 uu at depth 100 = ±63° > ±45° fov): no background.
         assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
@@ -792,7 +864,7 @@ mod tests {
         };
         // Wall 2uu at depth 32, focal 32 (90° fov, 64px wide) -> covers 2 px around centre.
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[wall(32.0, 2.0, 0)], &[tex], &cam, 64, 64);
+        let img = render(&[wall(32.0, 2.0, 0)], &[tex], &cam, 64, 64, None);
         let px = |x: usize, y: usize| {
             let o = (y * 64 + x) * 3;
             [img[o], img[o + 1], img[o + 2]]
@@ -817,7 +889,7 @@ mod tests {
         let cam = cam_at_origin_looking_plus_x(90.0);
         let mut behind = wall(-100.0, 400.0, -1);
         behind.poly_flags = PF_TWO_SIDED;
-        let img = render(&[behind], &[], &cam, 32, 32);
+        let img = render(&[behind], &[], &cam, 32, 32, None);
         assert!(img.chunks_exact(3).all(|p| p == BACKGROUND));
         // A wall straddling the camera plane clips cleanly (no panic, partial coverage).
         let mut straddle = wall(1.0, 400.0, -1);
@@ -827,7 +899,7 @@ mod tests {
             Vec3::new(50.0, 200.0, -10.0),
             Vec3::new(-50.0, 200.0, -10.0),
         ];
-        let img = render(&[straddle], &[], &cam, 32, 32);
+        let img = render(&[straddle], &[], &cam, 32, 32, None);
         assert!(img.chunks_exact(3).any(|p| p != BACKGROUND));
     }
 
@@ -851,6 +923,7 @@ mod tests {
             &cam_at_origin_looking_plus_x(90.0),
             64,
             64,
+            None,
         );
         let centre = {
             let o = (32 * 64 + 32) * 3;
@@ -890,6 +963,7 @@ mod tests {
             &cam,
             64,
             64,
+            None,
         );
         let px = |img: &[u8], x: usize| {
             let o = (32 * 64 + x) * 3;
@@ -898,7 +972,7 @@ mod tests {
         assert!(px(&plain, 31)[0] > 0 && px(&plain, 31)[1] == 0); // unpanned left = red
         let mut p = wall(32.0, 2.0, 0);
         p.pan = [1.0, 0.0];
-        let panned = render(&[p], &[tex], &cam, 64, 64);
+        let panned = render(&[p], &[tex], &cam, 64, 64, None);
         assert!(px(&panned, 31)[1] > 0 && px(&panned, 31)[0] == 0); // panned left = green
         assert!(px(&panned, 32)[0] > 0 && px(&panned, 32)[1] == 0); // wraps back to red
     }
@@ -918,7 +992,7 @@ mod tests {
         let mut front = wall(32.0, 2.0, 0); // 2-uu masked wall, near, 2 texels
         front.masked = true;
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[back, front], &[tex], &cam, 64, 64);
+        let img = render(&[back, front], &[tex], &cam, 64, 64, None);
         let px = |x: usize| {
             let o = (32 * 64 + x) * 3;
             [img[o], img[o + 1], img[o + 2]]
@@ -939,7 +1013,7 @@ mod tests {
             mask: vec![1, 0],
         };
         let back2 = wall(80.0, 400.0, -1);
-        let img = render(&[back2, opaque], &[tex2], &cam, 64, 64);
+        let img = render(&[back2, opaque], &[tex2], &cam, 64, 64, None);
         let o = (32 * 64 + 32) * 3;
         assert!(img[o] > 0 && img[o + 1] == 0 && img[o + 2] == 0); // red, not grey
     }
@@ -961,7 +1035,7 @@ mod tests {
         front.masked = true;
         let back = wall(80.0, 400.0, -1); // farther grey full-frame wall
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[front, back], &[tex], &cam, 64, 64); // masked drawn FIRST
+        let img = render(&[front, back], &[tex], &cam, 64, 64, None); // masked drawn FIRST
         let px = |x: usize| {
             let o = (32 * 64 + x) * 3;
             [img[o], img[o + 1], img[o + 2]]
@@ -987,10 +1061,10 @@ mod tests {
         // A wall facing away from the camera renders nothing: pure background, not even the
         // flat default grey (spec: real UnrealEd is single-sided by default).
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[wall_facing_away(100.0, 400.0, -1)], &[], &cam, 64, 64);
+        let img = render(&[wall_facing_away(100.0, 400.0, -1)], &[], &cam, 64, 64, None);
         assert!(img.chunks_exact(3).all(|p| p == BACKGROUND));
         // The same wall facing the camera (unchanged from `wall()`) DOES render.
-        let img = render(&[wall(100.0, 400.0, -1)], &[], &cam, 64, 64);
+        let img = render(&[wall(100.0, 400.0, -1)], &[], &cam, 64, 64, None);
         assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
     }
 
@@ -999,7 +1073,7 @@ mod tests {
         let cam = cam_at_origin_looking_plus_x(90.0);
         let mut w = wall_facing_away(100.0, 400.0, -1);
         w.poly_flags = PF_TWO_SIDED;
-        let img = render(&[w], &[], &cam, 64, 64);
+        let img = render(&[w], &[], &cam, 64, 64, None);
         assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
     }
 
@@ -1011,7 +1085,7 @@ mod tests {
         let cam = cam_at_origin_looking_plus_x(90.0);
         let mut w = wall_facing_away(100.0, 400.0, -1);
         w.poly_flags = PF_PORTAL;
-        let img = render(&[w], &[], &cam, 64, 64);
+        let img = render(&[w], &[], &cam, 64, 64, None);
         assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
     }
 
@@ -1057,7 +1131,7 @@ mod tests {
         let front_tex = || RenderTexture { w: 1, h: 1, data: vec![100, 50, 0], mask: vec![1] };
         let cam = cam_at_origin_looking_plus_x(90.0);
 
-        let bg_only = render(&[wall(100.0, 400.0, 0)], &[bg_tex()], &cam, 64, 64);
+        let bg_only = render(&[wall(100.0, 400.0, 0)], &[bg_tex()], &cam, 64, 64, None);
 
         let mut front = wall(40.0, 20.0, 1);
         front.poly_flags = PF_TRANSLUCENT;
@@ -1067,6 +1141,7 @@ mod tests {
             &cam,
             64,
             64,
+            None,
         );
 
         let px = |img: &[u8]| {
@@ -1083,7 +1158,7 @@ mod tests {
     fn modulated_wall_darkens_or_brightens_the_backdrop() {
         let cam = cam_at_origin_looking_plus_x(90.0);
         let bg_tex = || RenderTexture { w: 1, h: 1, data: vec![128, 128, 128], mask: vec![1] };
-        let bg_only = render(&[wall(100.0, 400.0, 0)], &[bg_tex()], &cam, 64, 64);
+        let bg_only = render(&[wall(100.0, 400.0, 0)], &[bg_tex()], &cam, 64, 64, None);
         let px = |img: &[u8]| {
             let o = (32 * 64 + 32) * 3;
             [img[o], img[o + 1], img[o + 2]]
@@ -1095,7 +1170,7 @@ mod tests {
         let mut dark = wall(40.0, 20.0, 1);
         dark.poly_flags = PF_MODULATED;
         let dark_tex = RenderTexture { w: 1, h: 1, data: vec![0, 0, 0], mask: vec![1] };
-        let darkened = render(&[wall(100.0, 400.0, 0), dark], &[bg_tex(), dark_tex], &cam, 64, 64);
+        let darkened = render(&[wall(100.0, 400.0, 0), dark], &[bg_tex(), dark_tex], &cam, 64, 64, None);
         assert_eq!(px(&darkened), [0, 0, 0]);
 
         // A WHITE (src=255, above the 128 neutral point) modulated wall brightens the backdrop.
@@ -1103,7 +1178,7 @@ mod tests {
         bright.poly_flags = PF_MODULATED;
         let bright_tex = RenderTexture { w: 1, h: 1, data: vec![255, 255, 255], mask: vec![1] };
         let brightened =
-            render(&[wall(100.0, 400.0, 0), bright], &[bg_tex(), bright_tex], &cam, 64, 64);
+            render(&[wall(100.0, 400.0, 0), bright], &[bg_tex(), bright_tex], &cam, 64, 64, None);
         assert!(px(&brightened)[0] > bg_px[0]);
     }
 
@@ -1116,7 +1191,7 @@ mod tests {
         let near_tex = || RenderTexture { w: 1, h: 1, data: vec![10, 20, 30], mask: vec![1] };
         let far_tex = || RenderTexture { w: 1, h: 1, data: vec![200, 200, 200], mask: vec![1] };
 
-        let alone = render(&[wall(40.0, 20.0, 0)], &[near_tex()], &cam, 64, 64);
+        let alone = render(&[wall(40.0, 20.0, 0)], &[near_tex()], &cam, 64, 64, None);
 
         let mut far = wall(100.0, 20.0, 1);
         far.poly_flags = PF_TRANSLUCENT;
@@ -1126,6 +1201,7 @@ mod tests {
             &cam,
             64,
             64,
+            None,
         );
         assert_eq!(alone, with_far);
     }
@@ -1157,6 +1233,7 @@ mod tests {
             &cam,
             64,
             64,
+            None,
         );
         let reversed = render(
             &[make_far(), make_near(), wall(100.0, 400.0, 0)],
@@ -1164,6 +1241,7 @@ mod tests {
             &cam,
             64,
             64,
+            None,
         );
         assert_eq!(forward, reversed);
     }
@@ -1229,7 +1307,7 @@ mod tests {
         // poly's output. Same wall/camera geometry and shade formula as `uv_texel_probe`.
         let tex = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[wall(32.0, 2.0, 0)], &[tex], &cam, 64, 64);
+        let img = render(&[wall(32.0, 2.0, 0)], &[tex], &cam, 64, 64, None);
         let s = 0.55 + 0.45 * 0.408;
         let o = (32 * 64 + 32) * 3;
         assert_eq!(img[o], (255.0 * s) as u8);
@@ -1253,7 +1331,7 @@ mod tests {
         });
         let tex = RenderTexture { w: 1, h: 1, data: vec![50, 50, 50], mask: vec![1] };
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[w], &[tex], &cam, 64, 64);
+        let img = render(&[w], &[tex], &cam, 64, 64, None);
         let o = (32 * 64 + 32) * 3;
         // 50 * 3.0 = 150 -- NOT the flat KEY_LIGHT shade (which would give ~50*0.73 =~ 36).
         assert_eq!((img[o], img[o + 1], img[o + 2]), (150, 0, 0));
@@ -1274,7 +1352,7 @@ mod tests {
         });
         let tex = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[w], &[tex], &cam, 64, 64); // must not panic
+        let img = render(&[w], &[tex], &cam, 64, 64, None); // must not panic
         let s = 0.55 + 0.45 * 0.408;
         let o = (32 * 64 + 32) * 3;
         assert_eq!(img[o], (255.0 * s) as u8); // flat shade, not the (9x) lumel
@@ -1286,9 +1364,9 @@ mod tests {
     fn mirror_flag_takes_precedence_over_translucent() {
         // Real DX content carries both bits together (02_NYC_Bar.dx Brush117's glass pane,
         // 0x8880004 = Mirrored|HighShadowDetail|BrightCorners|Translucent) — Mirror must win.
-        assert!(blend_mode(PF_MIRRORED | PF_TRANSLUCENT) == Blend::Mirror);
-        assert!(blend_mode(PF_MIRRORED | PF_MODULATED) == Blend::Mirror);
-        assert!(blend_mode(PF_MIRRORED) == Blend::Mirror);
+        assert!(blend_mode(PF_MIRRORED | PF_TRANSLUCENT, false) == Blend::Mirror);
+        assert!(blend_mode(PF_MIRRORED | PF_MODULATED, false) == Blend::Mirror);
+        assert!(blend_mode(PF_MIRRORED, false) == Blend::Mirror);
     }
 
     #[test]
@@ -1307,7 +1385,7 @@ mod tests {
         reflectee.poly_flags = 0;
         let red = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
 
-        let img = render(&[mirror, reflectee], &[red], &cam, 64, 64);
+        let img = render(&[mirror, reflectee], &[red], &cam, 64, 64, None);
         let o = (32 * 64 + 32) * 3;
         assert!(img[o] > 0 && img[o + 1] == 0 && img[o + 2] == 0); // red, not grey/background
 
@@ -1317,7 +1395,7 @@ mod tests {
         let mut opaque = wall(40.0, 400.0, -1);
         opaque.poly_flags = 0;
         let red2 = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
-        let img2 = render(&[opaque, wall_facing_away(-100.0, 400.0, 0)], &[red2], &cam, 64, 64);
+        let img2 = render(&[opaque, wall_facing_away(-100.0, 400.0, 0)], &[red2], &cam, 64, 64, None);
         let px2 = [img2[o], img2[o + 1], img2[o + 2]];
         assert_eq!(px2[0], px2[1]); // grey (default, untextured): r == g == b
         assert_eq!(px2[1], px2[2]);
@@ -1340,13 +1418,13 @@ mod tests {
         mirror.poly_flags = PF_MIRRORED;
         let mut reflectee = wall_facing_away(-100.0, 400.0, 0); // tex 0 = red
         reflectee.poly_flags = 0;
-        let pure = render(&[mirror, reflectee], &textures(), &cam, 64, 64);
+        let pure = render(&[mirror, reflectee], &textures(), &cam, 64, 64, None);
 
         let mut tinted = wall(40.0, 400.0, 1);
         tinted.poly_flags = PF_MIRRORED | PF_TRANSLUCENT;
         let mut reflectee2 = wall_facing_away(-100.0, 400.0, 0);
         reflectee2.poly_flags = 0;
-        let tint = render(&[tinted, reflectee2], &textures(), &cam, 64, 64);
+        let tint = render(&[tinted, reflectee2], &textures(), &cam, 64, 64, None);
 
         let o = (32 * 64 + 32) * 3;
         assert_eq!(pure[o + 2], 0); // pure mirror: no blue tint, its own texture never shows
@@ -1376,7 +1454,7 @@ mod tests {
         let reflectee = wall_facing_away(-100.0, 400.0, 2); // red, visible only via the reflection
 
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[mirror, back, reflectee], &[tex, back_tex, reflect_tex], &cam, 64, 64);
+        let img = render(&[mirror, back, reflectee], &[tex, back_tex, reflect_tex], &cam, 64, 64, None);
         let px = |x: usize| {
             let o = (32 * 64 + x) * 3;
             [img[o], img[o + 1], img[o + 2]]
@@ -1398,7 +1476,7 @@ mod tests {
         let cam = cam_at_origin_looking_plus_x(90.0);
         let mut away = wall_facing_away(100.0, 400.0, -1);
         away.poly_flags = PF_MIRRORED;
-        let img = render(&[away], &[], &cam, 32, 32);
+        let img = render(&[away], &[], &cam, 32, 32, None);
         assert!(img.chunks_exact(3).all(|p| p == BACKGROUND));
     }
 
@@ -1427,7 +1505,7 @@ mod tests {
         let mut backstop = wall(-10.0, 200.0, -1);
         backstop.poly_flags = PF_TWO_SIDED;
         let polys = [near_mirror, far_mirror, backstop];
-        let img = render(&polys, &[], &cam, 32, 32);
+        let img = render(&polys, &[], &cam, 32, 32, None);
         assert_eq!(img.len(), 32 * 32 * 3);
         assert!(img.chunks_exact(3).any(|p| p != BACKGROUND));
     }
@@ -1450,11 +1528,216 @@ mod tests {
         let mut far_mirror = wall_facing_away(-20.0, 100.0, -1);
         far_mirror.poly_flags = PF_MIRRORED;
         let polys = [near_mirror, far_mirror];
-        let shallow = render_impl(&polys, &[], &cam, 32, 32, 2); // 1 more bounce available
-        let deep = render_impl(&polys, &[], &cam, 32, 32, 1); // 2 more bounces available
+        let shallow = render_impl(&polys, &[], &cam, 32, 32, 2, None); // 1 more bounce available
+        let deep = render_impl(&polys, &[], &cam, 32, 32, 1, None); // 2 more bounces available
         assert_ne!(
             shallow, deep,
             "cap-3 budget produces the same image whether 1 or 2 more bounces are available"
+        );
+    }
+
+    // ── PF_FakeBackdrop sky sub-render ──────────────────────────────────────────────────────
+
+    /// A `size`-uu square quad centred `depth` uu ahead of `cam`, in `cam`'s own (right, up)
+    /// plane, wound to face back toward `cam` — a camera-basis-relative generalization of
+    /// `wall()` (which is hardwired to the +X-looking basis). Verified to reduce to `wall()`'s
+    /// exact vertex/UV construction when `cam` is `cam_at_origin_looking_plus_x`.
+    fn frame_filling_quad_for(cam: &Camera, depth: f32, size: f32, tex_index: i32) -> RenderPoly {
+        let s = size / 2.0;
+        let center = Vec3::new(
+            cam.location.x + cam.forward.x * depth,
+            cam.location.y + cam.forward.y * depth,
+            cam.location.z + cam.forward.z * depth,
+        );
+        let (r, u) = (cam.right, cam.up);
+        let p = |dr: f32, du: f32| {
+            Vec3::new(
+                center.x + dr * r.x + du * u.x,
+                center.y + dr * r.y + du * u.y,
+                center.z + dr * r.z + du * u.z,
+            )
+        };
+        RenderPoly {
+            verts: vec![p(-s, s), p(s, s), p(s, -s), p(-s, -s)],
+            uv_base: p(-s, s),
+            uv_axis_u: r,
+            uv_axis_v: Vec3::new(-u.x, -u.y, -u.z),
+            pan: [0.0, 0.0],
+            tex_index,
+            masked: false,
+            poly_flags: 0,
+            lightmap: None,
+        }
+    }
+
+    #[test]
+    fn backdrop_face_renders_the_sky_scene_not_its_own_texture() {
+        // A single quad flagged PF_FakeBackdrop, textured solid red, filling the primary
+        // camera's frame. A Sky points at a DIFFERENT scene (a solid blue quad filling the sky
+        // camera's own frame, positioned far off to the side so neither camera's frustum sees
+        // the other's content directly). The backdrop face must show BLUE, not its own red
+        // texture.
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let mut backdrop_poly = frame_filling_quad_for(&cam, 100.0, 400.0, 0);
+        backdrop_poly.poly_flags = PF_FAKE_BACKDROP;
+
+        let sky_cam = Camera {
+            location: Vec3::new(0.0, 5000.0, 0.0),
+            forward: Vec3::new(1.0, 0.0, 0.0),
+            right: Vec3::new(0.0, 1.0, 0.0),
+            up: Vec3::new(0.0, 0.0, 1.0),
+            fov_deg: 90.0,
+        };
+        let sky_scene_poly = frame_filling_quad_for(&sky_cam, 100.0, 400.0, 1);
+        let sky = Sky {
+            location: sky_cam.location,
+            forward: sky_cam.forward,
+            right: sky_cam.right,
+            up: sky_cam.up,
+        };
+
+        let red = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
+        let blue = RenderTexture { w: 1, h: 1, data: vec![0, 0, 255], mask: vec![1] };
+        let img = render(&[backdrop_poly, sky_scene_poly], &[red, blue], &cam, 64, 64, Some(&sky));
+
+        let center = ((64 / 2) * 64 + (64 / 2)) * 3;
+        let s = 0.55 + 0.45 * 0.408_f32;
+        assert_eq!(
+            (img[center], img[center + 1], img[center + 2]),
+            (0, 0, (255.0 * s) as u8)
+        ); // sky (blue), not the face's own texture (red)
+    }
+
+    #[test]
+    fn backdrop_face_falls_back_to_its_own_texture_with_no_sky() {
+        // Same backdrop-flagged red quad, but `sky: None` -- must draw its OWN texture (today's
+        // pre-existing behaviour), matching the real engine's NULL-SkyZone fallback.
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let mut backdrop_poly = frame_filling_quad_for(&cam, 100.0, 400.0, 0);
+        backdrop_poly.poly_flags = PF_FAKE_BACKDROP;
+        let red = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
+        let img = render(&[backdrop_poly], &[red], &cam, 64, 64, None);
+
+        let center = ((64 / 2) * 64 + (64 / 2)) * 3;
+        let s = 0.55 + 0.45 * 0.408_f32;
+        assert_eq!(
+            (img[center], img[center + 1], img[center + 2]),
+            ((255.0 * s) as u8, 0, 0)
+        );
+    }
+
+    #[test]
+    fn backdrop_wins_over_mirrored_when_a_sky_is_present() {
+        let flags = PF_FAKE_BACKDROP | PF_MIRRORED;
+        assert_eq!(blend_mode(flags, true), Blend::Backdrop);
+        assert_eq!(blend_mode(flags, false), Blend::Mirror); // no sky -> falls through
+    }
+
+    #[test]
+    fn backdrop_camera_ignores_viewer_position_no_parallax() {
+        // The spike's single most distinctive finding: the sky camera's LOCATION never depends
+        // on the viewer's position, only its rotation. A world-fixed backdrop quad and a
+        // world-fixed sky, rendered from two different VIEWER positions along the same viewing
+        // axis (only `camera.location` differs; rotation is identical) -- the sky camera never
+        // reads `camera.location`, so the sky content sampled through the backdrop face must be
+        // pixel-identical in both renders.
+        let reference = cam_at_origin_looking_plus_x(90.0);
+        let cam_a = cam_at_origin_looking_plus_x(90.0);
+        let mut cam_b = cam_at_origin_looking_plus_x(90.0);
+        cam_b.location = Vec3::new(90.0, 0.0, 0.0); // far from A, same rotation, still in front
+
+        let sky_cam = Camera {
+            location: Vec3::new(0.0, 5000.0, 0.0),
+            forward: Vec3::new(1.0, 0.0, 0.0),
+            right: Vec3::new(0.0, 1.0, 0.0),
+            up: Vec3::new(0.0, 0.0, 1.0),
+            fov_deg: 90.0,
+        };
+        let sky = Sky {
+            location: sky_cam.location,
+            forward: sky_cam.forward,
+            right: sky_cam.right,
+            up: sky_cam.up,
+        };
+        let red = || RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
+        let blue = || RenderTexture { w: 1, h: 1, data: vec![0, 0, 255], mask: vec![1] };
+        let make_backdrop = || {
+            let mut p = frame_filling_quad_for(&reference, 100.0, 400.0, 0);
+            p.poly_flags = PF_FAKE_BACKDROP;
+            p
+        };
+
+        let img_a = render(
+            &[make_backdrop(), frame_filling_quad_for(&sky_cam, 100.0, 400.0, 1)],
+            &[red(), blue()],
+            &cam_a,
+            64,
+            64,
+            Some(&sky),
+        );
+        let img_b = render(
+            &[make_backdrop(), frame_filling_quad_for(&sky_cam, 100.0, 400.0, 1)],
+            &[red(), blue()],
+            &cam_b,
+            64,
+            64,
+            Some(&sky),
+        );
+
+        let center = ((64 / 2) * 64 + (64 / 2)) * 3;
+        assert_eq!(
+            (img_a[center], img_a[center + 1], img_a[center + 2]),
+            (img_b[center], img_b[center + 1], img_b[center + 2]),
+            "the sky content shown through a backdrop face must not depend on the viewer's position"
+        );
+        let s = 0.55 + 0.45 * 0.408_f32;
+        assert_eq!(
+            (img_a[center], img_a[center + 1], img_a[center + 2]),
+            (0, 0, (255.0 * s) as u8)
+        );
+    }
+
+    #[test]
+    fn backdrop_only_recursion_respects_the_shared_cap() {
+        // A PF_FakeBackdrop face whose OWN sky points directly back at the viewer's own
+        // scene (the Sky reuses the viewer's own location+basis) -- the sky's "room" contains
+        // the SAME backdrop-flagged face, recursing into itself. Without the shared
+        // MAX_RECURSION cap this would recurse forever; rendering must terminate (finishing
+        // this test IS part of the regression check), falling back to the face's own opaque
+        // texture once the shared cap is hit (module doc's documented fallback).
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let mut backdrop = wall(100.0, 400.0, 0);
+        backdrop.poly_flags = PF_FAKE_BACKDROP;
+        let sky = Sky { location: cam.location, forward: cam.forward, right: cam.right, up: cam.up };
+        let tex = RenderTexture { w: 1, h: 1, data: vec![0, 0, 255], mask: vec![1] };
+        let img = render(&[backdrop], &[tex], &cam, 32, 32, Some(&sky));
+        assert_eq!(img.len(), 32 * 32 * 3);
+        let o = (16 * 32 + 16) * 3;
+        let s = 0.55 + 0.45 * 0.408_f32;
+        assert_eq!((img[o], img[o + 1], img[o + 2]), (0, 0, (255.0 * s) as u8));
+    }
+
+    #[test]
+    fn mixed_backdrop_and_mirror_recursion_shares_one_budget() {
+        // A mirror and a backdrop face together, the backdrop's sky reusing the viewer's own
+        // location+basis (so it re-enters the SAME scene, mirror included) -- a
+        // mirror-then-backdrop nesting must terminate at depth 3 TOTAL, not 3 mirror bounces
+        // plus 3 backdrop bounces independently. Same technique as
+        // `recursion_cap_generalized_to_3_not_still_1`: two starting depths one hop apart under
+        // the shared cap-3 budget must produce different images (a real difference in how many
+        // more hops happen).
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let mut mirror = wall(20.0, 100.0, -1);
+        mirror.poly_flags = PF_MIRRORED;
+        let mut backdrop = wall_facing_away(-20.0, 100.0, -1);
+        backdrop.poly_flags = PF_FAKE_BACKDROP;
+        let sky = Sky { location: cam.location, forward: cam.forward, right: cam.right, up: cam.up };
+        let polys = [mirror, backdrop];
+        let shallow = render_impl(&polys, &[], &cam, 32, 32, 1, Some(&sky)); // 2 more hops
+        let deep = render_impl(&polys, &[], &cam, 32, 32, 2, Some(&sky)); // 1 more hop
+        assert_ne!(
+            shallow, deep,
+            "mirror+backdrop combined recursion produces the same image whether 1 or 2 more hops are available"
         );
     }
 }
