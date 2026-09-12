@@ -5,20 +5,24 @@ comparable to the reference's."""
 import os, pathlib, subprocess, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from build_gold import WT, PY
+from build_gold import RENDER_WT, RENDER_PY
 
 YAWS = [0, 8192, 16384, 24576, 32768, 40960, 49152, 57344]  # 8x45deg
 
 def render_photos(task: dict, trunk: pathlib.Path, out_dir: pathlib.Path, prefix: str = "pan"):
     """Writes out_dir/<prefix>_<i>.png for i in 0..7, from `trunk`'s
     task["level"]."""
+    if not RENDER_PY.exists():
+        sys.exit(f"{RENDER_PY} not found -- set up the frozen render worktree first: "
+                  f"git worktree add --detach {RENDER_WT} <a known-good commit>, then run "
+                  f"`bin/uedcli --help` inside it once to self-provision (.venv + uedcli_native).")
     out_dir.mkdir(parents=True, exist_ok=True)
     cam = task["photo_camera"]
     x, y, z = cam["at"]
     pitch = cam.get("pitch", 0)
     shots = [f"at:{x},{y},{z};rot:{pitch},{yaw};name:{prefix}_{i}" for i, yaw in enumerate(YAWS)]
     env = {**os.environ, "UEDCLI_PROJECT": str(trunk), "UEDCLI_LEVEL": task["level"]}
-    args = [PY, "-m", "uedcli", "level", "photo", "--native", "--faces", "textured",
+    args = [str(RENDER_PY), "-m", "uedcli", "level", "photo", "--native", "--faces", "textured",
             "--size", "512x384", *shots, "--out-dir", str(out_dir)]
-    subprocess.run(args, cwd=WT, env=env, check=True, capture_output=True)
+    subprocess.run(args, cwd=str(RENDER_WT), env=env, check=True, capture_output=True)
     print("rendered", f"{prefix}_0..{len(YAWS)-1}", "->", out_dir)

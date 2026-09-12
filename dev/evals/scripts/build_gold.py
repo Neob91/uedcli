@@ -30,6 +30,17 @@ DX_MAPS_DIR = MAIN_CHECKOUT / "dev" / "games" / "deusex" / "Maps"
 # eval_runs/ (run_eval.py's subject trunks) lives alongside the base-trunk cache, same reasoning.
 BASE_TRUNKS_DIR = pathlib.Path(os.environ.get("BASE_TRUNKS_DIR") or (pathlib.Path(WT) / "dev" / "evals" / "_scratch" / "base_trunks"))
 
+# A dedicated worktree with its OWN isolated .venv + uedcli_native build, used ONLY by
+# render_photos.py's `level photo --native` call. MAIN_CHECKOUT's own native extension is a
+# SHARED artifact the native-materialize campaign rebuilds constantly (different commit, often a
+# different render_frame signature mid-change) -- a render mid-eval can hit it stale or broken by
+# unrelated, concurrent work. This worktree is pinned at a fixed commit (detached HEAD) and never
+# touched by that campaign; set up once with `git worktree add --detach <path> <known-good commit>`
+# then `bin/uedcli --help` in it once to self-provision (.venv + a one-time uedcli_native build).
+RENDER_WT = pathlib.Path(os.environ.get("EVAL_RENDER_WT")
+                          or (MAIN_CHECKOUT / ".claude" / "worktrees" / "eval-render-frozen"))
+RENDER_PY = RENDER_WT / ".venv" / "bin" / "python"
+
 def base_trunk_for(spec: dict) -> pathlib.Path:
     """The task's baseline trunk project. One shared per `dx_map` (sibling tasks on the same
     level -- e.g. all 4 nyc_bar_* tasks -- share one import), cached under BASE_TRUNKS_DIR,
