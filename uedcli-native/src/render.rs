@@ -14,10 +14,10 @@
 //! computes each polygon's world UV frame (base/axes/pan, texel units); Rust only
 //! rasterizes. `cargo test`-able with no Python.
 //!
-//! `PF_Translucent`/`PF_Modulated` polys draw in a SECOND pass, back-to-front (painter's), after
-//! every opaque poly: z-TESTED against the opaque buffer but never z-WRITTEN, so overlapping
-//! blended layers all test against the same opaque depth and composite in draw order (nearest
-//! last). Blend formulas (real UE1, 8-bit paletted textures with no per-texel alpha —
+//! `PF_Translucent`/`PF_Modulated` polys draw LAST, back-to-front (painter's), after every opaque,
+//! mirror, and `PF_FakeBackdrop` poly: z-TESTED against the opaque buffer but never z-WRITTEN, so
+//! overlapping blended layers all test against the same opaque depth and composite in draw order
+//! (nearest last). Blend formulas (real UE1, 8-bit paletted textures with no per-texel alpha —
 //! `dev/docs/unrealed/leveldesign/kb/textures.md` "Translucent"/"Modulated"): Translucent is
 //! ADDITIVE (`dest + src`, clamped); Modulated is D3D modulate-2x (`dest * src / 128`, clamped).
 //!
@@ -479,11 +479,12 @@ pub fn render(
 }
 
 /// The real `render()` body, plus `recursion_depth` (0 = the primary frame; each level of mirror
-/// reflection adds 1, capped at `MAX_RECURSION` — see the module doc). Opaque polys draw
-/// first (z-tested + z-written); mirror polys draw next, also z-tested + z-written, each sampling
-/// its own reflected re-render of the (mirror-plane-clipped) scene; `PF_Translucent`/
-/// `PF_Modulated` polys draw last, sorted back-to-front, z-tested but not z-written (so they
-/// composite correctly over a mirror pixel too).
+/// or backdrop recursion adds 1, capped at `MAX_RECURSION` — see the module doc). Opaque polys
+/// draw first (z-tested + z-written); mirror polys draw next, also z-tested + z-written, each
+/// sampling its own reflected re-render of the (mirror-plane-clipped) scene; backdrop polys draw
+/// next, sampling the ONE shared sky sub-render; `PF_Translucent`/`PF_Modulated` polys draw last,
+/// sorted back-to-front, z-tested but not z-written (so they composite correctly over a mirror or
+/// backdrop pixel too).
 fn render_impl(
     polys: &[RenderPoly],
     textures: &[RenderTexture],
@@ -588,28 +589,30 @@ fn render_impl(
     // mirror clusters and BEFORE the blended sort/draw loop so a backdrop face is resolved before
     // any translucent/modulated layer composites on top of it.
     if let Some(sky) = sky {
-        let backdrop_indices: Vec<usize> = polys
-            .iter()
-            .enumerate()
-            .filter(|(_, p)| blend_mode(p.poly_flags, true) == Blend::Backdrop)
-            .map(|(i, _)| i)
-            .collect();
-        if !backdrop_indices.is_empty() && recursion_depth < MAX_RECURSION {
-            let sky_camera = Camera {
-                location: sky.location,
-                forward: sky.forward,
-                right: sky.right,
-                up: sky.up,
-                fov_deg: camera.fov_deg,
-            };
-            let secondary = render_impl(
-                polys, textures, &sky_camera, width, height, recursion_depth + 1, Some(sky),
-            );
-            for &idx in &backdrop_indices {
-                render_poly(
-                    &polys[idx], Blend::Backdrop, textures, camera, half_w, half_h, focal,
-                    &mut img, &mut zbuf, w, h, Some(&secondary), false,
+        if recursion_depth < MAX_RECURSION {
+            let backdrop_indices: Vec<usize> = polys
+                .iter()
+                .enumerate()
+                .filter(|(_, p)| blend_mode(p.poly_flags, has_sky) == Blend::Backdrop)
+                .map(|(i, _)| i)
+                .collect();
+            if !backdrop_indices.is_empty() {
+                let sky_camera = Camera {
+                    location: sky.location,
+                    forward: sky.forward,
+                    right: sky.right,
+                    up: sky.up,
+                    fov_deg: camera.fov_deg,
+                };
+                let secondary = render_impl(
+                    polys, textures, &sky_camera, width, height, recursion_depth + 1, Some(sky),
                 );
+                for &idx in &backdrop_indices {
+                    render_poly(
+                        &polys[idx], Blend::Backdrop, textures, camera, half_w, half_h, focal,
+                        &mut img, &mut zbuf, w, h, Some(&secondary), false,
+                    );
+                }
             }
         }
     }
@@ -1636,15 +1639,20 @@ mod tests {
     #[test]
     fn backdrop_camera_ignores_viewer_position_no_parallax() {
         // The spike's single most distinctive finding: the sky camera's LOCATION never depends
-        // on the viewer's position, only its rotation. A world-fixed backdrop quad and a
-        // world-fixed sky, rendered from two different VIEWER positions along the same viewing
-        // axis (only `camera.location` differs; rotation is identical) -- the sky camera never
-        // reads `camera.location`, so the sky content sampled through the backdrop face must be
-        // pixel-identical in both renders.
+        // on the viewer's position, only its rotation. A world-fixed backdrop quad, rendered from
+        // two VIEWER positions offset SIDEWAYS from each other (same rotation, same depth from
+        // the backdrop) -- the sky camera never reads `camera.location`, so the sky content
+        // sampled through the backdrop face must be pixel-identical in both renders.
+        //
+        // The sky scene is deliberately NOT a single flat colour: it's two quads (green/blue)
+        // straddling the sky camera's own right axis, boundary offset 45uu from dead-ahead. A
+        // sky camera that (buggily) added the viewer's own position -- cam_b's +90uu sideways
+        // offset -- would land 90uu off dead-ahead, crossing the boundary into the other colour;
+        // a single-colour sky could never expose that shift.
         let reference = cam_at_origin_looking_plus_x(90.0);
         let cam_a = cam_at_origin_looking_plus_x(90.0);
         let mut cam_b = cam_at_origin_looking_plus_x(90.0);
-        cam_b.location = Vec3::new(90.0, 0.0, 0.0); // far from A, same rotation, still in front
+        cam_b.location = Vec3::new(0.0, 90.0, 0.0); // sideways from A, same rotation/depth
 
         let sky_cam = Camera {
             location: Vec3::new(0.0, 5000.0, 0.0),
@@ -1660,29 +1668,37 @@ mod tests {
             up: sky_cam.up,
         };
         let red = || RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
+        let green = || RenderTexture { w: 1, h: 1, data: vec![0, 255, 0], mask: vec![1] };
         let blue = || RenderTexture { w: 1, h: 1, data: vec![0, 0, 255], mask: vec![1] };
         let make_backdrop = || {
             let mut p = frame_filling_quad_for(&reference, 100.0, 400.0, 0);
             p.poly_flags = PF_FAKE_BACKDROP;
             p
         };
+        // A quad spanning right-axis offset [lo, hi) from the sky camera's own axis, at its
+        // depth-100 point, wound like `frame_filling_quad_for` (face back toward the sky camera).
+        let quad_half = |lo: f32, hi: f32, tex_index: i32| -> RenderPoly {
+            let depth_x = sky_cam.location.x + sky_cam.forward.x * 100.0;
+            let p = |dr: f32, dv: f32| {
+                Vec3::new(depth_x, sky_cam.location.y + dr, sky_cam.location.z + dv)
+            };
+            RenderPoly {
+                verts: vec![p(lo, 200.0), p(hi, 200.0), p(hi, -200.0), p(lo, -200.0)],
+                uv_base: p(lo, 200.0),
+                uv_axis_u: Vec3::new(0.0, 1.0, 0.0),
+                uv_axis_v: Vec3::new(0.0, 0.0, -1.0),
+                pan: [0.0, 0.0],
+                tex_index,
+                masked: false,
+                poly_flags: 0,
+                lightmap: None,
+            }
+        };
+        let make_scene =
+            || vec![make_backdrop(), quad_half(-400.0, 45.0, 1), quad_half(45.0, 400.0, 2)];
 
-        let img_a = render(
-            &[make_backdrop(), frame_filling_quad_for(&sky_cam, 100.0, 400.0, 1)],
-            &[red(), blue()],
-            &cam_a,
-            64,
-            64,
-            Some(&sky),
-        );
-        let img_b = render(
-            &[make_backdrop(), frame_filling_quad_for(&sky_cam, 100.0, 400.0, 1)],
-            &[red(), blue()],
-            &cam_b,
-            64,
-            64,
-            Some(&sky),
-        );
+        let img_a = render(&make_scene(), &[red(), green(), blue()], &cam_a, 64, 64, Some(&sky));
+        let img_b = render(&make_scene(), &[red(), green(), blue()], &cam_b, 64, 64, Some(&sky));
 
         let center = ((64 / 2) * 64 + (64 / 2)) * 3;
         assert_eq!(
@@ -1690,10 +1706,11 @@ mod tests {
             (img_b[center], img_b[center + 1], img_b[center + 2]),
             "the sky content shown through a backdrop face must not depend on the viewer's position"
         );
+        // Dead ahead of the (fixed) sky camera is 0uu from its axis, inside the GREEN half.
         let s = 0.55 + 0.45 * 0.408_f32;
         assert_eq!(
             (img_a[center], img_a[center + 1], img_a[center + 2]),
-            (0, 0, (255.0 * s) as u8)
+            (0, (255.0 * s) as u8, 0)
         );
     }
 
@@ -1718,14 +1735,15 @@ mod tests {
     }
 
     #[test]
-    fn mixed_backdrop_and_mirror_recursion_shares_one_budget() {
+    fn mixed_backdrop_and_mirror_recursion_respects_the_cap() {
         // A mirror and a backdrop face together, the backdrop's sky reusing the viewer's own
         // location+basis (so it re-enters the SAME scene, mirror included) -- a
-        // mirror-then-backdrop nesting must terminate at depth 3 TOTAL, not 3 mirror bounces
-        // plus 3 backdrop bounces independently. Same technique as
-        // `recursion_cap_generalized_to_3_not_still_1`: two starting depths one hop apart under
-        // the shared cap-3 budget must produce different images (a real difference in how many
-        // more hops happen).
+        // mirror-then-backdrop nesting must still terminate and respect the cap-3 hop budget
+        // (a single `recursion_depth` counter is threaded through both recursion sites, so an
+        // independent-per-kind budget isn't even expressible here to distinguish from this).
+        // Same technique as `recursion_cap_generalized_to_3_not_still_1`: two starting depths one
+        // hop apart under the cap-3 budget must produce different images (a real difference in
+        // how many more hops happen).
         let cam = cam_at_origin_looking_plus_x(90.0);
         let mut mirror = wall(20.0, 100.0, -1);
         mirror.poly_flags = PF_MIRRORED;
