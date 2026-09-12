@@ -801,6 +801,104 @@ def test_find_sky_actor_prefers_bhighdetail_true_among_several():
     assert actor.name == "SkyZoneInfoHighDetail"
 
 
+# --------------------------------------------------------------- PF_FakeBackdrop end-to-end
+# `render_shots` wiring (Task 5): a `PF_FakeBackdrop` face samples the ONE shared sky sub-render
+# (Rust `render::render`'s `sky` parameter) when the level has a `SkyZoneInfo`, else falls back to
+# its own texture -- the pre-existing behavior. A stub `TextureResolver` stands in for
+# `utexture.TextureResolver` so each room's wall renders a flat, shading-safe single-channel
+# color (real per-face light shading only scales that one channel, never introduces the others),
+# which is what lets a sampled pixel prove WHICH room's texture rendered without decoding real
+# .utx pixels.
+
+PF_FAKE_BACKDROP = 0x80          # render.rs's PF_FAKE_BACKDROP; not a preview_native constant
+
+
+def _flat_texture_resolver_stub(colors: dict):
+    """A `utexture.TextureResolver`-shaped stub: `.resolve(ref)` returns a flat 1x1 texture in
+    `colors[ref]`, ignoring `search_files`/`class_index` (same construction call shape as the
+    real resolver, `TextureResolver(search_files, class_index=index)` in `build_scene`)."""
+    from uedcli.utexture import DecodedTexture
+
+    class _Stub:
+        def __init__(self, search_files, *, class_index=None):
+            pass
+
+        def resolve(self, ref):
+            r, g, b = colors[ref]
+            return DecodedTexture(ref=ref, width=1, height=1, rgb=bytes([r, g, b]), mask=b"\x01",
+                                  layout="linear1", layout_source="synthetic", format_code=0,
+                                  array="mips", b_masked=False, b_alpha_texture=False)
+
+    return _Stub
+
+
+def test_pf_fakebackdrop_face_renders_sky_zone_geometry(tmp_path, monkeypatch):
+    """End-to-end: a two-room fixture (a normal room + a sealed sky room containing a
+    SkyZoneInfo), one face of the normal room flagged PF_FakeBackdrop and textured differently
+    from the sky room's own walls. The rendered shot must show the SKY ROOM's texture through
+    that face, not the face's own assigned texture."""
+    index = _ued22_index()
+
+    # Normal room, camera at its centre looking down +X (`camera_basis`'s identity direction):
+    # `cube()`'s face list puts the +X interior wall at index 0 (same face
+    # `test_pf_invisible_faces_dropped` drops), dead ahead of the camera and filling the screen
+    # centre. Flagged + retextured AFTER building so the rest of the room keeps its own texture.
+    room = cube_room("Room", size=1024.0, height=512.0, texture="Room.Wall")
+    room.brush.polys[0].texture = "Backdrop.Face"
+    room.brush.polys[0].flags = PF_FAKE_BACKDROP
+
+    # A separate, sealed box brush far from the main room (no visual overlap) -- every one of its
+    # 6 interior walls shares one texture, so it doesn't matter which wall the sky camera's
+    # forward ray happens to hit from the room's centre.
+    sky_brush = cube(1024.0, 1024.0, 512.0, texture="Sky.Wall")
+    sky_room = make_brush_actor("SkyRoom", sky_brush, location=(100000.0, 0.0, 0.0),
+                               csg="subtract")
+    # A non-zero Rotation exercises Task 1's `sky_camera_basis` formula end to end, not just in
+    # isolation -- the sealed box means whichever direction the composed basis looks, it still
+    # hits one of its own 6 walls.
+    sky_zone = Actor(name="Sky0", cls="Engine.SkyZoneInfo",
+                     location=(Decimal(100000), Decimal(0), Decimal(0)),
+                     props=[("Rotation", "(Pitch=0,Yaw=16384,Roll=0)")])
+
+    lvl = _level(room, sky_room, sky_zone)
+    monkeypatch.setattr(pn, "TextureResolver", _flat_texture_resolver_stub({
+        "Room.Wall": (0, 255, 0), "Backdrop.Face": (255, 0, 0), "Sky.Wall": (0, 0, 255)}))
+
+    shots = [parse_shot("at:0,0,0;rot:0,0")]
+    written = pn.render_shots(level=lvl, shots=shots, out_dir=tmp_path, index=index,
+                              defaults=DEFAULTS, size=(64, 64))
+    assert written == 1
+    from PIL import Image
+    img = Image.open(tmp_path / "shot-01.png")
+    # Screen centre = the backdrop face's own centre (the camera looks straight at it) -- must be
+    # the sky room's BLUE (only the blue channel can be non-trivial after per-face shading scales
+    # a single-channel color), never the face's own RED.
+    px = img.getpixel((32, 32))
+    assert px[2] > 100 and px[0] < 40 and px[1] < 40, px
+
+
+def test_pf_fakebackdrop_face_falls_back_with_no_skyzoneinfo_in_level(tmp_path, monkeypatch):
+    """The SAME PF_FakeBackdrop face, but the level has no SkyZoneInfo actor at all -- must
+    render its own assigned texture (today's pre-existing behavior, now confirmed correct for
+    this specific case)."""
+    index = _ued22_index()
+    room = cube_room("Room", size=1024.0, height=512.0, texture="Room.Wall")
+    room.brush.polys[0].texture = "Backdrop.Face"
+    room.brush.polys[0].flags = PF_FAKE_BACKDROP
+    lvl = _level(room)
+    monkeypatch.setattr(pn, "TextureResolver", _flat_texture_resolver_stub({
+        "Room.Wall": (0, 255, 0), "Backdrop.Face": (255, 0, 0)}))
+
+    shots = [parse_shot("at:0,0,0;rot:0,0")]
+    written = pn.render_shots(level=lvl, shots=shots, out_dir=tmp_path, index=index,
+                              defaults=DEFAULTS, size=(64, 64))
+    assert written == 1
+    from PIL import Image
+    img = Image.open(tmp_path / "shot-01.png")
+    px = img.getpixel((32, 32))
+    assert px[0] > 100 and px[1] < 40 and px[2] < 40, px    # its own RED -- no sky in this level
+
+
 # --------------------------------------------------------------- invisible faces
 
 

@@ -725,6 +725,8 @@ def render_shots(*, level, shots: list[Shot], out_dir: Path, index, defaults,
             raise NativePreviewError(str(e)) from None
 
     polys, textures = build_scene(level, search_files or [], index, defaults=defaults)
+    sky_actor = find_sky_actor(level, index)              # None -> every PF_FakeBackdrop face
+                                                            # falls back to its own texture
 
     try:
         out_dir.mkdir(parents=True, exist_ok=True)
@@ -742,8 +744,16 @@ def render_shots(*, level, shots: list[Shot], out_dir: Path, index, defaults,
     for i, rs in enumerate(resolved):
         fwd, right, up = camera_basis(rs.pitch, rs.yaw)
         camera = (tuple(float(c) for c in rs.eye), fwd, right, up, float(fov))
+        sky = None
+        if sky_actor is not None:
+            from .rotation import actor_rotation_uu
+            sky_pitch_uu, sky_yaw_uu, sky_roll_uu = actor_rotation_uu(sky_actor)
+            sky_fwd, sky_right, sky_up = sky_camera_basis(rs.pitch, rs.yaw,
+                                                          sky_pitch_uu, sky_yaw_uu, sky_roll_uu)
+            sky_loc = sky_actor.location or (0.0, 0.0, 0.0)   # Actor.location is Vec3 | None
+            sky = (tuple(float(c) for c in sky_loc), sky_fwd, sky_right, sky_up)
         rgb = uedcli_native.render_frame(polys, textures, camera,
-                                         (int(size[0]), int(size[1])))
+                                         (int(size[0]), int(size[1])), sky)
         img = Image.frombytes("RGB", (int(size[0]), int(size[1])), rgb)
         shot_src = shots[i]
         img.save(out_dir / shot_filename(shot_src, i, taken))

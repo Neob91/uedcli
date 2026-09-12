@@ -658,14 +658,19 @@ type RenderPolyTuple = (
 /// polygons + a texture table (`(w, h, rgb_bytes, mask_bytes)` mip0; `mask` is `w*h` bytes,
 /// `1` opaque / `0` transparent, consulted only for PF_Masked faces) + a camera BASIS
 /// (`(location, forward, right, up, fov_deg)` — Python single-sources the FRotator
-/// convention; Rust never converts angles) -> `width*height*3` RGB bytes.
+/// convention; Rust never converts angles) + an optional `sky` basis (`(location, forward,
+/// right, up)`, no fov — `preview_native.sky_camera_basis`/`find_sky_actor`; `None` when the
+/// level has no `SkyZoneInfo`, so every `PF_FakeBackdrop` face falls back to its own texture)
+/// -> `width*height*3` RGB bytes.
 #[pyfunction]
+#[pyo3(signature = (polys, textures, camera, size, sky=None))]
 fn render_frame(
     py: Python<'_>,
     polys: Vec<RenderPolyTuple>,
     textures: Vec<(u32, u32, Vec<u8>, Vec<u8>)>,
     camera: ([f32; 3], [f32; 3], [f32; 3], [f32; 3], f32),
     size: (u32, u32),
+    sky: Option<([f32; 3], [f32; 3], [f32; 3], [f32; 3])>,
 ) -> PyResult<Py<PyBytes>> {
     let (width, height) = size;
     if width == 0 || height == 0 || width > 16384 || height > 16384 {
@@ -735,7 +740,13 @@ fn render_frame(
         up: model::Vec3::new(up[0], up[1], up[2]),
         fov_deg: fov,
     };
-    let img = py.allow_threads(|| render::render(&rpolys, &rtex, &cam, width, height, None));
+    let sky = sky.map(|(loc, fwd, right, up)| render::Sky {
+        location: model::Vec3::new(loc[0], loc[1], loc[2]),
+        forward: model::Vec3::new(fwd[0], fwd[1], fwd[2]),
+        right: model::Vec3::new(right[0], right[1], right[2]),
+        up: model::Vec3::new(up[0], up[1], up[2]),
+    });
+    let img = py.allow_threads(|| render::render(&rpolys, &rtex, &cam, width, height, sky.as_ref()));
     Ok(PyBytes::new_bound(py, &img).unbind())
 }
 
