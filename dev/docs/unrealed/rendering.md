@@ -258,3 +258,55 @@ Verified two ways: disassembly (both functions, `Engine.dll`/`render.dll`) and a
 (byte-identical screenshot hashes across configs pin the slot-0 and slot-1 cases separately). Full
 evidence, disassembly listings, and the live-probe capture table: `dev/docs/spikes/2026-09-10-multiskin-skin-precedence/README.md`.
 Consumed by `uedcli/meshrender.py::resolve_skins`.
+
+## `PF_FakeBackdrop` (skybox) rendering ✅
+
+A `PF_FakeBackdrop` surface is never itself drawn. `URender::OccludeBsp` (`render.dll` RVA
+`0x18e10`) tests `PolyFlags & PF_FakeBackdrop` (`0x80`) FIRST in an if/else-if chain — before
+`PF_Mirrored` (`0x8000000`), then `PF_Portal` (`0x4000000`), then `PF_Invisible` (`0x01`) — so the
+four are mutually exclusive on one surface, not independently composable. The compiler encodes the
+test as a sign test of AL (`test al,al`/`jns`), not a literal `test/and 0x80`.
+
+On a match, the branch finds the level's `SkyZoneInfo` via `ZoneActor->SkyZone` (`AZoneInfo +0x278`)
+and, if non-NULL, renders a whole second scene: camera at the `SkyZoneInfo` actor's `Location`,
+basis = the viewer's rotation **divided by** the sky zone's own `Rotation` (`FCoords::operator
+/=(FRotator)` — an inverse, not a multiply/compose; matters once a `SkyZoneInfo` has a non-zero
+`Rotation`), with camera *translation* fully discarded (`Origin -= Frame->Coords.Origin` zeros it
+before `SkyZone->Location` is added back — no parallax at all). The child scene renders via
+`URender::CreateChildFrame`, clipped to the backdrop face's screen footprint; the face's own draw is
+skipped entirely (same skip target `PF_Invisible` uses).
+
+**`SkyZone` is not an authored/editable property.** `Engine.u`'s `ZoneInfo` declares
+`var skyzoneinfo SkyZone;` (no `var(Category)` — not editor-exposed, never in a T3D) and resolves it
+at level start via `simulated function LinkToSkybox()` (called from every `ZoneInfo`'s
+`PreBeginPlay()`): `foreach AllActors(class'SkyZoneInfo', T) if (T.bHighDetail ==
+Level.bHighDetailMode) SkyZone = T;`. Every zone in a level therefore points at the SAME
+`SkyZoneInfo` (picked by `bHighDetail`) — a NULL `SkyZone` means the level has no `SkyZoneInfo`
+actor at all, not a per-zone authoring choice. On NULL, the surface falls through to the
+`PF_Mirrored` test and, absent that flag too, draws as an ordinary opaque textured face — this is
+`level photo --native`'s current (draft-tier) behavior for EVERY `PF_FakeBackdrop` surface, which
+this RE work shows is only correct for the no-`SkyZoneInfo` case.
+
+Recursion (a `PF_FakeBackdrop` face visible from within its own sky zone) is capped by
+`FSceneNode::Recursion` (+0x1c) `>= 3`, a SHARED per-frame depth counter — the identical field, read
+from the identical frame pointer, at the backdrop/mirror/portal branches alike. `PF_Mirrored` has
+NO separate one-bounce cap of its own; the budget is shared across all three frame kinds.
+
+`PF_Unlit` (`0x400000`) is irrelevant to any of this: the branch never tests or sets it, and a
+`PF_FakeBackdrop` face never gets a lightmap in the first place (`Editor.dll`'s lightmap allocator
+excludes `PF_Invisible|PF_FakeBackdrop|PF_Unlit` as one mask, `0x400081`) — so "FakeBackdrop needs a
+companion Unlit flag or the sky draws lit/wrong" (leveldesign tutorial-corpus knowledge,
+`dev/docs/unrealed/leveldesign/kb/textures.md`) is level-author folklore, not an engine dependency.
+
+Both the backdrop and mirror branches are additionally gated on `ShowFlags & 0x800` — this is the
+**"Realtime Preview"** toggle, NOT `SHOW_Backdrop` (`0x4`, confirmed separately from the editor's
+own "Show Backdrop" toggle). The shipped game's default viewport `ShowFlags` (`0x480c`) already
+contains `0x800`, so in-game the sky always renders; only the editor needs the extra toggle.
+
+Verified by static disassembly alone (`render.dll`'s `OccludeBsp`/`DrawFrame`/`OccludeFrame`/
+`CreateChildFrame`, cross-checked against `Editor.dll`/`Engine.dll`/`unrealed.exe` and `Engine.u`'s
+own embedded UnrealScript source), independently adversarially re-reviewed. 36 facts pinned
+byte-exact in the spike's own harness; 29 as permanent pytest regressions
+(`uedcli/tests/test_engine_facts.py::test_pf_fakebackdrop_*`). Full evidence, disassembly listings,
+and the harness: `dev/docs/spikes/2026-09-12-pf-fakebackdrop-re/spike.md`. Consumed by (planned,
+not yet implemented as of this writing) `uedcli-native/src/render.rs`.

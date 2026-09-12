@@ -1186,11 +1186,15 @@ def test_pf_fakebackdrop_renders_a_child_scene_not_the_face():
     `dev/docs/spikes/2026-09-12-pf-fakebackdrop-re/`. A `PF_FakeBackdrop` (0x80) surf is never
     itself drawn. The compiler encodes the `PolyFlags & 0x80` test as a sign test of AL
     (`test al,al` / `jns`), not a `test`/`and` against the literal `0x80` — a byte scan for `0x80`
-    misses it. On a non-NULL `AZoneInfo::SkyZone` (Actor +0x278) the branch composes a child
-    `FSceneNode` aimed FROM the sky-zone actor, using the VIEWER's rotation but the sky zone's OWN
-    location (parallax-free — camera translation is discarded, only rotation carries over), and
-    calls `URender::CreateChildFrame` through the vtable; on a NULL `SkyZone` it falls through to
-    the `PF_Mirrored` test instead (next test) — `uedcli-native`'s current behavior (draw the
+    misses it. On a non-NULL `AZoneInfo::SkyZone` (Actor +0x278) the branch builds a child
+    `FSceneNode` aimed FROM the sky-zone actor: `SkyCoords = Frame->Coords`, then `SkyCoords.Origin
+    -= Frame->Coords.Origin` (exactly zero — camera translation is fully discarded, not carried
+    over), then `SkyCoords /= SkyZone->Rotation` (a DIVIDE — the inverse of the sky zone's own
+    rotation, not a multiply/compose — applied to the zero vector, still zero either way, but get
+    the operator right for anything that later reads `SkyCoords`'s basis), then `SkyCoords.Origin
+    += SkyZone->Location` (the camera ends up exactly AT the `SkyZoneInfo` actor). It then calls
+    `URender::CreateChildFrame` through the vtable; on a NULL `SkyZone` it falls through to the
+    `PF_Mirrored` test instead (next test) — `uedcli-native`'s current behavior (draw the
     assigned texture) is the real engine's fallback only for that null case, not its general one.
     """
     render = (UED22 / "render.dll").read_bytes()
@@ -1204,7 +1208,7 @@ def test_pf_fakebackdrop_renders_a_child_scene_not_the_face():
         (0x10019D7E, "8d8d7cf7ffffff15644203",
          "SkyCoords.Origin -= Frame->Coords.Origin — position is discarded, not carried over"),
         (0x10019D8A, "8d86dc000000",
-         "&SkyZone->Rotation (AActor +0xdc) composed into SkyCoords — rotation IS carried over"),
+         "&SkyZone->Rotation (AActor +0xdc) — SkyCoords /= SkyZone->Rotation (a divide, not a compose)"),
         (0x10019D9D, "8d86d0000000",
          "&SkyZone->Location (AActor +0xd0) — the sky camera sits AT the SkyZoneInfo actor"),
         (0x10019E55, "ff5268", "call [edx+0x68] — URender vtable slot 0x68"),
@@ -1215,27 +1219,34 @@ def test_pf_fakebackdrop_renders_a_child_scene_not_the_face():
         got = render[off:off + len(want) // 2].hex()
         assert got == want, f"render.dll {va:#x} ({what}): want {want}, found {got}"
 
-    # Vtable slot +0x68 really is CreateChildFrame — verified without an export/symbol lookup by
-    # matching the callee's own entry-point bytes (a unique MSVC prologue + SEH frame push), not
-    # just an address, so this survives a rebuild that shuffles the export table.
+    # Vtable slot +0x68 really is CreateChildFrame — 0x149c0 is that export's RVA (confirmed once
+    # via pefile's export table during the spike, and again by an independent review that dumped
+    # the whole URender vtable's method list). Not re-verified structurally here (a generic MSVC
+    # SEH prologue match, tried in an earlier version of this test, is NOT discriminating — dozens
+    # of functions in this DLL share it), so this pin is only as strong as "the export table still
+    # says so" — re-run the spike's own harness (which does resolve the export live) after any
+    # binary swap, not just this test.
     vtable_off = _rva_to_offset(render, 0x345E0 + 0x68)
     target = struct.unpack_from("<I", render, vtable_off)[0]
-    callee_off = _rva_to_offset(render, target - _IMAGE_BASE)
-    assert render[callee_off:callee_off + 10].hex() == "558bec6aff6820340310", \
-        "URender vtable +0x68 no longer points at CreateChildFrame's entry point"
+    assert target == _IMAGE_BASE + 0x149C0, \
+        "URender vtable +0x68 no longer points at CreateChildFrame's RVA (0x149c0)"
 
 
 def test_pf_fakebackdrop_mirrored_and_portal_are_mutually_exclusive_arms():
     """Continues the dispatch chain from the previous test as one if/else-if cascade, not
     independent flag checks: `PF_FakeBackdrop` (0x80) is tested FIRST, `PF_Mirrored` (0x8000000)
-    second, `PF_Portal` (0x4000000) third — each reached only when the earlier one did not take its
-    branch. A surf carrying BOTH `PF_FakeBackdrop` and `PF_Mirrored` renders as backdrop only (no
-    reflection, and its own texture never shows) UNLESS its zone's `SkyZone` is NULL, in which case
-    the backdrop branch falls through and it renders as an ordinary mirror instead. All three arms
-    (plus `PF_Invisible`) share the identical `Frame->Recursion` (+0x1c) `>= 3` depth guard and the
-    same skip target: `PF_Mirrored` has no separate one-bounce cap of its own, and the recursion
-    budget is shared across backdrop/mirror/portal child frames, not tracked per kind. Spike
-    `dev/docs/spikes/2026-09-12-pf-fakebackdrop-re/`.
+    second, `PF_Portal` (0x4000000) third, `PF_Invisible` (0x01) fourth — each reached only when
+    the earlier one did not take its branch. A surf carrying BOTH `PF_FakeBackdrop` and
+    `PF_Mirrored` renders as backdrop only (no reflection, and its own texture never shows) UNLESS
+    the backdrop branch's own gates fail (its zone's `SkyZone` is NULL, the recursion cap below is
+    already hit, or the `ShowFlags` gate is off) — in which case it falls through and the SAME surf
+    renders as an ordinary mirror instead. Backdrop, mirror, and portal share the identical
+    `Frame->Recursion` (+0x1c) `>= 3` depth guard, read from the SAME frame pointer at each site
+    (not three lookalike constants) — `PF_Mirrored` has no separate one-bounce cap of its own, and
+    the recursion budget is shared across backdrop/mirror/portal child frames, not tracked per
+    kind. `PF_Invisible` shares the same eventual skip target as a successful backdrop branch, but
+    has no recursion guard of its own — it's a plain unconditional skip, not a fourth depth-capped
+    arm. Spike `dev/docs/spikes/2026-09-12-pf-fakebackdrop-re/`.
     """
     render = (UED22 / "render.dll").read_bytes()
     for va, want, what in [
