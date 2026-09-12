@@ -17,7 +17,7 @@ from uedcli.cli import resources
 from uedcli.builders import cube, make_brush_actor, sheet
 from uedcli.model import Actor, Brush, Polygon
 from uedcli.preview import (
-    BACK, BG, DEFAULT_GREY, FRONT, _CSG_PALETTE, _FRAME_PAD, AnnotationSpec,
+    BACK, BG, DEFAULT_GREY, FRAME_BORDER, FRONT, _CSG_PALETTE, _FRAME_PAD, AnnotationSpec,
     FaceData, PointRender, PreviewAbort, PreviewData, TextureData, _decal_opacity, _fade, _framing,
     _occluder_count, _scene_geometry, assign_tints, render_brushes_pgm,
 )
@@ -901,7 +901,7 @@ def test_a_surviving_surface_with_no_texture_renders_grey():
     room = _room("Room")
     ppm = render_brushes_pgm([room], view="iso", size=96, annotations=AnnotationSpec.none(),
                              color_by_csg=True, render_data=_solved([room]), faces="textured")
-    fills = [px for px in _pixels(ppm) if px != (BG, BG, BG)]
+    fills = [px for px in _pixels(ppm) if px != (BG, BG, BG) and px != FRAME_BORDER]
     assert fills, "the room interior drew nothing"
     assert all(r == g == b and 0 < r <= DEFAULT_GREY[0] for r, g, b in fills)
 

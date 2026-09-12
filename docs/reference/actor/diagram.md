@@ -191,6 +191,11 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   sphere of a light's reach (`25·(LightRadius+1)` UU); **`sound-range`** — a faint blue sphere of an
   AmbientSound's reach (`25·(SoundRadius+1)` UU). Brush actors (including movers) are excluded, so a
   brush diagram needs no class schema. An unknown member is a clean exit 2 naming it.
+- **A visible frame border is drawn on every diagram** — a thin grey rectangle marking exactly where
+  geometry stops: everything drawn (edges, fills, markers, the world gridline overlay) is confined
+  strictly inside it, never on or past it. Locator cells (below) sit OUTSIDE the border, in the
+  margin between it and the image edge — the border is the boundary of the geometry itself, not of
+  the whole labelled image.
 - **Locator cells are drawn on every diagram by default** — a **label gutter** with columns `A,B,C…`
   across the top and rows `1,2,3…` down both sides (no gridlines), so every region of the image has a
   text address like `D4` (a letter is always a column, a number always a row). It is **on by default**

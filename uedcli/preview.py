@@ -1904,6 +1904,10 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
 
 _FRAME_PAD = 6         # px border kept clear of the geometry on every side (shared by framing + reserve)
 
+FRAME_BORDER = (150, 150, 150)   # the drawn frame line — brighter than LOCATOR_LABEL (105) so it never
+                                 # reads as a label glyph, dimmer than WHITE/FRONT so it doesn't compete
+                                 # with content
+
 
 def _framed_bounds(pts, region, view, iso_angle) -> tuple[float, float, float, float]:
     """The projected-plane AABB `_framing` fits: `(minx, maxx, miny, maxy)`, from an explicit `region`
@@ -2038,21 +2042,28 @@ def _grid_indices(step: int, shift: int, lo_world: float, hi_world: float) -> ra
     return range(lo, hi)
 
 
-def _draw_grid_backdrop(buf, size, to_px, minx, miny, span, draw_px, step: int) -> int:
+def _draw_grid_backdrop(buf, size, to_px, minx, miny, span, draw_px, step: int,
+                        clip: tuple[int, int, int, int] | None = None) -> int:
     """Draw the two-tier world gridline lattice into the pane framed by `minx`/`miny`/`span`/`draw_px`
     (`_framing`'s own bounds, so the lattice fills exactly the drawable rect the geometry is framed
     into — never the gutter/pad border outside it) — a BACKDROP, called BEFORE any geometry. Returns
     the VISIBLE step actually rendered after escalation (`set << shift`), which may differ from the
-    requested `step` (== "set", §5) — for the stderr report (§6) to name."""
+    requested `step` (== "set", §5) — for the stderr report (§6) to name.
+
+    `clip` (see `_px`) is passed through to every line: `_grid_indices` deliberately widens its range
+    with `floor`/`ceil` (so a lattice line just outside the framed span still gets its full length
+    drawn from edge to edge), which can put an escalated gridline's OWN endpoint past the drawable
+    rect — without `clip` that line would render past the visible frame border, exactly what the
+    border exists to make impossible."""
     shift, drawn, fade = _grid_escalation(draw_px, span / draw_px, step)
     for i in _grid_indices(step, shift, minx, minx + span):          # vertical lines (constant axis-1)
         x_world = (i << shift) * step
         color = _grid_line_color(i, shift, fade)
-        _line(buf, size, to_px((x_world, miny)), to_px((x_world, miny + span)), color)
+        _line(buf, size, to_px((x_world, miny)), to_px((x_world, miny + span)), color, clip=clip)
     for i in _grid_indices(step, shift, miny, miny + span):          # horizontal lines (constant axis-2)
         y_world = (i << shift) * step
         color = _grid_line_color(i, shift, fade)
-        _line(buf, size, to_px((minx, y_world)), to_px((minx + span, y_world)), color)
+        _line(buf, size, to_px((minx, y_world)), to_px((minx + span, y_world)), color, clip=clip)
     return drawn
 
 
@@ -2491,7 +2502,7 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     grid_drawn: int | None = None      # the VISIBLE step actually rendered (`set << shift`)
     if view in _ORTHO_AXES:
         grid_step = grid_size if grid_size is not None else _auto_grid_step(fspan)
-        grid_drawn = _draw_grid_backdrop(buf, size, to_px, fminx, fminy, fspan, fdraw, grid_step)
+        grid_drawn = _draw_grid_backdrop(buf, size, to_px, fminx, fminy, fspan, fdraw, grid_step, clip=clip)
     # Face fills sit here, immediately after the background and AHEAD of the point layer: they are
     # brush geometry, and drawing them later would paint over every sprite and every `--show` overlay.
     if zbuf is not None:
@@ -2651,6 +2662,13 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     # is drawn into the image here. `grid_caption_out` just carries the text out for the caller to print.
     if grid_drawn is not None and grid_caption_out is not None:
         grid_caption_out["text"] = _grid_caption_text(view, fminx, fminy, fspan, grid_step, grid_drawn)
+    # The visible frame border — drawn LAST so it always reads as a clean, unbroken rectangle rather than
+    # a line a label glyph could partially overdraw. It sits exactly 1px OUTSIDE `clip`'s own bound: since
+    # every geometry pixel above is clipped INTO `clip`, nothing can ever touch this line, and its position
+    # is the literal, visible answer to "beyond here, nothing renders" — the world gridline overlay (which
+    # fits inside the SAME `clip` by construction, see `_draw_grid_backdrop`) always ends strictly inside
+    # it too. `_box` draws unclipped (correct here: the border is the one thing meant to sit AT the margin).
+    _box(buf, size, clip[0] - 1, clip[2] - 1, clip[1] + 1, clip[3] + 1, FRAME_BORDER)
     return _ppm(buf, size)
 
 

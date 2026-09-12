@@ -1253,7 +1253,7 @@ def test_actor_cell_is_a_frozen_value():
 
 
 # ── locator cells: gutter render + per-pane cell collection ─────────────────────────────────────
-from uedcli.preview import LOCATOR_LABEL, _locator_gutter_px  # noqa: E402
+from uedcli.preview import FRAME_BORDER, LOCATOR_LABEL, _locator_gutter_px  # noqa: E402
 
 
 def _two_brushes():
@@ -1291,18 +1291,22 @@ def test_locator_gutter_is_independent_of_annotate_none():
 
 def test_geometry_does_not_draw_in_the_gutter_band():
     # The top gutter band (below the frame pad, above the drawable rect) holds only the grey column
-    # letters — never brush geometry, which _framing insets clear of the band.
+    # letters and the visible frame border's own line (1px outside `clip`'s edge, so 1 column inside
+    # the drawable rect's own edge) — never brush geometry, which _framing insets clear of the band.
     actors = _two_brushes()
     size = 256
     ppm = render_brushes_pgm(actors, view="iso", size=size, color_by_csg=True, locator=12,
                              annotations=AnnotationSpec.none())
     px = _pixels(ppm)
     gutter = _locator_gutter_px(max(2, size // 256))
-    # a horizontal strip inside the left row-number band, below the top band: only BG or grey labels
+    border_col = _FRAME_PAD + gutter - 2   # clip[0] - 1 — see render_brushes_pgm's border comment
+    # a horizontal strip inside the left row-number band, below the top band: only BG, the border
+    # line (at its own column), or grey labels
     band_cols = range(_FRAME_PAD, _FRAME_PAD + gutter)
     for y in range(_FRAME_PAD + gutter + 20, size - _FRAME_PAD - gutter - 20):
         for x in band_cols:
-            assert px[y * size + x] in ((BG, BG, BG), LOCATOR_LABEL)
+            want = FRAME_BORDER if x == border_col else (BG, BG, BG)
+            assert px[y * size + x] in (want, LOCATOR_LABEL)
 
 
 def test_no_locator_draws_no_label_pixels():
