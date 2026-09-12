@@ -1,7 +1,7 @@
 {
   "level": "wanchai",
   "title": "Widen the upper corridor",
-  "req": "&ldquo;The corridor Brush1159 feels cramped. Widen it by 48 units &mdash; push the south wall out.&rdquo;",
+  "req": "&ldquo;The corridor (near Brush1159) feels cramped. Widen it by 48 units &mdash; push the south wall out.&rdquo;",
   "dx_map": "06_HongKong_WanChai_Market",
   "photo_camera": {
     "at": [

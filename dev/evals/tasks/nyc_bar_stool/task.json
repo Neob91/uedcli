@@ -1,7 +1,7 @@
 {
   "level": "bar",
   "title": "One more stool",
-  "req": "&ldquo;The bar counter Brush70 could use one more stool at its west end. Extend the counter westward and add a matching stool to continue the row.&rdquo;",
+  "req": "&ldquo;The bar counter (near Brush70) could use one more stool at its west end. Extend the counter westward and add a matching stool to continue the row.&rdquo;",
   "dx_map": "02_NYC_Bar",
   "photo_camera": {
     "at": [
