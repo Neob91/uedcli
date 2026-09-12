@@ -26,6 +26,27 @@ mechanics used below.
 
 Not needed for edits that don't change a brush's box extent.
 
+## Confirm you're moving the right face first
+
+A vague direction ("the south wall") can be ambiguous when a room borders ANOTHER already-carved
+room through a connecting gap — that internal doorway wall looks like a candidate exterior wall
+too. Before moving anything, check each candidate face against the level's other rooms:
+
+```bash
+uedcli brush relation measure Brush15 Brush1 --top all   # Brush1 = a neighboring room, not the brush you're editing
+```
+
+A face that's `coincident`/`contains`-overlapping with ANOTHER subtract brush's own volume is an
+internal connecting wall or doorway into that room, not the exterior boundary — moving it "outward"
+doesn't expand livable space, it pushes into the neighbor's own already-hollow interior (a subtract
+growing into an already-subtracted void changes nothing structurally, and can corrupt the shared
+boundary between the two rooms). Confirmed on a real edit: a nook had two south-facing walls — one
+bordering the main hall through a connecting gap, one genuinely exterior 256uu further out — and the
+wrong (connecting) one was moved, extending the nook 64uu into the main hall's own volume instead of
+into solid space. If the task names a landmark ("the far wall", "near the recess pockets") that
+doesn't match the face you're about to move, that mismatch is the signal you picked the wrong one —
+find the one that actually matches before moving anything.
+
 ## Core Pattern
 
 ```bash
@@ -64,6 +85,17 @@ shelf back panel, both built flush against the counter's old west edge) rooted a
 while the counter moved past them. If the edit's intent is "extend this object," a flush companion
 at the moving face usually needs the SAME edit applied to it, not just a post-hoc check that it's
 still touching — decide this from the BEFORE snapshot, before you move anything.
+
+**Companions can have their OWN companions — sweep transitively, not just once from the brush
+you're editing.** A companion you find via its relation to the face you're moving may itself be
+flush against something else that never touches that face at all. Confirmed on a real edit: five
+decorative post assemblies, each built from three brushes (a floor plate, a cap, and a thin
+connecting strut between them), sat flush against a moving wall. The wall-relative sweep found the
+floor plate and cap (both directly coincident with the wall) but missed the strut — it only
+touches the floor plate and cap, never the wall itself. Moving just the two directly-found
+companions left the strut behind at the old position in all five assemblies, splitting every one
+of them in two. After finding a companion from the wall's own sweep, re-run the SAME `find`/
+`measure` pass FROM that companion too, and repeat until a pass turns up nothing new.
 
 Capture BOTH `find` and `measure` snapshots before the edit — `measure` reads live geometry, so a
 `before_detail.txt` taken after the edit is not a baseline, it's a second AFTER. `--max-gap` bounds
@@ -143,6 +175,12 @@ This check is scoped to cross-brush RELATIONS — it doesn't cover texture or fl
   overlap is invisible by default (see `--max-gap` above) even at a small real-world gap — it can
   look like there's nothing there when something is 16uu away and about to be swallowed. Use the
   explicit `--footprint none,...,coincident` form when you want that visibility in advance.
+- **Sweeping companions only once, from the brush you're editing.** A companion's OWN companion
+  (flush against IT, not against your face) is invisible to a single-hop sweep — see "Companions
+  can have their OWN companions" above. Re-sweep from each new companion until nothing new turns up.
+- **Picking the nearest/first plausible face for a vague direction without checking it against
+  neighboring rooms.** An internal connecting wall can look just as valid a candidate as the true
+  exterior wall — see "Confirm you're moving the right face first" above.
 
 ## Known limitation
 
@@ -192,3 +230,11 @@ from partial overlap to fully containing a neighboring room's contents — 90° 
 face. A second, independent agent that thoroughly reattached everything flush against the moved
 wall, diffed `level doctor` against a fresh reimport, and rendered a wireframe still missed it —
 none of that checks the room's other faces.
+
+A separate real edit combined BOTH the wrong-face and single-hop-sweep failures at once: pushing
+a nook's "south wall" out 64uu moved the wrong candidate face — an internal connecting wall to the
+main hall, not the true exterior wall 256uu further out — extending the nook 64uu into the main
+hall's own already-hollow volume. The same run then found and moved 10 of 15 brushes belonging to
+five 3-piece post assemblies flush against that wall (2 of 3 per assembly — the connecting struts,
+touching only their own cap and floor plate, were never swept), leaving every one of the five
+split in two.
