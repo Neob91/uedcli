@@ -62,14 +62,22 @@ QUESTION_MARKERS = ("?", "your call", "which would you like", "should i", "shall
 # imports this same constant to show the FULL prompt the agent received, so the two never drift.
 RESPONSE_LENGTH_NOTE = ("\n\nKeep each of your own responses -- including if you ask a question, "
                          "and your final summary -- to at most 40 words.")
+# uedcli's own source is reachable from inside the container (bind-mounted read-only for
+# entrypoint.sh's install step, at /uedcli-src) -- this eval tests whether a skill correctly
+# guides real-world uedcli USAGE, not whether the agent can read the implementation and shortcut
+# around it. A run mechanic, not something a task author writes -- same reasoning as
+# RESPONSE_LENGTH_NOTE above.
+NO_SOURCE_READING_NOTE = ("\n\nTreat uedcli as a black-box CLI: use --help and its own documented "
+                          "output only. Never read uedcli's own source code (e.g. anything under "
+                          "/uedcli-src), even if you can find it.")
 
 def full_prompt(task: dict) -> str:
     """The exact prompt text `claude -p` gets: the task's own req (HTML-unescaped -- it's stored
-    entity-encoded for the page), plus RESPONSE_LENGTH_NOTE. NOT part of the task's own req -- it's
-    a run mechanic, not something a task author writes -- but the human grading an execution should
-    still be able to see exactly what the agent was actually given, hence build_page.py imports this
-    same function rather than recomputing it."""
-    return html.unescape(task["req"]) + RESPONSE_LENGTH_NOTE
+    entity-encoded for the page), plus RESPONSE_LENGTH_NOTE and NO_SOURCE_READING_NOTE. NOT part of
+    the task's own req -- these are run mechanics, not something a task author writes -- but the
+    human grading an execution should still be able to see exactly what the agent was actually
+    given, hence build_page.py imports this same function rather than recomputing it."""
+    return html.unescape(task["req"]) + RESPONSE_LENGTH_NOTE + NO_SOURCE_READING_NOTE
 
 def _ensure_docker_image():
     """Builds ../docker/'s image if it isn't already present. uedcli itself is NOT baked into
