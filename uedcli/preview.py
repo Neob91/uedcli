@@ -2775,6 +2775,17 @@ def _draw_sphere(buf, size, lp, radius, view, iso_angle, to_px, scale, rgb) -> N
     _circle(buf, size, cx, cy, radius * iso_scale * scale, rgb)
 
 
+_QUAD_CAPTION_H = 16   # target px reserved ABOVE each pane's own sub-render for its name (TOP/FRONT/ISO/
+                       # SIDE) — a genuinely separate strip, not shared with the pane's frame pad/gutter/
+                       # content: the pane itself renders shorter (still square) and is pasted that far
+                       # down within its cell, so the caption band and the pane's own image never share a
+                       # pixel regardless of `--size` or whether `locator` is on (owner ruling: the caption
+                       # must never overlap either the locator gutter or the geometry). A 10px-tall glyph
+                       # (`_draw_text` at scale=2) fits with margin at this value. `render_quad_pgm` clamps
+                       # it (`cap_h`) to `half - 1` at a `--size` too small to afford it in full — crowded
+                       # at extreme sizes, never past the pane's own cell boundary.
+
+
 def render_quad_pgm(actors, *, size: int = 512,
                     annotations: AnnotationSpec = AnnotationSpec.all(),
                     iso_angle: float = 30.0, region=None, highlight_polys=None,
@@ -2796,7 +2807,16 @@ def render_quad_pgm(actors, *, size: int = 512,
     if isinstance(actors, Actor):
         actors = [actors]
     half = size // 2
-    hdr = f"P6\n{half} {half}\n255\n".encode()
+    # `cap_h + sub_size == half` ALWAYS, by construction — not `sub_size = max(1, half - _QUAD_CAPTION_H)`
+    # with `cap_h` left at the raw constant: at a `--size` small enough that `half <= _QUAD_CAPTION_H`
+    # (no CLI-enforced minimum on `--size`), that floor left `cap_h + sub_size > half`, so the paste loop
+    # below wrote past each cell's own end — the bottom-row panes wrote at or past the whole buffer, which
+    # `bytearray[dst:dst+n] = ...` grows silently instead of raising. Shrinking `cap_h` first keeps the
+    # pane's paste flush with the cell boundary at every `--size`, degrading the caption band toward 0px
+    # (crowded, not corrupt) rather than ever overflowing it.
+    cap_h = min(_QUAD_CAPTION_H, max(0, half - 1))
+    sub_size = max(1, half - cap_h)
+    hdr = f"P6\n{sub_size} {sub_size}\n255\n".encode()
     buf, _ = _alloc_buffers(size, depth=False)
     panes = [("TOP", "top", 0, 0), ("FRONT", "front", half, 0),
              ("ISO", "iso", 0, half), ("SIDE", "side", half, half)]
@@ -2804,7 +2824,7 @@ def render_quad_pgm(actors, *, size: int = 512,
         pane_cells: dict = {}                            # each pane's OWN cell map (cells are per-pane)
         pane_caption: dict = {}
         pane_dims: dict = {}
-        sub = render_brushes_pgm(actors, view=view, size=half, annotations=annotations,
+        sub = render_brushes_pgm(actors, view=view, size=sub_size, annotations=annotations,
                                  iso_angle=iso_angle, region=region,
                                  highlight_polys=highlight_polys, highlight_points=highlight_points,
                                  highlight_actors=highlight_actors,
@@ -2823,13 +2843,14 @@ def render_quad_pgm(actors, *, size: int = 512,
         if locator_dims_out is not None and pane_dims:
             locator_dims_out[name.capitalize()] = pane_dims
         body = sub[len(hdr):]
-        for j in range(half):
-            dst = ((oy + j) * size + ox) * 3
-            src = j * half * 3
-            buf[dst:dst + half * 3] = body[src:src + half * 3]
-        cap_y = oy + 12
-        if locator is not None:                          # keep it below the locator's top column-label band
-            cap_y = oy + _FRAME_PAD + _locator_gutter_px(max(2, half // 256)) + 10
+        for j in range(sub_size):
+            dst = ((oy + cap_h + j) * size + ox) * 3
+            src = j * sub_size * 3
+            buf[dst:dst + sub_size * 3] = body[src:src + sub_size * 3]
+        # The pane name sits in its OWN reserved strip, entirely above where the pane's render starts
+        # (`oy + cap_h`) — never inside the locator gutter or the geometry's own bordered area,
+        # regardless of `--size` or whether `locator` is on.
+        cap_y = oy + cap_h // 2
         _draw_text(buf, size, ox + 4 + len(name) * 8, cap_y, name, 2, CAPTION)
     for k in range(size):
         _px(buf, size, half, k, DIVIDER)
