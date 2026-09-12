@@ -769,6 +769,38 @@ def test_sky_camera_basis_matches_viewer_when_sky_rotation_is_zero():
             assert abs(g - w) < 1e-6
 
 
+# --------------------------------------------------------------- find_sky_actor
+
+
+def test_find_sky_actor_returns_none_with_no_skyzoneinfo():
+    index = _ued22_index()
+    level = _level(cube_room())
+    assert pn.find_sky_actor(level, index) is None
+
+
+def test_find_sky_actor_finds_the_one_skyzoneinfo():
+    index = _ued22_index()
+    level = _level(Actor(name="SkyZoneInfo0", cls="Engine.SkyZoneInfo"))
+    actor = pn.find_sky_actor(level, index)
+    assert actor is not None
+    assert actor.name == "SkyZoneInfo0"
+
+
+def test_find_sky_actor_prefers_bhighdetail_true_among_several():
+    index = _ued22_index()
+    # `props` is a list[tuple[str, str]], not a dict, and prop VALUES are the raw authored strings
+    # ("True"/"False") -- matched here by actor NAME rather than by re-reading the fixture's own
+    # props back (that would just restate what find_sky_actor already read).
+    level = _level(
+        Actor(name="SkyZoneInfoPlain", cls="Engine.SkyZoneInfo"),
+        Actor(name="SkyZoneInfoHighDetail", cls="Engine.SkyZoneInfo",
+              props=[("bHighDetail", "True")]),
+    )
+    actor = pn.find_sky_actor(level, index)
+    assert actor is not None
+    assert actor.name == "SkyZoneInfoHighDetail"
+
+
 # --------------------------------------------------------------- invisible faces
 
 

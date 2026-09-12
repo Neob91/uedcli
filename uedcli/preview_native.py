@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from . import movers
+from .classindex import CORE_OBJECT, ClassRefError
 from .normalize import is_builder_brush
 from .preview_shots import ResolvedShot, Shot, resolve_pose, shot_filename
 from .rotation import (actor_linear, actor_prepivot, deg_to_uu, euler_to_matrix_uu, matvec)
@@ -373,6 +374,71 @@ def actor_aim_point(level, name: str) -> tuple[float, float, float]:
         return tuple((float(lo[i]) + float(hi[i])) / 2.0 for i in range(3))
     loc = actor.location or (0, 0, 0)
     return tuple(float(c) for c in loc)
+
+
+# --------------------------------------------------------------------- sky actor
+
+SKY_ZONE_INFO_BASE = "Engine.SkyZoneInfo"
+
+
+def _is_sky_zone_actor_class(index, cls: str) -> bool:
+    """`Engine.SkyZoneInfo` ancestry check, decided by the resolved class chain, never by how the
+    class is SPELLED -- same shape as `native.materialize._is_zone_actor_class` (ancestry-based,
+    not a name-suffix guess, with the same bare-class-name and undecidable-chain handling).
+
+    It answers or it raises (`ClassRefError` -> a clean exit 2): a chain that truncates before the
+    `Core.Object` root means a package is off the search path, and answering `False` there would
+    silently drop a real sky actor."""
+    if not cls:
+        return False
+    if "." not in cls:
+        candidates = sorted(index.bare_to_fqcn().get(cls.casefold(), ()))
+        if not candidates:
+            raise ClassRefError(
+                f"cannot decide whether the bare class {cls} is a SkyZoneInfo: no class of that "
+                f"name exists in any package on the composed search path")
+        verdicts = {_is_sky_zone_actor_class(index, fqcn) for fqcn in candidates}
+        if len(verdicts) > 1:
+            raise ClassRefError(
+                f"cannot decide whether the bare class {cls} is a SkyZoneInfo: it resolves to "
+                f"{', '.join(candidates)}, and they disagree -- qualify the actor's class")
+        return verdicts.pop()
+    chain = [a.casefold() for a in index.ancestry(cls)]
+    if SKY_ZONE_INFO_BASE.casefold() in chain:
+        return True
+    if chain[-1] != CORE_OBJECT.casefold():
+        raise ClassRefError(
+            f"cannot decide whether class {cls} is a SkyZoneInfo: its ancestor chain stops at "
+            f"{chain[-1]} instead of the {CORE_OBJECT} root, so a package on the chain is missing "
+            f"from the composed search path (check the project `paths` and the games config)")
+    return False
+
+
+def find_sky_actor(level, index):
+    """The level's sky actor (an `Engine.SkyZoneInfo` or subclass), or `None` if the level has
+    none -- a port of `Engine.u`'s `ZoneInfo::LinkToSkybox()` OUTCOME (see
+    `dev/docs/unrealed/rendering.md`'s `PF_FakeBackdrop` section): the real engine assigns
+    `SkyZone` on every match, so the WINNER is the FIRST actor in `level.order` (the trunk order
+    this codebase already uses for zone-actor resolution -- NOT `level.actors.values()`, an
+    alphabetical dict that has a NAMED regression for exactly this class of bug,
+    `test_native_roundtrip.py`'s NYC_Bar N=70 case) whose `bHighDetail` matches, else the FIRST
+    `SkyZoneInfo` found if none states `bHighDetail=True`. There is at most one sky actor for a
+    whole level (not per-zone)."""
+    from .uprops import resolve_class_defaults
+
+    best = None
+    for name in level.order:
+        a = level.actors[name]
+        if not _is_sky_zone_actor_class(index, (a.cls or "").strip()):
+            continue
+        instance = {k.casefold(): v for k, v in a.props}
+        defaults = resolve_class_defaults(a.cls, resolver=index.resolver())
+        high_detail = instance.get("bhighdetail", defaults.get(("bhighdetail", 0)))
+        if str(high_detail or "False").strip() == "True":
+            return a          # a bHighDetail match wins outright, first one in trunk order
+        if best is None:
+            best = a           # remember the first SkyZoneInfo as the no-bHighDetail fallback
+    return best
 
 
 # --------------------------------------------------------------------- orchestration
