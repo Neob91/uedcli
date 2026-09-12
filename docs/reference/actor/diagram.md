@@ -161,6 +161,16 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   highlighted face that something in front of it hides shows nothing, and a **stderr note** names any
   selector that landed on nothing visible for any reason (hidden, culled, invisible, or off-frame) —
   under `--layout quad` that means no pane showed it.
+
+  A **whole-brush** highlight (a bare `NAME`, or `BRUSH:all` — never a partial poly selector) also
+  draws UnrealEd's own vertex/pivot glyphs, `--faces wire` only: every poly vertex, plus the world
+  position of the brush's **local coordinate origin** — `Location` transformed the same way as every
+  vertex (rotation, and scale if the brush has any), each as a small square in the brush's own
+  (brightened) CSG hue — and the actor's **true pivot**, always `Location` itself regardless of
+  `PrePivot`, as a red square with a crosshair. The local-origin dot is *not* the pivot: it only
+  coincides with `Location` when `PrePivot` is `(0,0,0)`; a nonzero `PrePivot` (e.g. a door hinged
+  off-centre) separates the two. These markers do NOT affect framing — like the rest of `--highlight`
+  — so a brush whose `PrePivot` sits far outside its own geometry can put a marker outside the frame.
 - **`--focus BRUSH`** spotlights ONE brush: only it shows face indices (in its tint), and every OTHER
   brush recedes — for reading one brush's faces in a busy scene. Under `--faces wire` those brushes
   recede to a **faint (dimmed)** wireframe; under `--faces textured` their solved **fills** fade too, to
