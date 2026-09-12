@@ -1,6 +1,6 @@
 ---
 name: verifying-brush-relations
-description: Use when resizing, widening, or reshaping a UE1/Deus Ex room-shaped brush in uedcli (`brush vertex move`, `brush scale`, `brush apply-transform`) and before calling the edit verified — especially if a rendered decoration looks detached/floating, or you need to confirm the edit's effects stayed on the face you touched.
+description: Use when resizing, widening, or reshaping ANY UE1/Deus Ex brush's box extent in uedcli (`brush vertex move`, `brush scale`, `brush apply-transform`) — a room wall exactly as much as a counter, shelf unit, or any other multi-part furniture assembly — and before calling the edit verified. Especially if a rendered decoration looks detached/floating, you need to confirm the edit's effects stayed on the face you touched, or the edit might have grown into an NPC/prop that was already standing nearby.
 ---
 
 # Verifying Brush Relations After Reshaping
@@ -16,9 +16,12 @@ mechanics used below.
 
 ## When to Use
 
-- Any `brush vertex move` / `brush scale` / `brush apply-transform` that changes a room-shaped
-  brush's box extent — not a cosmetic single-vertex nudge.
-- Before calling a room resize "verified."
+- Any `brush vertex move` / `brush scale` / `brush apply-transform` that changes a brush's box
+  extent — not a cosmetic single-vertex nudge. This applies just as much to furniture (a counter,
+  a shelf unit, anything assembled from more than one brush) as it does to a room wall — don't
+  reserve this skill for "room-shaped" brushes only; the same cross-brush and point-actor blind
+  spots apply to any multi-part object.
+- Before calling any resize "verified" — a room OR a piece of furniture.
 - A render shows a decoration looking detached or floating with no backdrop.
 
 Not needed for edits that don't change a brush's box extent.
@@ -51,6 +54,16 @@ diff -u before_detail.txt after_detail.txt
 `footprint_2d` against every candidate, before and after (a `distance` shift alone, with no
 category change, is fine — see below). Any face you didn't touch changing category is the
 failure this check exists to catch.
+
+**Read the BEFORE snapshot for companions, not just a baseline to diff against.** A candidate that
+shows `coincident` or heavy `footprint_2d` overlap against the SPECIFIC face you're about to move
+is very likely a separate piece of the same assembly (a support leg, a back panel, a base plinth)
+that was built flush against that exact edge — not an unrelated neighbor. Confirmed on a real edit:
+extending a bar counter (`Brush70`) 64uu west left two flush companion brushes (a support and a
+shelf back panel, both built flush against the counter's old west edge) rooted at the old position
+while the counter moved past them. If the edit's intent is "extend this object," a flush companion
+at the moving face usually needs the SAME edit applied to it, not just a post-hoc check that it's
+still touching — decide this from the BEFORE snapshot, before you move anything.
 
 Capture BOTH `find` and `measure` snapshots before the edit — `measure` reads live geometry, so a
 `before_detail.txt` taken after the edit is not a baseline, it's a second AFTER. `--max-gap` bounds
@@ -149,6 +162,26 @@ uedcli actor find --overlapping-bbox=<new face plane ± a few uu, new extent> --
 
 An actor caught in the OLD slab but not the NEW one was mounted on the face you moved and is now
 detached — reposition it (or confirm it was never actually mounted) before calling the edit done.
+
+**This same blind spot cuts the other way too: growing a brush can push it INTO a point actor that
+was already standing nearby, unrelated to the face you moved.** An NPC in the room, a prop sitting
+where the extension now reaches — nothing was mounted on your face; the brush's growth just claimed
+space something else already occupied. The OLD/NEW slab sweep above doesn't catch this either, since
+it's scoped to the moved face's own plane, not the brush's whole new volume. Sweep the brush's OWN
+full bbox instead, before and after:
+
+```bash
+uedcli actor bbox Brush1          # BEFORE the edit -- the old volume
+uedcli actor find --overlapping-bbox=<Brush1's OLD bbox> --kind point > before_engulf.txt
+# ... perform the edit ...
+uedcli actor bbox Brush1          # AFTER -- the new, grown volume
+uedcli actor find --overlapping-bbox=<Brush1's NEW bbox> --kind point > after_engulf.txt
+diff before_engulf.txt after_engulf.txt
+```
+
+Any point actor appearing in the AFTER list but not the BEFORE one is newly engulfed — confirmed on
+a real edit: extending a bar counter (`Brush70`, NYC_Bar) 64uu west grew it into a standing NPC
+(`DeusEx.Jock`) that was never near the face being moved, only near the counter's new footprint.
 
 ## Real-world impact
 
