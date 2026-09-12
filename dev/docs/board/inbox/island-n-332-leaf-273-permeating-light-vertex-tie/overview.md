@@ -154,3 +154,28 @@ stack/registers between the two calls, to confirm or rule out x87 extended-preci
 the actual mechanism. If confirmed, the fix is a genuine widening of the relevant intermediate(s) to
 match — NOT a heuristic. Island's ladder cannot advance past N=332 until this closes; there is no
 other known blocker past it (N=1..331 all byte-exact).
+
+## 2026-09-12 (3rd pass) — narrowed to `SafeNormal`'s own FPU precision; live confirmation blocked by host disk
+
+Full writeup in `unatco-n-226-leaf-12-gets-a-permeating-light157` (same mechanism, second
+reproducer, worked in one session so it isn't duplicated here). Summary: fresh from-scratch
+disassembly (not re-trusting the earlier writeup) confirms `FLinePlaneIntersection` (`Engine.dll
+0x101507c0`) and the `FPlane(A,B,C)` cross-product ctor (`core.dll 0x1000b440`) are both bit-exact
+with native's Rust port — no reordering bug left in either. The one function left that could
+genuinely diverge is `FVector::SafeNormal` (`core.dll 0x10051090`, called from the `FPlane` ctor to
+normalize the clip plane): it disassembles to real x87 (`call sqrt; fstp/fld/fld1/fdivrp/fstp`), and
+a whole-`.text` census of `core.dll` and `D3D9Drv.dll` (this build's render driver) — DLLs spike 41
+never covered — finds zero `fldcw`/`fnstcw` in either, same as `Engine.dll`/`Editor.dll`. So nothing
+anywhere in this build ever sets the x87 precision-control field, meaning it runs at whatever the
+process inherited at creation — plausibly the x87 hardware-reset default (PC=`11`, 64-bit extended),
+not the PC=`10`/53-bit ("double") precision `safe_normal()`'s Rust model assumes. This is a real,
+previously-unexamined candidate (distinct from the "x87 vs SSE in the CSG math" question spike 41
+already answered), but still UNCONFIRMED: a probe script
+(`dev/docs/spikes/2026-09-12-safenormal-fpu-precision/harness/fctrl_probe.py`, one gdb breakpoint,
+reads `$fctrl` at `SafeNormal` — no single-stepping, no need to reproduce this item's exact
+`162->275` crossing) is written but could not be run — this worktree has no wine-based debug-editor
+image, and building one failed TWICE on this host with disk driven to 0 bytes free during the final
+containerd layer-export step (from 6.0 GB and then 7.4 GB free, both times on the same step, for a
+1.05 GB image) — a hard host limit, not a fixable retry. Cleaned up after each attempt; host disk
+restored to ~7.4 GB free. Next step for whoever has working infra: run `fctrl_probe.py` against any
+small cached subset and read `$fctrl` — `0x037f` confirms, `0x027f` refutes.

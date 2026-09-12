@@ -1,8 +1,8 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "UNATCO is byte-exact N=1..225 and bails at N=226: world leaf 12's permeating-light run carries Light157, which UED22 leaves out. Root-caused (2026-09-12) to the SAME unresolved mechanism as island-n-332-leaf-273-permeating-light-vertex-tie: native's FLinePlaneIntersection lands the crossing exactly on a shared portal vertex (a true tie); a live editor capture of the identical crossing lands ~1 ULP off it. Not fixed, no mask."
-spikes = ["dev/docs/spikes/2026-09-07-gather-box-verdict/"]
+summary = "UNATCO is byte-exact N=1..225 and bails at N=226: world leaf 12's permeating-light run carries Light157, which UED22 leaves out. Root-caused (2026-09-12) to the SAME unresolved mechanism as island-n-332-leaf-273-permeating-light-vertex-tie: native's FLinePlaneIntersection lands the crossing exactly on a shared portal vertex (a true tie); a live editor capture of the identical crossing lands ~1 ULP off it. Not fixed, no mask. 2026-09-12 (2nd pass): fresh disassembly confirms FLinePlaneIntersection and the FPlane(A,B,C) cross-product ctor are bit-exact ports; the one place left that could diverge is FVector::SafeNormal's real x87 sqrt/reciprocal chain (core.dll, never covered by the Engine.dll/Editor.dll-only spike-41 census) running under an unconfirmed FPU precision-control setting. Live gdb confirmation blocked by this host's docker/containerd disk limits (see below); still open."
+spikes = ["dev/docs/spikes/2026-09-07-gather-box-verdict/", "dev/docs/spikes/2026-09-12-safenormal-fpu-precision/"]
 +++
 
 # UNATCO N=226 — leaf 12 gets a permeating `Light157` UED22 leaves out
@@ -94,3 +94,77 @@ register-level gdb single-stepping the Island item calls for — not done here.
         --trunk _scratch/actor-parity/03_nyc_unatcohq/N226/maps/03_nyc_unatcohq --verts 8 --out <log>
     dev/docs/spikes/2026-09-07-gather-box-verdict/harness/perm_flood_diff.py \
         <native UEDCLI_PERM_TRACE=all log> <log> --light 240.9201,-373.26294,330.79813
+
+## 2026-09-12 (2nd pass) — the "same formula" claim re-verified by fresh disassembly; the real gap narrows to one function's FPU precision
+
+Re-disassembled all three functions in the chain from scratch (`uned/UED22/{Engine,core}.dll`, image
+base `0x10000000`), independent of the earlier session's writeup, to check the "native's formula is
+disassembly-verified correct, only a register-level effect is missing" claim directly rather than
+trust it secondhand.
+
+- **`FLinePlaneIntersection`** — the real call site is `SplitWithPlaneFast`'s `call 0x101507c0`
+  (`Engine.dll`, confirmed by disassembling `SplitWithPlaneFast` itself and finding this exact call
+  at `0x1015214b`, args `(out, prevVertex, curVertex, Plane)` — the OTHER candidate RVA some earlier
+  notes cite, `0x1506f0`, is a different 5-argument overload taking `Base`/`Normal` as separate
+  vectors, not called from here). Full instruction-level decode confirms it is **bit-exact** with
+  `uedcli-native/src/permeating_lights.rs::line_plane_intersection`: numerator = `W -
+  ((P1.y*N.y + P1.x*N.x) + P1.z*N.z)` (note the y,x swap, then +z — matches instruction for
+  instruction), denominator = `(D.x*N.x + D.y*N.y) + D.z*N.z` (plain x,y,z order) where `D = P2-P1`.
+  No reordering left to find here.
+- **`FPlane::FPlane(A,B,C)`** (`core.dll 0x1000b440`, `clip_beam`'s `FPlane(Light, clip[j],
+  clip[jPrev])`) — decoded fully. The cross product is `(B-A) x (C-A)` with the standard formula
+  (`cross.x = (B-A).y*(C-A).z - (B-A).z*(C-A).y`, etc.), which is bit-exact with
+  `uedcli-native/src/model.rs::Vec3::cross`. Its normalize call is `call 0x10051090` — i.e. it calls
+  **`FVector::SafeNormal`, in `core.dll`, not `Engine.dll`/`Editor.dll`**.
+- **`FVector::SafeNormal`** (`core.dll 0x10051090`) — decoded fully. It is genuinely **x87**, not SSE:
+  `cvtps2pd` (widen SquareSum to double) -> `call sqrt` -> `fstp dword` (round to f32) -> `fld dword`
+  (reload) -> `fld1` -> `fdivrp st(1)` (1.0/root, x87) -> `fstp dword` (round to f32) -> scale x/y/z in
+  SSE. This matches the pre-existing doc comment in `fpoly.rs::safe_normal` exactly (independently
+  re-verified, not taken on faith).
+
+**The correction this adds:** spike 41 (`41-fp-model-x87-vs-sse.md`) is still right about what it
+actually measured — `Engine.dll`/`Editor.dll`'s CSG/geometry arithmetic (`PlaneDot`,
+`SplitWithPlane[Fast]`, `CalcNormal`) is genuinely SSE2, no x87, no FMA. But that census never covered
+`core.dll`, and `SafeNormal` — the one function in this whole chain that isn't pure add/mul/sub — lives
+in `core.dll` and does use x87. This isn't a contradiction of spike 41, it's a gap it never claimed to
+close. Re-running `fp_scan_text.py` against `core.dll` AND `D3D9Drv.dll` (this build's own render
+driver, the other plausible place something could set FPU state) finds **zero** `fldcw`/`fnstcw` in
+either — so now all four DLLs in the relevant code path (`Engine.dll`, `Editor.dll`, `core.dll`,
+`D3D9Drv.dll`) are confirmed to never touch the x87 precision-control (PC) field.
+
+**The hypothesis this supports:** since nothing ever sets PC, the FPU runs at whatever PC the
+process/thread inherited at creation. The x87 hardware-reset default is `0x037F` — PC=`11` (64-bit
+EXTENDED mantissa) — and under Wine on Linux, absent an explicit `_controlfp` call anywhere (which the
+census rules out for these four DLLs), that default is very likely what persists. `safe_normal()`'s
+current Rust model computes the sqrt and the `1.0/root` reciprocal each in `f64` (53-bit) and rounds
+ONCE to `f32` at the very end — i.e. it assumes PC=`10`, not PC=`11`. If the real hardware state is
+PC=`11`, each of those two x87 ops carries a genuinely wider (64-bit-mantissa) intermediate before its
+own `fstp dword` rounds it to `f32` — a different double-rounding path than native's, and exactly the
+kind of sub-ULP effect that could tip a true numerical tie one way in native and the other way in the
+real editor, which is the whole shape of this divergence.
+
+**Attempted live confirmation, blocked by host infra (not by the science).** Wrote
+`dev/docs/spikes/2026-09-12-safenormal-fpu-precision/harness/fctrl_probe.py`: a single gdb breakpoint
+at `SafeNormal`'s entry (`core.dll+0x10051090`) that reads `$fctrl` (gdb's x87 control-word
+pseudo-register) plus the input vector, and a second at `core.dll+0x1005112f` (just before the
+callee's `pop esi`, after all three output floats are stored) that reads `$fctrl` plus the output — no
+single-stepping needed, and no need to reproduce this item's specific `(102,13)` crossing: the PC
+field can't change mid-process (nothing ever writes it), so ANY `SafeNormal` hit during a real MAP
+REBUILD settles it. Could not run it: the wine-based debug-editor image (`ued-x86-runtime` + gdb) does
+not exist in this worktree, and building it **twice** failed with the host's disk driven to **0 bytes
+free** during the final containerd layer-export/unpack step — once starting from 6.0 GB free, once
+from 7.4 GB free, both times on the same step, despite the produced image being only 1.05 GB. That is
+a hard limit of this host's rootless-docker/containerd overlay extraction, not a marginal one-off;
+retrying a third time would not be expected to behave differently. Cleaned up fully after each
+attempt (`docker rmi`, `docker builder prune -af`); the host disk is back to its starting ~7.4 GB
+free / 88% used.
+
+**Next step for whoever has working editor-container infra:** run `fctrl_probe.py --trunk <any cached
+subset trunk>` (any small N works — e.g. an existing N=8/N=19 scaffold; N=226 does not need to be
+reproduced) and read the reported `$fctrl`. `0x027f`/PC=`10` refutes this hypothesis (the residual is
+something else, drop this line of inquiry); `0x037f`/PC=`11` confirms it. If confirmed, the fix is
+porting `safe_normal`'s sqrt+reciprocal through genuine 64-bit-mantissa arithmetic (not a heuristic —
+a real precision-model correction, e.g. an x87-equivalent extended-precision emulation) instead of
+`f64`, then re-verifying it does not move any of the already-passing near-tie cases this item and
+`island-n-332-leaf-273-permeating-light-vertex-tie` list (N=8, N19, N45, N93, N123, N153, and this
+item's own N=226 siblings) before trusting it against N=226/N=332 themselves.
