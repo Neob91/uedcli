@@ -9,8 +9,14 @@ through (invoke it path-qualified — `test` alone is a shell builtin):
 bin/test                 # whole offline suite (pytest + cargo test)
 bin/test -k preview -x
 ```
-Integration tests (`-m integration`) require the live editor RUNTIME container and are deselected by
-default (`pytest.ini`).
+Integration tests (`-m integration`) require the live editor RUNTIME container, and real-corpus
+`-m slow` tests (e.g. the retail Unreal Gold map import) are both deselected by default
+(`pytest.ini`); run either explicitly with `bin/test -m integration` / `bin/test -m slow`.
+
+The default (no-args) run is parallelized (`pytest-xdist`, `-n 4 --dist=loadfile`, override worker
+count with `UEDCLI_TEST_WORKERS`) on a private per-invocation `TMPDIR` under `/tmp` — cuts the suite
+from ~26 min to ~2 min. An explicit-args invocation (`bin/test -k ...`, `-m integration`) stays
+serial on the OS default `TMPDIR`.
 
 The Rust goldens run every time (the container supplies cargo + `libpython`), so a green run exercises
 the native `uedcli_native` core — `level materialize` and `photo` native paths — not just the
