@@ -1179,3 +1179,138 @@ def test_umesh_gettexture_skin_precedence():
         slot = _rva_to_offset(engine, vtable_rva + 0x74)   # GetTexture is vtable slot 29
         assert struct.unpack_from("<I", engine, slot)[0] == _IMAGE_BASE + 0x1129A0, \
             f"{name} overrides GetTexture — the single-resolution-point assumption is broken"
+
+
+def test_pf_fakebackdrop_renders_a_child_scene_not_the_face():
+    """`URender::OccludeBsp` (render.dll RVA 0x18e10) per-surf PolyFlags dispatch — spike
+    `dev/docs/spikes/2026-09-12-pf-fakebackdrop-re/`. A `PF_FakeBackdrop` (0x80) surf is never
+    itself drawn. The compiler encodes the `PolyFlags & 0x80` test as a sign test of AL
+    (`test al,al` / `jns`), not a `test`/`and` against the literal `0x80` — a byte scan for `0x80`
+    misses it. On a non-NULL `AZoneInfo::SkyZone` (Actor +0x278) the branch composes a child
+    `FSceneNode` aimed FROM the sky-zone actor, using the VIEWER's rotation but the sky zone's OWN
+    location (parallax-free — camera translation is discarded, only rotation carries over), and
+    calls `URender::CreateChildFrame` through the vtable; on a NULL `SkyZone` it falls through to
+    the `PF_Mirrored` test instead (next test) — `uedcli-native`'s current behavior (draw the
+    assigned texture) is the real engine's fallback only for that null case, not its general one.
+    """
+    render = (UED22 / "render.dll").read_bytes()
+    for va, want, what in [
+        (0x100198B2, "8b4004", "PolyFlags = Model->Surfs[Node->iSurf].PolyFlags (FBspSurf +0x04)"),
+        (0x10019C43, "84c07933", "test al,al / jns -> the PF_FakeBackdrop (0x80) test, a sign test"),
+        (0x10019C5F, "83b878020000000f859c000000",
+         "NULL check on AZoneInfo::SkyZone (+0x278); zero -> falls through to the mirror test"),
+        (0x10019D67, "8d8d7cf7ffffff15744203",
+         "SkyCoords = Frame->Coords (FCoords copy ctor)"),
+        (0x10019D7E, "8d8d7cf7ffffff15644203",
+         "SkyCoords.Origin -= Frame->Coords.Origin — position is discarded, not carried over"),
+        (0x10019D8A, "8d86dc000000",
+         "&SkyZone->Rotation (AActor +0xdc) composed into SkyCoords — rotation IS carried over"),
+        (0x10019D9D, "8d86d0000000",
+         "&SkyZone->Location (AActor +0xd0) — the sky camera sits AT the SkyZoneInfo actor"),
+        (0x10019E55, "ff5268", "call [edx+0x68] — URender vtable slot 0x68"),
+        (0x10019E60, "e986090000",
+         "backdrop branch jumps past the draw-list emission: the face itself is never drawn"),
+    ]:
+        off = _rva_to_offset(render, va - _IMAGE_BASE)
+        got = render[off:off + len(want) // 2].hex()
+        assert got == want, f"render.dll {va:#x} ({what}): want {want}, found {got}"
+
+    # Vtable slot +0x68 really is CreateChildFrame — verified without an export/symbol lookup by
+    # matching the callee's own entry-point bytes (a unique MSVC prologue + SEH frame push), not
+    # just an address, so this survives a rebuild that shuffles the export table.
+    vtable_off = _rva_to_offset(render, 0x345E0 + 0x68)
+    target = struct.unpack_from("<I", render, vtable_off)[0]
+    callee_off = _rva_to_offset(render, target - _IMAGE_BASE)
+    assert render[callee_off:callee_off + 10].hex() == "558bec6aff6820340310", \
+        "URender vtable +0x68 no longer points at CreateChildFrame's entry point"
+
+
+def test_pf_fakebackdrop_mirrored_and_portal_are_mutually_exclusive_arms():
+    """Continues the dispatch chain from the previous test as one if/else-if cascade, not
+    independent flag checks: `PF_FakeBackdrop` (0x80) is tested FIRST, `PF_Mirrored` (0x8000000)
+    second, `PF_Portal` (0x4000000) third — each reached only when the earlier one did not take its
+    branch. A surf carrying BOTH `PF_FakeBackdrop` and `PF_Mirrored` renders as backdrop only (no
+    reflection, and its own texture never shows) UNLESS its zone's `SkyZone` is NULL, in which case
+    the backdrop branch falls through and it renders as an ordinary mirror instead. All three arms
+    (plus `PF_Invisible`) share the identical `Frame->Recursion` (+0x1c) `>= 3` depth guard and the
+    same skip target: `PF_Mirrored` has no separate one-bounce cap of its own, and the recursion
+    budget is shared across backdrop/mirror/portal child frames, not tracked per kind. Spike
+    `dev/docs/spikes/2026-09-12-pf-fakebackdrop-re/`.
+    """
+    render = (UED22 / "render.dll").read_bytes()
+    for va, want, what in [
+        (0x10019C86, "f7c1000000080f843c030000",
+         "PF_Mirrored (0x8000000) test, reached only when FakeBackdrop did NOT take"),
+        (0x10019C98, "83781c030f8d2c030000",
+         "mirror: Frame->Recursion (+0x1c) >= 3 -> skip"),
+        (0x10019CA4, "f7807c04000000080000",
+         "mirror: ShowFlags (PlayerPawn +0x47c) & 0x800 (the recursion-vs-realtime gate)"),
+        (0x10019D24, "837f1c030f8d52ffffff",
+         "backdrop: Frame->Recursion >= 3 -> fall through to the mirror test"),
+        (0x10019D30, "f7807c04000000080000",
+         "backdrop: the identical ShowFlags & 0x800 gate as the mirror arm"),
+        (0x10019FCE, "f7c1000000040f844a030000",
+         "PF_Portal (0x4000000) warp-zone test, the third arm of the same chain"),
+        (0x1001A083, "83781c03", "warp zone: the same Frame->Recursion >= 3 guard"),
+        (0x1001A324, "f6c1010f85be040000",
+         "PF_Invisible shares the identical skip target as the backdrop branch"),
+        (0x1001_4B64, "8b461c4089471c", "Child->Recursion = Parent->Recursion + 1"),
+        (0x1001_4E13, "c7471c00000000", "CreateMasterFrame: Recursion = 0"),
+        (0x1001AD3E, "8b771085f6740d568bcbe853fdffff8b760c",
+         "OccludeFrame walks Frame->Child(+0x10)/Sibling(+0xc) and re-enters OccludeFrame"),
+        (0x10015110, "8b761085f6740e56e873ffffff8b760c",
+         "DrawFrame draws child frames first, then the frame's own surfaces"),
+    ]:
+        off = _rva_to_offset(render, va - _IMAGE_BASE)
+        got = render[off:off + len(want) // 2].hex()
+        assert got == want, f"render.dll {va:#x} ({what}): want {want}, found {got}"
+
+
+def test_pf_fakebackdrop_lighting_and_showflags_facts():
+    """The tutorial-corpus claim that `PF_FakeBackdrop` "needs a companion `Unlit` flag or the sky
+    draws lit/wrong" is folklore, not an engine dependency: `PF_Unlit` (0x400000) is the ONLY
+    PolyFlag the light manager tests, `PF_FakeBackdrop` never appears in that test, and `DrawFrame`
+    skips lighting entirely once a surf has no lightmap — which a `PF_FakeBackdrop` surf never gets
+    anyway (`Editor.dll`'s lightmap allocator explicitly excludes it, mask `0x400081` =
+    `PF_Invisible|PF_FakeBackdrop|PF_Unlit`). Separately pins the `ShowFlags` bit identities behind
+    the recursion-vs-realtime gate the two previous tests check: `SHOW_Backdrop` is bit `0x4` (the
+    editor's own "Show Backdrop" toggle), the bit `OccludeBsp` actually gates sky/mirror/portal
+    frames on is `0x800` (the "Realtime Preview" toggle, NOT `SHOW_Backdrop`), and the shipped
+    game's default viewport `ShowFlags` (`0x480c`) already contains `0x800` — so in-game the sky
+    always renders; only the editor needs the extra toggle. Spike
+    `dev/docs/spikes/2026-09-12-pf-fakebackdrop-re/`.
+    """
+    render = (UED22 / "render.dll").read_bytes()
+    for va, want, what in [
+        (0x1000_7C3B, "8b4b10f7c100004000",
+         "light setup tests PF_Unlit (0x400000) only — PF_FakeBackdrop is not tested"),
+        (0x10015690, "837818ff7455",
+         "DrawFrame skips the light manager when Surf->iLightMap (+0x18) == INDEX_NONE"),
+    ]:
+        off = _rva_to_offset(render, va - _IMAGE_BASE)
+        got = render[off:off + len(want) // 2].hex()
+        assert got == want, f"render.dll {va:#x} ({what}): want {want}, found {got}"
+
+    editor = (UED22 / "Editor.dll").read_bytes()
+    off = _rva_to_offset(editor, 0x100A4AE7 - _IMAGE_BASE)
+    assert editor[off:off + 7].hex() == "f7470481004000", \
+        "Editor.dll lightmap alloc no longer skips PolyFlags & 0x400081"
+
+    engine = (UED22 / "Engine.dll").read_bytes()
+    off = _rva_to_offset(engine, 0x101402B9 - _IMAGE_BASE)
+    assert engine[off:off + 10].hex() == "c7867c0400000c480000", \
+        "Engine.dll's default viewport ShowFlags is no longer 0x480c"
+
+    unrealed_base = 0x400000
+    unrealed = (UED22 / "unrealed.exe").read_bytes()
+    for va, want, what in [
+        (0x0043_3FFD, "8b817c04000083f004",
+         "the 'Show Backdrop' toolbar command is ShowFlags ^= 4 => SHOW_Backdrop == 0x4"),
+        (0x0043_3659, "81b07c04000000080000",
+         "the 'Realtime Preview' command is ShowFlags ^= 0x800 (the bit OccludeBsp gates on)"),
+        (0x0043_3F89, "f6460480",
+         "the editor's guard scans Surfs for PolyFlags & PF_FakeBackdrop"),
+    ]:
+        off = _rva_to_offset(unrealed, va - unrealed_base)
+        got = unrealed[off:off + len(want) // 2].hex()
+        assert got == want, f"unrealed.exe {va:#x} ({what}): want {want}, found {got}"
