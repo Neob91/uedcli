@@ -573,8 +573,13 @@ function renderVariant(){
   const item = CAROUSELS[lbScen][lbIdx];
   const v = item.variants[lbVariant];
   const img = document.getElementById('lbimg');
+  // clear inline sizing (not the zoom LEVEL) so the browser measures this
+  // new image's own "fit" size correctly once it loads; the load handler
+  // below reapplies the CURRENT zoom level, if any, once it knows that
+  // size -- zoom persists across left/right/up/down navigation, only the
+  // pixel size needs recomputing per image
+  clearZoomStyle();
   img.src = v.src;
-  resetZoom();
   document.getElementById('lbimgwrap').scrollTo(0, 0);
   document.getElementById('lbcap').textContent = v.cap;
   const vbar = document.getElementById('lbvariant');
@@ -617,13 +622,17 @@ function cycleVariant(d){
 let lbFitWidth = 0, lbZoom = 1;
 document.getElementById('lbimg').addEventListener('load', function(){
   lbFitWidth = this.getBoundingClientRect().width;
+  if (lbZoom > 1) applyZoom();  // reapply the persisted zoom level to this new image
 });
-function resetZoom(){
-  lbZoom = 1;
+function clearZoomStyle(){
   const img = document.getElementById('lbimg');
   img.style.width = ''; img.style.height = '';
   img.style.maxWidth = ''; img.style.maxHeight = '';
   img.classList.remove('zoomed');
+}
+function resetZoom(){
+  lbZoom = 1;
+  clearZoomStyle();
 }
 function applyZoom(cx, cy){
   const img = document.getElementById('lbimg'), wrap = document.getElementById('lbimgwrap');
@@ -658,7 +667,7 @@ function toggleZoom(e){
   if (lbZoom > 1) { lbZoom = 1; applyZoom(); }
   else { lbZoom = 2.5; applyZoom(e.clientX, e.clientY); }
 }
-function closeLB(){ document.getElementById('lb').hidden = true; }
+function closeLB(){ document.getElementById('lb').hidden = true; resetZoom(); }
 document.addEventListener('keydown', e => {
   if (document.getElementById('lb').hidden) return;
   // stopImmediatePropagation so the focus-pane listener (registered later,
