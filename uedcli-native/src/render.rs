@@ -32,9 +32,10 @@
 //! usual fixed `NEAR`), so nothing "behind" the mirror (e.g. a wall it's mounted on) leaks into
 //! the reflection. A mirror poly draws OPAQUE (z-tested AND z-written) sampling the secondary
 //! buffer at the SAME pixel it occupies in the primary frame, no per-poly shading (a mirror shows
-//! already-lit imagery, not a diffuse surface). Capped at one reflection deep: inside a
-//! reflection's own render, `PF_Mirrored` polys draw as ordinary opaque textured surfaces instead
-//! of recursing — a hall-of-mirrors is a real UE1 case this draft renderer does not attempt.
+//! already-lit imagery, not a diffuse surface). Recursion is capped at 3 — the real engine's
+//! `FSceneNode::Recursion` budget, shared across mirror and (new) `PF_FakeBackdrop` frames (spike
+//! 2026-09-12): a mirror reached at depth 3 draws as an ordinary opaque textured surface instead of
+//! recursing further.
 //!
 //! `PF_Mirrored` alone is a PURE mirror: the surface's own texture never shows. Combined with
 //! `PF_Translucent` — real content carries both (`02_NYC_Bar.dx` Brush117, `Terraniux.unr`
@@ -456,8 +457,8 @@ pub fn render(
     render_impl(polys, textures, camera, width, height, 0)
 }
 
-/// The real `render()` body, plus `mirror_depth` (0 = the primary frame; 1 = inside one mirror's
-/// reflected re-render — see the module doc for why recursion stops there). Opaque polys draw
+/// The real `render()` body, plus `recursion_depth` (0 = the primary frame; each level of mirror
+/// reflection adds 1, capped at `MAX_RECURSION` — see the module doc). Opaque polys draw
 /// first (z-tested + z-written); mirror polys draw next, also z-tested + z-written, each sampling
 /// its own reflected re-render of the (mirror-plane-clipped) scene; `PF_Translucent`/
 /// `PF_Modulated` polys draw last, sorted back-to-front, z-tested but not z-written (so they
@@ -468,8 +469,9 @@ fn render_impl(
     camera: &Camera,
     width: u32,
     height: u32,
-    mirror_depth: u32,
+    recursion_depth: u32,
 ) -> Vec<u8> {
+    const MAX_RECURSION: u32 = 3; // real engine's FSceneNode::Recursion cap (spike 2026-09-12)
     let (w, h) = (width as usize, height as usize);
     let mut img = vec![0u8; w * h * 3];
     for px in img.chunks_exact_mut(3) {
@@ -485,9 +487,9 @@ fn render_impl(
     let mut blended: Vec<(&RenderPoly, Blend, f32)> = Vec::new();
     for poly in polys {
         let mut mode = blend_mode(poly.poly_flags);
-        // Recursion cap (module doc): a mirror poly reached while ALREADY inside a reflected
-        // re-render draws as plain opaque texture instead of recursing again.
-        if mode == Blend::Mirror && mirror_depth > 0 {
+        // Recursion cap (module doc): a mirror poly reached at the cap depth draws as plain
+        // opaque texture instead of recursing again.
+        if mode == Blend::Mirror && recursion_depth >= MAX_RECURSION {
             mode = Blend::Opaque;
         }
         match mode {
@@ -500,7 +502,7 @@ fn render_impl(
         }
     }
 
-    if mirror_depth == 0 {
+    if recursion_depth < MAX_RECURSION {
         for cluster in group_mirror_clusters(polys) {
             // Orient the plane normal toward the REAL camera, so the clip below keeps the half
             // of the scene the mirror actually reflects (reflect_point/reflect_dir themselves
@@ -543,8 +545,9 @@ fn render_impl(
                     lightmap: poly.lightmap.clone(),
                 });
             }
-            let secondary =
-                render_impl(&clipped_scene, textures, &refl_camera, width, height, mirror_depth + 1);
+            let secondary = render_impl(
+                &clipped_scene, textures, &refl_camera, width, height, recursion_depth + 1,
+            );
             for &idx in &cluster.indices {
                 let tint = polys[idx].poly_flags & PF_TRANSLUCENT != 0;
                 render_poly(
@@ -1403,16 +1406,55 @@ mod tests {
     fn facing_mirrors_do_not_hang_and_cap_recursion() {
         // Two mirrors facing each other between the camera: without a recursion cap this would
         // either hang or blow the stack. Rendering must complete (this test finishing at all IS
-        // the regression check) and show something other than the flat background — the module
-        // doc's documented behaviour is that a mirror reached a second time (mirror_depth > 0)
-        // draws as its own opaque texture instead of recursing again.
+        // part of the regression check) and show something other than the flat background — the
+        // module doc's documented behaviour is that a mirror reached at the cap depth
+        // (MAX_RECURSION = 3) draws as its own opaque texture instead of recursing again.
+        //
+        // A third, plain (non-mirror, two-sided) wall sits behind the camera at x=-10, between the
+        // two mirrors' planes (x=20 and x=-20): under cap-3, near_mirror's own reflection recurses
+        // through far_mirror, whose reflection in turn finds nothing behind it (both mirrors already
+        // excluded) and would otherwise bottom out on an empty scene -- pure BACKGROUND -- which
+        // then propagates back up through both mirrors to the final image. This wall is real content
+        // for that first reflected bounce (near_mirror's own re-render, camera reflected to
+        // x=40 looking -X) to show, so the assertion below is satisfiable again. PF_TWO_SIDED avoids
+        // having to reason about which of the several reflected-camera orientations in the chain
+        // would otherwise back-face-cull it.
         let cam = cam_at_origin_looking_plus_x(90.0);
         let mut near_mirror = wall(20.0, 100.0, -1);
         near_mirror.poly_flags = PF_MIRRORED;
         let mut far_mirror = wall_facing_away(-20.0, 100.0, -1);
         far_mirror.poly_flags = PF_MIRRORED;
-        let img = render(&[near_mirror, far_mirror], &[], &cam, 32, 32);
+        let mut backstop = wall(-10.0, 200.0, -1);
+        backstop.poly_flags = PF_TWO_SIDED;
+        let polys = [near_mirror, far_mirror, backstop];
+        let img = render(&polys, &[], &cam, 32, 32);
         assert_eq!(img.len(), 32 * 32 * 3);
         assert!(img.chunks_exact(3).any(|p| p != BACKGROUND));
+    }
+
+    #[test]
+    fn recursion_cap_generalized_to_3_not_still_1() {
+        // Compare two STARTING depths that are both non-zero, one hop apart: depth=2 leaves ONE
+        // more recursion available under the real cap-3 (2 < 3, then 3 >= 3 stops); depth=1 leaves
+        // TWO more (1 < 3, 2 < 3, then 3 >= 3 stops) -- a genuine difference in how many mirror
+        // bounces happen, so the two renders must differ. This specifically catches a regression to
+        // the OLD effective cap of 1: under `MAX_RECURSION = 1`, BOTH starting depths already meet
+        // or exceed the cap (2 >= 1 and 1 >= 1), so both immediately force every mirror opaque with
+        // zero bounces -- identical images, and `assert_ne!` correctly fails. (A comparison against
+        // depth=0 does NOT discriminate: depth=0 vs depth=2 differ under ANY cap >= 1, since going
+        // from "recurses at all" to "doesn't" always changes the image regardless of the cap's
+        // actual value -- verified empirically, see task-2-report.md.)
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let mut near_mirror = wall(20.0, 100.0, -1);
+        near_mirror.poly_flags = PF_MIRRORED;
+        let mut far_mirror = wall_facing_away(-20.0, 100.0, -1);
+        far_mirror.poly_flags = PF_MIRRORED;
+        let polys = [near_mirror, far_mirror];
+        let shallow = render_impl(&polys, &[], &cam, 32, 32, 2); // 1 more bounce available
+        let deep = render_impl(&polys, &[], &cam, 32, 32, 1); // 2 more bounces available
+        assert_ne!(
+            shallow, deep,
+            "cap-3 budget produces the same image whether 1 or 2 more bounces are available"
+        );
     }
 }
