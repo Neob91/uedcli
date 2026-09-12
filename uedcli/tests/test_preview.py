@@ -98,12 +98,12 @@ def test_highlighted_brush_gets_ued22_style_vertex_and_pivot_markers():
     assert vivid not in _colors(plain)
 
 
-def test_highlighted_pivot_markers_do_not_affect_framing():
-    # `--highlight` is documented/tested as having NO EFFECT ON FRAMING. A brush whose PrePivot sits
-    # far from its own geometry (a door hinged off-centre) must not silently re-zoom the view just
-    # because its pivot/local-origin dots would otherwise land far outside the vertex cloud — the
-    # markers themselves are excluded from the framing source (`pts`), even though they may then
-    # land outside the frame.
+def test_highlighted_pivot_markers_widen_auto_fit_framing():
+    # A brush whose PrePivot sits far from its own geometry (a door hinged off-centre) must have its
+    # pivot/local-origin dots pulled INTO the auto-fit view, not silently left outside it: the markers'
+    # points now feed the framing source (`pts`), so highlighting the brush re-zooms the view out to
+    # include them. (An explicit `--frame`/`region` is unaffected — `_framed_bounds` ignores `pts`
+    # whenever `region is not None`, so this only widens the auto-fit case.)
     a = copy.deepcopy(_brush())
     a.props = [(k, "(X=50000,Y=50000,Z=50000)" if k == "PrePivot" else v) for k, v in a.props]
 
@@ -115,7 +115,41 @@ def test_highlighted_pivot_markers_do_not_affect_framing():
             geom.pts, None, 256, "top", 30.0, pad=_FRAME_PAD)
         return scale, region
 
-    assert _bounds(set()) == _bounds({"Brush938"})   # framing identical — the far-off pivot never fed it
+    plain_scale, plain_region = _bounds(set())
+    hi_scale, hi_region = _bounds({"Brush938"})
+    assert hi_region != plain_region     # the far-off pivot widened the fit
+    assert hi_scale < plain_scale        # zoomed OUT to make room for it
+
+
+def test_highlighted_pivot_marker_never_bleeds_into_the_reserved_margin():
+    # Combined regression: including the pivot/origin dots in auto-fit framing (above) puts the pivot's
+    # CENTER right at the drawable rect's edge — its 4px crosshair would then overshoot into the
+    # pad/gutter margin (and the locator label band) without the general pixel-plot `clip` bound. No
+    # `_PIVOT_RED` pixel may land outside `to_px`'s own achievable pixel range — 1px looser than
+    # `_drawable_rect` on each side (see `render_brushes_pgm`'s `clip` computation for why: `to_px`'s
+    # int-truncated output legitimately reaches exactly that 1px further at the framed region's own
+    # extreme, so clipping to `_drawable_rect` itself would crop real boundary geometry, not just markers).
+    from uedcli.preview import _locator_gutter_px
+
+    a = copy.deepcopy(_brush())
+    a.props = [(k, "(X=50000,Y=50000,Z=50000)" if k == "PrePivot" else v) for k, v in a.props]
+    size = 256
+    gutter = _locator_gutter_px(max(2, size // 256))
+    geom = _scene_geometry([a], view="top", iso_angle=30.0, annotations=AnnotationSpec.none(),
+                           highlight_polys=set(), highlight_actors={"Brush938"}, focus_cf=None,
+                           hybrid=False, tints={}, color_by_csg=False, render_data=PreviewData())
+    _scale, _to_px, _to_pxf, _world_to_pxf, (_fminx, _fminy, _fspan, fdraw) = _framing(
+        geom.pts, None, size, "top", 30.0, pad=_FRAME_PAD, gutter=gutter)
+    x0 = y0 = _FRAME_PAD + gutter - 1
+    x1 = y1 = _FRAME_PAD + gutter + fdraw
+
+    ppm = render_brushes_pgm([a], view="top", size=size, color_by_csg=True, locator=12,
+                             highlight_actors={"Brush938"}, annotations=AnnotationSpec.none())
+    px = _pixels(ppm)
+    for y in range(size):
+        for x in range(size):
+            if not (x0 <= x <= x1 and y0 <= y <= y1):
+                assert px[y * size + x] != _PIVOT_RED
 
 
 def test_highlight_actors_ignores_a_partial_poly_selector():

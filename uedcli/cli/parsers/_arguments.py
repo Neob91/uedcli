@@ -252,7 +252,7 @@ def _preview_opts(pp):
                          "is always framed exactly, unaffected by this")
     pp.add_argument("--highlight", metavar="POLY|NAME",
                     action="append", default=None,
-                    help="emphasise a poly or an actor; repeatable, no effect on framing. A token "
+                    help="emphasise a poly or an actor; repeatable. A token "
                          "WITH a colon is a poly selector BRUSH:IDX (the set form BRUSH:1,2 and "
                          "BRUSH:all work too) — those polys draw with a bolder line in their brush's "
                          "vivid CSG hue; under --faces textured the highlighted face keeps its texture "
@@ -267,8 +267,10 @@ def _preview_opts(pp):
                          "every poly vertex + the local-origin dot (Location transformed the same way "
                          "as its vertices) as a square in the brush's brightened CSG hue, and the TRUE "
                          "pivot (always Location, independent of PrePivot) as a red square + crosshair. "
-                         "These markers do not affect framing either — a brush with a PrePivot far from "
-                         "its own geometry can put one outside the frame")
+                         "These markers widen an auto-fit view to keep them inside it — the one way "
+                         "--highlight affects framing; an explicit --frame still frames exactly what it "
+                         "names, and a marker outside it is cropped at the frame border instead of drawn "
+                         "over it")
     pp.add_argument("--focus", metavar="BRUSH", default=None,
                     help="spotlight ONE brush: only it shows face indices (in its label tint); "
                          "every OTHER brush recedes — its wireframe to faint (dimmed) lines, and under "

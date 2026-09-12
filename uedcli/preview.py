@@ -516,18 +516,23 @@ def _alloc_dim_mask(size: int) -> bytearray:
                            f"in memory (--size is uncapped, so pick a smaller one)") from None
 
 
-def _px(buf, size, x, y, rgb) -> bool:
+def _px(buf, size, x, y, rgb, clip: tuple[int, int, int, int] | None = None) -> bool:
     """Plot one pixel, clipped to the frame. Returns whether it LANDED, which `_line` sums so a caller can
-    tell "I drew this" from "this was clipped away entirely"."""
+    tell "I drew this" from "this was clipped away entirely". `clip`, when given, is an additional
+    `(x0, x1, y0, y1)` inclusive bound tighter than the canvas — the drawable content rect (see
+    `render_brushes_pgm`'s `clip` computation for its exact bounds) — so a fixed-pixel marker glyph whose
+    CENTER is legitimately in-bounds still can't paint over the pad/gutter border or locator-label band
+    with its footprint."""
     w, h = _dims(size)
-    if 0 <= x < w and 0 <= y < h:
+    if 0 <= x < w and 0 <= y < h and (clip is None or (clip[0] <= x <= clip[1] and clip[2] <= y <= clip[3])):
         i = (y * w + x) * 3
         buf[i], buf[i + 1], buf[i + 2] = rgb
         return True
     return False
 
 
-def _line(buf, size, p0, p1, rgb, weight: int = 1, alpha: float = 1.0) -> int:
+def _line(buf, size, p0, p1, rgb, weight: int = 1, alpha: float = 1.0,
+          clip: tuple[int, int, int, int] | None = None) -> int:
     """Bresenham line. `weight` > 1 thickens it (each plotted point becomes a weight×weight block,
     toward +x/+y) — used to make a highlighted poly's edges bolder without changing hue. `alpha` < 1
     COMPOSITES the line over whatever's behind it (via `_blend_px`) instead of painting opaquely — used
@@ -536,8 +541,13 @@ def _line(buf, size, p0, p1, rgb, weight: int = 1, alpha: float = 1.0) -> int:
 
     **Returns the number of pixels that actually LANDED** inside the frame — 0 when the segment is clipped
     away entirely. `--highlight` needs that to tell "this face is not visible" from "this face is outside
-    the frame", both of which draw nothing but only one of which is about depth."""
-    plot = _px if alpha >= 1.0 else (lambda b, s, x, y, c: _blend_px(b, s, x, y, c, alpha))
+    the frame", both of which draw nothing but only one of which is about depth.
+
+    `clip` (an extra `(x0,x1,y0,y1)` bound, see `_px`) only applies to the OPAQUE (`alpha>=1`) path — the
+    dimmed/`--focus` blend path is vertex-anchored geometry, already guaranteed inside `clip` by
+    construction, so it needs no clip of its own."""
+    plot = (lambda b, s, x, y, c: _px(b, s, x, y, c, clip)) if alpha >= 1.0 \
+        else (lambda b, s, x, y, c: _blend_px(b, s, x, y, c, alpha))
     drawn = 0
     x0, y0 = p0
     x1, y1 = p1
@@ -562,7 +572,7 @@ def _line(buf, size, p0, p1, rgb, weight: int = 1, alpha: float = 1.0) -> int:
     return drawn
 
 
-def _circle(buf, size, cx, cy, r_px, rgb) -> None:
+def _circle(buf, size, cx, cy, r_px, rgb, clip: tuple[int, int, int, int] | None = None) -> None:
     """A solid (continuous) wire circle of pixel radius `r_px` centred at (cx, cy)."""
     r_px = max(1, int(round(r_px)))
     steps = max(24, r_px * 4)
@@ -571,37 +581,37 @@ def _circle(buf, size, cx, cy, r_px, rgb) -> None:
         a = 2 * math.pi * i / steps
         p = (int(round(cx + r_px * math.cos(a))), int(round(cy + r_px * math.sin(a))))
         if prev is not None:
-            _line(buf, size, prev, p, rgb)
+            _line(buf, size, prev, p, rgb, clip=clip)
         prev = p
 
 
-def _filled_diamond(buf, size, cx, cy, r, rgb) -> None:
+def _filled_diamond(buf, size, cx, cy, r, rgb, clip: tuple[int, int, int, int] | None = None) -> None:
     """A solid diamond of pixel radius `r` centred at (cx, cy) — the point-actor marker glyph on the
     CSG-coloured preview (tinted per actor)."""
     for dy in range(-r, r + 1):
         span = r - abs(dy)
         for dx in range(-span, span + 1):
-            _px(buf, size, cx + dx, cy + dy, rgb)
+            _px(buf, size, cx + dx, cy + dy, rgb, clip)
 
 
-def _draw_vertex_dot(buf, size, cx, cy, rgb) -> None:
+def _draw_vertex_dot(buf, size, cx, cy, rgb, clip: tuple[int, int, int, int] | None = None) -> None:
     """UED22's brush-vertex-handle glyph (`DrawLevelBrush`, `UnEdRend.cpp`): a 3x3-pixel filled square,
     fixed screen-space size (not world-scaled). Used for a `--highlight`ed brush's poly vertices and
     its local-origin dot — both draw identically in UED22, in the brush's own brightened wire colour."""
-    _fill(buf, size, cx - 1, cy - 1, cx + 1, cy + 1, rgb)
+    _fill(buf, size, cx - 1, cy - 1, cx + 1, cy + 1, rgb, clip)
 
 
-def _draw_pivot_marker(buf, size, cx, cy) -> None:
+def _draw_pivot_marker(buf, size, cx, cy, clip: tuple[int, int, int, int] | None = None) -> None:
     """UED22's `GPivotShown` widget: the same 3x3 square plus a 4px crosshair, in `_PIVOT_RED` — the
     actor's true, PrePivot-independent rotation-invariant pivot (always at Location), visually distinct
     from an ordinary vertex/origin dot."""
     for d in range(-4, 5):
-        _px(buf, size, cx, cy + d, _PIVOT_RED)
-        _px(buf, size, cx + d, cy, _PIVOT_RED)
-    _fill(buf, size, cx - 1, cy - 1, cx + 1, cy + 1, _PIVOT_RED)
+        _px(buf, size, cx, cy + d, _PIVOT_RED, clip)
+        _px(buf, size, cx + d, cy, _PIVOT_RED, clip)
+    _fill(buf, size, cx - 1, cy - 1, cx + 1, cy + 1, _PIVOT_RED, clip)
 
 
-def _draw_selection_brackets(buf, size, cx, cy, r_px) -> None:
+def _draw_selection_brackets(buf, size, cx, cy, r_px, clip: tuple[int, int, int, int] | None = None) -> None:
     """Point-actor highlight = four corner brackets (a selection reticle, in the uncoloured FRONT hue) framing the actor.
     Deliberately NOT a circle or rectangle: circles here already mean light/sound radius and the
     top-view collision cylinder, and a rectangle is the side-view cylinder — a selection mark must
@@ -611,11 +621,11 @@ def _draw_selection_brackets(buf, size, cx, cy, r_px) -> None:
     for sx, sy, dx, dy in ((cx - ri, cy - ri, 1, 1), (cx + ri, cy - ri, -1, 1),
                            (cx - ri, cy + ri, 1, -1), (cx + ri, cy + ri, -1, -1)):
         for t in (0, 1):                          # 2px thick corners
-            _line(buf, size, (sx, sy + t * dy), (sx + dx * arm, sy + t * dy), FRONT)
-            _line(buf, size, (sx + t * dx, sy), (sx + t * dx, sy + dy * arm), FRONT)
+            _line(buf, size, (sx, sy + t * dy), (sx + dx * arm, sy + t * dy), FRONT, clip=clip)
+            _line(buf, size, (sx + t * dx, sy), (sx + t * dx, sy + dy * arm), FRONT, clip=clip)
 
 
-def _blit(buf, size, cx, cy, pw, ph, tex, mask, tw, th) -> None:
+def _blit(buf, size, cx, cy, pw, ph, tex, mask, tw, th, clip: tuple[int, int, int, int] | None = None) -> None:
     """Scaled nearest-neighbour bitmap blit of a `tw×th` RGB texture (`tex`, packed w*h*3) into a
     `pw×ph` screen rectangle centred at (cx, cy). `mask` (w*h bytes, 1 = opaque) makes palette-index-0
     pixels transparent so the sprite never occludes the wireframe behind it."""
@@ -628,7 +638,7 @@ def _blit(buf, size, cx, cy, pw, ph, tex, mask, tw, th) -> None:
             sx = min(tw - 1, dx * tw // pw)
             si = sy * tw + sx
             if mask[si]:
-                _px(buf, size, x0 + dx, y0 + dy, (tex[si * 3], tex[si * 3 + 1], tex[si * 3 + 2]))
+                _px(buf, size, x0 + dx, y0 + dy, (tex[si * 3], tex[si * 3 + 1], tex[si * 3 + 2]), clip)
 
 
 # ----- solid face fills (untextured/mover fills under `--faces textured`) -----
@@ -940,10 +950,10 @@ def _fade_dimmed(buf, dim, size, alpha: float) -> None:
             buf[j + 2] = round(alpha * buf[j + 2] + faded)
 
 
-def _fill(buf, size, x0, y0, x1, y1, rgb) -> None:
+def _fill(buf, size, x0, y0, x1, y1, rgb, clip: tuple[int, int, int, int] | None = None) -> None:
     for y in range(min(y0, y1), max(y0, y1) + 1):
         for x in range(min(x0, x1), max(x0, x1) + 1):
-            _px(buf, size, x, y, rgb)
+            _px(buf, size, x, y, rgb, clip)
 
 
 def _box(buf, size, x0, y0, x1, y1, rgb) -> None:
@@ -1867,11 +1877,14 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
             # pivot — always Location itself (`SetPivot`/`NoteSelectionChange`, `UnEdCam.cpp`).
             pivot_2d = _project(lp, view, iso_angle)
             hi_pivot_dots.append(pivot_2d)
-            # Deliberately NOT fed into `pts` (the framing source): `--highlight` is documented and
-            # tested as having NO EFFECT ON FRAMING (`docs/reference/actor/diagram.md`,
-            # `--highlight`'s own help text). A brush with a far-off PrePivot (a door hinged
-            # off-centre) can put its pivot/origin dots outside the frame — same "may not be visible"
-            # contract a highlighted poly already has under depth-hiding/`--frame`.
+            # Fed into `pts` (the auto-fit framing source) so a door hinged off-centre (a far-off
+            # `PrePivot`) still gets its origin/pivot dot INSIDE the view, not off-frame. `_framed_bounds`
+            # ignores `pts` entirely whenever an explicit `--frame`/`region` is given, so this only
+            # widens the auto-fit case — an explicit `--frame` still frames EXACTLY what it named, and
+            # a dot spilling past it is caught by `_px`'s `clip` (drawable-rect clip) instead: cropped at
+            # the border/locator band, not bled onto it.
+            pts.append(origin_2d)
+            pts.append(pivot_2d)
         if brush_cands_2d:
             actor_points[actor.name] = brush_cands_2d   # kept on EVERY path — the grid-cell source
     if textured:
@@ -2455,6 +2468,19 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     gutter = _locator_gutter_px(name_scale) if locator is not None else 0
     scale, to_px, to_pxf, world_to_pxf, (fminx, fminy, fspan, fdraw) = _framing(
         geom.pts, region, size, view, iso_angle, pad=frame_pad, gutter=gutter)
+    # The pixel-plot clip bound for everything below: a fixed-pixel marker glyph (pivot crosshair,
+    # selection brackets, point marker) can overshoot the pad/gutter margin even when its CENTER point is
+    # legitimately inside it (guaranteed only for the point, not its footprint) — see `_px`.
+    #
+    # NOT `_drawable_rect(size, frame_pad, gutter)`: that rect is 1px TIGHTER than `to_px`'s own real
+    # output range. `to_px`'s int-truncated `sx`/`t` reach exactly `draw` (not `draw - 1`) at the framed
+    # region's own extreme, so the point that DEFINES the frame — the legitimate edge of the drawn
+    # geometry — lands one pixel past `_drawable_rect`'s bound on the non-flipped side of each axis (and
+    # one pixel before it on the flipped side, `front`/`side`/`iso`'s flip_v). Clipping to `_drawable_rect`
+    # verbatim would crop that real boundary pixel — caught by `test_grid_golden` diverging. `frame_pad +
+    # gutter - 1 .. frame_pad + gutter + fdraw` is `to_px`'s true achievable range in EITHER flip state.
+    clip = (frame_pad + gutter - 1, frame_pad + gutter + fdraw,
+            frame_pad + gutter - 1, frame_pad + gutter + fdraw)
 
     hidden: set = set()             # faces depth hid — their edges, outline and highlight index go
     buf, zbuf = _alloc_buffers(size, depth=bool(geom.fills))
@@ -2520,31 +2546,32 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
                 hidden.add(face_key)
     for actor, pr in points:                        # under-layer: selection brackets + sprites + overlays
         _draw_point_underlay(buf, size, actor, pr, view, iso_angle, to_px, scale,
-                             highlighted=actor.name in highlight_points)
+                             highlighted=actor.name in highlight_points, clip=clip)
     # `textured` draws NO wireframe (decision 2.5): only `--highlight` outlines below are line art.
     # `wire` draws every non-depth-hidden edge, back then front — same shade either way (facing-blind).
     draw_wire = faces != "textured"
     for f, (a, b), fr, bk, al, fk in edges:         # back then front (same shade, facing-blind)
         if draw_wire and not f and fk not in hidden:
-            _line(buf, size, to_px(a), to_px(b), bk, alpha=al)
+            _line(buf, size, to_px(a), to_px(b), bk, alpha=al, clip=clip)
     for f, (a, b), fr, bk, al, fk in edges:
         if draw_wire and f and fk not in hidden:
-            _line(buf, size, to_px(a), to_px(b), fr, alpha=al)
+            _line(buf, size, to_px(a), to_px(b), fr, alpha=al, clip=clip)
     for (a, b), vivid, face_key in hi_edges:         # highlighted poly: vivid hue + bold, on top
         if face_key not in hidden:                  # ...unless depth hid the face (filled modes only)
-            landed = _line(buf, size, to_px(a), to_px(b), vivid, weight=2)
+            landed = _line(buf, size, to_px(a), to_px(b), vivid, weight=2, clip=clip)
             # Record only a stroke that put PIXELS ON THE CANVAS. Counting the call instead made a
             # highlight clipped entirely outside the frame — ordinary with `--frame <other brush>` —
             # look drawn, so the note stayed silent on exactly the case it exists for.
             if landed and shown_highlights is not None:
                 shown_highlights.add(face_key)
     for p2d, rgb in geom.hi_vertex_dots:              # `--highlight`ed brush: vertex + origin dots
-        _draw_vertex_dot(buf, size, *to_px(p2d), rgb)
+        _draw_vertex_dot(buf, size, *to_px(p2d), rgb, clip)
     for p2d in geom.hi_pivot_dots:                    # `--highlight`ed brush: the TRUE pivot (red)
-        _draw_pivot_marker(buf, size, *to_px(p2d))
+        _draw_pivot_marker(buf, size, *to_px(p2d), clip)
     for actor, pr in points:                        # over-layer: markers
         _draw_point_marker(buf, size, actor, pr, view, iso_angle, to_px,
-                           color=tints.get(actor.name, MARKER) if hybrid else MARKER, hybrid=hybrid)
+                           color=tints.get(actor.name, MARKER) if hybrid else MARKER, hybrid=hybrid,
+                           clip=clip)
 
     # Point-actor footprints seed `occupied` so a poly-index decal never lands on an actor icon.
     occupied: list = []
@@ -2628,11 +2655,17 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
 
 
 def _draw_point_underlay(buf, size, actor, pr: PointRender, view, iso_angle, to_px, scale,
-                         *, highlighted: bool = False) -> None:
+                         *, highlighted: bool = False,
+                         clip: tuple[int, int, int, int] | None = None) -> None:
     """Corner brackets — a selection reticle — (when highlighted) + sprite billboard + faint
     collision/range overlays for one point actor (drawn UNDER the wireframe so the geometry stays
     readable). The brackets frame the sprite/marker from OUTSIDE, so they don't obscure it; they are
-    drawn FIRST so the sprite (with its transparency mask) still composites on top."""
+    drawn FIRST so the sprite (with its transparency mask) still composites on top.
+
+    `clip` reaches only the brackets/sprite below — both fixed-pixel glyphs whose footprint can overshoot
+    a drawable-rect-adjacent point. The collision/light/sound overlays need no clip: their world radius
+    already feeds `point_extent()` into the framing `pts`, so they're bounded by construction like any
+    other projected geometry."""
     loc = actor.location or (Decimal(0), Decimal(0), Decimal(0))
     lp = (float(loc[0]), float(loc[1]), float(loc[2]))
     cx, cy = to_px(_project(lp, view, iso_angle))
@@ -2641,12 +2674,12 @@ def _draw_point_underlay(buf, size, actor, pr: PointRender, view, iso_angle, to_
         # comfortably around the 3px diamond marker.
         r = (max(pr.sprite_world[0], pr.sprite_world[1]) * scale / 2 + 4
              if (pr.sprite is not None and pr.sprite_world is not None) else 10.0)
-        _draw_selection_brackets(buf, size, cx, cy, r)
+        _draw_selection_brackets(buf, size, cx, cy, r, clip)
     if pr.sprite is not None and pr.sprite_world is not None:
         w, h, rgb, mask = pr.sprite
         pw = int(round(pr.sprite_world[0] * scale))
         ph = int(round(pr.sprite_world[1] * scale))
-        _blit(buf, size, cx, cy, pw, ph, rgb, mask, w, h)
+        _blit(buf, size, cx, cy, pw, ph, rgb, mask, w, h, clip)
     if pr.collision is not None:
         _draw_cylinder(buf, size, lp, pr.collision[0], pr.collision[1], view, iso_angle,
                        to_px, scale, COL_COLLISION)
@@ -2657,7 +2690,8 @@ def _draw_point_underlay(buf, size, actor, pr: PointRender, view, iso_angle, to_
 
 
 def _draw_point_marker(buf, size, actor, pr: PointRender, view, iso_angle, to_px,
-                       *, color=MARKER, hybrid: bool = False) -> None:
+                       *, color=MARKER, hybrid: bool = False,
+                       clip: tuple[int, int, int, int] | None = None) -> None:
     """The point actor's marker (only when there is no sprite) at its Location, drawn OVER the wireframe.
     On the hybrid path it is a small FILLED DIAMOND in the actor's tint; on the legacy path a
     neutral-grey `+`. The actor's NAME is not drawn here — the hybrid path draws no names; on the legacy
@@ -2667,12 +2701,12 @@ def _draw_point_marker(buf, size, actor, pr: PointRender, view, iso_angle, to_px
     loc = actor.location or (Decimal(0), Decimal(0), Decimal(0))
     cx, cy = to_px(_project((float(loc[0]), float(loc[1]), float(loc[2])), view, iso_angle))
     if hybrid:
-        _filled_diamond(buf, size, cx, cy, 7, WHITE)    # halo lifts the marker off both bg and wireframe
-        _filled_diamond(buf, size, cx, cy, 5, color)
+        _filled_diamond(buf, size, cx, cy, 7, WHITE, clip)    # halo lifts the marker off both bg and wireframe
+        _filled_diamond(buf, size, cx, cy, 5, color, clip)
         return
     for d in range(-3, 4):                           # DT_Mesh/DT_None/miss → a small neutral marker
-        _px(buf, size, cx + d, cy, color)
-        _px(buf, size, cx, cy + d, color)
+        _px(buf, size, cx + d, cy, color, clip)
+        _px(buf, size, cx, cy + d, color, clip)
 
 
 # ISO collision-cylinder facet count. MUST be ODD (9), and that is LOAD-BEARING, not cosmetic: under

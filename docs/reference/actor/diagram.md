@@ -151,7 +151,7 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   tightness N`** (default `0.8`, must be in `[0, 1]`) sets framing tightness toward a **selector**
   target only: `0` = whole-set frame, `1` = tightest (target + margin); no `--frame` ⇒ no-op. An
   explicit-AABB `--frame` is always framed exactly — `--frame-tightness` does NOT modulate it.
-- **`--highlight POLY|NAME`** emphasises a poly or actor; repeatable, no effect on framing. A token
+- **`--highlight POLY|NAME`** emphasises a poly or actor; repeatable. A token
   **with a colon** is a poly selector `BRUSH:IDX` (set form `BRUSH:1,2` / `BRUSH:all` too) — those
   polys draw with a **bolder line** in their brush's vivid CSG hue. Under `--faces textured` a
   highlighted face keeps its texture and takes only that vivid outline. A token **without a colon** is an
@@ -169,8 +169,10 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   (brightened) CSG hue — and the actor's **true pivot**, always `Location` itself regardless of
   `PrePivot`, as a red square with a crosshair. The local-origin dot is *not* the pivot: it only
   coincides with `Location` when `PrePivot` is `(0,0,0)`; a nonzero `PrePivot` (e.g. a door hinged
-  off-centre) separates the two. These markers do NOT affect framing — like the rest of `--highlight`
-  — so a brush whose `PrePivot` sits far outside its own geometry can put a marker outside the frame.
+  off-centre) separates the two. These markers widen an **auto-fit** view to keep them inside it — the
+  one way `--highlight` affects framing. An explicit `--frame` still frames **exactly** what it names;
+  a marker that would fall outside it is cropped at the frame border/locator band instead of drawn
+  over either.
 - **`--focus BRUSH`** spotlights ONE brush: only it shows face indices (in its tint), and every OTHER
   brush recedes — for reading one brush's faces in a busy scene. Under `--faces wire` those brushes
   recede to a **faint (dimmed)** wireframe; under `--faces textured` their solved **fills** fade too, to
