@@ -539,6 +539,10 @@ function groupBounds(name){
   return name === 'diagrams' ? [0, nd] : [nd, total];
 }
 function openLB(scenId, idx){
+  // a fresh execution's carousel starts centered; staying on the same
+  // execution (re-open, or switching diagrams/photos via openLBGroup, which
+  // sets lbScen itself before calling here) keeps wherever the pan was
+  if (scenId !== lbScen) { lbPanX = lbPanY = 0.5; }
   lbScen = scenId; lbIdx = idx;
   lbVariant = CAROUSELS[lbScen][lbIdx].default || 0;
   const nd = nDiagrams(), total = CAROUSELS[lbScen].length;
@@ -557,6 +561,9 @@ function jumpGroup(name){
   renderLB();
 }
 function openLBGroup(scenId, name){
+  // checked here (before lbScen is overwritten) since openLB's own check
+  // would otherwise always see scenId === lbScen by the time it runs
+  if (scenId !== lbScen) { lbPanX = lbPanY = 0.5; }
   lbScen = scenId;
   const [lo, hi] = groupBounds(name);
   if (lo >= hi) return;
@@ -573,14 +580,16 @@ function renderVariant(){
   const item = CAROUSELS[lbScen][lbIdx];
   const v = item.variants[lbVariant];
   const img = document.getElementById('lbimg');
-  // clear inline sizing (not the zoom LEVEL) so the browser measures this
-  // new image's own "fit" size correctly once it loads; the load handler
-  // below reapplies the CURRENT zoom level, if any, once it knows that
-  // size -- zoom persists across left/right/up/down navigation, only the
-  // pixel size needs recomputing per image
+  // clear inline sizing (not the zoom LEVEL or pan position) so the browser
+  // measures this new image's own "fit" size correctly once it loads; the
+  // load handler below reapplies the CURRENT zoom level and pan fraction,
+  // if any, once it knows that size -- both persist across left/right/
+  // up/down navigation, only the pixel size needs recomputing per image.
+  // No scrollTo(0,0) here: unzoomed there's nothing to scroll (the image
+  // fits the wrap), and zoomed the load handler's applyZoom() restores the
+  // remembered pan position instead.
   clearZoomStyle();
   img.src = v.src;
-  document.getElementById('lbimgwrap').scrollTo(0, 0);
   document.getElementById('lbcap').textContent = v.cap;
   const vbar = document.getElementById('lbvariant');
   const hasVariants = item.variants.length > 1;
@@ -620,6 +629,12 @@ function cycleVariant(d){
 // why "zoom in the browser" normally does nothing on this page. This
 // intercepts the same gesture and drives an explicit pixel width instead.
 let lbFitWidth = 0, lbZoom = 1;
+// Pan position as a FRACTION of the image (0.5,0.5 = centered), not raw
+// scroll pixels -- pixels don't transfer between differently-sized images.
+// Kept current by applyZoom (zoom-driven repositioning) and the scroll
+// listener below (manual drag/scrollbar/trackpad-pan), and reapplied by the
+// img load handler on navigation so panning survives left/right/up/down.
+let lbPanX = 0.5, lbPanY = 0.5;
 document.getElementById('lbimg').addEventListener('load', function(){
   lbFitWidth = this.getBoundingClientRect().width;
   if (lbZoom > 1) applyZoom();  // reapply the persisted zoom level to this new image
@@ -641,9 +656,20 @@ function applyZoom(cx, cy){
   const rect = img.getBoundingClientRect(), wrapRect = wrap.getBoundingClientRect();
   const anchorCx = cx != null ? cx : wrapRect.left + wrapRect.width / 2;
   const anchorCy = cy != null ? cy : wrapRect.top + wrapRect.height / 2;
-  // fraction of the CURRENT (pre-zoom-step) image that sits under the cursor
-  const fx = (anchorCx - rect.left + wrap.scrollLeft) / rect.width;
-  const fy = (anchorCy - rect.top + wrap.scrollTop) / rect.height;
+  let fx, fy;
+  if (cx != null || cy != null){
+    // fraction of the CURRENT (pre-zoom-step) image that sits under the
+    // cursor -- and remember it as the pan position, so wherever the user
+    // just zoomed to is what navigation restores next
+    fx = (anchorCx - rect.left + wrap.scrollLeft) / rect.width;
+    fy = (anchorCy - rect.top + wrap.scrollTop) / rect.height;
+    lbPanX = fx; lbPanY = fy;
+  } else {
+    // no cursor coords -- called from the img load handler during
+    // navigation: restore the remembered pan fraction instead of
+    // re-centering on the wrap's own middle
+    fx = lbPanX; fy = lbPanY;
+  }
   img.style.maxWidth = 'none'; img.style.maxHeight = 'none';
   img.style.width = (lbFitWidth * lbZoom) + 'px';
   img.style.height = 'auto';
@@ -662,12 +688,24 @@ document.getElementById('lbimgwrap').addEventListener('wheel', e => {
   e.preventDefault();
   zoomBy(Math.exp(-e.deltaY * 0.003), e.clientX, e.clientY);
 }, {passive: false});
+// Manual drag/scrollbar/trackpad-pan on a zoomed image: recompute the
+// remembered pan fraction from where the wrap's own center now sits, using
+// the same fraction formula as applyZoom's no-cursor branch -- so a plain
+// pan (not just a zoom step) also survives navigation.
+document.getElementById('lbimgwrap').addEventListener('scroll', () => {
+  if (lbZoom <= 1.001) return;
+  const img = document.getElementById('lbimg'), wrap = document.getElementById('lbimgwrap');
+  const rect = img.getBoundingClientRect(), wrapRect = wrap.getBoundingClientRect();
+  if (!rect.width || !rect.height) return;
+  lbPanX = (wrapRect.left + wrapRect.width / 2 - rect.left + wrap.scrollLeft) / rect.width;
+  lbPanY = (wrapRect.top + wrapRect.height / 2 - rect.top + wrap.scrollTop) / rect.height;
+});
 function toggleZoom(e){
   e.stopPropagation();
   if (lbZoom > 1) { lbZoom = 1; applyZoom(); }
   else { lbZoom = 2.5; applyZoom(e.clientX, e.clientY); }
 }
-function closeLB(){ document.getElementById('lb').hidden = true; resetZoom(); }
+function closeLB(){ document.getElementById('lb').hidden = true; resetZoom(); lbPanX = lbPanY = 0.5; }
 document.addEventListener('keydown', e => {
   if (document.getElementById('lb').hidden) return;
   // stopImmediatePropagation so the focus-pane listener (registered later,
