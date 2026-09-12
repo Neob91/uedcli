@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "NYC_Bar is byte-exact N=1..152 and bails at N=153: three world `LightMap` records get an `iLightActors` run UED22 leaves at -1, so `Lights` is 484 vs 478 and `LightBits` 6003 vs 5891."
+summary = "NYC_Bar bails at N=153: root-caused to native's world gather/raytrace not treating a closed Mover (DeusExMover9) as an occluder, so Light5 wrongly lights 3 world stair-tread surfs through the door and wrongly fails to light the door's own face. Not fixed -- needs a structural change unifying the world and mover light bakes."
 +++
 
 # NYC_Bar N=153 — three world `LightMap` records get a light run UED22 leaves empty
@@ -48,7 +48,71 @@ Also recorded: N=153 fails on TWO bodies, not one — `model model2` and `model
 model_deusexmover9`. The mover body was already failing on master before the box-occlusion work
 (checked by rebuilding N=153 against `HEAD`), so it belongs to this item, not to that change.
 
+## Root cause found (2026-09-12): native's world-level gather doesn't occlude through a closed Mover
+
+Re-derived the 3 records with the correct `model_dump.py` field layout (`surf.ci[4]` is `iLightMap`,
+not the raw `int32` two bytes later — `lightrun_diff.py`/`lmdiag.py`-style scripts that read that
+next slot report a false "0 differing runs"; use `model_dump.py` directly). Records **4, 8, 12**
+(0-indexed) belong to world surfs **95, 97, 67**, all `PF_HighShadowDetail` (`0x800000`, 16 uu lumel
+grid), all sharing texture `-25`. Their node geometry is three stacked stair treads at
+`Z=0/-16/-32`, `X` roughly `-3600..-3088`, `Y` `176..560`, with solid vertical riser surfs between
+them (nodes 11/18 etc., planes `X=-3120`/`X=-3152`). The one light in all three extra runs is
+**`Light5`** (`Location=(-2944.198486,384.973572,129.119934)`, `LightRadius=12` -> world radius
+`(12+1)*25=325`) — the first N where `Light5` itself enters the trunk (`order[152]`, 0-indexed
+152 = the 153rd actor), so this is a brand-new-light bug, not a geometry regression.
+
+**Ruled out:** the gather's perpendicular-plane-distance filter (`OceanLab N=44`'s fix) doesn't
+reject this — the three tread planes sit 145-161 uu from `Light5` along Z, nowhere near the 325 uu
+radius, unlike OceanLab's 1026-vs-1025 near-miss. Confirmed by direct probe (see below) that this is
+a **gather-stage (`GetVisibleSurfs`) over-inclusion**, not a per-lumel `line_clear` raytrace bug: a
+throwaway `#[test]` in `visible_surfs.rs` parsed native's own built `Model2` body
+(`model_read::parse`) and called `get_visible_surfs(&model, light5_location)` directly — it returns
+surf 95/97/67 as visible, so `light::bake`'s `gathered()` predicate never even reaches the per-lumel
+raytrace with a false verdict; the gather itself is wrong.
+
+**The actual occluder: `DeusExMover9`, a closed wooden door, standing exactly at the gap.** Its
+trunk actor:
+
+    Begin Actor Class=DeusEx.DeusExMover
+        Location=(X=-3088.000000,Y=416.000000,Z=0.000000)
+        Rotation=(Yaw=32768)
+        bIsDoor=True
+        ClosedSound=Sound'MoverSFX.door.WoodDoorClose' ...
+
+`X=-3088` is exactly the world-BSP boundary plane between `Light5`'s side (`X>-3088`, where `Light5`
+sits at `X=-2944`) and the stair treads (`X<=-3088`, descending away from the light). The world model
+has an OPENING there (nodes 89/90/93/94/100/101, all on the `X=-3088` plane) that the closed door
+brush fills. **`model model_deusexmover9` ALSO fails the N=153 gate** (already noted above) — and its
+divergence is the MIRROR IMAGE of this one: UED22's `lights` includes `Light5` on the door's own
+surf 4 (`iLightActors` -> `[Light5, None]`), native's is empty (`[]`). So UED22's real behavior is:
+`Light5` lights the door's own face (surf 4, facing the light) AND is blocked by the closed door from
+reaching the stair treads behind it; native does the opposite on both counts — it lights the treads
+straight through the door and fails to light the door's own face.
+
+**This is the documented, previously-"assumed to never fire" gap**, `visible_surfs.rs`'s own header:
+"**Moving-brush filter (step 3)** ... is not modeled. The board item says whether `BrushTracker` is
+even non-NULL during `LIGHT APPLY` is undetermined, and native has no dynamic-brush tracking to
+answer it ... assumed to never fire." `uedcli/native/unbuilt.py`'s `light_apply_movers` docstring
+(from the NYC_Bar N=59/N=151 mover work) already describes the real mechanism from disassembly:
+`FMovingBrushTracker` (`Engine.dll 0x1014d250`) mirrors every mover poly into a **transient** world
+`Surfs` entry, appended after the world's own surfs, so the mover's geometry participates in the
+SAME bake as a real occluder/target — then those transient surfs are dropped at the end of the bake,
+leaving only the `iLink` bookkeeping and (per mover) a `PrecomputeSphereFilter` leaf-flag pass. Native
+currently only uses that mechanism for the mover's OWN lightmap indices (`brush_lightmap_indices`)
+and the `iLink`/sphere-filter side effects — the world's own `light::bake` /
+`visible_surfs::get_visible_surfs` never sees the movers' transient surfs, so it can neither be
+occluded by a closed door nor light the door's own face through the same gather.
+
+**Not fixed.** The real fix is structural, not a local tweak: the world gather/raytrace and the
+movers' bake need to run against ONE shared scene (world surfs + every mover's transient mirror,
+matching `FMovingBrushTracker`'s real object lifetime), not two independent passes
+(`light::bake` for the world, `light_apply_movers` for movers) that never see each other's geometry.
+That is a larger change touching `light.rs`, `visible_surfs.rs`, and the `unbuilt.py`/`lib.rs`
+orchestration between them — scoping and building it is follow-up work, not a local patch here. No
+mask was added; the gate is untouched.
+
 ## Repro
 
     ladder_run.py --dx dev/games/deusex/Maps/02_NYC_Bar.dx --from 153 --to 153 --keep-native
     model_dump.py <native_N153.dx> <ref_N153.dx> Model2
+    model_dump.py <native_N153.dx> <ref_N153.dx> model_deusexmover9   # the mirror-image half
