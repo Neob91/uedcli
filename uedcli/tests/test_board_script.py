@@ -19,6 +19,12 @@ from pathlib import Path
 
 import pytest
 
+# This file mutates the REAL `dev/docs/board/` tree transiently (see e.g.
+# test_a_malformed_item_is_skipped_not_fatal). `test_board.py` walks that same tree and asserts its
+# shape — under xdist `--dist=loadfile` the two files could otherwise land on different concurrent
+# workers and race. Same xdist_group as test_board.py forces them onto one worker.
+pytestmark = pytest.mark.xdist_group(name="board")
+
 REPO = Path(__file__).resolve().parents[2]
 BOARD = REPO / "dev/docs/board"
 SCRIPT = REPO / "bin/board"

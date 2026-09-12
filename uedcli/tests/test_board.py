@@ -32,6 +32,13 @@ from pathlib import Path
 
 import pytest
 
+# `test_board_script.py` mutates the REAL `dev/docs/board/` tree transiently (creates/deletes real
+# items, some deliberately malformed, to exercise `bin/board`). Under xdist `--dist=loadfile`,
+# different FILES can land on different concurrent workers — pinning both files to one xdist group
+# forces them onto the same worker, restoring the serial ordering this test relies on (a malformed
+# item existing only for the other file's test duration must never be visible here).
+pytestmark = pytest.mark.xdist_group(name="board")
+
 REPO = Path(__file__).resolve().parents[2]
 BOARD = REPO / "dev/docs/board"
 

@@ -152,13 +152,14 @@ filesystem at that path).
   from `tmp_path`. Don't extend the new `TMPDIR` scheme to `-m integration` runs without checking
   that separately — the default `bin/test` (`-m "not integration"`) is what this spec is about.
 
-### 4. Gate the retail-map corpus tests behind an opt-in marker — mechanically trivial, but a real policy call
+### 4. Gate the retail-map corpus tests behind an opt-in marker — DECIDED
 
-Adding a `slow`/`corpus` marker + `addopts = -m "not integration and not slow"` is a five-line
-change. Owner's call, not mine: it removes `test_retail_unreal_gold_maps_import_fully` (173s of
-real regression coverage over real shipped map files) from every default `bin/test` run — a change
-to what "the offline suite" verifies by default, which `dev/docs/rules/tests.md` currently defines
-as the thing you run before every commit. Filed as an open question below.
+Owner ruling (2026-09-12): gate it. Implemented — `@pytest.mark.slow` on
+`test_retail_unreal_gold_maps_import_fully`, `addopts = -m "not integration and not slow"` in
+`pytest.ini`. Saves 173s (11%) of every default `bin/test` run; the coverage still runs via
+`pytest -m slow`. `dev/docs/rules/tests.md` describes "the offline suite" and should be updated to
+say `-m slow` tests are excluded by default — that edit needs its own owner yes
+(`dev/docs/rules/` is not agent-editable) and is NOT done as part of this item; flagged separately.
 
 ### 5. Reduce redundant class-schema resolution in `actor find --prop` / board-scan tests — original framing was wrong; real fix is bigger than a test tweak
 
@@ -198,13 +199,14 @@ own board item rather than building it as part of this one; see the open questio
 
 ## Open questions (owner)
 
-Both filed in `questions/` on this item, and raised live in the same session this spec was written:
-
-1. Gate `test_retail_unreal_gold_maps_import_fully` (and any similarly-shaped real-corpus test)
-   behind an opt-in marker, deselected by default? Saves 173s (11%) of every `bin/test` run, at the
-   cost of that coverage not running by default.
-2. Item 5 turned out to need a `schema_cache.py` change (a new memo-only mode), not a test-only
-   tweak — worth doing as part of this effort, or split into its own board item?
+1. ~~Gate the retail-map corpus test?~~ **Answered 2026-09-12: yes, gate it.** Implemented (item 4).
+2. Item 5 needs a `schema_cache.py` change (a new memo-only mode), not a test-only tweak — worth
+   doing as part of this effort, or split into its own board item? Owner raised a sharp follow-up:
+   would warming the memo across tests invalidate any test that writes a package file and re-reads
+   it expecting fresh content? Answer: the memo is keyed by realpath and would go stale exactly in
+   that scenario — this needs a check (do any tests write then re-read a `.u`/`.utx` at the same
+   path?) before item 5 is safe to build at all, regardless of where it lives. Still open, filed in
+   `questions/`.
 
 ## Proposed order of work
 

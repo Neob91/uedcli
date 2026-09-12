@@ -131,6 +131,7 @@ def _class_index(sys_root: Path) -> ClassIndex:
     return ClassIndex(_paths=paths, _stems={k: Path(v).stem for k, v in paths.items()})
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("name", MAP_NAMES)
 def test_retail_unreal_gold_maps_import_fully(name):
     """Every map in the retail Unreal Gold corpus hits the stale-package redirect (a different

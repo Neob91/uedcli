@@ -4,8 +4,33 @@
 # Rust build/test is containerized. Integration tests (-m integration) stay deselected by pytest.ini.
 # Extra args pass straight through to pytest. Invoke path-qualified (`bin/test`) — `test` is a builtin.
 #     bin/test                 # whole offline suite (pytest + cargo test)
-#     bin/test -k texture -x   # extra args -> pytest
+#     bin/test -k texture -x   # extra args -> pytest, serial (no -n/TMPDIR override — see below)
+#     bin/test -m slow         # the real-corpus tests deselected by default (see pytest.ini)
 #     UEDCLI_SKIP_NATIVE=1 bin/test <file>   # pytest only (skip the Rust ext build + cargo test)
+#
+# The default (no-args) run is parallelized (`-n`, default 4 — override with UEDCLI_TEST_WORKERS;
+# capped rather than `auto` since this host runs multiple concurrent sessions) with
+# `--dist=loadfile` (not the xdist default `--dist=load`): several modules have `scope="module"`
+# fixtures that decode the real UED22 corpus, and `loadfile` keeps every test in one file on one
+# worker so that decode still happens once, not once per worker (test_board.py/test_board_script.py
+# are additionally pinned to one xdist_group — the latter mutates the real `dev/docs/board/` tree
+# and the former walks it, a race `loadfile` alone doesn't close since they're different files). It
+# also runs from a private, uniquely-named tmpfs TMPDIR (`/tmp`) instead of a fixed shared root,
+# fixing a measured hazard: running with a FIXED shared TMPDIR (this repo's own scratch dir, same
+# absolute path for every concurrent session, or plain `/tmp`) produced 1423 cascading
+# `FileNotFoundError`s partway through a real run on this host (board
+# `speed-up-the-offline-test-suite`; exact mechanism unconfirmed — pytest's own tmp_path_factory GC
+# was checked and ruled out). The explicit-args branch below still uses a fixed TMPDIR and so still
+# carries that unconfirmed hazard — this fix only covers the default run. `trap EXIT` won't fire on
+# SIGKILL, so a reaper below also clears any leaked dir — the window is 7 days, looser than pytest's
+# own 3-day liveness assumption for a numbered tmp dir, so it never reaps a run that isn't already
+# long past any reasonable liveness signal.
+#
+# Both the parallel run and the private TMPDIR are scoped to the DEFAULT (no-args) invocation only.
+# `-m integration` tests bind-mount host paths into the live editor container — a private tmpfs
+# TMPDIR here may not be the path the Docker daemon sees — so an explicit-args run (where
+# `-m integration` or single-test debugging happens) stays serial, on the OS default TMPDIR,
+# unless the caller passes their own `-n`/`--dist`.
 set -euo pipefail
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_venv.sh"
 ensure_venv
@@ -14,7 +39,12 @@ cd "$UEDCLI_DIR"                       # pytest rootdir/testpaths resolve here
 
 rc=0
 if [ "$#" -eq 0 ]; then
-  env PYTHONPATH="$UEDCLI_DIR" "$PY" -m pytest uedcli -q || rc=$?
+  find /tmp -maxdepth 1 -name 'uedcli-test-*' -mtime +7 -exec rm -rf {} + 2>/dev/null || true
+  export TMPDIR
+  TMPDIR="$(mktemp -d -p /tmp uedcli-test-XXXXXX)"
+  trap 'rm -rf "$TMPDIR"' EXIT
+  workers="${UEDCLI_TEST_WORKERS:-4}"
+  env PYTHONPATH="$UEDCLI_DIR" "$PY" -m pytest uedcli -q -n "$workers" --dist=loadfile || rc=$?
 else
   env PYTHONPATH="$UEDCLI_DIR" "$PY" -m pytest "$@" -q || rc=$?
 fi
