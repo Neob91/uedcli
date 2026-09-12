@@ -20,6 +20,7 @@ mod linecheck;
 mod model;
 mod model_read;
 mod model_write;
+mod package_read;
 mod passes;
 mod paths;
 mod paths_py;
@@ -38,9 +39,15 @@ use pyo3::types::PyBytes;
 create_exception!(uedcli_native, BuildError, pyo3::exceptions::PyException);
 /// A path-build failure naming the offending value (`paths::PathError`).
 create_exception!(uedcli_native, PathError, pyo3::exceptions::PyException);
+/// A malformed/truncated UE1 package, naming the offending value (`package_read::parse_package`).
+create_exception!(uedcli_native, PackageError, pyo3::exceptions::PyException);
 
 fn map_err(e: model::BuildError) -> PyErr {
     BuildError::new_err(e.to_string())
+}
+
+fn map_pkg_err(e: model::BuildError) -> PyErr {
+    PackageError::new_err(e.to_string())
 }
 
 /// An opaque handle to a built model (the `Built`/handle of §8.1).  Python never sees the
@@ -464,6 +471,74 @@ fn serialize_model(py: Python<'_>, built: &Built) -> PyResult<Py<PyBytes>> {
     Ok(PyBytes::new_bound(py, &bytes).unbind())
 }
 
+// NOTE: the brief's RawPackageOut was a flat 13-tuple; pyo3's `IntoPy` is only implemented for
+// tuples up to 12 elements (compile error: "the trait `OkWrap<_>` is not implemented"). Fixed by
+// nesting the three (offset, count) pairs — same information, arity 10. Flag for Task 5.
+type RawPackageOut = (
+    u16,                       // version
+    u16,                       // licensee
+    u32,                       // flags
+    Vec<(String, u32)>,        // names: (text, entry_flags)
+    Vec<(i64, i64, i32, i64)>, // imports: (ClassPackage, ClassName, PackageIndex, ObjectName)
+    Vec<(i64, i64, i32, i64, u32, i64, i64)>, // exports: (cls, sup, outer, nm, flags, ssize, soff)
+    (usize, usize),          // (name_offset, name_count)
+    (usize, usize),          // (import_offset, import_count)
+    (usize, usize),          // (export_offset, export_count)
+    Option<(usize, usize)>,  // guid_range
+);
+
+/// `parse_package_raw` — the UE1 package header/name/import/export table walk, as plain
+/// tuples (`package_read::parse_package`). Malformed/truncated input raises `PackageError`.
+///
+/// `buf: &[u8]` borrows the Python `bytes` object's buffer directly (zero-copy) rather than
+/// cloning it into an owned `Vec<u8>` — safe under `allow_threads` because Python `bytes` is
+/// immutable, so the buffer cannot change while the GIL is released. This matters far more for
+/// `read_property_tags_raw` below (called thousands of times per package with the SAME full
+/// buffer each time — an owned `Vec<u8>` there re-copies the whole package on every call,
+/// measured at ~15-20ms/call for a 1.2MB package regardless of the tiny slice actually decoded,
+/// versus microseconds borrowed) but is applied here too for consistency.
+#[pyfunction]
+fn parse_package_raw(py: Python<'_>, buf: &[u8]) -> PyResult<RawPackageOut> {
+    let pkg = py
+        .allow_threads(|| package_read::parse_package(buf))
+        .map_err(map_pkg_err)?;
+    Ok((
+        pkg.version, pkg.licensee, pkg.flags, pkg.names, pkg.imports,
+        pkg.exports.into_iter().map(|e| (e.cls, e.sup, e.outer, e.nm, e.flags, e.ssize, e.soff)).collect(),
+        (pkg.name_offset, pkg.name_count),
+        (pkg.import_offset, pkg.import_count),
+        (pkg.export_offset, pkg.export_count),
+        pkg.guid_range,
+    ))
+}
+
+type RawPropertyTagOut = (String, u8, Option<String>, i64, Option<bool>, Vec<u8>, (usize, usize));
+
+/// `read_property_tags_raw` — the UE1 tagged-property list decode, as plain tuples
+/// (`package_read::read_property_tags`). Malformed/truncated input raises `PackageError`.
+///
+/// `buf: &[u8]` borrows the package's full buffer (zero-copy) instead of cloning it — see
+/// `parse_package_raw`'s doc comment. This function is called once per PROPERTY, not once per
+/// package (thousands of calls resolving one deep class hierarchy), each time historically
+/// re-copying the entire multi-hundred-KB-to-multi-MB package buffer to decode a
+/// ~15-byte slice — the root cause of a real hang/severe-slowdown reproduced against
+/// `Engine.u`'s class hierarchy (measured ~15ms/call regardless of the tiny span actually
+/// decoded, dominated by the buffer copy, not the `names` list argument).
+#[pyfunction]
+fn read_property_tags_raw(
+    py: Python<'_>, buf: &[u8], pos: usize, end: usize, names: Vec<String>,
+) -> PyResult<(Vec<RawPropertyTagOut>, usize)> {
+    let (tags, next) = py
+        .allow_threads(|| package_read::read_property_tags(buf, pos, end, &names))
+        .map_err(map_pkg_err)?;
+    Ok((
+        tags.into_iter()
+            .map(|t| (t.name, t.ptype, t.struct_name, t.array_index, t.bool_value, t.raw, t.span))
+            .collect(),
+        next,
+    ))
+}
+
 /// `bake_lighting` — the native `LIGHT APPLY` surface-lightmap bake (spike section 20).
 /// Fills the built Model's lightmap arrays (`light_map`/`light_bits`/`lights`) and links each
 /// lit surf's `iLightMap`, in parallel (rayon).  `lights` is the participating light set as
@@ -738,6 +813,9 @@ fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bake_lighting, m)?)?;
     m.add_function(wrap_pyfunction!(bake_radiance, m)?)?;
     m.add_function(wrap_pyfunction!(render_frame, m)?)?;
+    m.add("PackageError", m.py().get_type_bound::<PackageError>())?;
+    m.add_function(wrap_pyfunction!(parse_package_raw, m)?)?;
+    m.add_function(wrap_pyfunction!(read_property_tags_raw, m)?)?;
     m.add("PathError", m.py().get_type_bound::<PathError>())?;
     m.add_class::<paths_py::PresetIn>()?;
     m.add_class::<paths_py::PathGraphOut>()?;

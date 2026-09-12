@@ -25,7 +25,8 @@ from __future__ import annotations
 
 import os
 import struct
-from dataclasses import dataclass
+import sys
+from dataclasses import dataclass, field
 
 MAGIC = 0x9E2A83C1
 
@@ -35,6 +36,17 @@ class SchemaError(ValueError):
     unresolvable ref). Per the no-fallback contract this is a hard error, never a silent
     degrade. (Canonical home here; `uprops` re-exports it, so `uprops.SchemaError` remains
     the same class object for every existing caller.)"""
+
+
+@dataclass(frozen=True, kw_only=True)
+class NameEntry:
+    """One name-table row as the wire format actually stores it: text plus the real engine's
+    per-entry EObjectFlags bits (RF_Native = 0x04000000, RF_HighlightName = 0x400 — see
+    USCRIPT-COMPILER.md). Named for the concept, not the engine's own `FNameEntry` struct: this
+    module already drops Epic's struct-prefix convention (`Package`, `PropertyTag`), and the
+    real `FNameEntry` also carries a runtime-only hash/next-pointer this never touches."""
+    text: str
+    flags: int
 
 
 def read_compact_index(buf: bytes, pos: int) -> tuple[int, int]:
@@ -84,6 +96,16 @@ class Package:
     imports: list[tuple[int, int, int, int]]   # (ClassPackage, ClassName, PackageIndex, ObjectName)
     exports: list[dict]                          # cls, sup, outer, nm, flags, ssize, soff
     buf: bytes
+    # Rust-decoder metadata — optional for a hand-built test fixture that skips `_parse_package`.
+    name_entries: list[NameEntry] = field(default_factory=list)
+    licensee: int = 0
+    name_offset: int = 0
+    name_count: int = 0
+    import_offset: int = 0
+    import_count: int = 0
+    export_offset: int = 0
+    export_count: int = 0
+    guid_range: tuple[int, int] | None = None
 
     def name_of_ref(self, idx: int) -> str | None:
         """Resolve a signed object reference: 0=None, >0 export idx-1, <0 import -idx-1.
@@ -174,16 +196,54 @@ class Package:
         return self.names[cn] if 0 <= cn < len(self.names) else None
 
 
+_LOAD_CACHE: dict[tuple[str, str], tuple[int, int, "Package"]] = {}  # (realpath, name) -> (size, mtime_ns, Package)
+
+
 def load_package(path: str, *, name: str | None = None) -> Package:
     """Parse a package header + name/import/export tables. Any malformed/truncated input raises
     `SchemaError` (bad magic, a too-short header, a byte-parse overrun, or an export table that
     does not consume to EOF) — the no-fallback integrity gate, so a corrupt package never reaches
-    a caller as a bare `struct.error`/`IndexError` traceback."""
+    a caller as a bare `struct.error`/`IndexError` traceback.
+
+    Memoized in-process by (realpath, resolved name, size, mtime_ns): the same package is loaded
+    repeatedly within one render (e.g. one actor class's package loaded once per actor instance
+    sharing that class) — profiled at 3,404 calls for 108 distinct packages rendering one photo.
+    `name` is keyed too, not just `realpath`: `resolve_class_properties` calls this with `name`
+    derived from a class's FQCN (e.g. `"Fire"` from `Fire.Flame`), which can legitimately differ
+    in casing from the file's own stem (e.g. `fire.u` -> `"fire"`) across different callers of the
+    SAME file — caching by realpath alone served one caller's requested name to another (a real,
+    reproduced bug: found via `test_schema_cache.py`'s golden test failing only when
+    `test_proceduraltex.py` ran first and resolved `Fire.Flame`, poisoning `fire.u`'s cache entry
+    with `Package.name="Fire"` before a later `name="fire"` request). A second, on-disk tier
+    (`pkg_cache.py`) survives across separate CLI invocations.
+
+    The no-name fallback is derived from `path` (as given), not `realpath`: `_parse_package` derives
+    `Package.name` the same way from its own `where=path` argument, so the two must agree — deriving
+    one from `path` and the other from `realpath` would silently diverge whenever `path`'s last
+    component is a symlink pointing at a differently-named file."""
+    realpath = os.path.realpath(path)
+    resolved_name = name if name is not None else os.path.splitext(os.path.basename(path))[0]
+    cache_key = (realpath, resolved_name)
     try:
-        buf = open(path, "rb").read()
+        st = os.stat(realpath)
     except OSError as e:
         raise SchemaError(f"{path}: cannot read package ({e})") from e
-    return parse_package_bytes(buf, where=path, name=name)
+    cached = _LOAD_CACHE.get(cache_key)
+    if cached is not None and cached[0] == st.st_size and cached[1] == st.st_mtime_ns:
+        return cached[2]
+    from . import pkg_cache  # local import: pkg_cache imports Package/NameEntry from here
+    disk_hit = pkg_cache.read(realpath, resolved_name, st.st_size, st.st_mtime_ns)
+    if disk_hit is not None:
+        _LOAD_CACHE[cache_key] = (st.st_size, st.st_mtime_ns, disk_hit)
+        return disk_hit
+    try:
+        buf = open(realpath, "rb").read()
+    except OSError as e:
+        raise SchemaError(f"{path}: cannot read package ({e})") from e
+    pkg = parse_package_bytes(buf, where=path, name=name)
+    _LOAD_CACHE[cache_key] = (st.st_size, st.st_mtime_ns, pkg)
+    pkg_cache.write(realpath, resolved_name, st.st_size, st.st_mtime_ns, pkg)
+    return pkg
 
 
 def parse_package_bytes(buf: bytes, *, where: str, name: str | None = None) -> Package:
@@ -199,52 +259,30 @@ def parse_package_bytes(buf: bytes, *, where: str, name: str | None = None) -> P
 
 
 def _parse_package(buf: bytes, path: str, name: str | None) -> Package:
-    tag, ver_l, _flags, namecnt, nameoff, expcnt, expoff, impcnt, impoff = \
-        struct.unpack_from("<9I", buf, 0)
-    if tag != MAGIC:
-        raise SchemaError(f"{path}: bad magic {tag:#010x} (not an Unreal package)")
-    version = ver_l & 0xFFFF
-
-    def read_name(pos: int) -> tuple[str, int]:
-        if version < 64:                       # null-terminated string + u32 flags
-            end = buf.index(b"\x00", pos)
-            return buf[pos:end].decode("latin-1"), end + 1 + 4
-        s, pos = read_fstring(buf, pos)
-        return s, pos + 4                       # + u32 ObjectFlags
-
-    names, pos = [], nameoff
-    for _ in range(namecnt):
-        s, pos = read_name(pos)
-        names.append(s)
-    imports, pos = [], impoff
-    for _ in range(impcnt):
-        cp, pos = read_compact_index(buf, pos)
-        cn, pos = read_compact_index(buf, pos)
-        pi = struct.unpack_from("<i", buf, pos)[0]; pos += 4
-        on, pos = read_compact_index(buf, pos)
-        imports.append((cp, cn, pi, on))
-    exports, pos = [], expoff
-    for _ in range(expcnt):
-        cls, pos = read_compact_index(buf, pos)
-        sup, pos = read_compact_index(buf, pos)
-        outer = struct.unpack_from("<i", buf, pos)[0]; pos += 4
-        nm, pos = read_compact_index(buf, pos)
-        flv = struct.unpack_from("<I", buf, pos)[0]; pos += 4
-        ssize, pos = read_compact_index(buf, pos)
-        soff = 0
-        if ssize > 0:
-            soff, pos = read_compact_index(buf, pos)
-        exports.append(dict(cls=cls, sup=sup, outer=outer, nm=nm, flags=flv, ssize=ssize, soff=soff))
-    # Integrity: the export loop must not OVERRUN the file (a truncated/desynced package reads a
-    # compact past EOF → an earlier IndexError, or `pos > len` here). A small TRAILING remainder is
-    # tolerated — some real DX packages carry a few bytes of padding after the export table (e.g.
-    # `CaroneElevatorSet.u` has 1 trailing byte; UnrealEd and uedcli's own `utexture` parser both load
-    # it fine). An exact `pos == len` gate false-rejected those as "partial schema".
-    if pos > len(buf):
-        raise SchemaError(f"{path}: export table overran EOF "
-                          f"(cursor {pos} > size {len(buf)}) — truncated or desynced package")
-    return Package(name=name or os.path.splitext(os.path.basename(path))[0], version=version,
-                   names=names, imports=imports, exports=exports, buf=buf)
+    from .native_ext import import_native
+    uedcli_native = import_native()
+    try:
+        (version, licensee, flags, names_with_flags, imports, exports_raw,
+         (name_offset, name_count), (import_offset, import_count),
+         (export_offset, export_count), guid_range) = uedcli_native.parse_package_raw(buf)
+    except uedcli_native.PackageError as e:
+        raise SchemaError(f"{path}: {e}") from e
+    interned_names_with_flags = [(sys.intern(text), flags_) for text, flags_ in names_with_flags]
+    names = [text for text, _flags in interned_names_with_flags]
+    name_entries = [NameEntry(text=text, flags=flags_) for text, flags_ in interned_names_with_flags]
+    exports = [
+        dict(cls=cls, sup=sup, outer=outer, nm=nm, flags=flv, ssize=ssize, soff=soff)
+        for cls, sup, outer, nm, flv, ssize, soff in exports_raw
+    ]
+    return Package(
+        name=sys.intern(name or os.path.splitext(os.path.basename(path))[0]), version=version,
+        names=names, imports=imports, exports=exports, buf=buf,
+        name_entries=name_entries, licensee=licensee,
+        name_offset=name_offset, name_count=name_count,
+        import_offset=import_offset, import_count=import_count,
+        export_offset=export_offset, export_count=export_count,
+        guid_range=guid_range,
+    )
 
 
 # ── the UE1 tagged-property list ─────────────────────────────────────────────────────────────
@@ -275,48 +313,16 @@ class PropertyTag:
 def read_property_tags(pkg: Package, pos: int, end: int) -> tuple[list[PropertyTag], int]:
     """Parse a tagged-property list starting at `pos`, up to the terminating "None" name.
     Returns (tags, pos_after_None). Raises `SchemaError` on any overrun/desync."""
-    buf = pkg.buf
-    if end > len(buf):
-        raise SchemaError(f"tagged-property list bounds exceed the file ({end} > {len(buf)})")
-    tags: list[PropertyTag] = []
-    while True:
-        if pos >= end:
-            raise SchemaError(f"tagged-property list overran its bounds at {pos} (no None)")
-        tag_start = pos
-        nidx, pos = read_compact_index(buf, pos)
-        if not (0 <= nidx < len(pkg.names)):
-            raise SchemaError(f"tagged-property name index {nidx} out of range at {pos}")
-        name = pkg.names[nidx]
-        if name == "None":
-            return tags, pos
-        info = buf[pos]; pos += 1
-        ptype = info & 0x0F
-        size_code = (info >> 4) & 0x07
-        bit7 = bool(info & 0x80)
-        struct_name = None
-        if ptype == PT_STRUCT:
-            sidx, pos = read_compact_index(buf, pos)
-            struct_name = pkg.names[sidx] if 0 <= sidx < len(pkg.names) else None
-        if size_code in _SIZE_FIXED:
-            size = _SIZE_FIXED[size_code]
-        elif size_code == 5:
-            size = buf[pos]; pos += 1
-        elif size_code == 6:
-            size = struct.unpack_from("<H", buf, pos)[0]; pos += 2
-        else:
-            size = struct.unpack_from("<I", buf, pos)[0]; pos += 4
-        if ptype == PT_BOOL:
-            tags.append(PropertyTag(name=name, ptype=ptype, struct_name=None,
-                                    array_index=0, bool_value=bit7, raw=b"",
-                                    span=(tag_start, pos)))
-            continue
-        array_index = 0
-        if bit7:
-            array_index, pos = read_array_index(buf, pos)
-        if pos + size > end:
-            raise SchemaError(f"tagged property {name} value overruns its bounds "
-                              f"({pos}+{size} > {end})")
-        raw = buf[pos:pos + size]; pos += size
-        tags.append(PropertyTag(name=name, ptype=ptype, struct_name=struct_name,
-                                array_index=array_index, bool_value=None, raw=raw,
-                                span=(tag_start, pos)))
+    from .native_ext import import_native
+    uedcli_native = import_native()
+    try:
+        raw_tags, next_pos = uedcli_native.read_property_tags_raw(pkg.buf, pos, end, pkg.names)
+    except uedcli_native.PackageError as e:
+        raise SchemaError(str(e)) from e
+    tags = [
+        PropertyTag(name=sys.intern(name), ptype=ptype,
+                    struct_name=(sys.intern(struct_name) if struct_name is not None else None),
+                    array_index=array_index, bool_value=bool_value, raw=bytes(raw), span=span)
+        for name, ptype, struct_name, array_index, bool_value, raw, span in raw_tags
+    ]
+    return tags, next_pos

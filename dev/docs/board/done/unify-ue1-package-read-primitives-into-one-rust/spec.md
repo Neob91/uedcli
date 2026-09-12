@@ -85,11 +85,15 @@ in `model_read.rs`/`model_write.rs`, no `byteorder`/`nom` in use):
 - `read_property_tags(buf, pos, end, names) -> Result<(Vec<RawPropertyTag>, usize), PkgError>`.
 
 `RawPackage`/`RawPropertyTag` are plain structs (version, licensee, flags, `Vec<(String, u32)>`
-names-with-flags, `Vec<(i64,i64,i64,String)>` imports, `Vec<ExportEntry>` exports) — enough to
-reconstruct today's `upackage.Package` one-for-one, plus the flags field `gate.py` currently
-re-derives by hand. It also carries the raw header layout `gate.py`'s own `Header`/`_parse_header`
-needs and `upackage.Package` currently doesn't expose: `licensee` (the high 16 bits `upackage`
-today discards — `upackage.py:206` keeps only `ver & 0xFFFF`), `name_offset`/`name_count`,
+names (text + per-entry flags, decoded together — see "Python shell" below for how this splits on
+the Python side), `Vec<(i64,i64,i32,i64)>` imports (ClassPackage/ClassName/PackageIndex/ObjectName
+— all four raw indices, matching `upackage.Package.imports`'s existing all-int tuple shape exactly;
+an earlier draft of this spec wrongly wrote the 4th field as a `String`, corrected here),
+`Vec<ExportEntry>` exports) — enough to
+reconstruct today's `upackage.Package` one-for-one, plus the flags `gate.py` currently re-derives
+by hand. It also carries the raw header layout `gate.py`'s own `Header`/`_parse_header` needs and
+`upackage.Package` currently doesn't expose: `licensee` (the high 16 bits `upackage` today
+discards — `upackage.py:206` keeps only `ver & 0xFFFF`), `name_offset`/`name_count`,
 `import_offset`/`import_count`, `export_offset`/`export_count`, and `guid_range: Option<(usize,
 usize)>` — closing `gate.py`'s second duplicate decoder (the byte-offset header struct, not just
 the name-table walk) in the same PR2 pass.
@@ -113,31 +117,60 @@ malformed package raises a normal Python exception, never a panic/traceback.
 into the existing dataclasses, plus new fields (`licensee`/`name_offset`/`import_offset`/
 `export_offset`/`guid_range`) `Package` gains for `gate.py`'s sake.
 
-`Package.names` changes shape: `list[tuple[str, int]]` (name + flags) instead of today's
-`list[str]`. This repo has no back-compat cruft to preserve (unreleased, every caller in-tree and
-editable in the same change — `CLAUDE.md` "no back-compat cruft") — no parallel bare-string compat
-view. Audit and update every one of the ~15 existing callers that indexes/iterates `.names` as bare
-strings in the same PR: grep confirms `mapimport.py`, `umesh.py`, `meshfacts.py`, `audioindex.py`,
-`native/{paths,props,saveorder}.py`, `uprops/{__init__,base,ufield,uclass,values}.py`,
-`uscript/{bytecode,env,compile,conimport,natives,reorder,gate}.py` as the set to check; most only
-call `name_of_ref`/`object_path` (unaffected — those methods absorb the shape change internally),
-a minority index `.names` directly and need the one-line `name, _flags = pkg.names[i]` unpack.
+**Revised during planning (2026-09-11), replacing the original "merge into tuples" design below —
+see `plan.md` for the finding that forced this:** `Package.names` stays exactly `list[str]`,
+unchanged. A new frozen dataclass captures what the wire format actually pairs per name-table
+entry — text plus the real engine's per-entry `EObjectFlags` bits (this project's own
+reverse-engineering, `USCRIPT-COMPILER.md`, already identified two live values: `RF_Native`
+0x04000000 and `RF_HighlightName` 0x400). Named `NameEntry`, not the engine's own `FNameEntry` —
+this codebase already drops Epic's struct-prefix convention for decoded types (`Package`,
+`PropertyTag`, not `UPackage`/`FPropertyTag`), and the real `FNameEntry` also carries a hash and
+hash-bucket next-pointer that never touch disk, so a same-named type would overclaim 1:1 fidelity
+with the C++ struct:
+
+```python
+@dataclass(frozen=True, kw_only=True)
+class NameEntry:
+    text: str
+    flags: int
+```
+
+`Package.name_entries: list[NameEntry]` is added alongside the untouched `Package.names: list[str]`
+— same length, same order (both come from one Rust decode call, so alignment isn't a
+separately-maintained invariant to break). This is NOT the back-compat shim the review rejected
+(that was two representations of the *same* data for migration convenience); the flags are
+genuinely new information no current caller has, so adding them as a new field is ordinary API
+growth, not a compatibility hack. Zero of the ~65 existing call sites that index/iterate `.names`
+need to change — only `gate.py` (PR2) touches `name_entries`.
+
+*(Original design, superseded: `Package.names` becomes `list[tuple[str, int]]`, migrating every
+caller. Planning found the real caller surface is 20+ files / 65+ sites — not the ~15 estimated
+above — several of which (`native/saveorder.py`'s dict-keyed-by-name and set-of-names
+comprehensions) need real semantic rework, not a one-line unpack, since a tuple changes hashing/
+equality semantics for those data structures. Not worth the risk for information most callers
+never wanted.)*
+
 `_parse_package` keeps its name and signature for the direct importers (`uscript/gate.py`,
-`uscript/reorder.py`, `native/saveorder.py`, tests) — only the shape of `Package.names` inside its
-return value changes.
+`uscript/reorder.py`, `native/saveorder.py`, tests) — `Package.names`'s shape inside its return
+value is unchanged; only the new `name_entries`/`licensee`/offset fields are additions.
 
 ### Caching
 
 Two tiers, per `direction/packages.md`'s own "decoded package primitives are cached per-package on
 disk" line:
 
-Before adding either tier, investigate the existing lead from the superseded caching item:
-`uprops/values.py:523`'s `resolve_class_defaults` comment claims packages load "once (shared with
-the render cache)" — implying a cache already exists somewhere in that chain-walk. It evidently
-isn't preventing the 3,404-call count (confirmed: the comment is still there, verbatim), but
-understand what it actually does and why it doesn't help before building a second cache next to
-it — it may be fixable in place, or may be a different (narrower) cache this one should sit beside
-rather than duplicate.
+**Resolved (investigated during planning):** `uprops/values.py:523`'s `resolve_class_defaults`
+comment ("packages load once, shared with the render cache") refers to `_pkgs`, a dict threaded
+through ONE call's own ancestor-chain walk (and into `render_default_tag`'s recursive calls) so a
+single class's superclass chain doesn't reload a package twice. It is real and does its narrow job.
+It does NOT persist across separate top-level calls: `preview_native.py:202-204` calls
+`resolve_class_defaults(actor.cls, resolver=index.resolver())` once per actor instance with no
+`_pkgs` argument, so every one of 1439 actor instances starts a fresh empty dict — this is the
+exact mechanism behind the 3,404-call count (108 distinct packages × many actors sharing classes).
+Not a bug to fix in place: the in-process memoization below sits one layer lower, inside
+`load_package` itself, and fixes this pattern without touching `preview_native.py` or `_pkgs` at
+all — a package loaded for actor #1's chain is already cached when actor #2's fresh chain-walk
+calls `load_package` on the same path.
 
 1. **In-process memoization** inside `load_package`, keyed by `(realpath, st_size, st_mtime_ns)`.
    This alone collapses most of the 3,404-calls-for-108-distinct-packages number within one render.

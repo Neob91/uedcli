@@ -16,7 +16,7 @@ After slice 10 this enforces every structural rule 1-9 (spec "Dependency rules")
   targets < rendering < placement < generators < commands < dispatch < main — a module imports an
   earlier owner and lower services, never a later one.
 - Rule 5: the five cross-family orchestrators import no command family; no family imports another.
-- Rule 6: `cli.dispatch` imports only the eight error owners (plus os/sys) at module scope and loads
+- Rule 6: `cli.dispatch` imports only the nine error owners (plus os/sys) at module scope and loads
   the selected family with function-local imports of `cli.commands`.
 - Rule 7: no production module outside `cli/`, except `__main__.py`, imports any `cli` module.
 - Rule 8: every `__init__.py` under `uedcli/cli/` is import-free (docstring only).
@@ -306,7 +306,7 @@ def test_execution_owners_obey_the_total_order():
 
 
 # Rule 6: the ONLY names `cli.dispatch` may import at module scope — os/sys, `from __future__`, and
-# the eight error owners the ordered process guard catches. Everything else (the command families,
+# the nine error owners the ordered process guard catches. Everything else (the command families,
 # the orchestrators, every service) loads function-locally.
 _DISPATCH_MODULE_SCOPE_ALLOWED = {
     "__future__", "__future__.annotations", "os", "sys",
@@ -315,6 +315,7 @@ _DISPATCH_MODULE_SCOPE_ALLOWED = {
     "uedcli.driver", "uedcli.driver.DriverError",
     "uedcli.geometry", "uedcli.geometry.GeometryError",
     "uedcli.model", "uedcli.model.CoordinateError",
+    "uedcli.pkg_cache", "uedcli.pkg_cache.CacheWriteError",
     "uedcli.schema_cache", "uedcli.schema_cache.CacheWriteError",
     "uedcli.uprops", "uedcli.uprops.SchemaError",
     "uedcli.cli.errors", "uedcli.cli.errors.CommandError", "uedcli.cli.errors.ProjectError",
@@ -330,7 +331,7 @@ def test_dispatch_module_scope_imports_only_the_error_owners():
     module_scope = _module_scope_imports(tree, mod_name, is_pkg)
     extra = sorted(module_scope - _DISPATCH_MODULE_SCOPE_ALLOWED)
     assert not extra, (
-        "cli.dispatch imports these at module scope, but rule 6 allows only os/sys and the eight "
+        "cli.dispatch imports these at module scope, but rule 6 allows only os/sys and the nine "
         f"error owners there (every family/orchestrator/service loads function-locally): {extra}")
     all_imports = _imported_names(tree, mod_name, is_pkg)
     assert any(n.startswith(_COMMANDS_PKG) for n in all_imports), (

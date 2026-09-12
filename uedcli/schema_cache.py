@@ -65,7 +65,7 @@ from .uprops import Package, Prop, SchemaError
 # Bump on ANY change to: a bundle shape/fields (disc OR prop), a feeding decoder in uprops/upackage,
 # the Prop layout, or the serialization format. A bump makes every old entry unreachable (new key +
 # new v<N>/ dir). The committed frozen-golden test trips red to force this human step (spec §4.5/§11).
-SCHEMA_CACHE_VERSION = 2
+SCHEMA_CACHE_VERSION = 3
 
 # Footprint cap for the persistent schema cache (spec follow-up: automatic GC for cache/schema/).
 # Entries are IMMUTABLE / content-keyed, so eviction carries NO correctness pressure — evicting a

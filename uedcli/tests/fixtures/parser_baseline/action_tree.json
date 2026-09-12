@@ -14860,8 +14860,8 @@
             "gc"
           ],
           "subparser_help": {
-            "clear": "delete the persistent package-schema cache (~/.uedcli/cache/schema); it is pure derivable throwaway and rebuilds on the next command. Use for the schema-cache escape-hatch/paranoid case or to reclaim old decoder-version (v<N>/) dirs.",
-            "gc": "shrink the package-schema cache without emptying it: delete the orphaned old decoder-version (v<N>/) dirs, then evict current-version entries least-recently-used until the cache fits its size/count cap. Cached entries are derivable, so an evicted one simply re-decodes the next time it is needed. Runs automatically (best-effort) after a cache write; this is the on-demand surface."
+            "clear": "delete BOTH persistent caches (~/.uedcli/cache/schema and .../pkg); both are pure derivable throwaway and rebuild on the next command. Use for the cache escape-hatch/paranoid case or to reclaim old decoder/cache-version (v<N>/) dirs.",
+            "gc": "shrink BOTH caches without emptying them: delete the orphaned old decoder/cache-version (v<N>/) dirs, then evict current-version entries least-recently-used until each cache fits its size/count cap. Cached entries are derivable, so an evicted one simply re-decodes the next time it is needed. Runs automatically (best-effort) after a cache write; this is the on-demand surface."
           }
         }
       ],
@@ -14930,7 +14930,7 @@
               "choices": null,
               "metavar": "N",
               "converter": "int",
-              "help": "evict until the cache holds at most N bytes (default: the built-in cap, 256 MiB, or $UEDCLI_SCHEMA_CACHE_MAX_BYTES). 0 evicts everything.",
+              "help": "evict until each cache holds at most N bytes (default per cache: the built-in cap, 256 MiB, or its own $UEDCLI_*_CACHE_MAX_BYTES). 0 evicts everything.",
               "mutex_group": null
             },
             {
@@ -14946,7 +14946,7 @@
               "choices": null,
               "metavar": "N",
               "converter": "int",
-              "help": "evict until the cache holds at most N blob files (default: no count cap unless $UEDCLI_SCHEMA_CACHE_MAX_ENTRIES sets one). 0 evicts everything.",
+              "help": "evict until each cache holds at most N blob files (default per cache: no count cap unless its own $UEDCLI_*_CACHE_MAX_ENTRIES sets one). 0 evicts everything.",
               "mutex_group": null
             }
           ],

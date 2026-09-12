@@ -302,6 +302,19 @@ def schema_cache_root(*, create: bool = False) -> Path:
     return root
 
 
+def pkg_cache_root(*, create: bool = False) -> Path:
+    """The gitignored, regenerable per-package DECODED-PRIMITIVES cache: the per-user, cross-project
+    `<user_cache_home>/pkg/`, sibling to `schema/` — the second tier below `upackage.load_package`'s
+    in-process memoization (`pkg_cache.py`). Holds one marshal blob per `(package realpath, size,
+    mtime_ns)` stat tuple under a `v<N>/` cache-version subdir; `pkg_cache.py` owns the layout.
+    `create=True` `mkdir -p`s it; the default is a pure path (a read must not create the dir as a
+    side effect)."""
+    root = user_cache_home() / "pkg"
+    if create:
+        root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
 def load_user_config(override: str | None = None) -> UserConfig | None:
     """Load the per-user `[games.*]` config. Returns None if absent (→ caller uses the legacy path).
     Raises ConfigError on a malformed file, wrong schema, unknown key, missing/relative game dir."""

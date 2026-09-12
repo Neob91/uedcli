@@ -6,7 +6,8 @@ that guard.
 
 To preserve the guard's ordered catch it imports the error owners at module scope (spec "Dependency
 rules" rule 6): `cli.errors`, `config.ConfigError`, `model.CoordinateError`, `geometry.GeometryError`,
-`driver.DriverError`, `classindex.ClassRefError`, `uprops.SchemaError`, `schema_cache.CacheWriteError`.
+`driver.DriverError`, `classindex.ClassRefError`, `uprops.SchemaError`, `schema_cache.CacheWriteError`,
+`pkg_cache.CacheWriteError`.
 """
 from __future__ import annotations
 
@@ -18,6 +19,7 @@ from ..config import ConfigError
 from ..driver import DriverError            # DriverError → top-level clean-exit catch (no traceback)
 from ..geometry import GeometryError
 from ..model import CoordinateError
+from ..pkg_cache import CacheWriteError as PkgCacheWriteError
 from ..schema_cache import CacheWriteError
 from ..uprops import SchemaError
 from .errors import CommandError, ProjectError
@@ -61,11 +63,11 @@ def dispatch(args) -> int:
         # the corrupt-package backstop so it never tracebacks (dispatch did NOT catch this before).
         print(f"schema error: {e}", file=sys.stderr)
         return 2
-    except CacheWriteError as e:
-        # The persistent schema cache is unwritable (classically a root-owned ~/.uedcli/cache from a
-        # container run). Surfaced with an actionable fix, never swallowed — a dead cache otherwise
-        # re-decodes every package every run with no hint why (2026-07-18). The message is
-        # self-contained (chown hint + UEDCLI_SCHEMA_CACHE=off escape hatch).
+    except (CacheWriteError, PkgCacheWriteError) as e:
+        # A persistent cache (schema or on-disk package) is unwritable (classically a root-owned
+        # ~/.uedcli/cache from a container run). Surfaced with an actionable fix, never swallowed —
+        # a dead cache otherwise re-decodes every package every run with no hint why (2026-07-18).
+        # The message is self-contained (chown hint + the relevant UEDCLI_*_CACHE=off escape hatch).
         print(str(e), file=sys.stderr)
         return 2
     except BrokenPipeError:

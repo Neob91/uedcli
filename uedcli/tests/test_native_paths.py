@@ -155,8 +155,15 @@ def test_a_graph_naming_a_nav_index_off_the_roster_is_an_error(env, monkeypatch)
 
 
 def test_a_missing_native_symbol_is_a_named_error(env, monkeypatch):
+    """Simulates a stale `uedcli_native` build missing `build_path_graph` specifically -- not the
+    WHOLE module, since `apply_path_pass` also decodes the golden `.dx` via `upackage.load_package`
+    (needs `parse_package_raw`/`PackageError`) before ever reaching the graph builder under test."""
+    import sys
     import types
-    monkeypatch.setitem(__import__("sys").modules, "uedcli_native", types.SimpleNamespace())
+    import uedcli_native as real_native
+    fake = types.SimpleNamespace(**{k: v for k, v in vars(real_native).items()
+                                    if k != "build_path_graph"})
+    monkeypatch.setitem(sys.modules, "uedcli_native", fake)
     monkeypatch.setattr(paths, "graph_builder", paths._native_build_path_graph)
     with pytest.raises(paths.PathPassError, match="build_path_graph"):
         paths.apply_path_pass(_GOLDEN.read_bytes(), pathing="ued22-469", **env)
