@@ -33,6 +33,7 @@ EX_CASE = 0x0A
 EX_ARRAY_ELEMENT = 0x1A
 EX_JUMP_IF_NOT = 0x07
 EX_STOP = 0x08
+EX_ASSERT = 0x09
 EX_NOTHING = 0x0B
 EX_LABEL_TABLE = 0x0C
 EX_GOTO_LABEL = 0x0D
@@ -372,6 +373,8 @@ def build_scope(func: FuncDecl, *, members: dict[str, str] | None = None,
 
 
 # ── conversions (EExprToken 0x39..0x5F) — each opcode VERIFIED against a UCC compile ─────────────
+# 0x56 (ObjectToString) is object/class -> string, not listed here since object types are
+# parametrized (`object:actor`, ...) — handled directly in `_coerce` instead of this flat table.
 _CONV: dict[tuple[str, str], int] = {
     ("byte", "int"): 0x3A, ("byte", "float"): 0x3C,
     ("int", "byte"): 0x3D, ("int", "bool"): 0x3E, ("int", "float"): 0x3F,
@@ -615,6 +618,14 @@ class _Lowerer:
 
     def _st_stop(self, s) -> None:
         self.body.tok(Tok(EX_STOP))
+
+    def _st_assert(self, s) -> None:
+        # bytecode.py's decode confirms the u16 operand is the 1-based source line of the `assert`
+        # keyword itself (probed against a live UED22 UCC compile, 2026-09-13).
+        if s.line is None:
+            raise LowerError("assert statement missing its source line")
+        cond, _ = self.expr(s.exprs[0])
+        self.body.tok(Tok(EX_ASSERT, (("raw", struct.pack("<H", s.line)), ("sub", cond))))
 
     def _st_block(self, s) -> None:
         for inner in s.body:
@@ -1053,6 +1064,8 @@ class _Lowerer:
         if ftype == "none" and (_is_object(ttype) or _is_struct(ttype)
                                 or ttype in ("class", "name")):
             return tok                                  # NoObject already the right null const
+        if (_is_object(ftype) or ftype == "class") and ttype == "string":
+            return Tok(0x56, (("sub", tok),))            # ObjectToString (probed: object AND class)
         if fold and ttype in ("int", "float", "byte"):
             cv = _const_num(tok)                        # a numeric literal folds at compile time
             if cv is not None:

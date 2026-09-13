@@ -47,6 +47,7 @@ class Stmt:
     clauses: tuple[tuple[Expr | None, tuple["Stmt", ...]], ...] = ()   # if/switch arms
     local_type: TypeRef | None = None
     names: tuple[str, ...] = ()
+    line: int | None = None         # 1-based source line; only `assert` needs it so far
 
 
 # ── declarations ──────────────────────────────────────────────────────────────

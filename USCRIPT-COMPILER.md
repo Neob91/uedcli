@@ -492,9 +492,23 @@ strict gate autonomously.
   — a real user pointing `--deps` at a UT99 substrate would still get the UED22 defaults rule. Out of
   scope for this fix (only the `compile.py`/`InstallEnv` threading and the test-harness call site were
   asked for); flagged here rather than silently added.
-- `assert`/`do..until` lowering — a real, scoped gap in `lower.py`/`compile.py`. Replication blocks
-  and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented, scoped out
-  for now.
+- **`assert` lowering is FIXED (2026-09-13)**: found compiling the real UT99 `IpServer` package
+  (below). `EX_Assert` (0x09)'s u16 operand is the 1-based source line of the `assert` keyword itself
+  (probed live: two `assert`s on different lines each encode their own line number) — not a jump
+  offset. `Token.line` (already tracked by the lexer) now threads through `Stmt.line`
+  (`parser._parse_assert`) into the new `lower._st_assert`. Verified byte-exact vs a fresh UED22 UCC
+  build (`UscAssertObjToStr` fixture, `test_uscript_assert_objtostring.py`). `do..until` lowering
+  remains unimplemented.
+- **Object -> string conversion is FIXED (2026-09-13)**, found in the same `IpServer` pass:
+  `string(SomeObject)` casts raised "no conversion" — `_CONV`'s flat table can't hold a parametrized
+  object type, so this opcode was never added. Probed live: `EX_ObjectToString` (0x56), sitting
+  between `FloatToString` (0x55) and `NameToString` (0x57) in UCC's own conversion-opcode block.
+  Handled directly in `_coerce` (not the `_CONV` table). Verified byte-exact in the `UscAssertObjToStr`
+  fixture. The `class<T>` case (`string(SomeClass)`) uses the same code path and compiles, on the
+  inference that an object and a class both store as a 4-byte object ref — but this half is NOT
+  live-verified (no golden exercises it); a future package hitting a different real opcode there would
+  surface as a normal gate failure, not a silent corruption. Non-conversation `#exec` (mesh/audio/font
+  import codecs) remain fully unimplemented, scoped out for now.
 - **`#exec TEXTURE IMPORT`** (RE'd + wired in 2026-09-13, `dev/docs/board/done/
   uscript-texture-import-compiler-integration/`): a controlled single-class fixture with no
   mip-average tie (`UscTexAsym4x4`) passes the STRICT gate byte-exact. Two open judgment calls,
@@ -513,6 +527,24 @@ strict gate autonomously.
   `native noexport` and do not round-trip **even through UCC itself** — not valid golden targets.
   Reaching 30 packages needs community/Internet pure-script packages (network access confirmed
   working) once the substrate + `#exec` gaps above narrow further.
+  **2026-09-13 UT99 stock-package survey** (beyond `UWeb`/`Fire`, looking for the next corpus wins):
+  `IpDrv` is `native noexport` (batchexport asserts on `Class->ScriptText`) — not a valid target, same
+  class as the UED22 natives above. `UnrealI` (146 classes) and `UWindow` (78 classes) both decompile
+  fine but do NOT round-trip even through UT99's own UCC — both need game content this substrate never
+  fetches (`UnrealI`: `.pcx`/sound assets via `#exec TEXTURE IMPORT`/sound refs; `UWindow`: a `MenuBar`
+  texture `UWindowMenuBar.uc` expects loaded). `UTServerAdmin` won't even LOAD (`Female2Voice` audio
+  package missing). `UBrowser`/`UMenu`/`UTMenu`/`UTBrowser` all depend on `UWindow` and were not
+  reached (blocked by the same missing-texture issue one level down). None of these five are content-
+  free code-only packages the way `UWeb`/`Fire` are — not valid targets without a much larger
+  asset-fetch effort, out of scope here.
+  `IpServer` (2 classes, `UdpServerQuery`/`UdpServerUplink`) IS content-free and round-trips cleanly
+  through UT99's own UCC — a real candidate, not yet a corpus win. Compiling it surfaced the `assert`
+  and object/class->string gaps above (now fixed) and ONE more, NOT yet fixed: a `byte -> string`
+  conversion (`PlayerReplicationInfo.Team`, a byte field, read through a `$` string concat in
+  `GetPlayer`) — `_CONV` has no entry for it and the exact opcode is unconfirmed (probing was blocked
+  by host-wide docker/OCI resource exhaustion this session, not a code question). Sources+golden
+  saved offline at `_scratch/uscript_survey/IpServer/` (not committed — scratch). See
+  `dev/docs/board/inbox/uscript-byte-to-string-conversion-missing/`.
 - **Cross-campaign flag**: `uedcli/native/saveorder.py` (the map-parity path) has its own copy of the
   same CRT `qsort` — worth checking it isn't the mis-ported classic variant we initially (wrongly)
   suspected here (board item `saveorder-msvc-qsort-misport`).

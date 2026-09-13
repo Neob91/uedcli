@@ -917,12 +917,12 @@ class _Parser:
         return Stmt(kind="foreach", exprs=(iterator,), body=self._parse_embedded())
 
     def _parse_assert(self) -> Stmt:
-        self._advance()  # 'assert'
+        line = self._advance().line  # 'assert'
         self._expect_op("(")
         cond = self._parse_expr()
         self._expect_op(")")
         self._eat_op_optional(";")
-        return Stmt(kind="assert", exprs=(cond,))
+        return Stmt(kind="assert", exprs=(cond,), line=line)
 
     def _parse_expr_statement(self) -> Stmt:
         lhs = self._parse_expr()
