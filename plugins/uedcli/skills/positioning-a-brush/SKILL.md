@@ -126,13 +126,3 @@ work, but don't try to convert to world XYZ by hand; use the reported U/V values
   whichever in-plane axis is vertical), not `--centroid-v` — see Core Pattern.
 - **Forgetting `set` doesn't decide `CsgOper` either.** An alcove carved into a room's wall needs
   `--csg subtract` at build time; positioning alone won't make a `CSG_Add` block "recess."
-
-## Real-world impact
-
-Confirmed on real UE1/Deus Ex geometry across three levels (UNATCO HQ, NYC_Bar, WanChai Market):
-**the "anti-parallel mating face" rule as originally written was wrong for every reference brush
-tested, because every one of them was a subtractive room** (the common case for an interior wall)
-— five independent agents each caught this and picked the parallel face instead, verifying via a
-distance-sign check, before the rule above was corrected to be CsgOper-aware. On a level built the
-way real Deus Ex levels are built, the earlier "anti-parallel" default would have embedded the new
-brush in the wall on nearly every placement.
