@@ -167,6 +167,30 @@ class ObjectBody:
 
 
 @dataclass(frozen=True, kw_only=True)
+class TextureMip:
+    """One `FMipmap` level of a `UTexture`'s `Mips` array: `width`/`height` plus its row-major
+    palette-index pixel bytes (mip0 = the imported PCX verbatim; each further level a quantized
+    box-average — see `texture_import.py`)."""
+    width: int
+    height: int
+    data: bytes
+
+
+@dataclass(frozen=True, kw_only=True)
+class TextureBody:
+    """A `UTexture` export body (`#exec TEXTURE IMPORT`): `props` (tagged properties, already
+    serialized, same convention as `ObjectBody`) then a `TArray<FMipmap>` built from `mips`.
+
+    Unlike every other body kind, this one is NOT fully positioned by the compiler: each `FMipmap`'s
+    leading skip-offset is an ABSOLUTE FILE position (the byte just past that mip's pixel data),
+    which only `serialize.py` knows once the whole package is laid out. `serialize._texture_body`
+    writes a zero placeholder and returns the relative patch positions; `serialize.serialize` patches
+    them to real file offsets in a second pass once `build_package` has fixed this export's `soff`."""
+    props: bytes
+    mips: tuple[TextureMip, ...]
+
+
+@dataclass(frozen=True, kw_only=True)
 class Export:
     cls: int
     super_ref: int
@@ -174,7 +198,7 @@ class Export:
     name: int               # name index
     flags: int              # RF_* object flags
     body: (TextBufferBody | ClassBody | PropertyBody | EnumBody | ConstBody | StructBody
-           | FunctionBody | StateBody | ObjectBody)
+           | FunctionBody | StateBody | ObjectBody | TextureBody)
 
 
 @dataclass(frozen=True, kw_only=True)

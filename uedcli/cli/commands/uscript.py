@@ -47,7 +47,8 @@ def _compile(args) -> int:
     env = InstallEnv(_search_dirs(args.deps))
 
     try:
-        pkg = compile_package_dir(classes, env, package_name=package)
+        pkg = compile_package_dir(classes, env, package_name=package,
+                                  texture_files=_texture_files(src_dir))
         data = serialize(pkg)
         siblings = compile_conversation_siblings(classes, env, package_name=package,
                                                  con_files=_con_files(src_dir))
@@ -86,6 +87,20 @@ def _con_files(src_dir: str) -> dict[str, bytes]:
     for d in (src_dir, os.path.dirname(os.path.abspath(src_dir))):
         for p in glob.glob(os.path.join(d, "*.con")) + glob.glob(os.path.join(d, "*.Con")):
             out.setdefault(os.path.basename(p), Path(p).read_bytes())
+    return out
+
+
+def _texture_files(src_dir: str) -> dict[str, bytes]:
+    """PCX inputs a `#exec TEXTURE IMPORT FILE=Textures\\X.PCX` may reference — a package lays its
+    `Textures/` dir beside `Classes/`, so this checks both the sources dir and its parent. Keyed
+    `Textures/<name>` (compile.py matches a directive's `FILE=` path case/slash-insensitively)."""
+    out: dict[str, bytes] = {}
+    for d in (src_dir, os.path.dirname(os.path.abspath(src_dir))):
+        tex_dir = os.path.join(d, "Textures")
+        if not os.path.isdir(tex_dir):
+            continue
+        for p in glob.glob(os.path.join(tex_dir, "*")):
+            out.setdefault(f"Textures/{os.path.basename(p)}", Path(p).read_bytes())
     return out
 
 

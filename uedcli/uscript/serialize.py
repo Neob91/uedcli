@@ -8,10 +8,13 @@ that builds the model; this module's job is a faithful encode, pinned by `test_u
 """
 from __future__ import annotations
 
+import struct
+
 from ..native.codec import enc_u16, enc_u32, enc_u64, write_ci, write_fstring
 from ..native.pkg_write import ExportRec, ImportRec, NameTable, build_package
+from ..upackage import _parse_package
 from .model import (ClassBody, CompiledPackage, ConstBody, EnumBody, Export, FunctionBody,
-                    ObjectBody, PropertyBody, StateBody, StructBody, TextBufferBody)
+                    ObjectBody, PropertyBody, StateBody, StructBody, TextBufferBody, TextureBody)
 
 _FUNC_NET = 0x40   # FUNC_Net: adds a trailing u16 RepOffset
 
@@ -100,6 +103,27 @@ def _class_body(b: ClassBody) -> bytes:
     return bytes(out)
 
 
+def _texture_body(b: TextureBody) -> tuple[bytes, list[tuple[int, int]]]:
+    """`props` then a `TArray<FMipmap>`: `ci(count)`, then per mip `u32 skip-offset (placeholder) +
+    ci(len) + data + u32 USize + u32 VSize + u8 UBits + u8 VBits`. Returns `(body, patches)` where
+    `patches` is `[(skip_field_relative_offset, data_end_relative_offset), ...]` — relative to the
+    START of this body, resolved to absolute file positions by `serialize()` once `build_package` has
+    fixed this export's `soff` (see `TextureBody`'s docstring)."""
+    out = bytearray(b.props)
+    out += write_ci(len(b.mips))
+    patches: list[tuple[int, int]] = []
+    for m in b.mips:
+        skip_pos = len(out)
+        out += enc_u32(0)                     # placeholder; patched to an absolute file position
+        out += write_ci(len(m.data))
+        out += m.data
+        data_end = len(out)                   # this mip's skip value, once body_start is added
+        ubits, vbits = m.width.bit_length() - 1, m.height.bit_length() - 1
+        out += enc_u32(m.width) + enc_u32(m.height) + bytes((ubits, vbits))
+        patches.append((skip_pos, data_end))
+    return bytes(out), patches
+
+
 def _body_bytes(e: Export, none_ref: int) -> bytes:
     match e.body:
         case TextBufferBody():
@@ -120,8 +144,23 @@ def _body_bytes(e: Export, none_ref: int) -> bytes:
             return _state_body(e.body, none_ref)
         case ObjectBody():
             return e.body.props + e.body.trailer     # UObject body: no leading None ref
+        # TextureBody has no case here: serialize() branches around _body_bytes for it entirely,
+        # since a mip's skip-offset patch needs the package's final layout — see serialize(). A
+        # TextureBody reaching this function is a bug in that branch, caught by the fallthrough below.
         case _:
             raise NotImplementedError(f"no serializer for body {type(e.body).__name__}")
+
+
+def _patch_texture_mips(data: bytes, patches: list[tuple[int, int, int]]) -> bytes:
+    """Patch each `(export_index, skip_pos_rel, data_end_rel)` FMipmap skip-offset to the real
+    absolute file position, once `build_package` has laid the package out and fixed every export's
+    `soff`."""
+    parsed = _parse_package(data, "<serialize>", "uedcli")
+    out = bytearray(data)
+    for export_index, skip_pos_rel, data_end_rel in patches:
+        soff = parsed.exports[export_index]["soff"]
+        struct.pack_into("<I", out, soff + skip_pos_rel, soff + data_end_rel)
+    return bytes(out)
 
 
 def serialize(pkg: CompiledPackage) -> bytes:
@@ -136,8 +175,17 @@ def serialize(pkg: CompiledPackage) -> bytes:
     none_ref = next(i for i, n in enumerate(pkg.names) if n.text == "None")
     imports = [ImportRec(im.class_package, im.class_name, im.package_index, im.object_name)
                for im in pkg.imports]
-    exports = [ExportRec(cls=e.cls, super_ref=e.super_ref, outer=e.outer, name=e.name,
-                         flags=e.flags, body=_body_bytes(e, none_ref)) for e in pkg.exports]
-    return build_package(version=pkg.version, licensee=pkg.licensee,
+    exports = []
+    mip_patches: list[tuple[int, int, int]] = []
+    for i, e in enumerate(pkg.exports):
+        if isinstance(e.body, TextureBody):
+            body, patches = _texture_body(e.body)
+            mip_patches += [(i, skip_pos, data_end) for skip_pos, data_end in patches]
+        else:
+            body = _body_bytes(e, none_ref)
+        exports.append(ExportRec(cls=e.cls, super_ref=e.super_ref, outer=e.outer, name=e.name,
+                                 flags=e.flags, body=body))
+    data = build_package(version=pkg.version, licensee=pkg.licensee,
                          package_flags=pkg.package_flags, names=names,
                          imports=imports, exports=exports, guid=pkg.guid)
+    return _patch_texture_mips(data, mip_patches) if mip_patches else data

@@ -6,6 +6,10 @@ byte to fix.
 
 Exclusion set (only per-build-random engine fields; see `dev/docs/unrealed/unrealscript/parity.md`):
 - the 16-byte package GUID in the header (v>=68).
+- a `UTexture` export's `InternalTime[2]` property (RE'd 2026-09-13, `dev/docs/spikes/
+  2026-09-13-texture-import-re/spike.md`): two clean compiles of the same `#exec TEXTURE IMPORT`
+  source differ in EXACTLY the GUID plus this field — same per-compile-random evidence bar as the
+  GUID. See `USCRIPT-COMPILER.md` for the owner-review note.
 
 Anything else that differs is a REAL divergence and fails. New exclusions need evidence + owner
 sign-off (board item `uedcli-unrealscript-compiler`), never a silent mask here.
@@ -20,6 +24,34 @@ from ..upackage import (MAGIC, _parse_package, read_compact_index, read_fstring,
                         read_property_tags)
 from ..uprops.base import PROPERTY_TYPES
 from .bytecode import decode_script
+
+_INTERNALTIME = "internaltime"
+_ATOMIC_STRUCTS = frozenset({"vector", "rotator", "scale", "color"})
+
+
+def _internaltime_ranges(buf: bytes) -> list[tuple[int, int]]:
+    """Byte ranges of every `Texture` export's `InternalTime` property VALUE (both static-array
+    elements) — the second per-compile-random field, alongside the package GUID (see module
+    docstring). Only scans exports classed exactly `Texture` (a plain tagged-property body); any
+    parse failure just yields no ranges (the raw-byte compare below still catches a real divergence)."""
+    ranges: list[tuple[int, int]] = []
+    try:
+        pkg = _parse_package(buf, "<gate>", "gate")
+    except Exception:
+        return ranges
+    for i, e in enumerate(pkg.exports):
+        if (pkg.object_class_name(i + 1) or "").casefold() != "texture":
+            continue
+        so, sz = e["soff"], e["ssize"]
+        try:
+            tags, _ = read_property_tags(pkg, so, so + sz)
+        except Exception:
+            continue
+        for t in tags:
+            if t.name.casefold() == _INTERNALTIME:
+                start, end = t.span
+                ranges.append((end - len(t.raw), end))
+    return ranges
 
 _HEADER_FIXED = 36  # nine little-endian u32: tag, version, flags, (count,offset)*3
 
@@ -122,11 +154,12 @@ def gate(uedcli_u: bytes, ucc_u: bytes, *, ucc_name: str = "ucc", mine_name: str
     except ValueError as e:
         return GateResult(passed=False, messages=[f"header parse: {e}"])
 
-    ranges_a = [ha.guid_range] if ha.guid_range else []
-    ranges_b = [hb.guid_range] if hb.guid_range else []
+    ranges_a = ([ha.guid_range] if ha.guid_range else []) + _internaltime_ranges(uedcli_u)
+    ranges_b = ([hb.guid_range] if hb.guid_range else []) + _internaltime_ranges(ucc_u)
     ma, mb = _masked(uedcli_u, ranges_a), _masked(ucc_u, ranges_b)
     if ma == mb:
-        return GateResult(passed=True, messages=[f"byte-identical modulo GUID ({len(ucc_u)} bytes)"])
+        return GateResult(passed=True,
+                          messages=[f"byte-identical modulo GUID/InternalTime ({len(ucc_u)} bytes)"])
 
     # Diverged — build diagnostics.
     if len(uedcli_u) != len(ucc_u):
@@ -293,12 +326,40 @@ class _UPkg:
                     self.ref_identity(ch), self._nm(fn), line, tp, ss)
         if cls in _CF_PROPERTY_TYPES:
             return ("property", *self._canon_property(pos, end))
+        if cls == "texture":
+            # `#exec TEXTURE IMPORT`: tagged properties, then a `TArray<FMipmap>` (a SECOND one iff
+            # `bHasComp`). Each `FMipmap`'s leading skip-offset is an ABSOLUTE FILE position — real
+            # content only up to a table-layout permutation, so it is excluded here (not compared),
+            # same as everything else this gate treats as position, not content.
+            tags, pos = read_property_tags(self.p, pos, end)
+            mips, pos = self._canon_mip_array(pos)
+            has_comp = any(t.name.casefold() == "bhascomp" and t.bool_value for t in tags)
+            comp_mips: tuple = ()
+            if has_comp:
+                comp_mips, pos = self._canon_mip_array(pos)
+            return ("texture", self._canon_tags(tags, texture=True), mips, comp_mips, buf[pos:end].hex())
         # Any other class = a plain UObject instance (e.g. a ConSys conversation object from
         # `#exec CONVERSATION IMPORT`): its body is a None-terminated tagged-property list, then any
         # native-Serialize trailer. Canonicalise the tags (order/case/ref-target neutral) and keep the
         # trailer raw so a native tail still compares.
         tags, after = read_property_tags(self.p, pos, end)
         return ("object", cls, self._canon_tags(tags), buf[after:end].hex())
+
+    def _canon_mip_array(self, pos: int) -> tuple[tuple, int]:
+        """One `TArray<FMipmap>`: `ci(count)`, then per mip `[u32 skip-offset (v>=63, EXCLUDED — an
+        absolute file position)] + ci(len) + data + u32 USize + u32 VSize + u8 UBits + u8 VBits`."""
+        buf = self.buf
+        count, pos = read_compact_index(buf, pos)
+        mips = []
+        for _ in range(count):
+            if self.p.version >= 63:
+                pos += 4                              # skip-offset: excluded, not content
+            dcount, pos = read_compact_index(buf, pos)
+            data = buf[pos:pos + dcount]; pos += dcount
+            usize, vsize = struct.unpack_from("<II", buf, pos); pos += 8
+            ubits, vbits = buf[pos], buf[pos + 1]; pos += 2
+            mips.append((usize, vsize, ubits, vbits, data.hex()))
+        return tuple(mips), pos
 
     def _canon_property(self, pos: int, end: int):
         buf = self.buf
@@ -365,9 +426,16 @@ class _UPkg:
     def _canon_props(self, pos: int, end: int):
         return self._canon_tags(read_property_tags(self.p, pos, end)[0])
 
-    def _canon_tags(self, tags):
+    def _canon_tags(self, tags, *, texture: bool = False):
+        # `InternalTime` is per-compile-random (see gate.py's module docstring / USCRIPT-COMPILER.md)
+        # — same exclusion bar as the package GUID, so its value is EXCLUDED, not compared. Scoped to
+        # an actual `Texture` export's own tags (`texture=True`), matching the strict gate's own
+        # `_internaltime_ranges` scoping — a property merely NAMED `InternalTime` on some other class
+        # (defaults, a nested struct, a plain object body) is real content and stays compared.
         return tuple((t.name.casefold(), t.array_index, (t.struct_name or "").casefold(),
-                     self._canon_value(t)) for t in tags)
+                     "excluded" if texture and t.name.casefold() == _INTERNALTIME
+                     else self._canon_value(t))
+                    for t in tags)
 
     def _canon_value(self, t):
         from ..upackage import PT_BOOL, PT_NAME, PT_OBJECT, PT_STRUCT
@@ -380,9 +448,15 @@ class _UPkg:
             ref, _ = read_compact_index(t.raw, 0)
             return ("obj", self.ref_identity(ref))
         if t.ptype == PT_STRUCT:
-            # A struct value is a nested None-terminated tagged-property list; its member-name (and
-            # any nested name/object) refs are name-table-ORDER-dependent, so canonicalise them
-            # structurally — raw hex would false-FAIL a correct compile whose name order differs.
+            if (t.struct_name or "").casefold() in _ATOMIC_STRUCTS:
+                # Vector/Rotator/Scale/Color serialize as fixed-size raw bytes (`SerializeBin`), not a
+                # tagged-property list -- treating one as a nested tag list mis-parses it (found via a
+                # `Color`-typed `MipZero`/`MaxColor` #exec TEXTURE IMPORT tag, 2026-09-13).
+                return ("raw", t.raw.hex())
+            # A NON-atomic struct value is a nested None-terminated tagged-property list; its
+            # member-name (and any nested name/object) refs are name-table-ORDER-dependent, so
+            # canonicalise them structurally — raw hex would false-FAIL a correct compile whose name
+            # order differs.
             tags, _ = read_property_tags(_RawView(t.raw, self.p.names), 0, len(t.raw))
             return ("struct", (t.struct_name or "").casefold(), self._canon_tags(tags))
         return ("raw", t.raw.hex())
