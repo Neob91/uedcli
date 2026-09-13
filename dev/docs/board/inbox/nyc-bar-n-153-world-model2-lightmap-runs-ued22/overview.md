@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "NYC_Bar bails at N=153: Light5 wrongly lights 3 world stair-tread surfs UED22 leaves dark, and native never lights the closed door's (DeusExMover9) own face either. Live gdb capture (2026-09-13) confirmed the door's mover-mirrored BSP surf IS a real static-tree node and DOES get moving-brush-filtered during Light5's gather -- but in a DIFFERENT cube-map face pass than the one visiting the tread surfs, so it cannot be occluding them by rasterization. illuminateSurf's per-lumel raytrace is never even invoked for the 3 tread surfs (0 hits) with any light, and the gather-commit routine (0x100a4ba0) has no occlusion test beyond the already-ruled-out plane-distance cull -- so GetVisibleSurfs itself must be excluding them, via a mechanism not yet found (likely zone/portal reachability, possibly UNRELATED to the mover). The original mover-occlusion theory does not survive this capture. Not fixed; no mask; next step below."
+summary = "NYC_Bar bails at N=153: Light5 wrongly lights 3 world stair-tread surfs UED22 leaves dark, and native never lights the closed door's (DeusExMover9) own face either. Zone crossing, cross-light box-test ordering, the world-space/screen-space clip-formula bug class, per-lumel raytrace divergence, and now (2026-09-13, round 5) box occlusion at every candidate node (round 4's node 16, its literal geometry live-captured against UED22, and node 128 -- the real governing ancestor of all three divergent surfaces) are all ruled out by direct measurement/live capture; UED22 matches native on every box test that matters. The remaining unexplored territory is rasterization/span-buffer draw order in GetVisibleSurfs, not yet probed. Not fixed; no mask; next step below."
 +++
 
 # NYC_Bar N=153 — three world `LightMap` records get a light run UED22 leaves empty
@@ -292,3 +292,63 @@ Not fixed. No mask. Next step for a future round: live-capture `BoundVisible`'s 
 UED22 counterpart (and its render-bound ancestors) during Light5's `-X` face pass specifically, same
 method as `spikes/2026-09-05-lightapply-node-flags`/`spikes/2026-09-06-boundvisible-port`, to see
 whether UED22's real box test rejects something upstream of the treads that native's accepts.
+
+## Fifth round (2026-09-13) — node 16 box occlusion is a DEAD END; the real governing ancestor also matches. Not fixed.
+
+Followed up on round four's "untested lead" (node 16, native numbering, rejected on Light5's `-X`
+face). Two independent checks, static-then-live, both clear it.
+
+**Static: node 16 is not an ancestor of the divergent surfaces — a pure traversal-order read, no
+live capture needed.** Re-ran the N=153 native build with `UEDCLI_VISGATE_TRACE_BOX=1
+UEDCLI_VISGATE_TRACE_SURF=-1 UEDCLI_VISGATE_TRACE_LOC=<Light5>` (single-threaded,
+`RAYON_NUM_THREADS=1`, for a clean per-light sequential log) and hand-traced `traverse()`'s recursion
+from the print order alone. Node 16 is the **far child of node 13's coplanar chain** (13 → 14 → 15,
+the three surf-97 nodes) — i.e. a strict DESCENDANT, not an ancestor, of any of the three divergent
+surfaces (95 at node 9, 97 at nodes 13/14/15, 67 at nodes 20/22/24). Box-rejecting node 16 only skips
+node 16's own subtree; the divergent nodes are chain members/ancestors that are fully processed
+BEFORE node 16 is even reached (13/14/15's own rasterize calls run before the chain's far-child
+recursion into 16), so node 16's verdict cannot gate them either way — the "same local region of the
+traversal" adjacency round four flagged was not a causal link.
+
+**Found the real governing ancestor instead: node 128 (`iRenderBound`=60, `FBox`
+min=(-3072,420,0) max=(-3068,512,132)) — the true common ancestor of all three divergent surfaces**
+(its far child chain leads to nodes 9/10/11/13-chain/20/22/24 exactly, confirmed the same way: node
+128's own `iFront=-1, iBack=129`, `is_front=false` for Light5, so `far_child=129`, which is the very
+next node visited). Native box-tests it (index 128, in the `%16==0` residue) and gets
+`visible=true` for the `-X` face.
+
+**Live-captured the real editor's `BoundVisible` for both boxes**, harness
+`harness/box_verdict_n153.py` (same call site/verdict addresses as
+`spikes/2026-09-06-boundvisible-port`), full trace `logs/box-verdict-n153.log`:
+
+- Node 128's box (`min=(-3072,420,0) max=(-3068,512,132)`), Light5, `ZAXIS=(-1,0,0)` (the `-X`
+  face): **`ret=1`, path=accept — UED22 ALSO accepts it.** Matches native exactly.
+- Node 16's box (`min=(-3120,176,-16) max=(-3092,560,0)`), same light: UED22 tests this exact
+  geometry only ONCE across all six faces, on `ZAXIS=(0,-0,-1)` (the `-Z` face, not `-X`) — the
+  editor's own real node numbering never subjects it to the box test on the `-X` face at all — and
+  where it IS tested, **`ret=1`, path=zone — also accepted**, not rejected. So even taken literally,
+  UED22 never rejects this box; round four's native-only "visible=false" is a pure amortization-index
+  artifact (node 16 lands on native's `%16` residue on the `-X` pass; the same geometric node, at
+  whatever index UED22's own permutation gives it, does not).
+- The `-X` face's box-test COUNT also matches except for this one artifact: UED22 runs exactly 2 box
+  tests on that face (root `+` node-128-equivalent, both accept); native runs 3 (same 2, plus node
+  16 — an extra, harmless test from the index/permutation mismatch, not a missing or wrong one).
+
+**Conclusion: box occlusion is fully cleared as this divergence's cause**, at every node checked
+(round four's candidate, its literal geometry on the face where UED22 does test it, and the actual
+governing ancestor identified this round) — not just re-asserting the round-three finding, but
+closing the one candidate mechanism that survived round three's own live capture. The real cause is
+still in `GetVisibleSurfs` somewhere else — with box occlusion, zone crossing (round four), cross-
+light box-test ordering (round four), the world-space/screen-space clip-formula bug class (round
+four), and per-lumel raytrace divergence (round three) all now ruled out by direct measurement, the
+remaining unexplored territory is the RASTERIZATION/span-buffer-accumulation layer itself: node
+DRAW ORDER (near-to-far, front-to-back) determines how much of each zone's span buffer is already
+claimed by the time a later node's own surface is tested, and node order across native/UED22 is only
+a PERMUTATION match at N=153 (not identity) — a reordering of two overlapping or coplanar occluders
+ahead of the treads in the `-X` face's traversal could change how much of the light's screen area is
+still unclaimed by the time surf 95/97/67 rasterize, without touching box occlusion, zones, or
+per-lumel raytracing at all. Not attempted this round — it needs a NEW live capture (rasterize/span-
+subtract call sites, not `BoundVisible`) with node identities matched by geometry, the same
+discipline this round used for the box test. No mask added; `visible_surfs.rs`/`light.rs` unchanged.
+
+Harness: `harness/box_verdict_n153.py`; log: `logs/box-verdict-n153.log`.
