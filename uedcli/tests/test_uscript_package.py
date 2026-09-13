@@ -181,6 +181,27 @@ _PACKAGES: dict[str, dict[str, str]] = {
             "class CPFPlainClassNativeVar expands Object;\n\n"
             "var native int NativeVar;\n"),
     },
+    "PointerVar": {
+        # `dev/docs/board/inbox/uscript-pointer-var-type-not-supported/`: a `pointer` static array on
+        # a native class (the shape real UWeb's `WebRequest.VariableMap`/`WebResponse.ReplacementMap`
+        # use) -- `pointer` wasn't in `_SCALAR_KINDS`, so `_resolve_var_type` raised.
+        "PVProbe.uc": (
+            "class PVProbe expands Object native noexport;\n\n"
+            "var native const pointer Ptr[2];\n"),
+    },
+    "ExplicitNoneDefault": {
+        # `dev/docs/board/inbox/uscript-explicit-none-object-default-not/`: an explicit `Foo=None` on
+        # an OWN object-typed property (real UWeb's `WebApplication.WebServer`/
+        # `WebConnection.WebServer`) -- `_emit_default`'s PT_OBJECT branch used to raise
+        # unconditionally for ANY explicit override, even one worth the same zero tag as unset.
+        "ENDBase.uc": (
+            "class ENDBase expands Object;\n\n"
+            "function string Tag()\n{\n    return \"base\";\n}\n"),
+        "ENDUser.uc": (
+            "class ENDUser expands Object;\n\n"
+            "var ENDBase Base;\n\n"
+            "defaultproperties\n{\n    Base=None\n}\n"),
+    },
 }
 
 
@@ -297,6 +318,23 @@ def test_cpf_native_requires_native_class():
     the previous fix mapped the `native`/`intrinsic` var modifier straight to `CPF_NATIVE`
     unconditionally, which is wrong whenever the class itself isn't native)."""
     _check("CPFNativeProbe")
+
+
+def test_pointer_var_static_array_on_native_class():
+    """`var native const pointer Ptr[2];` on a native class -- `pointer` is a real `PointerProperty`
+    UProperty subclass (confirmed in `gobjnames_ued22.json`/`gobjobjects_ued22.json`'s dumped global
+    index and `uedcli/uprops/base.py`'s closed `PROPERTY_TYPES` set), with no type-tail (not in
+    `_KINDS_WITH_TYPE_REF`) -- the same shape as `IntProperty`/`FloatProperty`. Blocked real UWeb's
+    `WebRequest.VariableMap`/`WebResponse.ReplacementMap`."""
+    _check("PointerVar")
+
+
+def test_explicit_none_object_default_same_as_unset():
+    """An explicit `Base=None` on an OWN object-typed property emits the SAME zero-object tag an unset
+    property would get -- resolved via `_object_default_ref` (already correct for the INHERITED-default
+    path) instead of `_emit_default`'s old unconditional raise for any explicit object default. Blocked
+    real UWeb's `WebApplication.WebServer`/`WebConnection.WebServer`."""
+    _check("ExplicitNoneDefault")
 
 
 def test_perm_gate_catches_wrong_body():

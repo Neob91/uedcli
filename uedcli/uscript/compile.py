@@ -166,13 +166,21 @@ class _Kind:
     base_flags: int = 0              # type-inherent PropertyFlags (StrProperty/ArrayProperty)
 
 
+# `pointer` (raw native-only field, e.g. UWeb `WebRequest.VariableMap`) has no on-disk default-tag
+# type code — a `PointerProperty` is a C++ address with no UnrealScript literal syntax, so real UCC
+# never emits a defaultproperties tag for one (confirmed: it only appears on native classes, which
+# skip unset defaults entirely — `_auto_emit_defaults`). PT_POINTER is a local sentinel, never a real
+# PT_* tag code, so `_emit_default` can name the gap instead of a `_SCALAR_ZERO` KeyError if a default
+# were ever attempted.
+PT_POINTER = -1
 _SCALAR_KINDS: dict[str, _Kind] = {
-    "int":    _Kind(prop_class="IntProperty",   ptype=PT_INT),
-    "float":  _Kind(prop_class="FloatProperty", ptype=PT_FLOAT),
-    "bool":   _Kind(prop_class="BoolProperty",  ptype=PT_BOOL),
-    "byte":   _Kind(prop_class="ByteProperty",  ptype=PT_BYTE),
-    "string": _Kind(prop_class="StrProperty",   ptype=PT_STR, base_flags=CPF_NEEDCTORLINK),
-    "name":   _Kind(prop_class="NameProperty",  ptype=PT_NAME),
+    "int":     _Kind(prop_class="IntProperty",     ptype=PT_INT),
+    "float":   _Kind(prop_class="FloatProperty",   ptype=PT_FLOAT),
+    "bool":    _Kind(prop_class="BoolProperty",    ptype=PT_BOOL),
+    "byte":    _Kind(prop_class="ByteProperty",    ptype=PT_BYTE),
+    "string":  _Kind(prop_class="StrProperty",     ptype=PT_STR, base_flags=CPF_NEEDCTORLINK),
+    "name":    _Kind(prop_class="NameProperty",    ptype=PT_NAME),
+    "pointer": _Kind(prop_class="PointerProperty", ptype=PT_POINTER),
 }
 _SCALAR_ZERO = {PT_INT: 0, PT_FLOAT: 0.0, PT_BOOL: False, PT_BYTE: 0, PT_STR: "", PT_NAME: "None"}
 _LITERAL_OPS = {"intconst", "floatconst", "boolconst", "byteconst", "stringconst", "nameconst"}
@@ -1125,6 +1133,10 @@ def _emit_default(b: _Build, pname: str, ptype: int, array_dim: int, struct_name
     native class emits only members explicitly set in `defaultproperties` (its CDO is built in C++)."""
     if not b.emit_zero_defaults and not any(name == pname for name, _ai in values):
         return
+    if ptype == PT_POINTER:
+        raise NotImplementedError(f"pointer property {pname!r}: default-value emission not supported "
+                                  "(no UnrealScript literal for a pointer; expected only on native "
+                                  "classes, which skip unset defaults)")
     if ptype == PT_STRUCT:
         if (pname, None) in values or (pname, 0) in values:
             raise NotImplementedError(f"explicit struct default for {pname!r} not supported yet")
@@ -1136,9 +1148,12 @@ def _emit_default(b: _Build, pname: str, ptype: int, array_dim: int, struct_name
         b.default_props.append(Prop(pname, PT_ARRAY, ArrayValue([])))
         return
     if ptype == PT_OBJECT:
-        if (pname, None) in values:
-            raise NotImplementedError(f"explicit object default for {pname!r} not supported yet")
-        b.default_props.append(Prop(pname, PT_OBJECT, 0))
+        # An explicit `Foo=None` is the SAME zero-object tag an unset property gets — resolved via
+        # `_object_default_ref` (already handles `noneconst` -> 0, and a genuine `Class'X'`/object
+        # literal -> a deferred ref; anything else still raises there).
+        expr = values.get((pname, None), values.get((pname, 0)))
+        value = _object_default_ref(b, pname, expr) if expr is not None else 0
+        b.default_props.append(Prop(pname, PT_OBJECT, value))
         return
     for idx in range(array_dim):
         arr_idx = None if array_dim == 1 else idx

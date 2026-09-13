@@ -1,7 +1,7 @@
 +++
 priority = "p3"
 kind = "implement"
-summary = "explicit 'Foo=None' object default raises, even though it's the same as the type-zero"
+summary = "DONE — explicit object defaults now resolve via _object_default_ref (the same helper the inherited-default path already used), not an unconditional raise"
 +++
 
 # uscript explicit `Foo=None` object default not supported
@@ -20,3 +20,15 @@ separate, still-unimplemented case this workaround did not address either.
 
 Blocks `WebApplication`/`WebConnection` (and so all of `UWeb`) from compiling through the real
 (unpatched) compiler.
+
+## Fixed (2026-09-13)
+
+`_emit_default`'s `PT_OBJECT` branch now resolves the explicit value (if any) through
+`_object_default_ref` — the same helper the INHERITED-default path (`_emit_inherited_defaults`)
+already used, which handles `noneconst` -> 0 and a genuine `Class'X'`/object-literal -> a deferred
+ref, and still raises for anything else. No special-casing of `None` specifically: any explicit own
+object default that `_object_default_ref` can resolve now works, not just `Foo=None`. Verified
+against a fresh live UED22 UCC compile: `pkg_ExplicitNoneDefault` fixture
+(`test_uscript_package.py`, `test_explicit_none_object_default_same_as_unset`), mirroring real
+UWeb's `WebApplication.WebServer=None`/`WebConnection.WebServer=None` shape. Real UWeb now compiles
+past this point (see `USCRIPT-COMPILER.md`'s UWeb entry for its current overall status).

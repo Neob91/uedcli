@@ -429,16 +429,36 @@ strict gate autonomously.
   `ExtendedBuilders`/`DavesBrushBuilders`/`UnrealShare`/`pkg_Mutual`/the six other UWeb-gap
   fixtures).
 
-  **Not yet a corpus win**: fixing `Dependencies` did not get the real `UWeb` package itself through
-  an end-to-end `compile_package_dir` — two SEPARATE, pre-existing gaps block it, found compiling the
-  real sources while validating the `Dependencies` fix (not fixed here, out of scope for this pass):
-  a `var native const pointer X[N];` field (`WebRequest.VariableMap`, `WebResponse.ReplacementMap`)
-  hits `_resolve_var_type`'s "not scalar/local/class" `NotImplementedError` (no `pointer` var-type
-  support), and an explicit `Foo=None` object-property default (`WebApplication.WebServer`,
-  `WebConnection.WebServer`) hits `_emit_default`'s unconditional "explicit object default … not
-  supported yet" even though the value is the same as the type-zero it would otherwise emit. Filed:
-  `dev/docs/board/inbox/uscript-pointer-var-type-not-supported/`,
-  `dev/docs/board/inbox/uscript-explicit-none-object-default-not/`.
+  **Both remaining blockers are FIXED (2026-09-13)**: a `pointer` var type (`WebRequest.VariableMap`,
+  `WebResponse.ReplacementMap`) is now a real `PointerProperty` in `_SCALAR_KINDS` — confirmed a real
+  UProperty subclass with no type-tail (`gobjnames_ued22.json`'s dumped global index,
+  `uedcli/uprops/base.py`'s closed `PROPERTY_TYPES`/`_KINDS_WITH_TYPE_REF` sets) — with a named
+  `PT_POINTER` sentinel that raises cleanly instead of guessing a value if a default were ever
+  attempted (it never is: `pointer` only appears on native classes, which skip unset defaults). An
+  explicit `Foo=None` object default (`WebApplication.WebServer`, `WebConnection.WebServer`) now
+  resolves through `_object_default_ref` — the same helper the INHERITED-default path already used —
+  instead of `_emit_default`'s old unconditional raise for any explicit object override. Both pinned
+  by live-UED22-verified fixtures (`pkg_PointerVar`, `pkg_ExplicitNoneDefault`,
+  `test_uscript_package.py`). `dev/docs/board/done/uscript-pointer-var-type-not-supported/`,
+  `dev/docs/board/done/uscript-explicit-none-object-default-not/`.
+
+  **Real `UWeb` now compiles end-to-end and is ONE divergence from a corpus win.** With both gaps
+  fixed, `compile_package_dir` runs all 7 real classes (`WebResponse`/`WebRequest`/`WebApplication`/
+  `WebServer`/`WebConnection`/`ImageServer`/`HelloWeb`) against a fresh UT99 UCC build with no
+  exception. `perm_gate` finds exactly ONE remaining divergence: `WebApplication`'s class body emits
+  3 default tags (`Level=None`/`WebServer=None`/`Path=""`) the golden omits — a NEWLY FOUND, DIFFERENT
+  gap, root-caused to a genuine UED22-vs-UT99 substrate difference (not a WebApplication-specific
+  bug): **UT99's own UCC never auto-emits a type-zero defaultproperties tag for a plain class's unset
+  own property**, contradicting the UED22-measured `_auto_emit_defaults` rule (`compile-model.md`)
+  that a non-native/non-transient class auto-emits one for every own property. Isolated on 5 minimal
+  UT99 UCC compiles (an exact `NoSpuriousPkgImport`-shaped single-property class, a 3-property/
+  in-package-object-type/body-less-function variant matching `WebApplication`'s exact shape, an
+  all-scalar variant, and a no-`defaultproperties`-block variant) — none get an auto-zero tag under
+  UT99, all get one under UED22 for the same shapes. Not fixed here (a real compiler behavior
+  difference needing substrate-aware `_auto_emit_defaults`, not a quick patch — flagged for the
+  owner rather than guessed at): `dev/docs/board/inbox/ut99-ucc-never-auto-emits-type-zero/`. Fixing
+  it would very likely take `UWeb` to full `perm_gate` (worth re-checking strict `gate()` too) — every
+  other class and the rest of `WebApplication` already identity-match.
 - `assert`/`do..until` lowering — a real, scoped gap in `lower.py`/`compile.py`. Replication blocks
   and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented, scoped out
   for now.
