@@ -249,6 +249,13 @@ def _gather_names(objs, creation_order, by):
         o = by.get(nm)
         if o is None:
             continue
+        if o.class_name == "Class" and len(o.name_refs) > 1:
+            # A class's PackageImports[0] is always its own package's self-reference (compile-model.md:
+            # "own package first"). RE'd 2026-09-13 from a live `AllocateNameEntry` capture of
+            # `DavesBrushBuilders` (findings-ordering-re.md): this registers BEFORE the class's own
+            # FName, not after — the earlier "registers at class-header time" model only pinned it
+            # ahead of the class's first member, not ahead of the class's own name too.
+            add(o.name_refs[1])
         add(o.disp)
         add(o.outer)
         for r in o.name_refs:

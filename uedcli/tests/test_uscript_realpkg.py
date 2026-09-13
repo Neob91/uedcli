@@ -77,30 +77,36 @@ def test_realpkg_strict_byte_exact(pkg: str):
     assert r.passed, f"{pkg}: " + " | ".join(r.messages)
 
 
-def test_davesbrushbuilders_ast_order_recovers_enum_property_interleaving():
-    """RE'd 2026-09-13 (`findings-ordering-re.md`): UCC's name-registration order follows TRUE
-    SOURCE-TEXTUAL order (a property and a later `var() enum` register side by side, exactly as
-    declared), but the compiled `.u`'s own Children chain bins ALL properties into one forward
-    sub-chain and ALL non-properties (enums/consts/structs/functions) into a separate reverse
-    sub-chain, losing that interleaving structurally. `compile._top_level_name_order` recovers it
-    from the parsed AST (`ClassDecl.decl_order`, before that binning happens) and threads it through
-    `reorder.true_order`'s `class_order`/`top_level_by_class` params.
+def test_davesbrushbuilders_name_table_byte_exact():
+    """RE'd 2026-09-13 (`findings-ordering-re.md`): two fixes to `reorder`/`ordering`'s name
+    registration model. (1) UCC's name-registration order follows TRUE SOURCE-TEXTUAL order (a
+    property and a later `var() enum` register side by side, exactly as declared), but the compiled
+    `.u`'s own Children chain bins ALL properties into one forward sub-chain and ALL non-properties
+    (enums/consts/structs/functions) into a separate reverse sub-chain, losing that interleaving
+    structurally. `compile._top_level_name_order` recovers it from the parsed AST (`ClassDecl.
+    decl_order`, before that binning happens) and threads it through `reorder.true_order`'s
+    `class_order`/`top_level_by_class` params. This alone left one pair swapped: `Core` (a real
+    engine pool name) and `DavesBrushBuilders` (the package's own self-name), both reference-count 1.
 
-    Before this fix, `DavesBrushBuilders`'s name table (74 entries) diverged from the golden at
-    index 14 (the first of its two `var() enum` declarations) with cascading effects through most of
-    the table. After it, only ONE pair differs: `Core` (a real engine pool name) and
-    `DavesBrushBuilders` (the package's own self-name), both reference-count 1 and swapped — a
-    narrower, PRE-EXISTING qsort-tie-permutation bug (present, masked, before this fix too),
-    unrelated to enum/property interleaving and tracked separately."""
+    (2) A live `AllocateNameEntry` capture of a real `UCC.exe make` of this same package (also in
+    `findings-ordering-re.md`) showed the package's own PackageImports[0] self-reference registers
+    BEFORE the class's own FName, not after — the earlier "registers at class-header time" model
+    only pinned the self-name ahead of the class's first member, not ahead of the class's own name
+    too. `ordering._gather_names` now special-cases a `Class`-kind object's `name_refs[1]`
+    (PackageImports[0], always the self-reference per `compile-model.md`) to register before
+    `add(o.disp)`. This closes the Core/self-name swap: the name table is now byte-exact.
+
+    `DavesBrushBuilders` still fails the STRICT gate (see `test_realpkg_strict_byte_exact`'s
+    parametrize list, which does not include it) on an UNRELATED, newly-found export-table
+    qsort-tie-permutation among four tied-refcount local/param objects across different functions —
+    tracked at `dev/docs/board/inbox/davesbrushbuilders-export-table-qsort-tie/`."""
     from uedcli.upackage import _parse_package
 
     mine = _compile("DavesBrushBuilders")
     golden = (_FIX / "DavesBrushBuilders" / "DavesBrushBuilders.u").read_bytes()
     mn = list(_parse_package(mine, "<mine>", "mine").names)
     gn = list(_parse_package(golden, "<golden>", "golden").names)
-    diffs = [i for i, (m, g) in enumerate(zip(mn, gn)) if m != g]
-    assert diffs == [21, 22], f"expected only the known Core/self-name tie at 21-22, got {diffs}"
-    assert set(mn[21:23]) == set(gn[21:23]) == {"Core", "DavesBrushBuilders"}
+    assert mn == gn
 
 
 def test_davesbrushbuilders_locals_register_inline_not_deferred():
