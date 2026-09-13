@@ -45,7 +45,7 @@ import argparse, datetime, html, json, os, pathlib, shutil, subprocess, sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from registry import TASKS
-from build_gold import BASE_TRUNKS_DIR, base_trunk_for, PY as VENV_PY
+from build_gold import BASE_TRUNKS_DIR, DX_GAME_DIR, base_trunk_for, PY as VENV_PY
 from extract_execution import extract_execution
 from render_execution import render_execution
 SCRIPTS_DIR = pathlib.Path(__file__).parent
@@ -79,16 +79,41 @@ def full_prompt(task: dict) -> str:
     given, hence build_page.py imports this same function rather than recomputing it."""
     return html.unescape(task["req"]) + RESPONSE_LENGTH_NOTE + NO_SOURCE_READING_NOTE
 
+def _ensure_native_wheel() -> pathlib.Path:
+    """Builds (or reuses, via its own freshness hash) a uedcli_native wheel through this repo's
+    OWN dev tooling (bin/_venv.sh's ensure_native_ext -- the same mechanism bin/uedcli and the
+    frozen render worktree already use), so the eval image can bake it in: `actor add`/`brush
+    build`/`actor duplicate` need it to parse a real .u package's class schema (confirmed by
+    testing -- schema loading calls straight into uedcli_native.parse_package_raw). Baked into the
+    IMAGE at build time (rare: first run, or after deleting the image), not bind-mounted fresh like
+    uedcli's own Python source -- a native build is ~30s+, unacceptable per-container-run overhead,
+    and .u package PARSING is stable, foundational code, not the actively-changing BSP/lighting
+    build path -- same accepted tradeoff as RENDER_WT above."""
+    subprocess.run(["bash", "-c", "source bin/_venv.sh && ensure_native_ext"],
+                   cwd=str(REPO_ROOT), check=True)
+    wheels = sorted((REPO_ROOT / "uedcli-native" / "target" / "wheels").glob("uedcli_native-*.whl"))
+    if not wheels:
+        sys.exit("uedcli-native build produced no wheel -- see the ensure_native_ext output above")
+    return wheels[-1]
+
 def _ensure_docker_image():
-    """Builds ../docker/'s image if it isn't already present. uedcli itself is NOT baked into
-    it (installed fresh from a bind-mounted source tree at container start, see
-    docker/entrypoint.sh) so a stale image still runs today's uedcli -- only the Dockerfile
-    itself (Node, claude-code, Pillow) needs a rebuild to pick up, and that rarely changes."""
+    """Builds ../docker/'s image if it isn't already present. uedcli's own PYTHON source is NOT
+    baked in (installed fresh from a bind-mounted source tree at container start, see
+    docker/entrypoint.sh) so a stale image still runs today's uedcli -- only the Dockerfile itself
+    (Node, claude-code, Pillow, the uedcli_native wheel) needs a rebuild to pick up, and that
+    rarely changes. The wheel is copied into the build context transiently (never committed --
+    dev/evals/docker/*.whl is gitignored) since `docker build`'s context can't reach outside it."""
     check = subprocess.run(["docker", "image", "inspect", DOCKER_IMAGE], capture_output=True)
     if check.returncode == 0:
         return
     print(f"[run_eval] building {DOCKER_IMAGE} (first run, or image was removed)...")
-    subprocess.run(["docker", "build", "-t", DOCKER_IMAGE, str(DOCKER_DIR)], check=True)
+    wheel = _ensure_native_wheel()
+    staged_wheel = DOCKER_DIR / wheel.name
+    shutil.copy(wheel, staged_wheel)
+    try:
+        subprocess.run(["docker", "build", "-t", DOCKER_IMAGE, str(DOCKER_DIR)], check=True)
+    finally:
+        staged_wheel.unlink(missing_ok=True)
 
 def _run_claude(cwd: pathlib.Path, home: pathlib.Path, level: str, token: str, extra_args: list[str]) -> dict:
     """Runs `claude` inside a throwaway `--rm` container, not on the bare host -- see the module
@@ -117,7 +142,17 @@ def _run_claude(cwd: pathlib.Path, home: pathlib.Path, level: str, token: str, e
     form, which reads the value from THIS process's own environment rather than `docker run`'s own
     argv. `/proc/<pid>/cmdline` (what `ps aux` reads) is world-readable by default; putting the
     token there would leak it to any local user on a shared host for as long as the process runs.
-    `/proc/<pid>/environ` is not."""
+    `/proc/<pid>/environ` is not.
+
+    The real Deus Ex asset tree (dev/games/deusex/{System,Textures,Sounds,Music,Maps}) is
+    bind-mounted read-only too, with entrypoint.sh writing a matching ~/.uedcli/config.toml inside
+    the container -- without this, `actor add`/`brush build`/`actor duplicate` (anything needing a
+    class schema from a real .u package) fail outright, confirmed on a real eval run: the agent
+    correctly diagnosed the missing game files as a hard blocker and couldn't complete a task that
+    needed to create a new brush."""
+    if not DX_GAME_DIR.exists():
+        sys.exit(f"{DX_GAME_DIR} not found -- dev/games/deusex isn't set up "
+                  f"(see dev/scripts/install-deusex-assets.sh)")
     cmd = [
         "docker", "run", "--rm",
         "--user", f"{os.getuid()}:{os.getgid()}",
@@ -125,6 +160,7 @@ def _run_claude(cwd: pathlib.Path, home: pathlib.Path, level: str, token: str, e
         "-v", f"{REPO_ROOT / 'pyproject.toml'}:/uedcli-src/pyproject.toml:ro",
         "-v", f"{cwd}:/work",
         "-v", f"{home}:/root",
+        "-v", f"{DX_GAME_DIR}:/dx-assets:ro",
         "-w", "/work",
         "-e", "HOME=/root",
         "-e", f"UEDCLI_LEVEL={level}",
