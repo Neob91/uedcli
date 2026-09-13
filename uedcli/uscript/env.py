@@ -105,12 +105,21 @@ def _package_imports(pkg: Package, class_index1: int) -> tuple[str, ...]:
     return tuple(out)
 
 
+_SUBSTRATES = ("ued22", "ut99")
+
+
 class InstallEnv:
     """Index of the compiled `.u` packages on a search path. Lazily loads a package the first time a
-    class in it is needed."""
+    class in it is needed. `substrate` names which real `UCC.exe` build the search path's packages
+    came from ("ued22" or "ut99") — the two are different binaries with measured behavior differences
+    (see `compile._auto_emit_defaults`); defaults to "ued22", the original/only substrate this
+    compiler targeted."""
 
-    def __init__(self, search_dirs: list[str]) -> None:
+    def __init__(self, search_dirs: list[str], *, substrate: str = "ued22") -> None:
+        if substrate not in _SUBSTRATES:
+            raise ValueError(f"unknown substrate: {substrate!r} (must be one of {_SUBSTRATES})")
         self._search_dirs = search_dirs
+        self.substrate = substrate
         self._pkg_cache: dict[str, Package] = {}
 
     @cached_property

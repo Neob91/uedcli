@@ -22,6 +22,13 @@ Fixtures (each isolates a compiler gap fixed for the first UT99 packages):
                      inherited member variable (`WinWidth`/`WinHeight`) never declared locally — both
                      need an import of the object from its declaring class (`UWindowDialogClientWindow`
                      / `UWindowWindow`) — the real-world case is `GiveMeItems`' `GMIClientWindow.uc`.
+  - `UscAutoEmitDefaultsUT99` - UT99's `UCC.exe` never auto-emits a type-zero `defaultproperties` tag
+                     for a plain class's unset own property (UED22's own `UCC.exe` does) — one class,
+                     an object + every scalar type, an explicit empty `defaultproperties{}` block, no
+                     tag for any of them (`compile._auto_emit_defaults`, `substrate="ut99"`).
+  - `UWeb`         - the real stock UT99 package (7 classes): the corpus win this fixture set was
+                     building toward. `perm_gate` byte-exact; the strict gate's only residual is the
+                     pre-existing UT99 own-name-pool gap already noted for `Fire` (`USCRIPT-COMPILER.md`).
 """
 from __future__ import annotations
 
@@ -43,11 +50,12 @@ _PKG_MAGIC = 0x9E2A83C1
 _FIX = Path(__file__).resolve().parent / "fixtures" / "uscript" / "ut99"
 
 # (package, export count) - the byte-parity corpus; count pins export-identity coverage.
-_PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritFinal", 5)]
+_PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritFinal", 5),
+            ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154)]
 
 # Extra stock EditPackages a fixture's super chain needs loaded (`_edit_packages_upto`'s
 # content-safe base only covers Core/Engine/Editor) — only needed for the DOCKER-gated rebuild.
-_DEPS: dict[str, tuple[str, ...]] = {"UscInheritFinal": ("UWindow",)}
+_DEPS: dict[str, tuple[str, ...]] = {"UscInheritFinal": ("UWindow",), "UWeb": ("IpDrv",)}
 
 
 def _docker_up() -> bool:
@@ -72,7 +80,7 @@ def _sources(pkg: str) -> dict[str, str]:
 
 
 def _compile(pkg: str) -> bytes:
-    env = InstallEnv([str(ut99_substrate_dir())])
+    env = InstallEnv([str(ut99_substrate_dir())], substrate="ut99")
     return serialize(compile_package_dir(_sources(pkg), env, package_name=pkg))
 
 

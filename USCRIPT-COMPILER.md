@@ -111,6 +111,8 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 | UscStateForeach | UED22 | 1 | ✅ | controlled: `Trigger`→`GotoState`→`state` (label+`Sleep`+`GotoState('')`) plus a `foreach AllActors` loop — first state-block + foreach proof |
 | UscTexAsym4x4 | UED22 | 1 | ✅ | controlled: `#exec TEXTURE IMPORT` proof (no mip-average tie on any channel, so unaffected by the two open judgment calls below) |
 | pkg_Mutual | UED22 | 2 | perm only | controlled: two SIBLING classes referencing each other MUTUALLY — the two-pass signature-graph proof (see below); residual is the same open name-table qsort-tie class as ExtendedBuilders |
+| UscAutoEmitDefaultsUT99 | UT99 | 1 | perm only | controlled: pins the substrate-aware `_auto_emit_defaults` fix (below) — an object + every scalar type, explicit empty `defaultproperties{}`, no auto-zero tag under UT99; residual is the same UT99 own-name-pool gap as `Fire` |
+| **UWeb** | UT99 | 7 | perm only | **real corpus package**, full byte match at the permutation level (identity/order/case-tolerant) — the substrate-aware `_auto_emit_defaults` fix below was the last blocker; residual is the same UT99 own-name-pool gap as `Fire` |
 
 Controlled (non-corpus) fixtures `UscHello`/`UscVars`/`UscBB`/`UscFn`/`UscW`/`UscSt` all pass the
 strict gate autonomously.
@@ -459,6 +461,37 @@ strict gate autonomously.
   owner rather than guessed at): `dev/docs/board/inbox/ut99-ucc-never-auto-emits-type-zero/`. Fixing
   it would very likely take `UWeb` to full `perm_gate` (worth re-checking strict `gate()` too) — every
   other class and the rest of `WebApplication` already identity-match.
+
+  **FIXED 2026-09-13 — real `UWeb` is a corpus win at `perm_gate`.** Re-verified the substrate claim
+  fresh (a live UT99 container, the same 2 minimal shapes plus a fresh `UWeb` decompile+recompile):
+  compiling `UDPOne`/`UDPScalar`-shaped classes with the OLD (UED22-only) rule fails `perm_gate`
+  against a fresh UT99 golden every time; with the rule substrate-gated, both pass. `InstallEnv`
+  gained `substrate: str = "ued22"` (`"ued22"` or `"ut99"`, validated) — the search-path packages'
+  real `UCC.exe` build, already conceptually distinct the way `reference.py`/`reference_ut99.py` are
+  separate drivers, just not threaded into `compile.py` before. `_auto_emit_defaults` takes
+  `substrate=env.substrate`: `"ut99"` always returns `False` (never auto-emit); `"ued22"` keeps the
+  native/transient rule unchanged. Threaded at both call sites (`_compile_single`, `_build_class_unit`)
+  via the `env` already in scope — no other signature grew. `InstallEnv`'s default keeps every UED22
+  call site (the CLI, every other test) unchanged; only `test_uscript_ut99.py`'s `_compile` helper
+  passes `substrate="ut99"`. Real `UWeb` (all 7 classes) now matches its fresh UT99 golden
+  byte-for-byte at `perm_gate` — the permutation-tolerant bar this campaign's own `NATIVE-MATERIALIZE.md`
+  methodology mirrors. Strict `gate()` still fails on name-table ORDER — the same pre-existing UT99
+  own-name-pool gap already noted for `Fire` (not a new bug; UT99 needs its own `ENGINE_NAME_POOL`/
+  `HIGHLIGHT_NAME_POOL` extraction, not attempted here). Pinned by two committed, live-UT99-UCC-verified
+  fixtures in `test_uscript_ut99.py`: `UscAutoEmitDefaultsUT99` (controlled — one class, an object +
+  every scalar type, explicit empty block) and `UWeb` itself (the real 7-class package,
+  `fixtures/uscript/ut99/UWeb/`). Re-verified the full offline (`test_uscript_*.py`, non-integration)
+  and integration (`-m integration`) uscript suites green, including every previously byte-exact UED22
+  package individually (`FrameBuilder`/`RahnemBrushBuilders`/`DavesBrushBuilders`/`ExtendedBuilders`/
+  `pkg_Mutual`/`UnrealShare`/`UscStateForeach`/`UscTexAsym4x4`/`UscInheritFinal`) — the `substrate`
+  default means none of their `InstallEnv` construction changed, and none of their results moved.
+  `dev/docs/board/done/ut99-ucc-never-auto-emits-type-zero/`.
+
+  **Scope note, not applied without asking:** the `uedcli uscript compile` CLI (`cli/commands/
+  uscript.py`) has no `--substrate` flag and always builds `InstallEnv` with the default (`"ued22"`)
+  — a real user pointing `--deps` at a UT99 substrate would still get the UED22 defaults rule. Out of
+  scope for this fix (only the `compile.py`/`InstallEnv` threading and the test-harness call site were
+  asked for); flagged here rather than silently added.
 - `assert`/`do..until` lowering — a real, scoped gap in `lower.py`/`compile.py`. Replication blocks
   and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented, scoped out
   for now.

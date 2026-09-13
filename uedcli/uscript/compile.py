@@ -398,7 +398,7 @@ def _compile_single(src: str, env: InstallEnv,
     class_flags |= super_info.class_flags & _CLASS_INHERIT_MASK
 
     b = _Build(class_name=class_name, env=env, class_object_flags=_class_object_flags(decl),
-               emit_zero_defaults=_auto_emit_defaults(decl, class_flags))
+               emit_zero_defaults=_auto_emit_defaults(decl, class_flags, substrate=env.substrate))
     b.local_enums = {m.name for m in decl.members if isinstance(m, EnumDecl)}
     b.local_structs = {m.name for m in decl.members if isinstance(m, StructDecl)}
     _seed_imports(b, super_name, within_key)
@@ -544,11 +544,17 @@ def _class_object_flags(decl: ClassDecl) -> int:
     return _RF_CLASS | (_RF_NATIVE if _is_native_class(decl) else 0)
 
 
-def _auto_emit_defaults(decl: ClassDecl, class_flags: int) -> bool:
-    """Whether the class default block auto-materialises a tag for every own property (RE'd 2026-09-05
-    against UT99). A NATIVE or TRANSIENT class serialises only the defaults explicitly written in its
+def _auto_emit_defaults(decl: ClassDecl, class_flags: int, *, substrate: str) -> bool:
+    """Whether the class default block auto-materialises a tag for every own property. Measured
+    against UED22: a NATIVE or TRANSIENT class serialises only the defaults explicitly written in its
     `defaultproperties` (its CDO is built in C++ / never saved); every other class also emits a
-    type-zero tag for each own property it does not set."""
+    type-zero tag for each own property it does not set. UT99's own `UCC.exe` does NOT do this at all
+    (RE'd 2026-09-13, 5 minimal isolated UT99 compiles: no tag for any type, count, or presence of an
+    explicit empty `defaultproperties{}` block — `dev/docs/board/done/
+    ut99-ucc-never-auto-emits-type-zero/`) — a genuine difference between the two UCC.exe builds, not
+    a bug in either."""
+    if substrate == "ut99":
+        return False
     return not (_is_native_class(decl) or bool(class_flags & CLASS_TRANSIENT))
 
 
@@ -2401,7 +2407,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
     crlf_source = _to_crlf(_script_text(src))
     class_flags, config_name, within_key = _class_header(decl, env)
     b.emit_zero_defaults = _auto_emit_defaults(
-        decl, class_flags | (super_class_flags & _CLASS_INHERIT_MASK))
+        decl, class_flags | (super_class_flags & _CLASS_INHERIT_MASK), substrate=env.substrate)
 
     # Seed the always-present imports; the super import only when it is cross-package.
     b.imports.setdefault("Core", _ImportSpec(class_package="Core", class_name="Package", outer=None,

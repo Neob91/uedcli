@@ -66,3 +66,29 @@ This is the ONLY remaining divergence blocking `UWeb`'s 6-non-trivial-class perm
 `WebApplication` already identity-match. Fixing this would very likely take real `UWeb` to full
 `perm_gate` byte-exactness (and worth re-checking the strict `gate()` too) — a genuine 7-class corpus
 win toward the 30-package campaign target.
+
+## FIXED 2026-09-13
+
+Re-verified the claim fresh (live UT99 container, `UDPOne`/`UDPScalar`-shaped classes plus a fresh
+`UWeb` decompile+recompile): our OLD rule fails `perm_gate` against the fresh golden every time;
+substrate-gated, it passes. `InstallEnv` gained `substrate: str = "ued22"` (`"ued22"`/`"ut99"`,
+validated); `_auto_emit_defaults(decl, class_flags, *, substrate)` returns `False` unconditionally
+for `"ut99"`, unchanged for `"ued22"`. Threaded via the `env` already in scope at both call sites
+(`compile._compile_single`, `compile._build_class_unit`) — no other function grew a parameter. The
+default keeps every existing UED22 `InstallEnv()` call site (the CLI, every other test) unchanged;
+only `test_uscript_ut99.py`'s `_compile` helper passes `substrate="ut99"`.
+
+Real `UWeb` (all 7 classes) now matches a fresh UT99 golden byte-for-byte at `perm_gate` — the
+corpus win. Strict `gate()` still fails on name-table ORDER, the same pre-existing UT99
+own-name-pool gap already noted for `Fire` (not new; UT99 needs its own `ENGINE_NAME_POOL`/
+`HIGHLIGHT_NAME_POOL` extraction, not attempted here). Pinned by two committed, live-UT99-UCC-verified
+fixtures in `test_uscript_ut99.py`: `UscAutoEmitDefaultsUT99` (controlled — one class, an object +
+every scalar type, explicit empty block) and `UWeb` itself (`fixtures/uscript/ut99/UWeb/`). Full
+offline + integration uscript suites re-verified green, including every previously byte-exact UED22
+package individually — the `substrate` default means none of their results moved.
+
+The CLI (`cli/commands/uscript.py`) has no `--substrate` flag and always builds `InstallEnv` at the
+default (`"ued22"`) — out of scope here, flagged in `USCRIPT-COMPILER.md` rather than silently added.
+
+Detail: `USCRIPT-COMPILER.md`'s "Real UWeb" entry, `dev/docs/unrealed/unrealscript/compile-model.md`'s
+`defaultproperties block` section.

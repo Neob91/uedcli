@@ -83,14 +83,25 @@ is read from that class's own self-dependency in its home package**, not recompu
 ## defaultproperties block
 
 The UClass body tail is a `None`-terminated tagged-property list of the class default object.
-**Rule (measured 2026-09-04): emit a tag for every property the class ITSELF declares — in
-`Children` (declaration) order — regardless of value**, plus any INHERITED property whose default is
-overridden here. So a class with `var int A; var float B;` and no `defaultproperties` still emits
-`A=0, B=0`; `UscHello` (no own properties) emits an empty block. This is why `Gamma=""` appeared —
-it is an own property, not a set default. Values are the CDO values (from `defaultproperties`, else
-type-zero). Static arrays emit one tag per element (`array_index` 0..n-1); dynamic `array<T>` emits
-one tag. Bools carry their value in the tag info byte. Tag encoding reuses
-`native/actor_write.write_props`.
+**Rule (measured 2026-09-04 against UED22's `UCC.exe`): emit a tag for every property the class
+ITSELF declares — in `Children` (declaration) order — regardless of value**, plus any INHERITED
+property whose default is overridden here. So a class with `var int A; var float B;` and no
+`defaultproperties` still emits `A=0, B=0`; `UscHello` (no own properties) emits an empty block.
+This is why `Gamma=""` appeared — it is an own property, not a set default. Values are the CDO
+values (from `defaultproperties`, else type-zero). Static arrays emit one tag per element
+(`array_index` 0..n-1); dynamic `array<T>` emits one tag. Bools carry their value in the tag info
+byte. Tag encoding reuses `native/actor_write.write_props`.
+
+**UT99's own `UCC.exe` does NOT auto-emit this tag at all (RE'd 2026-09-13).** Five minimal isolated
+UT99 compiles (an exact single-object-property shape, a 3-property object/scalar/string mix matching
+real `WebApplication`, an all-scalar variant, and a no-`defaultproperties`-block variant) all get NO
+tag for any own property UT99's UCC leaves unset — regardless of type, count, or whether the source
+has an explicit empty `defaultproperties{}` block. UT99 behaves as if every class were
+explicit-only, not just native/transient ones. `compile._auto_emit_defaults` takes `substrate`
+("ued22" keeps the rule above; "ut99" always returns `False`) threaded from `InstallEnv.substrate`.
+Found on real `WebApplication` (`dev/docs/board/done/ut99-ucc-never-auto-emits-type-zero/`); pinned
+by `UscAutoEmitDefaultsUT99` (`test_uscript_ut99.py`). Unconfirmed why the two `UCC.exe` builds
+differ here; not investigated further.
 
 **Inherited overrides** (a class setting a parent's member in `defaultproperties`) emit their tag(s)
 **after** all own-member tags, in the super's field-iteration order (most-derived ancestor first,
