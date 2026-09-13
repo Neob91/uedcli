@@ -17,6 +17,7 @@ mod f32;
 mod fpoly;
 mod light;
 mod linecheck;
+mod mesh_read;
 mod model;
 mod model_read;
 mod model_write;
@@ -539,6 +540,86 @@ fn read_property_tags_raw(
     ))
 }
 
+// PyO3 0.22's `IntoPy` tuple impl tops out at arity 12 (`types/tuple.rs`'s `tuple_conversion!`
+// calls) — `RawMesh`'s 32 fields need three nested groups, not one flat tuple. Grouped in `Mesh`
+// dataclass field order (group A, then B, then C, in sequence); the Python side re-flattens.
+#[allow(clippy::type_complexity)]
+type RawMeshOutA = (
+    ((f32, f32, f32), (f32, f32, f32), u8),                    // box
+    ((f32, f32, f32), f32),                                    // sphere
+    Vec<(i32, i32, i32)>,                                      // verts
+    Vec<((u16, u16, u16), (u8, u8, u8, u8, u8, u8), u32, i32)>, // tris
+    Vec<(i64, i64, i32, i32, f32, Vec<(f32, i64)>)>,           // anim_seqs
+    Vec<(i32, i32)>,                                           // connects
+    Vec<i32>,                                                  // vert_links
+    Vec<i64>,                                                  // textures
+    i32,                                                       // frame_verts
+    i32,                                                       // anim_frames
+    (f32, f32, f32),                                           // scale
+    (f32, f32, f32),                                           // origin
+);
+#[allow(clippy::type_complexity)]
+type RawMeshOutB = (
+    (i32, i32, i32),              // rot_origin
+    Vec<f32>,                     // texture_lod
+    Vec<u16>,                     // collapse_point_thus
+    Vec<u16>,                     // face_level
+    Vec<((u16, u16, u16), u16)>,  // faces
+    Vec<u16>,                     // collapse_wedge_thus
+    Vec<(u16, u8, u8)>,           // wedges
+    Vec<(u32, i32)>,              // materials
+    Vec<((u16, u16, u16), u16)>,  // special_faces
+    i32,                          // model_verts
+    i32,                          // special_verts
+    f32,                          // mesh_scale_max
+);
+type RawMeshOutC = (
+    f32,     // lod_hysteresis
+    f32,     // lod_strength
+    i32,     // lod_min_verts
+    f32,     // lod_morph
+    f32,     // lod_z_displace
+    Vec<u16>, // remap_anim_verts
+    i32,     // old_frame_verts
+    i32,     // vert_stride
+);
+type RawMeshOut = (RawMeshOutA, RawMeshOutB, RawMeshOutC);
+
+/// `parse_mesh_raw` — decode a `Mesh`/`LodMesh` export body (right after its tagged-property
+/// prefix) as plain tuples (`mesh_read::parse_mesh_body`), grouped into three <=12-element tuples
+/// (see the type aliases above) to stay under PyO3's tuple arity cap. Malformed/truncated input
+/// raises `PackageError`. `buf: &[u8]` borrows the package's full buffer — see `parse_package_raw`'s
+/// doc comment for why (an owned copy re-costs a full-package clone on every call).
+#[pyfunction]
+#[pyo3(signature = (buf, pos, end, version, is_lod, vert8_hint=None))]
+fn parse_mesh_raw(
+    py: Python<'_>,
+    buf: &[u8],
+    pos: usize,
+    end: usize,
+    version: i32,
+    is_lod: bool,
+    vert8_hint: Option<bool>,
+) -> PyResult<RawMeshOut> {
+    let m = py
+        .allow_threads(|| mesh_read::parse_mesh_body(buf, pos, end, version, is_lod, vert8_hint))
+        .map_err(map_pkg_err)?;
+    let a: RawMeshOutA = (
+        m.bbox, m.sphere, m.verts, m.tris, m.anim_seqs, m.connects, m.vert_links, m.textures,
+        m.frame_verts, m.anim_frames, m.scale, m.origin,
+    );
+    let b: RawMeshOutB = (
+        m.rot_origin, m.texture_lod, m.collapse_point_thus, m.face_level, m.faces,
+        m.collapse_wedge_thus, m.wedges, m.materials, m.special_faces, m.model_verts,
+        m.special_verts, m.mesh_scale_max,
+    );
+    let c: RawMeshOutC = (
+        m.lod_hysteresis, m.lod_strength, m.lod_min_verts, m.lod_morph, m.lod_z_displace,
+        m.remap_anim_verts, m.old_frame_verts, m.vert_stride,
+    );
+    Ok((a, b, c))
+}
+
 /// `bake_lighting` — the native `LIGHT APPLY` surface-lightmap bake (spike section 20).
 /// Fills the built Model's lightmap arrays (`light_map`/`light_bits`/`lights`) and links each
 /// lit surf's `iLightMap`, in parallel (rayon).  `lights` is the participating light set as
@@ -827,6 +908,7 @@ fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("PackageError", m.py().get_type_bound::<PackageError>())?;
     m.add_function(wrap_pyfunction!(parse_package_raw, m)?)?;
     m.add_function(wrap_pyfunction!(read_property_tags_raw, m)?)?;
+    m.add_function(wrap_pyfunction!(parse_mesh_raw, m)?)?;
     m.add("PathError", m.py().get_type_bound::<PathError>())?;
     m.add_class::<paths_py::PresetIn>()?;
     m.add_class::<paths_py::PathGraphOut>()?;
