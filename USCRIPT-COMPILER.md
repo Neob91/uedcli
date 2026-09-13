@@ -143,7 +143,17 @@ strict gate autonomously.
 ## Open items / known gaps (honest — not excluded, not hacked around)
 
 - `ExtendedBuilders` byte-count diff and `DavesBrushBuilders`'s enum-value-list ordering — both real,
-  both open (`findings-ordering-re.md`).
+  both open. A live `AllocateNameEntry` capture (2026-09-13, `findings-ordering-re.md`) root-caused
+  the mechanism: name registration follows plain interleaved SOURCE TEXTUAL order (a property and a
+  later `var() enum` sit side by side in registration order exactly as declared), but the COMPILED
+  `.u`'s own `Children` chain bins all properties into one forward sub-chain and all non-properties
+  into a separate reverse sub-chain — genuinely losing that interleaving (confirmed against the real
+  UCC golden, not just our own output). `reorder.py`'s decode-from-bytes architecture cannot recover
+  it; needs the compiler's own AST-walk order threaded through directly. One real sub-bug this same
+  capture found and fixed: a function's body locals register inline, not deferred to a trailing pass
+  (`reorder.name_creation_order`) — pinned by `test_davesbrushbuilders_locals_register_inline_not_deferred`,
+  but it doesn't move either package's gate result (their divergence starts earlier, in the
+  enum/property interleaving).
 - `assert`/`do..until` lowering, and a two-pass "signature graph" for mutually-referencing
   same-package classes (blocks `UWeb`) — real, scoped gaps in `lower.py`/`compile.py`. Replication
   blocks and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented,
