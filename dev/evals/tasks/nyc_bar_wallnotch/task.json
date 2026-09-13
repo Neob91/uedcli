@@ -1,7 +1,7 @@
 {
   "level": "bar",
   "title": "Push out the back nook",
-  "req": "&ldquo;The nook (near Brush15) feels cramped. Push its south wall out by 64 units.&rdquo;",
+  "req": "&ldquo;The nook Brush15 feels cramped. Push its south wall out by 64 units.&rdquo;",
   "dx_map": "02_NYC_Bar",
   "photo_camera": {
     "at": [

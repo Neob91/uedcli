@@ -19,6 +19,10 @@ _scratch/
 # path's job (grader scores/notes, live mutable state, never reference material).
 dev/evals/tasks/*/executions/
 
+# _ensure_docker_image() copies the uedcli_native wheel here transiently (docker build's context
+# can't reach outside dev/evals/docker/) and removes it right after -- never committed.
+dev/evals/docker/*.whl
+
 # The working game copy `dev/scripts/install-deusex-assets.sh` assembles, plus its
 # `.cache/<game>/{download,unpacked}` scratch. All COPYRIGHTED Deus Ex content and
 # multi-gigabyte installer artifacts — user-supplied, never committed. Both the

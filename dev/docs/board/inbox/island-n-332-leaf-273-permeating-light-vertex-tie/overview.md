@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Island is byte-exact N=1..331 and bails at N=332: leaf 273 carries Light124 where UED22 leaves it out. Root-caused to a genuine vertex COINCIDENCE (a portal vertex shared exactly with an adjacent portal) that makes one FLinePlaneIntersection crossing land a hair below the shared point in native and a hair above it in a live editor capture -- same formula, same inputs, opposite sign of a sub-ULP residual. Not fixed; suspected x87-vs-SSE double-rounding, unconfirmed."
+summary = "Island is byte-exact N=1..331 and bails at N=332: leaf 273 carries Light124 where UED22 leaves it out. Root-caused to a genuine vertex COINCIDENCE (a portal vertex shared exactly with an adjacent portal) that makes one FLinePlaneIntersection crossing land a hair below the shared point in native and a hair above it in a live editor capture -- same formula, same inputs, opposite sign of a sub-ULP residual. Not fixed. x87-vs-SSE double-rounding RULED UNLIKELY (2026-09-13a, fctrl probe). 2026-09-13b: a HEX-PRECISION live capture (not decimal) proves the crossing's INPUTS are NOT bit-identical after all -- one of the two input vertices (a Pass-B portal-quad corner, not a raw Model.Point) is 1 ULP off native's assumed grid value in the live editor. The beam-clip's own formula/precision are cleared; the divergence is upstream in Pass B portal construction. Second reproducer: unatco-n-226-leaf-12-gets-a-permeating-light157."
 spikes = ["dev/docs/spikes/2026-09-07-gather-box-verdict/"]
 +++
 
@@ -127,6 +127,25 @@ it is not a confirmed mechanism, only a plausible one matching the direction of 
     UEDCLI_PERM_TRACE=34 UEDCLI_PERM_TRACE_EDGE=162-275 actor_parity.py --dx <island.dx> native 332
     UEDCLI_PERM_TRACE=34 UEDCLI_PERM_TRACE_EDGE=275-273 actor_parity.py --dx <island.dx> native 332
 
+## Second reproducer + a correction to the x87-vs-SSE hypothesis (2026-09-12)
+
+`unatco-n-226-leaf-12-gets-a-permeating-light157` is the same mechanism: a live gdb capture of that
+level's `13->12` crossing shows native's `FLinePlaneIntersection` landing EXACTLY (0 ULP) on a vertex
+shared between two portal faces, while the editor's own capture of the identical crossing lands about
+1 ULP off that same vertex — not a tie there, but the same shape (native ties where the editor
+doesn't). See that item for the full trace.
+
+That session also flagged that this item's "suspected x87-vs-SSE double-rounding" framing conflicts
+with `dev/docs/spikes/2026-07-15-native-materialize/41-fp-model-x87-vs-sse.md` — a disassembly-based,
+high-confidence finding (2026-07-15) that this build's `Engine.dll`/`Editor.dll` (2022 MSVC rebuild,
+`/arch:SSE2`) contain **zero** `fldcw`/`fnstcw` and near-zero x87 arithmetic anywhere in `.text`; the
+CSG/geometry math is SSE2 scalar throughout with no 80-bit intermediates. So x87 extended-precision
+retention is very likely NOT what's happening here — the residual is more likely an unreplicated
+operation-order or register-allocation difference in the real compiled `FLinePlaneIntersection`/
+`SafeNormal` chain. This does not change the "not fixed" conclusion or the next step below; it only
+retires one candidate explanation so the eventual gdb single-step doesn't spend time confirming/
+ruling out x87 registers specifically.
+
 ## Next step for whoever picks this up
 
 Single-step the editor's real `FVector::SafeNormal` (`Core.dll 0x51090`) and the `FPoly` clip's
@@ -135,3 +154,79 @@ stack/registers between the two calls, to confirm or rule out x87 extended-preci
 the actual mechanism. If confirmed, the fix is a genuine widening of the relevant intermediate(s) to
 match — NOT a heuristic. Island's ladder cannot advance past N=332 until this closes; there is no
 other known blocker past it (N=1..331 all byte-exact).
+
+## 2026-09-12 (3rd pass) — narrowed to `SafeNormal`'s own FPU precision; live confirmation blocked by host disk
+
+Full writeup in `unatco-n-226-leaf-12-gets-a-permeating-light157` (same mechanism, second
+reproducer, worked in one session so it isn't duplicated here). Summary: fresh from-scratch
+disassembly (not re-trusting the earlier writeup) confirms `FLinePlaneIntersection` (`Engine.dll
+0x101507c0`) and the `FPlane(A,B,C)` cross-product ctor (`core.dll 0x1000b440`) are both bit-exact
+with native's Rust port — no reordering bug left in either. The one function left that could
+genuinely diverge is `FVector::SafeNormal` (`core.dll 0x10051090`, called from the `FPlane` ctor to
+normalize the clip plane): it disassembles to real x87 (`call sqrt; fstp/fld/fld1/fdivrp/fstp`), and
+a whole-`.text` census of `core.dll` and `D3D9Drv.dll` (this build's render driver) — DLLs spike 41
+never covered — finds zero `fldcw`/`fnstcw` in either, same as `Engine.dll`/`Editor.dll`. So nothing
+anywhere in this build ever sets the x87 precision-control field, meaning it runs at whatever the
+process inherited at creation — plausibly the x87 hardware-reset default (PC=`11`, 64-bit extended),
+not the PC=`10`/53-bit ("double") precision `safe_normal()`'s Rust model assumes. This is a real,
+previously-unexamined candidate (distinct from the "x87 vs SSE in the CSG math" question spike 41
+already answered), but still UNCONFIRMED: a probe script
+(`dev/docs/spikes/2026-09-12-safenormal-fpu-precision/harness/fctrl_probe.py`, one gdb breakpoint,
+reads `$fctrl` at `SafeNormal` — no single-stepping, no need to reproduce this item's exact
+`162->275` crossing) is written but could not be run — this worktree has no wine-based debug-editor
+image, and building one failed TWICE on this host with disk driven to 0 bytes free during the final
+containerd layer-export step (from 6.0 GB and then 7.4 GB free, both times on the same step, for a
+1.05 GB image) — a hard host limit, not a fixable retry. Cleaned up after each attempt; host disk
+restored to ~7.4 GB free. Next step for whoever has working infra: run `fctrl_probe.py` against any
+small cached subset and read `$fctrl` — `0x037f` confirms, `0x027f` refutes.
+
+## 2026-09-13 — probe run; hypothesis REFUTED
+
+`dx-lum-uned-dbg:latest` now exists (cached from a prior session). Ran `fctrl_probe.py` against the
+cached Island N=332 subset (`_scratch/actor-parity/01_nyc_unatcoisland/N332/...`) — fixed one stale
+bug first (`ROOT = Path(__file__).resolve().parents[4]` pointed at `dev/`, not the repo root; changed
+to `parents[5]`). 30/30 `SafeNormal` hits report `fctrl=0x27f` — PC=`10` (double, 53-bit), the value
+that refutes the hypothesis. `SafeNormal`'s real sqrt+reciprocal chain runs at exactly the precision
+`fpoly.rs::safe_normal`'s Rust `f64` model already assumes; there is nothing to widen. No code change.
+
+Full writeup: `dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md`. The x87-precision line of
+inquiry is closed for both this item and `unatco-n-226-leaf-12-gets-a-permeating-light157`. The real
+mechanism behind the sub-ULP tie is still open; it needs single-stepping the real
+`SafeNormal`/`FLinePlaneIntersection` chain at the exact `162->275`/`275->273` crossing and diffing
+intermediate register values against native's own trace, not another control-word read. Not fixed, no
+mask; ladder still bails at N=332.
+
+## 2026-09-13b — hex-precision live capture: the crossing's INPUTS are not bit-identical
+
+Every prior capture (this item and its sibling) compared vertex values printed with ~9 significant
+decimal digits, which is enough to round-trip an `f32` uniquely — but nobody had actually diffed the
+two sides' raw bit patterns for this exact crossing's ARGUMENTS, only their formulas (disassembly)
+and FPU state (the fctrl probe). Did that now: `dev/docs/spikes/2026-09-13-crossing-vertex-live-capture/`,
+a live gdb capture of `FPlane::FPlane` and `FLinePlaneIntersection` dumping every argument as a raw
+hex `u32`, gated on `FEditorVisibility::ActorVisibility`'s own actor match (a naive value-conditioned
+breakpoint on either hot CSG primitive wedges the whole editor — see the spike for why).
+
+Result: **the inputs are NOT bit-identical.** Native's own trace (`UEDCLI_PERM_TRACE_EDGE=162-275`,
+extended with hex output this session) shows the decisive `FLinePlaneIntersection` call as
+`P1=(-4495.99951171875, 3628.0, 192.0)`, `P2=(-4495.99951171875, 4080.0, 192.0)` — `P2.y` the exact
+grid value `0x457f0000`. The live editor's OWN call at this exact crossing (`LPI_ENTRY hit=1120` in
+the capture log, `P1`/`Normal`/`W` all matching native's trace, confirming this is the right call)
+has `P2.y = 0x457f0001` — `4080.000244140625`, one ULP off the grid value native assumes.
+
+`P2` is a **Pass-B portal-quad corner** (`zones.rs::collect_leaf_portals` → `build_infinite_fpoly` +
+`make_portals_clip`), not a raw `Model.Point` — a SEPARATE reconstruction from the final saved
+package's Points table that earlier sessions confirmed byte-identical (`model_dump.py`). That
+confirmation says nothing about whether the transient portal vertex `ActorVisibility` actually
+consumes during `MAP REBUILD` matches the final saved value, and it doesn't, here, by 1 ULP.
+
+`make_portals_clip`'s own crossing formula (`fpoly.rs::line_plane_intersection`, the OTHER
+`FLinePlaneIntersection` overload, `Engine.dll 0x1506f0`, distinct from `permeating_lights.rs`'s
+own copy at `0x101507c0`) was independently disassembled fresh this session and is ALSO bit-exact
+against native's Rust port. So this isn't a wrong formula in Pass B either — the same "right
+formula, right precision, still a sub-ULP residual" shape recurs one level upstream of where every
+prior session looked, which is new evidence for a genuinely low-level (codegen/register-allocation)
+effect rather than anything specific to the permeating-light beam clip.
+
+**Not fixed, no mask.** The root is now one level further back: whatever crossing inside Pass B's
+own ancestor-plane clip loop first produces `y=4080.00024` instead of `4080.0` for this vertex, not
+yet captured. Full writeup + next step: `dev/docs/spikes/2026-09-13-crossing-vertex-live-capture/spike.md`.

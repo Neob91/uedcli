@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "Port UE1 mesh geometry decode (umesh.py parse_mesh/lazy_array) to Rust"
+summary = "Built + independently reviewed + merged (2026-09-13): parse_mesh_raw (uedcli-native/src/mesh_read.rs) is live; umesh.py's parse_mesh calls it. Superseded Python decoders kept, unused. cargo test 234 passed; corpus parity 439 meshes/5 packages, 0 mismatches; full suite clean of new failures. REMAINING: owner visual sign-off on level photo + class preview renders (both substrates), then delete the superseded Python decoders."
 +++
 
 # Port UE1 mesh geometry decode to Rust

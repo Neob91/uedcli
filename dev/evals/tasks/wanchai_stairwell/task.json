@@ -1,7 +1,7 @@
 {
   "level": "wanchai",
   "title": "Widen the stairwell",
-  "req": "&ldquo;The stairwell shaft (near Brush1239) feels cramped. Widen it by 48 units.&rdquo;",
+  "req": "&ldquo;The stairwell shaft Brush1239 feels cramped. Widen it by 48 units.&rdquo;",
   "dx_map": "06_HongKong_WanChai_Market",
   "photo_camera": {
     "at": [

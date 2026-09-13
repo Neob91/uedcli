@@ -1,7 +1,7 @@
 {
   "level": "bar",
   "title": "Hang a matching bar sign",
-  "req": "&ldquo;There&rsquo;s a sign (Brush111) on the wall. Put a matching one further down that same wall.&rdquo;",
+  "req": "&ldquo;There&rsquo;s a sign, Brush111, on the wall. Put a matching one further down that same wall.&rdquo;",
   "dx_map": "02_NYC_Bar",
   "photo_camera": {
     "at": [

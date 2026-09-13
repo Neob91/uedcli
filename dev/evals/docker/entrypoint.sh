@@ -19,4 +19,17 @@ set -e
 cp -r /uedcli-src /tmp/uedcli-src
 pip install --no-cache-dir --no-deps --user -e /tmp/uedcli-src -q
 export PATH="$HOME/.local/bin:$PATH"
+
+# The real Deus Ex asset tree, bind-mounted read-only at /dx-assets (run_eval.py) -- without a
+# config pointing at it, `actor add`/`brush build`/`actor duplicate` (anything needing a class
+# schema from a real .u package) fail outright. Same [games.deusex] shape as this host's own
+# ~/.uedcli/config.toml, just re-rooted at the container's mount point.
+if [ -d /dx-assets ]; then
+  mkdir -p "$HOME/.uedcli"
+  cat > "$HOME/.uedcli/config.toml" <<EOF
+[games.deusex]
+paths = "/dx-assets/System:/dx-assets/Textures:/dx-assets/Sounds:/dx-assets/Music:/dx-assets/Maps"
+EOF
+fi
+
 exec "$@"

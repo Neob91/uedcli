@@ -203,6 +203,21 @@ fn clip_beam_traced(light: &Vec3, clip: &[Vec3], target: &[Vec3], trace: bool) -
         };
         let w = plane_w(light, &normal);
         if trace {
+            // Hex bit patterns of the computed plane (normal+w) and the two edge endpoints (a,b) and
+            // light -- pins down whether the LIVE COMPUTED plane matches the editor's, not just the
+            // formula (disassembly-verified separately). See board items
+            // `island-n-332-leaf-273-permeating-light-vertex-tie` /
+            // `unatco-n-226-leaf-12-gets-a-permeating-light157`.
+            eprintln!(
+                "PERM_PLANE j={j} light=({:08x},{:08x},{:08x}) a=({:08x},{:08x},{:08x}) \
+                 b=({:08x},{:08x},{:08x}) normal=({:08x},{:08x},{:08x}) w={:08x} \
+                 normal_f=({},{},{}) w_f={}",
+                light.x.to_bits(), light.y.to_bits(), light.z.to_bits(),
+                a.x.to_bits(), a.y.to_bits(), a.z.to_bits(),
+                b.x.to_bits(), b.y.to_bits(), b.z.to_bits(),
+                normal.x.to_bits(), normal.y.to_bits(), normal.z.to_bits(), w.to_bits(),
+                normal.x, normal.y, normal.z, w
+            );
             let dots: Vec<f32> = poly.iter().map(|v| plane_dot(&normal, w, v)).collect();
             let lo = dots.iter().copied().fold(f32::INFINITY, f32::min);
             let hi = dots.iter().copied().fold(f32::NEG_INFINITY, f32::max);
@@ -214,7 +229,7 @@ fn clip_beam_traced(light: &Vec3, clip: &[Vec3], target: &[Vec3], trace: bool) -
             };
             eprintln!("PERM_EDGE j={j} verts={} dot_min={lo} dot_max={hi} -> {branch}", poly.len());
         }
-        poly = split_with_plane_fast(&poly, &normal, w)?;
+        poly = split_with_plane_fast(&poly, &normal, w, trace)?;
     }
     if poly.len() >= 3 {
         Some(poly)
@@ -271,7 +286,7 @@ fn line_plane_intersection(p1: &Vec3, p2: &Vec3, normal: &Vec3, w: f32) -> Vec3 
 /// branch of the two the board item flagged. The crossing vertex itself comes from
 /// [`line_plane_intersection`], not from an `alpha` between the two `PlaneDot`s — which matters to
 /// the last ulp.
-fn split_with_plane_fast(poly: &[Vec3], normal: &Vec3, w: f32) -> Option<Vec<Vec3>> {
+fn split_with_plane_fast(poly: &[Vec3], normal: &Vec3, w: f32, trace: bool) -> Option<Vec<Vec3>> {
     let n = poly.len();
     if n == 0 {
         return None;
@@ -293,7 +308,21 @@ fn split_with_plane_fast(poly: &[Vec3], normal: &Vec3, w: f32) -> Option<Vec<Vec
         let (ds, dp) = (dots[i], dots[(i + n - 1) % n]);
         let (cur_front, prev_front) = (ds >= 0.0, dp >= 0.0);
         if cur_front != prev_front {
-            out.push(line_plane_intersection(&prev, &cur, normal, w));
+            let crossing = line_plane_intersection(&prev, &cur, normal, w);
+            if trace {
+                eprintln!(
+                    "PERM_CROSS prev=({:08x},{:08x},{:08x}) cur=({:08x},{:08x},{:08x}) \
+                     dp={:08x} ds={:08x} normal=({:08x},{:08x},{:08x}) w={:08x} \
+                     -> crossing=({:08x},{:08x},{:08x}) crossing_f=({},{},{})",
+                    prev.x.to_bits(), prev.y.to_bits(), prev.z.to_bits(),
+                    cur.x.to_bits(), cur.y.to_bits(), cur.z.to_bits(),
+                    dp.to_bits(), ds.to_bits(),
+                    normal.x.to_bits(), normal.y.to_bits(), normal.z.to_bits(), w.to_bits(),
+                    crossing.x.to_bits(), crossing.y.to_bits(), crossing.z.to_bits(),
+                    crossing.x, crossing.y, crossing.z
+                );
+            }
+            out.push(crossing);
         }
         if cur_front {
             out.push(cur);
@@ -407,6 +436,18 @@ pub fn write_permeating_region(model: &mut Model, lights: &[LightInput]) {
         return;
     }
     let portals = leaf_portal_map(model);
+    // `UEDCLI_PERM_DUMP_LEAF=<leaf>` lists every outward portal `collect_leaf_portals` gives that
+    // leaf (to_leaf + vert count) -- a topology check independent of any light's flood, for telling
+    // "the portal graph itself is missing an edge" apart from "the beam clip rejects every edge".
+    if let Ok(leaf_s) = std::env::var("UEDCLI_PERM_DUMP_LEAF") {
+        if let Ok(leaf) = leaf_s.parse::<i32>() {
+            let faces = portals.get(&leaf).map(|v| v.as_slice()).unwrap_or(&[]);
+            eprintln!("PERM_PORTALS leaf={leaf} count={}", faces.len());
+            for f in faces {
+                eprintln!("  ->leaf={} verts={:?}", f.to_leaf, f.verts);
+            }
+        }
+    }
     // `UEDCLI_PERM_TRACE=<light index>` logs that one light's whole flood — every leaf marked and
     // every face crossing kept or dropped, with the gate that dropped it — so it can be diffed
     // against a live `FEditorVisibility::ActorVisibility` capture. `all` traces every light.
@@ -542,7 +583,7 @@ mod tests {
             Vec3::new(-10.0, -10.0, 0.0),
         ];
         // A plain Sutherland-Hodgman clip would return Some(4 points) here (2 kept + 2 interpolated).
-        assert_eq!(split_with_plane_fast(&poly, &normal, 0.0), None);
+        assert_eq!(split_with_plane_fast(&poly, &normal, 0.0, false), None);
     }
 
     #[test]
@@ -556,7 +597,7 @@ mod tests {
             Vec3::new(0.1, 10.0, 0.0),
             Vec3::new(0.1, -10.0, 0.0),
         ];
-        assert_eq!(split_with_plane_fast(&poly, &normal, 0.0), Some(poly));
+        assert_eq!(split_with_plane_fast(&poly, &normal, 0.0, false), Some(poly));
     }
 
     #[test]
@@ -569,7 +610,7 @@ mod tests {
             Vec3::new(-10.0, 10.0, 0.0),
             Vec3::new(-10.0, -10.0, 0.0),
         ];
-        let out = split_with_plane_fast(&poly, &normal, 0.0).unwrap();
+        let out = split_with_plane_fast(&poly, &normal, 0.0, false).unwrap();
         assert_eq!(out.len(), 4, "2 kept corners + 2 interpolated crossing points");
         for v in &out {
             assert!(v.x >= -1e-4, "every kept vertex must be on the front side: {v:?}");
