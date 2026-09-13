@@ -814,8 +814,11 @@ class _Lowerer:
         if val is None or str(val).casefold() == "none":
             return Tok(EX_NO_OBJECT), "none"
         leaf = str(val).rsplit(".", 1)[-1]
-        ty = "class" if e.text.casefold() == "class" else f"object:{e.text.casefold()}"
-        return Tok(EX_OBJECT_CONST, (("obj", leaf),)), ty
+        is_class = e.text.casefold() == "class"
+        ty = "class" if is_class else f"object:{e.text.casefold()}"
+        # `class:<Name>` for a CLASS literal (never bare) — same collision risk/fix as a cast's target,
+        # see `_call_named`'s `class<...>(...)`/object-cast branches.
+        return Tok(EX_OBJECT_CONST, (("obj", f"class:{leaf}" if is_class else leaf),)), ty
 
     def _ex_self(self, e):
         cls = (self.scope.class_name or "Object").casefold()
@@ -985,10 +988,14 @@ class _Lowerer:
         if low.startswith("class<") and len(args) == 1:  # metaclass cast `class<Actor>(c)`
             meta = name[len("class<"):-1].strip().rsplit(".", 1)[-1]
             inner, _ = self.expr(args[0])
-            return Tok(EX_METACAST, (("obj", meta), ("sub", inner))), "class"
+            return Tok(EX_METACAST, (("obj", f"class:{meta}"), ("sub", inner))), "class"
         if len(args) == 1 and self.scope.is_class_name(name):   # object cast `Pawn(x)`
             inner, _ = self.expr(args[0])
-            return Tok(EX_DYNAMIC_CAST, (("obj", name), ("sub", inner))), f"object:{low}"
+            # `class:<Name>` (not a bare ident): a cast target is ALWAYS the class, never a same-named
+            # member/local (UnrealScript allows `var Foo Foo;` — `Foo(x)` still casts to the class) —
+            # see `compile._sibling_export_ref`/its callers, which resolve this prefix before any
+            # member/local lookup so the two identically-spelled meanings can't collide.
+            return Tok(EX_DYNAMIC_CAST, (("obj", f"class:{name}"), ("sub", inner))), f"object:{low}"
         arg_toks, arg_types = self._lower_args(args)
         tgt = self.scope.func(name)
         if tgt is None:

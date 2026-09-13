@@ -14,6 +14,30 @@ The offline tests run `compile_package_dir` and `perm_gate` against committed UC
     qsort-TIE permutation, the same open class of issue `ExtendedBuilders` hits (see
     `USCRIPT-COMPILER.md`), not specific to the mutual-reference mechanism itself.
 
+Six more fixtures (2026-09-13) each pin one gap found compiling the real `UWeb` package
+(`USCRIPT-COMPILER.md`'s "Real UWeb" entry) — every one verified against a live UED22 `UCC.exe` build,
+not just the real UWeb corpus attempt:
+  - `pkg_SamePkgMisc`: a same-package class LITERAL (`class'SPBase'`/`new(...) class'SPBase'`), a
+    `class<T>` property typed to a sibling, a same-package `Super` call resolving to an EXPORT, and a
+    member sharing its name with an unrelated sibling class (`var SPFoo SPFoo;` — a cast `SPFoo(x)`
+    must resolve to the CLASS, a bare `SPFoo` read/write to the MEMBER).
+  - `pkg_PoolCaseDedup`: the SCARIEST fix — two classes each declare a param/local differing only in
+    case (`S` / `s`); `pool_case` can re-spell them onto the SAME final name AFTER the gather's own
+    case-sensitive dedup already treated them as distinct, silently shifting every export's baked-in
+    name-table index by one from the collision point on (`compile._pool_cased_dedup`).
+  - `pkg_InheritedObjMember`: reading an INHERITED object-typed member (`Actor.Level`) never declared
+    locally.
+  - `pkg_GlobalEnumTag`: an unqualified enum tag (`GetKind_B`) resolved through a SIBLING class with
+    no inheritance relation to the enum's declaring class — enum tags are globally scoped in real UCC.
+  - `pkg_MiscFlags`: `CPF_Native` on a `native` var (ONLY when the owning class is itself native — see
+    `test_cpf_native_requires_native_class`), a function param's and a local's static-array size
+    (`byte B[8]`/`local byte Buf[4]`), and a non-native body-less function declaration (`function
+    Setup();`) compiling as an empty body (`Return(Nothing)`, not a native-style zero-script stub).
+  - `pkg_NoSpuriousPkgImport`: a property TYPE reference to another package (`var LevelInfo Level;`,
+    Engine) must NOT add that package to `PackageImports` — only the super chain's transitive deps do.
+  - `pkg_CPFNativeProbe`: `CPF_Native` needs BOTH the var's own `native` keyword AND the owning class
+    itself being `native` — a `native` var in a non-native class carries no CPF bit.
+
 `test_goldens_match_ucc` (docker-gated) rebuilds the goldens with UCC and re-gates, so the committed
 fixtures can't silently drift from the compiler.
 """
@@ -60,6 +84,80 @@ _PACKAGES: dict[str, dict[str, str]] = {
             "var MutualA Partner;\n\n"
             "function int Pong(MutualA a)\n{\n    Partner = a;\n    return a.GetValue();\n}\n"),
     },
+    "SamePkgMisc": {
+        "SPBase.uc": (
+            "class SPBase expands Object;\n\n"
+            "function string Greet()\n{\n    return \"base\";\n}\n"),
+        "SPSub.uc": (
+            "class SPSub expands SPBase;\n\n"
+            "function string Greet()\n{\n    return \"sub:\" $ Super.Greet();\n}\n"),
+        "SPFoo.uc": (
+            "class SPFoo expands Object;\n\n"
+            "function string Tag()\n{\n    return \"foo\";\n}\n"),
+        "SPUser.uc": (
+            "class SPUser expands Object;\n\n"
+            "var SPFoo SPFoo;\n"
+            "var Object Generic;\n"
+            "var class<SPBase> BaseClass;\n\n"
+            "function DoIt()\n{\n"
+            "    local SPBase b;\n"
+            "    b = new(None) class'SPBase';\n"
+            "    BaseClass = class'SPBase';\n"
+            "    SPFoo = SPFoo(Generic);\n"
+            "}\n"),
+    },
+    "PoolCaseDedup": {
+        "PCDOne.uc": (
+            "class PCDOne expands Object;\n\n"
+            "function Foo(string S)\n{\n    Log(S);\n}\n"),
+        "PCDTwo.uc": (
+            "class PCDTwo expands Object;\n\n"
+            "function Bar()\n{\n    local string s;\n    s = \"x\";\n    Log(s);\n}\n"),
+    },
+    "InheritedObjMember": {
+        "IOMActor.uc": (
+            "class IOMActor expands Actor;\n\n"
+            "function LevelInfo GetLevel()\n{\n    return Level;\n}\n"),
+    },
+    "GlobalEnumTag": {
+        "GETHolder.uc": (
+            "class GETHolder expands Object;\n\n"
+            "enum EGetKind\n{\n    GetKind_A,\n    GetKind_B\n};\n\n"
+            "var EGetKind Kind;\n"),
+        "GETUser.uc": (
+            "class GETUser expands Object;\n\n"
+            "var GETHolder Holder;\n\n"
+            "function UseTag()\n{\n    Holder.Kind = GetKind_B;\n}\n"),
+    },
+    "MiscFlags": {
+        "MFOne.uc": (
+            "class MFOne expands Object;\n\n"
+            "var private native const int Flags[3];\n\n"
+            "function DoWork(byte B[8])\n{\n"
+            "    local byte Buf[4];\n"
+            "    Buf[0] = B[0];\n"
+            "}\n\n"
+            "function Setup();\n\n"
+            "defaultproperties\n{\n}\n"),
+    },
+    "NoSpuriousPkgImport": {
+        "NSPIOne.uc": (
+            "class NSPIOne expands Object;\n\n"
+            "var LevelInfo Level;\n\n"
+            "defaultproperties\n{\n}\n"),
+    },
+    "CPFNativeProbe": {
+        # Each class declares ONLY the one native var under test (no unset PLAIN sibling) -- a
+        # native class with an unset plain property hits a SEPARATE, pre-existing defaults-emission
+        # bug unrelated to CPF_Native (see
+        # dev/docs/board/inbox/native-class-lone-plain-var-gets-a-spurious-zero-default/).
+        "CPFNativeClassNativeVar.uc": (
+            "class CPFNativeClassNativeVar expands Object native noexport;\n\n"
+            "var native int NativeVar;\n"),
+        "CPFPlainClassNativeVar.uc": (
+            "class CPFPlainClassNativeVar expands Object;\n\n"
+            "var native int NativeVar;\n"),
+    },
 }
 
 
@@ -102,6 +200,71 @@ def test_mutual_same_package_classes():
     single-pass, build-order-dependent resolution scheme — this is the two-pass signature-graph fix
     (`_prepass_signatures`/`_PkgSigGraph`)."""
     _check("Mutual")
+
+
+def test_same_package_class_literal_super_and_name_collision():
+    """A same-package class LITERAL (`class'SPBase'`/`new(...) class'SPBase'`), a `class<T>` property
+    typed to a sibling, `Super.Greet()` resolving to an in-package EXPORT (not an import), and a
+    member sharing its name with an unrelated sibling class (`var SPFoo SPFoo;` — casting `SPFoo(x)`
+    must resolve to the CLASS, a bare `SPFoo` read/write to the MEMBER, never confused with each
+    other) — all found compiling the real `UWeb` package (`WebServer`/`WebRequest`/`HelloWeb`)."""
+    _check("SamePkgMisc")
+
+
+def test_pool_case_dedup_does_not_corrupt_name_indices():
+    """Two classes each declare a param/local differing only in case (`S` in `PCDOne.Foo`, `s` in
+    `PCDTwo.Bar`) — the gather's dedup is case-SENSITIVE on the source spelling, so both survive as
+    distinct entries; `pool_case` can then re-spell one onto the other's exact final text (the boot
+    pool already has `S`), which `serialize.NameTable`'s dedup (case-sensitive on the FINAL spelling)
+    then collapses to one slot. Without re-deduping post-`pool_case` (`compile._pool_cased_dedup`),
+    every export's baked-in name-table index after the collision point silently pointed at the WRONG
+    name — found chasing an unrelated-looking symptom while compiling the real `WebConnection`/
+    `WebServer` (UWeb)."""
+    _check("PoolCaseDedup")
+
+
+def test_inherited_object_typed_member():
+    """Reading an inherited OBJECT-typed member never declared locally (`Actor.Level`, type
+    `LevelInfo`) — `_register_member_var_imports` only handled `_SCALAR_KINDS` before; an import table
+    row needs no type-tail, so any type down to its UProperty subclass (`ObjectProperty`/
+    `ClassProperty`/`StructProperty`) is enough (`_member_import_prop_class`)."""
+    _check("InheritedObjMember")
+
+
+def test_enum_tag_globally_scoped_across_unrelated_classes():
+    """An unqualified enum tag (`GetKind_B`, declared on `GETHolder.EGetKind`) resolves through
+    `GETUser`, a SIBLING class with NO inheritance relation to `GETHolder` — enum tags are globally
+    scoped in real UCC (`ClassGraph.enum_ordinal` already scanned every ON-DISK package's enums
+    regardless of class; `_PkgSigGraph.enum_ordinal` extends that scan to this in-progress package's
+    own classes, which have no compiled bytes yet for the disk-based scan to see)."""
+    _check("GlobalEnumTag")
+
+
+def test_misc_native_and_array_and_bodyless_function_flags():
+    """`CPF_Native` on a `native` var (only when the owning class is ALSO native — see
+    `test_cpf_native_requires_native_class`), a function param's and a local's static-array size
+    (`byte B[8]`, `local byte Buf[4]` — the parser previously parsed and discarded a param's size, and
+    `_add_func_prop` hardcoded `array_dim=1` for every param/local), and a non-native body-less
+    function declaration (`function Setup();`, meant to be overridden) compiling as an EMPTY body —
+    `Return(Nothing)`, not a native-style zero-script stub."""
+    _check("MiscFlags")
+
+
+def test_property_type_reference_does_not_pollute_package_imports():
+    """A property TYPE reference to another package (`var LevelInfo Level;`, Engine) gets its own
+    IMPORT table entry but must NOT add that package to `PackageImports` — only the super chain's
+    transitive package deps do. Reproduces on 4 of `UWeb`'s 6 non-trivial classes (`HelloWeb`/
+    `ImageServer`/`WebApplication`/`WebResponse`, each with an object/class-typed property whose
+    package isn't otherwise needed) before the fix."""
+    _check("NoSpuriousPkgImport")
+
+
+def test_cpf_native_requires_native_class():
+    """`CPF_Native` (`0x00001000`) needs BOTH the var's own `native` keyword AND the owning class
+    itself being `native` — a `native` var in a NON-native class carries no CPF bit (measured live:
+    the previous fix mapped the `native`/`intrinsic` var modifier straight to `CPF_NATIVE`
+    unconditionally, which is wrong whenever the class itself isn't native)."""
+    _check("CPFNativeProbe")
 
 
 def test_perm_gate_catches_wrong_body():

@@ -254,6 +254,55 @@ using a `class'X'` literal without a member access through it, does NOT add an e
 (populates a `extra_deps` list threaded through `compile.py`'s `_Build`), consumed when building
 each class's `Dependencies` tuple in `_class_export`/`_multi_class_export`.
 
+**Known incomplete (2026-09-13, real `UWeb` package):** the "one per DISTINCT class" count above was
+never checked against a class with MANY Context accesses through the same typed param across many
+statements. UWeb's real `HelloWeb.Query` (a dozen-plus `Request.X`/`Response.X` accesses inside an
+if/switch) has a real UCC `Dependencies` array that repeats `WebRequest`/`WebResponse` roughly a
+dozen times each — NOT deduped to one entry per class, contradicting the "DISTINCT" claim above,
+which was only verified on smaller controlled fixtures. The real counting rule (per-statement?
+per-Context-node? something else) is unknown — needs a live capture correlated against source, not
+attempted yet. `dev/docs/board/inbox/uweb-dependencies-array-over-counts-cross-class/`.
+
+## Real `UWeb` findings (2026-09-13, live UT99 UCC)
+
+- **Enum tags are globally scoped, not class/inheritance-scoped.** An unqualified enum value
+  (`Request_GET`) resolves in ANY class, including one with no inheritance relation to the enum's
+  declaring class (`WebConnection` reading `WebRequest.ERequestType`'s tag bare) — the same global
+  scope `ClassGraph.enum_ordinal`'s on-disk scan already modeled for STOCK packages; the gap was only
+  that a currently-compiling package's own classes weren't in that scan yet (`_PkgSigGraph.enum_ordinal`
+  now covers both).
+- **A same-package class CAST/`class'X'`/`class<T>()` literal is unambiguous even when a member
+  shares its name.** `var WebServer WebServer;` is legal UnrealScript; `WebServer(x)` still casts to
+  the class, plain `WebServer` still reads the member — the two meanings share nothing but a spelling.
+- **`Super` (an overridden function) and a `class<T>` property's meta-class resolve to a same-package
+  ancestor's own EXPORT, never an import** — the same rule an ordinary same-package member/call
+  already followed.
+- **`native` on a var persists `CPF_Native = 0x00001000` only when the OWNING CLASS is also native**
+  (measured live, corrected 2026-09-13: a `native` var in a non-native class carries no CPF bit — the
+  first version of this finding set it unconditionally on the var's own `native` keyword, wrong
+  whenever the class itself isn't native, caught by a `CPFNativeProbe` fixture pairing a native class
+  + native var against a plain class + native var).
+- **A non-native, body-less function declaration (`function Foo();`, meant to be overridden) compiles
+  as an EMPTY body** — `Return(Nothing)`, the same trailing token a real empty `{}` body gets — NOT a
+  native-style zero-script stub.
+- **A function param's static-array size (`byte B[255]`) is real** and must flow through to its
+  UProperty's `ArrayDim` — the parser previously parsed and discarded it.
+- **`serialize.NameTable`'s dedup is case-sensitive on the FINAL (pool-cased) spelling**, not the
+  source spelling — a package's own name-order computation must dedup on that same final spelling
+  (`compile._pool_cased_dedup`) or its baked-in name-table indices drift out of sync with what the
+  writer actually emits whenever two source names collide only after `pool_case` re-spells them.
+- **`PackageImports` = own package + the super chain's transitive package deps + Core, nothing else**
+  (corrected 2026-09-13): a property/param/local/return TYPE reference to another package (`var
+  LevelInfo Level;`, Engine) does NOT add that package, even though the class type itself still gets
+  its own IMPORT table entry — reproduced wrong on 4 of 6 real `UWeb` classes before the fix
+  (`b.class_ref_packages`, tracking every package any import touched, was the bug).
+- **A native class's OWN unset plain (non-native) property does not always skip its zero default.**
+  `WebRequest` (native) correctly omits a zero tag for its plain, unset properties — matching the
+  documented native-class explicit-only rule — but a minimal isolated repro of the same shape
+  (`native` class, one native var, one plain unset var) gets a spurious zero tag for the plain var
+  anyway. Contradiction not resolved; not fixed. `dev/docs/board/inbox/
+  native-class-lone-plain-var-gets-a-spurious-zero-default/`.
+
 `Sleep` and `FinishAnim` share identical `FunctionFlags` (`0x409`, both `FUNC_LATENT`) yet give 2 vs 3;
 `GotoState` is NOT latent (`0x401`) yet also gives 3; two `GotoState` calls give 0. This rules out
 "one Nothing per latent call" and "one Nothing per statement" as the rule. Likely compiler-internal

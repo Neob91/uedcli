@@ -332,18 +332,92 @@ strict gate autonomously.
   for an in-package class — fixed to read the sibling's own already-built `self_crc`). All fixed
   together; each was load-bearing for the controlled fixture below to compile at all.
 
-  **Real `UWeb` sources are NOT available in this environment** — only the compiled `uned/UED22/uweb.u`
-  (a binary) is committed; the `.uc` sources live in the gitignored UT99 substrate (`uscript/
-  fetch_ut99.sh`, ~50MB from archive.org), not fetched this pass (network + disk judged not worth the
-  risk on this host, 95%+ full). Proven instead by a new controlled fixture, `pkg_Mutual`
+  The mechanism was first proven on a controlled fixture, `pkg_Mutual`
   (`uedcli/tests/test_uscript_package.py::test_mutual_same_package_classes`) — matching this
   campaign's controlled-vs-real distinction (a controlled fixture proves the mechanism; only a real
   corpus package counts toward the "30 packages" goal). `perm_gate` byte-exact against a fresh live
   UED22 UCC build (`docker`-gated, `test_goldens_match_ucc`); the strict gate's one residual is a
   same-package name-table qsort-TIE permutation among equal-refcount names — the SAME open,
-  unresolved class of issue `ExtendedBuilders` already hits (confirmed, not guessed: two
-  independently-named variants of the fixture both hit a front-of-table tie between unrelated name
-  pairs, never a wrong value). Fetching UT99 and trying real `UWeb` is separate future work.
+  unresolved class of issue `ExtendedBuilders` already hits.
+
+  **Real `UWeb` (2026-09-13): UT99 substrate fetched, package attempted, NOT YET passing either
+  gate.** `bash uedcli/uscript/fetch_ut99.sh` + `ucc_decompile_ut99`/`ucc_compile_ut99` (the
+  `test_ipserver_roundtrips` pattern) got real `.uc` sources and a fresh UT99-UCC golden for all 7
+  `UWeb` classes. Compiling them surfaced SIX further real, previously-unexercised gaps, all fixed:
+  (1) an inherited member of OBJECT/CLASS/STRUCT type (e.g. `Actor.Level`) couldn't be imported —
+  `_register_member_var_imports` only handled `_SCALAR_KINDS` (`_member_import_prop_class` now maps
+  `object:`/`class`/`struct:` labels to their UProperty subclass; an import table row needs no
+  type-tail, so this was a narrower fix than it looked); (2) an unqualified ENUM TAG declared in a
+  DIFFERENT same-package class (`Request_GET` from `WebRequest.ERequestType`, used bare in
+  `WebConnection`) didn't resolve — enum tags are GLOBALLY scoped in real UCC
+  (`ClassGraph.enum_ordinal` already scanned every ON-DISK package's enums regardless of class); the
+  gap was the CURRENTLY-COMPILING package's own classes, which have no compiled bytes yet for that
+  scan — `ClassSig` gained an `enums` field (own tags), `_PkgSigGraph.enum_ordinal` now falls back to
+  scanning every in-package class's signature; (3) `new(None) class'WebRequest'` (a same-package
+  class LITERAL used as a bare script ref, not through `func:`/`mem:`) wasn't resolved —
+  `_sibling_export_ref` gained a bare-ident branch; (4) a NAME-TABLE CORRUPTION bug, found chasing an
+  apparently-unrelated symptom (an export's baked-in name field pointing at a DIFFERENT export's
+  name): `_multi_names`'s gather dedups on the SOURCE spelling (case-sensitive) BEFORE `pool_case`
+  re-spells each name from the boot pool, so two source names differing only in case (`WebConnection`
+  had a param `S` in one function and `s` in another) can both survive that dedup and then collapse
+  onto the SAME pooled spelling — every export name index computed after the collision point was off
+  by one relative to what `serialize.NameTable`'s own (correct, case-sensitive) dedup actually writes.
+  Fixed with `_pool_cased_dedup` (dedup AFTER `pool_case`, matching `NameTable.index`'s semantics),
+  applied at all three sites that build a package's name order; (5) an inherited function's `Super`
+  field and a `class<T>` property's meta-class type-tail always imported the ancestor/meta class even
+  when it was an IN-PACKAGE class (`HelloWeb extends WebApplication`, `WebServer.ApplicationClass:
+  class<WebApplication>`) — `_super_func_import` and a new `_class_meta_ref` helper now check
+  `b.in_pkg_class_names` first, same as an ordinary same-package member/call already did; (6) a class
+  CAST (`WebServer(Owner)`) or `class'X'`/`class<T>()` literal targeting a same-package class shared
+  the SAME bare-string "obj" identity as an ORDINARY MEMBER of that same name (`var WebServer
+  WebServer;` is legal UnrealScript — `WebServer(x)` still casts to the class, `WebServer` alone
+  reads the member) — `resolve_inv` couldn't tell them apart. Fixed by tagging every cast/metacast/
+  class-literal ident `class:<Name>` at lower time (never bare), resolved BEFORE any local/member/func
+  lookup (`_resolve_class_ident`, wired into all four export resolvers;
+  `_register_cast_class_imports` pre-registers the import for an out-of-package target, since
+  discovering one this late would miss the already-frozen import table). Two smaller, previously-
+  silently-wrong gaps found and fixed alongside: a `native` var modifier persisted NO CPF bit
+  (an EARLIER version of this fix wrongly modeled it as unconditional — see the review correction
+  below); a function PARAM's static-array size (`byte B[255]`) was parsed and then discarded (`Param`
+  had no `array_dim` field) — the SAME drop existed for a multi-name `local` declaration's own
+  already-captured dim, never reaching `_add_func_prop` (which hardcoded `array_dim=1`) — both now
+  flow through.
+
+  **Review pass (2026-09-13) found one more real bug and corrected one of the six above; two claims
+  did NOT reproduce.** (7) A property TYPE reference to another package (`var LevelInfo Level;`,
+  Engine) spuriously added that package to `PackageImports` — reproduced on 4 of 6 real `UWeb` classes
+  (`HelloWeb`/`ImageServer`/`WebApplication`/`WebResponse`) and on a trivial isolated fixture. Real
+  UCC's `PackageImports` = own package + the super chain's transitive package deps + Core, full stop —
+  a property/param/local/return type, a class-literal, or a `Texture'Pkg.Name'` still gets its own
+  IMPORT table entry, it just never counts toward `PackageImports` (`b.class_ref_packages`, the old
+  third source, is dead code now). **Correction to (part of) fix 5**: `CPF_Native` needs BOTH the
+  var's own `native` keyword AND the OWNING CLASS itself being native — the original fix set it
+  whenever the var said `native`, regardless of the class; a live `CPFNativeProbe` fixture (a `native`
+  var in a NON-native class) shows real UCC sets no CPF bit there. Fixed by threading
+  `native_class: bool` (`compile.ClassDecl`'s own modifiers, not inherited native-ness) into
+  `_build_var`. **Two claims investigated, NOT reproduced**: a spurious zero-value defaultproperties
+  tag on an own unset object/string var (`Level=None`/`Path=""`) — tested directly against live UED22
+  on the exact reported shape and on real `WebRequest`/`WebResponse`; both sides always agree. (A
+  REAL, but unrelated and much narrower, defaults divergence was found investigating this — a native
+  class's own UNSET PLAIN property sometimes gets a spurious zero default, sometimes doesn't,
+  real `WebRequest` itself does NOT hit it — filed separately, not chased further:
+  `dev/docs/board/inbox/native-class-lone-plain-var-gets-a-spurious-zero-default/`.)
+
+  **All seven fixes are now pinned by committed, live-UED22-verified regression fixtures** in
+  `test_uscript_package.py` (`pkg_SamePkgMisc`, `pkg_PoolCaseDedup`, `pkg_InheritedObjMember`,
+  `pkg_GlobalEnumTag`, `pkg_MiscFlags`, `pkg_NoSpuriousPkgImport`, `pkg_CPFNativeProbe` — one test
+  function each, each verified via `test_goldens_match_ucc`'s docker-gated fresh-UCC rebuild too, not
+  just the committed golden).
+
+  With all seven landed, `perm_gate` agrees on the import table, `PackageImports`, every property/
+  function/enum body, `Super` fields, and everything else EXCEPT each class's own `Dependencies`
+  array: UCC's real count is far higher than the "one entry per distinct referenced class" model
+  (`compile-model.md`'s "Cross-class `Dependency` entries") produces — `HelloWeb`'s real array
+  repeats `WebRequest`/`WebResponse` roughly a dozen times each (not deduped) where ours has exactly
+  one entry per class. Systemic across all 6 non-trivial `UWeb` classes, not `HelloWeb`-specific. The
+  real counting rule needs a live-capture RE pass, not a guess — not attempted this session.
+  `dev/docs/board/inbox/uweb-dependencies-array-over-counts-cross-class/`. Neither gate passes yet;
+  `UWeb` is NOT a corpus win until this closes.
 - `assert`/`do..until` lowering — a real, scoped gap in `lower.py`/`compile.py`. Replication blocks
   and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented, scoped out
   for now.

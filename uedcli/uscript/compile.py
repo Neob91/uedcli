@@ -29,7 +29,8 @@ from .ast import ClassDecl, ConstDecl, EnumDecl, FuncDecl, StateDecl, StructDecl
 from .bytecode import Tok, encode_script
 from .crc import script_text_crc
 from .env import InstallEnv
-from .lower import (EX_FINAL_FUNCTION, EX_INSTANCE_VARIABLE, EX_LABEL_TABLE, LowerError, Scope,
+from .lower import (EX_DYNAMIC_CAST, EX_FINAL_FUNCTION, EX_INSTANCE_VARIABLE, EX_LABEL_TABLE,
+                    EX_METACAST, EX_NOTHING, EX_OBJECT_CONST, EX_RETURN, LowerError, Scope,
                     build_scope, consts_of, enum_type_names, enums_of, local_funcs_of, lower_function,
                     lower_state_body, members_of, _mem_size)
 from .model import (ClassBody, CompiledPackage, ConstBody, Dependency, EnumBody, Export, FunctionBody,
@@ -120,6 +121,8 @@ CPF_CONFIG = 0x00004000
 CPF_LOCALIZED = 0x00008000
 CPF_TRAVEL = 0x00010000
 CPF_GLOBALCONFIG = 0x00040000
+CPF_NATIVE = 0x00001000              # the `native` var modifier (measured live vs UCC on UWeb's
+                                      # `WebRequest.VariableMap`/`WebResponse.ReplacementMap`)
 CPF_NEEDCTORLINK = 0x00400000        # StrProperty and ArrayProperty
 _VAR_MODIFIER_FLAGS: dict[str, int] = {
     "const": CPF_CONST,
@@ -130,7 +133,7 @@ _VAR_MODIFIER_FLAGS: dict[str, int] = {
     "travel": CPF_TRAVEL,
     "input": CPF_INPUT,
     "export": CPF_EXPORTOBJECT,
-    "native": 0, "intrinsic": 0, "private": 0,   # accepted, no persisted CPF bit
+    "native": CPF_NATIVE, "intrinsic": CPF_NATIVE, "private": 0,
 }
 
 
@@ -294,7 +297,6 @@ class _Build:
     in_pkg_class_names: dict[str, str] = field(default_factory=dict)  # casefold -> declared class name
     graph_override: object | None = None      # multi-class: a ClassGraph seeing in-package classes
     catalog_override: object | None = None
-    class_ref_packages: list[str] = field(default_factory=list)  # non-Core pkgs this class imports
     extra_deps: list[str] = field(default_factory=list)  # classes Context'd into, real-cased, in
                                                           # first-use order (deep=0 Dependency entries)
 
@@ -311,6 +313,25 @@ class _NameIndex(dict):
 
     def __missing__(self, key: str) -> int:
         return self[key.casefold()]
+
+
+def _pool_cased_dedup(names: list[str]) -> list[str]:
+    """`pool_case` each name, then drop a later EXACT-text repeat (first occurrence wins) — matching
+    `serialize.NameTable.index`'s own exact-string dedup. Needed because the gather order is deduped
+    on the SOURCE spelling (case-sensitive) before `pool_case` runs: two source names differing only
+    in case (e.g. a param `S` in one function, `s` in another) can both survive that gather dedup and
+    then collapse onto the SAME pooled spelling here — without re-deduping, `name_cf`'s positions
+    (baked into every export's `name` field) drift out of sync with `NameTable`'s own collapsed
+    table by one slot per such collision, corrupting every export name after it. (Found via UWeb's
+    `WebRequest`/`WebConnection`, whose `S`/`s` params collide via the pool onto `S`.)"""
+    out: list[str] = []
+    seen: set[str] = set()
+    for raw in names:
+        n = pool_case(raw)
+        if n not in seen:
+            seen.add(n)
+            out.append(n)
+    return out
 
 
 def _top_level_name_order(decl: ClassDecl) -> list[str]:
@@ -387,7 +408,7 @@ def _compile_single(src: str, env: InstallEnv,
         p.value for p in b.default_props if p.ptype == PT_NAME and isinstance(p.value, str)}
     names_order, imports_order, export_rows = _orders(b, class_name, super_name, config_name, decl,
                                                       default_names, has_new_kind, order_override)
-    names_order = [pool_case(n) for n in names_order]     # canonical FName spelling from the pool
+    names_order = _pool_cased_dedup(names_order)           # canonical FName spelling from the pool
     if order_override is not None:                          # override imports are DISPLAY names
         imports_order = _imports_by_display(b, imports_order)
 
@@ -525,10 +546,11 @@ def _auto_emit_defaults(decl: ClassDecl, class_flags: int) -> bool:
 # ── members ─────────────────────────────────────────────────────────────────────────────────────
 def _build_members(b: _Build, decl: ClassDecl) -> None:
     default_values, inherited = _default_value_map(decl)
+    native_class = _is_native_class(decl)
     for m in decl.members:
         match m:
             case VarDecl():
-                _build_var(b, m, default_values)
+                _build_var(b, m, default_values, native_class=native_class)
             case EnumDecl():
                 _build_enum(b, m)
             case ConstDecl():
@@ -618,6 +640,7 @@ def _build_one_state(b: _Build, decl: ClassDecl, state: StateDecl, super_name: s
         raise NotImplementedError(f"cannot lower state {state.name!r}: {e}") from e
     _register_final_call_imports(b, toks)
     _register_member_var_imports(b, toks, _member_graph(b))
+    _register_cast_class_imports(b, toks)
     b.states[skey] = _State(key=skey, name=state.name, class_key=b.okey(f"class:{decl.name}"),
                             line=line, text_pos=text_pos, toks=tuple(toks),
                             script_size=sum(_mem_size(t) for t in toks))
@@ -665,14 +688,15 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
     child_keys: list[str] = []
     local_by_name: dict[str, str] = {}
     for p in func.params:
-        pkey = _add_func_prop(b, fkey, func.name, p.name, p.type, CPF_PARM | _param_flags(func, p))
+        pkey = _add_func_prop(b, fkey, func.name, p.name, p.type, CPF_PARM | _param_flags(func, p),
+                              array_dim=p.array_dim)
         child_keys.append(pkey); local_by_name[p.name.casefold()] = pkey
     if func.return_type is not None:
         rkey = _add_func_prop(b, fkey, func.name, "ReturnValue", func.return_type, CPF_RETURN_ROLE)
         child_keys.append(rkey); local_by_name["returnvalue"] = rkey
     for vd in func.locals:
         for n in vd.names:
-            lkey = _add_func_prop(b, fkey, func.name, n, vd.type, 0)
+            lkey = _add_func_prop(b, fkey, func.name, n, vd.type, 0, array_dim=vd.array_dim)
             child_keys.append(lkey); local_by_name[n.casefold()] = lkey
 
     if func.has_body:
@@ -685,12 +709,16 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
             raise NotImplementedError(f"cannot lower function {func.name!r}: {e}") from e
     elif flags & FUNC_NATIVE:                        # native thunk: one NativeParm per param
         toks = [Tok(EX_NATIVE_PARM, (("obj", p.name),)) for p in func.params]
-    else:                                            # abstract declaration (`function Foo();`)
-        toks = []
+    else:                                            # non-native body-less decl (`function Foo();`,
+        # meant to be overridden) compiles as an EMPTY body — same trailing Return(Nothing)
+        # `lower_function` appends after a real (possibly empty) `{}` body; measured against a live
+        # UCC build of `WebApplication.Init/Cleanup/Query` (UWeb), all three bodyless and non-native.
+        toks = [Tok(EX_RETURN, (("sub", Tok(EX_NOTHING)),))]
 
     _register_struct_member_imports(b, toks, _struct_var_map(b, fkey), _member_graph(b))
     _register_final_call_imports(b, toks)
     _register_member_var_imports(b, toks, _member_graph(b))
+    _register_cast_class_imports(b, toks)
 
     b.funcs[fkey] = _Func(key=fkey, name=func.name, class_key=b.okey(f"class:{decl.name}"),
                           line=line, text_pos=text_pos,
@@ -702,14 +730,20 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
 
 
 def _super_func_import(b: _Build, super_name: str, func_name: str, graph) -> str | None:
-    """If this function overrides one inherited from the super chain, register an import of the parent
-    UFunction (Class=Function, Outer=its declaring class) and return its import key — the overriding
-    function's `SuperField`. Otherwise None (SuperField 0)."""
+    """If this function overrides one inherited from the super chain, return the overridden UFunction's
+    identity key (`func:<Class>.<Name>`) for the overriding function's `SuperField`; otherwise None
+    (SuperField 0). When the declaring class is a SAME-PACKAGE ancestor (multi-class compile), no
+    import is registered — the consumer resolves this key to that class's own export instead (see
+    `_sibling_export_ref`), same as `_register_final_call_imports` does for an ordinary inherited
+    call. Otherwise registers an import of the parent UFunction (Class=Function, Outer=its declaring
+    class), as before."""
     fb = graph.function(super_name, func_name) if graph is not None else None
     if fb is None:
         return None
-    _add_import(b, fb.class_name)                         # ensure the declaring class is imported
     key = f"func:{fb.class_name}.{fb.name}"
+    if fb.class_name.casefold() in b.in_pkg_class_names:
+        return key
+    _add_import(b, fb.class_name)                         # ensure the declaring class is imported
     b.imports.setdefault(key, _ImportSpec(class_package="Core", class_name="Function",
                                           outer=fb.class_name, object_name=fb.name))
     return key
@@ -734,12 +768,16 @@ def _param_flags(func: FuncDecl, p) -> int:
     return flags
 
 
-def _add_func_prop(b: _Build, fkey: str, func_name: str, pname: str, type_ref, role_flags: int) -> str:
+def _add_func_prop(b: _Build, fkey: str, func_name: str, pname: str, type_ref, role_flags: int,
+                   *, array_dim: int | str | None = None) -> str:
     """One param/return/local UProperty of a function (Outer = the function). `role_flags` is the
-    CPF role: CPF_PARM for a param, CPF_RETURN_ROLE for ReturnValue, 0 for a local."""
+    CPF role: CPF_PARM for a param, CPF_RETURN_ROLE for ReturnValue, 0 for a local. `array_dim` is a
+    static-array size, e.g. `byte B[255]` (rare; a param's is usually dropped by the parser — see
+    `Param.array_dim`/`_dim_value` — measured against UWeb's `WebResponse.SendBinary`)."""
     prop_class, base_flags, tail = _func_prop_type(b, type_ref, func_name, pname)
     key = b.okey(f"fprop:{func_name}.{pname}")
-    b.props[key] = _Prop(key=key, name=pname, prop_class=prop_class, outer_key=fkey, array_dim=1,
+    b.props[key] = _Prop(key=key, name=pname, prop_class=prop_class, outer_key=fkey,
+                         array_dim=_dim_value(array_dim),
                          property_flags=role_flags | base_flags, category_name=None,
                          type_tail=tail, in_class_chain=False)
     _add_import(b, prop_class)
@@ -758,11 +796,9 @@ def _func_prop_type(b: _Build, tr, func_name: str, pname: str) -> tuple[str, int
     if base in b.local_structs:
         return "StructProperty", 0, (_RefSpec(key=b.okey(f"struct:{base}"), is_export=True),)
     if base.casefold() == "class":
-        meta = tr.meta_class or "Object"
         _add_import(b, "Class")
-        meta_key = _add_import(b, meta)
         return "ClassProperty", 0, (_RefSpec(key="Class", is_export=False),
-                                    _RefSpec(key=meta_key, is_export=False))
+                                    _class_meta_ref(b, tr.meta_class or "Object"))
     graph = _member_graph(b)                              # a built-in/cross-package struct (Vector, …)
     if graph.is_struct_name(base):
         skey = _add_struct_import(b, graph, base)
@@ -835,7 +871,7 @@ def _function_positions(crlf: str, funcs) -> list[tuple[int, int]]:
     return out
 
 
-def _build_var(b: _Build, m: VarDecl, default_values: dict) -> None:
+def _build_var(b: _Build, m: VarDecl, default_values: dict, *, native_class: bool) -> None:
     flags = 0
     category_name: str | None = None
     if m.category is not None:                        # var() or var(Cat) → editable
@@ -844,7 +880,14 @@ def _build_var(b: _Build, m: VarDecl, default_values: dict) -> None:
     for mod in m.modifiers:
         if mod not in _VAR_MODIFIER_FLAGS:
             raise NotImplementedError(f"var modifier {mod!r} not supported (var {m.names[0]!r})")
-        flags |= _VAR_MODIFIER_FLAGS[mod]
+        bit = _VAR_MODIFIER_FLAGS[mod]
+        # CPF_Native persists only on a var of a NATIVE class — measured live: the same `native`/
+        # `intrinsic` var modifier on a non-native class carries NO CPF bit (a plain class's CDO is
+        # Python-serialised, so there's no C++ struct field for the engine to mark). WebRequest
+        # (native) vs a controlled non-native counterpart, 2026-09-13, `CPFNativeProbe` fixture.
+        if bit == CPF_NATIVE and not native_class:
+            continue
+        flags |= bit
     obj_flags = _RF_FIELD & ~0x04 if "private" in m.modifiers else _RF_FIELD  # private clears RF_Public
     if flags & CPF_CONFIG:                            # a config/globalconfig member → CLASS_Config
         b.member_class_flags |= 0x04
@@ -881,11 +924,9 @@ def _resolve_var_type(b: _Build, m: VarDecl, pname: str
         return ("StructProperty", 0, (_RefSpec(key=b.okey(f"struct:{base}"), is_export=True),),
                 PT_STRUCT, base)
     if base.casefold() == "class":
-        meta = m.type.meta_class or "Object"
         _add_import(b, "Class")
-        meta_key = _add_import(b, meta)
         return ("ClassProperty", 0, (_RefSpec(key="Class", is_export=False),
-                                     _RefSpec(key=meta_key, is_export=False)), PT_OBJECT, None)
+                                     _class_meta_ref(b, m.type.meta_class or "Object")), PT_OBJECT, None)
     if base.casefold() == "array":
         return _resolve_array_type(b, m, pname)
     if base.casefold() in b.in_pkg_class_names:           # a SIBLING class in this same package (own
@@ -938,12 +979,16 @@ def _resolve_array_type(b: _Build, m: VarDecl, pname: str
             (_RefSpec(key=inner_key, is_export=True),), PT_ARRAY, None)
 
 
-def _static_dim(m: VarDecl) -> int:
-    if m.array_dim is None:
+def _dim_value(array_dim: int | str | None) -> int:
+    if array_dim is None:
         return 1
-    if isinstance(m.array_dim, int):
-        return m.array_dim
-    raise NotImplementedError(f"const-named static array size {m.array_dim!r} not supported yet")
+    if isinstance(array_dim, int):
+        return array_dim
+    raise NotImplementedError(f"const-named static array size {array_dim!r} not supported yet")
+
+
+def _static_dim(m: VarDecl) -> int:
+    return _dim_value(m.array_dim)
 
 
 # ── defaults ──────────────────────────────────────────────────────────────────────────────────────
@@ -1184,21 +1229,25 @@ def _seed_imports(b: _Build, super_name: str, within_key: str) -> None:
         _add_import(b, within_key)
 
 
+def _class_meta_ref(b: _Build, meta: str) -> _RefSpec:
+    """A `class<Meta>` property's meta-class type-tail ref: a same-package sibling's own class export
+    (`f"{real}::class:{real}"`, same identity a same-package `var Meta x` property already resolves to
+    — see `_resolve_var_type`), an IMPORT otherwise."""
+    if meta.casefold() in b.in_pkg_class_names:
+        real = b.in_pkg_class_names[meta.casefold()]
+        return _RefSpec(key=f"{real}::class:{real}", is_export=True)
+    return _RefSpec(key=_add_import(b, meta), is_export=False)
+
+
 def _add_import(b: _Build, obj: str) -> str:
     """Ensure `obj` (a class or the Core package) is imported; return its import key (object name).
-    A Core class imports with outer=Core; a class in another package pulls in that package import.
-    A non-Core home package is recorded in `class_ref_packages` for THIS class's PackageImports —
-    even when the import already exists (imports dedupe package-wide, PackageImports is per-class)."""
-    def note_pkg(pkg: str | None) -> None:
-        if pkg and pkg != "Core" and pkg not in b.class_ref_packages:
-            b.class_ref_packages.append(pkg)
-
+    A Core class imports with outer=Core; a class in another package pulls in that package import
+    (not into `PackageImports` — see `_build_class_unit`'s `package_imports` comment)."""
     if obj == "Core":
         return obj
     existing = obj if obj in b.imports else next(       # FName is case-insensitive: `texture` (a member
         (k for k in b.imports if k.casefold() == obj.casefold()), None)  # type) dedupes onto `Texture`
     if existing is not None:
-        note_pkg(b.imports[existing].outer)              # outer of a class import = its home package
         return existing
     info = b.env.resolve_class(obj)
     if info is None or info.package.casefold() == "core":
@@ -1209,7 +1258,6 @@ def _add_import(b: _Build, obj: str) -> str:
     if pkg not in b.imports:
         b.imports[pkg] = _ImportSpec(class_package="Core", class_name="Package", outer=None,
                                      object_name=pkg)
-    note_pkg(pkg)
     b.imports[obj] = _ImportSpec(class_package="Core", class_name="Class", outer=pkg,
                                  object_name=obj)
     return obj
@@ -1376,6 +1424,24 @@ def _register_final_call_imports(b: _Build, toks) -> None:
         walk(t)
 
 
+def _member_import_prop_class(label: str | None) -> str | None:
+    """The UProperty subclass to import an inherited member AS — an import table row only names the
+    field's identity (class_package/class_name/outer/object_name), never its type-tail (that lives on
+    the DECLARING class's own export, which this package doesn't touch), so any type down to its
+    UProperty subclass is enough. Scalars use `_SCALAR_KINDS`; object/class/struct labels
+    (`natives.prop_type_label`) map straight to their UProperty subclass. `None` for an unsupported
+    label (currently just `array`, whose element type an import row cannot express)."""
+    if label in _SCALAR_KINDS:
+        return _SCALAR_KINDS[label].prop_class
+    if label is not None and label.startswith("object:"):
+        return "ObjectProperty"
+    if label == "class":
+        return "ClassProperty"
+    if label is not None and label.startswith("struct:"):
+        return "StructProperty"
+    return None
+
+
 def _register_member_var_imports(b: _Build, toks, graph: ClassGraph) -> None:
     """After lowering, import the target of every INHERITED instance-variable access (a member field
     the class being compiled doesn't itself declare/override) OR one reached through an object typed
@@ -1391,12 +1457,12 @@ def _register_member_var_imports(b: _Build, toks, graph: ClassGraph) -> None:
                 owner_cls, field = ident[len("mem:"):].rsplit(".", 1)
                 if owner_cls.casefold() not in b.in_pkg_class_names:
                     label = graph.member_type(owner_cls, field)
-                    if label is None or label not in _SCALAR_KINDS:
+                    prop_class = _member_import_prop_class(label)
+                    if prop_class is None:
                         raise NotImplementedError(
                             f"inherited member {owner_cls}.{field}: type {label!r} unsupported")
                     outer = _add_import(b, owner_cls)
-                    b.imports[ident] = _ImportSpec(class_package="Core",
-                                                   class_name=_SCALAR_KINDS[label].prop_class,
+                    b.imports[ident] = _ImportSpec(class_package="Core", class_name=prop_class,
                                                    outer=outer, object_name=field)
         for kind, val in t.parts:
             if kind == "sub":
@@ -1868,6 +1934,8 @@ def _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, i
         def resolve_inv(kind: str, ident: str) -> int:
             if kind == "name":
                 return name_cf[ident.casefold()]
+            if ident.startswith("class:"):                # a cast/class-literal target: see
+                return imp_ref[import_by_name[ident[len("class:"):].casefold()]]  # `_sibling_export_ref`
             cf = ident.casefold()
             if cf in fn.local_by_name:
                 return exp_ref[fn.local_by_name[cf]]
@@ -1911,6 +1979,8 @@ def _build_state_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, imp_
     def resolve_inv(kind: str, ident: str) -> int:
         if kind == "name":
             return name_cf[ident.casefold()]
+        if ident.startswith("class:"):                    # a cast/class-literal target: see
+            return imp_ref[import_by_name[ident[len("class:"):].casefold()]]  # `_sibling_export_ref`
         cf = ident.casefold()
         if cf in member_by_name:
             return exp_ref[member_by_name[cf]]
@@ -2052,8 +2122,10 @@ def _prepass_signatures(decls: dict[str, tuple[ClassDecl, str]], disk_graph: Cla
                 inative=f.native_index or 0, precedence=0,
                 flags=(_FUNC_MODIFIER_FLAGS["final"] if f.is_final else 0),
                 param_types=f.param_types, return_type=f.return_type)
+        enums = {tag.casefold(): ordinal for m in decl.members if isinstance(m, EnumDecl)
+                for ordinal, tag in enumerate(m.values)}
         sig = ClassSig(name=decl.name, package="", super_name=decl.super_name,
-                       members=members, member_owner=member_owner, functions=functions)
+                       members=members, member_owner=member_owner, functions=functions, enums=enums)
         sigs[cf] = sig
         building.discard(cf)
         return sig
@@ -2078,6 +2150,21 @@ class _PkgSigGraph(ClassGraph):
     def class_sig(self, name: str) -> ClassSig | None:
         sig = super().class_sig(name)
         return sig if sig is not None else self._pkg_sigs.get(name.casefold())
+
+    def enum_ordinal(self, tag: str) -> int | None:
+        """An enum TAG is a globally-scoped identifier in real UCC (`ClassGraph.enum_ordinal` already
+        scans every on-disk package's enums regardless of class) — extend that same global scope to
+        this in-progress package's own classes, which have no compiled bytes yet for the disk-based
+        scan to see. First disk package wins (matches `ClassGraph`'s own dict-first-wins semantics);
+        otherwise the first in-package class (iteration order) declaring the tag."""
+        ordinal = super().enum_ordinal(tag)
+        if ordinal is not None:
+            return ordinal
+        cf = tag.casefold()
+        for sig in self._pkg_sigs.values():
+            if cf in sig.enums:
+                return sig.enums[cf]
+        return None
 
 
 def compile_package_dir(classes: dict[str, str], env: InstallEnv, *,
@@ -2272,7 +2359,6 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
     b.default_props = []
     b.member_class_flags = 0
     b.class_object_flags = _class_object_flags(decl)
-    b.class_ref_packages = []
     b.extra_deps = []
     b.local_enums = {m.name for m in decl.members if isinstance(m, EnumDecl)}
     b.local_structs = {m.name for m in decl.members if isinstance(m, StructDecl)}
@@ -2307,14 +2393,18 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
     class_flags |= b.member_class_flags | (super_class_flags & _CLASS_INHERIT_MASK)
     chain = tuple(_class_chain(b))
     # PackageImports = own package, then the super chain's transitive package deps (a class inherits
-    # Engine from an in-package Texture subclass, IpDrv+Engine from a TcpLink subclass), then any
-    # other package this class references directly, then Core.
+    # Engine from an in-package Texture subclass, IpDrv+Engine from a TcpLink subclass), then Core.
+    # NOT "any other package this class references directly" (measured live against UWeb, 2026-09-13:
+    # `var LevelInfo Level;`/a `class<WebApplication>` property spuriously added Engine/self to
+    # PackageImports on 4 of 6 real classes whose super chain doesn't need it — a property/param/
+    # local/return TYPE reference, a class-literal, or a `Texture'Pkg.Name'` still gets its own
+    # IMPORT table entry, it just doesn't count toward PackageImports).
     # FName is case-insensitive: dedup Editor/editor, and spell each dep as its existing package
     # import so the name table doesn't carry both spellings (the super's PI may differ in case).
     imp_by_cf = {k.casefold(): b.imports[k].object_name for k in b.imports}
     deps: list[str] = []
     seen_cf = {package_name.casefold(), "core"}
-    for p in (*super_pkg_imports, *b.class_ref_packages):
+    for p in super_pkg_imports:
         cf = p.casefold()
         if cf not in seen_cf:
             seen_cf.add(cf)
@@ -2384,14 +2474,14 @@ def _finalize_multi(b: _Build, units: list[_ClassUnit], package_name: str,
     if override is None:
         export_keys = _multi_export_order(b, units)
         imports_order = list(b.imports)
-        names_order = [pool_case(n) for n in _multi_names(b, units, package_name)]
+        names_order = _pool_cased_dedup(_multi_names(b, units, package_name))
     else:
         ov_names, ov_imports, ov_rows = override
         ident = {(d.casefold(), tuple(x.casefold() for x in path)): k
                  for k, (d, path) in _multi_key_identity(b, units).items()}
         export_keys = [ident[(d.casefold(), tuple(x.casefold() for x in path))] for d, path in ov_rows]
         imports_order = _imports_by_display(b, ov_imports)
-        names_order = [pool_case(n) for n in ov_names]
+        names_order = _pool_cased_dedup(ov_names)
     exp_ref = {k: i + 1 for i, k in enumerate(export_keys)}
     imp_ref = {n: -(i + 1) for i, n in enumerate(imports_order)}
 
@@ -2561,8 +2651,21 @@ def _sibling_export_ref(b: _Build, ident: str, members_by_class: dict[str, dict[
     referenced MUTUALLY (two classes each calling into the other; see `_prepass_signatures`, the
     two-pass signature resolution that lets lowering resolve such a call regardless of build order).
     None when `<Owner>` isn't in-package, so the caller falls back to the import table (an inherited
-    ancestor outside this package)."""
-    if ":" not in ident or "." not in ident:
+    ancestor outside this package). A BARE ident (no `kind:`/`.`) is a class-literal reference
+    (`class'WebRequest'`/`new(...) class'WebRequest'`) to a same-package sibling's own class export —
+    same identity a same-package `var WebRequest x` property's type-tail already resolves to
+    (`f"{real}::class:{real}"`, see `_resolve_var_type`). A `class:<Name>` ident (a cast/`class<T>()`/
+    `class'X'` target, tagged at lower time — see `lower._call_named`/`_ex_objref`) resolves the SAME
+    way: it can't be confused with a same-NAMED member/local (`var WebServer WebServer;` is legal
+    UnrealScript; `WebServer(x)` still casts to the class), which is exactly why callers check this
+    prefix before any member/local lookup, not after."""
+    if ident.startswith("class:"):
+        real = b.in_pkg_class_names.get(ident[len("class:"):].casefold())
+        return exp_ref.get(f"{real}::class:{real}") if real else None
+    if ":" not in ident:
+        real = b.in_pkg_class_names.get(ident.casefold())
+        return exp_ref.get(f"{real}::class:{real}") if real else None
+    if "." not in ident:
         return None
     kind, rest = ident.split(":", 1)
     if kind not in ("func", "mem"):
@@ -2577,6 +2680,45 @@ def _sibling_export_ref(b: _Build, ident: str, members_by_class: dict[str, dict[
     if key is None:
         raise NotImplementedError(f"same-package {kind} ref {ident!r}: {real_owner}.{name} not found")
     return exp_ref[key]
+
+
+def _resolve_class_ident(b: _Build, ident: str, members_by_class: dict[str, dict[str, str]],
+                         funcs_by_class: dict[str, dict[str, str]], exp_ref: dict[str, int],
+                         imp_ref: dict[str, int]) -> int | None:
+    """A `class:<Name>` obj ident (a cast/`class<T>()`/`class'X'` target — see `_sibling_export_ref`'s
+    docstring for why it's prefixed) resolves BEFORE any local/member/func lookup: a same-package class
+    via `_sibling_export_ref`, else an import (pre-registered by `_register_cast_class_imports`, since
+    an import discovered this late would miss the already-frozen import table). Returns None for any
+    OTHER ident, so the caller continues its normal local/member/func/import resolution."""
+    if not ident.startswith("class:"):
+        return None
+    sib = _sibling_export_ref(b, ident, members_by_class, funcs_by_class, exp_ref)
+    if sib is not None:
+        return sib
+    return imp_ref[ident[len("class:"):]]
+
+
+def _register_cast_class_imports(b: _Build, toks) -> None:
+    """Pre-register an import for every `class:<Name>` cast/`class<T>()`/`class'X'` target (see
+    `_sibling_export_ref`'s docstring) that ISN'T a same-package class — must run before the import
+    table is frozen (`resolve_inv`'s later `class:` resolution, `_resolve_class_ident`, can only look
+    an already-registered import up, not add one)."""
+    def walk(t) -> None:
+        if t.op in (EX_DYNAMIC_CAST, EX_METACAST, EX_OBJECT_CONST):
+            ident = next((v for k, v in t.parts if k == "obj"), None)
+            if isinstance(ident, str) and ident.startswith("class:"):
+                name = ident[len("class:"):]
+                if name.casefold() not in b.in_pkg_class_names:
+                    _add_import(b, name)
+        for kind, val in t.parts:
+            if kind == "sub":
+                walk(val)
+            elif kind == "parms":
+                for s in val:
+                    walk(s)
+
+    for t in toks:
+        walk(t)
 
 
 def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs) -> None:
@@ -2603,6 +2745,9 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
         def resolve_inv(kind: str, ident: str) -> int:
             if kind == "name":
                 return name_cf[ident.casefold()]
+            cls_ref = _resolve_class_ident(b, ident, members_by_class, funcs_by_class, exp_ref, imp_ref)
+            if cls_ref is not None:
+                return cls_ref
             cf = ident.casefold()
             if cf in fn.local_by_name:
                 return exp_ref[fn.local_by_name[cf]]
@@ -2622,7 +2767,10 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
 
     for fkey, fn in b.funcs.items():
         children = exp_ref[fn.child_keys[0]] if fn.child_keys else 0
-        super_ref = imp_ref[fn.super_ref_key] if fn.super_ref_key else 0
+        super_ref = 0
+        if fn.super_ref_key:
+            sib = _sibling_export_ref(b, fn.super_ref_key, members_by_class, funcs_by_class, exp_ref)
+            super_ref = sib if sib is not None else imp_ref[fn.super_ref_key]
         recs[fkey] = Export(
             cls=imp_ref["Function"], super_ref=super_ref, outer=exp_ref[fn.class_key], name=nidx(fn.name),
             flags=_RF_FIELD,
@@ -2655,6 +2803,9 @@ def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref
         def resolve_inv(kind: str, ident: str) -> int:
             if kind == "name":
                 return name_cf[ident.casefold()]
+            cls_ref = _resolve_class_ident(b, ident, members_by_class, funcs_by_class, exp_ref, imp_ref)
+            if cls_ref is not None:
+                return cls_ref
             cf = ident.casefold()
             if cf in own_members:
                 return exp_ref[own_members[cf]]

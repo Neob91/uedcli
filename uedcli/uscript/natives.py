@@ -15,7 +15,7 @@ from __future__ import annotations
 import glob
 import os
 import struct
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 
 from ..upackage import (Package, load_package, read_compact_index as _rci, read_fstring,
@@ -310,6 +310,7 @@ class ClassSig:
     members: dict[str, str]                 # casefolded field name -> type label
     member_owner: dict[str, str]             # casefolded field name -> declaring class's real name
     functions: dict[str, FuncBody]          # casefolded function name -> its FuncBody
+    enums: dict[str, int] = field(default_factory=dict)  # casefolded OWN enum tag -> ordinal
 
 
 def _class_children(pkg: Package, idx1: int) -> int:
@@ -484,6 +485,7 @@ class ClassGraph:
                 member_owner.update(sup.member_owner)
                 functions.update(sup.functions)
         own_name = pkg.names[e["nm"]]
+        enums: dict[str, int] = {}
         cur = _class_children(pkg, idx1)
         for _ in range(4096):
             if cur <= 0:
@@ -498,9 +500,12 @@ class ClassGraph:
             elif kind == "Function":
                 fb = read_function(pkg, cur)
                 functions[fb.name.casefold()] = fb
+            elif kind == "Enum":
+                for ordinal, tag in enumerate(enum_values(pkg, cur)):
+                    enums[tag.casefold()] = ordinal
             cur = _field_next(pkg, cur)
         sig = ClassSig(name=own_name, package=pkg.name, super_name=super_name,
-                       members=members, member_owner=member_owner, functions=functions)
+                       members=members, member_owner=member_owner, functions=functions, enums=enums)
         self._cache[key] = sig
         return sig
 

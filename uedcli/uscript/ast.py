@@ -85,6 +85,7 @@ class Param:
     type: TypeRef
     modifiers: tuple[str, ...] = ()  # out/optional/coerce/skip
     default: Expr | None = None
+    array_dim: int | str | None = None  # a static-array param, e.g. `byte B[255]` (rare)
 
 
 @dataclass(frozen=True, kw_only=True)

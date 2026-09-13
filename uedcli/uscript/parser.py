@@ -431,6 +431,16 @@ class _Parser:
         return [VarDecl(names=(n,), type=vtype, modifiers=modifiers, category=category,
                         array_dim=dim) for n, dim in named]
 
+    def _parse_static_dim(self) -> int | str:
+        """A static-array size inside `[...]`, already past the `[` — an int literal or a named
+        `const`."""
+        dtok = self._peek()
+        if dtok.kind is Tok.INT:
+            return int(self._advance().value)
+        if dtok.kind is Tok.IDENT:
+            return self._parse_dotted_name()
+        raise self._error("expected an array size")
+
     def _parse_var_names(self) -> list[tuple[str, int | str | None]]:
         names: list[tuple[str, int | str | None]] = []
         while True:
@@ -438,13 +448,7 @@ class _Parser:
             dim: int | str | None = None
             if self._at_op("["):
                 self._advance()
-                dtok = self._peek()
-                if dtok.kind is Tok.INT:
-                    dim = int(self._advance().value)
-                elif dtok.kind is Tok.IDENT:
-                    dim = self._parse_dotted_name()
-                else:
-                    raise self._error("expected an array size")
+                dim = self._parse_static_dim()
                 self._expect_op("]")
             names.append((name, dim))
             if not self._at_op(","):
@@ -517,25 +521,22 @@ class _Parser:
                 mods.append(self._advance().text.lower())
             ptype = self._parse_type()
             pname = self._expect_ident()
-            if self._at_op("["):  # array parameter (rare) — consume the size, keep the name
+            array_dim: int | str | None = None
+            if self._at_op("["):  # static-array parameter (rare), e.g. `byte B[255]`
                 self._advance()
-                self._parse_var_names_dim()
+                array_dim = self._parse_static_dim()
                 self._expect_op("]")
             default: Expr | None = None
             if self._at_op("="):
                 self._advance()
                 default = self._parse_expr()
-            params.append(Param(name=pname, type=ptype, modifiers=tuple(mods), default=default))
+            params.append(Param(name=pname, type=ptype, modifiers=tuple(mods), default=default,
+                                array_dim=array_dim))
             if not self._at_op(","):
                 break
             self._advance()
         self._expect_op(")")
         return tuple(params)
-
-    def _parse_var_names_dim(self) -> None:
-        tok = self._peek()
-        if tok.kind in (Tok.INT, Tok.IDENT):
-            self._advance()
 
     def _parse_func_body(self) -> tuple[tuple[VarDecl, ...], tuple[Stmt, ...]]:
         self._expect_op("{")
