@@ -1743,11 +1743,11 @@ def _to_crlf(text: str) -> str:
 
 
 # ══ multi-class package compile (compile_package_dir) ═════════════════════════════════════════════
-# Build a WHOLE package (many `.uc` -> one `.u`) with shared name/import/export tables. The parity
-# oracle is `gate.perm_gate`, which excludes name/import/export table ORDER, so this path assigns a
-# valid deterministic order (creation order) rather than reproducing UCC's refcount sort. What it
-# DOES reproduce byte-exact (perm_gate compares them): every object body, name CONTENT+FLAGS, import
-# CONTENT, the export identity set, same-package super/refs, Dependencies, and PackageImports order.
+# Build a WHOLE package (many `.uc` -> one `.u`) with shared name/import/export tables. Like the
+# single-class path, the final pass re-emits in UCC's real order via `reorder.true_order` (below) —
+# this is NOT merely a stable "creation order". `perm_gate` remains the test suite's own bar for this
+# path (order/case-tolerant), since a multi-class package hasn't had the same per-fixture scrutiny as
+# the single-class corpus, not because the ordering here is architecturally weaker.
 
 @dataclass(frozen=True, kw_only=True)
 class _ClassUnit:
