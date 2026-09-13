@@ -232,3 +232,63 @@ this session's capture was investigating.
 
 Live-capture harness (2026-09-13): `dev/docs/spikes/2026-09-13-nycbar-n153-mover-occlusion/harness/`
 (`disasm_probe.py`, `mover_occlusion_probe.py`, `illuminate_ray_probe.py`, `gather_disasm_probe.py`).
+
+## Fourth round (2026-09-13, same day) — three more hypotheses ruled out; box occlusion is the untested lead
+
+Re-approached with the state/ordering + hex-precision lens that just closed the Island N=332/UNATCO
+N=226/WanChai N=58 tie (`spikes/2026-09-13-portal-graph-frozen-before-optgeom/`). No new live capture
+this round — reused native's own `UEDCLI_VISGATE_TRACE_*` env tracer (`visible_surfs.rs`) on a fresh
+N=153 build, plus a static `objdump` disassembly of `Editor.dll` (no docker) against the
+already-committed `mover-occlusion.log` capture above.
+
+**Zone-crossing ruled out by direct trace.** `UEDCLI_VISGATE_TRACE_SURF=-1
+UEDCLI_VISGATE_TRACE_LOC="-2944.198486,384.973572,129.119934"` shows surf 67/95/97's nodes all report
+`near_zone=1` — the same zone as `Light5` (`view_zone=1`). No portal crossing/merge is needed to reach
+them; `active_mask` already includes zone 1 from the seed. The zone/portal-reachability candidate this
+item's "Conclusion" section left open cannot be the mechanism.
+
+**Box-occlusion cross-light ordering ruled out by the code's own invariant.** `light::bake` asserts
+every node's `NF_BoxOccluded` starts clear, runs all lights' `get_visible_surfs` in PARALLEL from that
+shared clear baseline, then replays `box_tests` into `Model.Nodes` afterward in light order — a real
+candidate for an order-dependent bug (UED22's sequential run lets light K's box marks affect light
+K+1's amortization gate; native's parallel batch can't see that). Ruled out by the gate's own math: a
+node outside the `iNode % 16 == 0` residue class is only ever tested if it's ALREADY marked occluded or
+in the residue class, so it can never transition clear->occluded within one bake on EITHER side
+(UED22's own `NF_BoxOccluded` also starts clear on a never-before-lit freshly-imported map). Seeding
+order cannot matter for this node class.
+
+**`clip_bsp_surf`'s crossing formula is a different function, not the WanChai/Island/UNATCO bug
+class.** That fix was `FLinePlaneIntersection` vs a naive `alpha` crossing in a WORLD-SPACE BSP split
+(`FPoly::SplitWithPlaneFast`). `visible_surfs.rs`'s `clip_bsp_surf`/`clip_against` also uses an
+`alpha` crossing, but it clips a PROJECTED polygon against the six SCREEN-SPACE cube-face frustum
+planes (`render.dll 0x10013b70`) — the doorway's `X=-3088` grid coordinate never enters it. The doc
+comment's claim that `alpha` IS what `0x10013b70` does is disassembly-confirmed (byte-level opcode
+match). Dead end.
+
+**Re-confirmed independently (static disassembly, not just re-trusting the prior live capture):
+`illuminateSurf` has exactly one shadow-ray call site, and it never fires for these 3 surfs.**
+`objdump -d Editor.dll` over the whole function body (`0x100a5043`..`0x100a5be6`, bounded by `int3`
+padding + the next function's prologue at `0x100a5bf0`) finds exactly one `call [eax+0x58]`
+(`0x100a5a04`, the address `illuminate_ray_probe.py` already watches). The `0x800000`
+(`PF_HighShadowDetail`) test at `0x100a5c3b` belongs to a DIFFERENT, later function (the lumel-grid
+step-size selector at `0x100a5bf0`+, not a second raytrace call site) — so "high-detail surfaces use
+an unwatched raytrace call", which would have reconciled this item's own "`AddUniqueItem` looked like
+inclusion but that's a false positive" tension, does not hold. `illuminate_ray_probe.py`'s zero-hits
+finding stands: `GetVisibleSurfs` really does end these 3 surfaces' candidate light list at zero
+entries (not just missing `Light5`) — a genuine gather-stage exclusion, not a downstream drop.
+
+**New, untested lead: step-4 render-bound box occlusion, node 16 (native numbering), face 3
+(`-X`).** `UEDCLI_VISGATE_TRACE_BOX=1` alongside the same whole-traversal trace shows Light5's face-3
+(`-X`, toward the treads) box-testing node 128 (visible), then node 16 (`bound=0`,
+`rect=Some([0, 888, 1024, 1014])`, verdict **`visible=false`**, subtree skipped) — sitting in the same
+local region of the traversal as the accepted tread nodes (9/13/14/15/20/22/24, surfs 95/97/67). This
+is the first concrete, node-identified box-occlusion candidate this item has produced. Untested
+because it needs a LIVE capture of the real editor's own box test (`render.dll 0x1001932c`-
+`0x1001952a`) for this exact light+face+node to compare the geometric verdict against native's — the
+ancestor-chain reasoning done here only shows adjacency, not a mismatch. Also newly observed: Light5's
+face-3 box-tests several other bounds (43/164/169/140/79/188/198/254) not previously enumerated here.
+
+Not fixed. No mask. Next step for a future round: live-capture `BoundVisible`'s verdict for node 16's
+UED22 counterpart (and its render-bound ancestors) during Light5's `-X` face pass specifically, same
+method as `spikes/2026-09-05-lightapply-node-flags`/`spikes/2026-09-06-boundvisible-port`, to see
+whether UED22's real box test rejects something upstream of the treads that native's accepts.
