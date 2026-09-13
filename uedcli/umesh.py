@@ -1,9 +1,16 @@
-"""Deus Ex / Unreal-1 `UMesh` + `ULodMesh` export body decode.
+"""Native decoder for Deus Ex / Unreal-1 `UMesh` + `ULodMesh` export bodies.
 
-`parse_mesh` is a thin wrapper over the native decoder (`uedcli_native.parse_mesh_raw`,
-`uedcli-native/src/mesh_read.rs`) — see `dev/docs/board/done/port-ue1-mesh-geometry-decode-to-rust/`
-for the port. `class show`'s mesh facts read the `Mesh.box`/`scale` this returns;
-`tests/test_mesh_decode.py` pins the decode against the committed UED22 packages.
+Promoted into `uedcli/` from spike `2026-07-25-native-mesh-decode` (its `harness/umesh.py` stays put
+as frozen evidence, mirroring `tests/pkgfixture.py`'s promotion). `class show`'s mesh facts read the
+`Mesh.box`/`scale` this returns; `tests/test_mesh_decode.py` pins the decode against the committed
+UED22 packages. Builds on spike
+`2026-06-27-decontainerize-uedcli/02-native-mesh-format.md`, which established that a Deus Ex
+`FMeshVert` is **8 bytes** (`int16 X,Y,Z,pad`) rather than stock Unreal's 4-byte bit-packed dword,
+and disassembled `ULodMesh::Serialize`'s member order. This harness decodes the WHOLE body.
+
+The oracle is **consume-exactly-to-export-end**: an export's body occupies `[soff, soff+ssize)`, so
+a parse that lands on the final byte for every mesh in a package is structurally correct — a wrong
+field width or a missing/extra array desyncs and misses the end (by a lot, almost always).
 
 Usage:
     python umesh.py <pkg.u> [--verbose] [--mesh NAME]
@@ -15,12 +22,179 @@ import struct
 import sys
 from dataclasses import dataclass, field
 
-from .upackage import load_package, read_property_tags
+from .upackage import load_package, read_compact_index, read_property_tags
 
 
 class MeshParseError(ValueError):
     """Structural desync while decoding a mesh body."""
 
+
+# unused since `parse_mesh` was rewired to call `uedcli_native.parse_mesh_raw`
+# (`uedcli-native/src/mesh_read.rs`) — kept pending visual sign-off, see this item's "Removal
+# gate" in `dev/docs/board/to-build/port-ue1-mesh-geometry-decode-to-rust/spec.md`.
+# ---------------------------------------------------------------- primitives
+
+def u8(b, p):   return b[p], p + 1
+def i16(b, p):  return struct.unpack_from("<h", b, p)[0], p + 2
+def u16(b, p):  return struct.unpack_from("<H", b, p)[0], p + 2
+def i32(b, p):  return struct.unpack_from("<i", b, p)[0], p + 4
+def u32(b, p):  return struct.unpack_from("<I", b, p)[0], p + 4
+def f32(b, p):  return struct.unpack_from("<f", b, p)[0], p + 4
+
+
+def fvec(b, p):
+    x, y, z = struct.unpack_from("<3f", b, p)
+    return (x, y, z), p + 12
+
+
+def frotator(b, p):
+    pi, ya, ro = struct.unpack_from("<3i", b, p)
+    return (pi, ya, ro), p + 12
+
+
+def fbox(b, p):
+    mn, p = fvec(b, p)
+    mx, p = fvec(b, p)
+    valid, p = u8(b, p)
+    return (mn, mx, valid), p
+
+
+def fsphere(b, p):
+    c, p = fvec(b, p)
+    r, p = f32(b, p)
+    return (c, r), p
+
+
+def tarray(b, p, elem):
+    """Plain `TArray<T>`: compact count, then `count` elements via `elem(buf, pos)`."""
+    n, p = read_compact_index(b, p)
+    if n < 0 or n > 1 << 24:
+        raise MeshParseError(f"implausible TArray count {n} at {p}")
+    out = []
+    for _ in range(n):
+        v, p = elem(b, p)
+        out.append(v)
+    return out, p
+
+
+def lazy_array(b, p, elem, *, version):
+    """`TLazyArray<T>`: an `INT SkipOffset` (absolute file offset just past the element data;
+    serialized only for package version > 61), then a compact count, then the elements.
+
+    The skip offset is a free per-array checksum: after reading `count` elements the position MUST
+    equal it. That makes each lazy array independently self-verifying, which is how a wrong element
+    width gets caught at the array that has it rather than 200 bytes downstream.
+    """
+    skip = None
+    if version > 61:
+        skip, p = i32(b, p)
+    n, p = read_compact_index(b, p)
+    if n < 0 or n > 1 << 24:
+        raise MeshParseError(f"implausible lazy-array count {n} at {p}")
+    out = []
+    for _ in range(n):
+        v, p = elem(b, p)
+        out.append(v)
+    if skip is not None and skip != p:
+        raise MeshParseError(f"lazy-array skip mismatch: header says {skip}, parse ended at {p} "
+                             f"(count={n}, delta={p - skip})")
+    return out, p
+
+
+# ------------------------------------------------------------ mesh elements
+
+def mesh_vert_dx(b, p):
+    """Deus Ex `FMeshVert`: int16 X, Y, Z + int16 pad (8 bytes) — the licensee change."""
+    x, y, z, _pad = struct.unpack_from("<4h", b, p)
+    return (x, y, z), p + 8
+
+
+def mesh_vert_packed(b, p):
+    """Stock Unreal `FMeshVert`: one bit-packed dword, X:11 Y:11 Z:10 (signed)."""
+    d, p = u32(b, p)
+    x = (d & 0x7FF); x -= 0x800 if x > 0x3FF else 0
+    y = ((d >> 11) & 0x7FF); y -= 0x800 if y > 0x3FF else 0
+    z = ((d >> 22) & 0x3FF); z -= 0x400 if z > 0x1FF else 0
+    return (x, y, z), p
+
+
+def mesh_tri(b, p):
+    """`FMeshTri`: WORD iVertex[3]; FMeshUV Tex[3] (BYTE U,V); DWORD PolyFlags; INT TextureIndex."""
+    iv = struct.unpack_from("<3H", b, p); p += 6
+    uv = struct.unpack_from("<6B", b, p); p += 6
+    flags, p = u32(b, p)
+    tex, p = i32(b, p)
+    return (iv, uv, flags, tex), p
+
+
+def mesh_anim_notify(b, p):
+    time, p = f32(b, p)
+    fn, p = read_compact_index(b, p)          # FName index
+    return (time, fn), p
+
+
+def mesh_anim_seq(b, p):
+    """`FMeshAnimSeq`: FName Name; FName Group; INT StartFrame; INT NumFrames;
+    TArray<FMeshAnimNotify> Notifys; FLOAT Rate.
+
+    TWO traps, both of which desync the entire body downstream:
+    1. `Group` is a SINGLE FName, not UT's later `TArray<FName> Groups`. Every sequence with no
+       group writes a 0 byte, which reads identically as an empty TArray — so the difference only
+       surfaces on a mesh that actually uses groups (`DeusExCharacters.Pigeon` seq5 `Idle1`,
+       Group=17; the TArray reading takes 17 as a count and detonates).
+    2. The SERIALIZED order is not the declaration order: `Notifys` comes BEFORE `Rate`.
+       (`DeusExDeco.Keypad3` seq0: Name=12, Group=None, Start=0, NumFrames=1, Notifys=[], Rate=30.)
+    """
+    name, p = read_compact_index(b, p)
+    group, p = read_compact_index(b, p)
+    start, p = i32(b, p)
+    nframes, p = i32(b, p)
+    notifys, p = tarray(b, p, mesh_anim_notify)
+    rate, p = f32(b, p)
+    return (name, group, start, nframes, rate, notifys), p
+
+
+def mesh_vert_connect(b, p):
+    """`FMeshVertConnect`: INT NumVertTriangles; INT TriangleListOffset."""
+    a, p = i32(b, p)
+    c, p = i32(b, p)
+    return (a, c), p
+
+
+def mesh_face(b, p):
+    """`FMeshFace`: WORD iWedge[3]; WORD MaterialIndex."""
+    w0, w1, w2, mat = struct.unpack_from("<4H", b, p)
+    return ((w0, w1, w2), mat), p + 8
+
+
+def mesh_wedge(b, p):
+    """`FMeshWedge`: WORD iVertex; FMeshUV TexUV (BYTE U, BYTE V)."""
+    iv, u, v = struct.unpack_from("<HBB", b, p)
+    return (iv, u, v), p + 4
+
+
+def mesh_material(b, p):
+    """`FMeshMaterial`: DWORD PolyFlags; INT TextureIndex."""
+    flags, p = u32(b, p)
+    tex, p = i32(b, p)
+    return (flags, tex), p
+
+
+def detect_vert_stride(b, p, *, version):
+    """Vertex bytes-per-element, read off the Verts TLazyArray header without decoding anything:
+    `(skip_offset - first_element_offset) / count`. Returns None for an empty array (nothing to
+    measure), so the caller can fall back. 8 = Deus Ex int16 quad, 4 = stock Unreal packed dword."""
+    if version <= 61:
+        return None
+    skip = struct.unpack_from("<i", b, p)[0]
+    n, dp = read_compact_index(b, p + 4)
+    if n <= 0:
+        return None
+    span = skip - dp
+    return span // n if span > 0 and span % n == 0 else None
+
+
+# ------------------------------------------------------------------- parser
 
 @dataclass
 class Mesh:
@@ -68,7 +242,7 @@ def parse_mesh(pkg, j, *, vert8=None, strict_end=True):
     Thin wrapper (mirrors `upackage.read_property_tags`'s own shape): reads the property-tag
     prefix (already native), then decodes the whole body in one native call
     (`uedcli_native.parse_mesh_raw`, `uedcli-native/src/mesh_read.rs`) — see
-    `dev/docs/board/done/port-ue1-mesh-geometry-decode-to-rust/`. `strict_end=False` is
+    `dev/docs/board/to-build/port-ue1-mesh-geometry-decode-to-rust/spec.md`. `strict_end=False` is
     unused by every call site today; the native decoder always enforces consume-to-exact-end
     (baked into `parse_mesh_body`, not split across the FFI boundary), so on success `p` is always
     `end` — the `(m, p)` return shape is kept only for API compatibility with that dead path.
