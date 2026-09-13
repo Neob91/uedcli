@@ -121,9 +121,9 @@ def register(sub) -> None:
                        help="the offline draft renderer (the DEFAULT — passing it is optional): "
                             "carves the trunk with the native CSG core and software-rasterizes "
                             "textured stills in-process, world BSP surfaces lit from a native lumel "
-                            "bake (conceptual RE, not byte parity). Movers render at their base "
-                            "pose; point actors, mesh/mover lighting, and sky projection do not "
-                            "render (draft tier)")
+                            "bake, including a PF_FakeBackdrop sky room (conceptual RE, not byte "
+                            "parity). Movers render at their base pose; point actors and mesh/mover "
+                            "lighting do not render (draft tier)")
     lback.add_argument("--game", action="store_true",
                        help="OPT IN to the faithful in-game renderer (the DEFAULT is --native): "
                             "delivers the map into a WARM "
@@ -140,13 +140,19 @@ def register(sub) -> None:
                             "the game's first-person default, Engine.PlayerPawn DesiredFOV). "
                             "Native renders true straight-up/down; --game renders at the game's "
                             "own FOV and clamps pitch host-side to ±89.9°")
-    lprev.add_argument("--faces", choices=("wire", "textured"), default=None,
-                       help="--native only: 'textured' (the native default) software-rasterizes "
-                            "solid textured faces; 'wire' draws a content-free brush WIREFRAME from "
-                            "the same posed camera — brushes coloured by CSG op (add=blue, "
-                            "subtract=gold, semisolid=coral, nonsolid=green, mover=magenta), point "
-                            "actors as sprites/markers, every edge drawn (see-through). wire needs "
-                            "no CSG solve and no native extension. Rejected with --game")
+    lprev.add_argument("--mode", dest="faces", choices=("wire", "lit", "polys"), default=None,
+                       help="--native only: 'lit' (the native default) software-rasterizes solid "
+                            "textured faces from the native lumel bake; 'wire' draws a content-free "
+                            "brush WIREFRAME from the same posed camera — brushes coloured by CSG op "
+                            "(add=blue, subtract=gold, semisolid=coral, nonsolid=green, "
+                            "mover=magenta), point actors as sprites/markers, every edge drawn "
+                            "(see-through), needs no CSG solve and no native extension; 'polys' "
+                            "reproduces UnrealEd's real 'Texture Use' render (its actual UI label — "
+                            "commands.md's historical 'Polys' name for this mode is misleading): "
+                            "every surface fills with a flat, UNSHADED colour keyed by which texture "
+                            "it uses (same texture anywhere in the level ⇒ same colour; different "
+                            "texture ⇒ different colour), no lighting or per-face shading at all. "
+                            "Rejected with --game")
     lprev.add_argument("--map", default=None, metavar="PATH",
                        help="--game only: shoot a prebuilt map file (.dx/.unr) instead of the "
                             "$UEDCLI_LEVEL trunk (skips the materialize cache). Actor-relative shots "

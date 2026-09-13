@@ -1,5 +1,5 @@
-"""`actor diagram --faces` behaviour: the `wire` byte-identity golden, the texel rasterizer, and the
-`textured` = CSG-solved-world path (backface cull, decal-once, guards, the parity golden).
+"""`actor diagram --mode` behaviour: the `wire` byte-identity golden, the texel rasterizer, and the
+`fullbright` = CSG-solved-world path (backface cull, decal-once, guards, the parity golden).
 
 **The wire golden pair is the primary regression guard for the wireframe.** Re-bless only after
 deciding the wireframe itself should change: `UEDCLI_BLESS_GOLDEN=1 bin/test -k wire_golden`.
@@ -65,7 +65,7 @@ def _rgb(path) -> bytes:
 @pytest.mark.parametrize("layout,golden", [("single", GOLDEN_ISO), ("quad", GOLDEN_QUAD)])
 @pytest.mark.parametrize("faces", [None, "wire"])
 def test_wire_golden_is_byte_identical(tmp_path, layout, golden, faces):
-    """`--faces wire` — and no `--faces` at all — render EXACTLY the pre-`--faces` wireframe. This is
+    """`--mode wire` — and no `--mode` at all — render EXACTLY the pre-`--mode` wireframe. This is
     the whole feature's primary regression guard: the golden predates the rasterizer, so a fill,
     depth-test or cull leaking into `wire` fails here."""
     out = tmp_path / "g.png"
@@ -81,7 +81,7 @@ def test_wire_golden_is_byte_identical(tmp_path, layout, golden, faces):
     want = _rgb(golden)
     if got != want:
         diff = sum(1 for a, b in zip(got, want) if a != b) + abs(len(got) - len(want))
-        pytest.fail(f"--faces wire ({layout}) diverged from the pre-slice golden: {diff} bytes")
+        pytest.fail(f"--mode wire ({layout}) diverged from the pre-slice golden: {diff} bytes")
 
 
 # ── scene helpers ─────────────────────────────────────────────────────────────────────────────
@@ -129,7 +129,7 @@ def _at(ppm, size, x, y):
 
 
 def _solved(actors, by_ref=None, masked=None, movers=(), index=None):
-    """`PreviewData` for a `--faces textured` render: the REAL CSG solve over `actors` (so an add not
+    """`PreviewData` for a `--mode fullbright` render: the REAL CSG solve over `actors` (so an add not
     inside subtracted space leaves no surface), plus the decoded texture payload dispatch would resolve."""
     from uedcli import preview_native as pn
     idx = index or StubClassIndex()
@@ -142,7 +142,7 @@ def _geom(actors, *, faces="wire", view="iso", color_by_csg=True, brush_colors="
           highlight_polys=(), annotations=None, focus=None, movers=(), by_ref=None, masked=None):
     """`_SceneGeom` for these actors — the seam the backface cull, the fill/texture roles and the decal
     grouping are decided at, so a claim about WHICH surfaces survive is asserted there, not inferred."""
-    data = (_solved(actors, by_ref, masked, movers) if faces == "textured" else PreviewData())
+    data = (_solved(actors, by_ref, masked, movers) if faces == "fullbright" else PreviewData())
     return _scene_geometry(actors, view=view, iso_angle=30.0,
                            annotations=annotations or AnnotationSpec.none(),
                            highlight_polys=set(highlight_polys),
@@ -161,28 +161,28 @@ def _geom(actors, *, faces="wire", view="iso", color_by_csg=True, brush_colors="
 ])
 def test_faces_parses_on_all_three_preview_verbs(argv):
     """One flag, added once to the shared `_preview_opts`, so all three preview verbs carry it. Two
-    choices only — `wire` (default) and `textured`; `flat` is gone (no back-compat alias)."""
+    choices only — `wire` (default) and `fullbright`; `flat` is gone (no back-compat alias)."""
     p = cli.build_parser()
     assert p.parse_args(argv).faces == "wire"                      # default
-    assert p.parse_args(argv + ["--faces", "textured"]).faces == "textured"
+    assert p.parse_args(argv + ["--mode", "fullbright"]).faces == "fullbright"
     with pytest.raises(SystemExit):
-        p.parse_args(argv + ["--faces", "flat"])                   # deleted outright
+        p.parse_args(argv + ["--mode", "flat"])                   # deleted outright
 
 
 def test_an_unknown_faces_value_is_a_clean_exit_2_naming_it(capsys):
-    """The two choices are `wire`/`textured`; anything else is argparse's own choice error, exit 2
+    """The two choices are `wire`/`fullbright`; anything else is argparse's own choice error, exit 2
     naming the bad value — no bespoke refusal branch."""
     with pytest.raises(SystemExit) as e:
-        cli.build_parser().parse_args(["actor", "diagram", "A", "--faces", "shaded"])
+        cli.build_parser().parse_args(["actor", "diagram", "A", "--mode", "shaded"])
     assert e.value.code == 2
     assert "shaded" in capsys.readouterr().err
 
 
-def test_faces_help_describes_textured():
-    """`-h` and the docs must agree the moment `textured` is a choice."""
+def test_faces_help_describes_fullbright():
+    """`-h` and the docs must agree the moment `fullbright` is a choice."""
     actions = {a.dest: (a.help or "") for a in cli.build_parser()._subparsers._group_actions[0]
                .choices["actor"]._subparsers._group_actions[0].choices["diagram"]._actions}
-    assert "textured" in actions["faces"] and "UV frame" in actions["faces"]
+    assert "fullbright" in actions["faces"] and "UV frame" in actions["faces"]
 
 
 # ── the subtract cull, and what escapes it ────────────────────────────────────────────────────
@@ -289,7 +289,7 @@ def test_the_seam_refuses_a_filled_render_with_no_face_data():
     both `wire` and a filled mode. A filled render handed no `FaceData` has lost the mover set, which is
     the failure the movers/textures split exists to prevent, so it refuses instead of guessing."""
     with pytest.raises(PreviewAbort) as e:
-        render_brushes_pgm([_box("Add")], size=32, render_data=PreviewData(), faces="textured")
+        render_brushes_pgm([_box("Add")], size=32, render_data=PreviewData(), faces="fullbright")
     assert "mover set" in str(e.value)
 
 
@@ -487,7 +487,7 @@ def test_the_depth_plane_is_anchored_at_verts_0_not_the_centroid():
     assert at(bent[0], c_centroid) != pytest.approx(-bent[0][2], abs=1.0)
 
 
-# ── `--faces textured`: the texel path (renderer level) ─────────────────────────────────────────
+# ── `--mode fullbright`: the texel path (renderer level) ─────────────────────────────────────────
 # These drive `render_brushes_pgm`/the fill helpers directly with a hand-built `TextureData`, so the
 # shade, mip pick, texel addressing and masking are pinned with NO project, games config or real
 # content. What dispatch RESOLVES (ref resolution, the scaled/brush-colors refusals, the actor-OR'd
@@ -509,7 +509,7 @@ def _cols_mip(colors):
 
 def _tbox(name="Room", ref="Fix.T", **kw):
     """A SUBTRACT room whose every interior face carries `ref` (None = no texture). The CSG solve keeps
-    its interior walls, so `--faces textured` has surviving textured surfaces to draw — an isolated ADD
+    its interior walls, so `--mode fullbright` has surviving textured surfaces to draw — an isolated ADD
     would leave none."""
     kw.setdefault("csg", "subtract")
     return make_brush_actor(name, cube(512.0, 512.0, 512.0, texture=ref), **kw)
@@ -646,7 +646,7 @@ def _checker_mip(w, h):
     return (w, h, bytes(px), bytes([1]) * (w * h))
 
 
-# ── `--faces textured`: what dispatch resolves and refuses ─────────────────────────────────────
+# ── `--mode fullbright`: what dispatch resolves and refuses ─────────────────────────────────────
 # The real CLI path over `--from-t3d`, so exit codes and messages are the ones a user sees. The
 # texture resolver is the mockable `resources.texture_resolver` seam; the mover index is autouse-stubbed.
 
@@ -666,25 +666,25 @@ def _patch_resolver(monkeypatch, *paths):
 
 def test_textured_renders_through_the_cli_over_from_t3d(tmp_path, monkeypatch):
     _patch_resolver(monkeypatch, _utx(tmp_path))
-    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="textured", size=96) == 0
+    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="fullbright", size=96) == 0
     assert (tmp_path / "o.png").is_file()
 
 
 @pytest.mark.parametrize("layout", ["single", "quad", "breakdown"])
 def test_every_layout_renders_under_textured(tmp_path, monkeypatch, layout, capsys):
     _patch_resolver(monkeypatch, _utx(tmp_path))
-    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="textured", layout=layout, size=96) == 0
+    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="fullbright", layout=layout, size=96) == 0
     capsys.readouterr()
 
 
 def test_textured_with_explicit_brush_colors_exits_2(tmp_path, monkeypatch, capsys):
-    """Decision 2.7. Bare `--faces textured` succeeds; passing `--brush-colors` is a clean exit 2 —
+    """Decision 2.7. Bare `--mode fullbright` succeeds; passing `--brush-colors` is a clean exit 2 —
     the flag colours the wireframe/flat fills, and textured draws neither."""
     _patch_resolver(monkeypatch, _utx(tmp_path))
-    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="textured", brush_colors=None,
+    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="fullbright", brush_colors=None,
                 size=96) == 0
     capsys.readouterr()
-    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="textured", brush_colors="csg") == 2
+    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="fullbright", brush_colors="csg") == 2
     assert "--brush-colors" in capsys.readouterr().err
 
 
@@ -701,7 +701,7 @@ def test_textured_renders_scaled_sheared_and_mirrored_brushes(tmp_path, monkeypa
                                 sheer_rate=Decimal("0.5"), sheer_axis="SHEER_ZX")
     mirrored = _tbox("Mirrored", ref="Fix.T", location=(1200.0, 0.0, 0.0))
     mirrored.main_scale = FScale(scale=(Decimal(-1), Decimal(1), Decimal(1)))
-    assert _run(tmp_path, [scaled, sheared, mirrored], faces="textured") == 0
+    assert _run(tmp_path, [scaled, sheared, mirrored], faces="fullbright") == 0
     capsys.readouterr()
     # ...and wire/flat still render the same set (unchanged scope).
     assert _run(tmp_path, [scaled, sheared, mirrored], faces="wire") == 0
@@ -715,7 +715,7 @@ def test_textured_degenerate_scale_still_exits_2_naming_the_brush(tmp_path, monk
     _patch_resolver(monkeypatch, _utx(tmp_path))
     degenerate = _tbox("Degenerate", ref="Fix.T")
     degenerate.main_scale = FScale(scale=(Decimal(0), Decimal(1), Decimal(1)))
-    assert _run(tmp_path, [degenerate], faces="textured") == 2
+    assert _run(tmp_path, [degenerate], faces="fullbright") == 2
     assert "Degenerate" in capsys.readouterr().err
 
 
@@ -726,17 +726,17 @@ def test_textured_renders_a_scene_that_references_no_texture(tmp_path, monkeypat
     # No _patch_resolver: the real seam returns None with no games config — and must not be consulted.
     monkeypatch.setattr(resources, "texture_resolver",
                         lambda project: pytest.fail("resolver consulted for a no-texture scene"))
-    assert _run(tmp_path, [_tbox("Plain", ref=None)], faces="textured", size=96) == 0
+    assert _run(tmp_path, [_tbox("Plain", ref=None)], faces="fullbright", size=96) == 0
     capsys.readouterr()
 
 
 def test_textured_refuses_when_a_referenced_texture_has_no_resolver(tmp_path, capsys, tmp_project):
     """A scene that DOES reference a texture and has no resolver exits 2 naming the cause — here, no
     per-user games config (conftest isolates `UEDCLI_HOME`, so the genuine seam returns None)."""
-    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="textured",
+    assert _run(tmp_path, [_tbox("Box", ref="Fix.T")], faces="fullbright",
                 project=str(tmp_project)) == 2
     err = capsys.readouterr().err
-    assert "games config" in err and "actor diagram --faces textured" in err
+    assert "games config" in err and "actor diagram --mode fullbright" in err
 
 
 def test_the_three_no_resolver_causes_name_distinct_reasons(monkeypatch, tmp_path):
@@ -745,7 +745,7 @@ def test_the_three_no_resolver_causes_name_distinct_reasons(monkeypatch, tmp_pat
     two of them."""
     from uedcli import config
     from uedcli.cli import rendering
-    verb = "actor diagram --faces textured"
+    verb = "actor diagram --mode fullbright"
     monkeypatch.setattr(config, "load_user_config", lambda: None)
     assert "no per-user games config" in rendering._texture_resolver_cause(object(), verb)
 
@@ -765,7 +765,7 @@ def test_textured_lists_every_unreadable_ref_with_its_case(tmp_path, monkeypatch
     _patch_resolver(monkeypatch)                               # an EMPTY search path: every ref misses
     good = _tbox("A", ref="NoSuchPackage.Tex")                 # a qualified miss → unknown-package
     bare = _tbox("B", ref="BareName", location=(4000.0, 0.0, 0.0))  # apart, so both rooms survive
-    assert _run(tmp_path, [good, bare], faces="textured") == 2
+    assert _run(tmp_path, [good, bare], faces="fullbright") == 2
     err = capsys.readouterr().err
     assert "NoSuchPackage.Tex" in err and "BareName" in err
     assert "unknown-package" in err and "unqualified-ref" in err
@@ -778,7 +778,7 @@ def _preview_textures(actors, monkeypatch, tmp_path, *paths):
     from uedcli.cli import rendering
     from uedcli import preview_native as pn
     _patch_resolver(monkeypatch, *paths)
-    args = _preview_args(tmp_path / "o.png", faces="textured")
+    args = _preview_args(tmp_path / "o.png", faces="fullbright")
     solved = pn.solve_world_surfaces(actors, StubClassIndex())
     return rendering.preview_textures(actors, args, solved)
 
@@ -814,8 +814,8 @@ def test_a_bmasked_fixture_texture_masks_via_the_decoder(tmp_path, monkeypatch):
 
 
 
-# ── `--faces textured` = the CSG-solved world (the parity path) ─────────────────────────────────
-# `textured` no longer draws each brush's own faces; it runs the native CSG solve and draws only the
+# ── `--mode fullbright` = the CSG-solved world (the parity path) ─────────────────────────────────
+# `fullbright` no longer draws each brush's own faces; it runs the native CSG solve and draws only the
 # surfaces that SURVIVE, with a per-view backface cull. These pin the parity claims: a room shows its
 # interior (not a solid box), a buried add is invisible, a split poly is one texture and one label.
 
@@ -834,7 +834,7 @@ def test_backface_cull_keeps_far_interior_walls_and_drops_the_near_ones():
     backface cull keeps the 3 whose post-CSG normal faces the camera (the FAR interior walls) and drops
     the 3 near ones — so the render shows the room INTERIOR, not a solid box. Zero would be a black hole;
     six would be the solid box."""
-    geom = _geom([_room("Room")], faces="textured", view="iso")
+    geom = _geom([_room("Room")], faces="fullbright", view="iso")
     assert len(geom.fills) == 3          # 3 far walls kept, 3 camera-facing-away near walls culled
     assert geom.tex_faces and len(geom.tex_faces) == len(geom.fills)   # index-aligned
 
@@ -845,7 +845,7 @@ def test_two_sided_flag_exempts_the_near_walls_from_the_backface_cull():
     for the light-bake pass), not just `PF_TwoSided` read here as a special case."""
     from uedcli.preview import PF_TWOSIDED
     room = make_brush_actor("Room", cube(512.0, 512.0, 256.0), csg="subtract", poly_flags=PF_TWOSIDED)
-    geom = _geom([room], faces="textured", view="iso")
+    geom = _geom([room], faces="fullbright", view="iso")
     assert len(geom.fills) == 6           # all 6 walls now, not just the 3 far ones
 
 
@@ -855,7 +855,7 @@ def test_portal_flag_also_exempts_from_the_backface_cull():
     combination."""
     from uedcli.preview import PF_PORTAL
     room = make_brush_actor("Room", cube(512.0, 512.0, 256.0), csg="subtract", poly_flags=PF_PORTAL)
-    geom = _geom([room], faces="textured", view="iso")
+    geom = _geom([room], faces="fullbright", view="iso")
     assert len(geom.fills) == 6
 
 
@@ -878,7 +878,7 @@ def test_one_source_poly_split_into_many_fragments_gets_ONE_index_label():
     frags = [s for s in _solve([room, alcove]).world_surfaces if s.actor and s.actor.name == "Room"
              and s.poly_index == 0]
     assert len(frags) > 1, "the wall did not split — pick a scene that splits it"
-    geom = _geom([room, alcove], faces="textured", annotations=AnnotationSpec.all())
+    geom = _geom([room, alcove], faces="fullbright", annotations=AnnotationSpec.all())
     labels = [t for _c, t, _a, _d, _v, n in geom.poly_labels if n == "Room" and t == "0"]
     assert labels == ["0"]               # exactly one label for the split poly
 
@@ -900,29 +900,29 @@ def test_a_surviving_surface_with_no_texture_renders_grey():
     not an error (the most common textured render in practice)."""
     room = _room("Room")
     ppm = render_brushes_pgm([room], view="iso", size=96, annotations=AnnotationSpec.none(),
-                             color_by_csg=True, render_data=_solved([room]), faces="textured")
+                             color_by_csg=True, render_data=_solved([room]), faces="fullbright")
     fills = [px for px in _pixels(ppm) if px != (BG, BG, BG) and px != FRAME_BORDER]
     assert fills, "the room interior drew nothing"
     assert all(r == g == b and 0 < r <= DEFAULT_GREY[0] for r, g, b in fills)
 
 
 def test_textured_draws_no_wireframe():
-    """Decision 2.5: `textured` keeps NO CSG wireframe — only fills (and `--highlight` outlines). A
+    """Decision 2.5: `fullbright` keeps NO CSG wireframe — only fills (and `--highlight` outlines). A
     subtract room's gold CSG wire hue must not appear."""
     room = _room("Room")
     ppm = render_brushes_pgm([room], view="iso", size=96, annotations=AnnotationSpec.none(),
-                             color_by_csg=True, render_data=_solved([room]), faces="textured")
+                             color_by_csg=True, render_data=_solved([room]), faces="fullbright")
     cols = _colors(ppm)
     assert SUB_F not in cols and SUB_B not in cols, "a CSG wireframe edge leaked into textured"
 
 
 def test_a_highlight_outline_is_the_only_line_art_textured_keeps():
     """§5: a highlighted surviving face keeps its (grey) fill AND takes the vivid CSG outline — the only
-    line art `textured` draws."""
+    line art `fullbright` draws."""
     room = _room("Room")
     hi = {("Room", i) for i in range(6)}
     ppm = render_brushes_pgm([room], view="iso", size=96, annotations=AnnotationSpec.none(),
-                             color_by_csg=True, render_data=_solved([room]), faces="textured",
+                             color_by_csg=True, render_data=_solved([room]), faces="fullbright",
                              highlight_polys=hi)
     cols = _colors(ppm)
     assert SUB_F in cols                                # the vivid highlight outline drew
@@ -938,7 +938,7 @@ def test_a_non_finite_uv_frame_on_a_surviving_surface_refuses(bad):
         poly.texture_u = (bad, 0.0, 0.0)
     with pytest.raises(PreviewAbort) as e:
         render_brushes_pgm([room], view="iso", size=48, annotations=AnnotationSpec.none(),
-                           color_by_csg=True, render_data=_solved([room]), faces="textured")
+                           color_by_csg=True, render_data=_solved([room]), faces="fullbright")
     assert "Room" in str(e.value) and "poly" in str(e.value)
 
 
@@ -948,7 +948,7 @@ def test_a_mover_draws_as_a_filled_magenta_overlay():
     room = _room("Room", size=1024.0, height=1024.0)
     door = make_brush_actor("Door", cube(128.0, 400.0, 400.0), location=(0.0, 0.0, -300.0),
                             mover_class="Engine.Mover")
-    geom = _geom([room, door], faces="textured", movers=["Door"])
+    geom = _geom([room, door], faces="fullbright", movers=["Door"])
     assert any(rgb == MOVER_F for _v3, _vs, rgb, _d in geom.fills)   # mover magenta fill present
 
 
@@ -960,7 +960,7 @@ def test_a_mover_is_backface_culled_the_same_as_world_surfaces():
     room = _room("Room", size=1024.0, height=1024.0)
     door = make_brush_actor("Door", cube(400.0, 400.0, 400.0), location=(0.0, 0.0, -300.0),
                             mover_class="Engine.Mover")
-    geom = _geom([room, door], faces="textured", movers=["Door"])
+    geom = _geom([room, door], faces="fullbright", movers=["Door"])
     mover_fills = [f for f in geom.fills if f[2] == MOVER_F]
     assert len(mover_fills) == 3
 
@@ -971,7 +971,7 @@ def test_a_two_sided_mover_is_exempt_from_the_backface_cull():
     room = _room("Room", size=1024.0, height=1024.0)
     door = make_brush_actor("Door", cube(400.0, 400.0, 400.0), location=(0.0, 0.0, -300.0),
                             mover_class="Engine.Mover", poly_flags=PF_TWOSIDED)
-    geom = _geom([room, door], faces="textured", movers=["Door"])
+    geom = _geom([room, door], faces="fullbright", movers=["Door"])
     mover_fills = [f for f in geom.fills if f[2] == MOVER_F]
     assert len(mover_fills) == 6
 
@@ -1001,7 +1001,7 @@ def test_a_real_brush_set_that_solves_to_zero_surfaces_exits_2(tmp_path, capsys)
     room = make_brush_actor("Room", cube(512.0, 512.0, 512.0), csg="subtract")
     fill = make_brush_actor("Fill", cube(512.0, 512.0, 512.0), csg="add")
     assert not _solve([room, fill]).world_surfaces          # precondition: zero surviving surfaces
-    assert _run(tmp_path, [room, fill], faces="textured") == 2
+    assert _run(tmp_path, [room, fill], faces="fullbright") == 2
     assert "nothing survives" in capsys.readouterr().err
 
 
@@ -1009,7 +1009,7 @@ def test_a_mover_only_set_draws_its_overlay_over_black_at_exit_0(tmp_path, capsy
     """No WORLD-CSG brush (only a mover) is NOT the zero-surface error: the solved world is legitimately
     empty and the mover overlay draws over black at exit 0."""
     door = make_brush_actor("Door", cube(128.0, 128.0, 256.0), mover_class="Engine.Mover")
-    assert _run(tmp_path, [door], faces="textured") == 0
+    assert _run(tmp_path, [door], faces="fullbright") == 0
     assert (tmp_path / "o.png").is_file()
     capsys.readouterr()
 
@@ -1023,11 +1023,11 @@ def test_an_unreadable_texture_on_a_CULLED_face_does_not_refuse_but_on_a_SURVIVI
     buried = _box("Buried", at=(6000.0, 0.0, 0.0))             # add, buried → no surface
     for p in buried.brush.polys:
         p.texture = "NoSuchPackage.Missing"                    # unreadable, but never drawn
-    assert _run(tmp_path, [room, buried], faces="textured", size=96) == 0
+    assert _run(tmp_path, [room, buried], faces="fullbright", size=96) == 0
     capsys.readouterr()
     # ...but the same unreadable ref on the SURVIVING room refuses.
     bad_room = _tbox("BadRoom", ref="NoSuchPackage.Missing")
-    assert _run(tmp_path, [bad_room], faces="textured") == 2
+    assert _run(tmp_path, [bad_room], faces="fullbright") == 2
     assert "NoSuchPackage.Missing" in capsys.readouterr().err
 
 
@@ -1061,7 +1061,7 @@ def test_textured_world_golden(tmp_path):
     solved = _solved([room, add], by_ref=by_ref,
                      masked={(a.name, i): False for a in (room, add) for i in range(6)})
     ppm = render_brushes_pgm([room, add], view="iso", size=160, annotations=AnnotationSpec.none(),
-                             color_by_csg=True, render_data=solved, faces="textured")
+                             color_by_csg=True, render_data=solved, faces="fullbright")
     from io import BytesIO
     from PIL import Image
     out = tmp_path / "world.png"
@@ -1074,4 +1074,4 @@ def test_textured_world_golden(tmp_path):
     want = _rgb(GOLDEN_WORLD)
     if got != want:
         diff = sum(1 for a, b in zip(got, want) if a != b) + abs(len(got) - len(want))
-        pytest.fail(f"--faces textured world diverged from its golden: {diff} bytes")
+        pytest.fail(f"--mode fullbright world diverged from its golden: {diff} bytes")

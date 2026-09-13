@@ -604,7 +604,7 @@ def _level_preview(args) -> int:
               file=sys.stderr)
         return 2
     if use_game and args.faces is not None:
-        print("--faces requires --native (the in-game tier renders solid lit faces, "
+        print("--mode requires --native (the in-game tier renders solid lit faces, "
               "not a wireframe)", file=sys.stderr)
         return 2
     if not use_game:
@@ -712,7 +712,7 @@ def _level_preview(args) -> int:
     src = level_sources.TrunkLevelSource(maps_dir / name)
     level = src.load()
 
-    if (args.faces or "textured") == "wire":
+    if (args.faces or "lit") == "wire":
         # wire is a content-free schematic: no CSG solve, no class hierarchy (mover-ness is
         # name-guessed), no native extension. Point-actor render data is resolved HERE (dispatch owns
         # schema/texture resolution) and passed down, keeping preview_wire resolver-free.
@@ -740,7 +740,8 @@ def _level_preview(args) -> int:
                          fov=args.fov if args.fov is not None else DEFAULT_FOV,
                          search_files=search_files,
                          index=resources.mover_index(args, "level photo --native", project=project),
-                         defaults=ClassDefaults(packages.schema_resolver(project, user_config)))
+                         defaults=ClassDefaults(packages.schema_resolver(project, user_config)),
+                         texture_use=(args.faces == "polys"))
     except NativePreviewError as e:
         print(str(e), file=sys.stderr)
         return 2

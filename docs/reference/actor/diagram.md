@@ -1,15 +1,15 @@
 # actor diagram
 
 A self-rendered **colour** image (no editor) so you can see geometry and map **poly index ↔
-face**. Reads named actors from the current level, model-side. **`--faces`** picks how faces are drawn:
-`wire` (the default) is a content-free schematic of outlines; `textured` is the **CSG-solved textured
+face**. Reads named actors from the current level, model-side. **`--mode`** picks how faces are drawn:
+`wire` (the default) is a content-free schematic of outlines; `fullbright` is the **CSG-solved textured
 world**, as UnrealEd's 3D viewport draws it. (`actor diagram` renamed from `brush preview` in
 2026-07-21; `actor diagram`/`stash diagram`/`prefab diagram` all renamed to `diagram` since.)
 
 ```
 actor diagram [<names…> | --from-t3d <FILE…|->]
               [--layout quad|single|breakdown] [--view top|front|side|iso]
-              [--faces wire|textured]
+              [--mode wire|fullbright]
               [--brush-colors csg|legend] [--annotate SELECTORS]
               [--frame BRUSH[:IDX] | X0,Y0,Z0,X1,Y1,Z1] [--frame-tightness N]
               [--highlight POLY|NAME ...] [--focus BRUSH]
@@ -40,10 +40,10 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   **`--focus`/`--frame` are ignored** under it. Brush + point-actor counts are reported on stderr;
   breakdown is a small-selection inspector (it warns past ~16 panes — a whole level makes an unusably
   large grid, and point actors add panes too, so subset first).
-- **`--faces {wire,textured}`** picks how faces are drawn.
+- **`--mode {wire,fullbright}`** picks how faces are drawn.
   - **`wire`** (default) draws outlines only — the schematic, CSG-coloured (added blue, subtracted gold,
     …). It needs no game content at all and works on `--from-t3d` from anywhere.
-  - **`textured`** is the **CSG-solved textured world**, exactly what UnrealEd's 3D viewport shows: the
+  - **`fullbright`** is the **CSG-solved textured world**, exactly what UnrealEd's 3D viewport shows: the
     set is run through the native CSG **solve** and only the surfaces that **survive** are drawn, each
     filled by **sampling its own texture** through the face's authored UV frame
     (`Origin`/`TextureU`/`TextureV`/`Pan`), with **no wireframe**. Because it is a real solve, an
@@ -61,7 +61,7 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
     **magenta overlay** against the same depth buffer, so a mover behind a wall is hidden and one in
     front occludes — backface-culled the same way as world surfaces (its authored winding is already
     outward-correct, mirrored ones included). **Point actors** keep their sprite/marker overlay.
-  - **`textured` reads the game's class hierarchy** (to tell a mover from a world brush), so unlike
+  - **`fullbright` reads the game's class hierarchy** (to tell a mover from a world brush), so unlike
     `wire` it needs **both a resolved project and the per-user games config**, plus **every texture a
     surviving surface references to be readable** — miss one and it exits 2 naming the ref (a bare
     `Texture=Name` is rejected; qualify it as `Package.Name`). A scene that references no texture needs
@@ -71,15 +71,15 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
     sub-epsilon axis) is refused, exit 2 naming the brush.
   - A solve that leaves **no surface** (e.g. adds with nothing to carve empty space around them) is a
     clean exit 2 naming the cause; a set of only point actors and/or movers (no world brushes) draws its
-    overlays over the dark background at exit 0. `textured` composes with every other option here — `--focus`,
+    overlays over the dark background at exit 0. `fullbright` composes with every other option here — `--focus`,
     `--highlight` (its vivid outline is the only line art it keeps) and `--layout breakdown` included.
 - **Brushes are coloured by CSG op** (UnrealEd's legend): added-solid **blue**, subtracted
   **gold/yellow**, semi-solid **pink**, non-solid **green**, mover **magenta**; front and
   obscured/back faces draw in the same shade (facing-blind). This says what each brush *does*.
-- **`--brush-colors {csg,legend}`** picks the colour source for the `--faces wire` wireframe.
+- **`--brush-colors {csg,legend}`** picks the colour source for the `--mode wire` wireframe.
   `csg` (default) is the CSG-op colouring above. **`legend`** instead draws each brush in *its own
   per-actor tint* — every brush a distinct colour (you trade the CSG cue for telling same-op brushes
-  apart at a glance). It has no meaning under `--faces textured`, which colours nothing from it, so
+  apart at a glance). It has no meaning under `--mode fullbright`, which colours nothing from it, so
   passing it there is a clean exit 2.
 - **Labels use a HYBRID per-actor TINT.** The CSG palette has only ~5 hues, so two brushes with the
   SAME CSG op share ONE wireframe colour; to tell them apart, each **actor** is assigned a distinct
@@ -118,9 +118,9 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   brushes. A number **unreadable on screen** is omitted — a **view-dependent** verdict: a face too
   small, too edge-on, or too zoomed-out gets no number, and the same face is numbered once it's big
   enough (zoomed in, or in its `--layout breakdown` pane). There is no fallback for an omitted face.
-  Under **`--faces textured`** the fills are opaque but the numbers are not hidden by them: a face you
+  Under **`--mode fullbright`** the fills are opaque but the numbers are not hidden by them: a face you
   cannot see still shows its index, at 60% of a visible face's opacity, so a number can sit on a wall
-  in front of the face it belongs to. Read indices off `--faces wire`, or pass `--annotate none` for a
+  in front of the face it belongs to. Read indices off `--mode wire`, or pass `--annotate none` for a
   clean filled picture.
 - **`--annotate`** takes a **comma-set of `poly` selectors** (the drawn numbers are their **union**).
   Bare **`poly`** means every face index; each colon **filter** narrows; multiple filters on one
@@ -153,7 +153,7 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   explicit-AABB `--frame` is always framed exactly — `--frame-tightness` does NOT modulate it.
 - **`--highlight POLY|NAME`** emphasises a poly or actor; repeatable. A token
   **with a colon** is a poly selector `BRUSH:IDX` (set form `BRUSH:1,2` / `BRUSH:all` too) — those
-  polys draw with a **bolder line** in their brush's vivid CSG hue. Under `--faces textured` a
+  polys draw with a **bolder line** in their brush's vivid CSG hue. Under `--mode fullbright` a
   highlighted face keeps its texture and takes only that vivid outline. A token **without a colon** is an
   **actor name**: a brush actor highlights **all** its polys; a point actor gets **corner brackets**
   (a selection reticle) framing its sprite/marker. An unknown name / a selector on a non-brush → clean
@@ -174,8 +174,8 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   a marker that would fall outside it is cropped at the frame border/locator band instead of drawn
   over either.
 - **`--focus BRUSH`** spotlights ONE brush: only it shows face indices (in its tint), and every OTHER
-  brush recedes — for reading one brush's faces in a busy scene. Under `--faces wire` those brushes
-  recede to a **faint (dimmed)** wireframe; under `--faces textured` their solved **fills** fade too, to
+  brush recedes — for reading one brush's faces in a busy scene. Under `--mode wire` those brushes
+  recede to a **faint (dimmed)** wireframe; under `--mode fullbright` their solved **fills** fade too, to
   a faint wash of their own colour. **`--focus` changes brightness only — never what is visible or what
   hides what**, so the picture stays physically honest either way: a crate inside a subtracted room stands in
   front of the room's far wall, a brush between the camera and the focused one still covers it, and a
@@ -203,7 +203,7 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   reported as a **legend on stderr**: a density header, then one line per actor — `Pillar  D4  (C3–E5)`
   (the centroid cell, plus the covered range in parens) under `single`/`breakdown`, or pane-qualified
   `Pillar  Top:D4 Front:B7 Side:C7 Iso:E5` under `quad`. An actor that draws no pixel (e.g. one hidden
-  behind solid geometry under `--faces textured`) still gets a cell, flagged `(hidden)`. Two actors in
+  behind solid geometry under `--mode fullbright`) still gets a cell, flagged `(hidden)`. Two actors in
   the same cell each keep their own line. **The address is a region of the image/projection, never a
   world coordinate** — carry a cell back into a name set with `actor find`.
 - **`--locator-cells N`** sets the density: `N` equal columns × `N` equal rows. Must be in `[1, 52]`
@@ -249,7 +249,7 @@ actor diagram [<names…> | --from-t3d <FILE…|->]
   pre-escalation step, so it is pinned to `8 * set` world units, not `8 * visible`, and a caption
   printing the latter reads wrong once escalated.) Under `quad`/`breakdown`, each pane frames (and so
   may escalate) independently, so panes can report different steps. The grid is a backdrop: it never
-  covers geometry, is never dimmed by `--focus`, and is unaffected by `--faces`.
+  covers geometry, is never dimmed by `--focus`, and is unaffected by `--mode`.
 - **`--json`** prints a JSON object to stdout **instead of** the bare image path. With locator cells on
   (the default), it is the machine form of the legend:
   `{image, locator:{cols,rows}, actors:{<name>:{panes:{<Pane>:{cell,span}}, hidden}}}`, pane-keyed for

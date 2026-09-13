@@ -529,7 +529,7 @@ class DecodedTexture:
 
     `width`/`height`/`rgb`/`mask` are **mip 0**. `mips` is the WHOLE pyramid of the selected
     array, `(w, h, rgb, mask)` per level with mip 0 first — a caller that picks a level from
-    screen density (`actor diagram --faces textured`) needs all of them. It is a lazy property,
+    screen density (`actor diagram --mode fullbright`) needs all of them. It is a lazy property,
     not a field: a full pyramid costs about a third more work and memory than mip 0 alone, and
     the callers that only ever want level 0 (`level photo --native`, sprite billboards) must
     not pay for one. There is no second `resolve_*` entry point for it — one question, one way

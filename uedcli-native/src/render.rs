@@ -337,6 +337,7 @@ fn render_poly(
     h: usize,
     mirror_src: Option<&[u8]>,
     mirror_tint: bool,
+    texture_use: bool,
 ) {
     if poly.verts.len() < 3 {
         return;
@@ -428,6 +429,16 @@ fn render_poly(
     } else {
         None
     };
+    // `--mode polys`: UnrealEd's real "Texture Use" render (`REN=3`, mislabeled "Polys" in
+    // `dev/docs/unrealed/commands.md` — RE'd live in `dev/docs/spikes/2026-09-13-polys-render-
+    // mode-re/spike.md`) is a flat, UNSHADED solid colour keyed purely by texture identity: same
+    // texture anywhere in the level renders identically regardless of brush/face/lighting. Hashing
+    // `tex_index` (not the texture's name) is a deliberate simplification — stable WITHIN one
+    // render call (the same physical texture always gets the same slot in one shot's `textures`
+    // array) but not across separate `level photo` invocations, unlike the real engine's per-
+    // texture-object identity. Untextured polys (`tex_index < 0`) get their own fixed bucket
+    // rather than joining the hash space, matching the spike's "needs its own bucket" note.
+    let flat_color = texture_use.then(|| texture_use_color(poly.tex_index));
 
     for k in 1..scr.len() - 1 {
         raster_tri(
@@ -445,8 +456,44 @@ fn render_poly(
             mirror_src,
             mirror_tint,
             lightmap.map(|lm| (lm, [lm_scr[0], lm_scr[k], lm_scr[k + 1]])),
+            flat_color,
         );
     }
+}
+
+/// The flat swatch `--mode polys` (UnrealEd's real "Texture Use" mode) fills a surface with,
+/// keyed by `tex_index` (see `render_poly`'s call site for why index, not texture identity, and
+/// its scope limits). `tex_index < 0` (untextured) gets a fixed neutral swatch, never hashed in
+/// with real texture slots. A hashed index is mapped to a hue (golden-angle stepped, so adjacent
+/// small indices land far apart on the colour wheel) at fixed high saturation/value, then
+/// converted to RGB — visually distinct flat colours, matching the spike's screenshots (a
+/// uniform dark-green fill for one texture, flat pink/rose for another).
+fn texture_use_color(tex_index: i32) -> [f32; 3] {
+    if tex_index < 0 {
+        return [128.0, 128.0, 128.0]; // DEFAULT_GREY, as an f32 triple
+    }
+    // Golden-angle hue stepping (137.5..deg) spreads consecutive indices across the wheel instead
+    // of clustering nearby hues for nearby indices.
+    let hue = ((tex_index as f32) * 137.50776).rem_euclid(360.0);
+    let (sat, val) = (0.55, 0.85);
+    hsv_to_rgb_255(hue, sat, val)
+}
+
+/// Standard HSV -> RGB, scaled to the 0..255 range `raster_tri`'s colour math already works in.
+fn hsv_to_rgb_255(hue_deg: f32, sat: f32, val: f32) -> [f32; 3] {
+    let c = val * sat;
+    let h = hue_deg / 60.0;
+    let x = c * (1.0 - (h.rem_euclid(2.0) - 1.0).abs());
+    let (r1, g1, b1) = match h as i32 {
+        0 => (c, x, 0.0),
+        1 => (x, c, 0.0),
+        2 => (0.0, c, x),
+        3 => (0.0, x, c),
+        4 => (x, 0.0, c),
+        _ => (c, 0.0, x),
+    };
+    let m = val - c;
+    [(r1 + m) * 255.0, (g1 + m) * 255.0, (b1 + m) * 255.0]
 }
 
 /// World-space centroid depth along the camera's forward axis, for back-to-front sorting of
@@ -474,8 +521,9 @@ pub fn render(
     width: u32,
     height: u32,
     sky: Option<&Sky>,
+    texture_use: bool,
 ) -> Vec<u8> {
-    render_impl(polys, textures, camera, width, height, 0, sky)
+    render_impl(polys, textures, camera, width, height, 0, sky, texture_use)
 }
 
 /// The real `render()` body, plus `recursion_depth` (0 = the primary frame; each level of mirror
@@ -493,6 +541,7 @@ fn render_impl(
     height: u32,
     recursion_depth: u32,
     sky: Option<&Sky>,
+    texture_use: bool,
 ) -> Vec<u8> {
     const MAX_RECURSION: u32 = 3; // real engine's FSceneNode::Recursion cap (spike 2026-09-12)
     let (w, h) = (width as usize, height as usize);
@@ -519,7 +568,7 @@ fn render_impl(
         match mode {
             Blend::Opaque => render_poly(
                 poly, Blend::Opaque, textures, camera, half_w, half_h, focal, &mut img, &mut zbuf,
-                w, h, None, false,
+                w, h, None, false, texture_use,
             ),
             Blend::Mirror => {}   // drawn below, once per mirror plane, after every opaque poly
             Blend::Backdrop => {} // drawn below, once for the whole sky, after the mirror clusters
@@ -572,12 +621,13 @@ fn render_impl(
             }
             let secondary = render_impl(
                 &clipped_scene, textures, &refl_camera, width, height, recursion_depth + 1, sky,
+                texture_use,
             );
             for &idx in &cluster.indices {
                 let tint = polys[idx].poly_flags & PF_TRANSLUCENT != 0;
                 render_poly(
                     &polys[idx], Blend::Mirror, textures, camera, half_w, half_h, focal, &mut img,
-                    &mut zbuf, w, h, Some(&secondary), tint,
+                    &mut zbuf, w, h, Some(&secondary), tint, texture_use,
                 );
             }
         }
@@ -606,11 +656,12 @@ fn render_impl(
                 };
                 let secondary = render_impl(
                     polys, textures, &sky_camera, width, height, recursion_depth + 1, Some(sky),
+                    texture_use,
                 );
                 for &idx in &backdrop_indices {
                     render_poly(
                         &polys[idx], Blend::Backdrop, textures, camera, half_w, half_h, focal,
-                        &mut img, &mut zbuf, w, h, Some(&secondary), false,
+                        &mut img, &mut zbuf, w, h, Some(&secondary), false, texture_use,
                     );
                 }
             }
@@ -622,7 +673,7 @@ fn render_impl(
     for (poly, mode, _depth) in blended {
         render_poly(
             poly, mode, textures, camera, half_w, half_h, focal, &mut img, &mut zbuf, w, h, None,
-            false,
+            false, texture_use,
         );
     }
     img
@@ -644,6 +695,7 @@ fn raster_tri(
     mirror_src: Option<&[u8]>,
     mirror_tint: bool,
     lightmap: Option<(&Lightmap, [[f32; 2]; 3])>,
+    flat_color: Option<[f32; 3]>,
 ) {
     let min_x = a[0].min(b[0]).min(c[0]).floor().max(0.0) as usize;
     let max_x = (a[0].max(b[0]).max(c[0]).ceil() as i64).min(w as i64 - 1);
@@ -699,10 +751,19 @@ fn raster_tri(
                 gg = t.data[ti + 1] as f32;
                 bb = t.data[ti + 2] as f32;
             }
+            // `--mode polys` (real UnrealEd "Texture Use"): a flat, UNSHADED swatch keyed by
+            // texture identity replaces the sampled texel entirely — no KEY_LIGHT shade term, no
+            // lightmap, matching the spike's finding that this mode has zero per-face-orientation
+            // shading and no lighting dependency. The `masked` alpha test above still ran against
+            // the REAL texture's mask (a transparent texel already `continue`d), so a masked
+            // surface's holes still show background through in this mode too.
+            //
             // A lightmapped poly replaces the flat KEY_LIGHT `shade` scalar entirely with a
             // per-pixel lit multiplier sampled from the baked lumel grid (nearest, clamped to the
             // grid edge — no wrap, no bilinear filtering; see `Lightmap`'s doc).
-            let (sr, sg, sb) = if let Some((lm, luv)) = lightmap {
+            let (sr, sg, sb) = if let Some(flat) = flat_color {
+                (flat[0], flat[1], flat[2])
+            } else if let Some((lm, luv)) = lightmap {
                 let lu = (w0 * luv[0][0] + w1 * luv[1][0] + w2 * luv[2][0]) / inv_d;
                 let lv = (w0 * luv[0][1] + w1 * luv[1][1] + w2 * luv[2][1]) / inv_d;
                 let lx = (lu.round() as i32).clamp(0, lm.u_size - 1) as usize;
@@ -842,7 +903,7 @@ mod tests {
         // 90° hfov, 200x100: focal = 100 px. A point 10 right / 5 up at depth 100
         // lands 10 px right of centre, 5 px above centre.
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[wall(100.0, 400.0, -1)], &[], &cam, 200, 100, None);
+        let img = render(&[wall(100.0, 400.0, -1)], &[], &cam, 200, 100, None, false);
         assert_eq!(img.len(), 200 * 100 * 3);
         // Wall covers the whole frame (±200 uu at depth 100 = ±63° > ±45° fov): no background.
         assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
@@ -867,7 +928,7 @@ mod tests {
         };
         // Wall 2uu at depth 32, focal 32 (90° fov, 64px wide) -> covers 2 px around centre.
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[wall(32.0, 2.0, 0)], &[tex], &cam, 64, 64, None);
+        let img = render(&[wall(32.0, 2.0, 0)], &[tex], &cam, 64, 64, None, false);
         let px = |x: usize, y: usize| {
             let o = (y * 64 + x) * 3;
             [img[o], img[o + 1], img[o + 2]]
@@ -892,7 +953,7 @@ mod tests {
         let cam = cam_at_origin_looking_plus_x(90.0);
         let mut behind = wall(-100.0, 400.0, -1);
         behind.poly_flags = PF_TWO_SIDED;
-        let img = render(&[behind], &[], &cam, 32, 32, None);
+        let img = render(&[behind], &[], &cam, 32, 32, None, false);
         assert!(img.chunks_exact(3).all(|p| p == BACKGROUND));
         // A wall straddling the camera plane clips cleanly (no panic, partial coverage).
         let mut straddle = wall(1.0, 400.0, -1);
@@ -902,7 +963,7 @@ mod tests {
             Vec3::new(50.0, 200.0, -10.0),
             Vec3::new(-50.0, 200.0, -10.0),
         ];
-        let img = render(&[straddle], &[], &cam, 32, 32, None);
+        let img = render(&[straddle], &[], &cam, 32, 32, None, false);
         assert!(img.chunks_exact(3).any(|p| p != BACKGROUND));
     }
 
@@ -926,7 +987,7 @@ mod tests {
             &cam_at_origin_looking_plus_x(90.0),
             64,
             64,
-            None,
+            None, false,
         );
         let centre = {
             let o = (32 * 64 + 32) * 3;
@@ -966,7 +1027,7 @@ mod tests {
             &cam,
             64,
             64,
-            None,
+            None, false,
         );
         let px = |img: &[u8], x: usize| {
             let o = (32 * 64 + x) * 3;
@@ -975,7 +1036,7 @@ mod tests {
         assert!(px(&plain, 31)[0] > 0 && px(&plain, 31)[1] == 0); // unpanned left = red
         let mut p = wall(32.0, 2.0, 0);
         p.pan = [1.0, 0.0];
-        let panned = render(&[p], &[tex], &cam, 64, 64, None);
+        let panned = render(&[p], &[tex], &cam, 64, 64, None, false);
         assert!(px(&panned, 31)[1] > 0 && px(&panned, 31)[0] == 0); // panned left = green
         assert!(px(&panned, 32)[0] > 0 && px(&panned, 32)[1] == 0); // wraps back to red
     }
@@ -995,7 +1056,7 @@ mod tests {
         let mut front = wall(32.0, 2.0, 0); // 2-uu masked wall, near, 2 texels
         front.masked = true;
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[back, front], &[tex], &cam, 64, 64, None);
+        let img = render(&[back, front], &[tex], &cam, 64, 64, None, false);
         let px = |x: usize| {
             let o = (32 * 64 + x) * 3;
             [img[o], img[o + 1], img[o + 2]]
@@ -1016,7 +1077,7 @@ mod tests {
             mask: vec![1, 0],
         };
         let back2 = wall(80.0, 400.0, -1);
-        let img = render(&[back2, opaque], &[tex2], &cam, 64, 64, None);
+        let img = render(&[back2, opaque], &[tex2], &cam, 64, 64, None, false);
         let o = (32 * 64 + 32) * 3;
         assert!(img[o] > 0 && img[o + 1] == 0 && img[o + 2] == 0); // red, not grey
     }
@@ -1038,7 +1099,7 @@ mod tests {
         front.masked = true;
         let back = wall(80.0, 400.0, -1); // farther grey full-frame wall
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[front, back], &[tex], &cam, 64, 64, None); // masked drawn FIRST
+        let img = render(&[front, back], &[tex], &cam, 64, 64, None, false); // masked drawn FIRST
         let px = |x: usize| {
             let o = (32 * 64 + x) * 3;
             [img[o], img[o + 1], img[o + 2]]
@@ -1064,10 +1125,10 @@ mod tests {
         // A wall facing away from the camera renders nothing: pure background, not even the
         // flat default grey (spec: real UnrealEd is single-sided by default).
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[wall_facing_away(100.0, 400.0, -1)], &[], &cam, 64, 64, None);
+        let img = render(&[wall_facing_away(100.0, 400.0, -1)], &[], &cam, 64, 64, None, false);
         assert!(img.chunks_exact(3).all(|p| p == BACKGROUND));
         // The same wall facing the camera (unchanged from `wall()`) DOES render.
-        let img = render(&[wall(100.0, 400.0, -1)], &[], &cam, 64, 64, None);
+        let img = render(&[wall(100.0, 400.0, -1)], &[], &cam, 64, 64, None, false);
         assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
     }
 
@@ -1076,7 +1137,7 @@ mod tests {
         let cam = cam_at_origin_looking_plus_x(90.0);
         let mut w = wall_facing_away(100.0, 400.0, -1);
         w.poly_flags = PF_TWO_SIDED;
-        let img = render(&[w], &[], &cam, 64, 64, None);
+        let img = render(&[w], &[], &cam, 64, 64, None, false);
         assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
     }
 
@@ -1088,7 +1149,7 @@ mod tests {
         let cam = cam_at_origin_looking_plus_x(90.0);
         let mut w = wall_facing_away(100.0, 400.0, -1);
         w.poly_flags = PF_PORTAL;
-        let img = render(&[w], &[], &cam, 64, 64, None);
+        let img = render(&[w], &[], &cam, 64, 64, None, false);
         assert!(img.chunks_exact(3).all(|p| p != BACKGROUND));
     }
 
@@ -1104,7 +1165,7 @@ mod tests {
         // Opaque: z IS written (the existing, unchanged behaviour).
         let mut img = vec![0u8; 3];
         let mut zbuf = vec![0.0f32];
-        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Opaque, None, false, None);
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Opaque, None, false, None, None);
         assert_eq!(zbuf[0], 1.0);
         assert_eq!(img, vec![128, 128, 128]); // DEFAULT_GREY (no texture), shade 1.0
 
@@ -1112,7 +1173,7 @@ mod tests {
         // UNWRITTEN — mirrors `masked_transparent_texel_leaves_z_unwritten`'s precedent.
         let mut img = vec![10u8, 10, 10];
         let mut zbuf = vec![0.0f32];
-        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Translucent, None, false, None);
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Translucent, None, false, None, None);
         assert_eq!(zbuf[0], 0.0);
         assert_eq!(img, vec![138, 138, 138]); // 10 + 128
 
@@ -1120,7 +1181,7 @@ mod tests {
         // point, so a dest of 200 composites to exactly 200 — an exact, rounding-free check.
         let mut img = vec![200u8, 200, 200];
         let mut zbuf = vec![0.0f32];
-        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Modulated, None, false, None);
+        raster_tri(&mut img, &mut zbuf, 1, 1, &a, &b, &c, None, false, 1.0, Blend::Modulated, None, false, None, None);
         assert_eq!(zbuf[0], 0.0);
         assert_eq!(img, vec![200, 200, 200]);
     }
@@ -1134,7 +1195,7 @@ mod tests {
         let front_tex = || RenderTexture { w: 1, h: 1, data: vec![100, 50, 0], mask: vec![1] };
         let cam = cam_at_origin_looking_plus_x(90.0);
 
-        let bg_only = render(&[wall(100.0, 400.0, 0)], &[bg_tex()], &cam, 64, 64, None);
+        let bg_only = render(&[wall(100.0, 400.0, 0)], &[bg_tex()], &cam, 64, 64, None, false);
 
         let mut front = wall(40.0, 20.0, 1);
         front.poly_flags = PF_TRANSLUCENT;
@@ -1144,7 +1205,7 @@ mod tests {
             &cam,
             64,
             64,
-            None,
+            None, false,
         );
 
         let px = |img: &[u8]| {
@@ -1161,7 +1222,7 @@ mod tests {
     fn modulated_wall_darkens_or_brightens_the_backdrop() {
         let cam = cam_at_origin_looking_plus_x(90.0);
         let bg_tex = || RenderTexture { w: 1, h: 1, data: vec![128, 128, 128], mask: vec![1] };
-        let bg_only = render(&[wall(100.0, 400.0, 0)], &[bg_tex()], &cam, 64, 64, None);
+        let bg_only = render(&[wall(100.0, 400.0, 0)], &[bg_tex()], &cam, 64, 64, None, false);
         let px = |img: &[u8]| {
             let o = (32 * 64 + 32) * 3;
             [img[o], img[o + 1], img[o + 2]]
@@ -1173,7 +1234,7 @@ mod tests {
         let mut dark = wall(40.0, 20.0, 1);
         dark.poly_flags = PF_MODULATED;
         let dark_tex = RenderTexture { w: 1, h: 1, data: vec![0, 0, 0], mask: vec![1] };
-        let darkened = render(&[wall(100.0, 400.0, 0), dark], &[bg_tex(), dark_tex], &cam, 64, 64, None);
+        let darkened = render(&[wall(100.0, 400.0, 0), dark], &[bg_tex(), dark_tex], &cam, 64, 64, None, false);
         assert_eq!(px(&darkened), [0, 0, 0]);
 
         // A WHITE (src=255, above the 128 neutral point) modulated wall brightens the backdrop.
@@ -1181,7 +1242,7 @@ mod tests {
         bright.poly_flags = PF_MODULATED;
         let bright_tex = RenderTexture { w: 1, h: 1, data: vec![255, 255, 255], mask: vec![1] };
         let brightened =
-            render(&[wall(100.0, 400.0, 0), bright], &[bg_tex(), bright_tex], &cam, 64, 64, None);
+            render(&[wall(100.0, 400.0, 0), bright], &[bg_tex(), bright_tex], &cam, 64, 64, None, false);
         assert!(px(&brightened)[0] > bg_px[0]);
     }
 
@@ -1194,7 +1255,7 @@ mod tests {
         let near_tex = || RenderTexture { w: 1, h: 1, data: vec![10, 20, 30], mask: vec![1] };
         let far_tex = || RenderTexture { w: 1, h: 1, data: vec![200, 200, 200], mask: vec![1] };
 
-        let alone = render(&[wall(40.0, 20.0, 0)], &[near_tex()], &cam, 64, 64, None);
+        let alone = render(&[wall(40.0, 20.0, 0)], &[near_tex()], &cam, 64, 64, None, false);
 
         let mut far = wall(100.0, 20.0, 1);
         far.poly_flags = PF_TRANSLUCENT;
@@ -1204,7 +1265,7 @@ mod tests {
             &cam,
             64,
             64,
-            None,
+            None, false,
         );
         assert_eq!(alone, with_far);
     }
@@ -1236,7 +1297,7 @@ mod tests {
             &cam,
             64,
             64,
-            None,
+            None, false,
         );
         let reversed = render(
             &[make_far(), make_near(), wall(100.0, 400.0, 0)],
@@ -1244,7 +1305,7 @@ mod tests {
             &cam,
             64,
             64,
-            None,
+            None, false,
         );
         assert_eq!(forward, reversed);
     }
@@ -1273,7 +1334,7 @@ mod tests {
         let mut zbuf = vec![0.0f32];
         raster_tri(
             &mut img, &mut zbuf, 1, 1, &a, &b, &c, Some(&tex), false, 1.0, Blend::Opaque,
-            None, false, Some((&lm, luv)),
+            None, false, Some((&lm, luv)), None,
         );
         // base [100,100,100] * lumel [2.0,0.5,0.0] = [200,50,0] -- NOT [100,100,100] (shade=1.0
         // would be a no-op multiply, so this proves the lightmap branch is actually taken).
@@ -1299,7 +1360,7 @@ mod tests {
         let mut zbuf = vec![0.0f32];
         raster_tri(
             &mut img, &mut zbuf, 1, 1, &a, &b, &c, Some(&tex), false, 1.0, Blend::Opaque,
-            None, false, Some((&lm, luv)),
+            None, false, Some((&lm, luv)), None,
         );
         assert_eq!(img, vec![255, 255, 255]);
     }
@@ -1310,7 +1371,7 @@ mod tests {
         // poly's output. Same wall/camera geometry and shade formula as `uv_texel_probe`.
         let tex = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[wall(32.0, 2.0, 0)], &[tex], &cam, 64, 64, None);
+        let img = render(&[wall(32.0, 2.0, 0)], &[tex], &cam, 64, 64, None, false);
         let s = 0.55 + 0.45 * 0.408;
         let o = (32 * 64 + 32) * 3;
         assert_eq!(img[o], (255.0 * s) as u8);
@@ -1334,7 +1395,7 @@ mod tests {
         });
         let tex = RenderTexture { w: 1, h: 1, data: vec![50, 50, 50], mask: vec![1] };
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[w], &[tex], &cam, 64, 64, None);
+        let img = render(&[w], &[tex], &cam, 64, 64, None, false);
         let o = (32 * 64 + 32) * 3;
         // 50 * 3.0 = 150 -- NOT the flat KEY_LIGHT shade (which would give ~50*0.73 =~ 36).
         assert_eq!((img[o], img[o + 1], img[o + 2]), (150, 0, 0));
@@ -1355,7 +1416,7 @@ mod tests {
         });
         let tex = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[w], &[tex], &cam, 64, 64, None); // must not panic
+        let img = render(&[w], &[tex], &cam, 64, 64, None, false); // must not panic
         let s = 0.55 + 0.45 * 0.408;
         let o = (32 * 64 + 32) * 3;
         assert_eq!(img[o], (255.0 * s) as u8); // flat shade, not the (9x) lumel
@@ -1388,7 +1449,7 @@ mod tests {
         reflectee.poly_flags = 0;
         let red = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
 
-        let img = render(&[mirror, reflectee], &[red], &cam, 64, 64, None);
+        let img = render(&[mirror, reflectee], &[red], &cam, 64, 64, None, false);
         let o = (32 * 64 + 32) * 3;
         assert!(img[o] > 0 && img[o + 1] == 0 && img[o + 2] == 0); // red, not grey/background
 
@@ -1398,7 +1459,7 @@ mod tests {
         let mut opaque = wall(40.0, 400.0, -1);
         opaque.poly_flags = 0;
         let red2 = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
-        let img2 = render(&[opaque, wall_facing_away(-100.0, 400.0, 0)], &[red2], &cam, 64, 64, None);
+        let img2 = render(&[opaque, wall_facing_away(-100.0, 400.0, 0)], &[red2], &cam, 64, 64, None, false);
         let px2 = [img2[o], img2[o + 1], img2[o + 2]];
         assert_eq!(px2[0], px2[1]); // grey (default, untextured): r == g == b
         assert_eq!(px2[1], px2[2]);
@@ -1421,13 +1482,13 @@ mod tests {
         mirror.poly_flags = PF_MIRRORED;
         let mut reflectee = wall_facing_away(-100.0, 400.0, 0); // tex 0 = red
         reflectee.poly_flags = 0;
-        let pure = render(&[mirror, reflectee], &textures(), &cam, 64, 64, None);
+        let pure = render(&[mirror, reflectee], &textures(), &cam, 64, 64, None, false);
 
         let mut tinted = wall(40.0, 400.0, 1);
         tinted.poly_flags = PF_MIRRORED | PF_TRANSLUCENT;
         let mut reflectee2 = wall_facing_away(-100.0, 400.0, 0);
         reflectee2.poly_flags = 0;
-        let tint = render(&[tinted, reflectee2], &textures(), &cam, 64, 64, None);
+        let tint = render(&[tinted, reflectee2], &textures(), &cam, 64, 64, None, false);
 
         let o = (32 * 64 + 32) * 3;
         assert_eq!(pure[o + 2], 0); // pure mirror: no blue tint, its own texture never shows
@@ -1457,7 +1518,7 @@ mod tests {
         let reflectee = wall_facing_away(-100.0, 400.0, 2); // red, visible only via the reflection
 
         let cam = cam_at_origin_looking_plus_x(90.0);
-        let img = render(&[mirror, back, reflectee], &[tex, back_tex, reflect_tex], &cam, 64, 64, None);
+        let img = render(&[mirror, back, reflectee], &[tex, back_tex, reflect_tex], &cam, 64, 64, None, false);
         let px = |x: usize| {
             let o = (32 * 64 + x) * 3;
             [img[o], img[o + 1], img[o + 2]]
@@ -1479,7 +1540,7 @@ mod tests {
         let cam = cam_at_origin_looking_plus_x(90.0);
         let mut away = wall_facing_away(100.0, 400.0, -1);
         away.poly_flags = PF_MIRRORED;
-        let img = render(&[away], &[], &cam, 32, 32, None);
+        let img = render(&[away], &[], &cam, 32, 32, None, false);
         assert!(img.chunks_exact(3).all(|p| p == BACKGROUND));
     }
 
@@ -1508,7 +1569,7 @@ mod tests {
         let mut backstop = wall(-10.0, 200.0, -1);
         backstop.poly_flags = PF_TWO_SIDED;
         let polys = [near_mirror, far_mirror, backstop];
-        let img = render(&polys, &[], &cam, 32, 32, None);
+        let img = render(&polys, &[], &cam, 32, 32, None, false);
         assert_eq!(img.len(), 32 * 32 * 3);
         assert!(img.chunks_exact(3).any(|p| p != BACKGROUND));
     }
@@ -1531,8 +1592,8 @@ mod tests {
         let mut far_mirror = wall_facing_away(-20.0, 100.0, -1);
         far_mirror.poly_flags = PF_MIRRORED;
         let polys = [near_mirror, far_mirror];
-        let shallow = render_impl(&polys, &[], &cam, 32, 32, 2, None); // 1 more bounce available
-        let deep = render_impl(&polys, &[], &cam, 32, 32, 1, None); // 2 more bounces available
+        let shallow = render_impl(&polys, &[], &cam, 32, 32, 2, None, false); // 1 more bounce available
+        let deep = render_impl(&polys, &[], &cam, 32, 32, 1, None, false); // 2 more bounces available
         assert_ne!(
             shallow, deep,
             "cap-3 budget produces the same image whether 1 or 2 more bounces are available"
@@ -1601,7 +1662,7 @@ mod tests {
 
         let red = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
         let blue = RenderTexture { w: 1, h: 1, data: vec![0, 0, 255], mask: vec![1] };
-        let img = render(&[backdrop_poly, sky_scene_poly], &[red, blue], &cam, 64, 64, Some(&sky));
+        let img = render(&[backdrop_poly, sky_scene_poly], &[red, blue], &cam, 64, 64, Some(&sky), false);
 
         let center = ((64 / 2) * 64 + (64 / 2)) * 3;
         let s = 0.55 + 0.45 * 0.408_f32;
@@ -1619,7 +1680,7 @@ mod tests {
         let mut backdrop_poly = frame_filling_quad_for(&cam, 100.0, 400.0, 0);
         backdrop_poly.poly_flags = PF_FAKE_BACKDROP;
         let red = RenderTexture { w: 1, h: 1, data: vec![255, 0, 0], mask: vec![1] };
-        let img = render(&[backdrop_poly], &[red], &cam, 64, 64, None);
+        let img = render(&[backdrop_poly], &[red], &cam, 64, 64, None, false);
 
         let center = ((64 / 2) * 64 + (64 / 2)) * 3;
         let s = 0.55 + 0.45 * 0.408_f32;
@@ -1697,8 +1758,8 @@ mod tests {
         let make_scene =
             || vec![make_backdrop(), quad_half(-400.0, 45.0, 1), quad_half(45.0, 400.0, 2)];
 
-        let img_a = render(&make_scene(), &[red(), green(), blue()], &cam_a, 64, 64, Some(&sky));
-        let img_b = render(&make_scene(), &[red(), green(), blue()], &cam_b, 64, 64, Some(&sky));
+        let img_a = render(&make_scene(), &[red(), green(), blue()], &cam_a, 64, 64, Some(&sky), false);
+        let img_b = render(&make_scene(), &[red(), green(), blue()], &cam_b, 64, 64, Some(&sky), false);
 
         let center = ((64 / 2) * 64 + (64 / 2)) * 3;
         assert_eq!(
@@ -1727,7 +1788,7 @@ mod tests {
         backdrop.poly_flags = PF_FAKE_BACKDROP;
         let sky = Sky { location: cam.location, forward: cam.forward, right: cam.right, up: cam.up };
         let tex = RenderTexture { w: 1, h: 1, data: vec![0, 0, 255], mask: vec![1] };
-        let img = render(&[backdrop], &[tex], &cam, 32, 32, Some(&sky));
+        let img = render(&[backdrop], &[tex], &cam, 32, 32, Some(&sky), false);
         assert_eq!(img.len(), 32 * 32 * 3);
         let o = (16 * 32 + 16) * 3;
         let s = 0.55 + 0.45 * 0.408_f32;
@@ -1751,11 +1812,91 @@ mod tests {
         backdrop.poly_flags = PF_FAKE_BACKDROP;
         let sky = Sky { location: cam.location, forward: cam.forward, right: cam.right, up: cam.up };
         let polys = [mirror, backdrop];
-        let shallow = render_impl(&polys, &[], &cam, 32, 32, 1, Some(&sky)); // 2 more hops
-        let deep = render_impl(&polys, &[], &cam, 32, 32, 2, Some(&sky)); // 1 more hop
+        let shallow = render_impl(&polys, &[], &cam, 32, 32, 1, Some(&sky), false); // 2 more hops
+        let deep = render_impl(&polys, &[], &cam, 32, 32, 2, Some(&sky), false); // 1 more hop
         assert_ne!(
             shallow, deep,
             "mirror+backdrop combined recursion produces the same image whether 1 or 2 more hops are available"
         );
+    }
+
+    // ── `--mode polys` (UnrealEd's real "Texture Use", REN=3) ───────────────────────────────────
+    // RE evidence: `dev/docs/spikes/2026-09-13-polys-render-mode-re/spike.md` — a flat, UNSHADED
+    // solid colour keyed by texture identity, no lighting/shading dependency, own bucket for an
+    // untextured surface.
+
+    #[test]
+    fn texture_use_color_is_stable_per_index_and_distinct_across_indices() {
+        assert_eq!(texture_use_color(0), texture_use_color(0));
+        assert_eq!(texture_use_color(7), texture_use_color(7));
+        assert_ne!(texture_use_color(0), texture_use_color(1));
+        assert_ne!(texture_use_color(1), texture_use_color(2));
+    }
+
+    #[test]
+    fn texture_use_color_gives_untextured_its_own_fixed_bucket() {
+        // Every untextured index (whatever sentinel a caller passes below zero) shares ONE fixed
+        // swatch, never colliding with a real texture slot's hashed colour.
+        assert_eq!(texture_use_color(-1), texture_use_color(-1));
+        assert_eq!(texture_use_color(-1), [128.0, 128.0, 128.0]);
+        assert_ne!(texture_use_color(-1), texture_use_color(0));
+    }
+
+    /// The centre pixel of a `size=400`-uu wall at `depth=100` — big enough (per
+    /// `projection_round_trip`) to cover the whole frame, so the centre always hits it.
+    fn centre_px(img: &[u8]) -> [u8; 3] {
+        let o = (32 * 64 + 32) * 3;
+        [img[o], img[o + 1], img[o + 2]]
+    }
+
+    #[test]
+    fn polys_mode_matches_texture_use_color_exactly_no_shading_applied() {
+        // Real UnrealEd's Texture Use view has ZERO per-face shading (spike.md): the rendered
+        // pixel must equal `texture_use_color` EXACTLY. `wall`'s real orientation gives a
+        // `KEY_LIGHT` shade strictly less than 1.0 in the ordinary lit path (any deviation from
+        // the unmultiplied swatch below would mean a shade term leaked in).
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let img = render(&[wall(100.0, 400.0, 3)], &[], &cam, 64, 64, None, true);
+        let want = texture_use_color(3);
+        assert_eq!(centre_px(&img), [want[0] as u8, want[1] as u8, want[2] as u8]);
+    }
+
+    #[test]
+    fn polys_mode_gives_different_textures_different_colours() {
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let img_a = render(&[wall(100.0, 400.0, 0)], &[], &cam, 64, 64, None, true);
+        let img_b = render(&[wall(100.0, 400.0, 1)], &[], &cam, 64, 64, None, true);
+        assert_ne!(
+            centre_px(&img_a),
+            centre_px(&img_b),
+            "distinct tex_index values must render distinct --mode polys colours"
+        );
+    }
+
+    #[test]
+    fn polys_mode_gives_untextured_polys_the_fixed_fallback() {
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let img = render(&[wall(100.0, 400.0, -1)], &[], &cam, 64, 64, None, true);
+        assert_eq!(centre_px(&img), [128, 128, 128]);
+    }
+
+    #[test]
+    fn polys_mode_is_unaffected_by_a_lightmap() {
+        // No lighting dependency (spike.md: `polys.png`/`polys_nolight.png` byte-identical). A
+        // poly WITH a lightmap attached must still render the flat swatch, not a lit texel.
+        let cam = cam_at_origin_looking_plus_x(90.0);
+        let mut lit = wall(100.0, 400.0, 0);
+        lit.lightmap = Some(Lightmap {
+            grid_origin: Vec3::new(100.0, -200.0, 200.0),
+            u_step: Vec3::new(0.0, 1.0, 0.0),
+            v_step: Vec3::new(0.0, 0.0, -1.0),
+            u_size: 1,
+            v_size: 1,
+            rgb: vec![5.0, 5.0, 5.0], // an obviously-lit multiplier, must be ignored entirely
+        });
+        let unlit = wall(100.0, 400.0, 0);
+        let img_lit = render(&[lit], &[], &cam, 64, 64, None, true);
+        let img_unlit = render(&[unlit], &[], &cam, 64, 64, None, true);
+        assert_eq!(img_lit, img_unlit, "--mode polys must ignore a poly's lightmap entirely");
     }
 }

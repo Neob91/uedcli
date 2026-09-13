@@ -186,7 +186,7 @@ def _note_invisible_highlights(requests: list, shown: set) -> None:
     reader to ignore the note. A token naming faces (`Wall:3`, `Wall:1,2,3`) reports exactly the ones that
     drew nothing, which is actionable and is the granularity that user was already thinking in.
 
-    **Nearly, but not quite, unreachable under `--faces wire`.** Nothing is ever hidden by depth there, so
+    **Nearly, but not quite, unreachable under `--mode wire`.** Nothing is ever hidden by depth there, so
     a face that survives projection always draws — but a poly with NO projectable vertices is dropped
     before the edge loop in either mode, so a degenerate `--from-t3d` poly can trip the note under `wire`
     too. Reporting that is correct; the earlier claim that `wire` was structurally exempt was not."""
@@ -497,7 +497,7 @@ def render_actors_to_out(actors, args) -> int:
     shown_highlights: set = set()
     # `panes` collects each pane's `{actor: ActorCell}` map — keyed by pane name for quad, by the
     # single `--view` otherwise (breakdown reads off pane 0) — filled whether or not the locator is on
-    # (see `_collect_cells`). `hidden` answers the image actually rendered: under `--faces wire` that
+    # (see `_collect_cells`). `hidden` answers the image actually rendered: under `--mode wire` that
     # answer is invariant either way, but under a filled mode the locator's gutter reserve shifts
     # `to_pxf`/the depth buffer, so `hidden` can legitimately differ between the two modes.
     panes: dict = {}
@@ -742,14 +742,14 @@ def _resolve_point_render(actor, project, *, resolver, show_collision, show_ligh
 
 
 def _preview_faces_mode(args) -> str:
-    """The `--faces` mode for this render. Read with a default because the committed spike harnesses
+    """The `--mode` mode for this render. Read with a default because the committed spike harnesses
     build their own arg namespaces and carry no `faces` attribute."""
     return getattr(args, "faces", "wire")
 
 
 def _preview_verb(args, mode: str) -> str:
-    """`actor diagram --faces textured` and friends — the verb+flag a `--faces` refusal names."""
-    return f"{getattr(args, 'cmd', 'actor')} {getattr(args, 'sub', 'diagram')} --faces {mode}"
+    """`actor diagram --mode fullbright` and friends — the verb+flag a `--mode` refusal names."""
+    return f"{getattr(args, 'cmd', 'actor')} {getattr(args, 'sub', 'diagram')} --mode {mode}"
 
 
 def _mover_index_or_exit(args, verb: str):
@@ -763,7 +763,7 @@ def _mover_index_or_exit(args, verb: str):
         raise CommandError(
             f"{verb}: {e} — a filled render resolves every brush's class against Engine.Mover (a mover "
             f"is never carved into the world, so it escapes the subtract cull), and composing the game's "
-            f"package search path needs a project. --faces wire needs neither") from None
+            f"package search path needs a project. --mode wire needs neither") from None
 
 
 def preview_movers(actors, args, mode: str, *, index=None) -> frozenset[str]:
@@ -775,8 +775,8 @@ def preview_movers(actors, args, mode: str, *, index=None) -> frozenset[str]:
     `CsgOper` it carries, so it must escape the subtract cull, and it fills in mover colour. Both
     index-free rules are wrong — the raw `CsgOper` marker renders a `SomethingMover` door inside-out,
     and `preview.classify_brush`'s name guess additionally misses `CEDoor`/`BreakableGlass`, real movers
-    whose class names do not end in `Mover`. This is why `textured` loads the class hierarchy and so, unlike
-    `wire`, needs the game content available.
+    whose class names do not end in `Mover`. This is why `fullbright` loads the class hierarchy and so,
+    unlike `wire`, needs the game content available.
 
     `is_mover` ANSWERS OR RAISES — it never reports an unresolvable class as "not a mover", because
     nothing downstream re-checks. Every unresolvable actor is collected and refused together, grouped by
@@ -806,7 +806,7 @@ def preview_movers(actors, args, mode: str, *, index=None) -> frozenset[str]:
         raise CommandError(
             f"{verb}: cannot tell a mover from a real subtraction for "
             f"{sum(len(n) for n in by_cause.values())} actor(s), so the fill would be wrong:\n  "
-            f"{detail}\n(--faces wire needs no class hierarchy)")
+            f"{detail}\n(--mode wire needs no class hierarchy)")
     return frozenset(out)
 
 
@@ -814,14 +814,14 @@ def _preview_render_data(actors, args, show: set[str]) -> "preview.PreviewData":
     """Everything the preview needs resolved before a pixel is drawn — dispatch owns schema, texture
     and class-hierarchy resolution so `preview.py` stays resolver-free.
 
-    `points` is the per-point-actor render data. `faces` is None under `--faces wire`, which resolves
+    `points` is the per-point-actor render data. `faces` is None under `--mode wire`, which resolves
     nothing and so still works with no game install; under a FILLED mode it carries the mover set (which
     needs the game's class hierarchy) and, under `textured`, the decoded texture payload. The
     mover/texture resolution runs FIRST, so a scene that cannot resolve them does not first emit
     point-actor notes about it."""
     mode = _preview_faces_mode(args)
     faces = None
-    if mode == "textured":
+    if mode == "fullbright":
         # Cheap arg refusal first (§2.7), before touching any resolver.
         _reject_explicit_brush_colors(args)
         verb = _preview_verb(args, mode)
@@ -841,7 +841,7 @@ def _preview_render_data(actors, args, show: set[str]) -> "preview.PreviewData":
             raise CommandError(
                 f"{verb}: nothing survives the CSG solve — the set's {len(world_brushes)} world brush(es) "
                 f"carve no visible surface (an additive brush needs subtracted space around it to show). "
-                f"Use --faces wire for a content-free schematic")
+                f"Use --mode wire for a content-free schematic")
         # Texture resolution follows the solve (§M2): resolve/refuse only refs a SURVIVING surface needs,
         # so an unreadable texture on a culled/absent face never blocks a render that never draws it.
         textures = preview_textures(actors, args, solved)
@@ -850,15 +850,15 @@ def _preview_render_data(actors, args, show: set[str]) -> "preview.PreviewData":
 
 
 def _reject_explicit_brush_colors(args) -> None:
-    """`--faces textured --brush-colors X` is a clean exit 2 (decision 2.7). `--brush-colors` parses
-    with `default=None`, so a non-None value is an EXPLICIT one; textured colours nothing from it (it
+    """`--mode fullbright --brush-colors X` is a clean exit 2 (decision 2.7). `--brush-colors` parses
+    with `default=None`, so a non-None value is an EXPLICIT one; fullbright colours nothing from it (it
     samples each face's own texture), and giving one flag two jobs is refused rather than ignored."""
     chosen = getattr(args, "brush_colors", None)
     if chosen is not None:
-        verb = _preview_verb(args, "textured")
-        raise CommandError(f"{verb}: --brush-colors {chosen} conflicts with --faces textured. That flag "
-                           f"colours the wireframe; textured draws none — it "
-                           f"samples each face's OWN texture. Drop --brush-colors, or use --faces wire")
+        verb = _preview_verb(args, "fullbright")
+        raise CommandError(f"{verb}: --brush-colors {chosen} conflicts with --mode fullbright. That flag "
+                           f"colours the wireframe; fullbright draws none — it "
+                           f"samples each face's OWN texture. Drop --brush-colors, or use --mode wire")
 
 
 def _texture_resolver_cause(project, verb: str) -> str:
@@ -869,22 +869,22 @@ def _texture_resolver_cause(project, verb: str) -> str:
     try:
         user_config = config.load_user_config()
     except config.ConfigError as e:
-        return f"{lead}: the games config is broken — {e}. (--faces wire needs no textures)"
+        return f"{lead}: the games config is broken — {e}. (--mode wire needs no textures)"
     if user_config is None:
         return (f"{lead}: no per-user games config (~/.uedcli/config.toml) — create it with a "
-                f"[games.<name>] paths dir list. (--faces wire needs no textures)")
+                f"[games.<name>] paths dir list. (--mode wire needs no textures)")
     try:
         files = config.composed_search_files(project, user_config) if project is not None else []
     except config.ConfigError as e:
-        return f"{lead}: the games config is broken — {e}. (--faces wire needs no textures)"
+        return f"{lead}: the games config is broken — {e}. (--mode wire needs no textures)"
     if not files:
         return (f"{lead}: this project resolves no game packages (check the games config `paths` and "
-                f"that the project targets a game). (--faces wire needs no textures)")
+                f"that the project targets a game). (--mode wire needs no textures)")
     return f"{lead}."                                    # unreachable: a real resolver would have built
 
 
 def preview_textures(actors, args, solved) -> "preview.TextureData":
-    """Resolve the textures a `--faces textured` render draws from — dispatch owns this so `preview.py`
+    """Resolve the textures a `--mode fullbright` render draws from — dispatch owns this so `preview.py`
     stays resolver-free.
 
     "Needs" is literal (decision 2.6) and, per §M2, scoped to the SOLVE: only the source polys of the
@@ -913,7 +913,7 @@ def preview_textures(actors, args, solved) -> "preview.TextureData":
         refs.setdefault(cf, ref)
     if not refs:                                        # decision 2.6: nothing needed, nothing resolved
         return preview.TextureData(by_ref={}, masked={})
-    verb = _preview_verb(args, "textured")
+    verb = _preview_verb(args, "fullbright")
     try:
         project = resources.resolve_project(args)
     except ProjectError:
@@ -969,7 +969,7 @@ def _is_hidden_ed(actor, project) -> tuple[bool, str | None]:
 
 def _preview_point_data(actors, args, show: set[str]) -> dict:
     """Resolve per-point-actor render data for the preview. `show` is the validated `--show` member set.
-    Brush actors are skipped (their geometry needs no schema — which is why a pure-brush `--faces wire`
+    Brush actors are skipped (their geometry needs no schema — which is why a pure-brush `--mode wire`
     preview works with no game install). A `bHiddenEd` point actor (instance or class default, e.g.
     `LevelInfo`) is dropped, matching UnrealEd's editor viewport. A point actor whose schema is
     unresolvable degrades to an unscaled labelled marker + a one-line stderr note, NEVER a traceback."""

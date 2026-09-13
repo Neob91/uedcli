@@ -742,9 +742,12 @@ type RenderPolyTuple = (
 /// convention; Rust never converts angles) + an optional `sky` basis (`(location, forward,
 /// right, up)`, no fov — `preview_native.sky_camera_basis`/`find_sky_actor`; `None` when the
 /// level has no `SkyZoneInfo`, so every `PF_FakeBackdrop` face falls back to its own texture)
+/// `texture_use=True` switches every surface to `--mode polys` — UnrealEd's real "Texture Use"
+/// mode (`REN=3`; see `render::texture_use_color`'s doc for the RE citation): a flat, unlit
+/// swatch keyed by texture identity, no shading, no lighting.
 /// -> `width*height*3` RGB bytes.
 #[pyfunction]
-#[pyo3(signature = (polys, textures, camera, size, sky=None))]
+#[pyo3(signature = (polys, textures, camera, size, sky=None, texture_use=false))]
 fn render_frame(
     py: Python<'_>,
     polys: Vec<RenderPolyTuple>,
@@ -752,6 +755,7 @@ fn render_frame(
     camera: ([f32; 3], [f32; 3], [f32; 3], [f32; 3], f32),
     size: (u32, u32),
     sky: Option<([f32; 3], [f32; 3], [f32; 3], [f32; 3])>,
+    texture_use: bool,
 ) -> PyResult<Py<PyBytes>> {
     let (width, height) = size;
     if width == 0 || height == 0 || width > 16384 || height > 16384 {
@@ -827,7 +831,9 @@ fn render_frame(
         right: model::Vec3::new(right[0], right[1], right[2]),
         up: model::Vec3::new(up[0], up[1], up[2]),
     });
-    let img = py.allow_threads(|| render::render(&rpolys, &rtex, &cam, width, height, sky.as_ref()));
+    let img = py.allow_threads(|| {
+        render::render(&rpolys, &rtex, &cam, width, height, sky.as_ref(), texture_use)
+    });
     Ok(PyBytes::new_bound(py, &img).unbind())
 }
 

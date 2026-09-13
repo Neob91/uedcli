@@ -1,6 +1,6 @@
 """Self-rendered orthographic preview — a low-noise COLOR image from the model alone (no
-editor), so the LLM can SEE a brush's geometry and which poly INDEX is which face. `--faces wire`
-(the default) draws outlines only; `--faces textured` draws the CSG-SOLVED world (only surviving
+editor), so the LLM can SEE a brush's geometry and which poly INDEX is which face. `--mode wire`
+(the default) draws outlines only; `--mode fullbright` draws the CSG-SOLVED world (only surviving
 surfaces, each through its texture), with a per-view backface cull (see `_scene_geometry`).
 Rendering is stdlib only (no PIL/numpy), so every function here returns raw **PPM/P6
 bytes IN MEMORY**. That is an internal format only: the CLI's disk-write boundary
@@ -72,9 +72,9 @@ from .texframe import newell, poly_flags_int, world_uv_frame
 
 class PreviewAbort(Exception):
     """A refusal the renderer can only reach mid-render, carried out to `dispatch`, which turns it into
-    a clean exit 2. Everything a `--faces` render can validate is validated in `dispatch` BEFORE any
+    a clean exit 2. Everything a `--mode` render can validate is validated in `dispatch` BEFORE any
     pixel is drawn; this exists for the cases that cannot be — an out-of-memory buffer at an uncapped
-    `--size`. So a `--faces` render is NOT fully validated before it starts."""
+    `--size`. So a `--mode` render is NOT fully validated before it starts."""
 
 
 _ORTHO_AXES: dict[str, tuple[int, int]] = {"top": (0, 1), "front": (0, 2), "side": (1, 2)}
@@ -85,7 +85,7 @@ _DEPTH: dict[str, tuple[float, float, float]] = {
 # Colours (RGB), tuned for the DARK background (see BG, #404040 — not literally black, but dark enough
 # that this tuning still holds); captions/markers/gutter labels lift to a mid grey legible on the dark
 # bg. BACK is UNUSED for wire edges since the 2026-08-31 facing-blind ruling above (kept only for its
-# few other callers — hidden/uncoloured-mode textured-edge tuples, tests pinning that it never
+# few other callers — hidden/uncoloured-mode fullbright-edge tuples, tests pinning that it never
 # appears in a wire render).
 WHITE = (255, 255, 255)
 FRONT = (235, 235, 235)   # visible faces — near-white (uncoloured default, legible on the dark bg)
@@ -277,7 +277,7 @@ class PointRender:
 
 @dataclass(frozen=True, kw_only=True)
 class TextureData:
-    """The decoded texture payload a `--faces textured` render draws from. `by_ref` maps a
+    """The decoded texture payload a `--mode fullbright` render draws from. `by_ref` maps a
     **casefolded** texture ref (FName semantics) to that texture's whole mip pyramid, each level as
     `(w, h, rgb, mask)`; every ref the scene uses is present, since an unreadable one refuses in
     `dispatch` before rendering. `masked` answers "does this face draw palette index 0 as a hole?" per
@@ -295,10 +295,10 @@ class FaceData:
     read off the game's class hierarchy. The fill needs it because a MOVER is never carved into the
     world whatever `CsgOper` it carries, so it escapes the subtract cull and fills in mover colour.
 
-    `solved` is the CSG solve output (`preview_native.SolvedWorld`) under `--faces textured`: the
-    surviving world-space surfaces + the mover overlay polys. `textured` draws THOSE, not each brush's
+    `solved` is the CSG solve output (`preview_native.SolvedWorld`) under `--mode fullbright`: the
+    surviving world-space surfaces + the mover overlay polys. `fullbright` draws THOSE, not each brush's
     own faces, so an additive brush not inside subtracted space is invisible (containment, not a
-    per-brush cull). It is `None` under any non-textured filled mode."""
+    per-brush cull). It is `None` under any non-fullbright filled mode."""
     movers: frozenset[str]
     textures: TextureData | None = None
     solved: object | None = None      # preview_native.SolvedWorld (kept opaque — no import cycle)
@@ -308,7 +308,7 @@ class FaceData:
 class PreviewData:
     """Everything `dispatch` resolves for one preview and `preview.py` only draws — the resolver-free
     seam. `points` maps a point actor's Name to its `PointRender`; a point actor absent from it draws
-    nothing. `faces` is `None` under `--faces wire` (which resolves nothing) and carries a `FaceData`
+    nothing. `faces` is `None` under `--mode wire` (which resolves nothing) and carries a `FaceData`
     under every filled mode."""
     points: dict[str, PointRender] = field(default_factory=dict)
     faces: FaceData | None = None
@@ -341,7 +341,7 @@ def classify_brush(actor: Actor, *, is_mover: bool | None = None) -> str:
 
     **`is_mover` decides HOW mover-ness is answered, and the two answers are not interchangeable.**
 
-    - `is_mover=None` (`--faces wire`, the default) → a NAME GUESS, `cls` basename ends in `Mover`.
+    - `is_mover=None` (`--mode wire`, the default) → a NAME GUESS, `cls` basename ends in `Mover`.
       That is deliberate: the real predicate (`movers.is_mover`) needs a `classindex.ClassIndex`, and
       `wire` is the mode that must keep working with no game install at all. The cost is that a mover
       whose class name does not end in `Mover` (`CEDoor`, `BreakableGlass`, the lowercase `TNM.*mover`
@@ -452,7 +452,7 @@ def _is_front(verts3d, view: str, iso_angle: float = 30.0) -> bool:
     """Does this face point at the camera, per its own WINDING (the Newell normal — not the stored
     `Normal`, which the engine recomputes from winding anyway)? Vertices are wound CCW-from-outside, so
     an outward normal pointing against the into-screen direction is camera-facing. On the solved
-    `textured` path this is the per-view backface cull; on `wire` it picks the front/back shade."""
+    `fullbright` path this is the per-view backface cull; on `wire` it picks the front/back shade."""
     d = _iso_depth(iso_angle) if view == "iso" else _DEPTH[view]
     n = newell(verts3d)
     return (n[0] * d[0] + n[1] * d[1] + n[2] * d[2]) < 0
@@ -641,7 +641,7 @@ def _blit(buf, size, cx, cy, pw, ph, tex, mask, tw, th, clip: tuple[int, int, in
                 _px(buf, size, x0 + dx, y0 + dy, (tex[si * 3], tex[si * 3 + 1], tex[si * 3 + 2]), clip)
 
 
-# ----- solid face fills (untextured/mover fills under `--faces textured`) -----
+# ----- solid face fills (untextured/mover fills under `--mode fullbright`) -----
 # A filled face is rasterized ONCE, into the RGB canvas plus a depth buffer, before any line art. The
 # two rules that make it correct are both spelled out on the functions below: EVEN-ODD scanline
 # coverage (a triangle fan bleeds outside the 0.1-0.6 % of real faces that are concave), and depth
@@ -719,7 +719,7 @@ def _affine_on_plane(f0, f1, f2, x0, y0, ux, uy, vx, vy, det):
     return (a, b, f0 - a * x0 - b * y0)
 
 
-# ----- textured face fills (`--faces textured`) ------------------------------
+# ----- fullbright face fills (`--mode fullbright`) ------------------------------
 # The texel path shares the depth buffer and occlusion of the untextured/mover fills; only the fill
 # differs: each pixel samples the face's own decoded texture through its authored UV frame.
 # Shade, key light, mip pick and the DEFAULT_GREY no-texture colour all match `render.rs` (`level
@@ -731,7 +731,7 @@ DEFAULT_GREY = (128, 128, 128)         # a poly with no `Texture` — matches re
 
 
 def _face_shade(v3) -> float | None:
-    """Per-face key-light brightness for `textured`, `0.55 + 0.45*|N·L|/|N|` with `N` the world Newell
+    """Per-face key-light brightness for `fullbright`, `0.55 + 0.45*|N·L|/|N|` with `N` the world Newell
     normal (§4.1), matching `render.rs`. None for a face `render.rs` also skips — fewer than 3 vertices
     or a degenerate (zero-length) normal — which the render loop drops with no fill."""
     if len(v3) < 3:
@@ -1587,7 +1587,7 @@ class _SceneGeom:
     edges: list          # (front, (a2,b2), front_rgb, back_rgb, alpha, face_key) — alpha<1 dims
     fills: list          # (v3, poly2d, rgb, dimmed) in SCENE ORDER — ONE list, so the coplanar tie-break
                          # cannot depend on `--focus`; `dimmed`=1 marks a de-emphasised brush's face
-    tex_faces: list      # (frame, mips|None, masked, shade|None) per `fills` entry, `textured` ONLY —
+    tex_faces: list      # (frame, mips|None, masked, shade|None) per `fills` entry, `fullbright` ONLY —
                          # index-aligned with `fills` so the texel loop pairs them; empty otherwise
     hi_edges: list       # ((a2,b2), vivid_rgb, face_key)
     vis_faces: list      # (face_key, v3, poly2d) per surviving face, FILLED MODES ONLY — the faces whose
@@ -1609,7 +1609,7 @@ class _SceneGeom:
 
 @dataclass(frozen=True, kw_only=True)
 class _SolvedOut:
-    """The `_scene_geometry` accumulators the solved (`--faces textured`) branch appends into. Held
+    """The `_scene_geometry` accumulators the solved (`--mode fullbright`) branch appends into. Held
     as one object so the branch cannot silently skip a channel; every list is the SAME object
     `_SceneGeom` returns, appended in place."""
     edges: list
@@ -1634,15 +1634,15 @@ def _poly_area_2d(vs) -> float:
 
 def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_polys, focus_cf,
                   hybrid, tints, mover_names, tex_data, out: _SolvedOut) -> None:
-    """Draw the CSG-solved world into the shared `_scene_geometry` accumulators for `--faces
-    textured`. Each surviving fragment carries its own WORLD-space verts (NO local→world transform)
+    """Draw the CSG-solved world into the shared `_scene_geometry` accumulators for `--mode
+    fullbright`. Each surviving fragment carries its own WORLD-space verts (NO local→world transform)
     and its SOURCE poly's authored UV frame, so a texture stays continuous and aligned across BSP
     splits. A per-view BACKFACE CULL drops each fragment whose post-CSG normal faces away from the
     camera (owner ruling 2026-08-03): bspcsg orients every surviving normal into empty space, so this
-    shows a subtracted room's interior (like UnrealEd's textured view) while a fully-buried add stays
+    shows a subtracted room's interior (like UnrealEd's fullbright view) while a fully-buried add stays
     hidden (containment already removed it) — UNLESS the fragment's `PolyFlags` carry `PF_TwoSided`
     or `PF_Portal` (`_CULL_EXEMPT`), the real editor's own exemption for a face meant to render from
-    both sides (sheets, banners, chain-link, water portals). `textured` draws NO wireframe, so
+    both sides (sheets, banners, chain-link, water portals). `fullbright` draws NO wireframe, so
     `edges` here only feed label placement; the sole line art is the `--highlight` outline. Movers
     draw as a filled magenta overlay against the same depth buffer (occluded by / occluding the
     solved world), backface-culled the SAME way (their authored winding is already outward-correct
@@ -1669,7 +1669,7 @@ def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_poly
             frame = world_uv_frame(actor, poly)
             if not all(math.isfinite(c) for pt in frame for c in pt):
                 raise PreviewAbort(
-                    f"--faces textured: actor {name!r} poly {idx} has a non-finite texture frame "
+                    f"--mode fullbright: actor {name!r} poly {idx} has a non-finite texture frame "
                     f"(Origin/TextureU/TextureV/Pan), so its UV cannot be sampled")
             ref = _poly_texture_ref(poly)
             mips = tex_data.by_ref[ref.casefold()] if ref is not None else None
@@ -1683,7 +1683,7 @@ def _solved_scene(solved, *, view, iso_angle, d_vec, annotations, highlight_poly
         face_key = (name, idx)
         out.pts.extend(vs)
         # fill rgb is DEFAULT_GREY: it is used only when the fragment is untextured (mips is None);
-        # a textured fragment samples its mip and ignores it.
+        # a fullbright fragment samples its mip and ignores it.
         out.fills.append((v3, vs, DEFAULT_GREY, 0 if lit else 1))
         out.tex_faces.append((frame, mips, masked, _face_shade(v3)))
         out.vis_faces.append((face_key, v3, vs))
@@ -1743,30 +1743,30 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
     """Run the per-actor projection loop and return `_SceneGeom`. Pure (no drawing). See
     `render_brushes_pgm` for the semantics of each accumulated list.
 
-    `faces` is the `--faces` MODE, one of two:
+    `faces` is the `--mode` MODE, one of two:
 
     - **`wire`** — the per-actor loop below projects EVERY face of every brush to an edge pair (no
       facing cull, `fills` empty); `_is_front` only picks the front/back wire shade. Needs no game
       content.
-    - **`textured`** — brush geometry is NOT drawn per actor: the loop SKIPS brush actors and
+    - **`fullbright`** — brush geometry is NOT drawn per actor: the loop SKIPS brush actors and
       `_solved_scene` draws the CSG-solved world (`FaceData.solved`) instead — the surviving surfaces
       with their source polys' textures + UV frames, a per-view backface cull, and the mover overlay.
       Point actors go through the loop on both modes."""
     from .rotation import actor_linear, actor_prepivot, local_offset
     filled = faces != "wire"
-    textured = faces == "textured"
+    fullbright = faces == "fullbright"
     face_data = render_data.faces
     if filled and face_data is None:
-        raise PreviewAbort(f"--faces {faces} needs the resolved face data (the mover set) on the "
+        raise PreviewAbort(f"--mode {faces} needs the resolved face data (the mover set) on the "
                            f"preview seam, and it arrived empty")
     mover_names = face_data.movers if face_data is not None else frozenset()
     tex_data = face_data.textures if face_data is not None else None
-    if textured and tex_data is None:
-        raise PreviewAbort("--faces textured needs the decoded texture payload on the preview seam, "
+    if fullbright and tex_data is None:
+        raise PreviewAbort("--mode fullbright needs the decoded texture payload on the preview seam, "
                            "and it arrived empty")
     solved = face_data.solved if face_data is not None else None
-    if textured and solved is None:
-        raise PreviewAbort("--faces textured needs the CSG solve output on the preview seam, and it "
+    if fullbright and solved is None:
+        raise PreviewAbort("--mode fullbright needs the CSG solve output on the preview seam, and it "
                            "arrived empty")
     edges: list = []
     fills: list = []
@@ -1800,9 +1800,9 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
                         pts.append(_project(tuple(d), view, iso_angle))
             points.append((actor, pr))
             continue
-        if textured:
+        if fullbright:
             continue        # brush geometry comes from the CSG solve, drawn in the solved branch below
-        # `wire` is the only per-actor brush path now (`textured` draws the solved world above). ONE CSG
+        # `wire` is the only per-actor brush path now (`fullbright` draws the solved world above). ONE CSG
         # key per actor decides the wire colour AND `is_solid` (occluders → decal grading). `wire`
         # answers mover-ness by the name guess — it must work with no game install (`classify_brush`).
         csg_key = classify_brush(actor)
@@ -1887,7 +1887,7 @@ def _scene_geometry(actors, *, view, iso_angle, annotations, highlight_polys, fo
             pts.append(pivot_2d)
         if brush_cands_2d:
             actor_points[actor.name] = brush_cands_2d   # kept on EVERY path — the grid-cell source
-    if textured:
+    if fullbright:
         _solved_scene(solved, view=view, iso_angle=iso_angle, d_vec=d_vec, annotations=annotations,
                       highlight_polys=highlight_polys, focus_cf=focus_cf, hybrid=hybrid, tints=tints,
                       mover_names=mover_names, tex_data=tex_data,
@@ -2318,7 +2318,7 @@ def _collect_cells(geom, hidden, faces, points, to_pxf, col_bounds, row_bounds, 
     actor's marker always draws, a `wire` face is never culled or depth-hidden, and a filled face is
     hidden when the cull dropped it (absent from `vis_faces`) or depth hid it (`hidden`).
 
-    Under `textured` a surface is absent because containment removed it (buried add) or the backface
+    Under `fullbright` a surface is absent because containment removed it (buried add) or the backface
     cull / depth dropped it; either way the actor still gets its cell from its projected centroid
     whether or not it drew.
 
@@ -2327,7 +2327,7 @@ def _collect_cells(geom, hidden, faces, points, to_pxf, col_bounds, row_bounds, 
     fact: under `wire` it is invariant (`drew` above is every actor with points, never touching
     `to_pxf`), but under a filled mode it comes from `_face_is_occluded` against the depth buffer, and
     the locator's gutter reserve changes `to_pxf` — so `hidden` can legitimately differ between the
-    locator on and off for the SAME scene under `--faces textured` (measured; see spec §3.4). Each
+    locator on and off for the SAME scene under `--mode fullbright` (measured; see spec §3.4). Each
     answer is honest about the image it was computed from; the two are not guaranteed to agree."""
     if faces == "wire":
         drew = set(geom.actor_points)                # nothing is culled/depth-hidden under wire
@@ -2374,9 +2374,9 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
                        locator_dims_out: dict | None = None) -> bytes:
     """Render a set of actors as a PPM (P6) on a dark background (`BG`, `#404040`).
 
-    `faces` is the `--faces` MODE, and it is a parameter rather than something read off `render_data`
-    because `render_data.faces is None` would be both `wire` and `textured`. `wire` (the default)
-    draws outlines only. `textured` instead draws the CSG-SOLVED world (`render_data.faces.solved`):
+    `faces` is the `--mode` MODE, and it is a parameter rather than something read off `render_data`
+    because `render_data.faces is None` would be both `wire` and `fullbright`. `wire` (the default)
+    draws outlines only. `fullbright` instead draws the CSG-SOLVED world (`render_data.faces.solved`):
     only surviving surfaces, each through its texture + authored UV frame, with a per-view backface
     cull and NO wireframe; it needs `render_data.faces` populated (see `_scene_geometry`/`_solved_scene`).
 
@@ -2515,7 +2515,7 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
         # whether a DE-EMPHASISED face won each pixel, and `_fade_dimmed` fades those pixels once at the
         # end: one blend per pixel with no second rasterizing pass and no scratch canvas.
         dim = _alloc_dim_mask(size) if any(f[3] for f in geom.fills) else None
-        # `fills` is populated only on the `textured` path (the solved world + mover overlay), so every
+        # `fills` is populated only on the `fullbright` path (the solved world + mover overlay), so every
         # fill has an index-aligned `tex_faces` entry; `wire` fills nothing and never reaches here.
         for i, (v3, vs, rgb, dimmed) in enumerate(geom.fills):
             plane = _face_depth_affine(v3, world_to_pxf, d_vec)
@@ -2558,9 +2558,9 @@ def render_brushes_pgm(actors: list[Actor], *, view: str = "top", size: int = 25
     for actor, pr in points:                        # under-layer: selection brackets + sprites + overlays
         _draw_point_underlay(buf, size, actor, pr, view, iso_angle, to_px, scale,
                              highlighted=actor.name in highlight_points, clip=clip)
-    # `textured` draws NO wireframe (decision 2.5): only `--highlight` outlines below are line art.
+    # `fullbright` draws NO wireframe (decision 2.5): only `--highlight` outlines below are line art.
     # `wire` draws every non-depth-hidden edge, back then front — same shade either way (facing-blind).
-    draw_wire = faces != "textured"
+    draw_wire = faces != "fullbright"
     for f, (a, b), fr, bk, al, fk in edges:         # back then front (same shade, facing-blind)
         if draw_wire and not f and fk not in hidden:
             _line(buf, size, to_px(a), to_px(b), bk, alpha=al, clip=clip)

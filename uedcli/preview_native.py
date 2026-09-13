@@ -532,7 +532,7 @@ def build_scene(level, search_files, index, *, defaults) -> tuple[list, list]:
         # itself is `bMasked` — the engine ORs a texture's PolyFlags onto every surface it's applied
         # to, so a masked texture masks with NO surface flag (owner-confirmed, `unrealed/quirks.md`
         # "a face draws index 0 as a hole iff poly.flags & PF_Masked OR its texture carries bMasked").
-        # Matches `cli/rendering.py`'s `--faces` gate.
+        # Matches `cli/rendering.py`'s `--mode` gate.
         masked = bool(flags & PF_MASKED) or textures.is_bmasked(tex_index)
         polys.append((verts_flat, list(base_w), list(tu), list(tv), list(pan), tex_index, masked,
                      flags, lightmap))
@@ -641,7 +641,7 @@ class SolvedSurface:
     BSP node that joined to no source poly (renders flat grey). `world_verts` is the fragment's
     ring, already in world space — NO local→world transform is applied again downstream.
     `poly_flags` is the surf's OWN merged actor+poly `PolyFlags` (real even when actor/poly_index
-    are None — a BSP node always has a surf) — the `actor diagram --faces textured` backface
+    are None — a BSP node always has a surf) — the `actor diagram --mode fullbright` backface
     cull's `PF_TwoSided`/`PF_Portal` exemption reads this, single-sourced with `level photo
     --native`'s own cull."""
     actor: object | None
@@ -652,7 +652,7 @@ class SolvedSurface:
 
 @dataclass(frozen=True)
 class SolvedWorld:
-    """The CSG solve output `actor diagram --faces textured` draws: the surviving world surfaces
+    """The CSG solve output `actor diagram --mode fullbright` draws: the surviving world surfaces
     plus the movers (excluded from world CSG, drawn as a separate overlay)."""
     world_surfaces: list  # list[SolvedSurface]
     mover_polys: list     # list[(world_verts, actor, poly)]
@@ -661,7 +661,7 @@ class SolvedWorld:
 def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
     """Run the native CSG solve over an ad-hoc actor list (in the order given — the actor-set order
     IS the CSG evaluation order) through the FAITHFUL `build_geometry_bspcsg` core, and return the
-    surviving world surfaces + the movers. This is the `actor diagram --faces textured` engine: the
+    surviving world surfaces + the movers. This is the `actor diagram --mode fullbright` engine: the
     world is solved in isolation from a SOLID world, so an add not inside subtracted space leaves no
     surface. `index` is a `classindex.ClassIndex`; movers are excluded from world CSG (raising
     `classindex.ClassRefError` straight through on an unresolvable class). Raises `NativePreviewError`
@@ -671,7 +671,7 @@ def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
         uedcli_native = import_native()
     except ImportError:
         raise NativePreviewError(
-            "the uedcli_native extension is not built — `actor diagram --faces textured` needs it "
+            "the uedcli_native extension is not built — `actor diagram --mode fullbright` needs it "
             "(build with `maturin develop`, or run bin/test once)") from None
 
     brushes, join = [], []
@@ -713,10 +713,14 @@ def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
 
 def render_shots(*, level, shots: list[Shot], out_dir: Path, index, defaults,
                  size: tuple[int, int] = DEFAULT_SIZE, fov: float = DEFAULT_FOV,
-                 search_files=None) -> int:
+                 search_files=None, texture_use: bool = False) -> int:
     """Render every SHOT natively into `out_dir` (created if absent). Returns the count
     written. All actor refs resolve up front (all-or-nothing) BEFORE the build. `defaults` is a
-    `classdefaults.ClassDefaults`, needed by `build_scene` to light world BSP surfaces."""
+    `classdefaults.ClassDefaults`, needed by `build_scene` to light world BSP surfaces.
+
+    `texture_use=True` is `--mode polys`: UnrealEd's real "Texture Use" render (`REN=3`; RE'd in
+    `dev/docs/spikes/2026-09-13-polys-render-mode-re/spike.md`) — a flat, unlit swatch per texture
+    identity, no shading, no lighting. See `uedcli-native/src/render.rs`'s `texture_use_color`."""
     resolved: list[ResolvedShot] = []
     for shot in shots:                                   # all-or-nothing resolution
         try:
@@ -753,7 +757,7 @@ def render_shots(*, level, shots: list[Shot], out_dir: Path, index, defaults,
             sky_loc = sky_actor.location or (0.0, 0.0, 0.0)   # Actor.location is Vec3 | None
             sky = (tuple(float(c) for c in sky_loc), sky_fwd, sky_right, sky_up)
         rgb = uedcli_native.render_frame(polys, textures, camera,
-                                         (int(size[0]), int(size[1])), sky)
+                                         (int(size[0]), int(size[1])), sky, texture_use)
         img = Image.frombytes("RGB", (int(size[0]), int(size[1])), rgb)
         shot_src = shots[i]
         img.save(out_dir / shot_filename(shot_src, i, taken))
