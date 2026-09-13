@@ -75,11 +75,23 @@ def test_realpkg_strict_byte_exact(pkg: str):
     now the sole gather order — see its docstring): the export-table tie in
     `dev/docs/board/inbox/davesbrushbuilders-export-table-qsort-tie/` was never a qsort bug, it was
     the export gather still using the old binned `_decl_forward` walk after the name gather had
-    already been fixed to use the true one. `ExtendedBuilders` still fails `gate()` on the SAME root
-    cause as before — a DIFFERENT, unresolved qsort-tie-permutation among a larger group of real-pool
-    + own-new names — but its compiled bytes did shift: `compile_package_dir` always feeds the export
-    gather this same AST-derived walk, so its total size now happens to match golden's (11429 B, was
-    11424 B) even though content still diverges. Open."""
+    already been fixed to use the true one. `ExtendedBuilders` (two classes) also pins a fix, in the
+    SAME pass as `DavesBrushBuilders`'s enum-vs-property one but one level up the class hierarchy: a
+    class's defaultproperties tag values (`late_name_refs`) now split and flush PER CLASS, not just
+    for the first class export nor in one trailing pass over the whole package — see
+    `test_extendedbuilders_defaultproperties_values_land_per_class`. `ExtendedBuilders` still fails
+    `gate()` outright: first diff moved from name-table index 12 (`Core` vs `Vertex3f`, pre-fix) to
+    index 7 (`BuildCube` vs `GetVertexCount`, both refcount 3) — the per-class fix changed the
+    array's own-new tail, and `msvc_qsort`'s median-of-3 pivot is sensitive to the WHOLE array (not
+    just the local tied group), so a tail change can shift an unrelated front tie's permutation. This
+    is the SAME bug class as `DavesBrushBuilders`'s (now-fixed) enum-tag scatter and the campaign's
+    other large-tied-group permutations: every name in the diverging range genuinely ties on
+    refcount (verified against both `mine`'s and golden's own decoded counts, which agree exactly),
+    so the remaining gap is gather-order sensitivity within an unstable sort over ~90 own-new names
+    (mostly never-referenced function params/locals across BOTH classes, refcount 0) that a live
+    `AllocateNameEntry` capture — not more static reasoning — would be needed to pin, per
+    `findings-ordering-re.md`'s own conclusion on the enum-tag case. Not attempted here (no live
+    UED22/winedbg environment available in this sandbox)."""
     r = gate(_compile(pkg), (_FIX / pkg / f"{pkg}.u").read_bytes())
     assert r.passed, f"{pkg}: " + " | ".join(r.messages)
 
@@ -138,6 +150,36 @@ def test_davesbrushbuilders_locals_register_inline_not_deferred():
 
     assert idx("Extrapolate3") < idx("im") < idx("Extrapolate4")
     assert idx("Extrapolate5") < idx("dR") < idx("BuildOctahedron")
+
+
+def test_extendedbuilders_defaultproperties_values_land_per_class():
+    """`ExtendedBuilders` is two classes (`ExtParallelepiped`, `ExtWave`), each with its own
+    `defaultproperties GroupName="..."` (`Parellelepiped`/`Wave`, own-new value-only names). Before
+    this fix, `reorder._Decoder.objinputs()` only split a class's header refs from its
+    defaultproperties tag refs (`late_name_refs`) for `self.class_i` — the FIRST class export by
+    array position — so the OTHER class's defaultproperties tag value was gathered as an ordinary
+    (early) `name_refs` entry, registering right after that class's header instead of after its own
+    members. `ordering._gather_names` also ran late refs in ONE trailing pass over every class
+    combined, which for a multi-class package defers the FIRST class's own defaultproperties past
+    the SECOND class's entire body — wrong, since UCC compiles one class fully (through its own
+    defaultproperties) before starting the next (`compile_package_dir`'s own sequencing).
+
+    Fix: `objinputs()` splits every class export (`e["cls"] == 0`), not just `self.class_i`; `
+    _gather_names` flushes each class's `late_name_refs` right before the NEXT class object starts
+    (or at the very end, for the last class) instead of in one combined trailing pass. Golden has
+    `Parellelepiped` sandwiched between `ExtParallelepiped`'s own last property (`DipY`) and
+    `ExtWave`'s first (`WaveHeight`), and `Wave` between `ExtWave`'s last property (`MergeCoplanars`)
+    and the end of the name table's own-new tail — both now reproduced byte-exact (this fix does not
+    close `ExtendedBuilders`'s remaining, separate qsort-tie-permutation divergence — see
+    `test_realpkg_strict_byte_exact`'s docstring)."""
+    from uedcli.upackage import _parse_package
+
+    mine = _compile("ExtendedBuilders")
+    golden = (_FIX / "ExtendedBuilders" / "ExtendedBuilders.u").read_bytes()
+    mn = list(_parse_package(mine, "<mine>", "mine").names)
+    gn = list(_parse_package(golden, "<golden>", "golden").names)
+    for value in ("Parellelepiped", "Wave"):
+        assert mn.index(value) == gn.index(value), value
 
 
 # ── docker-gated fresh rebuild ────────────────────────────────────────────────────────────────────

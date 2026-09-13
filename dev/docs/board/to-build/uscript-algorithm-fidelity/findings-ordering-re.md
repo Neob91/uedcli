@@ -448,3 +448,42 @@ multi-class cross-class registration-order model is also unverified. No regressi
 uscript suite, 217 passed (was 216). Full detail + the fixed board item:
 `dev/docs/board/done/uscript-name-order-enum-vs-property/`.
 
+## FIXED (2026-09-13): ExtendedBuilders's multi-class registration-order model — the cross-class
+## piece flagged above as unverified
+
+Confirmed and fixed: `reorder._Decoder.objinputs()` split a class's header refs from its
+defaultproperties tag refs (`late_name_refs`) only for `self.class_i` (the first class export by
+array position, not necessarily the first class in true compile order) — the OTHER class in a
+multi-class package routed through the merged `_class_streams` path instead, so its
+defaultproperties tag value (`ExtendedBuilders`'s own `GroupName="Parellelepiped"`/`"Wave"`, both
+own-new) registered as an ordinary early ref right after that class's header, not after its own
+members. `ordering._gather_names` compounded this: it flushed `late_name_refs` in ONE trailing pass
+over the whole package, which for a multi-class compile defers the FIRST class's own
+defaultproperties past the SECOND class's entire body — wrong, since a multi-class package compiles
+one class fully (through its own defaultproperties) before starting the next
+(`compile_package_dir`'s own sequencing, confirmed via the alphabetical fixture filenames matching
+`_compile_order`'s output: `ExtParallelepiped` before `ExtWave`, matching golden's own placement of
+`Parellelepiped` immediately before `ExtWave`'s first property).
+
+Fix: `objinputs()` splits every class export (`e["cls"] == 0`), not just `self.class_i`;
+`_gather_names` flushes each class's `late_name_refs` right before the next class object starts (or
+at the end, for the last class). Verified: `Parellelepiped`/`Wave` now land at golden's exact
+name-table index (`test_extendedbuilders_defaultproperties_values_land_per_class`).
+
+**Does NOT close `ExtendedBuilders`**. The first `gate()` diff moved from name-table index 12
+(`Core` vs `Vertex3f`) to index 7 (`BuildCube` vs `GetVertexCount`, both refcount 3) — this fix
+changed the array's own-new TAIL, and `msvc_qsort`'s median-of-3 pivot reads `a[lo]`/`a[mid]`/`a[hi]`
+of the CURRENT recursion slice, so a tail change can shift an unrelated front tie's permutation
+without either tie's own local comparator values changing. Verified this isn't a counting/gather
+bug for the front group specifically: decoded BOTH `mine`'s own bytes and golden's bytes
+independently through `_reference_counts` and got IDENTICAL refcounts and IDENTICAL
+`default_global_index()` lookups for all 11 names in the diverging range (`BuildCube`,
+`GetVertexCount`, `Editor`, `Core`, `GroupName`, `Vertex3f`, `Width`, `System`, `EndBrush`,
+`Breadth`, `BeginBrush`) — so the divergence is not in what these entries ARE, only in what
+surrounds them in the full gather array at qsort time. The interacting tail region is a ~90-item
+refcount-0 tie (function params/locals across BOTH classes that are addressed by object ref in
+bytecode, never referenced by `<<FName`, so they never earn a real name refcount) — the same shape
+as `DavesBrushBuilders`'s enum-tag scatter above, which needed a live `AllocateNameEntry` capture to
+resolve, not static reasoning. Not attempted this pass (no live UED22/winedbg environment
+available). Board item: `dev/docs/board/done/extendedbuilders-multi-class-defaultproperties/`.
+

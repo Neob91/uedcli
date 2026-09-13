@@ -232,12 +232,14 @@ def _gather_names(objs, creation_order, by):
     the declaration that emits it is processed, same as UCC's compiler interning it inline; RE'd from
     `RahnemBrushBuilders` (package self-name sorts immediately before the first `var()` it precedes in
     golden, not after the whole class body). `late_name_refs` (the defaultproperties tag stream) is a
-    SECOND, later registration point — the whole block compiles after every member/function in the
-    source, so it gathers in its own trailing pass, after the main walk (also RE'd from
-    `RahnemBrushBuilders`: `GroupName="Landscape"` sorts after a function param declared later in
-    source than the property it defaults). Only relative order among names absent from `global_index`
-    matters — anything with a real global index is re-sorted by that below regardless of gather
-    position."""
+    SECOND, later registration point — the whole block compiles after every member/function of its
+    OWN class, so it gathers once that class's own main walk is done, not deferred past the next
+    class's compile unit (a multi-class package compiles one class fully — declarations through
+    defaultproperties — before starting the next; RE'd from `RahnemBrushBuilders`: `GroupName=
+    "Landscape"` sorts after a function param declared later in source than the property it
+    defaults). For a single-class package this is still one flush after the whole (only) class's main
+    walk, unchanged. Only relative order among names absent from `global_index` matters — anything
+    with a real global index is re-sorted by that below regardless of gather position."""
     seen: list[str] = []
 
     def add(n: str | None) -> None:
@@ -245,10 +247,18 @@ def _gather_names(objs, creation_order, by):
             seen.append(n)
 
     add("None")
+    pending_late: list[str] = []
+    seen_class = False
     for nm in creation_order:
         o = by.get(nm)
         if o is None:
             continue
+        if o.class_name == "Class":
+            if seen_class:                          # a new class's compile unit starts: the
+                for r in pending_late:                # previous class's own defaultproperties
+                    add(r)                            # registered before it, not after every
+                pending_late = []                     # class in the package.
+            seen_class = True
         if o.class_name == "Class" and len(o.name_refs) > 1:
             # A class's PackageImports[0] is always its own package's self-reference (compile-model.md:
             # "own package first"). RE'd 2026-09-13 from a live `AllocateNameEntry` capture of
@@ -260,6 +270,7 @@ def _gather_names(objs, creation_order, by):
         add(o.outer)
         for r in o.name_refs:
             add(r)
+        pending_late.extend(o.late_name_refs)
     # Imports are not in creation_order but their Name/Outer and Class.Name/Class.Outer are gathered
     # too (the flag pass walks the whole object array). Stock names re-sort by global index below, so
     # the order they enter here is irrelevant; only their presence is.
@@ -272,10 +283,6 @@ def _gather_names(objs, creation_order, by):
         co = by.get(o.class_name)
         if co is not None:
             add(co.outer)
-    for nm in creation_order:
-        o = by.get(nm)
-        if o is None:
-            continue
-        for r in o.late_name_refs:
-            add(r)
+    for r in pending_late:                            # the LAST (or only) class's defaultproperties
+        add(r)
     return seen

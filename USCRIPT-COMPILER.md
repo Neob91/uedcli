@@ -102,7 +102,7 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 |---|---|---|---|---|
 | FrameBuilder | UED22 | 1 | ✅ | |
 | RahnemBrushBuilders | UED22 | 1 | ✅ | pins the value-only-name gather fix |
-| ExtendedBuilders | UED22 | 2 | perm only | name-table qsort-tie-permutation among `Core`/`Editor`/`System`/self-name/imports — same bug class as `DavesBrushBuilders`'s (now-fixed) name-table tie, larger group, unresolved; its compiled bytes shifted with the export-gather fix below (now 11429 B, matching golden's size) but it still fails `gate()` on the same root cause |
+| ExtendedBuilders | UED22 | 2 | perm only | a per-class defaultproperties-timing bug is FIXED (2026-09-13, see below) — its two classes' own-new `GroupName` default values now land at the byte-exact right spot; still fails `gate()` on a separate, still-open large-tied-group qsort permutation (first diff now at name-table index 7, was 12) |
 | DavesBrushBuilders | UED22 | 1 | ✅ | the export-gather bug (see Open items) turned out to be the same top-level-interleaving bug one level up — fixed by feeding both gathers the same AST-derived walk |
 | Fire | UT99 | 6 (native) | perm only | strict-gate diff traced to compact-index width, itself a consequence of UT99 needing its OWN name-pool extraction (`ENGINE_NAME_POOL`/`HIGHLIGHT_NAME_POOL` are UED22-`core.dll`-specific); not a new bug |
 | ConvTest + siblings | DXORIG | 1 (+2 auto) | ✅ | conversation import proof |
@@ -187,6 +187,32 @@ strict gate autonomously.
   in the fix: `decl_order` doesn't place a HOISTED nested enum/struct (one declared inline inside a
   struct body) correctly — `parser.py`'s own comment on `self._hoisted` admits it lands at "the same
   (unresolved) position as in `members`." Not exercised by any current fixture; no test covers it.
+- **`ExtendedBuilders`'s multi-class defaultproperties-timing bug is FIXED (2026-09-13)**: a THIRD
+  instance of the same "gather order isn't reproducible from decoded bytes alone" bug class, one
+  level up again — this time across a CLASS boundary, which a single-class fixture can never
+  exercise. `reorder._Decoder.objinputs()` only split a class's header refs from its
+  defaultproperties tag refs (`late_name_refs`) for `self.class_i` (the first class export by array
+  position); every OTHER class in a multi-class package fell through to the merged `_class_streams`
+  path, so its defaultproperties tag VALUE (`ExtendedBuilders`'s `GroupName="Parellelepiped"`/
+  `GroupName="Wave"`, both own-new) registered as an ordinary early ref right after that class's
+  header, instead of after its own members. `ordering._gather_names` compounded this: it flushed
+  `late_name_refs` in ONE trailing pass over the WHOLE package, which for a multi-class compile
+  defers the FIRST class's own defaultproperties past the SECOND class's entire body — wrong, since
+  `compile_package_dir` compiles one class fully (through its own defaultproperties) before starting
+  the next. Fix: `objinputs()` splits every class export (`e["cls"] == 0`), not just `self.class_i`;
+  `_gather_names` flushes each class's `late_name_refs` right before the next class object starts (or
+  at the very end, for the last class). `Parellelepiped`/`Wave` now land at golden's exact name-table
+  index — `test_extendedbuilders_defaultproperties_values_land_per_class`. `ExtendedBuilders` still
+  fails `gate()` outright: the first diff moved from name-table index 12 (`Core` vs `Vertex3f`) to
+  index 7 (`BuildCube` vs `GetVertexCount`, both refcount 3) — this fix changed the array's own-new
+  tail, and `msvc_qsort`'s median-of-3 pivot is sensitive to the WHOLE array, not just a local tied
+  group, so a tail change can (and did) shift an unrelated front tie's permutation. Investigated
+  further: every name in the diverging front range genuinely ties on refcount (verified identical
+  between `mine`'s and golden's own independently-decoded counts), and the tail region it interacts
+  with is a ~90-item refcount-0 tie (mostly never-referenced function params/locals across BOTH
+  classes) — the SAME bug class as `DavesBrushBuilders`'s enum-tag scatter, which `findings-ordering-
+  re.md` already concluded needs a live `AllocateNameEntry` capture, not more static reasoning, to
+  pin. Not attempted here (no live UED22/winedbg environment in this sandbox).
 - **Calling an inherited `final` function, and reading an inherited member variable, are both FIXED
   (2026-09-13)**: an ordinary call to a function the class being compiled doesn't itself
   declare/override, any `Super.Foo()` call (always an ancestor's function, even when the current

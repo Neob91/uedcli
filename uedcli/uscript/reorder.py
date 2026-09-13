@@ -78,8 +78,6 @@ class _Decoder:
         kind = self.class_disp(i0)
         pos, end = e["soff"], e["soff"] + e["ssize"]
         buf = self.buf
-        if e["cls"] == 0:
-            return self._class_streams(pos, end)
         names: list[str] = []
         objs: list[str] = []
 
@@ -162,13 +160,6 @@ class _Decoder:
                 names.append(t.struct_name)
         names.append("None")                            # tagged-list terminator
         return names, objs
-
-    def _class_streams(self, pos: int, end: int) -> tuple[list[str], list[str]]:
-        """A non-`self.class_i` class export's ref stream (multi-class packages, e.g.
-        `ExtendedBuilders`) — `objinputs()` only special-cases `self.class_i` for the
-        `late_name_refs` split, so every OTHER class still routes through here via `streams()`."""
-        (names, objs), (tnames, tobjs) = self._class_split_streams(pos, end)
-        return names + tnames, objs + tobjs
 
     def _class_split_streams(self, pos: int, end: int) -> tuple[tuple[list[str], list[str]],
                                                                 tuple[list[str], list[str]]]:
@@ -326,11 +317,11 @@ class _Decoder:
         objs: list[ObjInput] = []
         for i0 in range(len(self.p.exports)):
             late_names: tuple[str, ...] = ()
-            if i0 == self.class_i:
-                e = self.p.exports[i0]
-                (names, orefs), (late_names, late_orefs) = self._class_split_streams(
-                    e["soff"], e["soff"] + e["ssize"])
-                orefs = orefs + late_orefs
+            if self.p.exports[i0]["cls"] == 0:            # every class, not just self.class_i --
+                e = self.p.exports[i0]                     # a multi-class package's OTHER classes
+                (names, orefs), (late_names, late_orefs) = self._class_split_streams(  # need the
+                    e["soff"], e["soff"] + e["ssize"])      # same header/tail split (see
+                orefs = orefs + late_orefs                  # `_gather_names`'s per-class flush).
             else:
                 names, orefs = self.streams(i0)
             objs.append(ObjInput(name=self.ekey(i0), display=self.edisp(i0),
