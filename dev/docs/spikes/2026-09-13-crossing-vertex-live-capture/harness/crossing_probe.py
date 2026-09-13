@@ -179,7 +179,7 @@ disable 1
 break *__FPLANE_EXIT__
 commands
 silent
-printf "FPLANE_EXIT  this=%#x "
+printf "FPLANE_EXIT  this=%#x ", $esi
 {_dump_vec3("Normal", "$esi+0")}
 printf " W=(%08x) [%.9g]", *(unsigned int*)($esi+0xc), *(float*)($esi+0xc)
 printf "\\n"
