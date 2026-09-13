@@ -15,6 +15,14 @@ corruption and tamper detection. uedcli reads and writes the T3D files and never
 ([`trunk-and-editor.md`](trunk-and-editor.md)). Work that was never committed is protected only by the
 mechanisms below, like any other uncommitted file.
 
+### The GUI keeps an audit-snapshot store — the one exemption
+
+This "no snapshot/history" rule is about the **CLI**. The interactive GUI (`uedcli serve`, board
+item `uedcli-human-gui`) is exempt for one purpose: it keeps an automatic audit-snapshot store of
+the trunk (model-side, under `.uedcli/`, LRU-pruned) so a person can review what changed — human or
+AI, git repo or not — actor by actor. It is an editor convenience, not a recovery mechanism: git
+stays the recovery route, and the clobber guards below still apply to every GUI write.
+
 ### A destination that already exists is never written over silently
 
 Every verb that **creates** something at a named destination refuses when that destination exists —
@@ -78,7 +86,8 @@ Several agent sessions work one project at once, so every trunk write assumes a 
 **Recovery and backups**
 - **A uedcli-side backup of the build artifact** — the authored work is in git and the map file
   regenerates.
-- **A `backups/` copy of the written T3D tree** — git already holds the prior committed state.
+- **A `backups/` copy of the written T3D tree** — git already holds the prior committed state. *(The
+  GUI's audit-snapshot store is the sole exception; see above.)*
 - **The name guards A/B and the level-name-matching guard family** — level identity, rename and
   history are git's job; a blunt "never write over an existing destination" covers the real risk with
   a fraction of the surface.
