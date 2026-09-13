@@ -122,12 +122,24 @@ class Symbol:
 
 @dataclass(frozen=True, kw_only=True)
 class CallTarget:
-    """A resolved call target — script (Virtual/Final) or native — with its signature."""
+    """A resolved call target — script (Virtual/Final) or native — with its signature. `owner` is the
+    class that actually DECLARES the function, set only when that isn't the class being compiled (an
+    inherited function reached via a `ClassGraph`, not the AST of the current class) — a final call to
+    it needs an object-ref import, keyed by (owner, name), rather than a same-class export ref."""
     name: str
     is_final: bool
     native_index: int | None
     param_types: tuple[str, ...]
     return_type: str | None
+    owner: str | None = None
+
+
+def _final_call_ident(tgt: CallTarget) -> str:
+    """The `EX_FinalFunction` obj identity for `tgt` — a bare name for the class's own function
+    (resolves to a same-package export), else `func:<owner>.<name>` so `compile.py` knows to import
+    the function object from its declaring class (matches `_super_func_import`'s own key format, so
+    the two mechanisms dedupe onto one import when both name the same inherited function)."""
+    return tgt.name if tgt.owner is None else f"func:{tgt.owner}.{tgt.name}"
 
 
 def _target_of(x) -> CallTarget:
@@ -136,10 +148,10 @@ def _target_of(x) -> CallTarget:
     if isinstance(x, LocalFunc):
         return CallTarget(name=x.name, is_final=x.is_final, native_index=x.native_index,
                           param_types=x.param_types, return_type=x.return_type)
-    # a natives.FuncBody
+    # a natives.FuncBody — declared on some other class (own-class lookups never reach here)
     return CallTarget(name=x.name, is_final=x.is_final,
                       native_index=x.inative if x.is_native else None,
-                      param_types=x.param_types, return_type=x.return_type)
+                      param_types=x.param_types, return_type=x.return_type, owner=x.class_name)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -918,12 +930,13 @@ class _Lowerer:
         if tgt is not None:
             coerced = self._coerce_args(arg_toks, arg_types, tgt.param_types)
             ret = tgt.return_type or "none"
+            ident = _final_call_ident(tgt)
         elif arg_toks:
             raise LowerError(f"unresolved super call {base_cls}.{name} with args")
         else:
-            coerced, ret = arg_toks, "none"
+            coerced, ret, ident = arg_toks, "none", name
         run = tuple(coerced) + (Tok(EX_END_FUNCTION_PARMS),)
-        return Tok(EX_FINAL_FUNCTION, (("obj", name), ("parms", run))), ret
+        return Tok(EX_FINAL_FUNCTION, (("obj", ident), ("parms", run))), ret
 
     def _lower_args(self, args) -> tuple[list[Tok], list[str]]:
         toks: list[Tok] = []
@@ -977,7 +990,7 @@ class _Lowerer:
             return _emit_native(tgt.native_index, tgt.name, coerced), ret
         run = tuple(coerced) + (Tok(EX_END_FUNCTION_PARMS),)
         if tgt.is_final:
-            return Tok(EX_FINAL_FUNCTION, (("obj", tgt.name), ("parms", run))), ret
+            return Tok(EX_FINAL_FUNCTION, (("obj", _final_call_ident(tgt)), ("parms", run))), ret
         return Tok(EX_VIRTUAL_FUNCTION, (("name", tgt.name), ("parms", run))), ret
 
     # ── helpers ───────────────────────────────────────────────────────────────
@@ -1010,11 +1023,20 @@ class _Lowerer:
 def canon(tok: Tok) -> Tok:
     """Casefold every obj/name identity in a token tree. UE1 `FName` is case-insensitive but the
     editor spells locals/params from its boot global name pool (e.g. `A`, `X`), not the source — the
-    owner+opus-blessed FName-case exclusion. Comparing canon() forms ignores that spelling."""
+    owner+opus-blessed FName-case exclusion. Comparing canon() forms ignores that spelling.
+
+    An `EX_FinalFunction` obj identity for an inherited function carries a `func:<Class>.<Name>`
+    qualifier (`_final_call_ident`) so `compile.py`'s `resolve_inv` can find the right cross-class
+    import — but the real compiled bytecode only ever stores the target object's own bare NAME
+    (`upackage.Package.name_of_ref` never qualifies it), so a decoded golden token has just `<name>`.
+    Strip the qualifier here, not at the lowering site, so the qualified form still does its real job
+    (disambiguating the import) right up until the moment two token trees are compared as data."""
     parts = []
     for part in tok.parts:
         match part:
             case ("obj", ident) | ("name", ident):
+                if part[0] == "obj" and ident.startswith("func:") and "." in ident:
+                    ident = ident.rsplit(".", 1)[1]
                 parts.append((part[0], ident.casefold()))
             case ("sub", t):
                 parts.append(("sub", canon(t)))

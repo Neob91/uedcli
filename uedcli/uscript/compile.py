@@ -31,8 +31,9 @@ from .ast import ClassDecl, ConstDecl, EnumDecl, FuncDecl, StateDecl, StructDecl
 from .bytecode import Tok, encode_script
 from .crc import script_text_crc
 from .env import InstallEnv
-from .lower import (EX_LABEL_TABLE, LowerError, Scope, build_scope, consts_of, enum_type_names,
-                    enums_of, local_funcs_of, lower_function, lower_state_body, members_of, _mem_size)
+from .lower import (EX_FINAL_FUNCTION, EX_LABEL_TABLE, LowerError, Scope, build_scope, consts_of,
+                    enum_type_names, enums_of, local_funcs_of, lower_function, lower_state_body,
+                    members_of, _mem_size)
 from .model import (ClassBody, CompiledPackage, ConstBody, Dependency, EnumBody, Export, FunctionBody,
                     Import, Name, ObjectBody, PropertyBody, StateBody, StructBody, TextBufferBody,
                     TextureBody, TextureMip)
@@ -617,6 +618,7 @@ def _build_one_state(b: _Build, decl: ClassDecl, state: StateDecl, super_name: s
         toks = lower_state_body(state, scope, catalog)
     except LowerError as e:
         raise NotImplementedError(f"cannot lower state {state.name!r}: {e}") from e
+    _register_final_call_imports(b, toks)
     b.states[skey] = _State(key=skey, name=state.name, class_key=b.okey(f"class:{decl.name}"),
                             line=line, text_pos=text_pos, toks=tuple(toks),
                             script_size=sum(_mem_size(t) for t in toks))
@@ -688,6 +690,7 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
         toks = []
 
     _register_struct_member_imports(b, toks, _struct_var_map(b, fkey), _member_graph(b))
+    _register_final_call_imports(b, toks)
 
     b.funcs[fkey] = _Func(key=fkey, name=func.name, class_key=b.okey(f"class:{decl.name}"),
                           line=line, text_pos=text_pos,
@@ -1320,6 +1323,32 @@ def _register_struct_member_imports(b: _Build, toks, name_to_struct: dict[str, s
             if st is None:
                 raise NotImplementedError(f"struct-member access .{fld}: owning struct unresolved")
             _add_struct_member_import(b, graph, st, fld)
+        for kind, val in t.parts:
+            if kind == "sub":
+                walk(val)
+            elif kind == "parms":
+                for s in val:
+                    walk(s)
+
+    for t in toks:
+        walk(t)
+
+
+def _register_final_call_imports(b: _Build, toks) -> None:
+    """After lowering, import the target of every INHERITED final-function call (an ordinary call to a
+    function the class being compiled doesn't itself declare/override, and a `super.Foo()` call, which
+    always targets an ancestor). `lower.py` marks such a call's obj identity `func:<Class>.<Name>`
+    (never a bare identifier, which is reserved for the class's own function, resolved as a same-
+    package export) — the same key format `_super_func_import` uses for an override's SuperField, so
+    the two mechanisms dedupe onto one import when both name the same inherited function."""
+    def walk(t) -> None:
+        if t.op == EX_FINAL_FUNCTION:
+            ident = next((v for k, v in t.parts if k == "obj"), None)
+            if ident is not None and ident.startswith("func:") and ident not in b.imports:
+                owner_cls, func_name = ident[len("func:"):].rsplit(".", 1)
+                outer = _add_import(b, owner_cls)
+                b.imports[ident] = _ImportSpec(class_package="Core", class_name="Function",
+                                               outer=outer, object_name=func_name)
         for kind, val in t.parts:
             if kind == "sub":
                 walk(val)

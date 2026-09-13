@@ -17,6 +17,10 @@ Fixtures (each isolates a compiler gap fixed for the first UT99 packages):
                      byte ordinal against the inherited `ENetRole`.
   - `UscTextPos`   - function Line/TextPos located by the actual declaration, not a bare name-`(`
                      substring (here `Beta` is called before it is declared).
+  - `UscInheritFinal` - calling an inherited `final` function never overridden locally (an ordinary
+                     call and a `Super.` call to the SAME name as a local override), both needing an
+                     import of the function object from its declaring class (`UWindowDialogClientWindow`
+                     / `UWindowWindow`) — the real-world case is `GiveMeItems`' `GMIClientWindow.uc`.
 """
 from __future__ import annotations
 
@@ -38,7 +42,11 @@ _PKG_MAGIC = 0x9E2A83C1
 _FIX = Path(__file__).resolve().parent / "fixtures" / "uscript" / "ut99"
 
 # (package, export count) - the byte-parity corpus; count pins export-identity coverage.
-_PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12)]
+_PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritFinal", 3)]
+
+# Extra stock EditPackages a fixture's super chain needs loaded (`_edit_packages_upto`'s
+# content-safe base only covers Core/Engine/Editor) — only needed for the DOCKER-gated rebuild.
+_DEPS: dict[str, tuple[str, ...]] = {"UscInheritFinal": ("UWindow",)}
 
 
 def _docker_up() -> bool:
@@ -87,7 +95,7 @@ def test_ut99_offline_byte_exact(pkg: str, exports: int):
 @pytest.mark.parametrize("pkg,exports", _PACKAGES)
 def test_ut99_matches_fresh_ucc(pkg: str, exports: int, tmp_path):
     with ut99_container(state_dir=tmp_path) as c:
-        fresh = ucc_compile_ut99(c, pkg, _sources(pkg))
+        fresh = ucc_compile_ut99(c, pkg, _sources(pkg), deps=_DEPS.get(pkg, ()))
     r = perm_gate(_compile(pkg), fresh)
     assert r.passed, f"{pkg} vs fresh UCC: " + " | ".join(r.messages)
 

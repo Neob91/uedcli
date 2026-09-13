@@ -42,14 +42,16 @@ _WINE_TIMEOUT = 300.0                       # UT99 compiles load a big substrate
 _EXFIL_TIMEOUT = 60.0
 
 
-def _edit_packages_upto(ini_text: str, package: str) -> str:
+def _edit_packages_upto(ini_text: str, package: str, deps: tuple[str, ...] = ()) -> str:
     """Return `ini_text` with the `[Editor.EditorEngine]` EditPackages list trimmed so `<package>` is
     the LAST entry. Deps stay (they precede the target in the CD's build order and load as prebuilt
     `.u`, no `Classes/` → not recompiled); every entry AFTER the target is dropped so `UCC make`'s
     dependent-invalidation cascade can't reach a stock package with no `Classes/` dir and abort. If
     the target isn't in the CD list, it is appended to the content-safe base (up to `Editor`) rather
     than the full list — the tail (Botpack, …) can't even LOAD here without content packages, so
-    keeping it would abort the build before reaching the target."""
+    keeping it would abort the build before reaching the target. `deps` names extra stock packages
+    (e.g. `UWindow`, for a `UWindow*`-derived class) the target's own super chain needs loaded that
+    the content-safe base drops — appended (in the CD's own order, deduped) right before the target."""
     def is_ep(ln: str) -> bool:
         return ln.strip().casefold().startswith("editpackages=")
 
@@ -59,7 +61,8 @@ def _edit_packages_upto(ini_text: str, package: str) -> str:
         keep = order[:order.index(package) + 1]
     else:
         base = order[:order.index("Editor") + 1] if "Editor" in order else order
-        keep = base + [package]
+        extra = [p for p in order if p in deps and p not in base]
+        keep = base + extra + [package]
     at = next((i for i, ln in enumerate(lines) if is_ep(ln)), None)          # first EP line's slot
     out = [ln for ln in lines if not is_ep(ln)]
     if at is None:                                                           # no EP lines at all
@@ -118,11 +121,13 @@ def _exfil(container: str, path: str) -> bytes:
     return r.stdout
 
 
-def ucc_compile_ut99(container: str, package: str, classes: dict[str, str]) -> bytes:
+def ucc_compile_ut99(container: str, package: str, classes: dict[str, str],
+                     *, deps: tuple[str, ...] = ()) -> bytes:
     """Compile `<package>` from `classes` ({filename -> source}) with UT99's UCC and return the built
-    `<package>.u` bytes. CLEAN rebuild every call. Success requires `make` exit 0 AND `Success` in the
-    output AND a `.u` larger than a 64-byte empty stub; otherwise `UccError` names the package and
-    carries the UCC output tail."""
+    `<package>.u` bytes. CLEAN rebuild every call. `deps` names extra stock packages (e.g. `UWindow`)
+    the target's super chain needs loaded — see `_edit_packages_upto`. Success requires `make` exit 0
+    AND `Success` in the output AND a `.u` larger than a 64-byte empty stub; otherwise `UccError`
+    names the package and carries the UCC output tail."""
     pkg_dir = f"{_GAME_ROOT}/{package}"
     built = f"{_SYS}/{package}.u"
 
@@ -130,7 +135,7 @@ def ucc_compile_ut99(container: str, package: str, classes: dict[str, str]) -> b
     for filename, source in classes.items():
         _exec(container, "sh", "-c", f"cat > {pkg_dir}/Classes/{filename}", input_text=source)
 
-    ini = _edit_packages_upto(_exec(container, "cat", _INI), package)
+    ini = _edit_packages_upto(_exec(container, "cat", _INI), package, deps)
     _exec(container, "sh", "-c", f"cat > {_INI}", input_text=ini)
 
     make = _wine(container, _UCC, "make")

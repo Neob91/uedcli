@@ -169,6 +169,21 @@ strict gate autonomously.
   in the fix: `decl_order` doesn't place a HOISTED nested enum/struct (one declared inline inside a
   struct body) correctly — `parser.py`'s own comment on `self._hoisted` admits it lands at "the same
   (unresolved) position as in `members`." Not exercised by any current fixture; no test covers it.
+- **Calling an inherited `final` function is FIXED (2026-09-13)**: an ordinary call to a function the
+  class being compiled doesn't itself declare/override, and any `Super.Foo()` call (always an
+  ancestor's function, even when the current class overrides `Foo` under the same name — that case
+  previously self-referenced the override instead of the parent, silently), raised or mis-resolved
+  because `compile.py`'s `resolve_inv` only knew the class's own functions and existing imports.
+  `lower.py`'s `CallTarget` now carries the function's declaring class (`owner`) when it isn't the
+  class being compiled; a final call to it gets obj identity `func:<Class>.<Name>` (`_final_call_ident`),
+  and `compile.py`'s `_register_final_call_imports` imports the function object from its declaring
+  class, deduping onto `_super_func_import`'s existing key format for the same function. Verified
+  against a live UT99 UCC compile (fixture `UscInheritFinal`, extends `UWindowDialogClientWindow`) —
+  `perm_gate` byte-exact; the strict gate's one diff is the pre-existing UT99 name-pool gap already
+  noted for `Fire` below, not new. The same gap exists for an inherited MEMBER VARIABLE
+  (`EX_InstanceVariable` also needs an import compile.py doesn't register) — hit by the real
+  community package `GiveMeItems`'s `WinWidth`/`WinHeight` reads; not fixed, see
+  `dev/docs/board/inbox/givemeitems-blocked-by-inherited-member-access/`.
 - `assert`/`do..until` lowering, and a two-pass "signature graph" for mutually-referencing
   same-package classes (blocks `UWeb`) — real, scoped gaps in `lower.py`/`compile.py`. Replication
   blocks and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented,
