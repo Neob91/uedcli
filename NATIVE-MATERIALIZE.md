@@ -277,10 +277,13 @@ the permeating flood is where the campaign's leverage is.
     afterwards). Captured properly, native's box occlusion matches the editor on every call of
     OceanLab N=48 and WanChai N=45 — same set, same ORDER, same rectangles, same verdicts.
   WanChai then advanced to byte-exact **N=1..57** and bails at **N=58** —
-  `dev/docs/board/inbox/wanchai-n58-leaf-51-permeating-light-over-included/`, the same one-extra-leaf
-  shape but NOT the same cause: the crossing is localised (leaf 56 → 51) and its margins are nowhere
-  near the epsilon. The next probe there is to print native's beam POLYGON per crossing and pair it
-  with the capture's, which `perm_flood_diff.py` does not yet do.
+  `dev/docs/board/inbox/wanchai-n58-leaf-51-permeating-light-over-included/`. Root-caused 2026-09-13:
+  a THIRD confirmed instance of the Island N=332 / UNATCO N=226 one-ULP `FLinePlaneIntersection`
+  crossing tie (a beam-clip vertex lands exactly on a grid coordinate in native, one ULP off it live),
+  this time one hop upstream of the leaf-51 symptom — the `45->55` beam's own closing vertex — and for
+  the first time changing which PORTAL a beam-clip survives (`SP_Back` vs `SP_Split`), not just which
+  vertex a permeating flood carries. Not fixed; still needs the register-level single-step the other
+  two also stopped short of.
 - **UNATCO, N=226**: `dev/docs/board/inbox/unatco-n-226-leaf-12-gets-a-permeating-light157/` — a
   SECOND, independent case of the same shape, NOT closed by the above: leaf 12 still carries
   `Light157` where UED22 leaves it out (measured after the fix; `Model.Lights` 2953 vs 2952, per-surf

@@ -40,9 +40,9 @@
       "highest_n": 57,
       "total_actors": 2288,
       "status": "blocked",
-      "blocker": "N=58: leaf 51 gets an extra permeating-light entry -- same shape as N=45 but a DIFFERENT cause: the crossing itself is fine, what differs is the beam polygon carried into the leaf. N=45's real bug is FIXED (BREAKTHROUGH): FPoly::SplitWithPlaneFast's crossing vertex comes from FLinePlaneIntersection's exact formula (Sc = (W - dot(P1,N)) / dot(D,N); out = Sc*D + P1), not native's mathematically-equivalent alpha = dp/(dp-ds) -- same real number, different f32 rounding, which on WanChai collapsed a downstream clip edge to zero length and let a beam through a boundary it should have stopped at. This is the SAME root cause already fixed for Island/OceanLab/UNATCO's shared leaf-permeating class -- WanChai N=45 was its cheapest reproducer.",
+      "blocker": "N=58: leaf 51 gets an extra permeating-light entry. Root-caused 2026-09-13 via a new live probe (split_fast_probe.py, capturing FPoly::SplitWithPlaneFast's own call site): a THIRD confirmed instance of the Island N=332 / UNATCO N=226 one-ULP FLinePlaneIntersection tie, one hop upstream of leaf 51 -- the 45->55 beam's own closing vertex lands exactly on the grid value 1344.0 in native, one ULP below it (1343.99988) in the live editor. That one ULP makes the next edge (55->56's boundary) zero-length in native (skipped, no constraint) but real in the editor, which computes SP_Back and rejects the whole crossing -- native has no such edge to reject with and wrongly keeps it. Portal-graph topology was independently verified NOT the cause (UEDCLI_PERM_DUMP_LEAF dump matches the live editor's adjacency exactly for every leaf on the path). Not fixed; no mask; needs the same register-level single-step the other two instances also stopped short of.",
       "board": "wanchai-n58-leaf-51-permeating-light-over-included",
-      "updated": "2026-09-07T08:10:00Z"
+      "updated": "2026-09-13T00:00:00Z"
     },
     {
       "slug": "island",

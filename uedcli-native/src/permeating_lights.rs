@@ -436,6 +436,18 @@ pub fn write_permeating_region(model: &mut Model, lights: &[LightInput]) {
         return;
     }
     let portals = leaf_portal_map(model);
+    // `UEDCLI_PERM_DUMP_LEAF=<leaf>` lists every outward portal `collect_leaf_portals` gives that
+    // leaf (to_leaf + vert count) -- a topology check independent of any light's flood, for telling
+    // "the portal graph itself is missing an edge" apart from "the beam clip rejects every edge".
+    if let Ok(leaf_s) = std::env::var("UEDCLI_PERM_DUMP_LEAF") {
+        if let Ok(leaf) = leaf_s.parse::<i32>() {
+            let faces = portals.get(&leaf).map(|v| v.as_slice()).unwrap_or(&[]);
+            eprintln!("PERM_PORTALS leaf={leaf} count={}", faces.len());
+            for f in faces {
+                eprintln!("  ->leaf={} verts={:?}", f.to_leaf, f.verts);
+            }
+        }
+    }
     // `UEDCLI_PERM_TRACE=<light index>` logs that one light's whole flood — every leaf marked and
     // every face crossing kept or dropped, with the gate that dropped it — so it can be diffed
     // against a live `FEditorVisibility::ActorVisibility` capture. `all` traces every light.
