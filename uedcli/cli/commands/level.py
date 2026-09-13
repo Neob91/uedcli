@@ -741,7 +741,8 @@ def _level_preview(args) -> int:
                          search_files=search_files,
                          index=resources.mover_index(args, "level photo --native", project=project),
                          defaults=ClassDefaults(packages.schema_resolver(project, user_config)),
-                         texture_use=(args.faces == "polys"))
+                         texture_use=(args.faces == "polys"),
+                         project=project, level_name=name)
     except NativePreviewError as e:
         print(str(e), file=sys.stderr)
         return 2

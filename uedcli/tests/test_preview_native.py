@@ -9,6 +9,7 @@ import math
 import os
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -1011,6 +1012,140 @@ def test_render_shots_with_both_a_lit_world_surf_and_a_mesh_actor(tmp_path):
                         index=index, defaults=DEFAULTS, search_files=_mesh_sf(index))
     assert n == 1
     assert (tmp_path / "out" / "shot-01.png").is_file()
+
+
+# --------------------------------------------------------------- scene cache (owner ruling 2026-09-13)
+
+
+def _proj(tmp_path):
+    return SimpleNamespace(root=str(tmp_path))
+
+
+def _light(radius: str) -> Actor:
+    return Actor(name="L1", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(32)),
+                props=[("LightRadius", radius)])
+
+
+def _counting(monkeypatch, obj, name: str) -> list[int]:
+    """Wrap `obj.name` to count calls while still running the real function — a single-item list
+    so the test can read the live count after each `build_scene` call."""
+    count = [0]
+    real = getattr(obj, name)
+
+    def wrapper(*a, **k):
+        count[0] += 1
+        return real(*a, **k)
+
+    monkeypatch.setattr(obj, name, wrapper)
+    return count
+
+
+def test_build_scene_without_project_never_writes_a_cache_file(tmp_path):
+    """Every other test in this file calls `build_scene` with no `project` — confirms that path
+    stays cache-free (no `.uedcli/` ever created next to the test), not just that it still works."""
+    index = _ued22_index()
+    pn.build_scene(_level(cube_room(), _light("8")), [], index, defaults=DEFAULTS)
+    assert not (tmp_path / ".uedcli").exists()
+
+
+def test_build_scene_reuses_the_full_scene_when_nothing_changed(tmp_path, monkeypatch):
+    index = _ued22_index()
+    csg_calls = _counting(monkeypatch, uedcli_native, "build_geometry_bspcsg")
+    light_calls = _counting(monkeypatch, uedcli_native, "bake_lighting")
+    lvl = _level(cube_room(), _light("8"))
+    proj = _proj(tmp_path)
+    first = pn.build_scene(lvl, [], index, defaults=DEFAULTS, project=proj, level_name="lvl")
+    second = pn.build_scene(lvl, [], index, defaults=DEFAULTS, project=proj, level_name="lvl")
+    assert csg_calls[0] == 1 and light_calls[0] == 1      # second call served entirely from cache
+    assert second == first
+
+
+def test_build_scene_reuses_geometry_when_only_a_light_changes(tmp_path, monkeypatch):
+    """A LightRadius edit changes nothing CSG-relevant — `build_geometry_bspcsg` must run once,
+    `bake_lighting` must run again (the light actually changed, so its bake must reflect that)."""
+    index = _ued22_index()
+    csg_calls = _counting(monkeypatch, uedcli_native, "build_geometry_bspcsg")
+    light_calls = _counting(monkeypatch, uedcli_native, "bake_lighting")
+    proj = _proj(tmp_path)
+    first, _ = pn.build_scene(_level(cube_room(), _light("8")), [], index, defaults=DEFAULTS,
+                              project=proj, level_name="lvl")
+    second, second_textures = pn.build_scene(_level(cube_room(), _light("64")), [], index,
+                                             defaults=DEFAULTS, project=proj, level_name="lvl")
+    assert csg_calls[0] == 1
+    assert light_calls[0] == 2
+    assert first != second                              # the wider radius actually changed the bake
+    # The geometry-cache-hit rebake must match a TOTALLY fresh, uncached build at the same light —
+    # not just "some difference happened". This is the `leaf_portals` fix's regression test: a
+    # `load_model` reload that dropped the frozen portal graph would still produce SOME lightmap
+    # (from `permeating_lights`' own fresh-recompute fallback), so `first != second` alone would
+    # stay green even with that bug back — only a byte-for-byte match against an independent
+    # from-scratch build proves the reload is behaviorally identical to a fresh CSG build.
+    reference, reference_textures = pn.build_scene(_level(cube_room(), _light("64")), [], index,
+                                                   defaults=DEFAULTS)
+    assert second == reference
+    assert second_textures == reference_textures
+
+
+def test_build_scene_rebuilds_csg_when_geometry_changes(tmp_path, monkeypatch):
+    index = _ued22_index()
+    csg_calls = _counting(monkeypatch, uedcli_native, "build_geometry_bspcsg")
+    proj = _proj(tmp_path)
+    room = cube_room()
+    pn.build_scene(_level(room, _light("8")), [], index, defaults=DEFAULTS,
+                   project=proj, level_name="lvl")
+    room2 = cube_room()
+    set_prop(room2, "MainScale", "(Scale=(X=2.000000),SheerAxis=SHEER_ZX)")
+    pn.build_scene(_level(room2, _light("8")), [], index, defaults=DEFAULTS,
+                   project=proj, level_name="lvl")
+    assert csg_calls[0] == 2
+
+
+def test_scene_hashes_never_drop_a_brush_from_geom_hash_even_if_it_states_light_props(tmp_path,
+                                                                                       monkeypatch):
+    """`gather_lights` has no class check ('any class can be a light', its own docstring) — a
+    world-CSG brush actor that ALSO states light-like props (`LightType`/`bStatic`) would otherwise
+    land in `light_names` and drop its own geometry out of `geom_hash` entirely, so an edit to its
+    shape would never invalidate `scenegeo`. `_scene_hashes` excludes any `actor.brush is not None`
+    actor from `light_names` regardless of what `gather_lights` says; this proves the exclusion
+    actually holds, not just that the ordinary light-actor case works."""
+    index = _ued22_index()
+    csg_calls = _counting(monkeypatch, uedcli_native, "build_geometry_bspcsg")
+    proj = _proj(tmp_path)
+
+    def _light_brush():
+        room = cube_room()
+        set_prop(room, "LightType", "LT_Steady")
+        set_prop(room, "bStatic", "True")
+        return room
+
+    pn.build_scene(_level(_light_brush()), [], index, defaults=DEFAULTS,
+                   project=proj, level_name="lvl")
+    changed = _light_brush()
+    set_prop(changed, "MainScale", "(Scale=(X=2.000000),SheerAxis=SHEER_ZX)")
+    pn.build_scene(_level(changed), [], index, defaults=DEFAULTS, project=proj, level_name="lvl")
+    assert csg_calls[0] == 2   # the shape change must bust the geometry cache, not hide behind
+                              # a `light_names`-driven geom_hash that never saw it
+
+
+def test_build_scene_treats_an_incompatible_geometry_cache_entry_as_a_miss(tmp_path, monkeypatch):
+    """`load_model` failing on a cached `model_body` (e.g. the native model's own serialized-body
+    layout changed since the entry was written — an internal, actively-developed format) must fall
+    through to a fresh CSG build, not raise and permanently block that level's `--native` photo."""
+    index = _ued22_index()
+    csg_calls = _counting(monkeypatch, uedcli_native, "build_geometry_bspcsg")
+    proj = _proj(tmp_path)
+    pn.build_scene(_level(cube_room(), _light("8")), [], index, defaults=DEFAULTS,
+                   project=proj, level_name="lvl")
+    assert csg_calls[0] == 1
+    monkeypatch.setattr(uedcli_native, "load_model",
+                        lambda *a, **k: (_ for _ in ()).throw(uedcli_native.BuildError("bad body")))
+    # A different light forces a `scenelit` MISS + `scenegeo` HIT — the code path that calls
+    # `load_model` — rather than the unchanged-level path, which would short-circuit before ever
+    # reaching it.
+    polys, _ = pn.build_scene(_level(cube_room(), _light("64")), [], index, defaults=DEFAULTS,
+                              project=proj, level_name="lvl")
+    assert csg_calls[0] == 2                    # fell through to a real rebuild, not a crash
+    assert polys                                # and still produced a real result
 
 
 def test_render_shots_unwritable_out_dir(tmp_path):

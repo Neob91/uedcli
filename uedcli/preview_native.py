@@ -29,7 +29,7 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import movers
+from . import movers, preview_cache
 from .classindex import CORE_OBJECT, ClassRefError
 from .normalize import is_builder_brush
 from .preview_shots import ResolvedShot, Shot, resolve_pose, shot_filename
@@ -441,9 +441,48 @@ def find_sky_actor(level, index):
     return best
 
 
+# --------------------------------------------------------------------- scene cache
+
+def _scene_hashes(level, light_names: set[str]) -> tuple[str, str]:
+    """Split `normalize.canonical_level_hash`'s construction (content hash + order hash, combined)
+    into a GEOMETRY hash (every actor `build_scene`'s CSG/mesh/texture stages read) and a LIGHT
+    hash (only the actors `gather_lights` accepts, given here as `light_names` so this can't
+    disagree with what the bake actually treats as a light). Both fold in the FULL `level.order`,
+    not just the restricted subset's relative order — reordering a light actor relative to a brush
+    can't move CSG evaluation order (`_brush_inputs` filters to brush actors before reading it), so
+    this is deliberately over-invalidating rather than reasoning that out: same "err strict, never
+    serve stale" posture as `canonical_level_hash` itself (`preview_cache` costs an extra rebuild on
+    a miss, never a wrong scene).
+
+    A BRUSH actor is excluded from `light_names` here regardless of what `gather_lights` says about
+    it — `gather_lights` has no class check ("any class can be a light", its own docstring) and
+    reads only stated `LightType`/`bStatic`/`bNoDelete` props, so a world-CSG brush that happens to
+    also state those props would otherwise drop its own geometry out of `geom_hash` entirely,
+    letting a real edit to it (a moved vertex, a changed `CsgOper`) go undetected. `_brush_inputs`
+    puts every non-mover, non-builder-brush actor with `actor.brush is not None` into world CSG
+    without ever checking light-ness, so this project's own CSG-participation test is the one that
+    must gate the hash split, not `gather_lights`'."""
+    import hashlib
+
+    from .normalize import canonical_actor_t3d
+
+    order_hash = hashlib.sha256("\n".join(level.order).encode("utf-8")).hexdigest()
+
+    def _hash(names) -> str:
+        content = hashlib.sha256(
+            "\n".join(canonical_actor_t3d(level.actors[n]) for n in sorted(names))
+            .encode("utf-8")).hexdigest()
+        return hashlib.sha256(f"{content}:{order_hash}".encode("utf-8")).hexdigest()[:12]
+
+    all_names = set(level.order or level.actors)
+    light_names = {n for n in light_names if level.actors[n].brush is None}
+    return _hash(all_names - light_names), _hash(light_names & all_names)
+
+
 # --------------------------------------------------------------------- orchestration
 
-def build_scene(level, search_files, index, *, defaults) -> tuple[list, list]:
+def build_scene(level, search_files, index, *, defaults, project=None,
+                level_name=None) -> tuple[list, list]:
     """Trunk → (render polys, texture table): CSG build + node-poly extraction + source-poly
     join + Python UV frames + mover extra_polys + native texture decode + world-surf lighting
     (board `bake-lighting-into-level-photo-native`). Raises NativePreviewError on every named
@@ -454,7 +493,13 @@ def build_scene(level, search_files, index, *, defaults) -> tuple[list, list]:
     NativePreviewError; dispatch's top-level guard turns it into the same clean exit 2. `defaults`
     is a `classdefaults.ClassDefaults`, needed to read light properties (their class defaults) —
     world BSP surfaces are lit; mesh/mover actors are not (a separate, un-RE'd mechanism, board
-    item `mesh-mover-per-vertex-lighting-in-level-photo`)."""
+    item `mesh-mover-per-vertex-lighting-in-level-photo`).
+
+    `project`/`level_name` are the `preview_cache` identity (owner ruling 2026-09-13, board `native-
+    photo-scene-cache`): given both, an unchanged level reuses its fully-lit scene outright, and a
+    level whose only change is to its light actors reuses the CSG solve + texture decode and reruns
+    only the (cheap) lighting bake. Neither given (every direct test call in this codebase) → always
+    a fresh, uncached build — no CLI path calls this without a project."""
     try:
         from uedcli.native_ext import import_native
         uedcli_native = import_native()
@@ -463,175 +508,236 @@ def build_scene(level, search_files, index, *, defaults) -> tuple[list, list]:
             "the uedcli_native extension is not built — `level photo --native` needs it "
             "(build with `maturin develop`, or run bin/test once)") from None
 
-    brushes, join = _brush_inputs(level, index)
-    if not brushes:
-        raise NativePreviewError("nothing to render: the trunk has no CSG brush actors")
-    # World-surf lighting inputs, gathered before the build so the bake can run right after CSG,
-    # same order as `native.materialize.build_world_model` (`bake_lighting` before
-    # `serialize_model`): `level materialize` uses `bake_lighting` alone (its structural output is
-    # already correct); `level photo --native` additionally needs `bake_radiance`'s lit RGB buffer,
-    # since its rasterizer (unlike the game) has no render-time light evaluation of its own.
+    # World-surf lighting inputs, gathered up front so the split-hash below can name which actors
+    # are lights (`level materialize` uses `bake_lighting` alone; `level photo --native`
+    # additionally needs `bake_radiance`'s lit RGB buffer, since its rasterizer has no render-time
+    # light evaluation of its own).
     from .native.materialize import gather_light_colors, gather_lights
     lights = gather_lights(level, defaults=defaults)
     lights_ffi = [(loc, radius, special) for _n, loc, radius, special in lights]
     colors_ffi = gather_light_colors(level, lights, defaults=defaults)
+
+    cache = project is not None and level_name is not None
+    geom_hash = light_hash = None
+    if cache:
+        geom_hash, light_hash = _scene_hashes(level, {n for n, *_ in lights})
+        cached_scene = preview_cache.load_scene(project, level_name, geom_hash, light_hash)
+        if cached_scene is not None:
+            return cached_scene
+
+    geo = preview_cache.load_geometry(project, level_name, geom_hash) if cache else None
+
+    built = None
+    if geo is not None:
+        model_body, portals, polys_no_light, i_surf_by_poly, texture_table = geo
+        try:
+            # `leaf_portals` is the frozen portal graph `assign_leaves_and_zones` computed during
+            # THIS geometry's original build — `serialize_model`'s on-disk format doesn't carry it,
+            # so it rides alongside `model_body` in the cache and is restored here. Without it,
+            # `bake_lighting`'s permeating-light pass falls back to a fresh recompute over the
+            # reloaded model's CURRENT points — the exact stale-portal divergence fixed in
+            # `dev/docs/spikes/2026-09-13-portal-graph-frozen-before-optgeom/` (board items
+            # `island-n-332-...`/`unatco-n-226-...`/`wanchai-n58-...`). Reloading without it would
+            # silently reintroduce that bug on every geometry-cache hit.
+            built = uedcli_native.load_model(model_body, leaf_portals=portals)
+        except uedcli_native.BuildError:
+            built = None       # a stale/incompatible cache entry (e.g. the native model's own
+                                # serialized-body layout changed since this entry was written — an
+                                # internal, actively-developed format, unlike the frozen on-disk UE1
+                                # format `--game`'s cache reuses) is a MISS, never a crash: same
+                                # posture as `schema_cache.py`'s own corrupt/version-mismatched-entry
+                                # handling. Falls through to a fresh build below.
+    if built is None:
+        brushes, join = _brush_inputs(level, index)
+        if not brushes:
+            raise NativePreviewError("nothing to render: the trunk has no CSG brush actors")
+        try:
+            # FAITHFUL incremental `bspBrushCSG` core, same as `solve_world_surfaces` — it
+            # reproduces the editor's surviving-surface set (Wanchai ratio ~1.01), where the coarse
+            # `build_geometry` convex point-in-solid dropped ~69% of surfaces (board `native-
+            # preview-drops-large-geometry-on-full`). Same `BrushTuple` input and
+            # `serialize_model`/`_node_polys` join path.
+            built = uedcli_native.build_geometry_bspcsg(brushes)
+            # Serialized PRE-lighting: `_node_polys` reads only geometry (nodes/surfs/points), so
+            # this body is a valid `load_model` cache seed for a later lighting-only rerun, and
+            # reordering the serialize ahead of `bake_lighting` changes nothing about this build.
+            # `leaf_portals` must travel WITH it (see the cache-hit branch above) — it's frozen by
+            # `build_geometry_bspcsg` itself (`bspcsg.rs::zone_pass`), not by lighting.
+            model_body = uedcli_native.serialize_model(built)
+            portals = uedcli_native.leaf_portals(built)
+        except uedcli_native.BuildError as ex:
+            raise NativePreviewError(f"native CSG build failed: {ex}") from ex
+        from .native.umodel import parse_model_body
+        model = parse_model_body(model_body, 0, len(model_body))
+
+        # class_index=index widens the resolver from the exact `Texture` class to every
+        # `Engine.Texture` descendant (FireTexture, WaterTexture, ...) -- without it, ANY texture
+        # subclass used on a world surface is invisible to lookup entirely (`unknown-texture`, not
+        # even reaching decode) rather than resolving and being recognised as procedural.
+        textures = _TextureTable(TextureResolver(search_files, class_index=index))
+        polys_no_light: list[tuple] = []
+        i_surf_by_poly: list[int | None] = []
+
+        def add_poly(world_verts, actor, poly, surf_flags=None, i_surf=None):
+            # `surf_flags` (a CSG-solved surf's OWN `poly_flags`, always real even when the join
+            # below is out of range) takes priority; a mover has no surf, so it falls back to
+            # deriving the merged flags itself from its authored poly + actor PolyFlags. `poly` can
+            # be None (the out-of-range-join grey filler) independently of `actor` being None, so
+            # the poly half of the fallback must not assume `poly is not None` just because `actor
+            # is not None`.
+            if surf_flags is not None:
+                flags = surf_flags
+            else:
+                # `poly.flags`/`poly_flags_int` decode `PolyFlags` as a SIGNED i32 (mapimport.py's
+                # `decode_fpoly`, matched to the write side) — a real DWORD with the top bit(s) set
+                # (an original-format Unreal map, e.g. `PF_Occlude`) comes out negative. Mask to
+                # unsigned 32-bit here, same as `brush_marshal.py`'s `poly_flags_flat`:
+                # `render_frame`'s Rust `poly_flags` field is `u32`, and an unmasked negative value
+                # is an `OverflowError` crossing the FFI.
+                flags = (((poly.flags or 0) if poly is not None else 0) | (
+                    poly_flags_int(dict(actor.props)) if actor else 0)) & 0xFFFFFFFF
+            if flags & PF_INVISIBLE:
+                return                                       # dropped Python-side (spec §5)
+            if actor is not None and poly is not None:
+                try:
+                    base_w, tu, tv, pan = world_uv_frame(actor, poly)
+                except DegenerateTransformError as e:    # degenerate-scale mover/brush → exit 2 (spec §7)
+                    raise NativePreviewError(str(e)) from e
+                tex_index = textures.index_for(poly.texture)
+            else:
+                base_w, tu, tv, pan = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0)
+                tex_index = -1                               # unknown owner → flat grey
+            verts_flat = [c for v in world_verts for c in
+                          (float(v[0]), float(v[1]), float(v[2]))]
+            # A face masks index-0 as see-through iff the surface `PF_Masked` flag is set OR the
+            # texture itself is `bMasked` — the engine ORs a texture's PolyFlags onto every surface
+            # it's applied to, so a masked texture masks with NO surface flag (owner-confirmed,
+            # `unrealed/quirks.md` "a face draws index 0 as a hole iff poly.flags & PF_Masked OR its
+            # texture carries bMasked"). Matches `cli/rendering.py`'s `--mode` gate.
+            masked = bool(flags & PF_MASKED) or textures.is_bmasked(tex_index)
+            polys_no_light.append((verts_flat, list(base_w), list(tu), list(tv), list(pan),
+                                   tex_index, masked, flags))
+            i_surf_by_poly.append(i_surf)
+
+        for world_verts, i_actor, i_brush_poly, poly_flags, i_surf in _node_polys(model):
+            if 0 <= i_actor < len(join):
+                name, source_polys = join[i_actor]
+                if 0 <= i_brush_poly < len(source_polys):
+                    add_poly(world_verts, level.actors[name], source_polys[i_brush_poly],
+                             surf_flags=poly_flags, i_surf=i_surf)
+                else:
+                    add_poly(world_verts, None, None, surf_flags=poly_flags,
+                             i_surf=i_surf)                   # out-of-range poly (§4.4)
+            else:
+                add_poly(world_verts, None, None, surf_flags=poly_flags,
+                         i_surf=i_surf)                       # out-of-range owner (§4.4)
+
+        for world_verts, actor, poly in _mover_world_polys(level, index):
+            add_poly(world_verts, actor, poly)
+
+        from .transform import DegenerateTransformError, flip_winding, reject_degenerate
+        from . import meshrender, meshworld, typedprops
+
+        for actor in level.actors.values():
+            if actor.brush is not None:
+                continue                                     # brushes/movers handled above
+            tris, skins, mesh, mesh_ref = _mesh_actor_polys(actor, index, search_files)
+            if not tris:
+                continue
+            # This actor's own skin-relevant override, once -- () for the common no-override actor
+            # (keeps `index_for_decoded`'s cache hit rate), a real fingerprint only when it states
+            # one (`per-actor-skins-override-in-native-mesh-render`'s cache-collision fix).
+            actor_skin_override = tuple(sorted(
+                (k, v) for k, v in typedprops.stored_prop_map(actor.props).items()
+                if k[0] in ("multiskins", "skin")))
+            # `L` + `translation` are the WHOLE placement formula, computed ONCE per actor: the
+            # per-vertex `apply_mesh_linear` below then costs one matvec, where the equivalent
+            # `mesh_vertex_to_world` would re-parse `Rotation` and rebuild both rotation matrices
+            # for every vertex of every triangle (pinned equivalent in `test_meshworld.py`).
+            L = meshworld.mesh_actor_linear(mesh, actor)
+            translation = meshworld.mesh_actor_translation(actor)
+            try:
+                reject_degenerate(L, actor.name)
+            except DegenerateTransformError as e:
+                raise NativePreviewError(str(e)) from e
+            flip = flip_winding(L)
+
+            for (v0, v1, v2, uv0, uv1, uv2, material_index, poly_flags) in tris:
+                if poly_flags & PF_INVISIBLE:
+                    continue                                  # dropped Python-side, matches add_poly
+                if flip:
+                    v0, v2 = v2, v0
+                    uv0, uv2 = uv2, uv0
+                w0 = meshworld.apply_mesh_linear(v0, mesh_origin=mesh.origin, L=L,
+                                                 translation=translation)
+                w1 = meshworld.apply_mesh_linear(v1, mesh_origin=mesh.origin, L=L,
+                                                 translation=translation)
+                w2 = meshworld.apply_mesh_linear(v2, mesh_origin=mesh.origin, L=L,
+                                                 translation=translation)
+                skin = skins.get(material_index)
+                if skin is None:
+                    # This material has NO texture assigned — flat grey, the same disposition an
+                    # untextured BSP face already gets (`add_poly`'s unowned branch,
+                    # `index_for(None) -> -1`, `render.rs`'s DEFAULT_GREY). Distinct from a texture
+                    # that IS assigned but won't decode, which `resolve_skins` refuses by name.
+                    # There is nothing to map UV onto, so the UV solve is skipped entirely and a
+                    # neutral frame goes out — `render.rs` never samples it at `tex_index == -1`.
+                    tex_index = -1
+                    base, axis_u, axis_v = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)
+                    pan = (0.0, 0.0)
+                else:
+                    tw, th, rgb, b_masked, mask = skin
+                    # Dedup key is (actor.cls, mesh_ref, material_index), NOT (actor.name, ...) --
+                    # many placed instances of the same decoration/crate share one texture-table
+                    # slot, matching `_TextureTable.index_for`'s own content-identity dedup intent
+                    # for world/mover polys. The class is IN the key because skins are
+                    # class-dependent (`index_for_decoded`).
+                    tex_index = textures.index_for_decoded(actor.cls, mesh_ref, material_index,
+                                                           tw, th, rgb, b_masked, mask,
+                                                           actor_override=actor_skin_override)
+                    u0 = (uv0[0] * tw / 256.0, uv0[1] * th / 256.0)
+                    u1 = (uv1[0] * tw / 256.0, uv1[1] * th / 256.0)
+                    u2 = (uv2[0] * tw / 256.0, uv2[1] * th / 256.0)
+                    frame = meshworld.solve_uv_frame(w0, w1, w2, u0, u1, u2)
+                    if frame is None:
+                        continue      # degenerate triangle, skip (matches render.rs's own
+                                      # zero-area poly skip)
+                    base, axis_u, axis_v, pan = frame
+                # Same masking rule as `add_poly`: the triangle's own PF_Masked flag OR the skin
+                # texture's own bMasked (`resolve_skins` carries it out of the decode).
+                masked = bool(poly_flags & PF_MASKED) or textures.is_bmasked(tex_index)
+                verts_flat = [c for v in (w0, w1, w2)
+                             for c in (float(v[0]), float(v[1]), float(v[2]))]
+                polys_no_light.append((verts_flat, list(base), list(axis_u), list(axis_v),
+                                       list(pan), tex_index, masked, poly_flags))
+                i_surf_by_poly.append(None)   # mesh actors: no lightmap (out of scope, board
+                                              # `mesh-mover-per-vertex-lighting-in-level-photo`)
+
+        texture_table = textures.table
+        if cache:
+            preview_cache.store_geometry(project, level_name, geom_hash,
+                                         (model_body, portals, polys_no_light, i_surf_by_poly,
+                                          texture_table))
+
     try:
-        # FAITHFUL incremental `bspBrushCSG` core, same as `solve_world_surfaces` — it reproduces
-        # the editor's surviving-surface set (Wanchai ratio ~1.01), where the coarse `build_geometry`
-        # convex point-in-solid dropped ~69% of surfaces (board `native-preview-drops-large-geometry-
-        # on-full`). Same `BrushTuple` input and `serialize_model`/`_node_polys` join path.
-        built = uedcli_native.build_geometry_bspcsg(brushes)
         uedcli_native.bake_lighting(built, lights_ffi)
         radiance_by_surf = {}
         for surf_index, origin, u_step, v_step, u_size, v_size, rgb in \
                 uedcli_native.bake_radiance(built, lights_ffi, colors_ffi):
             radiance_by_surf[surf_index] = (origin, u_step, v_step, u_size, v_size, rgb)
-        body = uedcli_native.serialize_model(built)
     except uedcli_native.BuildError as ex:
-        raise NativePreviewError(f"native CSG build failed: {ex}") from ex
-    from .native.umodel import parse_model_body
-    model = parse_model_body(body, 0, len(body))
+        raise NativePreviewError(f"native lighting bake failed: {ex}") from ex
 
-    # class_index=index widens the resolver from the exact `Texture` class to every
-    # `Engine.Texture` descendant (FireTexture, WaterTexture, ...) -- without it, ANY texture
-    # subclass used on a world surface is invisible to lookup entirely (`unknown-texture`, not
-    # even reaching decode) rather than resolving and being recognised as procedural.
-    textures = _TextureTable(TextureResolver(search_files, class_index=index))
-    polys = []
+    polys = [
+        (*poly, radiance_by_surf.get(i_surf) if i_surf is not None else None)
+        for poly, i_surf in zip(polys_no_light, i_surf_by_poly)
+    ]
 
-    def add_poly(world_verts, actor, poly, surf_flags=None, lightmap=None):
-        # `surf_flags` (a CSG-solved surf's OWN `poly_flags`, always real even when the join below
-        # is out of range) takes priority; a mover has no surf, so it falls back to deriving the
-        # merged flags itself from its authored poly + actor PolyFlags. `poly` can be None (the
-        # out-of-range-join grey filler) independently of `actor` being None, so the poly half of
-        # the fallback must not assume `poly is not None` just because `actor is not None`.
-        if surf_flags is not None:
-            flags = surf_flags
-        else:
-            # `poly.flags`/`poly_flags_int` decode `PolyFlags` as a SIGNED i32 (mapimport.py's
-            # `decode_fpoly`, matched to the write side) — a real DWORD with the top bit(s) set (an
-            # original-format Unreal map, e.g. `PF_Occlude`) comes out negative. Mask to unsigned 32-bit
-            # here, same as `brush_marshal.py`'s `poly_flags_flat`: `render_frame`'s Rust `poly_flags`
-            # field is `u32`, and an unmasked negative value is an `OverflowError` crossing the FFI.
-            flags = (((poly.flags or 0) if poly is not None else 0) | (
-                poly_flags_int(dict(actor.props)) if actor else 0)) & 0xFFFFFFFF
-        if flags & PF_INVISIBLE:
-            return                                       # dropped Python-side (spec §5)
-        if actor is not None and poly is not None:
-            try:
-                base_w, tu, tv, pan = world_uv_frame(actor, poly)
-            except DegenerateTransformError as e:        # degenerate-scale mover/brush → exit 2 (spec §7)
-                raise NativePreviewError(str(e)) from e
-            tex_index = textures.index_for(poly.texture)
-        else:
-            base_w, tu, tv, pan = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0)
-            tex_index = -1                               # unknown owner → flat grey
-        verts_flat = [c for v in world_verts for c in
-                      (float(v[0]), float(v[1]), float(v[2]))]
-        # A face masks index-0 as see-through iff the surface `PF_Masked` flag is set OR the texture
-        # itself is `bMasked` — the engine ORs a texture's PolyFlags onto every surface it's applied
-        # to, so a masked texture masks with NO surface flag (owner-confirmed, `unrealed/quirks.md`
-        # "a face draws index 0 as a hole iff poly.flags & PF_Masked OR its texture carries bMasked").
-        # Matches `cli/rendering.py`'s `--mode` gate.
-        masked = bool(flags & PF_MASKED) or textures.is_bmasked(tex_index)
-        polys.append((verts_flat, list(base_w), list(tu), list(tv), list(pan), tex_index, masked,
-                     flags, lightmap))
+    if cache:
+        preview_cache.store_scene(project, level_name, geom_hash, light_hash,
+                                  (polys, texture_table))
 
-    for world_verts, i_actor, i_brush_poly, poly_flags, i_surf in _node_polys(model):
-        lightmap = radiance_by_surf.get(i_surf)
-        if 0 <= i_actor < len(join):
-            name, source_polys = join[i_actor]
-            if 0 <= i_brush_poly < len(source_polys):
-                add_poly(world_verts, level.actors[name], source_polys[i_brush_poly],
-                         surf_flags=poly_flags, lightmap=lightmap)
-            else:
-                add_poly(world_verts, None, None, surf_flags=poly_flags,
-                         lightmap=lightmap)                # out-of-range poly (§4.4)
-        else:
-            add_poly(world_verts, None, None, surf_flags=poly_flags,
-                     lightmap=lightmap)                    # out-of-range owner (§4.4)
-
-    for world_verts, actor, poly in _mover_world_polys(level, index):
-        add_poly(world_verts, actor, poly)
-
-    from .transform import DegenerateTransformError, flip_winding, reject_degenerate
-    from . import meshrender, meshworld, typedprops
-
-    for actor in level.actors.values():
-        if actor.brush is not None:
-            continue                                     # brushes/movers handled above
-        tris, skins, mesh, mesh_ref = _mesh_actor_polys(actor, index, search_files)
-        if not tris:
-            continue
-        # This actor's own skin-relevant override, once -- () for the common no-override actor
-        # (keeps `index_for_decoded`'s cache hit rate), a real fingerprint only when it states one
-        # (`per-actor-skins-override-in-native-mesh-render`'s cache-collision fix).
-        actor_skin_override = tuple(sorted(
-            (k, v) for k, v in typedprops.stored_prop_map(actor.props).items()
-            if k[0] in ("multiskins", "skin")))
-        # `L` + `translation` are the WHOLE placement formula, computed ONCE per actor: the
-        # per-vertex `apply_mesh_linear` below then costs one matvec, where the equivalent
-        # `mesh_vertex_to_world` would re-parse `Rotation` and rebuild both rotation matrices for
-        # every vertex of every triangle (pinned equivalent in `test_meshworld.py`).
-        L = meshworld.mesh_actor_linear(mesh, actor)
-        translation = meshworld.mesh_actor_translation(actor)
-        try:
-            reject_degenerate(L, actor.name)
-        except DegenerateTransformError as e:
-            raise NativePreviewError(str(e)) from e
-        flip = flip_winding(L)
-
-        for (v0, v1, v2, uv0, uv1, uv2, material_index, poly_flags) in tris:
-            if poly_flags & PF_INVISIBLE:
-                continue                                  # dropped Python-side, matches add_poly
-            if flip:
-                v0, v2 = v2, v0
-                uv0, uv2 = uv2, uv0
-            w0 = meshworld.apply_mesh_linear(v0, mesh_origin=mesh.origin, L=L,
-                                             translation=translation)
-            w1 = meshworld.apply_mesh_linear(v1, mesh_origin=mesh.origin, L=L,
-                                             translation=translation)
-            w2 = meshworld.apply_mesh_linear(v2, mesh_origin=mesh.origin, L=L,
-                                             translation=translation)
-            skin = skins.get(material_index)
-            if skin is None:
-                # This material has NO texture assigned — flat grey, the same disposition an
-                # untextured BSP face already gets (`add_poly`'s unowned branch,
-                # `index_for(None) -> -1`, `render.rs`'s DEFAULT_GREY). Distinct from a texture
-                # that IS assigned but won't decode, which `resolve_skins` refuses by name.
-                # There is nothing to map UV onto, so the UV solve is skipped entirely and a
-                # neutral frame goes out — `render.rs` never samples it at `tex_index == -1`.
-                tex_index = -1
-                base, axis_u, axis_v = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)
-                pan = (0.0, 0.0)
-            else:
-                tw, th, rgb, b_masked, mask = skin
-                # Dedup key is (actor.cls, mesh_ref, material_index), NOT (actor.name, ...) -- many
-                # placed instances of the same decoration/crate share one texture-table slot,
-                # matching `_TextureTable.index_for`'s own content-identity dedup intent for
-                # world/mover polys. The class is IN the key because skins are class-dependent
-                # (`index_for_decoded`).
-                tex_index = textures.index_for_decoded(actor.cls, mesh_ref, material_index,
-                                                       tw, th, rgb, b_masked, mask,
-                                                       actor_override=actor_skin_override)
-                u0 = (uv0[0] * tw / 256.0, uv0[1] * th / 256.0)
-                u1 = (uv1[0] * tw / 256.0, uv1[1] * th / 256.0)
-                u2 = (uv2[0] * tw / 256.0, uv2[1] * th / 256.0)
-                frame = meshworld.solve_uv_frame(w0, w1, w2, u0, u1, u2)
-                if frame is None:
-                    continue          # degenerate triangle, skip (matches render.rs's own
-                                      # zero-area poly skip)
-                base, axis_u, axis_v, pan = frame
-            # Same masking rule as `add_poly`: the triangle's own PF_Masked flag OR the skin
-            # texture's own bMasked (`resolve_skins` carries it out of the decode).
-            masked = bool(poly_flags & PF_MASKED) or textures.is_bmasked(tex_index)
-            verts_flat = [c for v in (w0, w1, w2) for c in (float(v[0]), float(v[1]), float(v[2]))]
-            polys.append((verts_flat, list(base), list(axis_u), list(axis_v), list(pan),
-                         tex_index, masked, poly_flags, None))  # mesh actors: no lightmap (out of
-                                                                 # scope, board `mesh-mover-per-
-                                                                 # vertex-lighting-in-level-photo`)
-
-    return polys, textures.table
+    return polys, texture_table
 
 
 @dataclass(frozen=True)
@@ -713,10 +819,13 @@ def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
 
 def render_shots(*, level, shots: list[Shot], out_dir: Path, index, defaults,
                  size: tuple[int, int] = DEFAULT_SIZE, fov: float = DEFAULT_FOV,
-                 search_files=None, texture_use: bool = False) -> int:
+                 search_files=None, texture_use: bool = False, project=None,
+                 level_name=None) -> int:
     """Render every SHOT natively into `out_dir` (created if absent). Returns the count
     written. All actor refs resolve up front (all-or-nothing) BEFORE the build. `defaults` is a
     `classdefaults.ClassDefaults`, needed by `build_scene` to light world BSP surfaces.
+    `project`/`level_name` are `build_scene`'s scene-cache identity — forwarded verbatim, see its
+    docstring.
 
     `texture_use=True` is `--mode polys`: UnrealEd's real "Texture Use" render (`REN=3`; RE'd in
     `dev/docs/spikes/2026-09-13-polys-render-mode-re/spike.md`) — a flat, unlit swatch per texture
@@ -728,7 +837,8 @@ def render_shots(*, level, shots: list[Shot], out_dir: Path, index, defaults,
         except ValueError as e:
             raise NativePreviewError(str(e)) from None
 
-    polys, textures = build_scene(level, search_files or [], index, defaults=defaults)
+    polys, textures = build_scene(level, search_files or [], index, defaults=defaults,
+                                  project=project, level_name=level_name)
     sky_actor = find_sky_actor(level, index)              # None -> every PF_FakeBackdrop face
                                                             # falls back to its own texture
 
