@@ -644,3 +644,48 @@ changed (`ordering.py`/`reorder.py` unmodified); `ExtendedBuilders` stays at `pe
 Diagnostic scripts (`_scratch/trace2.py`, `trace3_selfconsistency.py`, `trace4_qsort_isolate.py`,
 `trace5_qsort_debug.py`, `dump_extendedbuilders.py`) are ephemeral, not committed.
 
+## Update (2026-09-13, later pass): mechanism 1 (`_shortsort` tie test) DEFINITIVELY REFUTED by fresh
+## disassembly; mechanism 2 confirmed NOT a qsort bug
+
+Extracted `core.dll` straight from the `ued-x86-runtime:latest` image (`docker create --entrypoint cat
+... /opt/UED22/core.dll`, `docker cp`) and re-disassembled `qsort` (`objdump -d -M intel
+--start-address=0x10077c80 --stop-address=0x100781c0`, ImageBase `0x10000000`) from scratch — a fresh
+pass, not a re-read of the prior notes, specifically to settle the `>` vs `>=` question the last pass
+left open.
+
+**`_shortsort`'s tie test, traced instruction-by-instruction (`0x10077d63`-`0x10077d92`):**
+
+    10077d63: push eax          ; push mx
+    10077d64: push esi          ; push p            (cdecl: p is comp's 1st arg, mx the 2nd)
+    10077d67: call [0x1009b20c] ; CFG check thunk
+    10077d6d: call ebx          ; comp(p, mx)
+    10077d72: test eax,eax
+    10077d74: jle 0x10077d80    ; result <= 0  ->  KEEP old mx (skip)
+    10077d76: mov eax,esi       ; result  > 0  ->  mx = p
+
+`jle` skips the update on a tie (`comp == 0`) exactly like a strictly-greater test — this is **`>`,
+not `>=`**. It matches `ordering.py`'s current `_shortsort` (`if comp(a[p], a[mx]) > 0: mx = p`)
+exactly. **The diagnostic `>=` tweak the prior pass flagged (closing 2/16 `ExtendedBuilders` diffs) is
+REFUTED by the actual binary — it was curve-fitting on that one package's array shape, not a real bug.
+Not applied; `ordering.py` is unchanged.**
+
+**The median-of-3 pivot selection (`0x10077e0a`-`0x10077e94`, all three swaps) and the main Hoare
+loguy/higuy scan (`0x10077f35`-`0x10078058`) were also re-traced end to end**, independently
+confirming the prior two static passes: every comparison in the port (all three median-of-3 swaps,
+both loguy scan loops, the higuy scan loop, the post-scan swap, and the `mid == higuy` re-pivot) uses
+the same `jle`-skips-on-`<=0` (i.e. strict `>`) convention as `_shortsort`, and every loop bound
+(`mid > loguy`, `loguy <= hi`, `higuy > mid`, `higuy < loguy`) matches `ordering.py`'s Python
+line-for-line. No `>=` anywhere in the ported region.
+
+**Conclusion for mechanism 2**: since the qsort port is now confirmed instruction-exact by a third,
+independent disassembly pass (on top of the two static passes and the self-consistency decode test),
+the `Vector`/`LRi..Rk` swap is NOT a qsort algorithm bug — this only reinforces the prior self-
+consistency finding, it doesn't newly explain it. The open question stays exactly where the live
+`AllocateNameEntry` capture pass left it: the true registration order of names inside a class BODY
+(past the point any capture so far reached — every capture stopped at the class self-name) is
+unknown, and settling it needs a deeper live capture, not more qsort tracing. Not attempted this pass
+(a multi-thousand-hit `winedbg` capture, same cost class as the DavesBrushBuilders capture — scoped as
+a separate follow-up, not part of verifying the qsort port). `ordering.py`/`reorder.py` unmodified;
+`ExtendedBuilders` stays at `perm_gate`-only. Extracted `core.dll` + the objdump listing are ephemeral
+(`_scratch/re/`, gitignored, not committed).
+

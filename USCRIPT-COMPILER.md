@@ -76,8 +76,9 @@ adversarial review that no code path emits a plausible-but-wrong token.
 **Table ordering — the true UCC algorithm, reproduced from a runtime dump, not fitted:**
 `UObject::SavePackage` gathers each table (names/imports/exports) from a **global engine array in
 ascending index**, then sorts DESCENDING by reference count with `core.dll`'s actual CRT `qsort`
-(re-verified **instruction-exact**, twice, including the tail recursion-stack logic once suspected of
-hiding extra behavior — it doesn't). The global index (`GObjNames`/`GObjObjects`) is a boot+load
+(re-verified **instruction-exact**, three times now — twice statically plus a 2026-09-13 fresh pass
+that specifically settled a `>` vs `>=` tie-test question — including the tail recursion-stack logic
+once suspected of hiding extra behavior; none of it does). The global index (`GObjNames`/`GObjObjects`) is a boot+load
 artifact not derivable from source, so it was **dumped from a live, booted `UCC.exe` under `winedbg`**
 (an INT3 planted at `SavePackage`, base `0x10000000`, no ASLR) and shipped as per-substrate data
 (`uedcli/uscript/data/{gobjnames,gobjobjects}_ued22.json`). The previous fitted `OBJECT_ORDER`/
@@ -102,7 +103,7 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 |---|---|---|---|---|
 | FrameBuilder | UED22 | 1 | ✅ | |
 | RahnemBrushBuilders | UED22 | 1 | ✅ | pins the value-only-name gather fix |
-| ExtendedBuilders | UED22 | 2 | perm only | a per-class defaultproperties-timing bug is FIXED (2026-09-13, see below) — its two classes' own-new `GroupName` default values now land at the byte-exact right spot; still fails `gate()` on a genuine `order_package`/`msvc_qsort` bug (not a gather/registration-order gap — ruled out by a live capture, see below) |
+| ExtendedBuilders | UED22 | 2 | perm only | a per-class defaultproperties-timing bug is FIXED (2026-09-13, see below) — its two classes' own-new `GroupName` default values now land at the byte-exact right spot; still fails `gate()` — a fresh disassembly pass (2026-09-13) confirms the `msvc_qsort` port itself is exact, so the residual is a gather-order question (names registering inside a class body, not yet captured live), see below |
 | DavesBrushBuilders | UED22 | 1 | ✅ | the export-gather bug (see Open items) turned out to be the same top-level-interleaving bug one level up — fixed by feeding both gathers the same AST-derived walk |
 | Fire | UT99 | 6 (native) | perm only | strict-gate diff traced to compact-index width, itself a consequence of UT99 needing its OWN name-pool extraction (`ENGINE_NAME_POOL`/`HIGHLIGHT_NAME_POOL` are UED22-`core.dll`-specific); not a new bug |
 | ConvTest + siblings | DXORIG | 1 (+2 auto) | ✅ | conversation import proof |
@@ -239,16 +240,28 @@ strict gate autonomously.
   through `order_package`) reproduces the identical 16-entry divergence, proving the bug is inside
   `order_package`/`msvc_qsort` itself, not in gather-order derivation from compile order — a materially
   different, more precisely located finding than the registration-order framing this item carried
-  before. Traced `msvc_qsort` on the real array: the `BuildCube`/`GetVertexCount` swap is a
-  `_shortsort` tie-handling question (a diagnostic `>` → `>=` tweak closes 2 of 16 diffs but is
-  unconfirmed against the binary, not applied); the `Vector`/`LRi..Rk` swap is NOT a shortsort matter
-  at all — it sits in a 39-item all-tied run where the containing partition call is a provable no-op
-  (loguy/higuy both scan off the ends without ever swapping), so `Vector`'s placement is set by the
-  OUTER partition's positional Hoare-scan mechanics, not a gather-order rule. Not fixed (no code
-  changed) — per the owner's standing rule against hacks, neither the `_shortsort` tweak nor any
-  operator flip was applied without disassembly confirmation. Full trace and the precise next step
-  (a live capture of the ACTUAL array `SavePackage`'s own `qsort`@`0x77cb0` call receives/produces for
-  this package, not `AllocateNameEntry`) in `findings-ordering-re.md`'s 2026-09-13 update.
+  before. Traced `msvc_qsort` on the real array: the `BuildCube`/`GetVertexCount` swap looked like a
+  `_shortsort` tie-handling question (a diagnostic `>` → `>=` tweak closes 2 of 16 diffs); the
+  `Vector`/`LRi..Rk` swap sits in a 39-item all-tied run where the containing partition call is a
+  provable no-op (loguy/higuy both scan off the ends without ever swapping), so `Vector`'s placement
+  looked like it was set by the OUTER partition's positional Hoare-scan mechanics.
+  **2026-09-13, disassembly pass: mechanism 1 REFUTED, mechanism 2 narrowed.** Extracted `core.dll`
+  fresh from the `ued-x86-runtime:latest` image and re-disassembled `qsort`@`0x77cb0`-`0x781a0`
+  (`objdump -d -M intel`) end to end, independently of the two prior static passes. `_shortsort`'s tie
+  test (`0x77d63`-`0x77d92`: `call comp(p,mx); test eax,eax; jle skip-update`) is confirmed **strict
+  `>`, not `>=`** — the diagnostic tweak was curve-fitting `ExtendedBuilders`'s one array shape, not a
+  real bug; NOT applied. The median-of-3 pivot swaps and the full loguy/higuy Hoare scan also re-trace
+  instruction-for-instruction to `ordering.py`'s port, with the same strict-`>` convention throughout —
+  a third independent confirmation the qsort port is exact. So mechanism 2 is NOT a qsort algorithm
+  bug either: with the sort proven exact, `Vector`'s wrong position must come from the ARRAY
+  `_gather_names`/`order_package` hand qsort, before any sorting happens — i.e. it's a gather-order
+  question after all, just one level deeper than `reorder.py`'s decode (already ruled out by the
+  self-consistency test above): the true registration order of names inside a class BODY, which no
+  capture so far has reached (every capture stops at the class self-name). Not fixed; no code changed
+  (`ordering.py`/`reorder.py` unmodified). Settling it needs a deeper live capture reaching past the
+  self-name into the class body — a separate, larger investigation (same cost class as the
+  `DavesBrushBuilders` capture), not attempted this pass. Full trace:
+  `findings-ordering-re.md`'s 2026-09-13 updates.
 - **Calling an inherited `final` function, and reading an inherited member variable, are both FIXED
   (2026-09-13)**: an ordinary call to a function the class being compiled doesn't itself
   declare/override, any `Super.Foo()` call (always an ancestor's function, even when the current
