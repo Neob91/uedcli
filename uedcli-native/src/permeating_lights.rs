@@ -84,8 +84,19 @@ fn to_vec3(p: [f32; 3]) -> Vec3 {
 /// Build, for every leaf, its outward-facing portal polygons — both directions of every
 /// `zones::Portal`, oriented and (for the reverse direction) re-wound so `normal` always points
 /// away from the leaf the entry is filed under.
+///
+/// Reads the portal geometry `assign_leaves_and_zones` FROZE at TestVisibility time
+/// (`model.leaf_portals`), not a fresh recompute: `bspoptgeom::merge_near_points` runs between that
+/// freeze and light-bake time and remaps some `surf.pBase`s, so recomputing here can land a
+/// beam-clip crossing on a different (post-merge-snapped) coordinate than the one the real editor's
+/// one-time, pre-merge `MakePortals` ever produced (2026-09-13 finding — see `zones::
+/// collect_leaf_portals`'s doc). Falls back to a fresh recompute only for hand-built models (tests)
+/// that never ran `assign_leaves_and_zones`.
 fn leaf_portal_map(model: &Model) -> HashMap<i32, Vec<FacePoly>> {
-    let raw: Vec<Portal> = collect_leaf_portals(model);
+    let raw: Vec<Portal> = model
+        .leaf_portals
+        .clone()
+        .unwrap_or_else(|| collect_leaf_portals(model));
     let mut out: HashMap<i32, Vec<FacePoly>> = HashMap::new();
     for p in raw {
         let verts: Vec<Vec3> = p.poly.iter().map(|&v| to_vec3(v)).collect();
@@ -666,6 +677,46 @@ mod tests {
             assert_eq!(m.lights[start], 0, "the single light's 0-based index");
             assert_eq!(m.lights[start + 1], -1, "NULL terminator");
         }
+    }
+
+    #[test]
+    fn leaf_portal_map_is_frozen_at_pass_b_not_recomputed_from_current_points() {
+        // Regression for the 2026-09-13 finding (Island N=332 / UNATCO N=226 / WanChai N=58): a
+        // beam-clip crossing must use the portal geometry `assign_leaves_and_zones` froze at
+        // TestVisibility time, not a fresh `collect_leaf_portals(model)` recompute at bake time --
+        // `bspoptgeom::merge_near_points` (real `bspOptGeom`) runs between those two moments and
+        // remaps some `surf.pBase`s, which the real editor's own one-time portal graph never sees.
+        // A single room with a raised step (an interior ADD): the step face splits the room's
+        // floor into two BSP leaves joined by a real portal, unlike two far-apart sealed rooms.
+        let mut m = build_geometry_from_brushes(&[
+            box_brush(512.0, 128.0, 128.0, Vec3::new(0.0, 0.0, 0.0), CsgOper::Subtract),
+            box_brush(256.0, 128.0, 8.0, Vec3::new(256.0, 0.0, -120.0), CsgOper::Add),
+        ])
+        .unwrap();
+        crate::zones::assign_leaves_and_zones(&mut m);
+        assert!(
+            m.leaf_portals.is_some(),
+            "assign_leaves_and_zones must freeze the Pass-B portal graph on the model"
+        );
+        let before = leaf_portal_map(&m);
+        assert!(!before.is_empty(), "the two rooms must share at least one portal");
+        let (&some_leaf, some_faces) = before.iter().next().unwrap();
+        let base_before = some_faces[0].base;
+
+        // Simulate a LATER points-array mutation, exactly what `bspoptgeom::merge_near_points`
+        // makes (a surf's pBase remapped to a different, nearby point) by translating every point.
+        // `leaf_portal_map` must be blind to this: it reads `model.leaf_portals`, frozen before any
+        // such remap could run, never `model.points` directly.
+        for p in m.points.iter_mut() {
+            *p = Vec3::new(p.x + 37.0, p.y - 11.0, p.z + 5.0);
+        }
+        let after = leaf_portal_map(&m);
+        let base_after = after[&some_leaf][0].base;
+        assert_eq!(
+            base_before, base_after,
+            "a points-array mutation after assign_leaves_and_zones must not move a portal face \
+             already frozen in model.leaf_portals"
+        );
     }
 
     #[test]

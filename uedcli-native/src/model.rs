@@ -222,6 +222,14 @@ pub struct Model {
     /// outward faces and a Subtract into pure void keeps nothing (§4.2).  The CSG leaf-filter's
     /// empty-Bsp branch seeds `F_OUTSIDE` when true, `F_INSIDE` when false.
     pub root_outside: bool,
+    /// The empty-leaf-to-empty-leaf portal graph, frozen by `zones::assign_leaves_and_zones` at the
+    /// moment TestVisibility/`MakePortals` actually runs (Pass B) — BEFORE `bspoptgeom::merge_near_points`
+    /// (real `bspOptGeom`, later in the build) can remap any `surf.pBase`. `permeating_lights` reads
+    /// this instead of recomputing portal geometry fresh at light-bake time, matching the real editor
+    /// (whose own portal graph is likewise computed once and never refreshed). `None` until
+    /// `assign_leaves_and_zones` has run at least once — hand-built test models that skip it fall back
+    /// to a fresh (pre-this-fix) recompute; see `zones::collect_leaf_portals`'s doc.
+    pub leaf_portals: Option<Vec<crate::zones::Portal>>,
 }
 
 impl Default for Model {
@@ -246,6 +254,7 @@ impl Default for Model {
             bbox_min: Vec3::new(0.0, 0.0, 0.0),
             bbox_max: Vec3::new(0.0, 0.0, 0.0),
             root_outside: true,
+            leaf_portals: None,
         }
     }
 }

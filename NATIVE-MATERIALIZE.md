@@ -214,10 +214,21 @@ Tests must NOT block the parity work. For this project specifically:
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
-Ceilings, all re-verified from N=1 against the current binary (2026-09-07): **UNATCO 225,
-NYC_Bar 152, OceanLab 202, Island 331, WanChai 57.** Two of the five next blockers are the SAME
-shape — one leaf gets a permeating-light run entry UED22 leaves out (UNATCO 226, WanChai 58) — so
-the permeating flood is where the campaign's leverage is.
+Ceilings (2026-09-13, after the portal-graph-freeze fix below): **UNATCO 242+ (re-verify to full,
+was 225), NYC_Bar 152 (spot-checked, unaffected), OceanLab 202 (spot-checked, unaffected), Island
+352+ (re-verify to full, was 331), WanChai 58 (was 57, now bails on a new unrelated N=59).**
+
+**2026-09-13 — the Island N=332 / UNATCO N=226 / WanChai N=58 "1-ULP tie" is FIXED, not masked.**
+All three were the SAME bug: `permeating_lights` recomputed the portal graph fresh at light-bake
+time, reading `model.points` AFTER `bspoptgeom::merge_near_points` had already remapped some
+`surf.pBase`s — the real editor's own portal graph is computed ONCE, during TestVisibility,
+strictly BEFORE its own point-merge, and never refreshed. Fix: `assign_leaves_and_zones` now
+freezes its Pass-B portal list onto `Model::leaf_portals`; `permeating_lights` reads that instead of
+recomputing. No formula/precision changed — this was a computation-ORDER bug, not a numerical one.
+Spike `dev/docs/spikes/2026-09-13-portal-graph-frozen-before-optgeom/`; regression test
+`permeating_lights::tests::leaf_portal_map_is_frozen_at_pass_b_not_recomputed_from_current_points`.
+All three board items closed to `done/`. WanChai now bails at a NEW, unrelated N=59 mover-`Polys`
+divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), not investigated yet.
 
 - **UNATCO**: N=163 is FIXED
   (`dev/docs/board/done/unatco-n-163-world-model2-lights-and-lightbits/`) — the 7 extra
@@ -282,12 +293,14 @@ the permeating flood is where the campaign's leverage is.
   crossing tie (a beam-clip vertex lands exactly on a grid coordinate in native, one ULP off it live),
   this time one hop upstream of the leaf-51 symptom — the `45->55` beam's own closing vertex — and for
   the first time changing which PORTAL a beam-clip survives (`SP_Back` vs `SP_Split`), not just which
-  vertex a permeating flood carries. Not fixed; still needs the register-level single-step the other
-  two also stopped short of.
-- **UNATCO, N=226**: `dev/docs/board/inbox/unatco-n-226-leaf-12-gets-a-permeating-light157/` — a
-  SECOND, independent case of the same shape, NOT closed by the above: leaf 12 still carries
-  `Light157` where UED22 leaves it out (measured after the fix; `Model.Lights` 2953 vs 2952, per-surf
-  runs 0 differing).
+  vertex a permeating flood carries. **FIXED 2026-09-13**
+  (`dev/docs/board/done/wanchai-n58-leaf-51-permeating-light-over-included/`) — same computation-order
+  bug as Island N=332/UNATCO N=226, see the portal-graph-freeze fix above. Re-verified byte-exact
+  N=1..58 (was 57); now bails at a NEW, unrelated N=59 mover-`Polys` divergence,
+  `dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/` (not investigated).
+- **UNATCO, N=226**: FIXED 2026-09-13 (`dev/docs/board/done/unatco-n-226-leaf-12-gets-a-permeating-light157/`)
+  — see the portal-graph-freeze fix above. Re-verified byte-exact N=1..242 (was 225); not yet
+  re-verified to its true new ceiling.
 - **NYC_Bar**: N=59 is FIXED (`dev/docs/board/done/nyc-bar-n-59-brush-region-zone-and-ued22/`) —
   its last three residuals (world-node `NF_IsFront`/`NF_IsBack`, the mover models' `LightMap`, and
   the mover `Polys`' `iLink`/`iBrushPoly`) were one thing: the moving-brush half of
@@ -369,8 +382,13 @@ the permeating flood is where the campaign's leverage is.
   real `SafeNormal`/`FLinePlaneIntersection` under `gdb` at this exact crossing). 2026-09-13: the
   `SafeNormal` x87-extended-precision candidate is REFUTED by a live `fctrl` probe (measured `0x027f`,
   PC=`10`/double, exactly matching native's `f64` model) —
-  `dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md`. No code change; the register-level
-  single-step is still the open next step.
+  `dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md`. **FIXED 2026-09-13**
+  (`dev/docs/board/done/island-n-332-leaf-273-permeating-light-vertex-tie/`) — no register-level
+  single-step needed after all: the tie was a computation-ORDER bug (`permeating_lights` reading a
+  post-`bspOptGeom`-remap `model.points`, not the pre-remap snapshot the real editor's one-time
+  portal graph actually used), not a numerical one. See the portal-graph-freeze fix above and
+  `dev/docs/spikes/2026-09-13-portal-graph-frozen-before-optgeom/`. Re-verified byte-exact
+  N=1..352 (was 331); not yet re-verified to its true new ceiling.
 - **OceanLab**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the

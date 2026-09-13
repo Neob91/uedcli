@@ -1047,6 +1047,7 @@ pub fn carved_box(size: f32, height: f32) -> Model {
         bbox_min: Vec3::new(-hx, -hy, -hz),
         bbox_max: Vec3::new(hx, hy, hz),
         root_outside: false,
+        leaf_portals: None,
     }
 }
 

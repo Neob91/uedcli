@@ -121,6 +121,7 @@ fn clip_poly(verts: &[[f32; 3]], n: [f32; 3], w: f32) -> Vec<[f32; 3]> {
 /// covers.  (The old per-generating-node `zone_portal` flag over-marked: a small portal surface in
 /// a large BSP cell had its whole cell-sized infinite-quad face flagged, wrongly separating leaves
 /// that share open space — the native zone over-fragmentation root cause, §70 §13.)
+#[derive(Clone, Debug)]
 pub(crate) struct Portal {
     pub(crate) a: i32,
     pub(crate) b: i32,
@@ -242,6 +243,55 @@ type Ancestor = (i32, bool);
 ///   * `SP_Split` → keep only our side's fragment (`0x100a9a97 cmove`).
 /// `>= 14` vertices are `SplitInHalf`'d first and the second half re-entered at the SAME stack
 /// position (`0x100a99e6`; note `FilterThroughSubtree`'s own guard is `> 14`).
+/// `UEDCLI_PORTAL_TRACE_NEAR="x,y,z[,eps]"` — dump every `make_portals_clip` ancestor-plane split
+/// that touches a vertex within `eps` (default 0.01) of the target, in hex, so the FIRST ancestor
+/// crossing that produces a suspect portal-quad corner can be found without knowing `ni`/`i_anc`
+/// ahead of time.  Debug-only; never on the default path.  See
+/// `dev/docs/spikes/2026-09-13-crossing-vertex-live-capture/`.
+fn portal_trace_target() -> Option<(Vec3, f32)> {
+    let s = std::env::var("UEDCLI_PORTAL_TRACE_NEAR").ok()?;
+    let mut it = s.split(',');
+    let comp = |s: &str| -> f32 {
+        if s.trim() == "*" {
+            f32::NAN // wildcard: this axis never gates the match
+        } else {
+            s.trim().parse().unwrap_or(f32::NAN)
+        }
+    };
+    let x = comp(it.next()?);
+    let y = comp(it.next()?);
+    let z = comp(it.next()?);
+    let eps: f32 = it
+        .next()
+        .and_then(|e| e.trim().parse().ok())
+        .unwrap_or(0.01);
+    Some((Vec3::new(x, y, z), eps))
+}
+
+fn near(v: &Vec3, t: &Vec3, eps: f32) -> bool {
+    (t.x.is_nan() || (v.x - t.x).abs() < eps)
+        && (t.y.is_nan() || (v.y - t.y).abs() < eps)
+        && (t.z.is_nan() || (v.z - t.z).abs() < eps)
+}
+
+fn any_near(verts: &[Vec3], t: &Vec3, eps: f32) -> bool {
+    verts.iter().any(|v| near(v, t, eps))
+}
+
+fn dump_verts_hex(label: &str, verts: &[Vec3]) {
+    for (k, v) in verts.iter().enumerate() {
+        eprintln!(
+            "    {label}[{k}]=({:08x},{:08x},{:08x}) [{},{},{}]",
+            v.x.to_bits(),
+            v.y.to_bits(),
+            v.z.to_bits(),
+            v.x,
+            v.y,
+            v.z
+        );
+    }
+}
+
 fn make_portals_clip(
     model: &Model,
     ni: i32,
@@ -250,6 +300,10 @@ fn make_portals_clip(
     stack: &[Ancestor],
     out: &mut Vec<Portal>,
 ) {
+    let trace = portal_trace_target();
+    let trace_ni: Option<i32> = std::env::var("UEDCLI_PORTAL_TRACE_NI")
+        .ok()
+        .and_then(|s| s.trim().parse().ok());
     while i < stack.len() {
         let (i_anc, subtree_is_back) = stack[i];
         if poly.verts.len() >= 14 {
@@ -257,7 +311,87 @@ fn make_portals_clip(
             make_portals_clip(model, ni, half, i, stack, out);
         }
         let (base, normal) = filter_plane(model, i_anc);
-        match poly.split_with_plane(&base, &normal, true) {
+        if trace_ni == Some(ni) {
+            let anc_n = &model.nodes[i_anc as usize];
+            eprintln!(
+                "NI_TRACE ni={ni} i={i} i_anc={i_anc} subtree_is_back={subtree_is_back} \
+                 anc_isurf={} anc_pbase={} anc_vnormal={} anc_plane=({:08x},{:08x},{:08x},{:08x})",
+                anc_n.i_surf,
+                usize::try_from(anc_n.i_surf)
+                    .ok()
+                    .and_then(|i| model.surfs.get(i))
+                    .map(|s| s.p_base)
+                    .unwrap_or(-999),
+                usize::try_from(anc_n.i_surf)
+                    .ok()
+                    .and_then(|i| model.surfs.get(i))
+                    .map(|s| s.v_normal)
+                    .unwrap_or(-999),
+                anc_n.plane.x.to_bits(),
+                anc_n.plane.y.to_bits(),
+                anc_n.plane.z.to_bits(),
+                anc_n.plane.w.to_bits()
+            );
+            dump_verts_hex("in", &poly.verts);
+            eprintln!(
+                "    anc_base=({:08x},{:08x},{:08x}) anc_normal=({:08x},{:08x},{:08x})",
+                base.x.to_bits(),
+                base.y.to_bits(),
+                base.z.to_bits(),
+                normal.x.to_bits(),
+                normal.y.to_bits(),
+                normal.z.to_bits()
+            );
+        }
+        if let Some((t, eps)) = trace {
+            if any_near(&poly.verts, &t, eps) {
+                eprintln!(
+                    "PORTAL_TRACE ni={ni} i={i} i_anc={i_anc} subtree_is_back={subtree_is_back}"
+                );
+                dump_verts_hex("in", &poly.verts);
+                eprintln!(
+                    "    anc_base=({:08x},{:08x},{:08x}) anc_normal=({:08x},{:08x},{:08x})",
+                    base.x.to_bits(),
+                    base.y.to_bits(),
+                    base.z.to_bits(),
+                    normal.x.to_bits(),
+                    normal.y.to_bits(),
+                    normal.z.to_bits()
+                );
+            }
+        }
+        let split = poly.split_with_plane(&base, &normal, true);
+        if trace_ni == Some(ni) {
+            match &split {
+                Split::Coplanar => eprintln!("    -> Coplanar"),
+                Split::Front => eprintln!("    -> Front (whole)"),
+                Split::Back => eprintln!("    -> Back (whole)"),
+                Split::Split(f, b) => {
+                    eprintln!("    -> Split");
+                    dump_verts_hex("front", &f.verts);
+                    dump_verts_hex("back", &b.verts);
+                }
+            }
+        }
+        if let Some((t, eps)) = trace {
+            let touched = match &split {
+                Split::Split(f, b) => any_near(&f.verts, &t, eps) || any_near(&b.verts, &t, eps),
+                _ => false,
+            };
+            if touched || any_near(&poly.verts, &t, eps) {
+                match &split {
+                    Split::Coplanar => eprintln!("    -> Coplanar"),
+                    Split::Front => eprintln!("    -> Front (whole)"),
+                    Split::Back => eprintln!("    -> Back (whole)"),
+                    Split::Split(f, b) => {
+                        eprintln!("    -> Split");
+                        dump_verts_hex("front", &f.verts);
+                        dump_verts_hex("back", &b.verts);
+                    }
+                }
+            }
+        }
+        match split {
             Split::Coplanar => return,
             Split::Front if subtree_is_back => return,
             Split::Back if !subtree_is_back => return,
@@ -265,6 +399,12 @@ fn make_portals_clip(
             Split::Split(front, back) => poly = if subtree_is_back { back } else { front },
         }
         i += 1;
+    }
+    if let Some((t, eps)) = trace {
+        if any_near(&poly.verts, &t, eps) {
+            eprintln!("PORTAL_TRACE ni={ni} SURVIVOR (after ancestor stack, before leaf landing)");
+            dump_verts_hex("survivor", &poly.verts);
+        }
     }
     // Survivor spans `ni`'s plane inside `ni`'s cell: two-phase filter (BACK subtree, then each
     // back-fragment through the FRONT subtree) to the leaf PAIRS it joins.  `AddPortal`
@@ -324,10 +464,20 @@ fn collect_portals(model: &Model, ni: i32, stack: &mut Vec<Ancestor>, out: &mut 
     }
 }
 
-/// Fresh re-collection of every empty-leaf-to-empty-leaf portal (with geometry), for
-/// `permeating_lights` to consume at BAKE time — the geometry-build-time `portals` local in
-/// `assign_leaves_and_zones` doesn't survive past that call, but the node tree is unchanged by the
-/// time lighting runs, so recomputing here is cheap and exact.
+/// Fresh re-collection of every empty-leaf-to-empty-leaf portal (with geometry).
+///
+/// **FALLBACK ONLY** — real callers should read `Model::leaf_portals` (frozen by
+/// `assign_leaves_and_zones` at the moment TestVisibility itself runs) instead of calling this.
+/// This function recomputes portal geometry against WHATEVER `model.points`/`model.surfs` currently
+/// hold, which is wrong once `bspoptgeom::merge_near_points` has run: that pass (real `bspOptGeom`,
+/// step 5 of `csgRebuild`, AFTER TestVisibility/step 3) remaps `surf.pBase` to a nearby
+/// earlier-index point, so a portal recomputed from the POST-merge model can land a beam-clip
+/// crossing on a DIFFERENT (now-exact-grid) coordinate than the one the real editor's one-time,
+/// PRE-merge `MakePortals` ever computed — a genuine sub-ULP tie that isn't in the real game (found
+/// 2026-09-13, see `dev/docs/spikes/2026-09-13-crossing-vertex-live-capture/`; three independent
+/// board items — Island N=332, UNATCO N=226, WanChai N=58 — were this exact bug, not a
+/// `FLinePlaneIntersection`/`SafeNormal` precision issue as first suspected). Kept only for
+/// hand-built models (tests) that bake lights without ever calling `assign_leaves_and_zones`.
 pub(crate) fn collect_leaf_portals(model: &Model) -> Vec<Portal> {
     let mut stack: Vec<Ancestor> = Vec::new();
     let mut out = Vec::new();
@@ -1140,6 +1290,12 @@ pub fn assign_leaves_and_zones(model: &mut Model) {
         let mut stack: Vec<Ancestor> = Vec::new();
         collect_portals(model, 0, &mut stack, &mut portals);
     }
+    // Freeze this Pass-B portal geometry on the model for `permeating_lights` to consume LATER, at
+    // light-bake time, INSTEAD of recomputing fresh there (see `Model::leaf_portals`'s doc: the
+    // editor's own TestVisibility/MakePortals runs once, here, strictly BEFORE bspOptGeom's
+    // near-point merge (`bspoptgeom::merge_near_points`) — recomputing after that merge reads
+    // different (post-merge-snapped) point coordinates than the real editor's beam-clip ever sees).
+    model.leaf_portals = Some(portals.clone());
 
     // Pass B': zone barriers (faithful BlockPortal) — the leaf-PAIRS a PF_Portal node's REAL
     // polygon separates.  Runs on the pre-Pass-D tree (nodes still carry full CSG polygons).
