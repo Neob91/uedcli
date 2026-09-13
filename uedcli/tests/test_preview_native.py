@@ -899,6 +899,55 @@ def test_pf_fakebackdrop_face_falls_back_with_no_skyzoneinfo_in_level(tmp_path, 
     assert px[0] > 100 and px[1] < 40 and px[2] < 40, px    # its own RED -- no sky in this level
 
 
+# --------------------------------------------------------------- mode polys ("Texture Use")
+
+
+def test_mode_polys_renders_differently_from_the_default_lit_mode(tmp_path, monkeypatch):
+    """End-to-end: the SAME shot of the SAME face, once with `texture_use=False` (today's default
+    lit render) and once `True` (`--mode polys`) — proves the flag actually reaches the native
+    renderer through the whole `render_shots` -> FFI -> Rust path, not just that Rust's own unit
+    tests pass in isolation."""
+    index = _ued22_index()
+    room = cube_room("Room", size=1024.0, height=512.0, texture="Room.Wall")
+    lvl = _level(room)
+    monkeypatch.setattr(pn, "TextureResolver",
+                        _flat_texture_resolver_stub({"Room.Wall": (0, 255, 0)}))
+    shots = [parse_shot("at:0,0,0;rot:0,0")]
+
+    written_lit = pn.render_shots(level=lvl, shots=shots, out_dir=tmp_path / "lit", index=index,
+                                  defaults=DEFAULTS, size=(64, 64))
+    written_polys = pn.render_shots(level=lvl, shots=shots, out_dir=tmp_path / "polys", index=index,
+                                    defaults=DEFAULTS, size=(64, 64), texture_use=True)
+    assert written_lit == 1 and written_polys == 1
+    from PIL import Image
+    lit_px = Image.open(tmp_path / "lit" / "shot-01.png").getpixel((32, 32))
+    polys_px = Image.open(tmp_path / "polys" / "shot-01.png").getpixel((32, 32))
+    assert lit_px != polys_px, "--mode polys must not render identically to the default lit mode"
+
+
+def test_mode_polys_gives_two_different_textures_two_different_flat_colours(tmp_path, monkeypatch):
+    """Two separate rooms, two separate textures, two shots (one aimed at each) -- `--mode polys`
+    must colour them differently, matching the real UnrealEd "Texture Use" mode's per-texture key
+    (`dev/docs/spikes/2026-09-13-polys-render-mode-re/spike.md`)."""
+    index = _ued22_index()
+    room_a = cube_room("RoomA", size=1024.0, height=512.0, texture="Wall.A")
+    room_b = make_brush_actor("RoomB", cube(1024.0, 1024.0, 512.0, texture="Wall.B"),
+                              location=(100000.0, 0.0, 0.0), csg="subtract")
+    lvl = _level(room_a, room_b)
+    monkeypatch.setattr(pn, "TextureResolver", _flat_texture_resolver_stub({
+        "Wall.A": (0, 255, 0), "Wall.B": (0, 0, 255)}))
+    shots = [parse_shot("at:0,0,0;rot:0,0;name:a"),
+             parse_shot("at:100000,0,0;rot:0,0;name:b")]
+
+    written = pn.render_shots(level=lvl, shots=shots, out_dir=tmp_path, index=index,
+                              defaults=DEFAULTS, size=(64, 64), texture_use=True)
+    assert written == 2
+    from PIL import Image
+    px_a = Image.open(tmp_path / "a.png").getpixel((32, 32))
+    px_b = Image.open(tmp_path / "b.png").getpixel((32, 32))
+    assert px_a != px_b, "different textures must render different --mode polys colours"
+
+
 # --------------------------------------------------------------- invisible faces
 
 

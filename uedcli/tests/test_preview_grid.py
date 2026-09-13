@@ -460,12 +460,12 @@ def test_grid_lines_are_1px_at_every_size(size):
 def test_grid_is_a_backdrop_a_covering_face_wins():
     """The grid is drawn FIRST; a face covering a gridline pixel must show the face colour. World
     (0,0) is always ON a gridline (0 is a multiple of any power-of-two step); a subtract room's
-    solved floor covers it under `--faces textured`."""
+    solved floor covers it under `--mode fullbright`."""
     region = (-256.0, -256.0, -128.0, 256.0, 256.0, 128.0)
     size = 200
     room = _room("Room", size=512.0, height=256.0)
     covered = render_brushes_pgm([room], view="top", size=size, annotations=AnnotationSpec.none(),
-                                 color_by_csg=True, render_data=_solved([room]), faces="textured",
+                                 color_by_csg=True, render_data=_solved([room]), faces="fullbright",
                                  region=region, grid_size=64)
     marker = Actor(name="M", cls="Engine.Actor",
                    location=(Decimal(10 ** 6), Decimal(10 ** 6), Decimal(0)))
@@ -483,7 +483,7 @@ def test_grid_is_a_backdrop_a_covering_face_wins():
 
 
 def test_grid_colours_are_the_same_under_wire_and_textured():
-    """`--faces` never touches the grid computation (it draws before the `faces` branch), so a lone
+    """`--mode` never touches the grid computation (it draws before the `faces` branch), so a lone
     small room framed inside a huge region shows an IDENTICAL grid whichever mode draws its (tiny,
     off to one side) geometry -- outside a safety margin around the room's OWN screen footprint,
     where `wire`'s outline and `textured`'s (CSG-solved interior) fill legitimately cover different
@@ -495,7 +495,7 @@ def test_grid_colours_are_the_same_under_wire_and_textured():
                               color_by_csg=True, region=region, grid_size=64, faces="wire")
     textured = render_brushes_pgm([room], view="top", size=size, annotations=AnnotationSpec.none(),
                                   color_by_csg=True, render_data=_solved([room]), region=region,
-                                  grid_size=64, faces="textured")
+                                  grid_size=64, faces="fullbright")
     _scale, to_px, *_rest = _framing([(0.0, 0.0)], region, size, "top", 30.0, pad=_FRAME_PAD)
     cx, cy = to_px((0.0, 0.0))
     margin = 20                                             # comfortably past the room's own footprint

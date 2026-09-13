@@ -6,7 +6,7 @@ never writes the trunk or a committed map.
 
 ```
 level photo SHOT… --out-dir DIR [--native | --game] [--size WxH] [--fov DEG]
-              [--faces wire|textured] [--map PATH] [--rebuild] [--keep-alive]
+              [--mode wire|lit|polys] [--map PATH] [--rebuild] [--keep-alive]
 level photo --list-actors Package.Class [--sample N] [--game --map PATH]   # discovery mode
 ```
 
@@ -53,7 +53,7 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
   BSP surfaces lit from a native lumel bake (conceptual RE against the real light-color/falloff
   formula, not byte parity). `--fov DEG` (default 75) applies here; `--map` / `--rebuild` /
   `--keep-alive` are rejected with `--native`.
-  - **`--faces textured` (the default)** — solid **textured** faces (lit world surfaces, flat-shaded
+  - **`--mode lit` (the default)** — solid **textured** faces (lit world surfaces, flat-shaded
     mesh/mover actors), **single-sided like the real editor**: a face renders only from the side its
     surface normal faces, unless it
     carries `PF_TwoSided` or `PF_Portal` (sheets, banners, chain-link, water portals — the same
@@ -100,12 +100,19 @@ One shot per positional token, fields `;`-separated (angles in **unreal rotation
     surfaces get one static draft frame generated from what the package does store, which
     approximates the effect rather than reproducing the engine's own pixels; a procedural class
     nothing draws renders flat red.
-  - **`--faces wire`** — a content-free **brush wireframe** from the same posed camera: every brush
+  - **`--mode wire`** — a content-free **brush wireframe** from the same posed camera: every brush
     edge drawn (see-through, no hidden-line removal), coloured by CSG op — **add** blue, **subtract**
     gold, **semisolid** coral, **nonsolid** green, **mover** magenta. Point actors draw as their
     sprites (or a marker when the sprite is unavailable). No CSG solve and no textures on the brushes,
     so it renders the raw authored geometry fast — useful for reading structure and CSG intent from
-    any vantage. `--faces` is `--native` only; passing it with `--game` exits 2.
+    any vantage.
+  - **`--mode polys`** — UnrealEd's real "Texture Use" render (the editor's actual UI label; its
+    numeric mode `3` is informally called "Polys" elsewhere, which is misleading). Every surface
+    fills with a **flat, unshaded colour keyed by which texture it uses** — the same texture
+    anywhere in the level renders identically regardless of which brush, face, or lighting it sits
+    under; a different texture gets a different colour. No lighting, no per-face shading, and (like
+    `wire`) it needs no lighting build — useful for spotting which surfaces in a level still share a
+    texture. `--mode` is `--native` only; passing it with `--game` exits 2.
 
 **Shared:** `--out-dir DIR` (required unless `--list-actors`; created if absent), `--size WxH`
 (default 1280×960).

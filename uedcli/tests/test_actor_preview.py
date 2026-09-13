@@ -910,7 +910,7 @@ def test_json_emits_the_locator_object_to_stdout(tmp_path, monkeypatch, capsys):
 def test_json_with_no_locator_cells_omits_locator_and_cell_span_but_keeps_hidden(tmp_path, monkeypatch,
                                                                                  capsys):
     # §3.4's reduced shape: no `locator` key, no `panes`/`cell`/`span`, but still `hidden`. `hidden`
-    # answers the image actually rendered, not an abstract locator-independent fact — under `--faces
+    # answers the image actually rendered, not an abstract locator-independent fact — under `--mode
     # textured` the locator's gutter reserve shifts `to_pxf`/the depth buffer and CAN change which face
     # is occluded (board item `locator-on-vs-off-can-disagree-on-hidden-under`). The equality below
     # holds because this fixture renders the default `wire`, where `hidden` never touches pixel
