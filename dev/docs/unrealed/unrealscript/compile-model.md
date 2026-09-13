@@ -31,8 +31,19 @@ VALUE** (e.g. `GroupName="Landscape"`) registers **last**, after every member an
 `defaultproperties` compiles last. Modeled in `ordering._gather_names` + `ObjInput.late_name_refs`.
 The former "permutation exclusion" proposal (gate masks name/import ORDER) is retired — see
 `parity.md` for the current, much narrower exclusion set (just the GUID, for the packages that fully
-reproduce). Open: an Enum's own value-list may carry its own un-RE'd sub-order (`DavesBrushBuilders`);
-`ExtendedBuilders` diverges on raw byte count, unrelated to ordering. Historical example orders:
+reproduce). **A class's top-level declaration order matters and is NOT the compiled Children chain**
+(RE'd 2026-09-13): registration follows plain source-textual order — a property and a later
+`var() enum`/`const`/`struct`/function register side by side, exactly as declared — but the compiled
+`.u`'s own Children chain bins every property into one forward sub-chain and every non-property into
+a separate reverse sub-chain, losing that interleaving structurally. `ast.ClassDecl.decl_order` (the
+parser's own top-to-bottom walk, before it splits into `members`/`callables`) supplies the true order
+to `ordering._gather_names` via `reorder._Decoder.name_creation_order`'s `class_order`/
+`top_level_by_class` params. Within one field's own subtree (a function's params+locals, a struct's
+members) nothing was lost — that substructure is uniform-kind, so `_decl_forward`'s existing forward
+walk still applies unchanged. Open: a narrower qsort-tie-permutation between real engine-pool names
+(e.g. `Core`) and an own-new value-only name (e.g. a package self-name), both same refcount —
+`DavesBrushBuilders` down to one such pair, `ExtendedBuilders` a larger unresolved group. Historical
+example orders:
 
 - `UscHello` names: `None, UscHello, Core, System, Class, TextBuffer, ScriptText, Package, Object`.
 - `UscVars` exports: `ScriptText, Alpha, Beta, Gamma, UscVars` (Children chain in decl order,

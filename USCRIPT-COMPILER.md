@@ -98,8 +98,8 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 |---|---|---|---|---|
 | FrameBuilder | UED22 | 1 | ✅ | |
 | RahnemBrushBuilders | UED22 | 1 | ✅ | pins the value-only-name gather fix |
-| ExtendedBuilders | UED22 | 2 | perm only | raw byte-count diff (+5 B), unexplained — likely multi-class-specific |
-| DavesBrushBuilders | UED22 | 1 | perm only | name-table order diff inside one Enum's own value list — same bug *class* as the fix above, narrower scope, not yet applied there |
+| ExtendedBuilders | UED22 | 2 | perm only | name-table qsort-tie-permutation among `Core`/`Editor`/`System`/self-name/imports — same bug class as `DavesBrushBuilders` below, larger group, unresolved |
+| DavesBrushBuilders | UED22 | 1 | perm only | enum/property interleaving FIXED (2026-09-13); one residual pair (`Core` vs the package self-name) — a qsort-tie-permutation, open |
 | Fire | UT99 | 6 (native) | perm only | strict-gate diff traced to compact-index width, itself a consequence of UT99 needing its OWN name-pool extraction (`ENGINE_NAME_POOL`/`HIGHLIGHT_NAME_POOL` are UED22-`core.dll`-specific); not a new bug |
 | ConvTest + siblings | DXORIG | 1 (+2 auto) | ✅ | conversation import proof |
 | UnrealShare | UED22 | 1 | ✅ | first live proof of the `ProbeMask` fix (`UnrealTestInfo` overrides `Tick` alone) |
@@ -142,18 +142,23 @@ strict gate autonomously.
 
 ## Open items / known gaps (honest — not excluded, not hacked around)
 
-- `ExtendedBuilders` byte-count diff and `DavesBrushBuilders`'s enum-value-list ordering — both real,
-  both open. A live `AllocateNameEntry` capture (2026-09-13, `findings-ordering-re.md`) root-caused
-  the mechanism: name registration follows plain interleaved SOURCE TEXTUAL order (a property and a
-  later `var() enum` sit side by side in registration order exactly as declared), but the COMPILED
-  `.u`'s own `Children` chain bins all properties into one forward sub-chain and all non-properties
-  into a separate reverse sub-chain — genuinely losing that interleaving (confirmed against the real
-  UCC golden, not just our own output). `reorder.py`'s decode-from-bytes architecture cannot recover
-  it; needs the compiler's own AST-walk order threaded through directly. One real sub-bug this same
-  capture found and fixed: a function's body locals register inline, not deferred to a trailing pass
-  (`reorder.name_creation_order`) — pinned by `test_davesbrushbuilders_locals_register_inline_not_deferred`,
-  but it doesn't move either package's gate result (their divergence starts earlier, in the
-  enum/property interleaving).
+- **The enum-vs-property name-table interleaving bug is FIXED (2026-09-13)**: a live
+  `AllocateNameEntry` capture (`findings-ordering-re.md`) showed UCC registers names in plain
+  interleaved SOURCE TEXTUAL order, which the compiled `.u`'s own `Children` chain cannot reproduce
+  (it bins all properties into one forward sub-chain and all non-properties into a separate reverse
+  sub-chain). `ast.py`'s `ClassDecl.decl_order` + `compile._top_level_name_order` thread the parser's
+  own true declaration order into `reorder._Decoder.name_creation_order` (new `class_order`/
+  `top_level_by_class` params), bypassing the decode-from-compiled-bytes path for this one piece.
+  `DavesBrushBuilders` went from diverging at name-table index 14/74 (cascading through most of the
+  table) to matching golden in all but one swapped pair (indices 21/22, `Core`/the package's own
+  self-name). That pair, and `ExtendedBuilders`'s still-open byte-count diff, are a DIFFERENT,
+  narrower bug — a qsort-tie-permutation between real engine-pool names and own-new value-only names
+  — tracked at `dev/docs/board/inbox/uscript-name-order-core-vs-package-self-name/`. A real sub-bug
+  found by the same capture is fixed too: a function's body locals register inline, not deferred to a
+  trailing pass — pinned by `test_davesbrushbuilders_locals_register_inline_not_deferred`. Known gap
+  in the fix: `decl_order` doesn't place a HOISTED nested enum/struct (one declared inline inside a
+  struct body) correctly — `parser.py`'s own comment on `self._hoisted` admits it lands at "the same
+  (unresolved) position as in `members`." Not exercised by any current fixture; no test covers it.
 - `assert`/`do..until` lowering, and a two-pass "signature graph" for mutually-referencing
   same-package classes (blocks `UWeb`) — real, scoped gaps in `lower.py`/`compile.py`. Replication
   blocks and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented,

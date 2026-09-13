@@ -137,6 +137,12 @@ class ClassDecl:
     # `functions`/`states` filtered to one category each; this is both, in TRUE declaration order
     # (the Children chain interleaves them, so the split-by-category order above is not enough).
     callables: tuple[object, ...] = ()       # FuncDecl | StateDecl
+    # EVERY top-level declaration (members + callables combined), in TRUE SOURCE order. `members`/
+    # `callables` above each split the class body into same-kind-only sublists, which loses the
+    # interleaving between e.g. a property and a later function/enum. UCC's name-table registration
+    # follows this true order (not the compiled Children chain, which bins properties and
+    # non-properties into separate sub-chains) — see `ordering.py`/`reorder.py`.
+    decl_order: tuple[object, ...] = ()      # VarDecl | ConstDecl | EnumDecl | StructDecl | FuncDecl | StateDecl
     replication: ReplBlock | None = None
     default_props: tuple[DefaultProp, ...] = ()
     exec_directives: tuple[str, ...] = ()    # `#exec ...` lines, in order

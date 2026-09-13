@@ -413,3 +413,38 @@ through to the name-gather step directly, instead of (or alongside) reconstructi
 bytes. That is a real architecture change (a new order-source parallel to `reorder.true_order`, not a
 `reorder.py` patch), scoped, not attempted this pass — flagged as the concrete next step.
 
+## FIXED (2026-09-13): AST-order threading recovers the enum-vs-property interleaving
+
+Did the architecture change the previous section flagged as the concrete next step. UCC's name
+registration follows plain SOURCE-TEXTUAL order — a property and a later `var() enum` register side
+by side, exactly as declared. The compiled `.u`'s own `Children` chain cannot reproduce that order
+after the fact — it structurally bins every property into one forward sub-chain and every
+non-property into a separate reverse sub-chain (confirmed against the real UCC golden, not just our
+own output) — so `reorder.py`'s decode-the-compiled-bytes architecture can never recover it, no
+matter how the decode is written.
+
+**Fix**: thread the compiler's own AST-walk order through directly, bypassing the decode for this
+one piece. `ClassDecl.decl_order` (`ast.py`) is every top-level declaration in true source order —
+the parser's single top-to-bottom class-body loop already sees this order, it just used to discard
+it when splitting into `members`/`callables`. `compile._top_level_name_order` turns it into a display
+-name list. `reorder._Decoder.name_creation_order` gained `class_order`/`top_level_by_class` params:
+supplied, it walks the true top-level order per class (still recursing into each field's own
+children via the existing `_decl_forward`, since a function's params/locals or a struct's members
+were never binned — only the top-level mix of properties and non-properties was); omitted, it's the
+same binned walk as before. `compile_package`/`compile_package_dir` supply both from the parsed AST.
+
+**Result**: `DavesBrushBuilders` went from diverging at name-table index 14/74 (cascading through
+most of the table) to matching golden in all but one swapped pair — indices 21/22 (`Core`/the
+package's own self-name), both refcount 1. That pair is a DIFFERENT, narrower bug: a qsort-tie-
+permutation between a real engine-pool name and an own-new value-only name, confirmed present
+(masked) in the PRE-fix output too, so this fix did not introduce it. Root-caused as far as: `Core`'s
+dumped global index (16) already sorts it far ahead of `DavesBrushBuilders` (sentinel, no dumped
+index) in `order_package`'s presort, so the swap must happen inside the `msvc_qsort` permutation of
+the refcount=1 tied group itself, not in gather order — tracked separately,
+`dev/docs/board/inbox/uscript-name-order-core-vs-package-self-name/`. `ExtendedBuilders` is
+unaffected by this fix (still fails `gate`, still passes `perm_gate`) — its divergence starts at a
+9-name tied group of the same apparent bug class, not the interleaving bug this fix targets; its
+multi-class cross-class registration-order model is also unverified. No regression: full offline
+uscript suite, 217 passed (was 216). Full detail + the fixed board item:
+`dev/docs/board/done/uscript-name-order-enum-vs-property/`.
+
