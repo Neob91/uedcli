@@ -258,53 +258,36 @@ class _Decoder:
         nonprops = [c for c in children if self.class_disp(c) not in _PROP_KINDS]
         return props + nonprops[::-1]
 
-    def creation_order(self) -> list[str]:
-        """Object creation order (forward declaration) — the export gather. Each field is created,
-        then its own children inline (a function immediately followed by its params + locals)."""
-        scripttext = next((i for i, e in enumerate(self.p.exports)
-                           if self.class_disp(i) == "TextBuffer" and e["outer"] == self.class_i + 1),
-                          None)
-        order = [self.ekey(self.class_i)]
-        seen = {self.class_i}
-        if scripttext is not None:
-            order.append(self.ekey(scripttext)); seen.add(scripttext)
-
-        def add(i0: int) -> None:
-            if i0 in seen:
-                return
-            seen.add(i0)
-            order.append(self.ekey(i0))
-            for c in self._decl_forward(i0):
-                add(c)
-
-        for c in self._decl_forward(self.class_i):
-            add(c)
-        for i0 in range(len(self.p.exports)):            # leftover array inners
-            add(i0)
-        return order
-
     def class_indices(self) -> dict[str, int]:
         """Every class export's display name -> its export index (0-based)."""
         return {self.edisp(i): i for i, e in enumerate(self.p.exports) if e["cls"] == 0}
 
     def name_creation_order(self, class_order: list[str] | None = None,
                             top_level_by_class: dict[str, list[str]] | None = None) -> list[str]:
-        """UCC's NAME-registration encounter order for own-new names (RE'd 2026-09-13 from a live
+        """UCC's single top-to-bottom declaration walk (RE'd 2026-09-13 from a live
         `AllocateNameEntry` capture of a real `UCC.exe make` of `DavesBrushBuilders`, `core.dll` VA
-        `0x1005cdc0` — see `findings-ordering-re.md`): a function's PARAMS/return AND its body LOCALS
-        all register immediately after the function itself, in ONE single top-to-bottom pass (a
-        function's locals are NOT deferred to a trailing pass, contrary to the previous two-pass
-        model) — so within one field's own subtree, forward declaration order (`_decl_forward`) is
-        already the real registration order. What is NOT reproducible from decoded bytes at all: the
-        TOP-LEVEL order a class's own properties interleave with its enums/consts/structs/functions —
-        the compiled Children chain bins all non-property fields (reverse-decl) ahead of all
-        properties (forward-decl), genuinely losing that interleaving, while UCC's real registration
-        follows plain source-textual order. `top_level_by_class` (a class display name -> its true
-        top-level child names, in source order, computed by `compile.py` from the parsed AST before
-        that binning happens) supplies the missing order; omitted, this falls back to the (binned)
-        `_decl_forward` walk, same as before this parameter existed. `class_order` is the class
-        display names in the order UCC compiles them (needed for a multi-class package — a
-        single-class caller may omit both and get the original single-`class_i` behavior)."""
+        `0x1005cdc0` — see `findings-ordering-re.md`): a class's own object CREATION order and its
+        FName REGISTRATION order are the same walk — each declared field is created and its name
+        (if new) is interned in the same step, so this one order drives both the export gather and
+        the name gather (`order_package`'s `creation_order`/`name_creation` args, both fed this same
+        list by `true_order`). A function's PARAMS/return AND its body LOCALS all register
+        immediately after the function itself, in ONE single top-to-bottom pass (a function's locals
+        are NOT deferred to a trailing pass, contrary to a previous two-pass model) — so within one
+        field's own subtree, forward declaration order (`_decl_forward`) is already the real order.
+        What is NOT reproducible from decoded bytes at all: the TOP-LEVEL order a class's own
+        properties interleave with its enums/consts/structs/functions — the compiled Children chain
+        bins all non-property fields (reverse-decl) ahead of all properties (forward-decl), genuinely
+        losing that interleaving, while UCC's real walk follows plain source-textual order.
+        `top_level_by_class` (a class display name -> its true top-level child names, in source
+        order, computed by `compile.py` from the parsed AST before that binning happens) supplies the
+        missing order; omitted, this falls back to the (binned) `_decl_forward` walk. `class_order`
+        is the class display names in the order UCC compiles them (needed for a multi-class package —
+        a single-class caller may omit both and get the original single-`class_i` behavior). Confirmed
+        against `DavesBrushBuilders`'s own committed golden (previously the ONLY fixture where export
+        order and name order were fed different walks — `dev/docs/board/done/
+        davesbrushbuilders-export-table-qsort-tie/`): the two isolated export-table qsort ties there
+        were not a qsort bug but this same lost top-level interleaving, one level up — the export
+        gather was still using the old binned walk after the name gather was already fixed."""
         order: list[str] = []
         seen: set[int] = set()
 
@@ -335,9 +318,8 @@ class _Decoder:
                 top_level = [by_disp[n.casefold()] for n in names_here]
             for c in top_level:
                 add(c)
-        for i0 in range(len(self.p.exports)):             # leftover (array inners, other classes)
-            if i0 not in seen:
-                seen.add(i0); order.append(self.ekey(i0))
+        for i0 in range(len(self.p.exports)):              # leftover (array inners, other classes)
+            add(i0)
         return order
 
     def objinputs(self) -> list[ObjInput]:
@@ -371,10 +353,12 @@ def true_order(u: bytes, class_order: list[str] | None = None,
     `export_rows` are (leaf display name, outer-chain) pairs (the shape `order_override` expects); the
     outer-chain is outermost->immediate, disambiguating a leaf whose immediate outer repeats.
     `class_order`/`top_level_by_class` feed `name_creation_order`'s AST-derived top-level order — see
-    its docstring; omit both to keep the old binned-`_decl_forward` behavior."""
+    its docstring; omit both to keep the old binned-`_decl_forward` behavior. The SAME walk drives
+    both the export gather and the name gather (`name_creation_order`'s docstring: object creation and
+    FName registration are one walk in real UCC, not two)."""
     d = _Decoder(u)
-    ordered = order_package(d.objinputs(), d.creation_order(), default_global_index(),
-                            name_creation=d.name_creation_order(class_order, top_level_by_class))
+    creation = d.name_creation_order(class_order, top_level_by_class)
+    ordered = order_package(d.objinputs(), creation, default_global_index(), name_creation=creation)
     exp_i = {d.ekey(i): i for i in range(len(d.p.exports))}
     export_rows = [(d.edisp(exp_i[k]), d.outer_chain(exp_i[k])) for k in ordered.exports]
     return ordered.names, ordered.imports, export_rows

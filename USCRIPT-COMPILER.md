@@ -102,8 +102,8 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 |---|---|---|---|---|
 | FrameBuilder | UED22 | 1 | ✅ | |
 | RahnemBrushBuilders | UED22 | 1 | ✅ | pins the value-only-name gather fix |
-| ExtendedBuilders | UED22 | 2 | perm only | name-table qsort-tie-permutation among `Core`/`Editor`/`System`/self-name/imports — same bug class as `DavesBrushBuilders`'s (now-fixed) name-table tie, larger group, unresolved |
-| DavesBrushBuilders | UED22 | 1 | perm only | name table now byte-exact (2026-09-13, the `Core`/self-name qsort tie is fixed); blocked on a separate, newly-found EXPORT-table qsort tie — open |
+| ExtendedBuilders | UED22 | 2 | perm only | name-table qsort-tie-permutation among `Core`/`Editor`/`System`/self-name/imports — same bug class as `DavesBrushBuilders`'s (now-fixed) name-table tie, larger group, unresolved; its compiled bytes shifted with the export-gather fix below (now 11429 B, matching golden's size) but it still fails `gate()` on the same root cause |
+| DavesBrushBuilders | UED22 | 1 | ✅ | the export-gather bug (see Open items) turned out to be the same top-level-interleaving bug one level up — fixed by feeding both gathers the same AST-derived walk |
 | Fire | UT99 | 6 (native) | perm only | strict-gate diff traced to compact-index width, itself a consequence of UT99 needing its OWN name-pool extraction (`ENGINE_NAME_POOL`/`HIGHLIGHT_NAME_POOL` are UED22-`core.dll`-specific); not a new bug |
 | ConvTest + siblings | DXORIG | 1 (+2 auto) | ✅ | conversation import proof |
 | UnrealShare | UED22 | 1 | ✅ | first live proof of the `ProbeMask` fix (`UnrealTestInfo` overrides `Tick` alone) |
@@ -164,12 +164,24 @@ strict gate autonomously.
   self-name) — since FIXED (2026-09-13, `dev/docs/board/done/uscript-name-order-core-vs-package-self-
   name/`): `ordering._gather_names` registered a class's own FName before its package's PackageImports
   self-reference; the real order (confirmed by the live `AllocateNameEntry` capture already on file)
-  is self-reference first. `DavesBrushBuilders`'s name table is now byte-exact, but the package still
-  fails the strict gate on a separate, newly-surfaced EXPORT-table qsort tie (two isolated swapped
-  pairs among tied-refcount function params/locals) — `dev/docs/board/inbox/davesbrushbuilders-
-  export-table-qsort-tie/`. `ExtendedBuilders`'s still-open byte-count diff is a DIFFERENT, larger
-  name-table qsort-tie-permutation among real engine-pool names and own-new value-only names,
-  unaffected by this fix. A real sub-bug
+  is self-reference first. `DavesBrushBuilders`'s name table is now byte-exact. The package's
+  remaining EXPORT-table divergence (two isolated swapped pairs among tied-refcount function
+  params/locals) turned out to be the SAME bug one level up, not a qsort bug: `reorder.true_order`
+  fed the export gather (`order_package`'s `creation_order` arg) the OLD binned `_decl_forward` walk
+  via a separate `_Decoder.creation_order()` method, even after `name_creation_order()` had already
+  been fixed to use the AST-derived true top-level order. Object creation and FName registration are
+  the same single top-to-bottom declaration walk in real UCC, so both gathers need the same order —
+  confirmed by feeding golden's own decoded gather through the existing (already instruction-exact)
+  `msvc_qsort` and finding it reproduces golden's true export order exactly once both gathers share
+  one walk. `creation_order()` is removed; `name_creation_order()` is now the sole gather-order
+  source for both tables. `DavesBrushBuilders` now passes the strict gate outright —
+  `dev/docs/board/done/davesbrushbuilders-export-table-qsort-tie/`. `ExtendedBuilders` still fails
+  `gate()` on the SAME root cause as before (a DIFFERENT, larger name-table qsort-tie-permutation
+  among real engine-pool names and own-new value-only names) — but its compiled bytes are not
+  unaffected: `compile_package_dir` always feeds `true_order` the AST-derived walk, so this fix
+  changes the export gather for every multi-class compile, `ExtendedBuilders` included. Its total
+  size now happens to match golden's (11429 B, was 11424 B) even though content still diverges from
+  offset `0x4b3` on. A real sub-bug
   found by the same capture is fixed too: a function's body locals register inline, not deferred to a
   trailing pass — pinned by `test_davesbrushbuilders_locals_register_inline_not_deferred`. Known gap
   in the fix: `decl_order` doesn't place a HOISTED nested enum/struct (one declared inline inside a

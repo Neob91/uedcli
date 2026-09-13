@@ -63,16 +63,23 @@ def test_realpkg_offline_byte_exact(pkg: str, classes: int):
     assert r.passed, f"{pkg}: " + " | ".join(r.messages)
 
 
-@pytest.mark.parametrize("pkg", ["FrameBuilder", "RahnemBrushBuilders", "UnrealShare"])
+@pytest.mark.parametrize("pkg", ["FrameBuilder", "RahnemBrushBuilders", "UnrealShare",
+                                 "DavesBrushBuilders"])
 def test_realpkg_strict_byte_exact(pkg: str):
-    """These two also pass the STRICT gate (name/import/export table ORDER included, not just
+    """These all also pass the STRICT gate (name/import/export table ORDER included, not just
     content) with no `order_override` — `RahnemBrushBuilders` pins the value-only-name gather-order
     fix (a package self-name in `PackageImports` registers at class-header time; a defaultproperties
     tag VALUE registers after every member/function, per `ordering._gather_names`/`late_name_refs`).
-    `ExtendedBuilders` still fails on raw byte count (a qsort-tie permutation among a larger group of
-    real-pool + own-new names, not isolated); `DavesBrushBuilders` now diverges only on ONE isolated
-    pair (see `test_davesbrushbuilders_ast_order_recovers_enum_property_interleaving`) — both open,
-    not this fix."""
+    `DavesBrushBuilders` pins the fix that made `reorder.true_order` feed the SAME AST-derived
+    top-level walk to both the export and name gathers (`reorder._Decoder.name_creation_order`,
+    now the sole gather order — see its docstring): the export-table tie in
+    `dev/docs/board/inbox/davesbrushbuilders-export-table-qsort-tie/` was never a qsort bug, it was
+    the export gather still using the old binned `_decl_forward` walk after the name gather had
+    already been fixed to use the true one. `ExtendedBuilders` still fails `gate()` on the SAME root
+    cause as before — a DIFFERENT, unresolved qsort-tie-permutation among a larger group of real-pool
+    + own-new names — but its compiled bytes did shift: `compile_package_dir` always feeds the export
+    gather this same AST-derived walk, so its total size now happens to match golden's (11429 B, was
+    11424 B) even though content still diverges. Open."""
     r = gate(_compile(pkg), (_FIX / pkg / f"{pkg}.u").read_bytes())
     assert r.passed, f"{pkg}: " + " | ".join(r.messages)
 
@@ -96,10 +103,10 @@ def test_davesbrushbuilders_name_table_byte_exact():
     (PackageImports[0], always the self-reference per `compile-model.md`) to register before
     `add(o.disp)`. This closes the Core/self-name swap: the name table is now byte-exact.
 
-    `DavesBrushBuilders` still fails the STRICT gate (see `test_realpkg_strict_byte_exact`'s
-    parametrize list, which does not include it) on an UNRELATED, newly-found export-table
-    qsort-tie-permutation among four tied-refcount local/param objects across different functions —
-    tracked at `dev/docs/board/inbox/davesbrushbuilders-export-table-qsort-tie/`."""
+    `DavesBrushBuilders` now passes the STRICT gate outright (see `test_realpkg_strict_byte_exact`) —
+    the export-table divergence this test's own docstring used to report here turned out to be the
+    SAME top-level-interleaving bug one level up (the export gather was still fed the old binned walk
+    after this fix; `reorder.true_order` now feeds both gathers the one true walk)."""
     from uedcli.upackage import _parse_package
 
     mine = _compile("DavesBrushBuilders")
@@ -117,9 +124,8 @@ def test_davesbrushbuilders_locals_register_inline_not_deferred():
     function `Extrapolate4`, and `dR` (a `BuildCube` local) between `Extrapolate5` and
     `BuildOctahedron` (`BuildCube`'s own name is a pre-existing import, so `BuildCube` itself never
     appears in the own-new name stream, but its local's position still splits `Extrapolate5` from
-    `BuildOctahedron`). This does not by itself make `DavesBrushBuilders` gate byte-exact (a separate,
-    open bug in enum-vs-property interleaving still diverges the table earlier) but is independently
-    checkable from `reorder.name_creation_order`'s own output."""
+    `BuildOctahedron`). Independently checkable from `reorder.name_creation_order`'s own output,
+    regardless of the top-level-interleaving fix (`test_realpkg_strict_byte_exact`)."""
     from uedcli.uscript.reorder import _Decoder
 
     u = (_FIX / "DavesBrushBuilders" / "DavesBrushBuilders.u").read_bytes()
