@@ -61,6 +61,20 @@ from build_ued_golden import _scratch_project  # noqa: E402
 CONTAINER = "uned-crossing-probe"
 CORE_PREF = 0x10000000
 ENGINE_PREF = 0x10000000
+EDITOR_PREF = 0x10000000
+
+# `FEditorVisibility::ActorVisibility` convergence point (Editor.dll 0x100a6edd, see
+# `actor_visibility_probe.py`) -- fires for EVERY recursive AND seed entry, always with the SAME
+# `Actor*` (the light) for the whole depth-first flood of one light. This is the cheap, LOW-volume
+# gate breakpoint 1-4 below arm/disarm on: v1 of this probe conditioned FPlane/FLinePlaneIntersection
+# directly on their own argument VALUES and it wedged the editor -- those two functions are also the
+# CSG BSP splitter's own primitives (confirmed: only 2 static callers of FLinePlaneIntersection in
+# Engine.dll, one of them SplitWithPlaneFast, which itself has 3 in-DLL callers besides the
+# ActorVisibility beam clip -- raw E8-scan, `_scratch/find_callers.py`), so an always-armed
+# conditional breakpoint on them pays a ptrace stop for every CSG split in the whole subset, not just
+# the permeating flood. Gating on ActorVisibility's own entry (armed only while the CURRENT actor is
+# Light124) bounds the live window to that one light's flood.
+AV_ENTRY = 0x100A6EDD
 
 # FPlane::FPlane(A,B,C) -- core.dll. Entry: right after `mov ebp,esp`, before esp is adjusted (arg
 # offsets are ebp-relative positive, unaffected). Exit: `pop esi`, not yet executed -- Normal/W
@@ -136,6 +150,10 @@ def build_gdb_script(case: dict, max_hits: int) -> str:
         f"*(unsigned int*)(*(unsigned int*)($ebp+0x10)+4)=={case['p2'][1]:#x}",
         f"*(unsigned int*)(*(unsigned int*)($ebp+0x10)+8)=={case['p2'][2]:#x}",
     ])
+    light = case["light"]
+    av_match = (f"*(unsigned int*)($act+0xd0)=={light[0]:#x} && "
+                f"*(unsigned int*)($act+0xd4)=={light[1]:#x} && "
+                f"*(unsigned int*)($act+0xd8)=={light[2]:#x}")
     return f"""
 set pagination off
 set confirm off
@@ -148,6 +166,8 @@ handle SIGUSR2 nostop noprint pass
 handle SIGPIPE nostop noprint pass
 set $fp_hits = 0
 set $lpi_hits = 0
+set $armed = 0
+set $av_hits = 0
 
 break *__FPLANE_ENTRY__ if {fplane_cond}
 commands
@@ -164,6 +184,7 @@ delete 1
 end
 continue
 end
+disable 1
 
 break *__FPLANE_EXIT__
 commands
@@ -176,6 +197,7 @@ printf "\\n"
 end
 continue
 end
+disable 2
 
 break *__LPI_ENTRY__ if {lpi_cond}
 commands
@@ -196,6 +218,7 @@ delete 3
 end
 continue
 end
+disable 3
 
 break *__LPI_EXIT__
 commands
@@ -207,6 +230,40 @@ printf "\\n"
 end
 continue
 end
+disable 4
+
+# Gate breakpoint: `FEditorVisibility::ActorVisibility`'s convergence point (Editor.dll), fires for
+# every recursive AND seed entry with the light Actor* unchanged for the whole flood of one light.
+# Cheap and unconditional (like `actor_visibility_probe.py`'s own ENTRY breakpoint) -- arms 1-4 only
+# while the CURRENT flood's actor is Light124, so FPlane/FLinePlaneIntersection's (still per-hit
+# costly) conditions are only paid during that one light's traversal, not the whole MAP REBUILD.
+break *__AV_ENTRY__
+commands
+silent
+set $av_hits = $av_hits + 1
+set $act = *(unsigned int*)($ebp+8)
+if {av_match}
+if $armed == 0
+printf "AV_ARM hit=%d\\n", $av_hits
+end
+set $armed = 1
+enable 1
+enable 2
+enable 3
+enable 4
+else
+if $armed == 1
+printf "AV_DISARM hit=%d\\n", $av_hits
+end
+set $armed = 0
+disable 1
+disable 2
+disable 3
+disable 4
+end
+continue
+end
+
 printf "ORACLE_ATTACHED\\n"
 continue
 """
@@ -258,14 +315,16 @@ def main() -> int:
         pid = O._editor_pid(CONTAINER)
         core_base = _find_dll_base(CONTAINER, pid, "core.dll")
         engine_base = _find_dll_base(CONTAINER, pid, "engine.dll")
-        print(f"[crossing] core.dll live base = {core_base:#x}  Engine.dll live base = {engine_base:#x}",
-              flush=True)
+        editor_base = _find_dll_base(CONTAINER, pid, "editor.dll")
+        print(f"[crossing] core.dll live base = {core_base:#x}  Engine.dll live base = {engine_base:#x} "
+              f"Editor.dll live base = {editor_base:#x}", flush=True)
         script = (build_gdb_script(case, max_hits)
                   .replace("__PID__", str(pid))
                   .replace("__FPLANE_ENTRY__", hex(remap(FPLANE_ENTRY, core_base, CORE_PREF)))
                   .replace("__FPLANE_EXIT__", hex(remap(FPLANE_EXIT, core_base, CORE_PREF)))
                   .replace("__LPI_ENTRY__", hex(remap(LPI_ENTRY, engine_base, ENGINE_PREF)))
                   .replace("__LPI_EXIT__", hex(remap(LPI_EXIT, engine_base, ENGINE_PREF)))
+                  .replace("__AV_ENTRY__", hex(remap(AV_ENTRY, editor_base, EDITOR_PREF)))
                   .replace("__MAXHITS__", str(max_hits)))
         subprocess.run(["docker", "exec", "-i", CONTAINER, "bash", "-c", "cat > /tmp/crossing.gdb"],
                        input=script, text=True, check=True)
