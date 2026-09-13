@@ -45,6 +45,12 @@ RANGES = [
     ("backface_portal_pawn", 0x100198a0, 0x100),
     ("zone_reach_emit", 0x10019940, 0x100),
     ("adduniqueitem_call", 0x100120a0, 0x40),
+    # 2026-09-13 round 6: raster-commit through emission/zone-retire, to find where iSurf/iNode
+    # (edi, per zonemask_prune's `shl 6,edi; add NodesBase,edi`) is still live at the accept/reject
+    # decision -- needed for a low-frequency, geometry-keyed order probe (NOT the hot per-pixel
+    # rasterizer entry, which is known to crash the container, `2026-09-06-raster-clipbspsurf-port`).
+    ("raster_commit", 0x10019a40, 0x400),
+    ("portal_emit_retire", 0x1001a1e0, 0x700),
 ]
 
 
