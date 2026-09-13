@@ -75,6 +75,31 @@ def test_realpkg_strict_byte_exact(pkg: str):
     assert r.passed, f"{pkg}: " + " | ".join(r.messages)
 
 
+def test_davesbrushbuilders_locals_register_inline_not_deferred():
+    """Pins a live `AllocateNameEntry` capture (`core.dll` VA `0x1005cdc0`, a real `UCC.exe make` of
+    this committed golden under `winedbg`; see `findings-ordering-re.md` 2026-09-13): a function's
+    body LOCALS register immediately after that function, not deferred to a trailing pass over every
+    function. The capture showed `im` (an `Extrapolate3` local) between `Extrapolate3` and the next
+    function `Extrapolate4`, and `dR` (a `BuildCube` local) between `Extrapolate5` and
+    `BuildOctahedron` (`BuildCube`'s own name is a pre-existing import, so `BuildCube` itself never
+    appears in the own-new name stream, but its local's position still splits `Extrapolate5` from
+    `BuildOctahedron`). This does not by itself make `DavesBrushBuilders` gate byte-exact (a separate,
+    open bug in enum-vs-property interleaving still diverges the table earlier) but is independently
+    checkable from `reorder.name_creation_order`'s own output."""
+    from uedcli.uscript.reorder import _Decoder
+
+    u = (_FIX / "DavesBrushBuilders" / "DavesBrushBuilders.u").read_bytes()
+    d = _Decoder(u)
+    exp_i = {d.ekey(i): i for i in range(len(d.p.exports))}
+    disp = [d.edisp(exp_i[k]) for k in d.name_creation_order()]
+
+    def idx(name: str) -> int:
+        return disp.index(name)
+
+    assert idx("Extrapolate3") < idx("im") < idx("Extrapolate4")
+    assert idx("Extrapolate5") < idx("dR") < idx("BuildOctahedron")
+
+
 # ── docker-gated fresh rebuild ────────────────────────────────────────────────────────────────────
 def _docker_up() -> bool:
     if shutil.which("docker") is None:

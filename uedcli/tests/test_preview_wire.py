@@ -1,4 +1,4 @@
-"""`level photo --native --faces wire` — the perspective brush wireframe.
+"""`level photo --native --mode wire` — the perspective brush wireframe.
 
 Deliberately NO `importorskip("uedcli_native")`: wire needs no native extension (no CSG solve),
 and that these tests run and render with the extension absent is itself the guarantee."""
@@ -108,9 +108,9 @@ def test_wire_empty_world_renders_blank_frame(tmp_path):
 
 
 def test_faces_rejected_under_game(tmp_path, capsys):
-    """--faces is --native only; under --game (the default backend) it exits 2 naming it."""
+    """--mode is --native only; under --game (the default backend) it exits 2 naming it."""
     args = cli.build_parser().parse_args(
-        ["level", "photo", "--faces", "wire", "--out-dir", str(tmp_path / "o"),
+        ["level", "photo", "--mode", "wire", "--out-dir", str(tmp_path / "o"),
          "at:0,0,0;rot:0,0"])
     assert dispatch.dispatch(args) == 2
-    assert "--faces requires --native" in capsys.readouterr().err
+    assert "--mode requires --native" in capsys.readouterr().err

@@ -209,24 +209,25 @@ def _preview_opts(pp):
                          "shows all four); 'iso' separates opposite faces so index labels don't overlap")
     pp.add_argument("--iso-angle", type=float, default=30.0,
                     help="iso receding-edge angle from horizontal (default 30°)")
-    pp.add_argument("--faces", default="wire", choices=["wire", "textured"],
+    pp.add_argument("--mode", dest="faces", default="wire", choices=["wire", "fullbright"],
                     help="how brush faces are drawn (default 'wire'). 'wire' = outlines only, the "
                          "content-free schematic — CSG-coloured (added blue, subtracted gold, …), needs "
-                         "no game install. 'textured' = the CSG-solved textured world, as UnrealEd's 3D "
-                         "viewport draws it: runs the native CSG solve over the set and fills only the "
-                         "surfaces that survive, each through its real texture and authored UV frame "
-                         "(Origin/TextureU/TextureV/Pan), NO wireframe — so alignment, panning and "
-                         "tiling are visible offline (no editor, no lighting). An additive brush not "
-                         "inside subtracted space is invisible; a solve that leaves nothing exits 2. "
-                         "'textured' needs a resolved project, the per-user games config and every "
-                         "referenced texture readable, and rejects --brush-colors and any scaled or "
-                         "sheared brush; 'wire' needs none of that and works on --from-t3d from anywhere")
+                         "no game install. 'fullbright' = the CSG-solved textured world, as UnrealEd's 3D "
+                         "viewport's PlainTex mode draws it: runs the native CSG solve over the set and "
+                         "fills only the surfaces that survive, each through its real texture and "
+                         "authored UV frame (Origin/TextureU/TextureV/Pan), NO wireframe, NO lighting — "
+                         "so alignment, panning and tiling are visible offline (no editor). An additive "
+                         "brush not inside subtracted space is invisible; a solve that leaves nothing "
+                         "exits 2. 'fullbright' needs a resolved project, the per-user games config and "
+                         "every referenced texture readable, and rejects --brush-colors and any scaled "
+                         "or sheared brush; 'wire' needs none of that and works on --from-t3d from "
+                         "anywhere")
     pp.add_argument("--brush-colors", dest="brush_colors", default=None, choices=["csg", "legend"],
-                    help="how to colour the '--faces wire' wireframe: 'csg' (the default) = by CSG op "
+                    help="how to colour the '--mode wire' wireframe: 'csg' (the default) = by CSG op "
                          "(added blue, subtracted gold, semisolid pink, nonsolid green, mover magenta); "
                          "'legend' = each brush in its own per-actor tint (drops the CSG cue but "
                          "tells same-op brushes apart at a glance). "
-                         "Rejected under --faces textured (which samples real textures, colouring "
+                         "Rejected under --mode fullbright (which samples real textures, colouring "
                          "nothing from this flag)")
     pp.add_argument("--annotate", dest="annotate", default=DEFAULT_ANNOTATIONS,
                     help="comma-set of poly-index selectors (union). Bare 'poly' = every face index; "
@@ -255,7 +256,7 @@ def _preview_opts(pp):
                     help="emphasise a poly or an actor; repeatable. A token "
                          "WITH a colon is a poly selector BRUSH:IDX (the set form BRUSH:1,2 and "
                          "BRUSH:all work too) — those polys draw with a bolder line in their brush's "
-                         "vivid CSG hue; under --faces textured the highlighted face keeps its texture "
+                         "vivid CSG hue; under --mode fullbright the highlighted face keeps its texture "
                          "and takes only that vivid outline. It re-colours what is VISIBLE and never "
                          "x-rays: a face hidden behind something at this --view draws nothing. A stderr "
                          "note names any selector that ended up not visible for ANY reason — hidden, "
@@ -274,7 +275,7 @@ def _preview_opts(pp):
     pp.add_argument("--focus", metavar="BRUSH", default=None,
                     help="spotlight ONE brush: only it shows face indices (in its label tint); "
                          "every OTHER brush recedes — its wireframe to faint (dimmed) lines, and under "
-                         "--faces textured its solved fills to a faint wash of their own colour. It "
+                         "--mode fullbright its solved fills to a faint wash of their own colour. It "
                          "changes BRIGHTNESS ONLY, never what is visible or what hides what: a brush "
                          "between the camera and the focused one still covers it. All "
                          "actor names still appear in the legend. --highlight OVERRIDES this — a "
@@ -291,8 +292,8 @@ def _preview_opts(pp):
                          "FRONT/SIDE, an 8-sided wire cylinder in ISO; 'light-range' = a faint orange "
                          "sphere of a light's reach (25·(LightRadius+1) UU); 'sound-range' = a faint "
                          "blue sphere of an AmbientSound's reach (25·(SoundRadius+1) UU). Brush actors "
-                         "(incl. movers) are excluded, so under --faces wire their preview stays "
-                         "schema-free (no class lookup). --faces textured does look classes up, but only "
+                         "(incl. movers) are excluded, so under --mode wire their preview stays "
+                         "schema-free (no class lookup). --mode fullbright does look classes up, but only "
                          "to tell a mover (drawn as a magenta overlay) from a world brush — it draws no "
                          "extra overlay")
     pp.add_argument("--size", type=int, default=1024, metavar="PX",

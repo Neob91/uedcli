@@ -143,11 +143,30 @@ strict gate autonomously.
 ## Open items / known gaps (honest — not excluded, not hacked around)
 
 - `ExtendedBuilders` byte-count diff and `DavesBrushBuilders`'s enum-value-list ordering — both real,
-  both open (`findings-ordering-re.md`).
+  both open. A live `AllocateNameEntry` capture (2026-09-13, `findings-ordering-re.md`) root-caused
+  the mechanism: name registration follows plain interleaved SOURCE TEXTUAL order (a property and a
+  later `var() enum` sit side by side in registration order exactly as declared), but the COMPILED
+  `.u`'s own `Children` chain bins all properties into one forward sub-chain and all non-properties
+  into a separate reverse sub-chain — genuinely losing that interleaving (confirmed against the real
+  UCC golden, not just our own output). `reorder.py`'s decode-from-bytes architecture cannot recover
+  it; needs the compiler's own AST-walk order threaded through directly. One real sub-bug this same
+  capture found and fixed: a function's body locals register inline, not deferred to a trailing pass
+  (`reorder.name_creation_order`) — pinned by `test_davesbrushbuilders_locals_register_inline_not_deferred`,
+  but it doesn't move either package's gate result (their divergence starts earlier, in the
+  enum/property interleaving).
 - `assert`/`do..until` lowering, and a two-pass "signature graph" for mutually-referencing
   same-package classes (blocks `UWeb`) — real, scoped gaps in `lower.py`/`compile.py`. Replication
-  blocks and non-conversation `#exec` (texture/mesh/audio/font import codecs) remain fully
-  unimplemented, scoped out for now.
+  blocks and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented,
+  scoped out for now. `#exec TEXTURE IMPORT` is RE'd but not wired in — see below.
+- **`#exec TEXTURE IMPORT`** (2026-09-13): the RE is done — `dev/docs/spikes/
+  2026-09-13-texture-import-re/spike.md` (PCX decode, the `UTexture`/`UPalette` body layout, the
+  mip-chain quantization algorithm) — but nothing is wired into `compile.py` yet
+  (`dev/docs/board/inbox/uscript-texture-import-compiler-integration/`). Two open sub-items the
+  integration needs to resolve: a texture's `InternalTime` property is a SECOND per-compile-random
+  field (needs an owner-approved gate exclusion, like the package GUID) and the mip-quantization
+  tie-break direction is unresolved for an exact-average edge case (real content is very unlikely
+  to hit it). This directly blocks the real community package `GiveMeItems`, which needs exactly
+  this directive.
 - Expected-type-directed operator overload resolution (e.g. an int-divide whose result narrows into
   an int field) — attempted twice and reverted; UCC's real tie-break rule is subtler than modeled.
 - **Corpus reality**: many stock packages (most of `ConSys`, `DeusEx`, even parts of `Extension`) are

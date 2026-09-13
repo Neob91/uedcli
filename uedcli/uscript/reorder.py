@@ -283,19 +283,16 @@ class _Decoder:
             add(i0)
         return order
 
-    _CPF_PARM = 0x80    # CPF_Parm — set on a function param/return (not on a local)
-
-    def _prop_flags(self, i0: int) -> int:
-        pos = self.p.exports[i0]["soff"]
-        for _ in range(3):                               # None, super, next
-            _v, pos = _rci(self.buf, pos)
-        pos += 4                                          # ArrayDim
-        return struct.unpack_from("<I", self.buf, pos)[0]
-
     def name_creation_order(self) -> list[str]:
-        """UCC's NAME-registration encounter order for own-new names = forward declaration order. The
-        Children linked list is stored reverse-declaration (UE1 prepends), so walk it reversed; a
-        function registers its PARAMS/return in pass 1 (inline) and its body LOCALS in pass 2."""
+        """UCC's NAME-registration encounter order for own-new names = forward declaration order,
+        fully inline (RE'd 2026-09-13 from a live `AllocateNameEntry` capture of a real `UCC.exe make`
+        of `DavesBrushBuilders`, `core.dll` VA `0x1005cdc0` — see `findings-ordering-re.md`): a
+        function's PARAMS/return AND its body LOCALS all register immediately after the function
+        itself, in ONE single top-to-bottom pass. The capture showed `im` (a local of `Extrapolate3`)
+        registering directly between `Extrapolate3` and the next function `Extrapolate4`, and `dR`
+        (a local of `BuildCube`) directly between `Extrapolate5` and `BuildOctahedron` — a function's
+        locals are NOT deferred to a trailing pass over every function, contrary to the previous
+        two-pass model. Same recursion shape as `creation_order` (no special Function case)."""
         scripttext = next((i for i, e in enumerate(self.p.exports)
                            if self.class_disp(i) == "TextBuffer" and e["outer"] == self.class_i + 1),
                           None)
@@ -303,29 +300,17 @@ class _Decoder:
         seen = {self.class_i}
         if scripttext is not None:
             order.append(self.ekey(scripttext)); seen.add(scripttext)
-        funcs: list[int] = []
 
         def add(i0: int) -> None:
             if i0 in seen:
                 return
             seen.add(i0)
             order.append(self.ekey(i0))
-            kids = self._decl_forward(i0)
-            if self.class_disp(i0) == "Function":
-                funcs.append(i0)
-                for c in kids:                            # pass 1: params/return only
-                    if self._prop_flags(c) & self._CPF_PARM and c not in seen:
-                        seen.add(c); order.append(self.ekey(c))
-            else:
-                for c in kids:
-                    add(c)
+            for c in self._decl_forward(i0):
+                add(c)
 
         for c in self._decl_forward(self.class_i):
             add(c)
-        for fi in funcs:                                  # pass 2: function-body locals
-            for c in self._decl_forward(fi):
-                if c not in seen:
-                    seen.add(c); order.append(self.ekey(c))
         for i0 in range(len(self.p.exports)):             # leftover (array inners)
             if i0 not in seen:
                 seen.add(i0); order.append(self.ekey(i0))

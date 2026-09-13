@@ -1,9 +1,9 @@
-"""Perspective wireframe renderer for `level photo --native --faces wire`.
+"""Perspective wireframe renderer for `level photo --native --mode wire`.
 
 A freely-posed, content-free brush wireframe: the same CSG-op colours and drawing primitives
 `actor diagram` uses, but projected through the shot camera instead of an orthographic view.
 
-Reused from elsewhere (the point of `--faces wire` reusing `actor diagram`):
+Reused from elsewhere (the point of `--mode wire` reusing `actor diagram`):
 
 - `preview._CSG_PALETTE` / `preview.classify_brush` — brush edge colour by CSG op (name-guessed
   mover-ness, so wire needs no game class hierarchy — the owner-accepted cosmetic cost).

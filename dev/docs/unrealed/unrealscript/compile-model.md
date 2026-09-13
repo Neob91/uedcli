@@ -183,6 +183,30 @@ opcode carries an explicit "jump back" operand). Implemented in `lower.py`'s `_s
 iterator`; verified byte-exact against a fresh UCC build of `AllActors(class'Inventory', Inv) {
 Inv.Destroy(); }`.
 
+## `#exec TEXTURE IMPORT` (partial RE, 2026-09-13, live UED22 compiles)
+
+`#exec TEXTURE IMPORT NAME=X FILE=Textures\X.PCX LODSET=0` creates a `UTexture` export named `X`
+**inside the compiling package** (unlike `#exec CONVERSATION IMPORT`, which emits sibling packages)
+plus an auto-created `UPalette` export, `Palette1` for the first (only measured) import in a class.
+`UPalette`'s body: an empty tagged-property list, then a `TArray<FColor>` (compact-index count 256,
+then 256 × `(R, G, B, 0xFF)` — alpha always `0xFF`), copying the PCX's palette verbatim. `UTexture`'s
+tagged properties: `LODSet` (BYTE), `Palette` (OBJECT ref), `UBits`/`VBits` (BYTE, log2 of
+width/height), `USize`/`VSize`/`UClamp`/`VClamp` (INT), `MipZero`/`MaxColor` (STRUCT `Color`, 4
+bytes — see the spike for their imprecisely-pinned rounding), `InternalTime` (INT) — **the second
+known per-compile-random field, alongside the package GUID; not yet an approved gate exclusion** —
+then `Mips`, a full chain down to 1x1 regardless of any import option, in the format
+`uedcli/utexture.py` already decodes.
+
+Mip levels beyond 0 are NOT a re-quantization of the previous level; each is the recursive
+box-average of the TRUE palette-resolved RGB from the ORIGINAL pixels, then requantized by
+searching the WHOLE 256-entry palette for the luma-weighted (79, 158, 19 — sums to 256, a `>>8`
+fixed-point scale; no standard named luma constant fits) nearest match. Confirmed against 4
+independent live-UCC probes with zero exceptions outside an unresolved exact-tie edge case. Full
+derivation, rejected theories, and the open tie-break gap: `dev/docs/spikes/
+2026-09-13-texture-import-re/spike.md`; a ready-to-use implementation of the formula:
+`dev/docs/spikes/2026-09-13-texture-import-re/harness/mip_formula.py`. Not yet wired into
+`compile.py` — `dev/docs/board/inbox/uscript-texture-import-compiler-integration/`.
+
 ## Cross-class `Dependency` entries (RE'd 2026-09-13, live UED22 compiles)
 
 A UClass body's `Dependencies` array is NOT always just `[self, super]`. Calling a member

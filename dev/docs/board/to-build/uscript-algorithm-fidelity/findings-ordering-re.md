@@ -280,3 +280,136 @@ qsort method for exactly this reason — this note's baseline claims should be t
 until re-derived that way. Next step: adapt `RahnemBrushBuilders`'s brute-force tail-permutation
 harness to this enum case (search the *gather* order that, once run through the ALREADY-verified
 `msvc_qsort`, reproduces golden) rather than reading positions by eye.
+
+## Update (2026-09-13): no committed harness exists to adapt; brute force is NOT tractable here — the tied group is too large
+
+Searched the repo and git history for the `RahnemBrushBuilders` brute-force harness referenced
+above. It never existed as a reusable script — the fix (commit `5c595b13`) hand-edits
+`ordering.py`/`reorder.py` directly, and the permutation search that led to it was ephemeral,
+uncommitted exploration in a prior session. There is nothing to adapt; a search for
+`DavesBrushBuilders` would have to be written from scratch.
+
+Tried one concrete hypothesis first, since it's cheap to test: reverse each enum's value list
+(mirroring the "last declared, first" prepend convention already confirmed for function/state-label
+chains). Result: it exactly reverses both enums' internal sub-order in OUR output, but golden's
+`_Platonic` tags are in FORWARD declared order (`Tetrahedron, Cube, Octahedron, Dodecahedron,
+Icosahedron` — which the UNREVERSED code already gets right) while `_Stellate`'s are in NEITHER
+forward nor reverse order (`Stellate2, NoStellate, Stellate1`). So it's not a uniform per-enum
+direction flip; reverted (`reorder.py` is back to its original Enum branch, no residual diff).
+
+**Why brute force doesn't work here**: computed the actual reference counts our own
+`ordering._reference_counts` assigns (`_scratch/daves_refcounts2.py`) for every "new" identifier in
+the ambiguous zone — all 8 enum tags AND 14 unrelated names (`StellateType`, `PlatonicType`, `Build`,
+`BadParameters`, `System`, `Editor`, `BitmapFilename`, …) come back `refcount=1`, genuinely tied.
+That's a 22+-item tied group feeding one `msvc_qsort` call — nothing close to `RahnemBrushBuilders`'s
+"tail permutation" (a small handful of items). Brute-forcing a 22-item permutation space (`22!`) is
+not tractable by any means available here.
+
+**What this actually needs**: the same rigor as the original table-ordering breakthrough — a live
+runtime dump (an INT3 breakpoint under `winedbg` capturing the real FName registration sequence
+during a controlled UCC compile of a small enum-bearing class), not a permutation search. This is a
+scoped, known-shape task (the infrastructure for it already exists — see `USCRIPT-COMPILER.md`'s
+table-ordering section for the method), just not attempted this pass given the setup cost. Left open;
+next session should budget for the live-dump approach specifically, not more static probing.
+
+## Update (2026-09-13, later pass): live `AllocateNameEntry` capture — locals-timing bug found and fixed; the enum-vs-property interleaving bug is real, root-caused, and NOT fixable from compiled bytes alone
+
+Did the live-dump the previous update called for. Found the real registration function — NOT
+`SavePackage` (that only gives the SAVE-time global index) but `FName::FName(const TCHAR*,
+EFindName)` @ `core.dll` VA `0x1005cad0`, which calls `AllocateNameEntry` @ VA `0x1005cdc0` exactly
+once per genuinely NEW name, cdecl args `(Name, Index, Flags, HashNext)` on the stack at
+`$esp+4/8/c/10`. Both addresses found by matching the `objdump -p core.dll` export tables by NAME
+POINTER TABLE INDEX (not by the ordinal number printed in the `+base[N]` column — those are two
+different numbers per row; matching by ordinal instead of index silently gives the WRONG function).
+Confirmed self-consistent: `FName::FName`'s "append new slot" branch calls
+`TArray::AddZeroed`(`0x1001a9b0`) on `0x10139d50` — the exact same array `dump_gobj.py` already
+established as `GObjNames`.
+
+**Method**: unlike `dump_gobj.py`'s one-shot `SavePackage` breakpoint (never needs to resume
+correctly — the process is about to end), this needs MANY hits across one compile. winedbg's own
+`break *ADDR` (not a raw one-shot memory-patched `0xCC`) manages the restore/step/re-arm dance
+correctly across repeated hits — tested live, works. One big batch (`cont` + `x/64b
+*(int*)($esp+4)`, repeated ~6400 times) piped to a single `winedbg UCC.exe make` invocation, against
+a container with `DavesBrushBuilders`'s sources already in `EditPackages` (this repo's baked UED22
+image already has it). Took ~14 minutes wall-clock for 6400 hits (~0.11s/hit); the harness is
+committed as `harness/dump_name_creation_order.py` (supersedes nothing — `dump_gobj.py` still owns
+the SavePackage/GObjNames dump, a different question).
+
+**Ground truth captured** (own-new names only, boot/Core.u/Engine.u/Editor.u/Fire/IpDrv/Extension
+already-registered names filtered out since `AllocateNameEntry` never fires for a name that's already
+interned):
+
+    DavesBrushBuilders, PlatonicsBuilder,
+    _Stellate, DB_NoStellate, DB_Stellate1, DB_Stellate2, StellateType,
+    StellatePercent,
+    _Platonic, DB_Tetrahedron, DB_Cube, DB_Octahedron, DB_Dodecahedron, DB_Icosahedron, PlatonicType,
+    Extrapolate3, im, Extrapolate4, Extrapolate5, dR, BuildOctahedron, BuildIcosahedron,
+    BuildDodecahedron, Platonics (the `GroupName="Platonics"` defaultproperties value)
+
+(`Radius`, `GroupName`, `Build`, `BadParameters`, `BeginBrush`, `EndBrush`, `Vertex3f`, `Vertexv`,
+`Poly3i`/`Poly4i`/`Polyi`, `PolyBegin`/`PolyEnd`, `GetVertex`, `BitmapFilename`, `ToolTip`,
+`BuildTetrahedron`, `BuildCube`, and every function's params (`A`/`B`/`C`/`D`/`E`/`Count`/`R`/
+`SphereExtrapolation`/`ReturnValue`) never fire `AllocateNameEntry` at all — they're all pre-existing
+names, reused from `BrushBuilder`'s own script or another already-loaded brush-builder package.)
+
+**Finding 1 — FIXED: a function's body LOCALS register immediately after that function, not deferred
+to a trailing pass.** `im` (an `Extrapolate3` local) sits directly between `Extrapolate3` and the next
+function `Extrapolate4`; `dR` (a `BuildCube` local — `BuildCube` itself is a pre-existing name, so it
+never appears in this stream, but its own local still lands at `BuildCube`'s SOURCE POSITION) sits
+directly between `Extrapolate5` and `BuildOctahedron`. This directly refutes the previous "NAME
+registration is two-pass (declarations incl. function params/return, then function-body locals)"
+model (`compile-model.md`, `reorder.py`'s old `name_creation_order`): under that model the combined
+own-new sequence would be `…Extrapolate3, Extrapolate4, Extrapolate5, BuildOctahedron,
+BuildIcosahedron, BuildDodecahedron, im, dR` (all functions' signatures first, then ALL locals in one
+trailing block) — measurably different from, and refuted by, the captured order above.
+
+**Fix**: `reorder.py`'s `name_creation_order` no longer special-cases `Function` (params-only inline +
+locals deferred to a second `for fi in funcs` pass); it now recurses into EVERY child inline,
+identical in shape to `creation_order` (which never had the bug — object/export creation was already
+fully inline). `_CPF_PARM`/`_prop_flags`, only used by the removed two-pass split, are deleted as dead
+code. No regression: full offline uscript suite still 210 passed (was 209 — the fix adds a new
+pinning test, `test_davesbrushbuilders_locals_register_inline_not_deferred`, asserting the two
+captured orderings directly against `DavesBrushBuilders.u`'s own committed golden). `FrameBuilder`/
+`RahnemBrushBuilders`/`UnrealShare` still pass the strict gate.
+
+**Finding 2 — ROOT-CAUSED, NOT FIXED: property-vs-non-property interleaving is lost once the class is
+compiled, and cannot be recovered from a `.u` file's bytes alone.** The SAME capture shows
+`_Stellate`+its 3 tags register BEFORE `StellateType` (the enum-typed property), and `StellatePercent`
+registers BETWEEN `StellateType` and `_Platonic` — i.e. registration follows plain interleaved SOURCE
+TEXTUAL declaration order (`Radius; enum _Stellate{...} StellateType; StellatePercent; GroupName; enum
+_Platonic{...} PlatonicType;`), enums and properties freely mixed as declared.
+
+But `_decl_forward` (used by both `creation_order` and the fixed `name_creation_order`) reconstructs a
+class's own children as `[properties, forward] ++ [non-properties (enums/consts/structs/functions),
+forward]` — ALL properties as one leading group, ALL non-properties after. This is not a `reorder.py`
+bug: decoding the REAL UCC golden `DavesBrushBuilders.u` directly (not our own compiler's output)
+shows its own on-disk `Children` chain is genuinely stored this way — `[Build,BuildDodecahedron,…,
+Extrapolate3, _Platonic, _Stellate]` (one combined non-property group, reverse-of-declared, enums AND
+functions correctly interleaved WITHIN that group) `++ [Radius, StellateType, StellatePercent,
+GroupName, PlatonicType]` (properties, forward). Reversing the non-property group recovers its own
+internal order exactly (confirmed: `_Platonic` before `_Stellate` reversed gives `_Stellate` before
+`_Platonic`, matching declaration order) — but the chain provides NO signal for where the property
+GROUP as a whole should interleave against the non-property group, because UCC's own class-body
+storage genuinely bins them into two separate sub-chains before serializing. The interleaving
+information (needed bit-for-bit, since these are all refcount-tied names whose exact gather position
+feeds the position-sensitive unstable `msvc_qsort`) is not present in ANY compiled `.u` — ours or the
+real UCC's — once compilation finishes.
+
+Confirmed this is DavesBrushBuilders's whole remaining divergence, and it did not move at all: the
+strict-gate first-diff point (name-table offset 306, `NAME[14]`) is byte-for-byte IDENTICAL before and
+after the Finding-1 fix — the locals-timing bug never touched this package's failure (its enum tags
+all sit before any function is even parsed), so Finding 1 is a real, separately-verified correctness
+fix that happens not to move THIS package's gate result. `ExtendedBuilders` still fails on the same
+symptom shape (a table-order-driven byte-count diff, unaffected by the fix) and is very likely the
+same underlying bug in its multi-class form — not reinvestigated this pass.
+
+**Why `reorder.py`'s whole architecture can't close this alone**: `compile.py` compiles PROVISIONALLY
+once (no order), serializes it, and `reorder._Decoder` decodes THOSE bytes to derive the target order
+for a second, final compile — i.e. the only order information available is whatever survives one trip
+through `serialize.py`'s Children-chain encoding, which (matching real UCC) already lost the
+prop/non-prop interleaving. Fixing this needs the compiler's own AST-walk order — which `compile.py`
+HAS while it is building the class the first time, before that information gets binned away — threaded
+through to the name-gather step directly, instead of (or alongside) reconstructing it from decoded
+bytes. That is a real architecture change (a new order-source parallel to `reorder.true_order`, not a
+`reorder.py` patch), scoped, not attempted this pass — flagged as the concrete next step.
+

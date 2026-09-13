@@ -58,8 +58,8 @@ or a T3D snippet from a generator (`brush build spiral | actor diagram --from-t3
 
 - Brushes are coloured by CSG op (added blue / subtracted gold / semisolid pink / nonsolid green /
   mover magenta), so a doorway subtract reads distinctly from the wall it carves.
-- `--faces {wire,textured}` picks how faces are drawn. `wire` (the default) is outlines only — the
-  schematic. `textured` is the CSG-solved textured world, as UnrealEd's viewport draws it: only the
+- `--mode {wire,fullbright}` picks how faces are drawn. `wire` (the default) is outlines only — the
+  schematic. `fullbright` is the CSG-solved textured world, as UnrealEd's viewport draws it: only the
   surfaces that survive the solve are filled, each through its own texture, so a subtracted room shows
   its interior (near walls dropped) while an add not inside carved space is invisible. Reach for it to
   answer "does this fit inside that", "is this pillar actually in the room", "does the texture line up
