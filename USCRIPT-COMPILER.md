@@ -100,8 +100,10 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 | RahnemBrushBuilders | UED22 | 1 | ✅ | pins the value-only-name gather fix |
 | ExtendedBuilders | UED22 | 2 | perm only | raw byte-count diff (+5 B), unexplained — likely multi-class-specific |
 | DavesBrushBuilders | UED22 | 1 | perm only | name-table order diff inside one Enum's own value list — same bug *class* as the fix above, narrower scope, not yet applied there |
-| Fire | UT99 | 6 (native) | not re-verified since the ordering fixes | was perm-only pre-fix; likely strict now, re-check before relying on it |
+| Fire | UT99 | 6 (native) | perm only | strict-gate diff traced to compact-index width, itself a consequence of UT99 needing its OWN name-pool extraction (`ENGINE_NAME_POOL`/`HIGHLIGHT_NAME_POOL` are UED22-`core.dll`-specific); not a new bug |
 | ConvTest + siblings | DXORIG | 1 (+2 auto) | ✅ | conversation import proof |
+| UnrealShare | UED22 | 1 | ✅ | first live proof of the `ProbeMask` fix (`UnrealTestInfo` overrides `Tick` alone) |
+| UscStateForeach | UED22 | 1 | ✅ | controlled: `Trigger`→`GotoState`→`state` (label+`Sleep`+`GotoState('')`) plus a `foreach AllActors` loop — first state-block + foreach proof |
 
 Controlled (non-corpus) fixtures `UscHello`/`UscVars`/`UscBB`/`UscFn`/`UscW`/`UscSt` all pass the
 strict gate autonomously.
@@ -122,19 +124,30 @@ strict gate autonomously.
 - **Two-level `Children` chains**: class → all fields (funcs first reverse-decl, then vars
   forward-decl — UE1 prepends); function → params (decl order) → `ReturnValue` → locals.
 - **Determinism**: two clean UCC compiles of identical source differ in *only* the 16-byte GUID.
+- **`ProbeMask`** (the `EProbe` bit map, RE'd 2026-09-12): recovered from the boot `EName` ordinals —
+  probe function names sit at consecutive ordinals from `Spawned`=217; an unused slot's placeholder
+  name (`ProbeN`) IS its own bit index (self-confirming). Accumulates through inheritance:
+  `ProbeMask(class) = ProbeMask(super) | own probe-function bits`. See `compile-model.md`.
+- **States** (RE'd 2026-09-13): `state Foo { Label: ... }` compiles byte-exact — the `EX_LabelTable`
+  format, and the `EX_Nothing` padding before it (`pad = (#GotoState/FinishAnim calls - #explicit
+  Stop; statements + 2) % 4`, an empirical formula with the mechanism still unknown). See
+  `compile-model.md` "UState label tables". `state` function overrides, `state X extends Y`, and
+  `ignores` blocks remain unimplemented (each raises a named `LowerError`).
+- **`foreach`** (RE'd 2026-09-13): `EX_Iterator`/`EX_IteratorNext`/`EX_IteratorPop` lowering is
+  byte-exact — the iterator call lowers like any other call, `break`/an empty iterator both land on
+  `IteratorPop` (never skip past it), `continue` jumps to `IteratorNext`. See `compile-model.md`.
+- **Cross-class `Dependency` entries** (RE'd 2026-09-13): a class's `Dependencies` array gets one
+  more entry (`deep=0`) per distinct external class reached via a member access/call through a
+  typed object (not merely declared or cast) — see `compile-model.md`.
 
 ## Open items / known gaps (honest — not excluded, not hacked around)
 
 - `ExtendedBuilders` byte-count diff and `DavesBrushBuilders`'s enum-value-list ordering — both real,
   both open (`findings-ordering-re.md`).
-- `ProbeMask`/`IgnoreMask` (the `EProbe` bit map): a fixed engine enum that **accumulates through
-  inheritance** — not solvable by static correlation over the stock corpus (tried, ruled out); needs
-  either `Engine.dll` RE or a runtime dump, same method as the ordering breakthrough. Blocks most
-  gameplay classes (`UnrealShare`/`IpServer`/etc.).
-- States, replication blocks, and non-conversation `#exec` (texture/mesh/audio/font import codecs) —
-  not implemented; scoped out for now.
-- `foreach`/`assert`/`do..until` lowering, and a two-pass "signature graph" for mutually-referencing
-  same-package classes (blocks `UWeb`) — real, scoped gaps in `lower.py`/`compile.py`.
+- `assert`/`do..until` lowering, and a two-pass "signature graph" for mutually-referencing
+  same-package classes (blocks `UWeb`) — real, scoped gaps in `lower.py`/`compile.py`. Replication
+  blocks and non-conversation `#exec` (texture/mesh/audio/font import codecs) remain fully
+  unimplemented, scoped out for now.
 - Expected-type-directed operator overload resolution (e.g. an int-divide whose result narrows into
   an int field) — attempted twice and reverted; UCC's real tie-break rule is subtler than modeled.
 - **Corpus reality**: many stock packages (most of `ConSys`, `DeusEx`, even parts of `Extension`) are

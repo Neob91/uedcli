@@ -19,7 +19,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 
-from .ast import ConstDecl, EnumDecl, Expr, FuncDecl, TypeRef, VarDecl
+from .ast import ConstDecl, EnumDecl, Expr, FuncDecl, StateDecl, TypeRef, VarDecl
 from .bytecode import Tok
 from .natives import Catalog, FuncBody
 
@@ -32,7 +32,10 @@ EX_JUMP = 0x06
 EX_CASE = 0x0A
 EX_ARRAY_ELEMENT = 0x1A
 EX_JUMP_IF_NOT = 0x07
+EX_STOP = 0x08
 EX_NOTHING = 0x0B
+EX_LABEL_TABLE = 0x0C
+EX_GOTO_LABEL = 0x0D
 EX_NEW = 0x11
 EX_LET = 0x0F
 EX_SKIP = 0x18
@@ -58,6 +61,9 @@ EX_TRUE = 0x27
 EX_FALSE = 0x28
 EX_NO_OBJECT = 0x2A
 EX_INT_CONST_BYTE = 0x2C
+EX_ITERATOR_POP = 0x30
+EX_ITERATOR_NEXT = 0x31
+EX_ITERATOR = 0x2F
 EX_EXTENDED_NATIVE = 0x60
 EX_FIRST_NATIVE = 0x70
 
@@ -355,6 +361,11 @@ class _Body:
         self.items: list[_Emit] = []
         self.labels: dict[int, int] = {}    # label id -> item index it precedes
         self._next = 0
+        self._resolved_offsets: dict[int, int] = {}   # label id -> MEMORY offset, set by `finish()`
+
+    def offset_of(self, label: int) -> int:
+        """A placed label's final MEMORY offset — valid only after `finish()`."""
+        return self._resolved_offsets[label]
 
     def new_label(self) -> int:
         self._next += 1
@@ -380,12 +391,18 @@ class _Body:
     def case_default(self) -> None:
         self.items.append(_Emit(jump_kind="casedefault"))
 
+    def iterator(self, call: Tok, target: int) -> None:
+        """`foreach`'s `EX_Iterator`: the iterator call, then a u16 offset past `IteratorPop` to
+        skip the whole loop when the first `Next` yields nothing."""
+        self.items.append(_Emit(jump_kind="iterator", cond=call, target=target))
+
     def finish(self) -> list[Tok]:
         sizes = [self._size(it) for it in self.items]
         prefix = [0]
         for s in sizes:
             prefix.append(prefix[-1] + s)
         offset = {lbl: prefix[idx] for lbl, idx in self.labels.items()}
+        self._resolved_offsets = offset
         out: list[Tok] = []
         for it in self.items:
             if it.tok is not None:
@@ -398,6 +415,9 @@ class _Body:
             elif it.jump_kind == "case":
                 out.append(Tok(EX_CASE,
                                (("raw", struct.pack("<H", offset[it.target])), ("sub", it.cond))))
+            elif it.jump_kind == "iterator":
+                out.append(Tok(EX_ITERATOR,
+                               (("sub", it.cond), ("raw", struct.pack("<H", offset[it.target])))))
             else:                                       # case default (0xFFFF marker, no value)
                 out.append(Tok(EX_CASE, (("raw", b"\xff\xff"),)))
         return out
@@ -410,7 +430,7 @@ class _Body:
             return 3
         if it.jump_kind == "casedefault":
             return 3
-        return 3 + _mem_size(it.cond)                   # jumpifnot / case: op + u16 + value/cond
+        return 3 + _mem_size(it.cond)                   # jumpifnot / case / iterator: op + u16 + cond
 
 
 def _mem_size(tok: Tok) -> int:
@@ -430,23 +450,107 @@ def _mem_size(tok: Tok) -> int:
 
 
 # ── the lowerer ────────────────────────────────────────────────────────────────
-def lower_function(func: FuncDecl, scope: Scope, catalog: Catalog) -> list[Tok]:
-    """Lower one function body to its token stream (with the trailing implicit Return(Nothing))."""
-    low = _Lowerer(scope, catalog, type_label(func.return_type) if func.return_type else "none")
+def lower_function(func: FuncDecl, scope: Scope, catalog: Catalog,
+                   extra_deps: list[str] | None = None) -> list[Tok]:
+    """Lower one function body to its token stream (with the trailing implicit Return(Nothing)).
+
+    `extra_deps` (shared across every function of the class, if given) collects, in first-use order,
+    the real-cased name of each class Context'd into (a member access/call through an object typed to
+    a class other than self/super) — UCC records one `Dependency` per such class (`deep=0`, alongside
+    the `deep=1` self/super entries)."""
+    low = _Lowerer(scope, catalog, type_label(func.return_type) if func.return_type else "none",
+                   extra_deps=extra_deps)
     for stmt in func.body:
         low.stmt(stmt)
     low.body.tok(Tok(EX_RETURN, (("sub", Tok(EX_NOTHING)),)))
     return low.body.finish()
 
 
+# ── state bodies (RE'd 2026-09-13, `compile-model.md`) ──────────────────────────────────────────────
+# UCC pads a state's code, after its implicit trailing `EX_Stop`, with `(T + 2) % 4` `EX_Nothing`
+# bytes before the `EX_LabelTable` (present iff the state declares any label) — T = (the number of
+# calls anywhere in the state to a native in `_NOTHING_PAD_NATIVES`) MINUS (the number of explicit
+# `Stop;` keyword statements the user wrote — each one, unlike the natives, SUBTRACTS from the count).
+# Confirmed by 18 controlled UCC compiles varying statement count/order/label count (T=4 and T=5 held
+# out as predictions before compiling them), plus 2 more pinning the explicit-`Stop;` term (one
+# `Stop;` alone -> pad 1 not the un-adjusted formula's 2; two `Stop;` alone -> pad 0; one `GotoState`
+# then one `Stop;` -> pad 2). The MECHANISM (why exactly these three constructs, and with `Stop;`
+# opposite-signed) is not understood — this is an empirical formula, not a derivation from source.
+_NOTHING_PAD_NATIVES = ("GotoState", "FinishAnim")
+_LABEL_TABLE_NONE_ICODE = 0x0000FFFF   # MAXWORD: the terminating (None, iCode) entry's iCode
+
+
+def lower_state_body(state: StateDecl, scope: Scope, catalog: Catalog) -> list[Tok]:
+    """Lower a state's top-level body (labels + statements) to its full token stream: the code,
+    an implicit `EX_Stop`, `EX_Nothing` padding, and (iff the state declares any label) a trailing
+    `EX_LabelTable` — `{name, u32 iCode}` pairs in REVERSE declaration order (the same "last
+    declared, first in the chain" convention as the class Children list), terminated by
+    `(None, 0x0000FFFF)`. Each label's `iCode` is its in-MEMORY offset into this same stream — reuses
+    the same `_Body` machinery as an ordinary jump target, just also recorded by name."""
+    if state.funcs:
+        raise LowerError("state function overrides not supported yet")
+    if state.base is not None:
+        raise LowerError("state inheritance ('state X extends Y') not supported yet")
+    if state.ignores:
+        raise LowerError("state 'ignores' not supported yet")
+    low = _Lowerer(scope, catalog, "none")
+    for stmt in state.body:
+        low.stmt(stmt)
+    low.body.tok(Tok(EX_STOP))
+    toks = low.body.finish()
+    if not low.state_labels:
+        return toks
+    pad_natives = frozenset(fb.inative for name in _NOTHING_PAD_NATIVES for fb in catalog.by_name(name))
+    explicit_stops = sum(1 for t in toks if t.op == EX_STOP) - 1   # exclude our own auto-appended Stop
+    pad = (_count_native_calls(toks, pad_natives) - explicit_stops + 2) % 4
+    toks += [Tok(EX_NOTHING) for _ in range(pad)]
+    named = [(name, low.body.offset_of(lbl)) for name, lbl in low.state_labels]
+    toks.append(_label_table_tok(named))
+    return toks
+
+
+def _label_table_tok(named_labels: list[tuple[str, int]]) -> Tok:
+    parts: list = []
+    for name, offset in reversed(named_labels):
+        parts.append(("name", name))
+        parts.append(("raw", struct.pack("<I", offset)))
+    parts.append(("name", "None"))
+    parts.append(("raw", struct.pack("<I", _LABEL_TABLE_NONE_ICODE)))
+    return Tok(EX_LABEL_TABLE, tuple(parts))
+
+
+def _count_native_calls(toks, native_indices: frozenset[int]) -> int:
+    """Recursively count calls to a native in `native_indices` anywhere in `toks` (incl. nested
+    inside `if`/expression sub-trees and argument lists)."""
+    count = 0
+    for t in toks:
+        idx = None
+        if EX_FIRST_NATIVE <= t.op <= 0xFF:
+            idx = t.op
+        elif EX_EXTENDED_NATIVE <= t.op < EX_FIRST_NATIVE:
+            lo = next((p[1][0] for p in t.parts if p[0] == "raw"), None)
+            idx = ((t.op - EX_EXTENDED_NATIVE) << 8) | lo if lo is not None else None
+        if idx in native_indices:
+            count += 1
+        for part in t.parts:
+            if part[0] == "sub":
+                count += _count_native_calls([part[1]], native_indices)
+            elif part[0] == "parms":
+                count += _count_native_calls(list(part[1]), native_indices)
+    return count
+
+
 class _Lowerer:
-    def __init__(self, scope: Scope, catalog: Catalog, return_type: str) -> None:
+    def __init__(self, scope: Scope, catalog: Catalog, return_type: str,
+                *, extra_deps: list[str] | None = None) -> None:
         self.scope = scope
         self.cat = catalog
         self.return_type = return_type
+        self.extra_deps = extra_deps
         self.body = _Body()
         self.break_targets: list[int] = []      # loops AND switch push here
         self.continue_targets: list[int] = []   # only loops push here
+        self.state_labels: list[tuple[str, int]] = []   # (name, label id) in DECLARATION order
 
     # ── statements ────────────────────────────────────────────────────────────
     def stmt(self, s) -> None:
@@ -457,6 +561,20 @@ class _Lowerer:
 
     def _st_local(self, s) -> None:
         pass                                            # declaration only; no code
+
+    def _st_label(self, s) -> None:
+        """A state label (`Begin:`) — placed like an internal jump target, but also remembered by
+        name for the state's `EX_LabelTable` (see `lower_state_body`)."""
+        lbl = self.body.new_label()
+        self.body.place(lbl)
+        self.state_labels.append((s.names[0], lbl))
+
+    def _st_goto(self, s) -> None:
+        tok, _ = self.expr(s.exprs[0])
+        self.body.tok(Tok(EX_GOTO_LABEL, (("sub", tok),)))
+
+    def _st_stop(self, s) -> None:
+        self.body.tok(Tok(EX_STOP))
 
     def _st_block(self, s) -> None:
         for inner in s.body:
@@ -544,6 +662,24 @@ class _Lowerer:
         self.body.jump(top)
         self.body.place(end)
 
+    def _st_foreach(self, s) -> None:
+        """`break`/an empty first `Next` both land on `IteratorPop` (never skip past it) — the
+        iterator must always be released, so `end` sits right before the `Pop` token, not after."""
+        call_tok, _ = self.expr(s.exprs[0])
+        end = self.body.new_label()
+        cont = self.body.new_label()
+        self.body.iterator(call_tok, end)
+        self.break_targets.append(end)
+        self.continue_targets.append(cont)
+        for inner in s.body:
+            self.stmt(inner)
+        self.continue_targets.pop()
+        self.break_targets.pop()
+        self.body.place(cont)
+        self.body.tok(Tok(EX_ITERATOR_NEXT))
+        self.body.place(end)
+        self.body.tok(Tok(EX_ITERATOR_POP))
+
     def _st_switch(self, s) -> None:
         subject, = s.exprs
         stok, stype = self.expr(subject)
@@ -613,7 +749,9 @@ class _Lowerer:
         return Tok(EX_TRUE if e.value else EX_FALSE), "bool"
 
     def _ex_nameconst(self, e):
-        return Tok(EX_NAME_CONST, (("name", str(e.value)),)), "name"
+        # An empty name literal (`''`) denotes NAME_None (confirmed against a real UCC compile of
+        # `GotoState('')` — the argument decodes to name identity "None", not an empty-string name).
+        return Tok(EX_NAME_CONST, (("name", str(e.value) or "None"),)), "name"
 
     def _ex_noneconst(self, e):
         return Tok(EX_NO_OBJECT), "none"
@@ -683,13 +821,29 @@ class _Lowerer:
             if ftype is None:
                 raise LowerError(f"unresolved member {base_type}.{field}")
             member = self._var(EX_INSTANCE_VARIABLE, field, ftype)
-            return self._context(base_tok, member, ftype), ftype
+            return self._context(base_tok, base_type, member, ftype), ftype
         raise LowerError(f"member access on non-object/struct type {base_type!r}")
 
-    def _context(self, base: Tok, member: Tok, member_type: str) -> Tok:
+    def _context(self, base: Tok, base_type: str, member: Tok, member_type: str) -> Tok:
+        self._record_dep(base_type)
         size = _value_size(member_type, self.scope.graph)
         skip = struct.pack("<H", _mem_size(member)) + bytes((size,))
         return Tok(EX_CONTEXT, (("sub", base), ("raw", skip), ("sub", member)))
+
+    def _record_dep(self, base_type: str) -> None:
+        """Record a `Dependency` (deep=0) for the class behind a Context, unless it's self/super
+        (those already carry their own deep=1 entry) or already recorded."""
+        if self.extra_deps is None or not _is_object(base_type):
+            return
+        cf = base_type.split(":", 1)[1]
+        if cf == (self.scope.class_name or "").casefold() or cf == (self.scope.super_name or "").casefold():
+            return
+        sig = self.scope.graph.class_sig(cf) if self.scope.graph else None
+        if sig is None:
+            return
+        if any(d.casefold() == sig.name.casefold() for d in self.extra_deps):
+            return
+        self.extra_deps.append(sig.name)
 
     def _ex_index(self, e):
         """`base[index]` -> ArrayElement(0x1A) = [index_expr][base_expr]; result is the element type
@@ -814,7 +968,7 @@ class _Lowerer:
             raise LowerError(f"unresolved method {base_type}.{name}")
         arg_toks, arg_types = self._lower_args(args)
         call, ret = self._emit_target(tgt, arg_toks, arg_types)
-        return self._context(base_tok, call, ret), ret
+        return self._context(base_tok, base_type, call, ret), ret
 
     def _emit_target(self, tgt: CallTarget, arg_toks, arg_types) -> tuple[Tok, str]:
         coerced = self._coerce_args(arg_toks, arg_types, tgt.param_types)

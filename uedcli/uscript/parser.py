@@ -153,6 +153,7 @@ class _Parser:
         members: list[object] = []
         functions: list[FuncDecl] = []
         states: list[StateDecl] = []
+        callables: list[FuncDecl | StateDecl] = []
         replication: ReplBlock | None = None
         default_props: tuple[DefaultProp, ...] = ()
         exec_directives: list[str] = []
@@ -185,6 +186,7 @@ class _Parser:
                 cpptext_parts.append(self._parse_cpptext())
             else:
                 decl = self._parse_callable_or_state()
+                callables.append(decl)
                 if isinstance(decl, StateDecl):
                     states.append(decl)
                 else:
@@ -194,6 +196,7 @@ class _Parser:
         return ClassDecl(
             name=name, super_name=super_name, within=within, modifiers=tuple(modifiers),
             members=tuple(members), functions=tuple(functions), states=tuple(states),
+            callables=tuple(callables),
             replication=replication, default_props=default_props,
             exec_directives=tuple(exec_directives), source=self.raw,
             cpptext="\n".join(cpptext_parts) if cpptext_parts else None)

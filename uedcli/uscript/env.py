@@ -26,6 +26,7 @@ class ClassInfo:
     self_crc: int             # its own ScriptText CRC (from its self-dependency)
     class_flags: int          # its ClassFlags (a subset propagates to subclasses)
     package_imports: tuple[str, ...]  # its PackageImports (own pkg + transitive deps + Core)
+    probe_mask: int           # its default-state EProbe bits (subclasses OR in their own overrides)
 
 
 def _class_export_index(pkg: Package, class_name: str) -> int | None:
@@ -56,6 +57,18 @@ def _self_crc(pkg: Package, class_index1: int) -> int:
         if cls == self_ref:
             return crc
     raise ValueError(f"{pkg.name}.{pkg.names[e['nm']]}: no self-dependency CRC found")
+
+
+def _probe_mask(pkg: Package, class_index1: int) -> int:
+    """The default-state ProbeMask u64 in a UClass body (first of the UState fields)."""
+    e = pkg.exports[class_index1 - 1]
+    buf, pos = pkg.buf, e["soff"]
+    for _ in range(5):                       # Super, Next, ScriptText, Children, FriendlyName
+        _, pos = _rci(buf, pos)
+    pos += 8                                 # Line + TextPos
+    ssz = struct.unpack_from("<I", buf, pos)[0]; pos += 4
+    pos = _skip_script(pkg, pos, ssz)
+    return struct.unpack_from("<Q", buf, pos)[0]
 
 
 def _class_flags(pkg: Package, class_index1: int) -> int:
@@ -150,4 +163,5 @@ class InstallEnv:
         from .global_index import pool_case
         return ClassInfo(name=pkg.names[pkg.exports[ci - 1]["nm"]], package=pool_case(stem),
                          self_crc=_self_crc(pkg, ci), class_flags=_class_flags(pkg, ci),
-                         package_imports=_package_imports(pkg, ci))
+                         package_imports=_package_imports(pkg, ci),
+                         probe_mask=_probe_mask(pkg, ci))

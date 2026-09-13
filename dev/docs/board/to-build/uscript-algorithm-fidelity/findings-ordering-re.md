@@ -198,3 +198,85 @@ enum's own value list (`DB_Tetrahedron`/`DB_Stellate2`/… — the same *class* 
 problem, but internal to a single Enum object's own value list, not the class-header/defaultproperties
 split above). `ExtendedBuilders` is unaffected (still +5 bytes, unrelated — likely multi-class/
 multi-source handling). Both remain open, tracked here for a future pass.
+
+## ExtendedBuilders +5-byte diff (2026-09-13) — mechanism confirmed, cause still open
+
+Re-checked: `perm_gate` passes (84 names in both, same string SET), but the two name tables are a
+different PERMUTATION of the same 84 names (`BeginBrush` at index 12 in ours / 10 in golden,
+`EndBrush` at 10 / 17, etc.) — and since every `NameConst`/obj-ref in the file encodes its target's
+TABLE INDEX as a `FCompactIndex` (1 byte under 64, 2+ above), a different permutation shifts which
+names land under/over that width threshold, changing the file's total byte count with the exact same
+name SET. The "+5 bytes" is a symptom of table order, not a separate bug — this narrows it to the
+same bug CLASS as `DavesBrushBuilders` below.
+
+**Correction to an earlier version of this note**: `compile_package_dir` (`ExtendedBuilders` is a
+two-class package, `ExtParallelepiped`+`ExtWave`) DOES call `reorder.true_order`, the same real
+ordering pipeline as the single-class path (`compile.py` end of `compile_package_dir`) — a stale
+comment atop the multi-class section claimed otherwise ("assigns creation order... rather than
+reproducing UCC's refcount sort"; fixed in the same pass as this note). So this is NOT an
+architectural gap — it is a real, fixable gather-order bug, most likely the SAME multi-class
+interleaving question as the enum-tag scatter below, just not yet isolated to one specific object.
+Not root-caused this pass; revisit alongside `DavesBrushBuilders`.
+
+## DavesBrushBuilders enum-tag scatter (2026-09-12) — looked at, not fixed, evidence recorded
+
+Current code (`reorder.py` `streams()`, "Enum" kind) treats an enum's whole value list as one
+`name_refs` clump registering at the Enum export's own position — wrong. Golden interleaves the tags
+with unrelated declarations (`DB_Tetrahedron` right after the last function; `DB_Stellate2` after
+`System`; `DB_Cube` after `Editor`; `DB_Octahedron`/`DB_Dodecahedron` after `BitmapFilename`; …), not
+clustered. This rules out "all tags register at enum-declaration time." It's also NOT explained by
+bytecode value-references: `bytecode.md` already established enum tags used as values compile to
+`ByteConst(ordinal)` — no `<<FName` in the script, so a `switch`/comparison against a tag can't be
+the registration point either. Mechanism not identified. Low priority: 2 fixtures, pure name-table
+permutation (zero functional effect, same class as the already-accepted indexing non-issues).
+Re-open with a controlled multi-enum probe (vary which function references each tag, vary enum
+position in source) rather than reasoning from one real package.
+
+## Update (2026-09-13): controlled probes run; a clean gather-order baseline recovered, full rule still open
+
+Ran controlled UED22 compiles varying which function references which tag (`_scratch/enum_probe*.py`,
+not committed). Two findings:
+
+- **`var` must precede every function in an UnrealScript class** (a hard grammar rule — `Error, 'Var'
+  is not allowed here` if declared after a function). So a real class's enum is always textually
+  before its functions; the "vary enum position relative to functions" idea from the note above isn't
+  a valid axis to probe.
+- Comparing ABSOLUTE name-table positions across probes with different total identifier counts is
+  invalid — the table is SORTED by reference count first, gather order only breaks ties, so a
+  differently-sized probe reshuffles unrelated items around any one name. The only clean readout is a
+  probe where every new name ties at refcount 1 (nothing referenced twice), so gather order is the
+  entire story with no sort to strip away.
+
+That clean baseline — `class UscEnumP2 expands Actor; var() enum _MyEnum { Tag_First, Tag_Second }
+MyVar; function Marker1(){} function Marker2(){}` (the ONLY reference to either tag is the enum's own
+declaration) — gathers as: `MyVar, Tag_Second, Tag_First, Core, Marker1, System, Marker2, Package,
+ScriptText, Actor, TextBuffer, _MyEnum, Object, Enum, Function, ByteProperty, Class`. Two surprises,
+neither yet explained:
+
+1. The tags gather in REVERSE declared order (`Tag_Second` before `Tag_First`) — consistent with the
+   campaign's general "last declared, first" prepend convention (function/state-label chains), so
+   plausibly the same mechanism, but not confirmed against a 3+-tag case.
+2. The enum's OWN name (`_MyEnum`) gathers AFTER both its tags, `Core`, `Marker1`, `System`,
+   `Marker2`, several unrelated import names — i.e. an enum's UEnum export doesn't register at
+   textual-declaration time at all; something defers it well past the functions that follow it in
+   source. Not identified.
+
+Not fixed — this needs the SAME rigor as the original `RahnemBrushBuilders` breakthrough (multiple
+cross-checked probes + an explicit registration-point model), not a guess from one baseline.
+
+**The 2-tag reading above does NOT generalize — the "clean baseline" methodology is unsound for 3+
+tied items.** Same class, same source shape, one more tag (`_MyEnum { Tag_First, Tag_Second,
+Tag_Third }`, still nothing but the declaration referencing any of them): `Marker1, Tag_Third,
+Tag_Second, Tag_First, MyVar, Core, System, Marker2, …` — `MyVar` now sorts AFTER `Marker1` and all
+three tags, where with 2 tags it sorted BEFORE `Marker1` and its tags. Nothing about the SOURCE
+changed except tag count, so this is not a gather-order fact about `MyVar` — it is the qsort itself:
+MSVC's `qsort` (median-of-3 quicksort) is **not a stable sort**, so a run of tied keys does not
+preserve insertion order once there are enough tied elements for the partition to touch them
+differently — confirmed here since going from 2 to 3 tied-in items reordered the group. Reading
+"gather order" directly off sorted output only works for a strictly 2-tied-item run (no partition
+freedom) or by coincidence; it is NOT a valid general probing method. The
+`RahnemBrushBuilders` breakthrough correctly used the harder brute-force-permutation-against-the-real-
+qsort method for exactly this reason — this note's baseline claims should be treated as unconfirmed
+until re-derived that way. Next step: adapt `RahnemBrushBuilders`'s brute-force tail-permutation
+harness to this enum case (search the *gather* order that, once run through the ALREADY-verified
+`msvc_qsort`, reproduces golden) rather than reading positions by eye.

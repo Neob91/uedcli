@@ -39,6 +39,13 @@ connecting wall, not the exterior boundary — moving it doesn't expand livable 
 into the neighbor's already-hollow interior. If a named landmark in the task doesn't match the face
 you're about to move, that mismatch is the signal you picked the wrong one.
 
+**Resolve doubt with evidence, don't default to inaction.** A candidate face looking ambiguous is a
+prompt to gather more evidence, not a reason to skip the edit: corroborate the `relation measure`
+reading with a rendered diagram of the target and its neighbors (`actor diagram ... --highlight`)
+and with any reference photos the task provides. These three rarely disagree — when they agree, act
+on them. Doing nothing when the task specifies a real edit is itself a failure, not a safe default;
+reserve stopping to ask for uncertainty that survives checking all three.
+
 ## Core Pattern
 
 ```bash
@@ -146,6 +153,9 @@ This check is scoped to cross-brush RELATIONS — it doesn't cover texture/flag 
   companion until nothing new turns up.
 - **Picking the nearest/first plausible face for a vague direction without checking neighboring
   rooms.** An internal connecting wall can look just as valid a candidate as the true exterior one.
+- **Treating unresolved-looking ambiguity as a reason to make no edit at all**, instead of resolving
+  it with a measurement + diagram + photo check first. A task that specifies a real edit is not
+  satisfied by doing nothing.
 - **Only checking for companions on the face you're moving.** A companion can be attached to any
   other face of the same brush.
 - **Silently shipping a partial or guessed fix instead of asking.**

@@ -74,11 +74,12 @@ def test_compile_json(tmp_path, capsys):
 def test_unsupported_construct_exits_2_without_traceback(tmp_path, capsys):
     src = tmp_path / "Classes"
     src.mkdir()
-    # A state block is a not-yet-supported construct — it must name itself, not traceback.
-    (src / "Foo.uc").write_text("class Foo expands Object;\n\nstate S {\n}\n", encoding="utf-8")
+    # A state 'ignores' block is a not-yet-supported construct — it must name itself, not traceback.
+    (src / "Foo.uc").write_text(
+        "class Foo expands Object;\n\nstate S {\n ignores Tick;\n}\n", encoding="utf-8")
     rc, cap = _run(["uscript", "compile", str(src), "-o", str(tmp_path / "Foo.u")], capsys)
     assert rc == 2
-    assert "compile failed" in cap.err and "states" in cap.err
+    assert "compile failed" in cap.err and "ignores" in cap.err
     assert "Traceback" not in cap.err
 
 

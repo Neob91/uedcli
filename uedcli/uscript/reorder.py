@@ -110,7 +110,7 @@ class _Decoder:
             rname(); robj(); robj(); robj(); robj()    # None, super, next, scripttext(0), children
             v, pos = _rci(buf, pos); names.append(self.ename(v))   # FriendlyName
             return names, objs
-        if kind == "Function":
+        if kind in ("Function", "State"):                # a State's body is shaped like a Function's
             rname(); robj(); robj(); robj(); robj()    # None, super, next, scripttext(0), children
             v, pos = _rci(buf, pos); names.append(self.ename(v))   # FriendlyName
             pos += 8                                    # Line, TextPos
@@ -134,13 +134,16 @@ class _Decoder:
         objs: list[str] = []
 
         def resolve(kind: str, index: int) -> str:
+            # Must return the real identity, not a placeholder: `EX_LabelTable`'s decode loop
+            # (bytecode.py) branches on the resolved "name" to find its `None` terminator.
             if kind == "name":
-                names.append(self.ename(index))
-            else:
-                k = self.objkey(index)
-                if k is not None:
-                    objs.append(k)
-            return ""
+                ident = self.ename(index)
+                names.append(ident)
+                return ident
+            k = self.objkey(index)
+            if k is not None:
+                objs.append(k)
+            return k or ""
         _toks, pos = decode_script(self.buf, pos, ss, resolve)
         return names, objs, pos
 
@@ -220,7 +223,7 @@ class _Decoder:
             v, _ = _rci(self.buf, pos)
             return v
         kind = self.class_disp(i0)
-        if kind in ("Struct", "Function"):               # None, super, next, ScriptText, Children
+        if kind in ("Struct", "Function", "State"):      # None, super, next, ScriptText, Children
             for _ in range(4):
                 _v, pos = _rci(self.buf, pos)
             v, _ = _rci(self.buf, pos)

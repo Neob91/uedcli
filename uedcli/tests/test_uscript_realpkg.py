@@ -30,7 +30,7 @@ _UED22 = Path(__file__).resolve().parents[2] / "uned" / "UED22"
 
 # (package, class count) — pins the export identity coverage per package.
 _PACKAGES = [("FrameBuilder", 1), ("RahnemBrushBuilders", 1), ("ExtendedBuilders", 2),
-             ("DavesBrushBuilders", 1)]
+             ("DavesBrushBuilders", 1), ("UnrealShare", 1)]
 
 
 def _sources(pkg: str) -> dict[str, str]:
@@ -63,7 +63,7 @@ def test_realpkg_offline_byte_exact(pkg: str, classes: int):
     assert r.passed, f"{pkg}: " + " | ".join(r.messages)
 
 
-@pytest.mark.parametrize("pkg", ["FrameBuilder", "RahnemBrushBuilders"])
+@pytest.mark.parametrize("pkg", ["FrameBuilder", "RahnemBrushBuilders", "UnrealShare"])
 def test_realpkg_strict_byte_exact(pkg: str):
     """These two also pass the STRICT gate (name/import/export table ORDER included, not just
     content) with no `order_override` — `RahnemBrushBuilders` pins the value-only-name gather-order

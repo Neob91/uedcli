@@ -217,6 +217,11 @@ class Catalog:
         best = _best(exact, argtypes)
         return best if best is not None else (cands[0] if cands else None)
 
+    def by_name(self, name: str) -> tuple[FuncBody, ...]:
+        """Every overload declared under `name`, regardless of argument count (e.g. to collect a
+        native function's `inative` index without a call site to match argtypes against)."""
+        return tuple(self._by_name.get(name.casefold(), ()))
+
 
 def _best(cands: list[FuncBody], argtypes: tuple[str, ...]) -> FuncBody | None:
     """The cheapest overload that each argument can widen into, or None if none match."""

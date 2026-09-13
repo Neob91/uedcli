@@ -11,7 +11,7 @@ from __future__ import annotations
 from ..native.codec import enc_u16, enc_u32, enc_u64, write_ci, write_fstring
 from ..native.pkg_write import ExportRec, ImportRec, NameTable, build_package
 from .model import (ClassBody, CompiledPackage, ConstBody, EnumBody, Export, FunctionBody,
-                    ObjectBody, PropertyBody, StructBody, TextBufferBody)
+                    ObjectBody, PropertyBody, StateBody, StructBody, TextBufferBody)
 
 _FUNC_NET = 0x40   # FUNC_Net: adds a trailing u16 RepOffset
 
@@ -61,6 +61,21 @@ def _function_body(b: FunctionBody, none_ref: int) -> bytes:
     return bytes(out)
 
 
+def _state_body(b: StateBody, none_ref: int) -> bytes:
+    out = bytearray()
+    out += write_ci(none_ref)
+    out += write_ci(b.super_field)
+    out += write_ci(b.next_field)
+    out += write_ci(0)                    # ScriptText: a state holds none (shares the class's)
+    out += write_ci(b.children)
+    out += write_ci(b.friendly_name)
+    out += enc_u32(b.line) + enc_u32(b.text_pos) + enc_u32(b.script_size)
+    out += b.script
+    out += enc_u64(b.probe_mask) + enc_u64(b.ignore_mask)
+    out += enc_u16(b.label_table_offset) + enc_u32(b.state_flags)
+    return bytes(out)
+
+
 def _class_body(b: ClassBody) -> bytes:
     out = bytearray()
     out += write_ci(b.super_field)
@@ -101,6 +116,8 @@ def _body_bytes(e: Export, none_ref: int) -> bytes:
             return _struct_body(e.body, none_ref)
         case FunctionBody():
             return _function_body(e.body, none_ref)
+        case StateBody():
+            return _state_body(e.body, none_ref)
         case ObjectBody():
             return e.body.props + e.body.trailer     # UObject body: no leading None ref
         case _:
