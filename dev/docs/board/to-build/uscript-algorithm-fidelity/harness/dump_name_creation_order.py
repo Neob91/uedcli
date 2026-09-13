@@ -58,6 +58,7 @@ import argparse
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 _ALLOC_NAME_ENTRY = "0x1005cdc0"   # core.dll VA of AllocateNameEntry (see docstring)
 
@@ -68,9 +69,28 @@ def _sh(container: str, script: str, *, inp: str | None = None, timeout: int = 1
 
 
 def _setup_package(container: str, package: str) -> None:
-    """Clear any stale build output for `package` (its `.uc` sources + `EditPackages` entry are
-    assumed already present — this repo's baked UED22 image wires the `realpkg` corpus in)."""
+    """Clear stale build output for `package` and stage its `.uc` sources fresh.
+
+    The baked UED22 image wires `EditPackages=<package>` into the ini for every `realpkg` corpus
+    fixture, but ONLY ships each one's compiled `.u` (`uned/UED22/<Package>.u`) — no `.uc` source
+    tree. A prior pass's docstring here wrongly assumed sources were "already present"; they are
+    not, for any `realpkg` fixture. Without them, `UCC make` aborts immediately on this package with
+    `Can't find files matching ..\\<Package>\\Classes\\*.uc` (a clean exit, not a crash) BEFORE
+    parsing a single line of the class body — which is why every capture of `ExtendedBuilders` to
+    date silently stalled at the class self-name (RE'd 2026-09-13, see `findings-ordering-re.md`).
+    Stage the same committed fixture sources `ucc_compile` uses
+    (`uedcli/tests/fixtures/uscript/realpkg/<Package>/*.uc`) under `/opt/<Package>/Classes/`, mirroring
+    `uedcli/uscript/reference.py`'s `ucc_compile`, so `make` can actually recompile the package."""
     _sh(container, f"rm -f /opt/UED22/{package}.u")
+    fixdir = (Path(__file__).resolve().parents[6] / "uedcli" / "tests" / "fixtures" / "uscript" /
+              "realpkg" / package)
+    ucs = sorted(fixdir.glob("*.uc"))
+    if not ucs:
+        return
+    pkg_dir = f"/opt/{package}"
+    _sh(container, f"rm -rf {pkg_dir}; mkdir -p {pkg_dir}/Classes")
+    for p in ucs:
+        _sh(container, f"cat > {pkg_dir}/Classes/{p.name}", inp=p.read_text())
 
 
 def _build_batch(hits: int) -> str:

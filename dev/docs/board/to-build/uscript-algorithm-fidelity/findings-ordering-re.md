@@ -689,3 +689,47 @@ a separate follow-up, not part of verifying the qsort port). `ordering.py`/`reor
 `ExtendedBuilders` stays at `perm_gate`-only. Extracted `core.dll` + the objdump listing are ephemeral
 (`_scratch/re/`, gitignored, not committed).
 
+## Update (2026-09-13, later pass): the deeper capture — harness bug found; region 2's RELATIVE order confirmed, index-reuse question still open
+
+Went to run the deeper capture the previous update called for and found why every prior attempt
+(including this campaign's own) stalled at the class self-name: it was never a natural stopping
+point. `dump_name_creation_order.py`'s `_setup_package` deletes the stale `<Package>.u` but never
+staged that package's `.uc` sources — the baked UED22 image ships only the compiled `.u` for every
+`realpkg` corpus fixture, no source tree. Confirmed directly: a plain follow-up `wine UCC.exe make`
+in the same container right after a capture prints `Can't find files matching
+..\ExtendedBuilders\Classes\*.uc` and exits — a clean error, not a crash, and it happens before a
+single line of the class body is parsed. **Fix**: `_setup_package` now stages the same committed
+fixture sources `ucc_compile` uses under `/opt/<Package>/Classes/`, mirroring `reference.py`.
+
+With sources staged, the capture ran the real compile to completion (6556 `AllocateNameEntry` hits,
+up from the 6249 every prior run stalled at; `ExtendedBuilders.u` rebuilt at the correct 11429
+bytes). Result:
+
+- `LRi`, `LRj`, `LRk`, `Ri`, `Rj`, `Rk` register in EXACTLY that order, immediately after
+  `ExtParallelepiped`'s other own-new properties and before the `GroupName` default value — matching
+  `reorder.name_creation_order`'s existing AST-derived walk exactly. Nothing to fix.
+- `Vector` never fires `AllocateNameEntry` anywhere in the whole 6556-name transcript (checked with a
+  full-file grep). It registers exactly once, at global index 31, during boot, with no relationship
+  to `ExtendedBuilders`'s compile timing at all. Its presort position is set entirely by that dumped
+  index, which `order_package` already uses correctly.
+
+**Conclusion: region 2's RELATIVE registration order (the six names' order among themselves, and
+`Vector`'s irrelevance to their timing) is confirmed correct — this narrows, but does not close, the
+open question.** This capture only reads the `AllocateNameEntry` breakpoint's `Name` argument, never
+its `Index` argument, so it cannot observe whether any of these names (or any other name in the
+package) reuses a freed `FName` slot instead of appending at the tail — `FName::FName` is documented
+(this same harness's own docstring) as popping from an `Available` array first. `ordering.py`'s
+`by_name_index` sentinel — every own-new name sorts after all dumped names — is an unverified
+assumption this capture cannot rule out, and is the one candidate explanation left standing: combined
+with the three independent disassembly passes confirming `msvc_qsort` itself is instruction-exact
+(same comparisons, same branches, same loop bounds — a deterministic algorithm), a genuine residual
+on a truly-identical sort can only mean the INPUT array our port builds differs from the one
+`SavePackage` actually passes to `qsort`. So the residual is an input-array question, not a
+qsort-partitioning question — "inside how msvc_qsort partitions this array" (this update's own
+earlier framing, now corrected) risks misdirecting the next probe toward the wrong side. The
+cheapest next step is extending this same capture to also read the `Index` argument at the
+`AllocateNameEntry` breakpoint, directly testing the freed-slot-reuse hypothesis; a live hook on
+`appQsort`@`0x315c0` or `qsort`@`0x77cb0` during `ExtendedBuilders`'s own `SavePackage`, dumping the
+actual array it sorts, is the more expensive but fully conclusive fallback. Neither attempted this
+pass. Board item: `dev/docs/board/inbox/extendedbuilders-name-table-qsort-residual/`.
+

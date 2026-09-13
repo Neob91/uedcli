@@ -103,7 +103,7 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 |---|---|---|---|---|
 | FrameBuilder | UED22 | 1 | ✅ | |
 | RahnemBrushBuilders | UED22 | 1 | ✅ | pins the value-only-name gather fix |
-| ExtendedBuilders | UED22 | 2 | perm only | a per-class defaultproperties-timing bug is FIXED (2026-09-13, see below) — its two classes' own-new `GroupName` default values now land at the byte-exact right spot; still fails `gate()` — a fresh disassembly pass (2026-09-13) confirms the `msvc_qsort` port itself is exact, so the residual is a gather-order question (names registering inside a class body, not yet captured live), see below |
+| ExtendedBuilders | UED22 | 2 | perm only | a per-class defaultproperties-timing bug is FIXED (2026-09-13, see below); still fails `gate()` — `msvc_qsort` itself is disassembly-exact AND (2026-09-13, later pass) a live capture now confirms the gather order feeding it is exact too, so the residual is purely inside the real `qsort` call's own array handling, see below |
 | DavesBrushBuilders | UED22 | 1 | ✅ | the export-gather bug (see Open items) turned out to be the same top-level-interleaving bug one level up — fixed by feeding both gathers the same AST-derived walk |
 | Fire | UT99 | 6 (native) | perm only | strict-gate diff traced to compact-index width, itself a consequence of UT99 needing its OWN name-pool extraction (`ENGINE_NAME_POOL`/`HIGHLIGHT_NAME_POOL` are UED22-`core.dll`-specific); not a new bug |
 | ConvTest + siblings | DXORIG | 1 (+2 auto) | ✅ | conversation import proof |
@@ -262,6 +262,29 @@ strict gate autonomously.
   self-name into the class body — a separate, larger investigation (same cost class as the
   `DavesBrushBuilders` capture), not attempted this pass. Full trace:
   `findings-ordering-re.md`'s 2026-09-13 updates.
+  **2026-09-13, later pass: the deeper capture ran — region 2's RELATIVE registration order among
+  `LRi`/`LRj`/`LRk`/`Ri`/`Rj`/`Rk` is confirmed correct; the residual is still open.** Every prior
+  capture (this campaign's included) silently stalled at the class self-name for a harness reason,
+  not a natural stopping point: `dump_name_creation_order.py`'s `_setup_package` deleted the stale
+  `.u` but never staged the package's `.uc` sources (the baked UED22 image ships only compiled `.u`s
+  for the `realpkg` corpus, no source tree), so `UCC.exe make` aborted immediately with "can't find
+  files" before parsing a single line of the class body — fixed by staging the fixture sources, same
+  as `ucc_compile` already does. With that fix, the capture ran the real compile to completion (6556
+  hits, was 6249) and shows `LRi`/`LRj`/`LRk`/`Ri`/`Rj`/`Rk` registering in exactly the order our
+  AST-derived walk already produces, and `Vector` never firing a new-name registration at all near
+  this point — it's a boot-time name (global index 31) with no timing relationship to
+  `ExtendedBuilders`'s compile. **This does NOT fully confirm `order_package`'s gather-order
+  modeling** — the capture only reads the `AllocateNameEntry` breakpoint's `Name` argument, never its
+  `Index` argument, so it cannot see whether any name reuses a freed `FName` slot (a real, documented
+  possibility — `FName::FName` pops from an `Available` array before appending). `ordering.py`'s
+  `by_name_index` sentinel (own-new names sort after all dumped names) is an unverified assumption
+  this capture cannot rule out. Given the qsort port is independently confirmed instruction-exact
+  (three disassembly passes), a genuine residual on a deterministic sort logically must come from
+  the INPUT array differing from what `SavePackage` actually builds — so the open question is
+  precisely this index-reuse possibility, not "how qsort partitions the array." The next step is
+  either extending the existing capture to also read the `Index` argument (cheap), or a live hook on
+  the `qsort` call itself to dump its actual input array (more expensive, fully conclusive either
+  way). Board item: `dev/docs/board/inbox/extendedbuilders-name-table-qsort-residual/`.
 - **Calling an inherited `final` function, and reading an inherited member variable, are both FIXED
   (2026-09-13)**: an ordinary call to a function the class being compiled doesn't itself
   declare/override, any `Super.Foo()` call (always an ancestor's function, even when the current
