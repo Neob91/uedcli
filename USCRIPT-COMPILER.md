@@ -102,7 +102,7 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 |---|---|---|---|---|
 | FrameBuilder | UED22 | 1 | ✅ | |
 | RahnemBrushBuilders | UED22 | 1 | ✅ | pins the value-only-name gather fix |
-| ExtendedBuilders | UED22 | 2 | perm only | a per-class defaultproperties-timing bug is FIXED (2026-09-13, see below) — its two classes' own-new `GroupName` default values now land at the byte-exact right spot; still fails `gate()` on a separate, still-open large-tied-group qsort permutation (first diff now at name-table index 7, was 12) |
+| ExtendedBuilders | UED22 | 2 | perm only | a per-class defaultproperties-timing bug is FIXED (2026-09-13, see below) — its two classes' own-new `GroupName` default values now land at the byte-exact right spot; still fails `gate()` on a genuine `order_package`/`msvc_qsort` bug (not a gather/registration-order gap — ruled out by a live capture, see below) |
 | DavesBrushBuilders | UED22 | 1 | ✅ | the export-gather bug (see Open items) turned out to be the same top-level-interleaving bug one level up — fixed by feeding both gathers the same AST-derived walk |
 | Fire | UT99 | 6 (native) | perm only | strict-gate diff traced to compact-index width, itself a consequence of UT99 needing its OWN name-pool extraction (`ENGINE_NAME_POOL`/`HIGHLIGHT_NAME_POOL` are UED22-`core.dll`-specific); not a new bug |
 | ConvTest + siblings | DXORIG | 1 (+2 auto) | ✅ | conversation import proof |
@@ -225,9 +225,30 @@ strict gate autonomously.
   unreported divergence was found at name-table index 70-76 (`Vector` vs `BuildCube`'s params
   `LRi`/`LRj`/`LRk` and `Build`'s locals `Ri`/`Rj`/`Rk`, all refcount 0) — the same bug class as
   `DavesBrushBuilders`'s enum-tag scatter. The true ambiguous refcount=0 tier is 39 names (corrects the
-  earlier "~90" estimate), still far past brute-force reach. Confirmed blocked on docker/winedbg
-  availability, not a research dead end — full evidence and the precise live-capture questions in
-  `findings-ordering-re.md`'s 2026-09-13 update.
+  earlier "~90" estimate), still far past brute-force reach.
+  **2026-09-13, live-capture pass**: ran the live `AllocateNameEntry` capture this blocked on. The
+  capture ends at `ExtendedBuilders`'s own class self-name, so it directly settles only REGION 1's 11
+  names (index 7-17, all header/class-level refs): each is already interned (from Editor/Fire/IpDrv/
+  Extension/`DavesBrushBuilders`/`FrameBuilder`/`RahnemBrushBuilders`) before `ExtendedBuilders`'s
+  compile starts, and the capture's indices for all of them match the committed `gobjnames_ued22.json`
+  dump exactly — no registration-order question left for these 11. Region 2's own-new names
+  (`Vector`/`LRi`/`LRj`/`LRk`/`Ri`/`Rj`/`Rk`, index 70-76) register inside the class BODY, after the
+  self-name, so this capture — which stops at the self-name — says nothing about their order; that
+  question stays open. A follow-on self-consistency test
+  (decode `ExtendedBuilders.u`'s OWN bytes and feed its own objectively-correct refcounts/gather back
+  through `order_package`) reproduces the identical 16-entry divergence, proving the bug is inside
+  `order_package`/`msvc_qsort` itself, not in gather-order derivation from compile order — a materially
+  different, more precisely located finding than the registration-order framing this item carried
+  before. Traced `msvc_qsort` on the real array: the `BuildCube`/`GetVertexCount` swap is a
+  `_shortsort` tie-handling question (a diagnostic `>` → `>=` tweak closes 2 of 16 diffs but is
+  unconfirmed against the binary, not applied); the `Vector`/`LRi..Rk` swap is NOT a shortsort matter
+  at all — it sits in a 39-item all-tied run where the containing partition call is a provable no-op
+  (loguy/higuy both scan off the ends without ever swapping), so `Vector`'s placement is set by the
+  OUTER partition's positional Hoare-scan mechanics, not a gather-order rule. Not fixed (no code
+  changed) — per the owner's standing rule against hacks, neither the `_shortsort` tweak nor any
+  operator flip was applied without disassembly confirmation. Full trace and the precise next step
+  (a live capture of the ACTUAL array `SavePackage`'s own `qsort`@`0x77cb0` call receives/produces for
+  this package, not `AllocateNameEntry`) in `findings-ordering-re.md`'s 2026-09-13 update.
 - **Calling an inherited `final` function, and reading an inherited member variable, are both FIXED
   (2026-09-13)**: an ordinary call to a function the class being compiled doesn't itself
   declare/override, any `Super.Foo()` call (always an ancestor's function, even when the current

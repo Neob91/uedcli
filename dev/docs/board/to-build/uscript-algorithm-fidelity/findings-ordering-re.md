@@ -556,3 +556,91 @@ dead end.** Every static angle available here is exhausted. What a live `Allocat
 No code changed this pass (`uedcli/uscript/reorder.py`/`ordering.py` unmodified). Diagnostic scripts
 used were ephemeral (`_scratch/`, not committed — none produced a new checkable rule to pin).
 
+## Update (2026-09-13, later pass): live capture done — refutes the registration-order hypothesis; the real bug is in `order_package` itself, isolated to two distinct mechanisms, neither fixed (no fitting)
+
+Ran the live `AllocateNameEntry` capture the previous update asked for
+(`harness/dump_name_creation_order.py --package ExtendedBuilders --hits 7200`, matching the real
+`bake_ued22.sh` `EditPackages` order — `DavesBrushBuilders, FrameBuilder, RahnemBrushBuilders,
+ExtendedBuilders, …` — via `reference.ucc_container` so the container's `unrealtournament.ini` is the
+real one, not a synthetic single-package ini). Result: **6249 names registered total, and the capture
+ends at `ExtendedBuilders`'s own class self-name.** This settles REGION 1's 11 names (`BuildCube`,
+`GetVertexCount`, `Editor`, `Core`, `GroupName`, `Vertex3f`, `Width`, `System`, `EndBrush`, `Breadth`,
+`BeginBrush`), which are all header/class-level refs the capture directly observes registering before
+that self-name: each is already interned before `ExtendedBuilders`'s own compile starts — confirmed
+independently, since this live capture's own indices for all of them (e.g. `Width`@4241,
+`BuildCube`@4275, `Breadth`@4289) are byte-for-byte identical to the committed `gobjnames_ued22.json`
+dump. So the dump is NOT stale, and — directly answering question 1 for region 1 — there is no "true
+registration order" left to discover for these 11 names by more live capture: they register during
+the Editor/Fire/IpDrv/Extension/DavesBrushBuilders/FrameBuilder/RahnemBrushBuilders load, not during
+`ExtendedBuilders`, and both a fresh live run and the shipped dump agree on exactly where.
+
+**Region 2's names (`Vector`, `LRi`/`LRj`/`LRk`/`Ri`/`Rj`/`Rk`, index 70-76) are NOT settled by this
+capture.** Per the campaign's own established fact (the `DavesBrushBuilders` capture: a class
+self-name registers at class-header time, before any of that class's own members are parsed), a
+capture that ends at the class self-name stops BEFORE it could observe body-local registrations —
+so it says nothing about when `LRi`/`LRj`/`LRk`/`Ri`/`Rj`/`Rk` register. These six are genuinely
+own-new (absent from `gobjnames_ued22.json`, and from every other package in the corpus) — the
+question 1 the previous pass posed for `Vector`'s relative order against them is still open and
+would need a deeper capture (past class-header registration, into the class body) to answer.
+
+**This refutes the registration-order framing question 2 posed.** It is not "which of these 11 names
+is mis-dumped" (question 2's first guess) — a self-consistency test proves it directly: decode
+`ExtendedBuilders.u` (golden) itself back into its own `ObjInput`s/refcounts/gather and feed that
+straight through our own `order_package`/`msvc_qsort` (`_scratch/trace3_selfconsistency.py`, not
+committed). Using GOLDEN's own objectively-correct membership, refcounts, and dumped indices still
+reproduces the *exact same* 16-entry divergence as compiling from source. Since every input to
+`order_package` is now independently verified correct (refcounts hand-checked against source
+occurrences; gidx values confirmed twice — the shipped dump and a fresh live capture agree), the bug
+is squarely inside `order_package`/`msvc_qsort`'s own mechanics, not in gather-order derivation from
+compile order. This is a materially different, and more precisely located, finding than every prior
+pass on this item.
+
+Traced `msvc_qsort` with instrumentation (`_scratch/trace5_qsort_debug.py`) on the real 84-item
+presorted array (`_gather_names` output, stably presorted by `default_global_index()`). Two distinct
+mechanisms, not one:
+
+1. **The `BuildCube`/`GetVertexCount` swap (index 7-8) and the 9-item `Editor`/`Core`/`GroupName`/…
+   run (index 9-17) are both resolved by one `_shortsort` call** (`shortsort[3:16]`, an 8-and-a-6-item
+   pair of size-≤8 runs after an outer split). `_shortsort` is a selection sort: for a tie
+   (`comp(a[p], a[mx]) > 0` false when equal), the FIRST-encountered element of a tied run keeps `mx`
+   and gets extracted-to-the-end LAST, landing it EARLIEST in final (descending) output — i.e. ties
+   preserve *input* order under our port. Diagnostic: changing the strict `> 0` to `>= 0` in
+   `_shortsort`'s selection test (untested against disassembly — NOT committed) closes exactly 2 of
+   the 16 diffs (the `BuildCube`/`GetVertexCount` swap and one downstream index) and leaves 14. So
+   *some* real discrepancy lives in the tie-handling convention here, but `>=` is not the whole
+   answer and is unconfirmed against the binary — flagged, not applied.
+2. **The `Vector`/`LRi..Rk` swap (index 70-76) is NOT a shortsort matter at all.** It sits inside a
+   39-item all-refcount-0 run (index 45-83) handled by ONE big (`size` 39 `>` `_CUTOFF` 8) partition
+   call. Traced instruction-by-instruction: because every element in this call's range is tied
+   (`comp` always 0 against the pivot), the three median-of-3 swaps are all no-ops, and the
+   loguy/higuy scan runs off both ends (`loguy` reaches `84` past `hi=83`, `higuy` reaches `lo=45`)
+   without ever executing the inner swap — this call is a **provable no-op**: whatever order this
+   39-item range had going IN is exactly what comes out. The `>=` diagnostic above changes nothing
+   here (it only touches `_shortsort`, never reached for a 39-item run). So `Vector`'s wrong position
+   is not a qsort-recursion artifact at all — it is set by the OUTER `qsort[0:83]` call's partition,
+   which (unlike this no-op) DOES swap: `Vector`, having a real low `gidx` (31, an intrinsic boot
+   name) starts at raw presort position 9, while `LRi..Rk` (own-new, no `gidx`) start at position
+   70-75 — the outer partition's positional Hoare-style scan (splitting the full 84 items into a
+   `{0:44}`/`{45:83}` pair by refcount) relocates `Vector` into the low-refcount half via a swap
+   against whatever the `higuy` scan currently holds, and THAT swap — not a simple "ascending gidx"
+   rule — is what determines its final neighbor. This is provably NOT explained by the "presort by
+   dumped index, own-new last" model in isolation: `Vector`'s presort position (9) is confirmed
+   correct (matches its true dumped/live-captured `gidx`), yet the outer partition's specific
+   swap sequence, which is sensitive to every OTHER element's position too, does not preserve that
+   ordering relative to `LRi..Rk` the way the (already twice disassembly-verified) shortsort's
+   tie behavior would predict for a smaller run.
+
+**Conclusion, per the owner's standing rule against hacks ("don't do hacks just to satisfy a single
+package scenario"): NOT fixed.** Both mechanisms are real, evidenced, and distinct from anything
+closed so far in this campaign — but the available static/dynamic evidence (two disassembly passes on
+the qsort structure, a fresh live registration-order capture, and a self-consistency decode of
+golden's own bytes) is now exhausted without pinning WHY the outer partition's positional swap (item
+2) or the shortsort tie convention (item 1) diverges from `core.dll`'s actual behavior on an array
+this size/shape. What would settle it: a live capture of the ACTUAL array `SavePackage`'s own
+`msvc_qsort` call receives and produces for `ExtendedBuilders`'s name table specifically (hooking
+`appQsort`@`0x315c0` or `qsort`@`0x77cb0` directly, not `AllocateNameEntry` — a fundamentally
+different probe than anything built so far in this campaign) — out of scope for this pass. No code
+changed (`ordering.py`/`reorder.py` unmodified); `ExtendedBuilders` stays at `perm_gate`-only.
+Diagnostic scripts (`_scratch/trace2.py`, `trace3_selfconsistency.py`, `trace4_qsort_isolate.py`,
+`trace5_qsort_debug.py`, `dump_extendedbuilders.py`) are ephemeral, not committed.
+
