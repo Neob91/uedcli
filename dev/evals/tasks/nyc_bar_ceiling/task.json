@@ -1,7 +1,7 @@
 {
   "level": "bar",
   "title": "Raise the bar's ceiling",
-  "req": "&ldquo;This bar (near Brush1) feels cramped. Raise its ceiling by 48 units.&rdquo;",
+  "req": "&ldquo;This bar (Brush1) feels cramped. Raise its ceiling by 48 units.&rdquo;",
   "dx_map": "02_NYC_Bar",
   "photo_camera": {
     "at": [

@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "Port UE1 mesh geometry decode (umesh.py parse_mesh/lazy_array) to Rust"
+summary = "Spec written + subagent-reviewed (2026-09-12) -- see spec.md. Ports the whole per-export mesh body (not just the hot arrays) into one Rust call, mirroring package_read.rs's pattern; deletion of the old Python decoders gated on the owner's visual sign-off over level photo + class preview renders across varied meshes in both Unreal Gold and Deus Ex. Needs plan.md next."
 +++
 
 # Port UE1 mesh geometry decode to Rust

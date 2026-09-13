@@ -25,7 +25,8 @@ MAIN_CHECKOUT = _main_checkout()
 PY = str(MAIN_CHECKOUT / ".venv" / "bin" / "python")
 # The main checkout specifically, not WT's -- dev/games/ is gitignored game content, installed
 # once in the main checkout, not replicated per-worktree (same reasoning as PY above).
-DX_MAPS_DIR = MAIN_CHECKOUT / "dev" / "games" / "deusex" / "Maps"
+DX_GAME_DIR = MAIN_CHECKOUT / "dev" / "games" / "deusex"
+DX_MAPS_DIR = DX_GAME_DIR / "Maps"
 # _scratch/ anywhere in the tree is already gitignored -- reuse that, no new pattern needed.
 # eval_runs/ (run_eval.py's subject trunks) lives alongside the base-trunk cache, same reasoning.
 BASE_TRUNKS_DIR = pathlib.Path(os.environ.get("BASE_TRUNKS_DIR") or (pathlib.Path(WT) / "dev" / "evals" / "_scratch" / "base_trunks"))
