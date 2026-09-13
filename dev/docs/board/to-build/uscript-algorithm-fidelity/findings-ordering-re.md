@@ -280,3 +280,34 @@ qsort method for exactly this reason — this note's baseline claims should be t
 until re-derived that way. Next step: adapt `RahnemBrushBuilders`'s brute-force tail-permutation
 harness to this enum case (search the *gather* order that, once run through the ALREADY-verified
 `msvc_qsort`, reproduces golden) rather than reading positions by eye.
+
+## Update (2026-09-13): no committed harness exists to adapt; brute force is NOT tractable here — the tied group is too large
+
+Searched the repo and git history for the `RahnemBrushBuilders` brute-force harness referenced
+above. It never existed as a reusable script — the fix (commit `5c595b13`) hand-edits
+`ordering.py`/`reorder.py` directly, and the permutation search that led to it was ephemeral,
+uncommitted exploration in a prior session. There is nothing to adapt; a search for
+`DavesBrushBuilders` would have to be written from scratch.
+
+Tried one concrete hypothesis first, since it's cheap to test: reverse each enum's value list
+(mirroring the "last declared, first" prepend convention already confirmed for function/state-label
+chains). Result: it exactly reverses both enums' internal sub-order in OUR output, but golden's
+`_Platonic` tags are in FORWARD declared order (`Tetrahedron, Cube, Octahedron, Dodecahedron,
+Icosahedron` — which the UNREVERSED code already gets right) while `_Stellate`'s are in NEITHER
+forward nor reverse order (`Stellate2, NoStellate, Stellate1`). So it's not a uniform per-enum
+direction flip; reverted (`reorder.py` is back to its original Enum branch, no residual diff).
+
+**Why brute force doesn't work here**: computed the actual reference counts our own
+`ordering._reference_counts` assigns (`_scratch/daves_refcounts2.py`) for every "new" identifier in
+the ambiguous zone — all 8 enum tags AND 14 unrelated names (`StellateType`, `PlatonicType`, `Build`,
+`BadParameters`, `System`, `Editor`, `BitmapFilename`, …) come back `refcount=1`, genuinely tied.
+That's a 22+-item tied group feeding one `msvc_qsort` call — nothing close to `RahnemBrushBuilders`'s
+"tail permutation" (a small handful of items). Brute-forcing a 22-item permutation space (`22!`) is
+not tractable by any means available here.
+
+**What this actually needs**: the same rigor as the original table-ordering breakthrough — a live
+runtime dump (an INT3 breakpoint under `winedbg` capturing the real FName registration sequence
+during a controlled UCC compile of a small enum-bearing class), not a permutation search. This is a
+scoped, known-shape task (the infrastructure for it already exists — see `USCRIPT-COMPILER.md`'s
+table-ordering section for the method), just not attempted this pass given the setup cost. Left open;
+next session should budget for the live-dump approach specifically, not more static probing.
