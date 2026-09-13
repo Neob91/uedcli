@@ -29,9 +29,9 @@
       "highest_n": 202,
       "total_actors": 2745,
       "status": "blocked",
-      "blocker": "BODY model model2 -- world Model2.points holds a 2-ULP-off value pair (0xc3800004 native vs 0xc3800002 UED22). 2026-09-13 hex-precision recheck pinned the provenance exactly: it's Brush483 poly 2's own transformed Origin via bsp_add_point(base), not a split_with_plane crossing (verified bit-exact under every f32 operand grouping, and every nearby crossing independently confirmed to already match UED22). Narrowed to a genuine bspAddPoint/FindNearestVertex HIT-vs-MISS divergence: native's faithful FNV descent misses an existing pool point only 6.1e-5 away (well inside the 0.002 threshold). Needs the same live-editor gdb capture that closed Island N=332/UNATCO N=226/WanChai N=58 -- not attempted this session. dev/docs/spikes/2026-09-13-oceanlab-n203-pbase-provenance/spike.md. No exclusion proposed.",
+      "blocker": "BODY model model2 -- world Model2.points holds a 2-ULP-off value pair (0xc3800004 native vs 0xc3800002 UED22). 2026-09-13 hex-precision recheck pinned the provenance exactly: it's Brush483 poly 2's own transformed Origin via bsp_add_point(base), not a split_with_plane crossing (verified bit-exact under every f32 operand grouping, and every nearby crossing independently confirmed to already match UED22). Narrowed to a genuine bspAddPoint/FindNearestVertex HIT-vs-MISS divergence: native's faithful FNV descent misses an existing pool point only 6.1e-5 away (well inside the 0.002 threshold); the miss target is referenced by NO currently-live node at all (full reachable-set DFS, not radius-pruned). A same-day live-editor gdb capture attempt (same recipe as Island N=332/UNATCO N=226/WanChai N=58) was aborted before starting any container: the shared host's disk swung 7.1G->159M->5.9G free within ~15 minutes from concurrent activity, past the 1.5GB abort threshold, so the ~4.2GB ued-x86-runtime rebuild the capture needs was not attempted. dev/docs/spikes/2026-09-13-oceanlab-n203-pbase-provenance/spike.md. No exclusion proposed.",
       "board": "oceanlab-n-203-world-model2-split-vertex-ulp",
-      "updated": "2026-09-13T00:00:00Z"
+      "updated": "2026-09-13T08:20:00Z"
     },
     {
       "slug": "wanchai",

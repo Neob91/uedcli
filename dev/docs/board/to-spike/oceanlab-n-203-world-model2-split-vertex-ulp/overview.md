@@ -112,3 +112,34 @@ Narrowed to a genuine `bspAddPoint`/`FindNearestVertex` HIT-vs-MISS divergence n
 gdb capture to settle (same method as N=8/N=19 and the Island N=332 tie) — exact breakpoint condition
 value and next steps are in the spike. Not attempted this session (scope/risk tradeoff, see spike's
 final section); no fix, no mask.
+
+## 2026-09-13 update (2) — live capture attempted, blocked by shared-disk exhaustion; miss re-confirmed exact
+
+Reproduced N=203 fresh against the current binary (post the portal-graph-freeze fix, `f1bd02a4`):
+unchanged, still `FAIL` at N=203 on `model2` only.
+
+Re-read `point_wired`/`reachable_nodes` (`bspcsg.rs`): `sb=[] vp=[]` is a FULL DFS over every
+currently-reachable node (root via `iFront`/`iBack`/`iPlane`), not a radius-pruned sample — so the
+miss target (point 30820, `6.1e-5` from the query) is referenced by NO live node's `Surf.pBase` or
+vert-pool at all right now, not merely outside some search radius. It is a genuinely orphaned
+`Points` entry in native's current tree at this exact moment.
+
+Attempted the live-editor gdb capture (same recipe as `stage2b/probe_editor_fnv.py`: break inside
+`bspAddPoint` right after its `FindNearestVertex` call, `Editor.dll` preferred-base offset
+`0x100354a1`, condition on the query's x bits `0xc3800004`, threshold `0.002`) — aborted before
+running any container. This worktree shares a Docker daemon and host disk with concurrent sessions
+(the parent session's UNATCO `ladder_run.py` sweep, at minimum). During setup, `docker images` showed
+`ued-x86-runtime:latest` (needed as the base for the debug image) present, then **absent**, in two
+checks minutes apart, and `df -h /` swung from 7.1G free to **159M free** and back to 5.9G within the
+same ~15-minute window with no build of my own running yet. Rebuilding the ~4.2GB `ued-x86-runtime`
+image on top of that would risk driving the shared host to true zero disk during a concurrent peak —
+this session's brief explicitly says abort toward ~1.5GB. Stopped before any docker build; no image
+was built, no disk was consumed beyond the failed (zero-cost) `docker build` attempts that errored on
+`FROM ued-x86-runtime:latest: pull access denied` once the image had been evicted.
+
+**Not resolved.** The open question is unchanged: does UED22's own `FindNearestVertex` ALSO miss at
+the equivalent call (native would then be faithfully reproducing an earlier, not-yet-byte-visible
+tree divergence from some prior actor/N), or does it HIT onto the nearby point (native's descent
+genuinely differs here, same shape as N8 but reversed)? Settling this needs the live capture above,
+run when the shared host's disk is not mid-swing. Exact recipe, breakpoint address, and query bits are
+unchanged from the prior update and ready to run as-is. No fix, no mask, no exclusion proposed.

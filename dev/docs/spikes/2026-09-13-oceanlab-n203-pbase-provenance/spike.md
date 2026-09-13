@@ -102,3 +102,27 @@ or exclusion proposed, per `NATIVE-MATERIALIZE.md`'s prime directive.
     UEDCLI_BSPCSG_POINT_TRACE="-256.0,552,-1750,120" <same ladder_run.py invocation>
     # crossing trace (finding 3):
     UEDCLI_LPI_TRACE_NEAR="-256.0,0.001" <same ladder_run.py invocation>
+
+## 2026-09-13, later same day — live capture attempt aborted (shared-disk exhaustion)
+
+Re-reproduced N=203: unchanged (still FAILs, same `model2` divergence, current binary post
+`f1bd02a4`). Confirmed `point_wired`'s `sb=[]`/`vp=[]` is a full reachable-set DFS, not a
+radius-sampled one — point 30820 is referenced by NO currently-live node, not merely "outside a
+search radius."
+
+Set out to run the live-editor gdb capture (same recipe as
+`dev/docs/spikes/2026-09-05-faithful-dedup-fix-attempt/stage2b/probe_editor_fnv.py`: break at
+`Editor.dll`-base-relative `0x100354a1`, right after `bspAddPoint`'s internal `FindNearestVertex`
+call, condition on query x bits `0xc3800004`, threshold `0.002`) but stopped before starting any
+container. `ued-x86-runtime:latest` (the base image the debug variant needs) was present in
+`docker images` at session start and gone minutes later; `df -h /` swung 7.1G -> 159M -> 5.9G free
+within ~15 minutes with no build of mine running — a concurrent session (at least the parent's
+UNATCO `ladder_run.py` sweep) was consuming the shared daemon's disk hard enough to hit the
+1.5GB abort threshold this session was briefed with. Rebuilding the ~4.2GB base image into that would
+risk pushing the shared host to true zero during a peak. No image was built; the only docker commands
+run were two `docker build` attempts that failed immediately (`pull access denied`, base image
+already evicted) before any layer was pulled or written.
+
+The capture recipe is otherwise unchanged and ready to run: same breakpoint, same condition, same
+0.002/0.015 threshold split as the N=8 probe. Whoever picks this up next should check `df -h /` and
+`docker images | grep ued-x86-runtime` are calm before starting `build-dbg-image.sh`.
