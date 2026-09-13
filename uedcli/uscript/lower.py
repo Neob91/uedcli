@@ -490,10 +490,12 @@ def lower_function(func: FuncDecl, scope: Scope, catalog: Catalog,
                    extra_deps: list[str] | None = None) -> list[Tok]:
     """Lower one function body to its token stream (with the trailing implicit Return(Nothing)).
 
-    `extra_deps` (shared across every function of the class, if given) collects, in first-use order,
-    the real-cased name of each class Context'd into (a member access/call through an object typed to
-    a class other than self/super) — UCC records one `Dependency` per such class (`deep=0`, alongside
-    the `deep=1` self/super entries)."""
+    `extra_deps`, if given, collects one entry (real-cased class name) per Context node lowered in
+    this function — a member access/call through an object typed to a class other than self/super —
+    in source-textual order (outer Context before one nested in its own call's arguments). NOT
+    deduped: UCC repeats a `Dependency` (`deep=0`) once per occurrence, alongside the `deep=1`
+    self/super entries. The caller assembles the class's full array across every function/state in
+    REVERSE declaration order (`compile._build_callables`) — measured against real UWeb, 2026-09-13."""
     low = _Lowerer(scope, catalog, type_label(func.return_type) if func.return_type else "none",
                    extra_deps=extra_deps)
     for stmt in func.body:
@@ -516,20 +518,22 @@ _NOTHING_PAD_NATIVES = ("GotoState", "FinishAnim")
 _LABEL_TABLE_NONE_ICODE = 0x0000FFFF   # MAXWORD: the terminating (None, iCode) entry's iCode
 
 
-def lower_state_body(state: StateDecl, scope: Scope, catalog: Catalog) -> list[Tok]:
+def lower_state_body(state: StateDecl, scope: Scope, catalog: Catalog,
+                     extra_deps: list[str] | None = None) -> list[Tok]:
     """Lower a state's top-level body (labels + statements) to its full token stream: the code,
     an implicit `EX_Stop`, `EX_Nothing` padding, and (iff the state declares any label) a trailing
     `EX_LabelTable` — `{name, u32 iCode}` pairs in REVERSE declaration order (the same "last
     declared, first in the chain" convention as the class Children list), terminated by
     `(None, 0x0000FFFF)`. Each label's `iCode` is its in-MEMORY offset into this same stream — reuses
-    the same `_Body` machinery as an ordinary jump target, just also recorded by name."""
+    the same `_Body` machinery as an ordinary jump target, just also recorded by name. `extra_deps`
+    mirrors `lower_function`'s own param (a Context inside a state's code is a Dependency too)."""
     if state.funcs:
         raise LowerError("state function overrides not supported yet")
     if state.base is not None:
         raise LowerError("state inheritance ('state X extends Y') not supported yet")
     if state.ignores:
         raise LowerError("state 'ignores' not supported yet")
-    low = _Lowerer(scope, catalog, "none")
+    low = _Lowerer(scope, catalog, "none", extra_deps=extra_deps)
     for stmt in state.body:
         low.stmt(stmt)
     low.body.tok(Tok(EX_STOP))
@@ -865,15 +869,19 @@ class _Lowerer:
             return self._context(base_tok, base_type, member, ftype), ftype
         raise LowerError(f"member access on non-object/struct type {base_type!r}")
 
-    def _context(self, base: Tok, base_type: str, member: Tok, member_type: str) -> Tok:
-        self._record_dep(base_type)
+    def _context(self, base: Tok, base_type: str, member: Tok, member_type: str, *,
+                record: bool = True) -> Tok:
+        if record:
+            self._record_dep(base_type)
         size = _value_size(member_type, self.scope.graph)
         skip = struct.pack("<H", _mem_size(member)) + bytes((size,))
         return Tok(EX_CONTEXT, (("sub", base), ("raw", skip), ("sub", member)))
 
     def _record_dep(self, base_type: str) -> None:
         """Record a `Dependency` (deep=0) for the class behind a Context, unless it's self/super
-        (those already carry their own deep=1 entry) or already recorded."""
+        (those already carry their own deep=1 entry). UCC records ONE entry per syntactic Context
+        occurrence -- NOT deduped by class (measured against real UWeb, 2026-09-13: `HelloWeb`'s
+        `WebRequest`/`WebResponse` params repeat a dozen+ times each)."""
         if self.extra_deps is None or not _is_object(base_type):
             return
         cf = base_type.split(":", 1)[1]
@@ -881,8 +889,6 @@ class _Lowerer:
             return
         sig = self.scope.graph.class_sig(cf) if self.scope.graph else None
         if sig is None:
-            return
-        if any(d.casefold() == sig.name.casefold() for d in self.extra_deps):
             return
         self.extra_deps.append(sig.name)
 
@@ -1012,9 +1018,13 @@ class _Lowerer:
         tgt = self.scope.method_of(base_type, name)
         if tgt is None:
             raise LowerError(f"unresolved method {base_type}.{name}")
+        # Record the Context's Dependency BEFORE lowering the arguments: UCC records it at the
+        # `Base.Method(` token, in source-textual order, ahead of any Context nested inside the
+        # call's own arguments (measured against real UWeb `HelloWeb.Query`, 2026-09-13).
+        self._record_dep(base_type)
         arg_toks, arg_types = self._lower_args(args)
         call, ret = self._emit_target(tgt, arg_toks, arg_types)
-        return self._context(base_tok, base_type, call, ret), ret
+        return self._context(base_tok, base_type, call, ret, record=False), ret
 
     def _emit_target(self, tgt: CallTarget, arg_toks, arg_types) -> tuple[Tok, str]:
         coerced = self._coerce_args(arg_toks, arg_types, tgt.param_types)

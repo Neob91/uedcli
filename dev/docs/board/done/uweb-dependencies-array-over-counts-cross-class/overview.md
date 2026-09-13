@@ -46,30 +46,32 @@ divergence was found investigating this (a native class's own UNSET plain proper
 spurious zero default) — filed separately, not reproduced on real `WebRequest`:
 `dev/docs/board/inbox/native-class-lone-plain-var-gets-a-spurious-zero-default/`.
 
-## What's still open: the `Dependencies` array
+## FIXED 2026-09-13 — the real rule
 
-`compile-model.md`'s "Cross-class Dependency entries" section (RE'd 2026-09-13) says a class's
-`Dependencies` array gets ONE entry per DISTINCT external class reached via a typed Context access,
-in first-use order. That model produces the RIGHT class SET for `HelloWeb` (`WebApplication`,
-`WebRequest`, `WebResponse`, `Engine.LevelInfo`) but the WRONG COUNT: UCC's real `HelloWeb` class
-carries ~30 `Dependencies` entries with `WebRequest`/`WebResponse` repeated many times (not deduped),
-where ours carries exactly one entry per distinct class (5 entries total). Every other class in the
-package (`ImageServer`, `WebApplication`, `WebConnection`, `WebResponse`, `WebServer`) fails the same
-way — this is systemic, not a `HelloWeb`-specific bug.
+Decoded the committed `uned/UED22/uweb.u` directly (it's UWeb's own stock UED22 build — a
+self-consistent (source, binary) pair with `UCC batchexport`-decompiled sources of it, no fresh
+docker rebuild needed) and correlated every `Dependencies` entry against `HelloWeb.Query`'s source
+line by line. The real rule: **one entry per SYNTACTIC Context occurrence, never deduped by class**
+(confirmed exactly — count AND order — against all 7 real UWeb classes, not just `HelloWeb`). Two
+ordering sub-rules, both confirmed: within one function, occurrences record in source-textual order
+(an outer Context's entry precedes one nested in its own call's arguments — opposite the natural
+bottom-up codegen order); across functions/states, the class's array gathers them in REVERSE
+declaration order (the same reversal already known to apply building the Children chain).
 
-`HelloWeb.Query` (the function this was measured on) has roughly a dozen `Request.X`/`Response.X`
-Context accesses across an if/switch with 4 cases — the repeat count in UCC's own Dependencies array
-doesn't obviously equal "one per Context statement" either (needs a careful correlation pass against
-the source, not attempted here). This needs the same kind of live-capture RE work the other open
-items in `USCRIPT-COMPILER.md` used (a live UCC build probed for the real counting rule), not a guess.
+Fixed in `lower.py` (`_call_method` records before lowering its own args; `_context` gains a
+`record=` flag to avoid double-counting; `_record_dep` no longer dedups) and `compile.py`
+(`_build_callables` collects each callable's own Context sequence into a slice, then assembles
+`b.extra_deps` from the slices in REVERSE order). Full mechanism + evidence:
+`compile-model.md`'s "Cross-class `Dependency` entries".
 
-## Where things are
+Verified: all 7 real `uweb.u` classes' `Dependencies` arrays decoded byte-exact (count + order)
+against the fixed compiler; a new controlled regression, `pkg_DepOrderProbe`
+(`test_uscript_package.py`), isolates all three mechanics in one small fixture and passes both
+`perm_gate` offline and a docker-gated fresh-UCC rebuild; the full offline + integration uscript
+suites are green with no regression on any previously byte-exact package.
 
-- Compiler fixes: committed on this session's worktree (see `USCRIPT-COMPILER.md`'s updated table/
-  status for the file list). Not yet merged to master.
-- Harness used: `_scratch/uweb_probe.py`-style script (not committed — ad hoc, reproducible via
-  `reference_ut99.ucc_decompile_ut99`/`ucc_compile_ut99` + `compile_package_dir` + `gate.perm_gate`,
-  same pattern as `test_uscript_ut99.py`'s `test_ipserver_roundtrips`).
-- Next step: a live `AllocateNameEntry`-style capture (or an `FLinkedProperty`/`FDependency`-focused
-  one) on a `UCC.exe make` of `UWeb`, correlated statement-by-statement against `HelloWeb.Query`'s
-  source, to find the real Dependency-counting rule.
+**Not a corpus win yet** — two SEPARATE, pre-existing compiler gaps (found compiling real UWeb while
+validating this fix, not fixed here) still block `compile_package_dir` on the real UWeb sources:
+`dev/docs/board/inbox/uscript-pointer-var-type-not-supported/` (a `pointer` var type) and
+`dev/docs/board/inbox/uscript-explicit-none-object-default-not/` (an explicit `Foo=None` object
+default). `USCRIPT-COMPILER.md`'s UWeb entry has the current status.

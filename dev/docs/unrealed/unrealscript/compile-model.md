@@ -242,26 +242,45 @@ Not yet attempted/verified: more than one `#exec TEXTURE IMPORT` in one class, a
 dimensions are not both powers of two (`import_texture` raises `NotImplementedError` for the latter
 rather than guess).
 
-## Cross-class `Dependency` entries (RE'd 2026-09-13, live UED22 compiles)
+## Cross-class `Dependency` entries (RE'd 2026-09-13, live UED22 + UWeb compiles)
 
-A UClass body's `Dependencies` array is NOT always just `[self, super]`. Calling a member
-function (or accessing a member) THROUGH an object typed to a class other than self or the
-immediate super — `p.Destroy()` where `local Pawn p` — adds one more `Dependency` entry per
-DISTINCT such class, `deep=0` (vs `deep=1` for self/super), in first-Context-use order across the
-whole class (all functions, in declaration order). Merely declaring a local/param of that type, or
-using a `class'X'` literal without a member access through it, does NOT add an entry — confirmed by
-4 controlled compiles isolating each case. Implemented via `lower.py`'s `_record_dep`/`_context`
-(populates a `extra_deps` list threaded through `compile.py`'s `_Build`), consumed when building
-each class's `Dependencies` tuple in `_class_export`/`_multi_class_export`.
+A UClass body's `Dependencies` array is NOT always just `[self, super]`. Calling a member function
+(or accessing a member) THROUGH an object typed to a class other than self or the immediate super —
+`p.Destroy()` where `local Pawn p` — adds one more `Dependency` entry, `deep=0` (vs `deep=1` for
+self/super). Merely declaring a local/param of that type, or using a `class'X'` literal without a
+member access through it, does NOT add an entry.
 
-**Known incomplete (2026-09-13, real `UWeb` package):** the "one per DISTINCT class" count above was
-never checked against a class with MANY Context accesses through the same typed param across many
-statements. UWeb's real `HelloWeb.Query` (a dozen-plus `Request.X`/`Response.X` accesses inside an
-if/switch) has a real UCC `Dependencies` array that repeats `WebRequest`/`WebResponse` roughly a
-dozen times each — NOT deduped to one entry per class, contradicting the "DISTINCT" claim above,
-which was only verified on smaller controlled fixtures. The real counting rule (per-statement?
-per-Context-node? something else) is unknown — needs a live capture correlated against source, not
-attempted yet. `dev/docs/board/inbox/uweb-dependencies-array-over-counts-cross-class/`.
+**The count is ONE PER SYNTACTIC OCCURRENCE, never deduped by class** — the earlier "one per
+DISTINCT class" model was wrong, caught decoding real UWeb's `HelloWeb.Query` (~30 total entries;
+`WebRequest`/`WebResponse` repeat 6/21 times, one per `Request.X`/`Response.X` access, not collapsed
+to one each). Confirmed exactly (count AND order) against every one of UWeb's 7 real classes.
+
+Two ordering rules, both confirmed against UWeb (`HelloWeb`, `WebConnection`, `WebResponse`):
+
+- **Within one function/state, occurrences record in source-textual order, OUTER Context before one
+  nested in its own call's arguments.** `Response.SendText(Request.GetVariable(...))` records
+  `WebResponse` (the `Response.SendText(` token) BEFORE `WebRequest` (nested in the call's own arg) —
+  the opposite of the natural bottom-up codegen order (arguments lower before the call that holds
+  them). `lower.py`'s `_call_method` therefore calls `_record_dep(base_type)` BEFORE lowering its
+  arguments, then builds the `Context` token with `_context(..., record=False)` to avoid a double
+  entry.
+- **ACROSS functions/states, the class's full array gathers them in REVERSE declaration order** —
+  the same reversal `_class_chain` already applies building the Children chain (functions/states
+  prepend; UE1's `AddField` semantics). `WebResponse`'s `Dependencies` starts with `Redirect` (its
+  LAST declared function, itself with no Context — so it contributes nothing) then
+  `SendStandardHeaders`, …, ending with `SendText` (its FIRST declared function) — reversing the
+  9-function declaration order reproduces the real array exactly; forward order does not.
+  `compile._build_callables` lowers functions/states FORWARD (as it must, for correct scope/name/
+  bytecode threading) but collects each one's own Context sequence into a separate slice
+  (`dep_slices`), then assembles `b.extra_deps = [... for slice in reversed(dep_slices) ...]` after
+  the walk. Both rules verified together, and independently confirmed by the controlled
+  `pkg_DepOrderProbe` fixture (`test_uscript_package.py`): `Repeat` (declared 2nd, 3 undeduped
+  entries) gathers before `NestedCall` (declared 1st, an outer-before-inner pair).
+
+Implemented via `lower.py`'s `_record_dep`/`_context`/`_call_method` (per-callable `extra_deps` list)
+and `compile.py`'s `_build_callables` (the reversal), consumed building each class's `Dependencies`
+tuple in `_class_export`/`_multi_class_export`. `dev/docs/board/done/
+uweb-dependencies-array-over-counts-cross-class/`.
 
 ## Real `UWeb` findings (2026-09-13, live UT99 UCC)
 

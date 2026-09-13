@@ -297,8 +297,9 @@ class _Build:
     in_pkg_class_names: dict[str, str] = field(default_factory=dict)  # casefold -> declared class name
     graph_override: object | None = None      # multi-class: a ClassGraph seeing in-package classes
     catalog_override: object | None = None
-    extra_deps: list[str] = field(default_factory=list)  # classes Context'd into, real-cased, in
-                                                          # first-use order (deep=0 Dependency entries)
+    extra_deps: list[str] = field(default_factory=list)  # classes Context'd into (deep=0 Dependency
+                                                          # entries), real-cased, one per occurrence,
+                                                          # assembled by `_build_callables` (below)
 
     def okey(self, local: str) -> str:
         """A package-unique object key: `prefix` + the class-local key (identity when prefix is "")."""
@@ -603,7 +604,16 @@ def _build_struct(b: _Build, m: StructDecl) -> None:
 def _build_callables(b: _Build, decl: ClassDecl, super_name: str, crlf_source: str) -> None:
     """Build every function and state, in TRUE declaration order (`decl.callables` — the two are
     split into `decl.functions`/`decl.states` elsewhere, but the class Children chain interleaves
-    them by source position, so this is the one place that must walk the combined order)."""
+    them by source position, so this is the one place that must walk the combined order).
+
+    Each callable's own Context-node Dependencies (`lower_function`'s `extra_deps`) are collected
+    into a PER-CALLABLE slice in this same forward walk (needed for correct bytecode/scope
+    threading), then assembled into `b.extra_deps` in REVERSE callable order — UCC gathers a class's
+    `Dependencies` array by walking the compiled Children chain, which prepends functions/states
+    (the same reversal `_class_chain` already applies to the chain itself); within one callable the
+    occurrences stay forward/textual. Measured against real UWeb (`WebConnection`/`WebResponse`,
+    2026-09-13): each callable's own Context sequence matches forward, but the multi-function
+    concatenation only matches gathered in reverse callable order."""
     search_dir = b.env._search_dirs[0]
     graph = b.graph_override if b.graph_override is not None else load_graph(search_dir)
     catalog = b.catalog_override if b.catalog_override is not None else load_catalog(search_dir)
@@ -618,26 +628,31 @@ def _build_callables(b: _Build, decl: ClassDecl, super_name: str, crlf_source: s
         _add_import(b, "State")
     func_pos = dict(zip((id(f) for f in decl.functions), _function_positions(crlf_source, decl.functions)))
     state_pos = dict(zip((id(s) for s in decl.states), _state_positions(crlf_source, decl.states)))
+    dep_slices: list[list[str]] = []
     for item in decl.callables:
         if isinstance(item, StateDecl):
             line, text_pos = state_pos[id(item)]
             _build_one_state(b, decl, item, super_name, graph, catalog, members, lfuncs, line,
-                             text_pos, enums, consts)
+                             text_pos, enums, consts, dep_slices)
         else:
             line, text_pos = func_pos[id(item)]
             _build_one_function(b, decl, item, super_name, graph, catalog, members, lfuncs, line,
-                                text_pos, enames, enums, consts)
+                                text_pos, enames, enums, consts, dep_slices)
+    b.extra_deps = [dep for slice_ in reversed(dep_slices) for dep in slice_]
 
 
 def _build_one_state(b: _Build, decl: ClassDecl, state: StateDecl, super_name: str, graph, catalog,
-                     members, lfuncs, line: int, text_pos: int, enums, consts) -> None:
+                     members, lfuncs, line: int, text_pos: int, enums, consts,
+                     dep_slices: list[list[str]]) -> None:
     skey = b.okey(f"state:{state.name}")
     scope = Scope(locals_={}, own_members=members, own_funcs={f.name: f for f in lfuncs},
                  class_name=decl.name, super_name=super_name, graph=graph, enums=enums, consts=consts)
+    own_deps: list[str] = []
     try:
-        toks = lower_state_body(state, scope, catalog)
+        toks = lower_state_body(state, scope, catalog, extra_deps=own_deps)
     except LowerError as e:
         raise NotImplementedError(f"cannot lower state {state.name!r}: {e}") from e
+    dep_slices.append(own_deps)
     _register_final_call_imports(b, toks)
     _register_member_var_imports(b, toks, _member_graph(b))
     _register_cast_class_imports(b, toks)
@@ -679,7 +694,8 @@ def _state_positions(crlf: str, states) -> list[tuple[int, int]]:
 
 
 def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: str, graph, catalog,
-                        members, lfuncs, line: int, text_pos: int, enames, enums, consts) -> None:
+                        members, lfuncs, line: int, text_pos: int, enames, enums, consts,
+                        dep_slices: list[list[str]]) -> None:
     if func.kind not in ("function", "event"):
         raise NotImplementedError(f"function kind {func.kind!r} not supported yet ({func.name!r})")
     fkey = b.okey(f"fn:{func.name}")
@@ -703,10 +719,12 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
         scope = build_scope(func, members=members, funcs=lfuncs, class_name=decl.name,
                             super_name=super_name, graph=graph,
                             enums=enums, enum_names=enames, consts=consts)
+        own_deps: list[str] = []
         try:
-            toks = lower_function(func, scope, catalog, extra_deps=b.extra_deps)
+            toks = lower_function(func, scope, catalog, extra_deps=own_deps)
         except LowerError as e:
             raise NotImplementedError(f"cannot lower function {func.name!r}: {e}") from e
+        dep_slices.append(own_deps)
     elif flags & FUNC_NATIVE:                        # native thunk: one NativeParm per param
         toks = [Tok(EX_NATIVE_PARM, (("obj", p.name),)) for p in func.params]
     else:                                            # non-native body-less decl (`function Foo();`,

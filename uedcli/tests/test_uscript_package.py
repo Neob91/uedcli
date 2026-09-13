@@ -38,6 +38,10 @@ not just the real UWeb corpus attempt:
   - `pkg_CPFNativeProbe`: `CPF_Native` needs BOTH the var's own `native` keyword AND the owning class
     itself being `native` — a `native` var in a non-native class carries no CPF bit.
 
+`pkg_DepOrderProbe` (2026-09-13) pins the real `Dependencies`-array counting rule found finishing the
+real `UWeb` corpus attempt: one entry per syntactic Context occurrence (undeduped), gathered per-
+function forward but ACROSS functions in REVERSE declaration order (`compile._build_callables`).
+
 `test_goldens_match_ucc` (docker-gated) rebuilds the goldens with UCC and re-gates, so the committed
 fixtures can't silently drift from the compiler.
 """
@@ -145,6 +149,25 @@ _PACKAGES: dict[str, dict[str, str]] = {
             "class NSPIOne expands Object;\n\n"
             "var LevelInfo Level;\n\n"
             "defaultproperties\n{\n}\n"),
+    },
+    "DepOrderProbe": {
+        # Pins the real `Dependencies`-array counting rule (RE'd 2026-09-13 against real UWeb, see
+        # `USCRIPT-COMPILER.md`'s UWeb entry / `compile-model.md`'s "Cross-class Dependency entries"):
+        # ONE entry per syntactic Context occurrence (not deduped by class), in source-textual order
+        # within a function (an outer Context's own entry precedes one nested in its call's own
+        # arguments), but functions/states are gathered in REVERSE declaration order across the class
+        # (the same reversal `_class_chain` already applies to the Children chain). `Repeat` (declared
+        # SECOND) repeats `T.A()` three times undeduped; `NestedCall` (declared FIRST) proves
+        # outer-before-inner (`W.Wrap(` records `Widget` before its own arg `T.A()` records `Thing`).
+        # Expected Dependencies: self, super, then Thing,Thing,Thing (Repeat) before Widget,Thing
+        # (NestedCall) -- `Repeat` gathers AFTER `NestedCall` despite being declared after it in
+        # source.
+        "Thing.uc": "class Thing expands Object;\n\nfunction int A()\n{\n    return 1;\n}\n",
+        "Widget.uc": "class Widget expands Object;\n\nfunction int Wrap(int X)\n{\n    return X;\n}\n",
+        "DepOrderProbe.uc": (
+            "class DepOrderProbe expands Object;\n\n"
+            "function int NestedCall(Widget W, Thing T)\n{\n    return W.Wrap(T.A());\n}\n\n"
+            "function int Repeat(Thing T)\n{\n    return T.A() + T.A() + T.A();\n}\n"),
     },
     "CPFNativeProbe": {
         # Each class declares ONLY the one native var under test (no unset PLAIN sibling) -- a
@@ -257,6 +280,15 @@ def test_property_type_reference_does_not_pollute_package_imports():
     `ImageServer`/`WebApplication`/`WebResponse`, each with an object/class-typed property whose
     package isn't otherwise needed) before the fix."""
     _check("NoSpuriousPkgImport")
+
+
+def test_dependencies_array_one_entry_per_context_occurrence():
+    """`Dependencies` (deep=0) gets ONE entry per syntactic Context occurrence, undeduped, gathered
+    per-function in source-textual order but ACROSS functions in REVERSE declaration order (RE'd
+    2026-09-13 against real UWeb's `HelloWeb`/`WebConnection`/`WebResponse` — see `USCRIPT-COMPILER.md`
+    and `compile-model.md`'s "Cross-class Dependency entries"). See `_PACKAGES["DepOrderProbe"]` for
+    the exact mechanism each part of this fixture proves."""
+    _check("DepOrderProbe")
 
 
 def test_cpf_native_requires_native_class():

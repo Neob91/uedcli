@@ -143,9 +143,12 @@ strict gate autonomously.
 - **`foreach`** (RE'd 2026-09-13): `EX_Iterator`/`EX_IteratorNext`/`EX_IteratorPop` lowering is
   byte-exact — the iterator call lowers like any other call, `break`/an empty iterator both land on
   `IteratorPop` (never skip past it), `continue` jumps to `IteratorNext`. See `compile-model.md`.
-- **Cross-class `Dependency` entries** (RE'd 2026-09-13): a class's `Dependencies` array gets one
-  more entry (`deep=0`) per distinct external class reached via a member access/call through a
-  typed object (not merely declared or cast) — see `compile-model.md`.
+- **Cross-class `Dependency` entries** (RE'd 2026-09-13, corrected 2026-09-13): a class's
+  `Dependencies` array gets one entry PER SYNTACTIC Context occurrence reached via a member
+  access/call through a typed object (not merely declared or cast) — never deduped by class. Within
+  one function/state, occurrences record in source-textual order (an outer Context records before
+  one nested in its own call's arguments); across functions/states, the class's full array gathers
+  them in reverse declaration order. See `compile-model.md`.
 - **`#exec TEXTURE IMPORT`** (RE'd + wired in 2026-09-13): creates a `UTexture`+`UPalette` export
   pair INSIDE the compiling package (unlike conversation import's sibling packages). `MaxColor` is
   the per-channel max over every pixel in the whole mip chain (no ambiguity); `MipZero` is the flat
@@ -409,15 +412,33 @@ strict gate autonomously.
   function each, each verified via `test_goldens_match_ucc`'s docker-gated fresh-UCC rebuild too, not
   just the committed golden).
 
-  With all seven landed, `perm_gate` agrees on the import table, `PackageImports`, every property/
-  function/enum body, `Super` fields, and everything else EXCEPT each class's own `Dependencies`
-  array: UCC's real count is far higher than the "one entry per distinct referenced class" model
-  (`compile-model.md`'s "Cross-class `Dependency` entries") produces — `HelloWeb`'s real array
-  repeats `WebRequest`/`WebResponse` roughly a dozen times each (not deduped) where ours has exactly
-  one entry per class. Systemic across all 6 non-trivial `UWeb` classes, not `HelloWeb`-specific. The
-  real counting rule needs a live-capture RE pass, not a guess — not attempted this session.
-  `dev/docs/board/inbox/uweb-dependencies-array-over-counts-cross-class/`. Neither gate passes yet;
-  `UWeb` is NOT a corpus win until this closes.
+  **The `Dependencies`-array bug is FIXED 2026-09-13** (`dev/docs/board/done/
+  uweb-dependencies-array-over-counts-cross-class/`) — decoding the committed `uned/UED22/uweb.u`
+  directly (it's UWeb's own stock UED22 build, self-consistent with `UCC batchexport`-decompiled
+  sources of it) found the real rule: ONE entry per syntactic Context occurrence, never deduped by
+  class, gathered per-function/state forward (outer Context before one nested in its own call's
+  args) but ACROSS functions/states in REVERSE declaration order (the same reversal the Children
+  chain already applies). Fixed in `lower.py`'s `_call_method`/`_context`/`_record_dep` and
+  `compile.py`'s `_build_callables`; full detail in `compile-model.md`'s "Cross-class `Dependency`
+  entries". Verified byte-exact (count AND order) against all 7 real `uweb.u` classes'
+  `Dependencies` arrays, decoded independently of the rest of the package, plus a new controlled
+  fixture (`pkg_DepOrderProbe`, `test_uscript_package.py`) that isolates all three mechanics and
+  passes both `perm_gate` offline and the docker-gated fresh-UCC rebuild. Full offline
+  (`test_uscript_*.py`, non-integration) and integration (`-m integration`) suites both green, no
+  regressions on any previously byte-exact package (`FrameBuilder`/`RahnemBrushBuilders`/
+  `ExtendedBuilders`/`DavesBrushBuilders`/`UnrealShare`/`pkg_Mutual`/the six other UWeb-gap
+  fixtures).
+
+  **Not yet a corpus win**: fixing `Dependencies` did not get the real `UWeb` package itself through
+  an end-to-end `compile_package_dir` — two SEPARATE, pre-existing gaps block it, found compiling the
+  real sources while validating the `Dependencies` fix (not fixed here, out of scope for this pass):
+  a `var native const pointer X[N];` field (`WebRequest.VariableMap`, `WebResponse.ReplacementMap`)
+  hits `_resolve_var_type`'s "not scalar/local/class" `NotImplementedError` (no `pointer` var-type
+  support), and an explicit `Foo=None` object-property default (`WebApplication.WebServer`,
+  `WebConnection.WebServer`) hits `_emit_default`'s unconditional "explicit object default … not
+  supported yet" even though the value is the same as the type-zero it would otherwise emit. Filed:
+  `dev/docs/board/inbox/uscript-pointer-var-type-not-supported/`,
+  `dev/docs/board/inbox/uscript-explicit-none-object-default-not/`.
 - `assert`/`do..until` lowering — a real, scoped gap in `lower.py`/`compile.py`. Replication blocks
   and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented, scoped out
   for now.
