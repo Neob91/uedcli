@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "NYC_Bar bails at N=153: Light5 wrongly lights 3 world stair-tread surfs UED22 leaves dark, and native never lights the closed door's (DeusExMover9) own face either. Zone crossing, cross-light box-test ordering, the world-space/screen-space clip-formula bug class, per-lumel raytrace divergence, and now (2026-09-13, round 5) box occlusion at every candidate node (round 4's node 16, its literal geometry live-captured against UED22, and node 128 -- the real governing ancestor of all three divergent surfaces) are all ruled out by direct measurement/live capture; UED22 matches native on every box test that matters. The remaining unexplored territory is rasterization/span-buffer draw order in GetVisibleSurfs, not yet probed. Not fixed; no mask; next step below."
+summary = "NYC_Bar bails at N=153: Light5 wrongly lights 3 world stair-tread surfs UED22 leaves dark, and native never lights the closed door's (DeusExMover9) own face either. Zone crossing, cross-light box-test ordering, the world-space/screen-space clip-formula bug class, per-lumel raytrace divergence, and box occlusion (round 5) are all ruled out by direct measurement/live capture. Round 6 (2026-09-13) live-captured UED22's own OccludeBsp raster-commit verdict for Light5 directly and found the leading theory (a node-visit-order self-occlusion race) does not hold as stated: UED22 accepts real screen area for these surfaces multiple times and still excludes them, so a further gate downstream of raster-commit (not yet found, in the zone-crossing/emission code past RVA 0x1001a1e0) must also be involved. Not fixed; no mask; next step below."
 +++
 
 # NYC_Bar N=153 — three world `LightMap` records get a light run UED22 leaves empty
@@ -352,3 +352,91 @@ subtract call sites, not `BoundVisible`) with node identities matched by geometr
 discipline this round used for the box test. No mask added; `visible_surfs.rs`/`light.rs` unchanged.
 
 Harness: `harness/box_verdict_n153.py`; log: `logs/box-verdict-n153.log`.
+
+## Sixth round (2026-09-13) — live-captured `OccludeBsp`'s own raster-commit verdict for Light5; the "self-occlusion order race" theory is FALSIFIED as stated. Not fixed.
+
+Round 5 left one untested lead: node-visit ORDER inside one cube face determines how much span-buffer
+area is still unclaimed when a target node's own rasterize attempt runs, so a target that is a strict
+subset of an earlier occluder's screen footprint could "lose the race" in one build and "win" in the
+other. This round built a live capture that measures this DIRECTLY (not by inference) and found the
+theory, in its simple form, does not hold: UED22's own `OccludeBsp` **does accept real, non-trivial
+screen area for surf 95/97/67 multiple times** during Light5's gather, yet the surfaces still end up
+excluded from Light5's final per-surf run. Something AFTER the raster-commit accept/reject decision
+also has to say no, and that something is not yet found.
+
+**Harness**: extended `harness/disasm_probe.py`'s ranges into `OccludeBsp`'s raster-commit tail
+(`raster_commit` RVA `0x10019a40`, `portal_emit_retire` RVA `0x1001a1e0`) and added
+`harness/raster_order_probe.py`. It breaks at `test %edi,%edi` (RVA `0x10019c1c`), the instruction
+immediately after `%edi` is overwritten by the return value of `FSpanBuffer::CopyFromRaster`
+(no-subtract, `0x1001dd10`) or `CopyFromRasterUpdate` (subtract, `0x1001df70`) — the exact call sites
+`2026-09-06-raster-clipbspsurf-port/spike.md` already documented. Zero means nothing was left
+unclaimed (the node gets `NF_PolyOccluded` and the loop moves on without ever reaching zone-crossing/
+emission, confirmed by the immediately-following `orb $0x8,0x37(%edi); jmp 0x1001a7eb`); non-zero
+means real area was accepted and the node proceeds toward the zone-crossing/emission code. At the
+breakpoint the node pointer is still readable from a stable stack slot the function's own code uses
+the same way (`$ebp-0x8bc`, confirmed against the moving-brush filter's own `push 0x1c(%edi)` argument
+to `SurfIsDynamic`), giving `iSurf` at `+0x1c`; the `FSceneNode* Frame` argument is at `$ebp-0x8b4`
+throughout, the same struct `box_verdict_n153.py` already reads ORIGIN (`+0x34/+0x38/+0x3c`) and the
+face Z-axis (`+0x4c/+0x50/+0x54`) from.
+
+This breakpoint sits inside `OccludeBsp` itself — the same function `box_verdict_n153.py`/
+`mover_occlusion_probe.py` already broke in for a FULL `LIGHT APPLY` run without crashing the
+container. It is NOT the raw per-pixel scanline setup (`0x1001b470`) that crashed
+`2026-09-06-raster-clipbspsurf-port/harness/raster_probe.py` four times — that address is shared with
+real-time viewport rendering (hence hit continuously even at editor idle); `OccludeBsp`'s own
+raster-commit code is gather-exclusive. The probe ran clean: 1202 hits across the whole N=153
+`LIGHT APPLY`, no crash, no `--hits` cap needed.
+
+**Surf identity, confirmed by geometry, not assumed**: rather than trust that "editor surf 97" is the
+same surface as "native surf 97" (this level's `nodes`/`surfs` are only a PERMUTATION match), cross-
+checked by node PLANE + vertex-ring bbox (`model_dump.py`'s `nodes`/`verts`/`points`, not `pBase` —
+`pBase` for these particular surfaces is a distant on-plane point near world origin, e.g. native surf
+97's `pBase` is `(0,0,0)`, a legitimate but non-corner reference point, which makes `pBase`-only
+matching unreliable here). Both native and the REF build number these specific nodes/surfaces
+IDENTICALLY (native node 9/13/14/15/20/22/24 = surf 95/97/67; REF node 9/13/14/15/20/22/24 = the same
+surf numbers, verified by matching plane `(∓0,∓0,±1,{-16,0,-32})` and vertex-ring bbox against
+native's own). So reading `isurf` directly off the live capture is valid here, coincidentally.
+
+**Filtering the capture for Light5** (`origin=-2944.19849,384.973572,129.119934`, exact match to
+Light5's `Location`) and looking at every face that visits surf 95/97/67:
+
+    zaxis=-1,0,0            : surf 67 -> edi=0, edi=0                        (2 rejects)
+    zaxis=0,-0,-1           : surf 97 -> edi=1,0,0,1,1,1  (4 accepts, 2 rejects)
+                              surf 95 -> edi=1                               (1 accept)
+                              surf 67 -> edi=0,0,1         (2 rejects, 1 accept)
+
+Full log: `logs/raster-order-n153.log`. **Surf 97 in particular gets a real accepted raster area on 4
+of its 6 raster-commit attempts** (its coplanar-chain fragments each get tested once per face they're
+visible on) — this is not a near-miss or a single ULP-scale sliver, it is the SAME qualitative pattern
+native's own trace shows (native's nodes 13/14/15 for surf 97 get accepted_px 69/15575/47 — mostly
+real area, not zero). **Yet the ground truth is that Light5 does NOT appear in surf 97's (or 95's or
+67's) final `iLightActors` run.** An OccludeBsp-level "accept" therefore does not by itself decide
+membership in the light's final per-surf set — something downstream of the raster-commit accept/
+reject branch this round instrumented (in the zone-crossing/portal-merge/emission block starting
+around RVA `0x1001a1e0`, only partially disassembled this round — `PF_Invisible`'s own gate is
+confirmed at `0x1001a30d` matching the previously-documented address, but the code between raster-
+commit and there was not fully traced to a register-precise level) must also reject these particular
+surfaces for this particular light, on every accepting face, without rejecting them on every face
+(rejects and accepts are mixed even for the SAME surf/light pair).
+
+**What this rules out**: the "first occluder to rasterize a screen region wins the pixels" self-
+occlusion race, AS THE SOLE MECHANISM, cannot be the whole story — if it were, an accepted raster
+region should mean the surface is visible and gets emitted; instead UED22 accepts area for these
+surfaces repeatedly and still excludes them. Node visit ORDER inside `OccludeBsp` may still matter
+(it changes WHICH accept/reject pattern results, and a different pattern could tip whether it happens
+to end up empty), but it cannot be reasoned about in isolation from whatever gate lives after
+raster-commit — that gate is the real next target, not order by itself.
+
+**Not fixed. No mask.** Next step for a future round: extend `raster_order_probe.py` (or a new probe)
+past the `test %edi,%edi` branch, register-tracing `0x1001a1e0`-`0x1001a800` to a precision that
+identifies the SPECIFIC test that turns an accepted raster-commit into a non-emission for surf
+95/97/67 specifically — most promisingly, whatever computes `-0x8ec(%ebp)` (tested at `0x1001a30d`
+and `0x1001a314`, gating a jump straight to the loop-continue) and whatever sets `-0x918(%ebp)`
+(tested at `0x1001a436`, branching between two very different code paths at `0x1001a43e` — one of
+which writes `iSurf` into what looks like an output record at `+0x4` off a pointer at `$ebp-0x8c8`,
+`0x1001a473`-`0x1001a476` — this LOOKS like the real "commit to output" step, but was not confirmed
+live this round). A live capture reading BOTH of those slots, keyed by iSurf, alongside the existing
+`edi` accept/reject read, is the natural next probe.
+
+Harness: `harness/disasm_probe.py` (extended ranges), `harness/raster_order_probe.py` (new);
+logs: `logs/raster-order-n153.log`.
