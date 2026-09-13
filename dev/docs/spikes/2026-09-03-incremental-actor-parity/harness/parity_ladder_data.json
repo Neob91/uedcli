@@ -7,9 +7,9 @@
       "highest_n": 152,
       "total_actors": 487,
       "status": "blocked",
-      "blocker": "BODY model model2 -- 3 world LightMap records get an iLightActors run UED22 leaves at -1 (Lights 484 vs 478, LightBits 6003 vs 5891); leaf permeating region is clean. A closed door (DeusExMover9) sits beside the gap, but a 2026-09-13 live gdb capture RULED OUT the moving-brush-occlusion theory: illuminateSurf's per-lumel raytrace never even runs for the 3 tread surfs (their per-surface light list is empty by raytrace time), and the gather's post-GetVisibleSurfs commit routine (0x100a4ba0, fully disassembled) has no occlusion test beyond the already-ruled-out plane-distance cull. So GetVisibleSurfs itself must be excluding them, via a mechanism not yet found (the door's own mover-mirrored BSP node is confirmed real and moving-brush-filtered, but never visited in the same cube-map face pass as the treads, so it can't be occluding them that way). Mirror-image: model_deusexmover9's own face still misses Light5, via the separate, already-understood gap (light_apply_movers never runs a mover's own raytrace). Not fixed; no mask; next probe targets zone/portal reachability inside GetVisibleSurfs.",
+      "blocker": "BODY model model2 — 3 world LightMap records get an iLightActors run UED22 leaves at -1 (Lights 484 vs 478, LightBits 6003 vs 5891); leaf permeating regions are clean (0/155 differ). Per-surf raytrace pass, same family as UNATCO N=116/WanChai N=45. N=151's leaf-permeating bug is FIXED: the beam-clip plane (FPlane(Light, edge)) wasn't normalized before testing against the editor's world-unit epsilon (+-0.25), so a ~1e4-magnitude cross product made the effective epsilon ~40000x too tight and let the beam survive extra portal hops.",
       "board": "nyc-bar-n-153-world-model2-lightmap-runs-ued22",
-      "updated": "2026-09-13T00:00:00Z"
+      "updated": "2026-09-07T01:20:00Z"
     },
     {
       "slug": "unatco",
@@ -18,9 +18,9 @@
       "highest_n": 225,
       "total_actors": 1437,
       "status": "blocked",
-      "blocker": "BODY model model2 -- leaf 12 gets a permeating-light run (Light157) UED22 leaves empty. Confirmed (2026-09-12) as the same shared-portal-vertex sub-ULP tie as Island N=332. 2026-09-13: the Island sibling's decisive crossing was hex-precision live-captured and its INPUTS were found to NOT be bit-identical -- the beam-clip's own formula/precision are cleared; the mismatch is an upstream Pass-B portal-vertex coordinate, 1 ULP off native's assumed grid value. This item's own 102->13 crossing was not re-captured this pass (budget went to confirming the mechanism on Island) -- the same hex-precision recheck is owed here before assuming an identical cause, not just an identical shape. dev/docs/spikes/2026-09-13-crossing-vertex-live-capture/spike.md.",
+      "blocker": "BODY model model2 — leaf 12 gets a permeating-light run (Light157) UED22 leaves empty; lightbits byte-identical, 0 differing per-surf records. Same family as Island N=123 and OceanLab N=93 -- three independent reproducers of one open gap now. N=163's blocker (lights/lightbits shift) is FIXED: OccludeBsp never retired a zone from the active set when its span buffer ran out of ValidLines, so native kept descending into subtrees the editor had abandoned and over-marked NF_BoxOccluded, which a PF_BrightCorners shadow ray's IsCsg test reads. Live-verified: box-test count now matches the editor exactly (1218 vs 1218).",
       "board": "unatco-n-226-leaf-12-gets-a-permeating-light157",
-      "updated": "2026-09-13T00:00:00Z"
+      "updated": "2026-09-07T06:30:00Z"
     },
     {
       "slug": "oceanlab",
@@ -40,9 +40,9 @@
       "highest_n": 57,
       "total_actors": 2288,
       "status": "blocked",
-      "blocker": "N=58: leaf 51 gets an extra permeating-light entry. Root-caused 2026-09-13 via a new live probe (split_fast_probe.py, capturing FPoly::SplitWithPlaneFast's own call site): a THIRD confirmed instance of the Island N=332 / UNATCO N=226 one-ULP FLinePlaneIntersection tie, one hop upstream of leaf 51 -- the 45->55 beam's own closing vertex lands exactly on the grid value 1344.0 in native, one ULP below it (1343.99988) in the live editor. That one ULP makes the next edge (55->56's boundary) zero-length in native (skipped, no constraint) but real in the editor, which computes SP_Back and rejects the whole crossing -- native has no such edge to reject with and wrongly keeps it. Portal-graph topology was independently verified NOT the cause (UEDCLI_PERM_DUMP_LEAF dump matches the live editor's adjacency exactly for every leaf on the path). Not fixed; no mask; needs the same register-level single-step the other two instances also stopped short of.",
+      "blocker": "N=58: leaf 51 gets an extra permeating-light entry -- same shape as N=45 but a DIFFERENT cause: the crossing itself is fine, what differs is the beam polygon carried into the leaf. N=45's real bug is FIXED (BREAKTHROUGH): FPoly::SplitWithPlaneFast's crossing vertex comes from FLinePlaneIntersection's exact formula (Sc = (W - dot(P1,N)) / dot(D,N); out = Sc*D + P1), not native's mathematically-equivalent alpha = dp/(dp-ds) -- same real number, different f32 rounding, which on WanChai collapsed a downstream clip edge to zero length and let a beam through a boundary it should have stopped at. This is the SAME root cause already fixed for Island/OceanLab/UNATCO's shared leaf-permeating class -- WanChai N=45 was its cheapest reproducer.",
       "board": "wanchai-n58-leaf-51-permeating-light-over-included",
-      "updated": "2026-09-13T00:00:00Z"
+      "updated": "2026-09-07T08:10:00Z"
     },
     {
       "slug": "island",
@@ -51,9 +51,9 @@
       "highest_n": 331,
       "total_actors": 3653,
       "status": "blocked",
-      "blocker": "BODY model model2 -- leaf 273 gets a permeating-light run (Light124) UED22 leaves empty. 2026-09-13: a hex-precision live gdb capture (not the ~9-digit decimal every prior capture used) proves the decisive crossing's INPUTS are not bit-identical after all -- FLinePlaneIntersection/SafeNormal's formula and FPU precision are both cleared (independently re-disassembled, and a 2026-09-13 fctrl probe found SafeNormal's real precision matches native's f64 model exactly). The actual mismatch is one input vertex: a Pass-B portal-quad corner (zones.rs::collect_leaf_portals, not a raw Model.Point) that the live editor holds at y=4080.000244140625, 1 ULP off native's assumed grid value 4080.0. Pass B's own crossing formula (fpoly.rs::line_plane_intersection, Engine.dll 0x1506f0) is also independently disassembly-verified bit-exact, so the same right-formula/sub-ULP-residual shape recurs one level upstream of the beam clip. Not fixed; the root is now one level further back -- capture Pass B's own crossing that PRODUCES the mismatched vertex. dev/docs/spikes/2026-09-13-crossing-vertex-live-capture/spike.md.",
-      "board": "island-n-332-leaf-273-permeating-light-vertex-tie",
-      "updated": "2026-09-13T00:00:00Z"
+      "blocker": "BODY model model2 differs at N=332 -- under investigation now (dispatched, not yet diagnosed). N=1..298 previously confirmed clean via a full sweep (carried by OceanLab's N=153/155 temp-brush-BSP and zone-connectivity fixes with no Island-specific work); the sweep continued past that on its own and found this new, real divergence at N=332.",
+      "board": null,
+      "updated": "2026-09-07T11:20:00Z"
     }
   ]
 }

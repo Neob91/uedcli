@@ -1,15 +1,15 @@
 ---
 name: verifying-brush-relations
-description: Use when resizing, widening, or reshaping ANY UE1/Deus Ex brush's box extent in uedcli (`brush vertex move`, `brush scale`, `brush apply-transform`) — a room wall exactly as much as a counter, shelf unit, or any other multi-part assembly — and before calling the edit verified. Especially if a rendered decoration looks detached/floating, or the edit might have grown into an NPC/prop that was already standing nearby.
+description: Use when resizing, widening, or reshaping ANY UE1/Deus Ex brush's box extent in uedcli (`brush vertex move`, `brush scale`, `brush apply-transform`) — a room wall exactly as much as a counter, shelf unit, or any other multi-part furniture assembly — and before calling the edit verified. Especially if a rendered decoration looks detached/floating, you need to confirm the edit's effects stayed on the face you touched, or the edit might have grown into an NPC/prop that was already standing nearby.
 ---
 
 # Verifying Brush Relations After Reshaping
 
 ## Overview
 
-Moving one face of a box-shaped brush also moves every OTHER face sharing those corners — ceiling,
-floor, and walls you never touched grow with it. Checking only the face you edited proves nothing
-about the others.
+Moving one face of a box-shaped brush (e.g. the 4 corners `brush vertex move` drags) also moves
+every OTHER face sharing those corners — ceiling, floor, and walls you never touched grow with
+it. Checking only the face you edited proves nothing about the others.
 
 **REQUIRED BACKGROUND:** read `../../references/brush-relation-basics.md` for the `find`/`measure`
 mechanics used below.
@@ -17,149 +17,181 @@ mechanics used below.
 ## When to Use
 
 - Any `brush vertex move` / `brush scale` / `brush apply-transform` that changes a brush's box
-  extent — not a cosmetic single-vertex nudge. Applies to any multi-part assembly (furniture,
-  shelving) as much as a room wall.
-- Before calling any resize "verified."
+  extent — not a cosmetic single-vertex nudge. This applies just as much to furniture (a counter,
+  a shelf unit, anything assembled from more than one brush) as it does to a room wall — don't
+  reserve this skill for "room-shaped" brushes only; the same cross-brush and point-actor blind
+  spots apply to any multi-part object.
+- Before calling any resize "verified" — a room OR a piece of furniture.
 - A render shows a decoration looking detached or floating with no backdrop.
 
 Not needed for edits that don't change a brush's box extent.
 
 ## Confirm you're moving the right face first
 
-A vague direction ("the south wall") can be ambiguous when a room borders another already-carved
-room through a connecting gap — an internal doorway wall can look like a candidate exterior wall
-too. Before moving anything, measure each candidate face against the level's OTHER rooms:
+A vague direction ("the south wall") can be ambiguous when a room borders ANOTHER already-carved
+room through a connecting gap — that internal doorway wall looks like a candidate exterior wall
+too. Before moving anything, check each candidate face against the level's other rooms:
 
 ```bash
-uedcli brush relation measure <target> <neighboring-room> --top all
+uedcli brush relation measure Brush15 Brush1 --top all   # Brush1 = a neighboring room, not the brush you're editing
 ```
 
-A face that's `coincident`/`contains`-overlapping ANOTHER subtract brush's own volume is an internal
-connecting wall, not the exterior boundary — moving it doesn't expand livable space, it intrudes
-into the neighbor's already-hollow interior. If a named landmark in the task doesn't match the face
-you're about to move, that mismatch is the signal you picked the wrong one.
+A face that's `coincident`/`contains`-overlapping with ANOTHER subtract brush's own volume is an
+internal connecting wall or doorway into that room, not the exterior boundary — moving it "outward"
+doesn't expand livable space, it pushes into the neighbor's own already-hollow interior (a subtract
+growing into an already-subtracted void changes nothing structurally, and can corrupt the shared
+boundary between the two rooms). Confirmed on a real edit: a nook had two south-facing walls — one
+bordering the main hall through a connecting gap, one genuinely exterior 256uu further out — and the
+wrong (connecting) one was moved, extending the nook 64uu into the main hall's own volume instead of
+into solid space. If the task names a landmark ("the far wall", "near the recess pockets") that
+doesn't match the face you're about to move, that mismatch is the signal you picked the wrong one —
+find the one that actually matches before moving anything.
 
 ## Core Pattern
 
 ```bash
 # BEFORE the edit — the brush's WHOLE relation set, no face pin, EVERY footprint category
-# (the default filter drops zero-overlap pairs, which can hide a real regression)
-uedcli brush relation find --relative-to <target> --top all --max-gap 200 \
+# (not just the default) — the default filter drops zero-overlap pairs, and on real levels
+# several of the props that end up detached are only visible with the full set below.
+uedcli brush relation find --relative-to Brush1 --top all --max-gap 200 \
   --footprint none,vertex,edge,partial,contains,coincident > before.txt
-uedcli brush relation measure <target> - --top all < before.txt > before_detail.txt
+uedcli brush relation measure Brush1 - --top all < before.txt > before_detail.txt
 
 # ... perform the edit ...
 
 # AFTER — identical commands
-uedcli brush relation find --relative-to <target> --top all --max-gap 200 \
+uedcli brush relation find --relative-to Brush1 --top all --max-gap 200 \
   --footprint none,vertex,edge,partial,contains,coincident > after.txt
-uedcli brush relation measure <target> - --top all < after.txt > after_detail.txt
+uedcli brush relation measure Brush1 - --top all < after.txt > after_detail.txt
 
-# find's output is rank-ordered, not sorted -- sort before diffing, or trust the stderr
+# find's output is rank-ordered, not sorted — an UNCHANGED identity set still reorders when
+# distances shift, producing spurious diff hunks. Sort before diffing, or trust the stderr
 # counts ("N face(s) matched across M candidate(s)") as the real set-level check.
 diff -u <(sort before.txt) <(sort after.txt)
 diff -u before_detail.txt after_detail.txt
 ```
 
-**Pass criterion:** every face you did NOT move must show the identical `plane` and `footprint_2d`
-against every candidate, before and after (a `distance` shift alone, with no category change, is
-fine). Any untouched face changing category is the failure this check exists to catch.
+**Pass criterion:** every face of Brush1 you did NOT move must show the identical `plane` and
+`footprint_2d` against every candidate, before and after (a `distance` shift alone, with no
+category change, is fine — see below). Any face you didn't touch changing category is the
+failure this check exists to catch.
 
-**Read the BEFORE snapshot for companions, not just a baseline.** A candidate showing `coincident`
-or heavy overlap against a face you're about to move is very likely a separate piece built flush
-against that edge, not an unrelated neighbor. A flush companion usually needs the SAME edit applied
-to it — decide this from the BEFORE snapshot, before you move anything.
+**Read the BEFORE snapshot for companions, not just a baseline to diff against.** A candidate that
+shows `coincident` or heavy `footprint_2d` overlap against the SPECIFIC face you're about to move
+is very likely a separate piece of the same assembly (a support leg, a back panel, a base plinth)
+that was built flush against that exact edge — not an unrelated neighbor. Confirmed on a real edit:
+extending a bar counter (`Brush70`) 64uu west left two flush companion brushes (a support and a
+shelf back panel, both built flush against the counter's old west edge) rooted at the old position
+while the counter moved past them. If the edit's intent is "extend this object," a flush companion
+at the moving face usually needs the SAME edit applied to it, not just a post-hoc check that it's
+still touching — decide this from the BEFORE snapshot, before you move anything.
 
-**A companion doesn't have to touch the SPECIFIC face you're moving.** It can be flush against, or
-nested inside, a DIFFERENT face of the same brush entirely (attached to the underside, or resting
-against a face perpendicular to the one you're editing). Don't scope the search to "things touching
-the one face I'm moving" — read the full sweep (bare brush name, every face, every footprint
-category) and treat ANY `contains`/`coincident` relation on ANY face as a companion candidate.
-
-**Companions can have their OWN companions.** Something you find via its relation to the face you
-moved may itself be flush against a third piece that never touches that face at all. After finding
-a companion, re-run the same `find`/`measure` pass FROM it too, and repeat until a pass turns up
-nothing new.
-
-**When a companion, or a cosmetic consequence of the edit (a texture that no longer matches, a
-visible seam), can't be cleanly resolved, stop and ask — don't silently ship a guess.** A
-confident-looking partial fix is worse than a flagged question: the guess passes casual review, the
-question doesn't.
+**Companions can have their OWN companions — sweep transitively, not just once from the brush
+you're editing.** A companion you find via its relation to the face you're moving may itself be
+flush against something else that never touches that face at all. Confirmed on a real edit: five
+decorative post assemblies, each built from three brushes (a floor plate, a cap, and a thin
+connecting strut between them), sat flush against a moving wall. The wall-relative sweep found the
+floor plate and cap (both directly coincident with the wall) but missed the strut — it only
+touches the floor plate and cap, never the wall itself. Moving just the two directly-found
+companions left the strut behind at the old position in all five assemblies, splitting every one
+of them in two. After finding a companion from the wall's own sweep, re-run the SAME `find`/
+`measure` pass FROM that companion too, and repeat until a pass turns up nothing new.
 
 Capture BOTH `find` and `measure` snapshots before the edit — `measure` reads live geometry, so a
-`before_detail.txt` taken after the edit is a second AFTER, not a baseline. `--max-gap` bounds how
-far a candidate can be and still show up — pick it generously (bigger than the move plus the moved
-brush's own extent); too small hides a real regression. Use the SAME value both times.
+`before_detail.txt` taken after the edit is not a baseline, it's a second AFTER. `--max-gap` bounds
+how far away a candidate can be and still show up — pick it generously (bigger than any
+face-to-face distance you'd plausibly care about for this brush, e.g. the size of the move plus
+the moved brush's own extent); too small silently hides a real regression, since a candidate
+outside the bound never appears in either snapshot. Use the SAME value on both the before and
+after calls.
 
-**Read the pre-edit `measure` as a headroom budget.** The smallest positive `distance` on the face
-you're about to move is how far it can go before colliding with something — if the planned move
-exceeds that, the edit is unsafe before you even run it.
+**Read the pre-edit `measure` as a headroom budget, not just a baseline.** The smallest positive
+`distance` on the face you're about to move is how far it can move before it collides with
+something — if the edit's planned distance exceeds that number, the edit is unsafe before you even
+run it, not just after.
 
-**Use the full `--footprint` list, not the default.** By default `find` drops any pair with NO
-footprint overlap, regardless of gap — a neighbor with zero overlap is invisible no matter how
-generous `--max-gap` is. Use the narrower default only for a quick look; for an edit you're calling
-"verified," use the full list.
+**Why the full `--footprint` list is in the Core Pattern by default, not an optional extra:** by
+default `find` drops any pair with NO footprint overlap (`footprint_2d: none`), regardless of gap —
+a neighbor sitting 16uu away with zero overlap is invisible in the BEFORE snapshot no matter how
+generous `--max-gap` is. On real levels that's not a rare edge case: on one real-level test, 3 of
+8 props that ended up detached by an edit were only visible in the full-footprint snapshot — the
+default-filtered one showed no problem at all, before or after. Use the default (narrower) filter
+only for a quick look; for an edit you're about to call "verified," use the full list.
 
-`find` reports IDENTITY only — with more than one candidate or affected face, its diff alone can't
-tell you WHICH face changed. `measure`'s diff is how you find that out. `measure` defaults to
-`--top 1` per candidate — always pass `--top all`, or it silently drops everything but the closest
-pair. `measure` has no `--json`; key any comparison on `(ref_poly, target_poly)` pairs rather than
-reading the raw diff line-by-line.
+`find` reports IDENTITY only (`candidate:poly` lines, no `ref_poly`) — with more than one
+candidate or more than one affected face, a diff of this alone can't tell you which of REF's own
+faces changed (the same `candidate:poly` line can legitimately appear twice, once per matching REF
+face). `measure`'s diff isn't optional detail here — it's how you find out WHICH face is
+responsible, not just what the geometry is. `measure` defaults to `--top 1` per candidate —
+without `--top all` here it silently shows only the single closest pair per target and drops the
+rest, even though `find`'s own snapshot already listed every one of them. Always pass `--top all`
+on this step; `find`'s `--top all` above is not enough on its own. `measure` has no `--json`, and
+its block order moves with the geometry the same way `find`'s ranking does — on anything but a
+tiny diff, key the comparison on `(ref_poly, target_poly)` pairs rather than reading the raw
+`diff -u` line-by-line.
 
-An empty `before_detail.txt` is a normal baseline, not a bad invocation. Read every changed line in
-the diff for TWO distinct failure modes:
+An empty `before_detail.txt` is a normal, common baseline — it means nothing related to Brush1 yet
+(not a bad invocation). Read every new/changed line in the diff for TWO distinct failure modes,
+not just one:
 
 - **Something got engulfed or newly overlapped** — a face you never moved shows up, or its
-  `footprint_2d` grows. The obvious failure.
+  `footprint_2d` grows (e.g. `partial` → `contains`). The obvious failure.
 - **Something LOST contact with the face you moved** — a pair that was `coplanar`/`distance
-  0.000uu` becomes `parallel` with a nonzero gap. An object built flush against the old position is
-  now detached, with a visible gap. At least as common as engulfment, and easy to miss since
-  nothing NEW appears.
+  0.000uu` becomes `parallel` with a nonzero gap. This means an object that was built flush
+  against the old position (a pillar reaching the old ceiling, a wall built to the old wall) is
+  now detached, with a visible gap where it used to be sealed. This is at least as common as
+  engulfment on real edits (raising a ceiling routinely leaves a wall-pier or partition wall
+  short) and is easy to miss because nothing new appeared — a relation just quietly stopped
+  holding.
 
-**`footprint_2d` is the primary signal; `distance` alone can miss the failure.** Widening a wall
-moves its corners WITHIN its own plane — every other face's perpendicular distance to it is
-unchanged, since the plane itself didn't move, only its extent did. Only `footprint_2d` changes on
-faces perpendicular to the one you edited.
+**`footprint_2d` is the primary signal; `distance` alone can miss the failure entirely.** Widening
+a wall moves its corners WITHIN its own plane — every OTHER face's perpendicular `distance` to
+that wall is unchanged, because the plane itself didn't move, only its extent did. The only thing
+that changes is `footprint_2d` (e.g. `partial` → `contains`, or `none` → some overlap) on faces
+that are perpendicular to the one you edited. Read `distance` shifts as informative but not
+sufficient; read every `footprint_2d` category change as the check itself.
 
-A `footprint_2d: none` pair collapses to one aggregate line per candidate: `<ref> <-> <candidate>:
-no overlapping face pairs (N candidates, nearest X.XXXuu apart)`. That `nearest ... apart` number is
-the real-world clearance to the nearest thing you didn't touch.
+A `footprint_2d: none` pair doesn't vanish from `measure`'s output — it collapses to one aggregate
+line per candidate brush: `<ref> <-> <candidate>: no overlapping face pairs (N candidates, nearest
+X.XXXuu apart)`. That `nearest ... apart` number is often the single most useful figure in the
+whole report — read it as the real-world clearance to the nearest thing you didn't touch.
 
-Real brushes are not always 6-face boxes — read poly indices from `find`, don't assume a small
-guessable set.
+Real brushes are not always 6-face boxes — a staircase, an octagonal column, or a curved wall can
+carry 10–26 polys. Don't assume a small, guessable set of poly indices; read them from `find`.
 
-This check is scoped to cross-brush RELATIONS — it doesn't cover texture/flag changes (diff
+This check is scoped to cross-brush RELATIONS — it doesn't cover texture or flag changes (diff
 `brush poly list --json` for those) or structural defects (`level doctor`).
 
 ## Common Mistakes
 
-- **Pinning to the face you moved** (`--relative-to X:5`). A box brush's corners are shared across
-  3 faces each. Always use the bare brush name.
-- **Scoping the sweep to "near the edited wall."** A companion or affected face can be anywhere on
-  the brush, or 90° from the one edited — sweep every face.
-- **Trusting `level doctor`.** It's a static per-brush geometry checker; nothing in it evaluates
-  cross-brush relations.
+- **Pinning to the face you moved** (`--relative-to Brush1:5`). A box brush's corners are shared
+  across 3 faces each — moving one face's corners changes the other two sharing them. Always use
+  the bare brush name, no `:idx`.
+- **Scoping the sweep to "near the edited wall."** Confirmed real incidents moved a face 90° away
+  from the one edited — sweep every face, not just nearby ones.
+- **Trusting `level doctor`.** It's a static per-brush geometry checker — CSG order, solidity,
+  degenerate faces. Nothing in it evaluates cross-brush relations.
 - **Assuming an empty BEFORE snapshot means "nothing nearby."** A candidate with zero footprint
-  overlap is invisible by default even at a small real-world gap. Use the explicit
-  `--footprint none,...,coincident` form for that visibility.
-- **Sweeping companions only once, from the brush you're editing.** Re-sweep from each new
-  companion until nothing new turns up.
-- **Picking the nearest/first plausible face for a vague direction without checking neighboring
-  rooms.** An internal connecting wall can look just as valid a candidate as the true exterior one.
-- **Only checking for companions on the face you're moving.** A companion can be attached to any
-  other face of the same brush.
-- **Silently shipping a partial or guessed fix instead of asking.**
-- **Repositioning an engulfed point actor to "somewhere else" without checking the new spot is
-  clear.**
+  overlap is invisible by default (see `--max-gap` above) even at a small real-world gap — it can
+  look like there's nothing there when something is 16uu away and about to be swallowed. Use the
+  explicit `--footprint none,...,coincident` form when you want that visibility in advance.
+- **Sweeping companions only once, from the brush you're editing.** A companion's OWN companion
+  (flush against IT, not against your face) is invisible to a single-hop sweep — see "Companions
+  can have their OWN companions" above. Re-sweep from each new companion until nothing new turns up.
+- **Picking the nearest/first plausible face for a vague direction without checking it against
+  neighboring rooms.** An internal connecting wall can look just as valid a candidate as the true
+  exterior wall — see "Confirm you're moving the right face first" above.
 
 ## Known limitation
 
-`brush relation`'s candidates are brush actors only. A point-actor decoration (a mesh, a light, a
-switch) is invisible to the whole family: `brush vertex move`/`scale` never carries a mounted actor
-along, so one flush on a wall you widen stays at its old coordinates.
+`brush relation`'s candidates are brush actors only (per its own `--help`). A point-actor
+decoration — a mesh, a wall light, a switch — is invisible to the whole family: `brush vertex
+move`/`scale` never carries a mounted actor along, so a light flush on a wall you widen stays at
+its old coordinates and ends up floating in open space, undetected by anything in this family.
 
-Before the edit, capture the moved face's OLD extent. Then, both before and after, sweep a thin
-slab through the face's plane (a few uu of thickness) spanning that extent:
+Before the edit, capture the moved face's OLD extent (`brush vertex list Brush1`) — you need it to
+sweep the old position after the edit. Then, both before and after, sweep a thin slab through the
+face's plane (a few uu of thickness is enough, e.g. ±8uu) spanning that extent:
 
 ```bash
 uedcli actor find --overlapping-bbox=<face plane ± a few uu, old extent> --kind point
@@ -167,22 +199,42 @@ uedcli actor find --overlapping-bbox=<new face plane ± a few uu, new extent> --
 ```
 
 An actor caught in the OLD slab but not the NEW one was mounted on the face you moved and is now
-detached — reposition it (or confirm it was never mounted). **Verify the new position is actually
-clear** via `actor find --overlapping-bbox=<new bbox> --kind brush` against nearby solids —
-"somewhere else" is not the same as "somewhere clear."
+detached — reposition it (or confirm it was never actually mounted) before calling the edit done.
 
-**The same blind spot cuts the other way: growing a brush can push it INTO a point actor that was
-already standing nearby, unrelated to the face you moved.** The slab sweep above doesn't catch
-this, since it's scoped to the moved face's own plane. Sweep the brush's OWN full bbox instead,
-before and after:
+**This same blind spot cuts the other way too: growing a brush can push it INTO a point actor that
+was already standing nearby, unrelated to the face you moved.** An NPC in the room, a prop sitting
+where the extension now reaches — nothing was mounted on your face; the brush's growth just claimed
+space something else already occupied. The OLD/NEW slab sweep above doesn't catch this either, since
+it's scoped to the moved face's own plane, not the brush's whole new volume. Sweep the brush's OWN
+full bbox instead, before and after:
 
 ```bash
-uedcli actor bbox <target>          # BEFORE -- the old volume
-uedcli actor find --overlapping-bbox=<old bbox> --kind point > before_engulf.txt
+uedcli actor bbox Brush1          # BEFORE the edit -- the old volume
+uedcli actor find --overlapping-bbox=<Brush1's OLD bbox> --kind point > before_engulf.txt
 # ... perform the edit ...
-uedcli actor bbox <target>          # AFTER -- the new, grown volume
-uedcli actor find --overlapping-bbox=<new bbox> --kind point > after_engulf.txt
+uedcli actor bbox Brush1          # AFTER -- the new, grown volume
+uedcli actor find --overlapping-bbox=<Brush1's NEW bbox> --kind point > after_engulf.txt
 diff before_engulf.txt after_engulf.txt
 ```
 
-Any point actor appearing in the AFTER list but not the BEFORE one is newly engulfed.
+Any point actor appearing in the AFTER list but not the BEFORE one is newly engulfed — confirmed on
+a real edit: extending a bar counter (`Brush70`, NYC_Bar) 64uu west grew it into a standing NPC
+(`DeusEx.Jock`) that was never near the face being moved, only near the counter's new footprint.
+
+## Real-world impact
+
+Confirmed on two independent real Deus Ex levels: widening Manderley's office (UNATCO HQ) via
+its west wall stretched the untouched NORTH face into a reception-room painting mounted on the
+shared wall. Widening NYC_Bar's main hall via its west wall stretched the untouched SOUTH face
+from partial overlap to fully containing a neighboring room's contents — 90° from the edited
+face. A second, independent agent that thoroughly reattached everything flush against the moved
+wall, diffed `level doctor` against a fresh reimport, and rendered a wireframe still missed it —
+none of that checks the room's other faces.
+
+A separate real edit combined BOTH the wrong-face and single-hop-sweep failures at once: pushing
+a nook's "south wall" out 64uu moved the wrong candidate face — an internal connecting wall to the
+main hall, not the true exterior wall 256uu further out — extending the nook 64uu into the main
+hall's own already-hollow volume. The same run then found and moved 10 of 15 brushes belonging to
+five 3-piece post assemblies flush against that wall (2 of 3 per assembly — the connecting struts,
+touching only their own cap and floor plate, were never swept), leaving every one of the five
+split in two.

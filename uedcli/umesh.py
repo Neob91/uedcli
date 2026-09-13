@@ -29,9 +29,6 @@ class MeshParseError(ValueError):
     """Structural desync while decoding a mesh body."""
 
 
-# unused since `parse_mesh` was rewired to call `uedcli_native.parse_mesh_raw`
-# (`uedcli-native/src/mesh_read.rs`) — kept pending visual sign-off, see this item's "Removal
-# gate" in `dev/docs/board/to-build/port-ue1-mesh-geometry-decode-to-rust/spec.md`.
 # ---------------------------------------------------------------- primitives
 
 def u8(b, p):   return b[p], p + 1
@@ -237,51 +234,104 @@ class Mesh:
 
 def parse_mesh(pkg, j, *, vert8=None, strict_end=True):
     """Decode export `j` (a `Mesh`/`LodMesh`) fully. Raises `MeshParseError` on any desync or if
-    the parse does not consume exactly to the export's end.
-
-    Thin wrapper (mirrors `upackage.read_property_tags`'s own shape): reads the property-tag
-    prefix (already native), then decodes the whole body in one native call
-    (`uedcli_native.parse_mesh_raw`, `uedcli-native/src/mesh_read.rs`) — see
-    `dev/docs/board/to-build/port-ue1-mesh-geometry-decode-to-rust/spec.md`. `strict_end=False` is
-    unused by every call site today; the native decoder always enforces consume-to-exact-end
-    (baked into `parse_mesh_body`, not split across the FFI boundary), so on success `p` is always
-    `end` — the `(m, p)` return shape is kept only for API compatibility with that dead path.
-    """
+    the parse does not consume exactly to the export's end."""
     e = pkg.exports[j]
+    b, ver = pkg.buf, pkg.version
     so, end = e["soff"], e["soff"] + e["ssize"]
     cls = pkg.object_class_name(j + 1)
-    is_lod = (cls == "LodMesh")
+    m = Mesh(name=pkg.names[e["nm"]], is_lod=(cls == "LodMesh"))
 
     _tags, p = read_property_tags(pkg, so, end)
 
-    from .native_ext import import_native
-    uedcli_native = import_native()
-    try:
-        raw = uedcli_native.parse_mesh_raw(pkg.buf, p, end, pkg.version, is_lod, vert8)
-    except uedcli_native.PackageError as ex:
-        raise MeshParseError(str(ex)) from ex
+    # --- UPrimitive
+    m.box, p = fbox(b, p)
+    m.sphere, p = fsphere(b, p)
 
-    (box, sphere, verts, tris, anim_seqs, connects, vert_links, textures,
-     frame_verts, anim_frames, scale, origin), \
-    (rot_origin, texture_lod, collapse_point_thus, face_level, faces, collapse_wedge_thus,
-     wedges, materials, special_faces, model_verts, special_verts, mesh_scale_max), \
-    (lod_hysteresis, lod_strength, lod_min_verts, lod_morph, lod_z_displace,
-     remap_anim_verts, old_frame_verts, vert_stride) = raw
+    # --- UMesh
+    # The vertex stride is SELF-DESCRIBING, so it never has to be configured per substrate: Verts
+    # is a TLazyArray, whose header carries both the element count and the absolute offset just
+    # past the data, so stride = (skip - data_start) / count. 8 ⇒ Deus Ex's int16 quad, 4 ⇒ stock
+    # Unreal's bit-packed dword. That is what lets ONE decoder read Deus Ex `.u` and stock
+    # Unreal/UT `.u` without a flag.
+    stride = detect_vert_stride(b, p, version=ver)
+    if stride is not None:
+        vert8 = (stride == 8)
+    elif vert8 is None:
+        raise MeshParseError("cannot determine vertex stride (empty Verts array)")
+    m.vert_stride = 8 if vert8 else 4
+    vert = mesh_vert_dx if vert8 else mesh_vert_packed
+    m.verts, p = lazy_array(b, p, vert, version=ver)
+    m.tris, p = lazy_array(b, p, mesh_tri, version=ver)
+    m.anim_seqs, p = tarray(b, p, mesh_anim_seq)
+    m.connects, p = lazy_array(b, p, mesh_vert_connect, version=ver)
+    # UMesh re-serializes its OWN bounds INLINE here (duplicating UPrimitive's, which were read
+    # above) — not as arrays. Then the per-animation-frame bounds follow later as PLAIN TArrays
+    # (only Verts/Tris/Connects/VertLinks — the big ones — are TLazyArrays).
+    _own_box, p = fbox(b, p)
+    _own_sphere, p = fsphere(b, p)
+    m.vert_links, p = lazy_array(b, p, i32, version=ver)
+    m.textures, p = tarray(b, p, read_compact_index)
+    _bboxes, p = tarray(b, p, fbox)
+    _bspheres, p = tarray(b, p, fsphere)
+    m.frame_verts, p = i32(b, p)
+    m.anim_frames, p = i32(b, p)
+    _and_flags, p = u32(b, p)
+    _or_flags, p = u32(b, p)
+    m.scale, p = fvec(b, p)
+    m.origin, p = fvec(b, p)
+    m.rot_origin, p = frotator(b, p)
+    _cur_poly, p = i32(b, p)
+    _cur_vertex, p = i32(b, p)
+    if ver == 65:
+        _f, p = f32(b, p)
+    elif ver >= 66:
+        m.texture_lod, p = tarray(b, p, f32)
 
-    m = Mesh(
-        name=pkg.names[e["nm"]], is_lod=is_lod,
-        box=box, sphere=sphere, verts=verts, tris=tris, anim_seqs=anim_seqs, connects=connects,
-        vert_links=vert_links, textures=textures, frame_verts=frame_verts, anim_frames=anim_frames,
-        scale=scale, origin=origin, rot_origin=rot_origin, texture_lod=texture_lod,
-        collapse_point_thus=collapse_point_thus, face_level=face_level, faces=faces,
-        collapse_wedge_thus=collapse_wedge_thus, wedges=wedges, materials=materials,
-        special_faces=special_faces, model_verts=model_verts, special_verts=special_verts,
-        mesh_scale_max=mesh_scale_max, lod_hysteresis=lod_hysteresis, lod_strength=lod_strength,
-        lod_min_verts=lod_min_verts, lod_morph=lod_morph, lod_z_displace=lod_z_displace,
-        remap_anim_verts=remap_anim_verts, old_frame_verts=old_frame_verts,
-        vert_stride=vert_stride,
-    )
-    return (m, end) if not strict_end else m
+    # --- ULodMesh
+    if m.is_lod:
+        m.collapse_point_thus, p = tarray(b, p, u16)
+        m.face_level, p = tarray(b, p, u16)
+        m.faces, p = tarray(b, p, mesh_face)
+        m.collapse_wedge_thus, p = tarray(b, p, u16)
+        m.wedges, p = tarray(b, p, mesh_wedge)
+        m.materials, p = tarray(b, p, mesh_material)
+        m.special_faces, p = tarray(b, p, mesh_face)
+        m.model_verts, p = i32(b, p)
+        m.special_verts, p = i32(b, p)
+        m.mesh_scale_max, p = f32(b, p)
+        m.lod_hysteresis, p = f32(b, p)
+        m.lod_strength, p = f32(b, p)
+        m.lod_min_verts, p = i32(b, p)
+        m.lod_morph, p = f32(b, p)
+        m.lod_z_displace, p = f32(b, p)
+        # ULodMesh's `TArray<_WORD> RemapAnimVerts` + `INT OldFrameVerts` (confirmed against the
+        # original UT99/Unreal ULodMesh header: stephank/surreal `Engine/Inc/UnMesh.h`, "Remapping
+        # of animation vertices" / "Possibly different old per-frame vertex count"). Present on
+        # LodMesh ONLY, not plain Mesh (`test_lodmesh_tail_is_not_deusex_specific`) — empty in
+        # every DX/UT retail mesh sampled so far, but genuinely populated (per-vertex WORD indices)
+        # in original 1998 Unreal Gold meshes (Continuous-LOD data UT/DX never wrote).
+        m.remap_anim_verts, p = tarray(b, p, u16)
+        m.old_frame_verts, p = i32(b, p)
+        if m.remap_anim_verts:
+            # A non-empty RemapAnimVerts means Verts was serialized at the OLD per-frame stride
+            # (`old_frame_verts`) and each frame's logical vertex `k` (what every Wedge.iVertex
+            # actually indexes, 0..frame_verts-1) now lives at `RemapAnimVerts[k]` within that
+            # frame's OLD slice — verified against UEViewer's `ULodMesh::SerializeLodMesh1`
+            # (`NewVerts[base+k] = Verts[oldBase + RemapAnimVerts[k]]`) and confirmed visually: a
+            # real Unreal Gold humanoid mesh only resolves to a coherent body shape once rebuilt
+            # this way (unrebuilt or wedge-side-remapped, every real sample renders as scattered,
+            # disconnected triangles). Frame count comes from `anim_frames`, read earlier.
+            new_verts = [(0, 0, 0)] * (m.anim_frames * m.frame_verts)
+            for f in range(m.anim_frames):
+                base = m.frame_verts * f
+                old_base = m.old_frame_verts * f
+                for k in range(m.frame_verts):
+                    new_verts[base + k] = m.verts[old_base + m.remap_anim_verts[k]]
+            m.verts = new_verts
+
+    if strict_end and p != end:
+        raise MeshParseError(f"{m.name}: consumed to {p}, export ends at {end} (delta {p - end})")
+    return (m, p) if not strict_end else m
 
 
 def mesh_exports(pkg):

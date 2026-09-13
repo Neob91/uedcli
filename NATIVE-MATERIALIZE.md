@@ -224,20 +224,7 @@ the permeating flood is where the campaign's leverage is.
   `Model.Lights` entries and 217 extra `LightBits` bytes came from the missing ZONE RETIRE described
   under OceanLab below, not from anything UNATCO-specific. Byte-exact **N=1..225** (was 162); bails
   at **N=226** on one leaf's permeating-light run —
-  `dev/docs/board/inbox/unatco-n-226-leaf-12-gets-a-permeating-light157/`. Root-caused 2026-09-12: a
-  live gdb capture of the editor's own flood (same method as Island N=332 below) confirms the SAME
-  unresolved mechanism — native's `FLinePlaneIntersection` lands a beam-clip crossing bit-for-bit on a
-  shared portal vertex (a true tie, collapsing the edge to zero and dropping it as a no-op constraint),
-  while the editor's own capture of the identical crossing lands ~1 ULP off it. Second confirmed
-  reproducer of the Island N=332 tie; not fixed, no mask. That investigation also found Island's
-  "x87 vs SSE" hypothesis very likely wrong — `spikes/2026-07-15-native-materialize/41-fp-model-x87-vs-sse.md`
-  already showed this build's `Engine.dll`/`Editor.dll` are SSE2-only with zero x87 control-word use —
-  so the real cause is more likely an unreplicated operation-order effect, still needing a register-level
-  gdb single-step to pin down. 2026-09-13: the follow-on candidate — `FVector::SafeNormal`'s x87
-  precision-control field running at PC=`11` (extended) instead of the PC=`10` (double) native's `f64`
-  model assumes — is REFUTED by a live `fctrl` probe (measured `0x027f`, i.e. PC=`10`, exactly matching
-  native's model). `dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md`. No code change; the
-  real mechanism is still open.
+  `dev/docs/board/inbox/unatco-n-226-leaf-12-gets-a-permeating-light157/`.
   N=116 needed no fix and was never a real divergence
   (`dev/docs/board/done/unatco-n-116-world-model2-light-runs-differ-on/`): the 941-against-940
   `Model.Lights` bail came from a STALE wheel. Cargo decides freshness by mtime, so a crate restored
@@ -277,13 +264,10 @@ the permeating flood is where the campaign's leverage is.
     afterwards). Captured properly, native's box occlusion matches the editor on every call of
     OceanLab N=48 and WanChai N=45 — same set, same ORDER, same rectangles, same verdicts.
   WanChai then advanced to byte-exact **N=1..57** and bails at **N=58** —
-  `dev/docs/board/inbox/wanchai-n58-leaf-51-permeating-light-over-included/`. Root-caused 2026-09-13:
-  a THIRD confirmed instance of the Island N=332 / UNATCO N=226 one-ULP `FLinePlaneIntersection`
-  crossing tie (a beam-clip vertex lands exactly on a grid coordinate in native, one ULP off it live),
-  this time one hop upstream of the leaf-51 symptom — the `45->55` beam's own closing vertex — and for
-  the first time changing which PORTAL a beam-clip survives (`SP_Back` vs `SP_Split`), not just which
-  vertex a permeating flood carries. Not fixed; still needs the register-level single-step the other
-  two also stopped short of.
+  `dev/docs/board/inbox/wanchai-n58-leaf-51-permeating-light-over-included/`, the same one-extra-leaf
+  shape but NOT the same cause: the crossing is localised (leaf 56 → 51) and its margins are nowhere
+  near the epsilon. The next probe there is to print native's beam POLYGON per crossing and pair it
+  with the capture's, which `perm_flood_diff.py` does not yet do.
 - **UNATCO, N=226**: `dev/docs/board/inbox/unatco-n-226-leaf-12-gets-a-permeating-light157/` — a
   SECOND, independent case of the same shape, NOT closed by the above: leaf 12 still carries
   `Light157` where UED22 leaves it out (measured after the fix; `Model.Lights` 2953 vs 2952, per-surf
@@ -313,16 +297,7 @@ the permeating flood is where the campaign's leverage is.
   (`dev/docs/spikes/2026-09-06-permeating-beam-plane-normalize/`). Byte-exact **N=1..152** (was 118);
   bails at **N=153** on the world `Model2`'s PER-SURF light runs — three `LightMap` records get an
   `iLightActors` run UED22 leaves at -1 (`Lights` 484 vs 478, `LightBits` 6003 vs 5891), with the
-  leaf permeating region clean. Root-caused 2026-09-12, not yet fixed: `Light5` sits beside a closed
-  door (`DeusExMover9`, a `Mover`) standing exactly in the world-BSP opening between it and 3 stair
-  treads; native's world-level `GetVisibleSurfs`/raytrace never sees the mover's geometry, so it
-  lights the treads straight through the closed door AND (the mirror-image half, `model
-  model_deusexmover9` also fails N=153) fails to light the door's own face with the same light. This
-  is the `visible_surfs.rs` "moving-brush filter (step 3)" gap the port flagged as "assumed to never
-  fire" — confirmed here to fire. The real fix unifies the world and mover light bakes into one scene
-  (per `unbuilt.light_apply_movers`'s own docstring, UED22's `FMovingBrushTracker` mirrors each mover
-  poly into a transient world surf for the bake) — a structural change, scoped as follow-up, not a
-  local patch —
+  leaf permeating region clean —
   `dev/docs/board/inbox/nyc-bar-n-153-world-model2-lightmap-runs-ued22/`.
 - **Island**: N=6, N=10 and N=93 are all FIXED. N=6 was the Vectors pool — native keeps
   the incremental pool across the repartition instead of rebuilding it from the surviving surfs
@@ -366,11 +341,7 @@ the permeating flood is where the campaign's leverage is.
   bit-for-bit by hand, so this is not a wrong formula to correct, only an unresolved
   register-level effect. Not fixed; no mask added. Island's ladder cannot advance past N=332 until
   this closes — see the board item for the full trace and the next step (single-step the editor's
-  real `SafeNormal`/`FLinePlaneIntersection` under `gdb` at this exact crossing). 2026-09-13: the
-  `SafeNormal` x87-extended-precision candidate is REFUTED by a live `fctrl` probe (measured `0x027f`,
-  PC=`10`/double, exactly matching native's `f64` model) —
-  `dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md`. No code change; the register-level
-  single-step is still the open next step.
+  real `SafeNormal`/`FLinePlaneIntersection` under `gdb` at this exact crossing).
 - **OceanLab**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the

@@ -95,14 +95,6 @@ owner explicitly chose this over a scoped `--allowedTools "Bash(uedcli:*)"` allo
 caveat ("recommended only for sandboxes with no internet access" — this container needs internet
 access for the API itself) specifically to match what every eval run already did on the bare host.
 
-**Docker also needs the real Deus Ex asset tree bind-mounted, or anything that CREATES an actor
-fails.** `actor add`/`brush build`/`actor duplicate` (any task whose intent is "add a new brush,"
-not just edit an existing one) need a class schema from a real `.u` package — confirmed on a real
-eval run: the agent correctly diagnosed "no DeusEx game package files" as a hard blocker and never
-completed the task. `run_eval.py` bind-mounts `dev/games/deusex` read-only at `/dx-assets`, and
-`docker/entrypoint.sh` writes a `~/.uedcli/config.toml` inside the container pointing `[games.
-deusex].paths` at it — the same shape as this host's own config, just re-rooted at the mount point.
-
 **A bind-mount source must be visible to whatever actually runs `docker run`, which this sandbox's
 own `/tmp` is NOT** — confirmed directly: mounting a path under `/tmp` (this session's private
 scratch space) produced an EMPTY directory inside the container with no error, while the identical
@@ -161,7 +153,6 @@ docker run --rm \
   -v "$PWD/pyproject.toml":/uedcli-src/pyproject.toml:ro \
   -v "$PWD/$run_dir/trunk":/work \
   -v "$PWD/$run_dir/home":/root \
-  -v "$PWD/dev/games/deusex":/dx-assets:ro \
   -w /work -e HOME=/root -e UEDCLI_LEVEL=<task.level> \
   -e CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
   geomeval-claude:latest \
@@ -181,7 +172,6 @@ docker run --rm \
   -v "$PWD/pyproject.toml":/uedcli-src/pyproject.toml:ro \
   -v "$PWD/$run_dir/trunk":/work \
   -v "$PWD/$run_dir/home":/root \
-  -v "$PWD/dev/games/deusex":/dx-assets:ro \
   -w /work -e HOME=/root -e UEDCLI_LEVEL=<task.level> \
   -e CLAUDE_CODE_OAUTH_TOKEN="$CLAUDE_CODE_OAUTH_TOKEN" \
   geomeval-claude:latest \

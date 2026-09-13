@@ -108,3 +108,98 @@ offset into the CRLF `ScriptText` — skipping the `{`, comments, AND leading `l
 the declaration line — that only coincided for single-line test functions.) An empty body points at
 the closing `}`. A UFunction overriding an inherited one sets its body `SuperField` to the parent
 UFunction (added as a `Function`-class import, Outer = the declaring parent class).
+
+## ProbeMask (EProbe table, RE'd 2026-09-12)
+`ProbeMask`/`IgnoreMask` (the first two UState fields in a UClass body) gate whether native code calls
+into script for a fixed set of ~48 "probe" events (Tick, Timer, Touch, Trigger, …) without the
+overhead of a virtual dispatch when no override exists anywhere in the ancestry. The bit table is
+recovered from the boot-registered `EName` ordinals (`global_index.py`'s dumped table): probe function
+names occupy consecutive ordinals starting at `Spawned`=217; an unused slot registers a literal
+`ProbeN` placeholder instead of a real name, where N is exactly its own bit index (`Probe34`@251 =
+251-217 = bit 34 — every gap self-confirms the offset). Full table + the bit-computation helper:
+`uedcli/uscript/compile.py` `_EPROBE_TABLE`/`_probe_bits`. `ProbeMask` **accumulates through
+inheritance**: `ProbeMask(class) = ProbeMask(super) | bits for this class's own probe-named
+functions`. `IgnoreMask` stays all-ones absent state `ignores` blocks (not yet implemented).
+Cross-checked against two measured facts plus a live UCC compile:
+`UnrealShare.UnrealTestInfo` overriding only `Tick` → `ProbeMask=0x1000000000` = bit 36 = `Tick`@253;
+`Engine.Pawn`'s real mask (`0xf8040c02`) decodes to `Destroyed/Falling/Landed/BaseChange/
+EncroachingOn/EncroachedBy/FootZoneChange/HeadZoneChange/PainTimer` — all plausible Pawn overrides;
+`UnrealShare` itself now byte-exact via `gate()` against a fresh UCC build (see `USCRIPT-COMPILER.md`).
+
+## UState label tables (RE'd 2026-09-13, live UED22 compiles)
+
+A `state Foo { Label: ... }` body's compiled script ends with an `EX_LabelTable` (opcode `0x0C`)
+token: a run of `(FName label, u32 iCode)` pairs in REVERSE source declaration order (the same
+"last declared, first" convention as the class `Children` chain), terminated by `(NAME_None,
+0x0000FFFF)` — confirmed live, token-exact vs UCC on a 2-label case, and already matches
+`bytecode.py`'s decode/encode (no codec change needed). `iCode` is the DISK byte offset of the
+label's first token within the state's own script stream (`Begin` at offset 0 when it's the first
+label). `UState`'s tail after the script is `[ProbeMask u64][IgnoreMask u64][LabelTableOffset
+u16][StateFlags u32]`; `LabelTableOffset` is the disk byte offset of the `0x0C` token within the
+state's own script bytes (always equal to the script's total length minus the label table's own
+encoded size). Implemented in `lower.py`'s `lower_state_body`/`_label_table_tok`.
+
+### `EX_Nothing` padding before the label table — SOLVED
+
+UCC always appends a compiler-synthesized `EX_Stop` after the state's real code, then a variable
+number of `EX_Nothing` (`0x0B`) padding tokens before the label table (present only when the state
+declares a label at all). Formula, confirmed on 13 controlled one-state compiles
+(`_scratch/state_probe*.py`) plus 3 full end-to-end byte-exact package compiles:
+
+    pad = (N_gotostate_or_finishanim_calls - N_explicit_stop_statements + 2) % 4
+
+`N_explicit_stop_statements` counts the bare `Stop;` KEYWORD statement (not a function call — it
+lowers to its own `EX_Stop`, distinct from the compiler's trailing one), which SUBTRACTS from the
+count, opposite-signed to the two natives:
+
+| State body (single label `Begin` unless noted) | GotoState/FinishAnim | explicit `Stop;` | Nothing count |
+|---|---|---|---|
+| empty | 0 | 0 | 2 |
+| `Sleep(1.0);` (×1 or ×3) | 0 | 0 | 2 |
+| `Sleep(1.0); GotoState('');` (1 or 2 labels) | 1 | 0 | 3 |
+| `GotoState('');` alone | 1 | 0 | 3 |
+| `GotoState(''); GotoState('');` | 2 | 0 | 0 |
+| `FinishAnim();` alone | 1 | 0 | 3 |
+| `Stop;` alone | 0 | 1 | 1 |
+| `Stop; Stop;` | 0 | 2 | 0 |
+| `GotoState(''); Stop;` | 1 | 1 | 2 |
+
+The MECHANISM (why exactly these three constructs, and why `Stop;` is opposite-signed) is not
+understood — this is an empirical formula, not a derivation from source. Implemented as
+`_NOTHING_PAD_NATIVES`/the `explicit_stops` count in `lower.py`'s `lower_state_body`; pinned by
+`test_uscript_states.py::test_state_nothing_padding_formula` (offline, no docker) and by
+`test_state_and_foreach_strict_byte_exact` (a full `Trigger`→`GotoState`→state-with-`Sleep`
+class, byte-exact end to end).
+
+## `foreach` / `EX_Iterator` (RE'd 2026-09-13, live UED22 compile)
+
+`foreach <IteratorCall>(...) { ... }` lowers to: `EX_Iterator(call, u16 end_offset)`, the loop
+body, `EX_IteratorNext` (`0x31`), `EX_IteratorPop` (`0x30`) — `<IteratorCall>` (e.g. `AllActors`) is
+lowered exactly like any other call (no special bytecode form of its own). `end_offset` points at
+`IteratorPop` itself, NOT past it: both `break` and an empty first `Next` still execute `Pop` to
+release the iterator, they only skip the body and the `Next` attempt. `continue` jumps to
+`IteratorNext` (the runtime remembers the loop's own start position per nested iterator, so neither
+opcode carries an explicit "jump back" operand). Implemented in `lower.py`'s `_st_foreach`/`_Body.
+iterator`; verified byte-exact against a fresh UCC build of `AllActors(class'Inventory', Inv) {
+Inv.Destroy(); }`.
+
+## Cross-class `Dependency` entries (RE'd 2026-09-13, live UED22 compiles)
+
+A UClass body's `Dependencies` array is NOT always just `[self, super]`. Calling a member
+function (or accessing a member) THROUGH an object typed to a class other than self or the
+immediate super — `p.Destroy()` where `local Pawn p` — adds one more `Dependency` entry per
+DISTINCT such class, `deep=0` (vs `deep=1` for self/super), in first-Context-use order across the
+whole class (all functions, in declaration order). Merely declaring a local/param of that type, or
+using a `class'X'` literal without a member access through it, does NOT add an entry — confirmed by
+4 controlled compiles isolating each case. Implemented via `lower.py`'s `_record_dep`/`_context`
+(populates a `extra_deps` list threaded through `compile.py`'s `_Build`), consumed when building
+each class's `Dependencies` tuple in `_class_export`/`_multi_class_export`.
+
+`Sleep` and `FinishAnim` share identical `FunctionFlags` (`0x409`, both `FUNC_LATENT`) yet give 2 vs 3;
+`GotoState` is NOT latent (`0x401`) yet also gives 3; two `GotoState` calls give 0. This rules out
+"one Nothing per latent call" and "one Nothing per statement" as the rule. Likely compiler-internal
+(a two-pass jump-backpatch reservation in UCC's own statement compiler, not something a runtime
+SavePackage dump can reveal — this needs UCC.exe's own `CompileStatement`/state-compiling code
+disassembled, a different kind of RE than the SavePackage-ordering dump). Do not guess/fit a table for
+this — it would violate the "reproduce, don't hack" rule. Blocks byte-exact state-block compilation
+until solved.

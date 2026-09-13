@@ -131,6 +131,31 @@ class FunctionBody:
 
 
 @dataclass(frozen=True, kw_only=True)
+class StateBody:
+    """A UState export (`state Foo {...}`). Same shape as `FunctionBody` (a UStruct with a code
+    stream and a leading UObject `None`), plus the `ProbeMask`/`IgnoreMask`/`LabelTableOffset`/
+    `StateFlags` tail `ClassBody` also carries (RE'd byte-exact, `compile-model.md`): the state's
+    own code ends in an implicit `EX_Stop`, then zero or more `EX_Nothing` padding bytes, then (iff
+    the state declares labels) an `EX_LabelTable` token — `{FName, u32 iCode}` pairs in REVERSE
+    declaration order, terminated by `(None, 0x0000FFFF)`. Each entry's `iCode` is the label's
+    in-MEMORY offset into this state's own script. `LabelTableOffset` below is ALSO in-memory units
+    — the memory offset of the `EX_LabelTable` token itself, PLUS ONE (RE'd byte-exact against 18
+    controlled UCC compiles; the +1 is an empirical constant, its reason unconfirmed)."""
+    super_field: int        # 0 unless the state extends another (not yet supported)
+    next_field: int         # objref of the next class-Children field (0 if last)
+    children: int           # objref of the state's own function-override chain (0 if none)
+    friendly_name: int      # name index of the state name
+    line: int
+    text_pos: int
+    script: bytes            # on-disk bytecode, incl. the trailing Stop/Nothing/LabelTable
+    script_size: int         # in-memory ScriptSize
+    probe_mask: int
+    ignore_mask: int
+    label_table_offset: int  # in-memory offset of LabelTable + 1 (0xFFFF if no labels)
+    state_flags: int
+
+
+@dataclass(frozen=True, kw_only=True)
 class ObjectBody:
     """A plain (non-code) UObject instance body — e.g. a `ConSys` conversation object emitted by
     `#exec CONVERSATION IMPORT` (`conimport.py`). Just its None-terminated tagged-property list,
@@ -149,7 +174,7 @@ class Export:
     name: int               # name index
     flags: int              # RF_* object flags
     body: (TextBufferBody | ClassBody | PropertyBody | EnumBody | ConstBody | StructBody
-           | FunctionBody | ObjectBody)
+           | FunctionBody | StateBody | ObjectBody)
 
 
 @dataclass(frozen=True, kw_only=True)

@@ -97,10 +97,10 @@ def execution_card(task_id, task, run):
         <div class="egrid">{grid}</div>
         <div class="gradebox" data-task="{task_id}" data-run="{run_id}">
           <label>Score (0–10)
-            <input type="number" min="0" max="10" step="1" class="gscore" placeholder="—" autocomplete="off">
+            <input type="number" min="0" max="10" step="1" class="gscore" placeholder="—">
           </label>
           <label class="gnotelbl">Notes
-            <textarea class="gnote" rows="3" placeholder="What's wrong, or why it's right..." autocomplete="off"></textarea>
+            <textarea class="gnote" rows="3" placeholder="What's wrong, or why it's right..."></textarea>
           </label>
           <div class="grow">
             <button class="gsave" onclick="saveGrade(this)">Save grade</button>
@@ -501,16 +501,6 @@ async function loadGrades(){
       const rec = grades[key];
       applyGrade(`${rec.task_id}--${rec.run_id}`, rec);
     }
-    // Explicitly blank every gradebox with no real stored grade -- a browser's own form
-    // autofill can otherwise leave a freshly-added, never-graded execution showing a value
-    // from ITS OWN memory (a number/text input with no unique name is fair game for that),
-    // since the loop above only ever touches boxes with a REAL grade on record.
-    document.querySelectorAll('.gradebox').forEach(box => {
-      if (!(`${box.dataset.task}/${box.dataset.run}` in grades)) {
-        box.querySelector('.gscore').value = '';
-        box.querySelector('.gnote').value = '';
-      }
-    });
     updateInboxButton();  // still correct even if `grades` was empty
   } catch (e) { console.error('loadGrades failed', e); }
 }

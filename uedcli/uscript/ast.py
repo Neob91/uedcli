@@ -134,6 +134,9 @@ class ClassDecl:
     members: tuple[object, ...] = ()         # VarDecl | ConstDecl | EnumDecl | StructDecl
     functions: tuple[FuncDecl, ...] = ()
     states: tuple[StateDecl, ...] = ()
+    # `functions`/`states` filtered to one category each; this is both, in TRUE declaration order
+    # (the Children chain interleaves them, so the split-by-category order above is not enough).
+    callables: tuple[object, ...] = ()       # FuncDecl | StateDecl
     replication: ReplBlock | None = None
     default_props: tuple[DefaultProp, ...] = ()
     exec_directives: tuple[str, ...] = ()    # `#exec ...` lines, in order

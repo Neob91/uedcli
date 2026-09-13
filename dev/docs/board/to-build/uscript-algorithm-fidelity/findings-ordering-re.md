@@ -198,3 +198,17 @@ enum's own value list (`DB_Tetrahedron`/`DB_Stellate2`/… — the same *class* 
 problem, but internal to a single Enum object's own value list, not the class-header/defaultproperties
 split above). `ExtendedBuilders` is unaffected (still +5 bytes, unrelated — likely multi-class/
 multi-source handling). Both remain open, tracked here for a future pass.
+
+## DavesBrushBuilders enum-tag scatter (2026-09-12) — looked at, not fixed, evidence recorded
+
+Current code (`reorder.py` `streams()`, "Enum" kind) treats an enum's whole value list as one
+`name_refs` clump registering at the Enum export's own position — wrong. Golden interleaves the tags
+with unrelated declarations (`DB_Tetrahedron` right after the last function; `DB_Stellate2` after
+`System`; `DB_Cube` after `Editor`; `DB_Octahedron`/`DB_Dodecahedron` after `BitmapFilename`; …), not
+clustered. This rules out "all tags register at enum-declaration time." It's also NOT explained by
+bytecode value-references: `bytecode.md` already established enum tags used as values compile to
+`ByteConst(ordinal)` — no `<<FName` in the script, so a `switch`/comparison against a tag can't be
+the registration point either. Mechanism not identified. Low priority: 2 fixtures, pure name-table
+permutation (zero functional effect, same class as the already-accepted indexing non-issues).
+Re-open with a controlled multi-enum probe (vary which function references each tag, vary enum
+position in source) rather than reasoning from one real package.

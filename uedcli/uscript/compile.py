@@ -27,14 +27,14 @@ from dataclasses import dataclass, field
 
 from ..native.actor_write import (PT_ARRAY, PT_BOOL, PT_BYTE, PT_FLOAT, PT_INT, PT_NAME, PT_OBJECT,
                                    PT_STR, PT_STRUCT, ArrayValue, Prop, StructValue, write_props)
-from .ast import ClassDecl, ConstDecl, EnumDecl, FuncDecl, StructDecl, VarDecl
+from .ast import ClassDecl, ConstDecl, EnumDecl, FuncDecl, StateDecl, StructDecl, VarDecl
 from .bytecode import Tok, encode_script
 from .crc import script_text_crc
 from .env import InstallEnv
-from .lower import (LowerError, build_scope, consts_of, enum_type_names, enums_of, local_funcs_of,
-                    lower_function, members_of, _mem_size)
+from .lower import (EX_LABEL_TABLE, LowerError, Scope, build_scope, consts_of, enum_type_names,
+                    enums_of, local_funcs_of, lower_function, lower_state_body, members_of, _mem_size)
 from .model import (ClassBody, CompiledPackage, ConstBody, Dependency, EnumBody, Export, FunctionBody,
-                    Import, Name, PropertyBody, StructBody, TextBufferBody)
+                    Import, Name, PropertyBody, StateBody, StructBody, TextBufferBody)
 from .global_index import default_global_index, engine_name_pool, highlight_name_pool, pool_case
 from .natives import ClassGraph, load_catalog, load_graph, prop_type_label
 from .ordering import ObjInput, order_package
@@ -69,6 +69,40 @@ _CLASS_MODIFIER_FLAGS: dict[str, int] = {
     "perobjectconfig": 0x0400,       # CLASS_PerObjectConfig
     "nativereplication": 0x0800,     # CLASS_NativeReplication
 }
+
+# ── EProbe / ProbeMask (RE'd 2026-09-12) ──────────────────────────────────────────────────────────
+# The engine's fixed probe-function table. Each bit corresponds to a "probe" event native code
+# dispatches into script only if the bit is set. Recovered from the boot-registered EName table
+# (`global_index.py`'s dumped `ename_ued22.json`): probe function names occupy consecutive ordinals
+# starting at "Spawned" (217); unused slots register a literal "ProbeN" placeholder instead of a real
+# function name, where N IS the bit index -- e.g. "Probe34" sits at ordinal 251 = 251-217 = bit 34,
+# self-confirming the offset for every gap (Probe4/5/34/39/48..62). Cross-checked against a real
+# measured fact from earlier in this campaign (`UnrealShare.UnrealTestInfo` overriding `Tick` alone ->
+# ProbeMask=0x1000000000 = bit 36, matching "Tick" at ordinal 253 here) and against `Engine.Pawn`'s
+# real ProbeMask (0xf8040c02 decodes to Destroyed/Falling/Landed/BaseChange/EncroachingOn/
+# EncroachedBy/FootZoneChange/HeadZoneChange/PainTimer -- all plausible Pawn overrides).
+_EPROBE_BASE = 217
+_EPROBE_TABLE: tuple[str, ...] = (
+    "Spawned", "Destroyed", "GainedChild", "LostChild", None, None, "Trigger", "UnTrigger",
+    "Timer", "HitWall", "Falling", "Landed", "ZoneChange", "Touch", "UnTouch", "Bump",
+    "BeginState", "EndState", "BaseChange", "Attach", "Detach", "ActorEntered", "ActorLeaving",
+    "KillCredit", "AnimEnd", "EndedRotation", "InterpolateEnd", "EncroachingOn", "EncroachedBy",
+    "FootZoneChange", "HeadZoneChange", "PainTimer", "SpeechTimer", "MayFall", None, "Die",
+    "Tick", "PlayerTick", "Expired", None, "SeePlayer", "EnemyNotVisible", "HearNoise",
+    "UpdateEyeHeight", "SeeMonster", "SeeFriend", "SpecialHandling", "BotDesireability",
+)
+_PROBE_BIT_OF: dict[str, int] = {name.casefold(): i for i, name in enumerate(_EPROBE_TABLE) if name}
+
+
+def _probe_bits(function_names) -> int:
+    """The OR of EProbe bits for every name in `function_names` that is a probe function."""
+    mask = 0
+    for name in function_names:
+        bit = _PROBE_BIT_OF.get(name.casefold())
+        if bit is not None:
+            mask |= 1 << bit
+    return mask
+
 
 # ── PropertyFlags / CPF_ (RE'd 2026-09-05) ────────────────────────────────────────────────────────
 CPF_EDIT = 0x00000001
@@ -201,6 +235,19 @@ class _Func:
     super_ref_key: str | None = None  # import key of an overridden inherited function (else 0)
 
 
+@dataclass(frozen=True, kw_only=True)
+class _State:
+    """A UState export: a `state Foo {...}` block's top-level labelled code. No params/locals/return
+    of its own (`children=0` always, for now — nested function overrides aren't supported yet)."""
+    key: str
+    name: str
+    class_key: str
+    line: int
+    text_pos: int
+    toks: tuple                      # full lowered stream: code + Stop + Nothing + [LabelTable]
+    script_size: int                 # in-memory ScriptSize (sum of _mem_size over all of `toks`)
+
+
 @dataclass(kw_only=True)
 class _Build:
     """Accumulator threaded through field construction. For a single class `prefix` is "" and object
@@ -215,6 +262,7 @@ class _Build:
     consts: dict[str, _ConstDef] = field(default_factory=dict)
     structs: dict[str, _StructDef] = field(default_factory=dict)
     funcs: dict[str, _Func] = field(default_factory=dict)
+    states: dict[str, _State] = field(default_factory=dict)
     chain_fields: list[tuple[str, bool]] = field(default_factory=list)  # (key, is_var) in decl order
     default_props: list[Prop] = field(default_factory=list)
     member_class_flags: int = 0      # ClassFlags contributed by member vars (config/localized)
@@ -228,6 +276,8 @@ class _Build:
     graph_override: object | None = None      # multi-class: a ClassGraph seeing in-package classes
     catalog_override: object | None = None
     class_ref_packages: list[str] = field(default_factory=list)  # non-Core pkgs this class imports
+    extra_deps: list[str] = field(default_factory=list)  # classes Context'd into, real-cased, in
+                                                          # first-use order (deep=0 Dependency entries)
 
     def okey(self, local: str) -> str:
         """A package-unique object key: `prefix` + the class-local key (identity when prefix is "")."""
@@ -283,8 +333,10 @@ def _compile_single(src: str, env: InstallEnv,
     b.local_structs = {m.name for m in decl.members if isinstance(m, StructDecl)}
     _seed_imports(b, super_name, within_key)
     _build_members(b, decl)
-    if decl.functions:
-        _build_functions(b, decl, super_name, crlf_source)
+    if decl.functions or decl.states:
+        _build_callables(b, decl, super_name, crlf_source)
+    for dep_name in b.extra_deps:
+        _add_import(b, dep_name)
 
     has_new_kind = bool(b.enums or b.consts or b.structs or b.funcs) or any(
         not (p.in_class_chain and p.prop_class in {k.prop_class for k in _SCALAR_KINDS.values()}
@@ -319,9 +371,11 @@ def _compile_single(src: str, env: InstallEnv,
     names = tuple(Name(text=n, flags=_name_flags(n)) for n in names_order)
     import_recs = tuple(_import_rec(b.imports[n], name_index, imp_ref) for n in imports_order)
 
+    probe_mask = super_info.probe_mask | _probe_bits(f.name for f in decl.functions)
     exports = _build_exports(b, class_name, super_name, super_info.self_crc, crlf_source,
                              class_flags, config_name, within_key, chain, chain_next,
-                             name_index, nidx, name_cf, exp_ref, imp_ref, ref, export_rows)
+                             name_index, nidx, name_cf, exp_ref, imp_ref, ref, export_rows,
+                             probe_mask)
     return CompiledPackage(version=69, licensee=0, package_flags=1,
                            names=names, imports=import_recs, exports=exports)
 
@@ -347,7 +401,10 @@ def _reject_unsupported(decl: ClassDecl) -> None:
     # `#exec CONVERSATION IMPORT` is supported (it emits sibling packages, `conimport.py`, and adds
     # nothing to this package); any OTHER `#exec` is not.
     other_exec = [d for d in decl.exec_directives if _CONV_IMPORT_RE.match(d) is None]
-    for feature, present in (("states", decl.states), ("replication", decl.replication),
+    # States are supported in the single-class path (see `_build_callables`/`_build_one_state`); a
+    # state's own unsupported shapes (extends/ignores/nested function overrides) raise inside
+    # `lower_state_body` instead.
+    for feature, present in (("replication", decl.replication),
                              ("#exec directives", other_exec),
                              ("cpptext", decl.cpptext)):
         if present:
@@ -447,8 +504,11 @@ def _build_struct(b: _Build, m: StructDecl) -> None:
     _add_import(b, "Struct")
 
 
-# ── functions ─────────────────────────────────────────────────────────────────────────────────────
-def _build_functions(b: _Build, decl: ClassDecl, super_name: str, crlf_source: str) -> None:
+# ── functions / states ───────────────────────────────────────────────────────────────────────────
+def _build_callables(b: _Build, decl: ClassDecl, super_name: str, crlf_source: str) -> None:
+    """Build every function and state, in TRUE declaration order (`decl.callables` — the two are
+    split into `decl.functions`/`decl.states` elsewhere, but the class Children chain interleaves
+    them by source position, so this is the one place that must walk the combined order)."""
     search_dir = b.env._search_dirs[0]
     graph = b.graph_override if b.graph_override is not None else load_graph(search_dir)
     catalog = b.catalog_override if b.catalog_override is not None else load_catalog(search_dir)
@@ -457,10 +517,67 @@ def _build_functions(b: _Build, decl: ClassDecl, super_name: str, crlf_source: s
     lfuncs = local_funcs_of(decl.functions, graph, enames)
     enums = enums_of(decl.members)
     consts = consts_of(decl.members)
-    _add_import(b, "Function")
-    for func, (line, text_pos) in zip(decl.functions, _function_positions(crlf_source, decl.functions)):
-        _build_one_function(b, decl, func, super_name, graph, catalog, members, lfuncs, line, text_pos,
-                            enames, enums, consts)
+    if decl.functions:
+        _add_import(b, "Function")
+    if decl.states:
+        _add_import(b, "State")
+    func_pos = dict(zip((id(f) for f in decl.functions), _function_positions(crlf_source, decl.functions)))
+    state_pos = dict(zip((id(s) for s in decl.states), _state_positions(crlf_source, decl.states)))
+    for item in decl.callables:
+        if isinstance(item, StateDecl):
+            line, text_pos = state_pos[id(item)]
+            _build_one_state(b, decl, item, super_name, graph, catalog, members, lfuncs, line,
+                             text_pos, enums, consts)
+        else:
+            line, text_pos = func_pos[id(item)]
+            _build_one_function(b, decl, item, super_name, graph, catalog, members, lfuncs, line,
+                                text_pos, enames, enums, consts)
+
+
+def _build_one_state(b: _Build, decl: ClassDecl, state: StateDecl, super_name: str, graph, catalog,
+                     members, lfuncs, line: int, text_pos: int, enums, consts) -> None:
+    skey = b.okey(f"state:{state.name}")
+    scope = Scope(locals_={}, own_members=members, own_funcs={f.name: f for f in lfuncs},
+                 class_name=decl.name, super_name=super_name, graph=graph, enums=enums, consts=consts)
+    try:
+        toks = lower_state_body(state, scope, catalog)
+    except LowerError as e:
+        raise NotImplementedError(f"cannot lower state {state.name!r}: {e}") from e
+    b.states[skey] = _State(key=skey, name=state.name, class_key=b.okey(f"class:{decl.name}"),
+                            line=line, text_pos=text_pos, toks=tuple(toks),
+                            script_size=sum(_mem_size(t) for t in toks))
+    b.chain_fields.append((skey, False))
+
+
+def _state_positions(crlf: str, states) -> list[tuple[int, int]]:
+    """(Line, TextPos) for each state's own top-level code, in `states` order: the first non-
+    whitespace/comment content after the state's `{` (RE'd 2026-09-13 against UCC — every controlled
+    state fixture's first item is a label, so this is verified only for that shape)."""
+    out: list[tuple[int, int]] = []
+    cur = 0
+    ws = " \t\r\n"
+    for st in states:
+        namepat = r"\b" + re.escape(st.name) + r"\b"
+        m = re.compile(r"\bstate\b[^{};]*?" + namepat + r"[^{};]*\{", re.IGNORECASE).search(crlf, cur)
+        if m is None:
+            raise NotImplementedError(f"could not locate declaration of state {st.name!r} in source "
+                                      "for TextPos")
+        k = m.end()
+        while True:
+            while k < len(crlf) and crlf[k] in ws:
+                k += 1
+            if crlf[k:k + 2] == "//":
+                nl = crlf.find("\n", k)
+                k = len(crlf) if nl < 0 else nl + 1
+                continue
+            if crlf[k:k + 2] == "/*":
+                end = crlf.find("*/", k)
+                k = len(crlf) if end < 0 else end + 2
+                continue
+            break
+        out.append((crlf.count("\n", 0, k) + 1, k))
+        cur = k
+    return out
 
 
 def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: str, graph, catalog,
@@ -488,7 +605,7 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
                             super_name=super_name, graph=graph,
                             enums=enums, enum_names=enames, consts=consts)
         try:
-            toks = lower_function(func, scope, catalog)
+            toks = lower_function(func, scope, catalog, extra_deps=b.extra_deps)
         except LowerError as e:
             raise NotImplementedError(f"cannot lower function {func.name!r}: {e}") from e
     elif flags & FUNC_NATIVE:                        # native thunk: one NativeParm per param
@@ -1222,6 +1339,8 @@ def _export_identity_map(b: _Build, class_name: str) -> dict[str, tuple[str, str
         out[key] = (s.name, class_name)
     for key, f in b.funcs.items():
         out[key] = (f.name, class_name)
+    for key, s in b.states.items():
+        out[key] = (s.name, class_name)
     return out
 
 
@@ -1271,6 +1390,10 @@ def _obj_streams(b: _Build, class_name: str, super_name: str, config_name: str, 
         return (b.consts[key].name,), ()
     if key in b.structs:
         return (b.structs[key].name,), ()
+    if key in b.states:
+        s = b.states[key]
+        nrefs, orefs = _token_refs(s.toks)
+        return (s.name, *nrefs), orefs
     f = b.funcs[key]
     nrefs, orefs = _token_refs(f.toks)
     return (f.name, *nrefs), orefs
@@ -1336,6 +1459,10 @@ def _general_names(b: _Build, class_name: str, super_name: str, config_name: str
         add(f.name)
         for ident in _token_refs(f.toks)[0]:
             add(ident)
+    for s in b.states.values():
+        add(s.name)
+        for ident in _token_refs(s.toks)[0]:
+            add(ident)
     for extra in default_names:
         add(extra)
     return order
@@ -1389,6 +1516,8 @@ def _export_refs(b: _Build, class_name: str, export_rows: list[tuple[str, str | 
         add(s.name, class_name, s.key)
     for f in b.funcs.values():
         add(f.name, class_name, f.key)
+    for s in b.states.values():
+        add(s.name, class_name, s.key)
 
     refs: dict[str, int] = {}
     for i, (name, path) in enumerate(export_rows):
@@ -1450,7 +1579,7 @@ def _name_flags(name: str) -> int:
 # ── exports ─────────────────────────────────────────────────────────────────────────────────────
 def _build_exports(b, class_name, super_name, super_crc, crlf_source, class_flags, config_name,
                    within_key, chain, chain_next, name_index, nidx, name_cf, exp_ref, imp_ref, ref,
-                   export_rows):
+                   export_rows, probe_mask):
     recs: dict[str, Export] = {}
     class_key = f"class:{class_name}"
     recs["ScriptText"] = Export(
@@ -1477,6 +1606,7 @@ def _build_exports(b, class_name, super_name, super_crc, crlf_source, class_flag
                               property_flags=p.property_flags, category=cat,
                               type_tail=tuple(ref(t) for t in p.type_tail)))
     _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs)
+    _build_state_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs)
     for key, e in b.enums.items():
         recs[key] = Export(cls=imp_ref["Enum"], super_ref=0, outer=exp_ref[class_key],
                            name=name_index[e.name], flags=_RF_FIELD,
@@ -1494,7 +1624,8 @@ def _build_exports(b, class_name, super_name, super_crc, crlf_source, class_flag
                                            children=children, friendly_name=name_index[s.name]))
 
     recs[class_key] = _class_export(b, class_name, super_name, super_crc, crlf_source, class_flags,
-                                    config_name, within_key, chain, name_index, exp_ref, imp_ref, ref)
+                                    config_name, within_key, chain, name_index, exp_ref, imp_ref, ref,
+                                    probe_mask)
     return tuple(recs[key] for key, _ in sorted(exp_ref.items(), key=lambda kv: kv[1]))
 
 
@@ -1538,8 +1669,44 @@ def _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, i
                 inative=0, oper_precedence=0, function_flags=fn.function_flags))
 
 
+def _build_state_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs) -> None:
+    """Emit one UState export per state, encoding its script against the final tables (same resolver
+    shape as `_build_function_exports` — a state has no params/locals of its own). The `EX_LabelTable`
+    token (if any) sits inside `st.toks` already (`lower_state_body`); `StateBody.label_table_offset`
+    is its in-MEMORY offset + 1 (see `model.StateBody`), needing no resolver to compute."""
+    member_by_name = {p.name.casefold(): key for key, p in b.props.items()
+                      if p.in_class_chain and p.is_var}
+    func_by_name = {f.name.casefold(): f.key for f in b.funcs.values()}
+    import_by_name = {k.casefold(): k for k in b.imports}
+
+    def resolve_inv(kind: str, ident: str) -> int:
+        if kind == "name":
+            return name_cf[ident.casefold()]
+        cf = ident.casefold()
+        if cf in member_by_name:
+            return exp_ref[member_by_name[cf]]
+        if cf in func_by_name:
+            return exp_ref[func_by_name[cf]]
+        if cf in import_by_name:
+            return imp_ref[import_by_name[cf]]
+        raise NotImplementedError(f"cannot resolve script ref {ident!r} in a state")
+
+    for skey, st in b.states.items():
+        has_table = bool(st.toks) and st.toks[-1].op == EX_LABEL_TABLE
+        label_table_offset = (sum(_mem_size(t) for t in st.toks[:-1]) + 1) if has_table else 0xFFFF
+        recs[skey] = Export(
+            cls=imp_ref["State"], super_ref=0, outer=exp_ref[class_key], name=nidx(st.name),
+            flags=_RF_FIELD,
+            body=StateBody(
+                super_field=0, next_field=next_lookup.get(skey, 0), children=0,
+                friendly_name=nidx(st.name), line=st.line, text_pos=st.text_pos,
+                script=encode_script(list(st.toks), resolve_inv), script_size=st.script_size,
+                probe_mask=0, ignore_mask=0xFFFFFFFFFFFFFFFF,
+                label_table_offset=label_table_offset, state_flags=0))
+
+
 def _class_export(b, class_name, super_name, super_crc, crlf_source, class_flags, config_name,
-                  within_key, chain, name_index, exp_ref, imp_ref, ref):
+                  within_key, chain, name_index, exp_ref, imp_ref, ref, probe_mask):
     children = exp_ref[chain[0]] if chain else 0
     return Export(
         cls=0, super_ref=imp_ref[super_name], outer=0, name=name_index[class_name],
@@ -1548,11 +1715,14 @@ def _class_export(b, class_name, super_name, super_crc, crlf_source, class_flags
             super_field=imp_ref[super_name], next_field=0, script_text=exp_ref["ScriptText"],
             children=children, friendly_name=name_index[class_name],
             line=0xFFFFFFFF, text_pos=0xFFFFFFFF, script=b"",
-            probe_mask=0, ignore_mask=0xFFFFFFFFFFFFFFFF, label_table_offset=0xFFFF,
+            probe_mask=probe_mask, ignore_mask=0xFFFFFFFFFFFFFFFF, label_table_offset=0xFFFF,
             state_flags=0, class_flags=class_flags, class_guid=b"\x00" * 16,
             dependencies=(Dependency(cls=exp_ref[f"class:{class_name}"], deep=1,
                                      script_text_crc=script_text_crc(crlf_source)),
-                          Dependency(cls=imp_ref[super_name], deep=1, script_text_crc=super_crc)),
+                          Dependency(cls=imp_ref[super_name], deep=1, script_text_crc=super_crc),
+                          *(Dependency(cls=imp_ref[_add_import(b, dep)], deep=0,
+                                      script_text_crc=b.env.resolve_class(dep).self_crc)
+                            for dep in b.extra_deps)),
             package_imports=(name_index[class_name], name_index["Core"]),
             class_within=imp_ref[within_key], class_config_name=name_index[config_name],
             default_props=write_props(lambda s: name_index[s],
@@ -1597,6 +1767,8 @@ class _ClassUnit:
     package_imports: tuple[str, ...]  # PackageImports package names, in order
     self_crc: int
     object_flags: int                 # the UClass export's ObjectFlags (+RF_Native for native)
+    probe_mask: int                   # accumulated EProbe bits (super's | this class's own overrides)
+    extra_deps: tuple[str, ...]       # classes Context'd into (deep=0 Dependency entries), real-cased
 
 
 def compile_package_dir(classes: dict[str, str], env: InstallEnv, *,
@@ -1769,6 +1941,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
         super_crc = super_unit.self_crc
         super_class_flags = super_unit.class_flags
         super_pkg_imports = super_unit.package_imports
+        super_probe_mask = super_unit.probe_mask
     else:
         info = env.resolve_class(super_name)
         if info is None:
@@ -1776,6 +1949,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
         super_crc = info.self_crc
         super_class_flags = info.class_flags
         super_pkg_imports = info.package_imports
+        super_probe_mask = info.probe_mask
 
     b.prefix = f"{class_name}::"
     b.class_name = class_name
@@ -1784,6 +1958,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
     b.member_class_flags = 0
     b.class_object_flags = _class_object_flags(decl)
     b.class_ref_packages = []
+    b.extra_deps = []
     b.local_enums = {m.name for m in decl.members if isinstance(m, EnumDecl)}
     b.local_structs = {m.name for m in decl.members if isinstance(m, StructDecl)}
     b.graph_override = graph
@@ -1805,8 +1980,10 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
         _add_import(b, within_key)
 
     _build_members(b, decl)
-    if decl.functions:
-        _build_functions(b, decl, super_name, crlf_source)
+    if decl.functions or decl.states:
+        _build_callables(b, decl, super_name, crlf_source)
+    for dep_name in b.extra_deps:
+        _add_import(b, dep_name)
 
     class_flags |= b.member_class_flags | (super_class_flags & _CLASS_INHERIT_MASK)
     chain = tuple(_class_chain(b))
@@ -1824,6 +2001,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
             seen_cf.add(cf)
             deps.append(imp_by_cf.get(cf, p))
     package_imports = (package_name, *deps, "Core")
+    probe_mask = super_probe_mask | _probe_bits(f.name for f in decl.functions)
     return _ClassUnit(
         name=class_name, class_key=b.okey(f"class:{class_name}"), st_key=b.okey("ScriptText"),
         super_name=super_name,
@@ -1831,7 +2009,8 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
         super_crc=super_crc, crlf_source=crlf_source, class_flags=class_flags,
         config_name=config_name, within_key=within_key, chain=chain,
         default_props=tuple(b.default_props), package_imports=package_imports,
-        self_crc=script_text_crc(crlf_source), object_flags=b.class_object_flags)
+        self_crc=script_text_crc(crlf_source), object_flags=b.class_object_flags,
+        probe_mask=probe_mask, extra_deps=tuple(b.extra_deps))
 
 
 def _imports_by_display(b: _Build, display_order: list[str]) -> list[str]:
@@ -1862,6 +2041,8 @@ def _multi_key_identity(b: _Build, units: list[_ClassUnit]) -> dict[str, tuple[s
         disp[key] = s.name; outer_key[key] = _outer_class_key(key)
     for key, f in b.funcs.items():
         disp[key] = f.name; outer_key[key] = f.class_key
+    for key, s in b.states.items():
+        disp[key] = s.name; outer_key[key] = s.class_key
 
     def chain(key: str) -> tuple[str, ...]:
         out, cur = [], outer_key[key]
@@ -1946,6 +2127,7 @@ def _finalize_multi(b: _Build, units: list[_ClassUnit], package_name: str,
                            body=StructBody(super_field=0, next_field=next_lookup.get(key, 0),
                                            children=children, friendly_name=name_index[s.name]))
     _multi_function_exports(b, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs)
+    _multi_state_exports(b, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs)
     for u in units:
         recs[u.class_key] = _multi_class_export(b, u, name_index, exp_ref, imp_ref, ref)
 
@@ -2026,6 +2208,10 @@ def _multi_names(b: _Build, units: list[_ClassUnit], package_name: str) -> list[
         add(f.name)
         for ident in _token_refs(f.toks)[0]:
             add(ident)
+    for s in b.states.values():
+        add(s.name)
+        for ident in _token_refs(s.toks)[0]:
+            add(ident)
     for u in units:
         for prop in u.default_props:
             add(prop.name)                                # inherited-override names aren't in b.props
@@ -2080,20 +2266,69 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
                 inative=0, oper_precedence=0, function_flags=fn.function_flags))
 
 
+def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs) -> None:
+    """One UState export per state; each script ref resolves within its OWN class, same scoping as
+    `_multi_function_exports`. See `_build_state_exports` (single-class path) for the
+    `label_table_offset` note."""
+    members_by_class: dict[str, dict[str, str]] = {}
+    funcs_by_class: dict[str, dict[str, str]] = {}
+    for key, p in b.props.items():
+        if p.in_class_chain and p.is_var:
+            members_by_class.setdefault(p.outer_key, {})[p.name.casefold()] = key
+    for f in b.funcs.values():
+        funcs_by_class.setdefault(f.class_key, {})[f.name.casefold()] = f.key
+    import_by_name = {k.casefold(): k for k in b.imports}
+
+    def resolver(st: _State):
+        own_members = members_by_class.get(st.class_key, {})
+        own_funcs = funcs_by_class.get(st.class_key, {})
+
+        def resolve_inv(kind: str, ident: str) -> int:
+            if kind == "name":
+                return name_cf[ident.casefold()]
+            cf = ident.casefold()
+            if cf in own_members:
+                return exp_ref[own_members[cf]]
+            if cf in own_funcs:
+                return exp_ref[own_funcs[cf]]
+            if cf in import_by_name:
+                return imp_ref[import_by_name[cf]]
+            raise NotImplementedError(f"cannot resolve script ref {ident!r} in state {st.name!r}")
+        return resolve_inv
+
+    for skey, st in b.states.items():
+        resolve_inv = resolver(st)
+        has_table = bool(st.toks) and st.toks[-1].op == EX_LABEL_TABLE
+        label_table_offset = (sum(_mem_size(t) for t in st.toks[:-1]) + 1) if has_table else 0xFFFF
+        recs[skey] = Export(
+            cls=imp_ref["State"], super_ref=0, outer=exp_ref[st.class_key], name=nidx(st.name),
+            flags=_RF_FIELD,
+            body=StateBody(
+                super_field=0, next_field=next_lookup.get(skey, 0), children=0,
+                friendly_name=nidx(st.name), line=st.line, text_pos=st.text_pos,
+                script=encode_script(list(st.toks), resolve_inv), script_size=st.script_size,
+                probe_mask=0, ignore_mask=0xFFFFFFFFFFFFFFFF,
+                label_table_offset=label_table_offset, state_flags=0))
+
+
 def _multi_class_export(b: _Build, u: _ClassUnit, name_index, exp_ref, imp_ref, ref) -> Export:
     super_ref = exp_ref[u.super_export_key] if u.super_export_key else imp_ref[u.super_name]
     children = exp_ref[u.chain[0]] if u.chain else 0
     self_dep = Dependency(cls=exp_ref[u.class_key], deep=1, script_text_crc=u.self_crc)
     super_dep = Dependency(cls=super_ref, deep=1, script_text_crc=u.super_crc)
+    extra_deps = tuple(
+        Dependency(cls=imp_ref[_add_import(b, dep)], deep=0,
+                  script_text_crc=b.env.resolve_class(dep).self_crc)
+        for dep in u.extra_deps)
     return Export(
         cls=0, super_ref=super_ref, outer=0, name=name_index[u.name], flags=u.object_flags,
         body=ClassBody(
             super_field=super_ref, next_field=0, script_text=exp_ref[u.st_key],
             children=children, friendly_name=name_index[u.name],
             line=0xFFFFFFFF, text_pos=0xFFFFFFFF, script=b"",
-            probe_mask=0, ignore_mask=0xFFFFFFFFFFFFFFFF, label_table_offset=0xFFFF,
+            probe_mask=u.probe_mask, ignore_mask=0xFFFFFFFFFFFFFFFF, label_table_offset=0xFFFF,
             state_flags=0, class_flags=u.class_flags, class_guid=b"\x00" * 16,
-            dependencies=(self_dep, super_dep),
+            dependencies=(self_dep, super_dep, *extra_deps),
             package_imports=tuple(name_index[p] for p in u.package_imports),
             class_within=imp_ref[u.within_key], class_config_name=name_index[u.config_name],
             default_props=write_props(lambda s: name_index[s],
