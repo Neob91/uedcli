@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "UNATCO is byte-exact N=1..225 and bails at N=226: world leaf 12's permeating-light run carries Light157, which UED22 leaves out. Root-caused (2026-09-12) to the SAME unresolved mechanism as island-n-332-leaf-273-permeating-light-vertex-tie: native's FLinePlaneIntersection lands the crossing exactly on a shared portal vertex (a true tie); a live editor capture of the identical crossing lands ~1 ULP off it. Not fixed, no mask. 2026-09-13: the FVector::SafeNormal x87-extended-precision hypothesis is REFUTED by a live fctrl probe (measured PC=10/double, matching native's f64 model exactly) -- see dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md. Real mechanism still open; needs register-level single-stepping, not another precision-control read."
+summary = "UNATCO is byte-exact N=1..225 and bails at N=226: world leaf 12's permeating-light run carries Light157, which UED22 leaves out. Root-caused (2026-09-12) to the SAME unresolved mechanism as island-n-332-leaf-273-permeating-light-vertex-tie: native's FLinePlaneIntersection lands the crossing exactly on a shared portal vertex (a true tie); a live editor capture of the identical crossing lands ~1 ULP off it. Not fixed, no mask. 2026-09-13a: the FVector::SafeNormal x87-extended-precision hypothesis is REFUTED by a live fctrl probe -- see dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md. 2026-09-13b: a hex-precision live capture on the Island sibling (same mechanism) proves the crossing's INPUTS are not bit-identical after all -- a Pass-B portal-quad corner is 1 ULP off native's assumed grid value in the live editor, upstream of the beam-clip entirely. See island-n-332-leaf-273-permeating-light-vertex-tie for the capture; the same recheck is owed here before assuming it's identical."
 spikes = ["dev/docs/spikes/2026-09-07-gather-box-verdict/", "dev/docs/spikes/2026-09-12-safenormal-fpu-precision/"]
 +++
 
@@ -185,3 +185,24 @@ The sub-ULP tie's real mechanism is still open — it is NOT `SafeNormal`'s FPU 
 `dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md`. Next step per that spike: single-step
 the real `SafeNormal`/`FLinePlaneIntersection` chain at the exact crossing and diff intermediate
 register values against native's own trace — a control-word read can't narrow it further.
+
+## 2026-09-13b — the Island sibling's inputs are NOT bit-identical; recheck owed here too
+
+Done on `island-n-332-leaf-273-permeating-light-vertex-tie` (same mechanism, this item's own
+sibling): a hex-precision live capture (`dev/docs/spikes/2026-09-13-crossing-vertex-live-capture/`)
+diffing every argument's raw bit pattern, not the ~9-digit decimal every prior capture used, found
+the decisive crossing's TWO inputs are not actually bit-identical — one of them (a Pass-B
+`collect_leaf_portals`/`make_portals_clip` portal-quad corner, not a raw `Model.Point`) is 1 ULP off
+native's assumed grid value in the live editor. The beam-clip's own `FLinePlaneIntersection`/
+`SafeNormal` are cleared (bit-exact formula AND matching inputs would produce matching outputs); the
+divergence is upstream in Pass B portal construction, and the SAME "right formula, sub-ULP residual"
+shape recurs there (`fpoly.rs::line_plane_intersection`, `Engine.dll 0x1506f0`, independently
+disassembled fresh and also confirmed bit-exact) — new evidence for a genuinely low-level
+codegen/register effect rather than anything specific to the permeating-light module.
+
+This item's own `102->13` crossing was NOT re-captured this pass (the Island capture already
+confirmed the input-mismatch shape and used the whole session's remaining budget) — the same
+hex-precision method should be applied here before assuming the two items share not just the
+mechanism SHAPE but the identical cause. See the spike for the harness and the exact next step
+(capture Pass B's own crossing that PRODUCES the mismatched vertex, one level further upstream).
+Not fixed, no mask; ladder still bails at N=226.

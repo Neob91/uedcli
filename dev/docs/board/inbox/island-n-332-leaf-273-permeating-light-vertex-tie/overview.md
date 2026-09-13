@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Island is byte-exact N=1..331 and bails at N=332: leaf 273 carries Light124 where UED22 leaves it out. Root-caused to a genuine vertex COINCIDENCE (a portal vertex shared exactly with an adjacent portal) that makes one FLinePlaneIntersection crossing land a hair below the shared point in native and a hair above it in a live editor capture -- same formula, same inputs, opposite sign of a sub-ULP residual. Not fixed; x87-vs-SSE double-rounding is now RULED UNLIKELY (see below) -- mechanism still unconfirmed. Second reproducer found: unatco-n-226-leaf-12-gets-a-permeating-light157. 2026-09-13: the FVector::SafeNormal x87-extended-precision candidate is REFUTED by a live fctrl probe (measured PC=10/double, matching native's f64 model exactly)."
+summary = "Island is byte-exact N=1..331 and bails at N=332: leaf 273 carries Light124 where UED22 leaves it out. Root-caused to a genuine vertex COINCIDENCE (a portal vertex shared exactly with an adjacent portal) that makes one FLinePlaneIntersection crossing land a hair below the shared point in native and a hair above it in a live editor capture -- same formula, same inputs, opposite sign of a sub-ULP residual. Not fixed. x87-vs-SSE double-rounding RULED UNLIKELY (2026-09-13a, fctrl probe). 2026-09-13b: a HEX-PRECISION live capture (not decimal) proves the crossing's INPUTS are NOT bit-identical after all -- one of the two input vertices (a Pass-B portal-quad corner, not a raw Model.Point) is 1 ULP off native's assumed grid value in the live editor. The beam-clip's own formula/precision are cleared; the divergence is upstream in Pass B portal construction. Second reproducer: unatco-n-226-leaf-12-gets-a-permeating-light157."
 spikes = ["dev/docs/spikes/2026-09-07-gather-box-verdict/"]
 +++
 
@@ -195,3 +195,38 @@ mechanism behind the sub-ULP tie is still open; it needs single-stepping the rea
 `SafeNormal`/`FLinePlaneIntersection` chain at the exact `162->275`/`275->273` crossing and diffing
 intermediate register values against native's own trace, not another control-word read. Not fixed, no
 mask; ladder still bails at N=332.
+
+## 2026-09-13b — hex-precision live capture: the crossing's INPUTS are not bit-identical
+
+Every prior capture (this item and its sibling) compared vertex values printed with ~9 significant
+decimal digits, which is enough to round-trip an `f32` uniquely — but nobody had actually diffed the
+two sides' raw bit patterns for this exact crossing's ARGUMENTS, only their formulas (disassembly)
+and FPU state (the fctrl probe). Did that now: `dev/docs/spikes/2026-09-13-crossing-vertex-live-capture/`,
+a live gdb capture of `FPlane::FPlane` and `FLinePlaneIntersection` dumping every argument as a raw
+hex `u32`, gated on `FEditorVisibility::ActorVisibility`'s own actor match (a naive value-conditioned
+breakpoint on either hot CSG primitive wedges the whole editor — see the spike for why).
+
+Result: **the inputs are NOT bit-identical.** Native's own trace (`UEDCLI_PERM_TRACE_EDGE=162-275`,
+extended with hex output this session) shows the decisive `FLinePlaneIntersection` call as
+`P1=(-4495.99951171875, 3628.0, 192.0)`, `P2=(-4495.99951171875, 4080.0, 192.0)` — `P2.y` the exact
+grid value `0x457f0000`. The live editor's OWN call at this exact crossing (`LPI_ENTRY hit=1120` in
+the capture log, `P1`/`Normal`/`W` all matching native's trace, confirming this is the right call)
+has `P2.y = 0x457f0001` — `4080.000244140625`, one ULP off the grid value native assumes.
+
+`P2` is a **Pass-B portal-quad corner** (`zones.rs::collect_leaf_portals` → `build_infinite_fpoly` +
+`make_portals_clip`), not a raw `Model.Point` — a SEPARATE reconstruction from the final saved
+package's Points table that earlier sessions confirmed byte-identical (`model_dump.py`). That
+confirmation says nothing about whether the transient portal vertex `ActorVisibility` actually
+consumes during `MAP REBUILD` matches the final saved value, and it doesn't, here, by 1 ULP.
+
+`make_portals_clip`'s own crossing formula (`fpoly.rs::line_plane_intersection`, the OTHER
+`FLinePlaneIntersection` overload, `Engine.dll 0x1506f0`, distinct from `permeating_lights.rs`'s
+own copy at `0x101507c0`) was independently disassembled fresh this session and is ALSO bit-exact
+against native's Rust port. So this isn't a wrong formula in Pass B either — the same "right
+formula, right precision, still a sub-ULP residual" shape recurs one level upstream of where every
+prior session looked, which is new evidence for a genuinely low-level (codegen/register-allocation)
+effect rather than anything specific to the permeating-light beam clip.
+
+**Not fixed, no mask.** The root is now one level further back: whatever crossing inside Pass B's
+own ancestor-plane clip loop first produces `y=4080.00024` instead of `4080.0` for this vertex, not
+yet captured. Full writeup + next step: `dev/docs/spikes/2026-09-13-crossing-vertex-live-capture/spike.md`.
