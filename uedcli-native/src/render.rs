@@ -461,21 +461,41 @@ fn render_poly(
     }
 }
 
+/// (saturation, value) tiers `texture_use_color` cycles through, chosen to look as DIFFERENT from
+/// each other as a swatch can — vivid/bright, muted/dark, deep/saturated, pastel/light — so once
+/// hue alone stops discriminating (human hue discrimination at one fixed brightness tops out well
+/// before 360 distinct steps), a texture landing near a previous hue still likely reads as a
+/// different colour because it landed in a different tier.
+const TEXTURE_USE_TIERS: [(f32, f32); 4] = [
+    (0.85, 0.90), // vivid, bright
+    (0.55, 0.50), // muted, darker
+    (0.90, 0.55), // deep, saturated
+    (0.30, 0.95), // pastel, light
+];
+
 /// The flat swatch `--mode polys` (UnrealEd's real "Texture Use" mode) fills a surface with,
 /// keyed by `tex_index` (see `render_poly`'s call site for why index, not texture identity, and
 /// its scope limits). `tex_index < 0` (untextured) gets a fixed neutral swatch, never hashed in
-/// with real texture slots. A hashed index is mapped to a hue (golden-angle stepped, so adjacent
-/// small indices land far apart on the colour wheel) at fixed high saturation/value, then
-/// converted to RGB — visually distinct flat colours, matching the spike's screenshots (a
-/// uniform dark-green fill for one texture, flat pink/rose for another).
+/// with real texture slots.
+///
+/// Two INDEPENDENT low-discrepancy (golden-ratio-family) sequences pick hue and (saturation,
+/// value) tier, so a real level with dozens-to-hundreds of textures stays distinguishable far
+/// longer than hue alone could: hue steps by the golden angle (137.5..°) — the standard technique
+/// for spreading an a-priori-unknown count of hues near-optimally at every prefix length, not just
+/// asymptotically — while the tier steps by a SEPARATE irrational (`sqrt(2)`'s fractional part),
+/// chosen so its cycle never lines up with the hue's own period: two textures whose hues land
+/// close together (bound to happen eventually as texture count grows) usually land in different
+/// brightness/saturation tiers instead of blending into the same swatch.
 fn texture_use_color(tex_index: i32) -> [f32; 3] {
     if tex_index < 0 {
         return [128.0, 128.0, 128.0]; // DEFAULT_GREY, as an f32 triple
     }
-    // Golden-angle hue stepping (137.5..deg) spreads consecutive indices across the wheel instead
-    // of clustering nearby hues for nearby indices.
-    let hue = ((tex_index as f32) * 137.50776).rem_euclid(360.0);
-    let (sat, val) = (0.55, 0.85);
+    let i = tex_index as f32;
+    let hue = (i * 137.50776).rem_euclid(360.0);
+    let tier_frac = (i * std::f32::consts::SQRT_2).rem_euclid(1.0);
+    let tier = ((tier_frac * TEXTURE_USE_TIERS.len() as f32) as usize)
+        .min(TEXTURE_USE_TIERS.len() - 1);
+    let (sat, val) = TEXTURE_USE_TIERS[tier];
     hsv_to_rgb_255(hue, sat, val)
 }
 
@@ -1831,6 +1851,37 @@ mod tests {
         assert_eq!(texture_use_color(7), texture_use_color(7));
         assert_ne!(texture_use_color(0), texture_use_color(1));
         assert_ne!(texture_use_color(1), texture_use_color(2));
+    }
+
+    #[test]
+    fn texture_use_color_cycles_through_more_than_one_saturation_value_tier() {
+        // Regression guard for the two-independent-sequences design: if the tier picker ever
+        // collapsed to a constant (e.g. a future edit accidentally makes it a no-op), every index
+        // would land in `TEXTURE_USE_TIERS[0]` and hue would be the ONLY thing varying again —
+        // exactly the earlier, shorter-lived design this test exists to keep from regressing to.
+        let seen: std::collections::HashSet<_> = (0..8)
+            .map(|i| {
+                let c = texture_use_color(i);
+                (c[0] as i32, c[1] as i32, c[2] as i32)
+            })
+            .collect();
+        // 8 consecutive indices, 4 tiers: pigeonhole guarantees at least 2 distinct (val, sat)
+        // pairs show up among their colours if the tier truly cycles, which a single fixed tier
+        // could never produce for indices whose HUE happens to repeat closely.
+        assert!(seen.len() >= 4, "expected clear variety across 8 samples, got {seen:?}");
+    }
+
+    #[test]
+    fn texture_use_color_stays_mostly_distinct_over_a_realistic_texture_count() {
+        // A real level's texture count is typically dozens to a couple hundred; this is a coarse
+        // "did the tiering actually help" guard, not a formal collision bound.
+        let colors: std::collections::HashSet<_> = (0..64)
+            .map(|i| {
+                let c = texture_use_color(i);
+                (c[0] as i32, c[1] as i32, c[2] as i32)
+            })
+            .collect();
+        assert!(colors.len() >= 60, "too many collisions among 64 samples: {} unique", colors.len());
     }
 
     #[test]
