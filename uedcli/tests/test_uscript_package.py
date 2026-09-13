@@ -6,7 +6,13 @@ The offline tests run `compile_package_dir` and `perm_gate` against committed UC
   - same-package super: `Derived expands Base` -> Base is an EXPORT ref, not an import (`pkg_TwoCls`);
   - same-package super CHAIN `A<-B<-C` with virtual calls up the chain (`pkg_ChainPkg`);
   - a non-Core super (`BrushBuilder` in Editor) across two classes: the shared Editor import and the
-    per-class `[<pkg>, Editor, Core]` PackageImports (`pkg_TwoBB`).
+    per-class `[<pkg>, Editor, Core]` PackageImports (`pkg_TwoBB`);
+  - two SIBLING (non-super) classes that reference each other MUTUALLY — A holds a member typed B and
+    calls a B method, B holds a member typed A and calls an A method (`pkg_Mutual`; see
+    `_prepass_signatures`/`_PkgSigGraph` in `compile.py` for the two-pass signature resolution this
+    needs). `perm_gate` only, not the strict byte gate — the residual is a same-package name-table
+    qsort-TIE permutation, the same open class of issue `ExtendedBuilders` hits (see
+    `USCRIPT-COMPILER.md`), not specific to the mutual-reference mechanism itself.
 
 `test_goldens_match_ucc` (docker-gated) rebuilds the goldens with UCC and re-gates, so the committed
 fixtures can't silently drift from the compiler.
@@ -42,6 +48,18 @@ _PACKAGES: dict[str, dict[str, str]] = {
         "BBAlpha.uc": "class BBAlpha expands BrushBuilder;\n\nvar int Alpha;\n",
         "BBBeta.uc": "class BBBeta expands BrushBuilder;\n\nvar float Beta;\n",
     },
+    "Mutual": {
+        "MutualA.uc": (
+            "class MutualA expands Object;\n\n"
+            "var MutualB Partner;\n"
+            "var int Value;\n\n"
+            "function int Ping()\n{\n    return Partner.Pong(Self);\n}\n\n"
+            "function int GetValue()\n{\n    return Value;\n}\n"),
+        "MutualB.uc": (
+            "class MutualB expands Object;\n\n"
+            "var MutualA Partner;\n\n"
+            "function int Pong(MutualA a)\n{\n    Partner = a;\n    return a.GetValue();\n}\n"),
+    },
 }
 
 
@@ -75,6 +93,15 @@ def test_two_class_noncore_super():
     """Two classes expanding `BrushBuilder` (Editor): one shared Editor import, and each class's
     PackageImports = `[TwoBB, Editor, Core]`."""
     _check("TwoBB")
+
+
+def test_mutual_same_package_classes():
+    """Two SIBLING classes (no inheritance relation) that reference each other MUTUALLY: `MutualA`
+    holds a `MutualB`-typed member and calls a `MutualB` method, `MutualB` holds a `MutualA`-typed
+    member/param and calls a `MutualA` method. Neither can be fully compiled before the other under a
+    single-pass, build-order-dependent resolution scheme — this is the two-pass signature-graph fix
+    (`_prepass_signatures`/`_PkgSigGraph`)."""
+    _check("Mutual")
 
 
 def test_perm_gate_catches_wrong_body():

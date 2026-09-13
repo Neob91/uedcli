@@ -21,8 +21,6 @@ from __future__ import annotations
 
 import os
 import re
-import shutil
-import tempfile
 from dataclasses import dataclass, field
 
 from ..native.actor_write import (PT_ARRAY, PT_BOOL, PT_BYTE, PT_FLOAT, PT_INT, PT_NAME, PT_OBJECT,
@@ -38,7 +36,7 @@ from .model import (ClassBody, CompiledPackage, ConstBody, Dependency, EnumBody,
                     Import, Name, ObjectBody, PropertyBody, StateBody, StructBody, TextBufferBody,
                     TextureBody, TextureMip)
 from .global_index import default_global_index, engine_name_pool, highlight_name_pool, pool_case
-from .natives import ClassGraph, load_catalog, load_graph, prop_type_label
+from .natives import ClassGraph, ClassSig, FuncBody, load_catalog, load_graph, prop_type_label
 from .ordering import ObjInput, order_package
 from .parser import parse
 from . import texture_import
@@ -769,6 +767,9 @@ def _func_prop_type(b: _Build, tr, func_name: str, pname: str) -> tuple[str, int
     if graph.is_struct_name(base):
         skey = _add_struct_import(b, graph, base)
         return "StructProperty", 0, (_RefSpec(key=skey, is_export=False),)
+    if base.casefold() in b.in_pkg_class_names:           # a same-package sibling class -> export ref
+        real = b.in_pkg_class_names[base.casefold()]
+        return "ObjectProperty", 0, (_RefSpec(key=f"{real}::class:{real}", is_export=True),)
     if b.env.resolve_class(base) is None:
         raise NotImplementedError(f"param/local type {base!r} ({func_name}.{pname}) not supported yet")
     obj_key = _add_import(b, base)
@@ -887,6 +888,10 @@ def _resolve_var_type(b: _Build, m: VarDecl, pname: str
                                      _RefSpec(key=meta_key, is_export=False)), PT_OBJECT, None)
     if base.casefold() == "array":
         return _resolve_array_type(b, m, pname)
+    if base.casefold() in b.in_pkg_class_names:           # a SIBLING class in this same package (own
+        real = b.in_pkg_class_names[base.casefold()]       # or mutually referenced) -> an export ref,
+        return ("ObjectProperty", 0,                        # never an import (it has no home package
+               (_RefSpec(key=f"{real}::class:{real}", is_export=True),), PT_OBJECT, None)  # of its own)
     # otherwise an object type: a class reference resolved via env.
     info = b.env.resolve_class(base)
     if info is None:
@@ -916,6 +921,10 @@ def _resolve_array_type(b: _Build, m: VarDecl, pname: str
     elif _member_graph(b).is_struct_name(base):          # built-in/cross-package struct (Vector, …)
         inner_class = "StructProperty"
         inner_tail = (_RefSpec(key=_add_struct_import(b, _member_graph(b), base), is_export=False),)
+    elif base.casefold() in b.in_pkg_class_names:        # a same-package sibling class -> export ref
+        real = b.in_pkg_class_names[base.casefold()]
+        inner_class = "ObjectProperty"
+        inner_tail = (_RefSpec(key=f"{real}::class:{real}", is_export=True),)
     elif b.env.resolve_class(base) is not None:
         inner_class = "ObjectProperty"
         inner_tail = (_RefSpec(key=_add_import(b, base), is_export=False),)
@@ -1339,18 +1348,23 @@ def _register_struct_member_imports(b: _Build, toks, name_to_struct: dict[str, s
 def _register_final_call_imports(b: _Build, toks) -> None:
     """After lowering, import the target of every INHERITED final-function call (an ordinary call to a
     function the class being compiled doesn't itself declare/override, and a `super.Foo()` call, which
-    always targets an ancestor). `lower.py` marks such a call's obj identity `func:<Class>.<Name>`
-    (never a bare identifier, which is reserved for the class's own function, resolved as a same-
-    package export) — the same key format `_super_func_import` uses for an override's SuperField, so
-    the two mechanisms dedupe onto one import when both name the same inherited function."""
+    always targets an ancestor) OR a final call through an object typed to a same-package SIBLING
+    class. `lower.py` marks such a call's obj identity `func:<Class>.<Name>` (never a bare identifier,
+    which is reserved for the class's own function, resolved as a same-package export) — the same key
+    format `_super_func_import` uses for an override's SuperField, so the two mechanisms dedupe onto
+    one import when both name the same inherited function. When `<Class>` is one of THIS package's own
+    classes (own super OR a sibling — including one referenced MUTUALLY, see `_prepass_signatures`),
+    no import is registered at all: `_multi_function_exports`'s resolver resolves the identity straight
+    to that class's own function export instead."""
     def walk(t) -> None:
         if t.op == EX_FINAL_FUNCTION:
             ident = next((v for k, v in t.parts if k == "obj"), None)
             if ident is not None and ident.startswith("func:") and ident not in b.imports:
                 owner_cls, func_name = ident[len("func:"):].rsplit(".", 1)
-                outer = _add_import(b, owner_cls)
-                b.imports[ident] = _ImportSpec(class_package="Core", class_name="Function",
-                                               outer=outer, object_name=func_name)
+                if owner_cls.casefold() not in b.in_pkg_class_names:
+                    outer = _add_import(b, owner_cls)
+                    b.imports[ident] = _ImportSpec(class_package="Core", class_name="Function",
+                                                   outer=outer, object_name=func_name)
         for kind, val in t.parts:
             if kind == "sub":
                 walk(val)
@@ -1364,23 +1378,26 @@ def _register_final_call_imports(b: _Build, toks) -> None:
 
 def _register_member_var_imports(b: _Build, toks, graph: ClassGraph) -> None:
     """After lowering, import the target of every INHERITED instance-variable access (a member field
-    the class being compiled doesn't itself declare/override). `lower.py` marks such an access's obj
-    identity `mem:<Class>.<Name>` (never a bare identifier, reserved for the class's own field,
-    resolved as a same-package export) — same shape as `_register_final_call_imports`, but a Property
-    import (the field's concrete UProperty subclass, e.g. IntProperty) rather than a Function import."""
+    the class being compiled doesn't itself declare/override) OR one reached through an object typed
+    to a same-package SIBLING class. `lower.py` marks such an access's obj identity `mem:<Class>.<Name>`
+    (never a bare identifier, reserved for the class's own field, resolved as a same-package export) —
+    same shape as `_register_final_call_imports`, but a Property import (the field's concrete
+    UProperty subclass, e.g. IntProperty) rather than a Function import. When `<Class>` is one of THIS
+    package's own classes, no import is registered — see `_register_final_call_imports`."""
     def walk(t) -> None:
         if t.op == EX_INSTANCE_VARIABLE:
             ident = next((v for k, v in t.parts if k == "obj"), None)
             if ident is not None and ident.startswith("mem:") and ident not in b.imports:
                 owner_cls, field = ident[len("mem:"):].rsplit(".", 1)
-                label = graph.member_type(owner_cls, field)
-                if label is None or label not in _SCALAR_KINDS:
-                    raise NotImplementedError(
-                        f"inherited member {owner_cls}.{field}: type {label!r} unsupported")
-                outer = _add_import(b, owner_cls)
-                b.imports[ident] = _ImportSpec(class_package="Core",
-                                               class_name=_SCALAR_KINDS[label].prop_class,
-                                               outer=outer, object_name=field)
+                if owner_cls.casefold() not in b.in_pkg_class_names:
+                    label = graph.member_type(owner_cls, field)
+                    if label is None or label not in _SCALAR_KINDS:
+                        raise NotImplementedError(
+                            f"inherited member {owner_cls}.{field}: type {label!r} unsupported")
+                    outer = _add_import(b, owner_cls)
+                    b.imports[ident] = _ImportSpec(class_package="Core",
+                                                   class_name=_SCALAR_KINDS[label].prop_class,
+                                                   outer=outer, object_name=field)
         for kind, val in t.parts:
             if kind == "sub":
                 walk(val)
@@ -1986,16 +2003,94 @@ class _ClassUnit:
     texture_keys: tuple[str, ...] = ()  # this class's own `#exec TEXTURE IMPORT` UTexture export keys
 
 
+def _prepass_signatures(decls: dict[str, tuple[ClassDecl, str]], disk_graph: ClassGraph | None
+                        ) -> dict[str, ClassSig]:
+    """Pass 1 of the two-pass package compile: a `ClassSig` (own + inherited members/functions) for
+    EVERY class in the package, built straight from its AST — no bytecode needed, since UnrealScript
+    var/param/return types are explicit in source. Keyed by casefolded class name.
+
+    This is what makes a MUTUAL same-package reference (class A calls into B, B calls into A) work:
+    without it, resolving A's call into B needs B already built (its signature decoded from compiled
+    bytes), and resolving B's call into A needs A already built — no build order satisfies both. Here
+    every class's signature exists before any class's BYTECODE BODY is lowered, so lowering (pass 2,
+    `compile_package_dir`'s loop) can resolve a call/member access into any sibling class regardless
+    of which one is being compiled first. Only INHERITANCE needs a fixed order within this pass (a
+    subclass's signature merges its super's) — safe, since class inheritance can't cycle in valid
+    UnrealScript; resolved here by recursing into `sig_of`, memoized, with a cycle guard that raises
+    rather than infinite-loop if that invariant is ever violated."""
+    by_cf = {name.casefold(): name for name in decls}
+    sigs: dict[str, ClassSig] = {}
+    building: set[str] = set()
+
+    def sig_of(name: str) -> ClassSig | None:
+        cf = name.casefold()
+        if cf in sigs:
+            return sigs[cf]
+        if cf not in by_cf:                               # a cross-package super/type
+            return disk_graph.class_sig(name) if disk_graph is not None else None
+        if cf in building:
+            raise NotImplementedError(f"cyclic class inheritance involving {name!r}")
+        building.add(cf)
+        decl, _src = decls[by_cf[cf]]
+        members: dict[str, str] = {}
+        member_owner: dict[str, str] = {}
+        functions: dict[str, FuncBody] = {}
+        if decl.super_name:
+            sup = sig_of(decl.super_name)
+            if sup is not None:
+                members.update(sup.members)
+                member_owner.update(sup.member_owner)
+                functions.update(sup.functions)
+        enames = enum_type_names(decl.members)
+        for n, label in members_of(decl.members, disk_graph).items():
+            ncf = n.casefold()
+            members[ncf] = label
+            member_owner[ncf] = decl.name
+        for f in local_funcs_of(decl.functions, disk_graph, enames):
+            functions[f.name.casefold()] = FuncBody(
+                name=f.name, package="", class_name=decl.name, script_size=0, tokens=(),
+                inative=f.native_index or 0, precedence=0,
+                flags=(_FUNC_MODIFIER_FLAGS["final"] if f.is_final else 0),
+                param_types=f.param_types, return_type=f.return_type)
+        sig = ClassSig(name=decl.name, package="", super_name=decl.super_name,
+                       members=members, member_owner=member_owner, functions=functions)
+        sigs[cf] = sig
+        building.discard(cf)
+        return sig
+
+    for name in decls:
+        sig_of(name)
+    return sigs
+
+
+class _PkgSigGraph(ClassGraph):
+    """A `ClassGraph` that ALSO resolves an in-package class from its AST-derived signature
+    (`_prepass_signatures`) when the disk-backed lookup (Core/Engine/other real packages on the search
+    path — never this in-progress package, which has no compiled bytes of its own to read) doesn't
+    know it. This is the single graph every class in a `compile_package_dir` compile shares, so a
+    class sees the WHOLE package's signatures — own, super, and every sibling, including one that
+    references it back — no matter which order classes are actually lowered in."""
+
+    def __init__(self, package_paths: list[str], pkg_sigs: dict[str, ClassSig]) -> None:
+        super().__init__(package_paths)
+        self._pkg_sigs = pkg_sigs
+
+    def class_sig(self, name: str) -> ClassSig | None:
+        sig = super().class_sig(name)
+        return sig if sig is not None else self._pkg_sigs.get(name.casefold())
+
+
 def compile_package_dir(classes: dict[str, str], env: InstallEnv, *,
                         package_name: str, texture_files: dict[str, bytes] | None = None
                         ) -> CompiledPackage:
     """Compile every `.uc` in a package (`{filename: source}`) into ONE `CompiledPackage` with shared
     tables. `package_name` is the package's own name (UCC takes it from EditPackages / the output
-    filename — it heads every class's PackageImports and enters the name table). Classes are compiled
-    supers-first; a same-package super/ref becomes an EXPORT ref, a cross-package super an import.
-    `texture_files` maps a `#exec TEXTURE IMPORT FILE=` path (as written) to its PCX bytes.
-    `perm_gate(serialize(...), ucc_golden)` is byte-exact modulo the documented exclusions (table
-    order, GUID, FName case)."""
+    filename — it heads every class's PackageImports and enters the name table). A same-package
+    super/sibling reference (including a MUTUAL one between two classes) becomes an EXPORT ref, a
+    cross-package one an import — see `_prepass_signatures`/`_PkgSigGraph` for how cross-class
+    resolution stays independent of build order. `texture_files` maps a `#exec TEXTURE IMPORT FILE=`
+    path (as written) to its PCX bytes. `perm_gate(serialize(...), ucc_golden)` is byte-exact modulo
+    the documented exclusions (table order, GUID, FName case)."""
     from .serialize import serialize as _serialize      # local: avoid a compile<->serialize cycle
 
     decls: dict[str, tuple[ClassDecl, str]] = {}
@@ -2004,6 +2099,8 @@ def compile_package_dir(classes: dict[str, str], env: InstallEnv, *,
         _reject_unsupported(decl)
         decls[decl.name] = (decl, decl.source or src)
     in_pkg_cf = {name.casefold() for name in decls}
+    # `order`: still supers-first (an inheritance requirement) and still the gather-order source
+    # `true_order` needs below — unrelated to cross-class resolution now (pass 1 handles that).
     order = _compile_order(decls, in_pkg_cf)
     extra_pkgs = _extra_super_packages(decls, env, in_pkg_cf)
 
@@ -2012,34 +2109,30 @@ def compile_package_dir(classes: dict[str, str], env: InstallEnv, *,
     catalog = load_catalog(search_dir, packages=base_pkgs)
     base_paths = [os.path.join(search_dir, p) for p in base_pkgs]
 
+    # Pass 1 (signatures): see `_prepass_signatures`. One shared graph for every class in pass 2.
+    pkg_sigs = _prepass_signatures(decls, ClassGraph(base_paths))
+    graph = _PkgSigGraph(base_paths, pkg_sigs)
+
     b = _Build(class_name="", env=env,
                in_pkg_class_names={name.casefold(): name for name in decls})
     units: list[_ClassUnit] = []
-    tmp = tempfile.mkdtemp(prefix="uscpkg-", dir=os.environ.get("TMPDIR"))
-    partial = os.path.join(tmp, "partial.u")
-    try:
-        pkg = None
-        for i, cname in enumerate(order):
-            decl, src = decls[cname]
-            graph = ClassGraph(base_paths + ([partial] if i > 0 else []))
-            unit = _build_class_unit(b, decl, src, env, in_pkg_cf, units, graph, catalog,
-                                     package_name, texture_files or {})
-            units.append(unit)
-            pkg = _finalize_multi(b, units, package_name)
-            if i + 1 < len(order):                        # only needed to seed the next class's graph
-                with open(partial, "wb") as fh:
-                    fh.write(_serialize(pkg))
-        # Re-emit in UCC's real name/import/export order (decode the provisional bytes, run the
-        # dumped-global-index tie-break) — the same autonomous ordering the single-class path uses.
-        # `order` (classes, supers-first = UCC's own compile order) + each class's true top-level
-        # declaration order (from its own AST, not the compiled/binned Children chain) supply the
-        # NAME-table gather order the decoded bytes alone can't recover (see `_top_level_name_order`).
-        from .reorder import true_order
-        top_level_by_class = {cname: _top_level_name_order(decls[cname][0]) for cname in order}
-        names, imports, export_rows = true_order(_serialize(pkg), list(order), top_level_by_class)
-        return _finalize_multi(b, units, package_name, override=(names, imports, export_rows))
-    finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+    # Pass 2 (lowering): each class's bytecode body, in turn. `graph` already sees every class's
+    # signature (pass 1), so a class may reference a sibling compiled EARLIER OR LATER in `order`.
+    for cname in order:
+        decl, src = decls[cname]
+        unit = _build_class_unit(b, decl, src, env, in_pkg_cf, units, graph, catalog,
+                                 package_name, texture_files or {})
+        units.append(unit)
+    pkg = _finalize_multi(b, units, package_name)
+    # Re-emit in UCC's real name/import/export order (decode the provisional bytes, run the
+    # dumped-global-index tie-break) — the same autonomous ordering the single-class path uses.
+    # `order` (classes, supers-first = UCC's own compile order) + each class's true top-level
+    # declaration order (from its own AST, not the compiled/binned Children chain) supply the
+    # NAME-table gather order the decoded bytes alone can't recover (see `_top_level_name_order`).
+    from .reorder import true_order
+    top_level_by_class = {cname: _top_level_name_order(decls[cname][0]) for cname in order}
+    names, imports, export_rows = true_order(_serialize(pkg), list(order), top_level_by_class)
+    return _finalize_multi(b, units, package_name, override=(names, imports, export_rows))
 
 
 def compile_conversation_siblings(classes: dict[str, str], env: InstallEnv, *, package_name: str,
@@ -2205,8 +2298,11 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
     if decl.functions or decl.states:
         _build_callables(b, decl, super_name, crlf_source)
     _build_texture_imports(b, decl, texture_files)
+    # A same-package sibling extra-dep needs no import (own package is already its 1st PackageImports
+    # entry) -- see `_multi_class_export`'s extra_dep().
     for dep_name in b.extra_deps:
-        _add_import(b, dep_name)
+        if dep_name.casefold() not in b.in_pkg_class_names:
+            _add_import(b, dep_name)
 
     class_flags |= b.member_class_flags | (super_class_flags & _CLASS_INHERIT_MASK)
     chain = tuple(_class_chain(b))
@@ -2356,8 +2452,9 @@ def _finalize_multi(b: _Build, units: list[_ClassUnit], package_name: str,
     _multi_function_exports(b, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs)
     _multi_state_exports(b, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs)
     _build_texture_exports(b, name_index, exp_ref, imp_ref, ref, recs)
+    units_by_name = {u.name.casefold(): u for u in units}
     for u in units:
-        recs[u.class_key] = _multi_class_export(b, u, name_index, exp_ref, imp_ref, ref)
+        recs[u.class_key] = _multi_class_export(b, u, name_index, exp_ref, imp_ref, ref, units_by_name)
 
     exports = tuple(recs[k] for k in export_keys)
     return CompiledPackage(version=69, licensee=0, package_flags=1,
@@ -2456,10 +2553,37 @@ def _multi_names(b: _Build, units: list[_ClassUnit], package_name: str) -> list[
     return order
 
 
+def _sibling_export_ref(b: _Build, ident: str, members_by_class: dict[str, dict[str, str]],
+                        funcs_by_class: dict[str, dict[str, str]], exp_ref: dict[str, int]
+                        ) -> int | None:
+    """Resolve a `func:<Owner>.<Name>`/`mem:<Owner>.<Name>` obj identity to a SAME-PACKAGE export when
+    `<Owner>` is one of this package's own classes — a sibling class's member/function, including one
+    referenced MUTUALLY (two classes each calling into the other; see `_prepass_signatures`, the
+    two-pass signature resolution that lets lowering resolve such a call regardless of build order).
+    None when `<Owner>` isn't in-package, so the caller falls back to the import table (an inherited
+    ancestor outside this package)."""
+    if ":" not in ident or "." not in ident:
+        return None
+    kind, rest = ident.split(":", 1)
+    if kind not in ("func", "mem"):
+        return None
+    owner_cls, name = rest.rsplit(".", 1)
+    if owner_cls.casefold() not in b.in_pkg_class_names:
+        return None
+    real_owner = b.in_pkg_class_names[owner_cls.casefold()]
+    class_key = f"{real_owner}::class:{real_owner}"
+    table = funcs_by_class if kind == "func" else members_by_class
+    key = table.get(class_key, {}).get(name.casefold())
+    if key is None:
+        raise NotImplementedError(f"same-package {kind} ref {ident!r}: {real_owner}.{name} not found")
+    return exp_ref[key]
+
+
 def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs) -> None:
     """One UFunction export per function; each script ref resolves within its OWN class (locals, own
-    members, own funcs) then package imports. Cross-class inherited virtual calls are name refs (no
-    object ref), so they need only the name table."""
+    members, own funcs), then a same-package sibling class, then package imports. Cross-class
+    INHERITED virtual calls are name refs (no object ref), so they need only the name table; a virtual
+    call through a sibling's typed object is a name ref too, for the same reason."""
     members_by_class: dict[str, dict[str, str]] = {}
     funcs_by_class: dict[str, dict[str, str]] = {}
     for key, p in b.props.items():
@@ -2488,6 +2612,9 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
                 return exp_ref[own_funcs[cf]]
             if cf in texture_by_name:
                 return exp_ref[texture_by_name[cf]]
+            sib = _sibling_export_ref(b, ident, members_by_class, funcs_by_class, exp_ref)
+            if sib is not None:
+                return sib
             if cf in import_by_name:
                 return imp_ref[import_by_name[cf]]
             raise NotImplementedError(f"cannot resolve script ref {ident!r} in {fn.name!r}")
@@ -2535,6 +2662,9 @@ def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref
                 return exp_ref[own_funcs[cf]]
             if cf in texture_by_name:
                 return exp_ref[texture_by_name[cf]]
+            sib = _sibling_export_ref(b, ident, members_by_class, funcs_by_class, exp_ref)
+            if sib is not None:
+                return sib
             if cf in import_by_name:
                 return imp_ref[import_by_name[cf]]
             raise NotImplementedError(f"cannot resolve script ref {ident!r} in state {st.name!r}")
@@ -2555,15 +2685,21 @@ def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref
                 label_table_offset=label_table_offset, state_flags=0))
 
 
-def _multi_class_export(b: _Build, u: _ClassUnit, name_index, exp_ref, imp_ref, ref) -> Export:
+def _multi_class_export(b: _Build, u: _ClassUnit, name_index, exp_ref, imp_ref, ref,
+                        units_by_name: dict[str, "_ClassUnit"] | None = None) -> Export:
     super_ref = exp_ref[u.super_export_key] if u.super_export_key else imp_ref[u.super_name]
     children = exp_ref[u.chain[0]] if u.chain else 0
     self_dep = Dependency(cls=exp_ref[u.class_key], deep=1, script_text_crc=u.self_crc)
     super_dep = Dependency(cls=super_ref, deep=1, script_text_crc=u.super_crc)
-    extra_deps = tuple(
-        Dependency(cls=imp_ref[_add_import(b, dep)], deep=0,
-                  script_text_crc=b.env.resolve_class(dep).self_crc)
-        for dep in u.extra_deps)
+
+    def extra_dep(dep: str) -> Dependency:
+        sib = (units_by_name or {}).get(dep.casefold())
+        if sib is not None:                               # a same-package sibling -> an EXPORT dep
+            return Dependency(cls=exp_ref[sib.class_key], deep=0, script_text_crc=sib.self_crc)
+        return Dependency(cls=imp_ref[_add_import(b, dep)], deep=0,
+                          script_text_crc=b.env.resolve_class(dep).self_crc)
+
+    extra_deps = tuple(extra_dep(dep) for dep in u.extra_deps)
     return Export(
         cls=0, super_ref=super_ref, outer=0, name=name_index[u.name], flags=u.object_flags,
         body=ClassBody(

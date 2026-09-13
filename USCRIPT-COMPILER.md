@@ -110,6 +110,7 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 | UnrealShare | UED22 | 1 | ✅ | first live proof of the `ProbeMask` fix (`UnrealTestInfo` overrides `Tick` alone) |
 | UscStateForeach | UED22 | 1 | ✅ | controlled: `Trigger`→`GotoState`→`state` (label+`Sleep`+`GotoState('')`) plus a `foreach AllActors` loop — first state-block + foreach proof |
 | UscTexAsym4x4 | UED22 | 1 | ✅ | controlled: `#exec TEXTURE IMPORT` proof (no mip-average tie on any channel, so unaffected by the two open judgment calls below) |
+| pkg_Mutual | UED22 | 2 | perm only | controlled: two SIBLING classes referencing each other MUTUALLY — the two-pass signature-graph proof (see below); residual is the same open name-table qsort-tie class as ExtendedBuilders |
 
 Controlled (non-corpus) fixtures `UscHello`/`UscVars`/`UscBB`/`UscFn`/`UscW`/`UscSt` all pass the
 strict gate autonomously.
@@ -306,10 +307,46 @@ strict gate autonomously.
   (confirmed on `GMIClientWindow.uc`'s `Created()`, which reads both) but still doesn't fully
   compile — a separate, unrelated blocker: its `#exec TEXTURE IMPORT`'s PCX asset isn't in the GitHub
   mirror, see `dev/docs/board/inbox/givemeitems-blocked-by-missing-pcx-texture-asset/`.
-- `assert`/`do..until` lowering, and a two-pass "signature graph" for mutually-referencing
-  same-package classes (blocks `UWeb`) — real, scoped gaps in `lower.py`/`compile.py`. Replication
-  blocks and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented,
-  scoped out for now.
+- **A two-pass "signature graph" for mutually-referencing same-package classes is IMPLEMENTED
+  (2026-09-13)**: two SIBLING classes (no inheritance relation) that reference each other MUTUALLY —
+  A holds a member typed B and calls a B method, B holds a member typed A and calls an A method —
+  compile correctly. `compile_package_dir`'s old single-pass scheme built one class fully (decls +
+  bytecode) before starting the next, resolving a cross-class reference by re-decoding the
+  already-serialized PARTIAL package built so far; a genuine cycle has no valid single order, so
+  either direction failed. Fixed with a real two-pass split in `compile.py`: pass 1
+  (`_prepass_signatures`) walks every class's AST (no bytecode needed — UnrealScript var/param/return
+  types are explicit in source) into a `natives.ClassSig` per class, so every class's signature exists
+  before ANY class's bytecode body is lowered; pass 2 (the existing per-class loop) shares one graph
+  (`_PkgSigGraph`, a `ClassGraph` that falls back to the pass-1 signature when the disk-backed lookup
+  doesn't know an in-package class yet) across every class, so lowering order no longer constrains
+  which cross-class refs resolve. Turned up three further gaps in the SAME area, previously
+  unreachable because no test exercised a same-package non-super class reference at all (only
+  same-package SUPER references, a separate, already-working mechanism): a class-typed member/param/
+  local naming an in-package sibling always treated it as an unresolvable cross-package import
+  (`_resolve_var_type`/`_resolve_array_type`/`_func_prop_type`); a final-function call or field access
+  through such a typed reference did the same (`_register_final_call_imports`/
+  `_register_member_var_imports`/`_multi_function_exports`'s `resolve_inv`, now falling back to a
+  same-package EXPORT ref via the new `_sibling_export_ref` helper); and a same-package
+  cross-class `Dependency` entry (`compile-model.md`'s "Cross-class Dependency entries") crashed
+  outright (`_multi_class_export`'s `extra_deps` always called `env.resolve_class(dep).self_crc`, `None`
+  for an in-package class — fixed to read the sibling's own already-built `self_crc`). All fixed
+  together; each was load-bearing for the controlled fixture below to compile at all.
+
+  **Real `UWeb` sources are NOT available in this environment** — only the compiled `uned/UED22/uweb.u`
+  (a binary) is committed; the `.uc` sources live in the gitignored UT99 substrate (`uscript/
+  fetch_ut99.sh`, ~50MB from archive.org), not fetched this pass (network + disk judged not worth the
+  risk on this host, 95%+ full). Proven instead by a new controlled fixture, `pkg_Mutual`
+  (`uedcli/tests/test_uscript_package.py::test_mutual_same_package_classes`) — matching this
+  campaign's controlled-vs-real distinction (a controlled fixture proves the mechanism; only a real
+  corpus package counts toward the "30 packages" goal). `perm_gate` byte-exact against a fresh live
+  UED22 UCC build (`docker`-gated, `test_goldens_match_ucc`); the strict gate's one residual is a
+  same-package name-table qsort-TIE permutation among equal-refcount names — the SAME open,
+  unresolved class of issue `ExtendedBuilders` already hits (confirmed, not guessed: two
+  independently-named variants of the fixture both hit a front-of-table tie between unrelated name
+  pairs, never a wrong value). Fetching UT99 and trying real `UWeb` is separate future work.
+- `assert`/`do..until` lowering — a real, scoped gap in `lower.py`/`compile.py`. Replication blocks
+  and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented, scoped out
+  for now.
 - **`#exec TEXTURE IMPORT`** (RE'd + wired in 2026-09-13, `dev/docs/board/done/
   uscript-texture-import-compiler-integration/`): a controlled single-class fixture with no
   mip-average tie (`UscTexAsym4x4`) passes the STRICT gate byte-exact. Two open judgment calls,
