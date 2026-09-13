@@ -427,12 +427,15 @@ divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), no
   Pass-B portal FRAGMENT list filtered by the zone-barrier set and skipped every pair touching zone
   0, leaving zones 0 and 1 mutually unconnected. Byte-exact **N=1..202** (was 93); bails at **N=203**
   on the world `Model2`'s `points` array — a genuine 2-ULP value pair (`x` off by
-  `2·2^-15`), not an index/order shift (full multiset diff confirms). Neither the raw brush
-  transform nor a single-hop `line_plane_intersection` against the obvious candidate plane
-  reproduces either side's stored value, and live crossing-vertex instrumentation found no
-  `split_with_plane` crossing that emits the divergent bits directly — likely the same point-pooling
-  bug CLASS as the fixed N=13/WanChai-N40 `MergeNearPoints` issue, but not the same cause; not
-  closed. `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`.
+  `2·2^-15`), not an index/order shift (full multiset diff confirms). 2026-09-13 hex-precision
+  recheck (`dev/docs/spikes/2026-09-13-oceanlab-n203-pbase-provenance/`) pins the provenance exactly:
+  the divergent value is `Brush483` poly 2's own transformed `Origin` (a `bsp_add_point(base)` call,
+  never a `split_with_plane` crossing — confirmed bit-exact under every f32 operand grouping, and
+  every nearby crossing independently confirmed to already match UED22), and native's faithful FNV
+  descent (not the repartition stopgap) MISSES an existing pool point only `6.1e-5` away, well inside
+  its `0.002` threshold. Narrowed to a genuine `bspAddPoint`/`FindNearestVertex` HIT-vs-MISS
+  divergence needing the same live-editor gdb capture that closed Island N=332/UNATCO N=226/WanChai
+  N=58 — not attempted yet; not closed. `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`.
 - **Standing stopgaps, all levels**:
   `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/` — repartition dedups points
   with a linear pool scan; the editor descends and appends on a miss (`AddThing(..., !FastRebuild)`

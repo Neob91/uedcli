@@ -89,3 +89,26 @@ an unconfirmed fix (`NATIVE-MATERIALIZE.md` prime directive: no masking, no gues
 
 No exclusion proposed — this is flagged as a reproducible algorithm difference per
 `NATIVE-MATERIALIZE.md`'s prime directive, not a candidate for the closed exclusion set.
+
+## 2026-09-13 update — provenance pinned, still not fixed
+
+Re-checked with HEX bit patterns (the `2026-09-13-crossing-vertex-live-capture/` method) against the
+current binary (post portal-graph-freeze fix); divergence unchanged. New findings, full detail in
+`dev/docs/spikes/2026-09-13-oceanlab-n203-pbase-provenance/spike.md`:
+
+- The divergent value is `Brush483` polygon 2's own transformed `Origin` (a `bsp_add_point(base)`
+  call, never a `split_with_plane` crossing) — traced exactly via `bspcsg.rs`'s existing
+  `UEDCLI_BSPCSG_POINT_TRACE`. Verified in f32 arithmetic that this transform's result is the SAME
+  bit pattern under every operand grouping, ruling out a rounding-order explanation.
+- A NEW committed diagnostic, `UEDCLI_LPI_TRACE_NEAR` (hex-precision trace on
+  `fpoly.rs::line_plane_intersection`), confirms every crossing near x=-256 this brush's own clip
+  produces lands on UED22's value (`0xc3800002`), not native's (`0xc3800004`) — ruling out a crossing
+  formula difference too.
+- `bsp_add_point_tol`'s FAITHFUL FNV descent (not the `bsp_build` repartition stopgap — this fires
+  inside `bsp_brush_csg`) MISSES an existing pool point only `6.1e-5` away (well inside the `0.002`
+  threshold) at the moment of this add; the miss target isn't currently wired to any reachable node.
+
+Narrowed to a genuine `bspAddPoint`/`FindNearestVertex` HIT-vs-MISS divergence needing a live-editor
+gdb capture to settle (same method as N=8/N=19 and the Island N=332 tie) — exact breakpoint condition
+value and next steps are in the spike. Not attempted this session (scope/risk tradeoff, see spike's
+final section); no fix, no mask.

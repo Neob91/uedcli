@@ -71,7 +71,28 @@ pub fn safe_normal(v: &Vec3) -> Option<Vec3> {
 fn line_plane_intersection(p1: &Vec3, p2: &Vec3, base: &Vec3, normal: &Vec3) -> Vec3 {
     let dir = p2.sub(p1);
     let t = base.sub(p1).dot(normal) / dir.dot(normal);
-    Vec3::new(p1.x + dir.x * t, p1.y + dir.y * t, p1.z + dir.z * t)
+    let out = Vec3::new(p1.x + dir.x * t, p1.y + dir.y * t, p1.z + dir.z * t);
+    // Hex-precision crossing trace (board `oceanlab-n-203-world-model2-split-vertex-ulp`): dumps
+    // every crossing whose output x lands near a target, in raw bit patterns — the class of check
+    // that decimal printing can hide a sub-ULP divergence in (2026-09-13 finding). Default path is
+    // byte-unchanged; gated by UEDCLI_LPI_TRACE_NEAR="x[,eps]" (eps default 0.01).
+    if let Ok(spec) = std::env::var("UEDCLI_LPI_TRACE_NEAR") {
+        let mut it = spec.split(',');
+        let tx: f32 = it.next().unwrap_or("0").parse().unwrap_or(0.0);
+        let eps: f32 = it.next().and_then(|s| s.parse().ok()).unwrap_or(0.01);
+        if (out.x - tx).abs() < eps {
+            eprintln!(
+                "LPI p1=({:#010x},{:#010x},{:#010x}) p2=({:#010x},{:#010x},{:#010x}) base=({:#010x},{:#010x},{:#010x}) normal=({:#010x},{:#010x},{:#010x}) -> out=({:#010x},{:#010x},{:#010x}) [{:.9},{:.9},{:.9}]",
+                p1.x.to_bits(), p1.y.to_bits(), p1.z.to_bits(),
+                p2.x.to_bits(), p2.y.to_bits(), p2.z.to_bits(),
+                base.x.to_bits(), base.y.to_bits(), base.z.to_bits(),
+                normal.x.to_bits(), normal.y.to_bits(), normal.z.to_bits(),
+                out.x.to_bits(), out.y.to_bits(), out.z.to_bits(),
+                out.x, out.y, out.z
+            );
+        }
+    }
+    out
 }
 
 #[derive(Debug, Clone, PartialEq)]
