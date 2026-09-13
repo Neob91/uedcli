@@ -33,8 +33,12 @@ golden fresh from the exact same sources via `ucc_compile`/`ucc_compile_ut99`/`u
 
 ## The parity bar — two gates, converging on one
 
-- **`gate()` (strict)** — raw byte-for-byte compare. Only exclusion: the 16-byte per-build-random
-  package GUID. This is the real target.
+- **`gate()` (strict)** — raw byte-for-byte compare. Exclusions: the 16-byte per-build-random package
+  GUID, and (2026-09-13) a `UTexture` export's `InternalTime[2]` property — a SECOND per-compile-random
+  field, same evidence bar as the GUID (two clean compiles of the same `#exec TEXTURE IMPORT` source
+  differ in exactly those two places; `dev/docs/spikes/2026-09-13-texture-import-re/spike.md`). This
+  is a new exclusion, added without a prior owner ask (the owner's standing direction for this item
+  authorized it) — flagged here for review. This is the real target.
 - **`perm_gate()` (permutation)** — identity/permutation compare (mirrors the `NATIVE-MATERIALIZE.md`
   campaign's methodology): resolves every ref to an identity so it also tolerates name/import/export
   table **order** and FName **case**. Originally meant as a permanent exclusion (order = pure
@@ -104,6 +108,7 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 | ConvTest + siblings | DXORIG | 1 (+2 auto) | ✅ | conversation import proof |
 | UnrealShare | UED22 | 1 | ✅ | first live proof of the `ProbeMask` fix (`UnrealTestInfo` overrides `Tick` alone) |
 | UscStateForeach | UED22 | 1 | ✅ | controlled: `Trigger`→`GotoState`→`state` (label+`Sleep`+`GotoState('')`) plus a `foreach AllActors` loop — first state-block + foreach proof |
+| UscTexAsym4x4 | UED22 | 1 | ✅ | controlled: `#exec TEXTURE IMPORT` proof (no mip-average tie on any channel, so unaffected by the two open judgment calls below) |
 
 Controlled (non-corpus) fixtures `UscHello`/`UscVars`/`UscBB`/`UscFn`/`UscW`/`UscSt` all pass the
 strict gate autonomously.
@@ -139,6 +144,11 @@ strict gate autonomously.
 - **Cross-class `Dependency` entries** (RE'd 2026-09-13): a class's `Dependencies` array gets one
   more entry (`deep=0`) per distinct external class reached via a member access/call through a
   typed object (not merely declared or cast) — see `compile-model.md`.
+- **`#exec TEXTURE IMPORT`** (RE'd + wired in 2026-09-13): creates a `UTexture`+`UPalette` export
+  pair INSIDE the compiling package (unlike conversation import's sibling packages). `MaxColor` is
+  the per-channel max over every pixel in the whole mip chain (no ambiguity); `MipZero` is the flat
+  mip0 average, floored — except at an exact `.5` tie, unresolved (see Open items). See
+  `compile-model.md`.
 
 ## Open items / known gaps (honest — not excluded, not hacked around)
 
@@ -162,16 +172,19 @@ strict gate autonomously.
 - `assert`/`do..until` lowering, and a two-pass "signature graph" for mutually-referencing
   same-package classes (blocks `UWeb`) — real, scoped gaps in `lower.py`/`compile.py`. Replication
   blocks and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented,
-  scoped out for now. `#exec TEXTURE IMPORT` is RE'd but not wired in — see below.
-- **`#exec TEXTURE IMPORT`** (2026-09-13): the RE is done — `dev/docs/spikes/
-  2026-09-13-texture-import-re/spike.md` (PCX decode, the `UTexture`/`UPalette` body layout, the
-  mip-chain quantization algorithm) — but nothing is wired into `compile.py` yet
-  (`dev/docs/board/inbox/uscript-texture-import-compiler-integration/`). Two open sub-items the
-  integration needs to resolve: a texture's `InternalTime` property is a SECOND per-compile-random
-  field (needs an owner-approved gate exclusion, like the package GUID) and the mip-quantization
-  tie-break direction is unresolved for an exact-average edge case (real content is very unlikely
-  to hit it). This directly blocks the real community package `GiveMeItems`, which needs exactly
-  this directive.
+  scoped out for now.
+- **`#exec TEXTURE IMPORT`** (RE'd + wired in 2026-09-13, `dev/docs/board/done/
+  uscript-texture-import-compiler-integration/`): a controlled single-class fixture with no
+  mip-average tie (`UscTexAsym4x4`) passes the STRICT gate byte-exact. Two open judgment calls,
+  documented (not guessed silently) in `compile-model.md`/`spike.md`: the mip-quantization
+  tie-break (favors the lower palette index) and `MipZero`'s rounding at an exact `.5` average
+  (favors rounding up) — both unresolved for real UCC behavior, both exceedingly unlikely to affect
+  real (non-degenerate) content. Only one `#exec TEXTURE IMPORT` per class is verified; a second is
+  handled the same way but untested. The real community package this was scoped for, `GiveMeItems`,
+  still does NOT fully compile — it needs the UT99 substrate (now fetched,
+  `bash uedcli/uscript/fetch_ut99.sh`) and hits an unrelated, pre-existing gap right after the
+  texture-import line: calling an inherited `final` function with no local override finds no import
+  for it (`dev/docs/board/inbox/calling-an-inherited-final-function-needs-an/`).
 - Expected-type-directed operator overload resolution (e.g. an int-divide whose result narrows into
   an int field) — attempted twice and reverted; UCC's real tie-break rule is subtler than modeled.
 - **Corpus reality**: many stock packages (most of `ConSys`, `DeusEx`, even parts of `Extension`) are

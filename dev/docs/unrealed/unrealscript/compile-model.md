@@ -194,29 +194,53 @@ opcode carries an explicit "jump back" operand). Implemented in `lower.py`'s `_s
 iterator`; verified byte-exact against a fresh UCC build of `AllActors(class'Inventory', Inv) {
 Inv.Destroy(); }`.
 
-## `#exec TEXTURE IMPORT` (partial RE, 2026-09-13, live UED22 compiles)
+## `#exec TEXTURE IMPORT` (RE'd 2026-09-13, live UED22 compiles; wired into `compile.py`)
 
 `#exec TEXTURE IMPORT NAME=X FILE=Textures\X.PCX LODSET=0` creates a `UTexture` export named `X`
 **inside the compiling package** (unlike `#exec CONVERSATION IMPORT`, which emits sibling packages)
-plus an auto-created `UPalette` export, `Palette1` for the first (only measured) import in a class.
+plus an auto-created `UPalette` export, `Palette1` for the first import in a class (`Palette2`, … for
+a second — an UNVERIFIED generalisation, only one import per class has been measured against live
+UCC). Both are top-level package objects (Outer=0), not class members. Implemented in
+`uscript/texture_import.py` (PCX decode + mip chain + directive parsing) and wired into
+`compile.py`'s `_Build`/`_orders`/`_build_exports` the same way `conimport.py` wires in conversation
+import, via `_TexDef`.
+
 `UPalette`'s body: an empty tagged-property list, then a `TArray<FColor>` (compact-index count 256,
 then 256 × `(R, G, B, 0xFF)` — alpha always `0xFF`), copying the PCX's palette verbatim. `UTexture`'s
-tagged properties: `LODSet` (BYTE), `Palette` (OBJECT ref), `UBits`/`VBits` (BYTE, log2 of
-width/height), `USize`/`VSize`/`UClamp`/`VClamp` (INT), `MipZero`/`MaxColor` (STRUCT `Color`, 4
-bytes — see the spike for their imprecisely-pinned rounding), `InternalTime` (INT) — **the second
-known per-compile-random field, alongside the package GUID; not yet an approved gate exclusion** —
-then `Mips`, a full chain down to 1x1 regardless of any import option, in the format
-`uedcli/utexture.py` already decodes.
+tagged properties, in this fixed order: `LODSet` (BYTE), `Palette` (OBJECT ref), `UBits`/`VBits`
+(BYTE, log2 of width/height), `USize`/`VSize`/`UClamp`/`VClamp` (INT, `UClamp`=`USize`,
+`VClamp`=`VSize`), `MipZero` (STRUCT `Color`, omitted if it equals its class default `(0,0,0,0)`),
+`MaxColor` (STRUCT `Color`, omitted if it equals its class default `(255,255,255,255)` — matches the
+usual UE1 "omit a property equal to the CDO" rule), `InternalTime` (INT, a 2-element static array —
+**a SECOND known per-compile-random field, alongside the package GUID; `gate.py` now excludes it**,
+same evidence bar as the GUID) — then `Mips`, a full chain down to 1x1 regardless of any import
+option, in the format `uedcli/utexture.py` already decodes. `serialize.py`'s `TextureBody` is the one
+export body kind requiring a two-pass write: each `FMipmap`'s leading skip-offset is an ABSOLUTE FILE
+position only known once the whole package is laid out, so `serialize()` writes a placeholder then
+patches it after `build_package` fixes this export's `soff` (re-parsing the just-built bytes).
 
 Mip levels beyond 0 are NOT a re-quantization of the previous level; each is the recursive
 box-average of the TRUE palette-resolved RGB from the ORIGINAL pixels, then requantized by
 searching the WHOLE 256-entry palette for the luma-weighted (79, 158, 19 — sums to 256, a `>>8`
 fixed-point scale; no standard named luma constant fits) nearest match. Confirmed against 4
-independent live-UCC probes with zero exceptions outside an unresolved exact-tie edge case. Full
-derivation, rejected theories, and the open tie-break gap: `dev/docs/spikes/
-2026-09-13-texture-import-re/spike.md`; a ready-to-use implementation of the formula:
-`dev/docs/spikes/2026-09-13-texture-import-re/harness/mip_formula.py`. Not yet wired into
-`compile.py` — `dev/docs/board/inbox/uscript-texture-import-compiler-integration/`.
+independent live-UCC probes with zero exceptions outside an unresolved exact-tie edge case (a
+JUDGMENT CALL, not a confirmed rule: ties favor the LOWER palette index, matching 2 of 3 measured
+live-UCC ties). Full derivation, rejected theories, and the open tie-break gap: `dev/docs/spikes/
+2026-09-13-texture-import-re/spike.md`.
+
+`MipZero`/`MaxColor` (RE'd 2026-09-13, NOT covered by the original spike — measured against the same
+6 live-UCC goldens): `MaxColor` is the per-channel INDEPENDENT maximum over every pixel in the WHOLE
+mip chain (every level, resolved through the palette) — no ambiguity, confirmed exactly on all 6
+probes. `MipZero` is the flat TRUE average of every mip0 pixel's resolved RGB, rounded per channel;
+the general (non-tie) rule is unambiguously FLOOR (`Asym4x4`'s `.8125` truncates to `39`, not a
+boundary case at all), but an exact `.5` average is a SEPARATE, genuinely unresolved tie: of 5
+measured `.5` cases, 2 floor and 3 ceil, and no rule found explains all 5. `texture_import.py`
+JUDGMENT CALL: round a `.5` tie UP (the direction the majority of that partial evidence leans) — not
+a confirmed formula. Real (non-degenerate) content is exceedingly unlikely to hit either tie.
+
+Not yet attempted/verified: more than one `#exec TEXTURE IMPORT` in one class, and any texture whose
+dimensions are not both powers of two (`import_texture` raises `NotImplementedError` for the latter
+rather than guess).
 
 ## Cross-class `Dependency` entries (RE'd 2026-09-13, live UED22 compiles)
 

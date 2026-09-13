@@ -34,11 +34,13 @@ from .env import InstallEnv
 from .lower import (EX_LABEL_TABLE, LowerError, Scope, build_scope, consts_of, enum_type_names,
                     enums_of, local_funcs_of, lower_function, lower_state_body, members_of, _mem_size)
 from .model import (ClassBody, CompiledPackage, ConstBody, Dependency, EnumBody, Export, FunctionBody,
-                    Import, Name, PropertyBody, StateBody, StructBody, TextBufferBody)
+                    Import, Name, ObjectBody, PropertyBody, StateBody, StructBody, TextBufferBody,
+                    TextureBody, TextureMip)
 from .global_index import default_global_index, engine_name_pool, highlight_name_pool, pool_case
 from .natives import ClassGraph, load_catalog, load_graph, prop_type_label
 from .ordering import ObjInput, order_package
 from .parser import parse
+from . import texture_import
 from ..upackage import read_compact_index as _rci
 from ..uprops.base import PROPERTY_TYPES
 from ..uprops.ufield import _decode_property, _field_next
@@ -48,6 +50,11 @@ _RF_TEXTBUFFER = 0x00340000
 _RF_FIELD = 0x00070004               # UProperty / Enum / Struct / struct-member / array-inner
 _RF_CONST = 0x00070000               # UConst (no low 0x4 bit)
 _RF_CLASS = 0x000F0004
+# `#exec TEXTURE IMPORT` objects (RE'd 2026-09-13 against a live UED22 golden, spike.md): the
+# UPalette export is a plain object (matches `conimport._RF_OBJECT`); the UTexture export carries
+# RF_Standalone (matches `conimport._RF_STANDALONE`) — both top-level package objects, Outer=0.
+_RF_PALETTE_OBJ = 0x00070004
+_RF_TEXTURE_OBJ = 0x000F0004
 
 _NAME_BASE = 0x00070010
 _RF_NATIVE = 0x04000000              # engine boot global name pool (engine_name_pool)
@@ -248,6 +255,18 @@ class _State:
     script_size: int                 # in-memory ScriptSize (sum of _mem_size over all of `toks`)
 
 
+@dataclass(frozen=True, kw_only=True)
+class _TexDef:
+    """One `#exec TEXTURE IMPORT` — a `UTexture` export plus its auto-created `UPalette` sibling
+    export (both top-level package objects, Outer=0; see `texture_import.py` / `compile-model.md`)."""
+    key: str                          # the UTexture export key
+    name: str                         # its object name (directive NAME=)
+    palette_key: str                  # the UPalette export key
+    palette_name: str                 # "Palette1", "Palette2", ... (numbered within this class)
+    lodset: int
+    result: texture_import.TextureImportResult
+
+
 @dataclass(kw_only=True)
 class _Build:
     """Accumulator threaded through field construction. For a single class `prefix` is "" and object
@@ -263,6 +282,7 @@ class _Build:
     structs: dict[str, _StructDef] = field(default_factory=dict)
     funcs: dict[str, _Func] = field(default_factory=dict)
     states: dict[str, _State] = field(default_factory=dict)
+    textures: dict[str, _TexDef] = field(default_factory=dict)
     chain_fields: list[tuple[str, bool]] = field(default_factory=list)  # (key, is_var) in decl order
     default_props: list[Prop] = field(default_factory=list)
     member_class_flags: int = 0      # ClassFlags contributed by member vars (config/localized)
@@ -309,29 +329,30 @@ def _top_level_name_order(decl: ClassDecl) -> list[str]:
 
 
 def compile_package(src: str, env: InstallEnv, *,
-                    order_override: tuple[list[str], list[str], list[str]] | None = None
-                    ) -> CompiledPackage:
+                    order_override: tuple[list[str], list[str], list[str]] | None = None,
+                    texture_files: dict[str, bytes] | None = None) -> CompiledPackage:
     """Compile UnrealScript `src` to a linked `CompiledPackage`, byte-exact vs UCC. `env` resolves the
-    super's home package + CRC. Ordering is autonomous: a provisional compile is decoded and re-emitted
-    in UCC's real name/import/export order (`reorder.true_order` — the runtime-dumped global index +
-    faithful qsort), with the class's own true top-level declaration order (`_top_level_name_order`,
-    from the parsed AST) supplying the NAME-table gather order the compiled bytes alone can't recover.
-    `order_override=(names, imports, export_rows)` forces a specific order (used by tests to pin
-    bodies against a golden); otherwise it is derived."""
+    super's home package + CRC. `texture_files` maps a `#exec TEXTURE IMPORT FILE=` path (as written,
+    case/slash-insensitive) to its PCX bytes. Ordering is autonomous: a provisional compile is decoded
+    and re-emitted in UCC's real name/import/export order (`reorder.true_order` — the runtime-dumped
+    global index + faithful qsort), with the class's own true top-level declaration order
+    (`_top_level_name_order`, from the parsed AST) supplying the NAME-table gather order the compiled
+    bytes alone can't recover. `order_override=(names, imports, export_rows)` forces a specific order
+    (used by tests to pin bodies against a golden); otherwise it is derived."""
     if order_override is None:
         from .reorder import true_order
         from .serialize import serialize as _serialize
         decl = parse(src)
-        provisional = _compile_single(src, env, None)
+        provisional = _compile_single(src, env, None, texture_files)
         ordered = true_order(_serialize(provisional), [decl.name],
                              {decl.name: _top_level_name_order(decl)})
-        return _compile_single(src, env, ordered)
-    return _compile_single(src, env, order_override)
+        return _compile_single(src, env, ordered, texture_files)
+    return _compile_single(src, env, order_override, texture_files)
 
 
 def _compile_single(src: str, env: InstallEnv,
-                    order_override: tuple[list[str], list[str], list[str]] | None
-                    ) -> CompiledPackage:
+                    order_override: tuple[list[str], list[str], list[str]] | None,
+                    texture_files: dict[str, bytes] | None = None) -> CompiledPackage:
     decl = parse(src)
     _reject_unsupported(decl)
     class_name = decl.name
@@ -355,10 +376,11 @@ def _compile_single(src: str, env: InstallEnv,
     _build_members(b, decl)
     if decl.functions or decl.states:
         _build_callables(b, decl, super_name, crlf_source)
+    _build_texture_imports(b, decl, texture_files or {})
     for dep_name in b.extra_deps:
         _add_import(b, dep_name)
 
-    has_new_kind = bool(b.enums or b.consts or b.structs or b.funcs) or any(
+    has_new_kind = bool(b.enums or b.consts or b.structs or b.funcs or b.textures) or any(
         not (p.in_class_chain and p.prop_class in {k.prop_class for k in _SCALAR_KINDS.values()}
              and p.array_dim == 1) for p in b.props.values())
 
@@ -415,12 +437,20 @@ def conversation_import_files(decl: ClassDecl) -> list[str]:
     return out
 
 
+def texture_import_directives(decl: ClassDecl) -> list[texture_import.TextureImportDirective]:
+    """The `#exec TEXTURE IMPORT` directives a class carries, in order. Unlike `#exec CONVERSATION
+    IMPORT`, these create `UTexture`/`UPalette` exports INSIDE the compiling package."""
+    return [d for directive in decl.exec_directives
+           for d in [texture_import.parse_texture_import(directive)] if d is not None]
+
+
 def _reject_unsupported(decl: ClassDecl) -> None:
     if decl.super_name is None:
         raise NotImplementedError(f"base class {decl.name!r} has no super — later rung")
-    # `#exec CONVERSATION IMPORT` is supported (it emits sibling packages, `conimport.py`, and adds
-    # nothing to this package); any OTHER `#exec` is not.
-    other_exec = [d for d in decl.exec_directives if _CONV_IMPORT_RE.match(d) is None]
+    # `#exec CONVERSATION IMPORT` (sibling packages, `conimport.py`) and `#exec TEXTURE IMPORT`
+    # (in-package `UTexture`/`UPalette`, `texture_import.py`) are supported; any OTHER `#exec` is not.
+    other_exec = [d for d in decl.exec_directives
+                 if _CONV_IMPORT_RE.match(d) is None and texture_import.parse_texture_import(d) is None]
     # States are supported in the single-class path (see `_build_callables`/`_build_one_state`); a
     # state's own unsupported shapes (extends/ignores/nested function overrides) raise inside
     # `lower_state_body` instead.
@@ -429,6 +459,30 @@ def _reject_unsupported(decl: ClassDecl) -> None:
                              ("cpptext", decl.cpptext)):
         if present:
             raise NotImplementedError(f"{feature} not supported yet (class {decl.name!r})")
+
+
+def _build_texture_imports(b: _Build, decl: ClassDecl, texture_files: dict[str, bytes]) -> None:
+    """Build a `_TexDef` (decoded PCX + mip chain) for each `#exec TEXTURE IMPORT` in `decl`. Only ONE
+    per class is RE-verified (spike.md: "Palette1, for the first (only measured) import in a class") —
+    a second is handled the same way (numbered `Palette2`, ...) but is an untested generalisation."""
+    directives = texture_import_directives(decl)
+    if not directives:
+        return
+    by_cf = {name.replace("\\", "/").casefold(): data for name, data in texture_files.items()}
+    for d in directives:
+        pcx_bytes = by_cf.get(d.file.replace("\\", "/").casefold())
+        if pcx_bytes is None:
+            raise NotImplementedError(
+                f"#exec TEXTURE IMPORT: PCX file not found: {d.file!r} "
+                f"(have {sorted(texture_files)}) (class {decl.name!r})")
+        result = texture_import.import_texture(pcx_bytes, lodset=d.lodset)
+        _add_import(b, "Texture")
+        _add_import(b, "Palette")
+        n = len(b.textures) + 1
+        tex_key = b.okey(f"tex:{d.name}")
+        b.textures[tex_key] = _TexDef(
+            key=tex_key, name=d.name, palette_key=b.okey(f"palette:{d.name}"),
+            palette_name=f"Palette{n}", lodset=d.lodset, result=result)
 
 
 # ── class header ────────────────────────────────────────────────────────────────────────────────
@@ -1312,6 +1366,7 @@ def _general_orders(b: _Build, class_name: str, super_name: str, config_name: st
     and builds the name table deterministically. The result loads and is self-consistent."""
     ident = _export_identity_map(b, class_name)
     class_key = f"class:{class_name}"
+    palette_keys = {t.palette_key for t in b.textures.values()}
 
     def class_of(key: str) -> str | None:
         if key == class_key:
@@ -1326,6 +1381,10 @@ def _general_orders(b: _Build, class_name: str, super_name: str, config_name: st
             return "Const"
         if key in b.structs:
             return "Struct"
+        if key in b.textures:
+            return "Texture"
+        if key in palette_keys:
+            return "Palette"
         return "Function"
 
     objs: list[ObjInput] = []
@@ -1361,13 +1420,18 @@ def _export_identity_map(b: _Build, class_name: str) -> dict[str, tuple[str, str
         out[key] = (f.name, class_name)
     for key, s in b.states.items():
         out[key] = (s.name, class_name)
+    for t in b.textures.values():
+        out[t.key] = (t.name, None)                       # Outer=0: a top-level package object
+        out[t.palette_key] = (t.palette_name, None)
     return out
 
 
 def _creation_order(b: _Build, class_name: str) -> list[str]:
     """A deterministic parse-order key list covering every export exactly once: class, ScriptText,
     then each class-Children field in declaration order — a function/struct immediately followed by
-    its child properties — then any array-inner property left over."""
+    its child properties — then any array-inner property left over, then any `#exec TEXTURE IMPORT`
+    (its Palette then its Texture — processed after the whole class body, like `#exec CONVERSATION
+    IMPORT`'s own late defaultproperties-style registration)."""
     order = [f"class:{class_name}", "ScriptText"]
     seen = set(order)
 
@@ -1386,6 +1450,9 @@ def _creation_order(b: _Build, class_name: str) -> list[str]:
                 add(mk)
     for key in b.props:                                  # array inners (not in chain_fields)
         add(key)
+    for t in b.textures.values():
+        add(t.palette_key)
+        add(t.key)
     return order
 
 
@@ -1414,9 +1481,28 @@ def _obj_streams(b: _Build, class_name: str, super_name: str, config_name: str, 
         s = b.states[key]
         nrefs, orefs = _token_refs(s.toks)
         return (s.name, *nrefs), orefs
+    for t in b.textures.values():
+        if key == t.palette_key:                          # empty tag list + a raw TArray<FColor>
+            return (), ()
+        if key == t.key:
+            return tuple(_texture_prop_names(t)), (t.palette_key,)
     f = b.funcs[key]
     nrefs, orefs = _token_refs(f.toks)
     return (f.name, *nrefs), orefs
+
+
+def _texture_prop_names(t: _TexDef) -> list[str]:
+    """Every NAME the UTexture body's tagged-property list references, in body-write order (each
+    STRUCT tag also references its struct type name "Color") — feeds both `order_package`'s
+    reference-count gather (`_obj_streams`) and name-table membership (`_general_names`)."""
+    names = ["LODSet", "Palette", "UBits", "VBits", "USize", "VSize", "UClamp", "VClamp"]
+    r = t.result
+    if r.mip_zero != (0, 0, 0):
+        names += ["MipZero", "Color"]
+    if r.max_color != texture_import.MAX_COLOR_DEFAULT:
+        names += ["MaxColor", "Color"]
+    names.append("InternalTime")
+    return names
 
 
 def _token_refs(toks) -> tuple[tuple[str, ...], tuple[str, ...]]:
@@ -1483,6 +1569,11 @@ def _general_names(b: _Build, class_name: str, super_name: str, config_name: str
         add(s.name)
         for ident in _token_refs(s.toks)[0]:
             add(ident)
+    for t in b.textures.values():
+        add(t.name)
+        add(t.palette_name)
+        for ident in _texture_prop_names(t):
+            add(ident)
     for extra in default_names:
         add(extra)
     return order
@@ -1538,6 +1629,9 @@ def _export_refs(b: _Build, class_name: str, export_rows: list[tuple[str, str | 
         add(f.name, class_name, f.key)
     for s in b.states.values():
         add(s.name, class_name, s.key)
+    for t in b.textures.values():
+        add(t.name, None, t.key)
+        add(t.palette_name, None, t.palette_key)
 
     refs: dict[str, int] = {}
     for i, (name, path) in enumerate(export_rows):
@@ -1643,10 +1737,43 @@ def _build_exports(b, class_name, super_name, super_crc, crlf_source, class_flag
                            body=StructBody(super_field=0, next_field=chain_next.get(key, 0),
                                            children=children, friendly_name=name_index[s.name]))
 
+    _build_texture_exports(b, name_index, exp_ref, imp_ref, ref, recs)
     recs[class_key] = _class_export(b, class_name, super_name, super_crc, crlf_source, class_flags,
                                     config_name, within_key, chain, name_index, exp_ref, imp_ref, ref,
                                     probe_mask)
     return tuple(recs[key] for key, _ in sorted(exp_ref.items(), key=lambda kv: kv[1]))
+
+
+def _build_texture_exports(b: _Build, name_index, exp_ref, imp_ref, ref, recs: dict[str, Export]
+                           ) -> None:
+    """Emit the `UPalette` + `UTexture` export pair for each `#exec TEXTURE IMPORT` (`_TexDef`), per
+    the body layout `texture_import.py`/`compile-model.md` document."""
+    for t in b.textures.values():
+        r = t.result
+        recs[t.palette_key] = Export(
+            cls=imp_ref["Palette"], super_ref=0, outer=0, name=name_index[t.palette_name],
+            flags=_RF_PALETTE_OBJ,
+            body=ObjectBody(props=write_props(lambda s: name_index[s], []),
+                            trailer=texture_import.palette_trailer_bytes(r.palette)))
+        props: list[Prop] = [
+            Prop("LODSet", PT_BYTE, t.lodset),
+            Prop("Palette", PT_OBJECT, _RefSpec(key=t.palette_key, is_export=True)),
+            Prop("UBits", PT_BYTE, r.ubits), Prop("VBits", PT_BYTE, r.vbits),
+            Prop("USize", PT_INT, r.usize), Prop("VSize", PT_INT, r.vsize),
+            Prop("UClamp", PT_INT, r.usize), Prop("VClamp", PT_INT, r.vsize),
+        ]
+        if r.mip_zero != (0, 0, 0):
+            props.append(Prop("MipZero", PT_STRUCT, bytes((*r.mip_zero, 0)), struct_name="Color"))
+        if r.max_color != texture_import.MAX_COLOR_DEFAULT:
+            props.append(Prop("MaxColor", PT_STRUCT, bytes((*r.max_color, 255)), struct_name="Color"))
+        # InternalTime[2]: per-compile-random (excluded from the strict gate, `gate.py`) — values are
+        # placeholders, only the tag SHAPE (a 2-element int static array) needs to be right.
+        props.append(Prop("InternalTime", PT_INT, 0))
+        props.append(Prop("InternalTime", PT_INT, 0, array_index=1))
+        props_bytes = write_props(lambda s: name_index[s], _resolve_default_refs(props, ref))
+        mips = tuple(TextureMip(width=m.width, height=m.height, data=m.indices) for m in r.mips)
+        recs[t.key] = Export(cls=imp_ref["Texture"], super_ref=0, outer=0, name=name_index[t.name],
+                             flags=_RF_TEXTURE_OBJ, body=TextureBody(props=props_bytes, mips=mips))
 
 
 def _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs) -> None:
@@ -1657,6 +1784,7 @@ def _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, i
                       if p.in_class_chain and p.is_var}
     func_by_name = {f.name.casefold(): f.key for f in b.funcs.values()}
     import_by_name = {k.casefold(): k for k in b.imports}
+    texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
 
     def resolver(fn):
         def resolve_inv(kind: str, ident: str) -> int:
@@ -1669,6 +1797,8 @@ def _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, i
                 return exp_ref[member_by_name[cf]]
             if cf in func_by_name:
                 return exp_ref[func_by_name[cf]]
+            if cf in texture_by_name:                     # a same-package `Texture'Pkg.Name'` literal
+                return exp_ref[texture_by_name[cf]]
             if cf in import_by_name:
                 return imp_ref[import_by_name[cf]]
             raise NotImplementedError(f"cannot resolve script ref {ident!r} in {fn.name!r}")
@@ -1698,6 +1828,7 @@ def _build_state_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, imp_
                       if p.in_class_chain and p.is_var}
     func_by_name = {f.name.casefold(): f.key for f in b.funcs.values()}
     import_by_name = {k.casefold(): k for k in b.imports}
+    texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
 
     def resolve_inv(kind: str, ident: str) -> int:
         if kind == "name":
@@ -1707,6 +1838,8 @@ def _build_state_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, imp_
             return exp_ref[member_by_name[cf]]
         if cf in func_by_name:
             return exp_ref[func_by_name[cf]]
+        if cf in texture_by_name:
+            return exp_ref[texture_by_name[cf]]
         if cf in import_by_name:
             return imp_ref[import_by_name[cf]]
         raise NotImplementedError(f"cannot resolve script ref {ident!r} in a state")
@@ -1789,14 +1922,17 @@ class _ClassUnit:
     object_flags: int                 # the UClass export's ObjectFlags (+RF_Native for native)
     probe_mask: int                   # accumulated EProbe bits (super's | this class's own overrides)
     extra_deps: tuple[str, ...]       # classes Context'd into (deep=0 Dependency entries), real-cased
+    texture_keys: tuple[str, ...] = ()  # this class's own `#exec TEXTURE IMPORT` UTexture export keys
 
 
 def compile_package_dir(classes: dict[str, str], env: InstallEnv, *,
-                        package_name: str) -> CompiledPackage:
+                        package_name: str, texture_files: dict[str, bytes] | None = None
+                        ) -> CompiledPackage:
     """Compile every `.uc` in a package (`{filename: source}`) into ONE `CompiledPackage` with shared
     tables. `package_name` is the package's own name (UCC takes it from EditPackages / the output
     filename — it heads every class's PackageImports and enters the name table). Classes are compiled
     supers-first; a same-package super/ref becomes an EXPORT ref, a cross-package super an import.
+    `texture_files` maps a `#exec TEXTURE IMPORT FILE=` path (as written) to its PCX bytes.
     `perm_gate(serialize(...), ucc_golden)` is byte-exact modulo the documented exclusions (table
     order, GUID, FName case)."""
     from .serialize import serialize as _serialize      # local: avoid a compile<->serialize cycle
@@ -1826,7 +1962,7 @@ def compile_package_dir(classes: dict[str, str], env: InstallEnv, *,
             decl, src = decls[cname]
             graph = ClassGraph(base_paths + ([partial] if i > 0 else []))
             unit = _build_class_unit(b, decl, src, env, in_pkg_cf, units, graph, catalog,
-                                     package_name)
+                                     package_name, texture_files or {})
             units.append(unit)
             pkg = _finalize_multi(b, units, package_name)
             if i + 1 < len(order):                        # only needed to seed the next class's graph
@@ -1951,7 +2087,8 @@ def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[s
 
 
 def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_pkg_cf: set[str],
-                      built: list[_ClassUnit], graph, catalog, package_name: str) -> _ClassUnit:
+                      built: list[_ClassUnit], graph, catalog, package_name: str,
+                      texture_files: dict[str, bytes]) -> _ClassUnit:
     """Build one class into the shared accumulator `b` (prefixed keys), returning its resolved unit.
     Per-class state (chain, defaults, member ClassFlags, referenced packages) is snapshotted and reset
     here; `props`/`funcs`/`imports`/… stay package-wide."""
@@ -2006,6 +2143,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
     _build_members(b, decl)
     if decl.functions or decl.states:
         _build_callables(b, decl, super_name, crlf_source)
+    _build_texture_imports(b, decl, texture_files)
     for dep_name in b.extra_deps:
         _add_import(b, dep_name)
 
@@ -2034,7 +2172,8 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
         config_name=config_name, within_key=within_key, chain=chain,
         default_props=tuple(b.default_props), package_imports=package_imports,
         self_crc=script_text_crc(crlf_source), object_flags=b.class_object_flags,
-        probe_mask=probe_mask, extra_deps=tuple(b.extra_deps))
+        probe_mask=probe_mask, extra_deps=tuple(b.extra_deps),
+        texture_keys=tuple(k for k in b.textures if k.startswith(b.prefix)))
 
 
 def _imports_by_display(b: _Build, display_order: list[str]) -> list[str]:
@@ -2067,6 +2206,9 @@ def _multi_key_identity(b: _Build, units: list[_ClassUnit]) -> dict[str, tuple[s
         disp[key] = f.name; outer_key[key] = f.class_key
     for key, s in b.states.items():
         disp[key] = s.name; outer_key[key] = s.class_key
+    for key, t in b.textures.items():
+        disp[key] = t.name; outer_key[key] = None            # Outer=0: a top-level package object
+        disp[t.palette_key] = t.palette_name; outer_key[t.palette_key] = None
 
     def chain(key: str) -> tuple[str, ...]:
         out, cur = [], outer_key[key]
@@ -2152,6 +2294,7 @@ def _finalize_multi(b: _Build, units: list[_ClassUnit], package_name: str,
                                            children=children, friendly_name=name_index[s.name]))
     _multi_function_exports(b, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs)
     _multi_state_exports(b, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs)
+    _build_texture_exports(b, name_index, exp_ref, imp_ref, ref, recs)
     for u in units:
         recs[u.class_key] = _multi_class_export(b, u, name_index, exp_ref, imp_ref, ref)
 
@@ -2190,6 +2333,9 @@ def _multi_export_order(b: _Build, units: list[_ClassUnit]) -> list[str]:
             elif key in b.structs:
                 for mk in b.structs[key].member_keys:
                     add(mk)
+        for tex_key in u.texture_keys:                    # this class's `#exec TEXTURE IMPORT`s
+            add(b.textures[tex_key].palette_key)
+            add(tex_key)
     for key in b.props:                                   # array inners (not in any chain)
         add(key)
     return order
@@ -2236,6 +2382,11 @@ def _multi_names(b: _Build, units: list[_ClassUnit], package_name: str) -> list[
         add(s.name)
         for ident in _token_refs(s.toks)[0]:
             add(ident)
+    for t in b.textures.values():
+        add(t.name)
+        add(t.palette_name)
+        for ident in _texture_prop_names(t):
+            add(ident)
     for u in units:
         for prop in u.default_props:
             add(prop.name)                                # inherited-override names aren't in b.props
@@ -2256,6 +2407,9 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
     for f in b.funcs.values():
         funcs_by_class.setdefault(f.class_key, {})[f.name.casefold()] = f.key
     import_by_name = {k.casefold(): k for k in b.imports}
+    # `#exec TEXTURE IMPORT` objects are top-level package objects (Outer=0), not class members --
+    # a `Texture'Pkg.Name'` literal in ANY class of this package can reach one built by another.
+    texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
 
     def resolver(fn: _Func):
         own_members = members_by_class.get(fn.class_key, {})
@@ -2271,6 +2425,8 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
                 return exp_ref[own_members[cf]]
             if cf in own_funcs:
                 return exp_ref[own_funcs[cf]]
+            if cf in texture_by_name:
+                return exp_ref[texture_by_name[cf]]
             if cf in import_by_name:
                 return imp_ref[import_by_name[cf]]
             raise NotImplementedError(f"cannot resolve script ref {ident!r} in {fn.name!r}")
@@ -2302,6 +2458,7 @@ def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref
     for f in b.funcs.values():
         funcs_by_class.setdefault(f.class_key, {})[f.name.casefold()] = f.key
     import_by_name = {k.casefold(): k for k in b.imports}
+    texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
 
     def resolver(st: _State):
         own_members = members_by_class.get(st.class_key, {})
@@ -2315,6 +2472,8 @@ def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref
                 return exp_ref[own_members[cf]]
             if cf in own_funcs:
                 return exp_ref[own_funcs[cf]]
+            if cf in texture_by_name:
+                return exp_ref[texture_by_name[cf]]
             if cf in import_by_name:
                 return imp_ref[import_by_name[cf]]
             raise NotImplementedError(f"cannot resolve script ref {ident!r} in state {st.name!r}")
