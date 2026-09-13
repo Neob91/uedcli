@@ -294,18 +294,38 @@ class _NameIndex(dict):
         return self[key.casefold()]
 
 
+def _top_level_name_order(decl: ClassDecl) -> list[str]:
+    """The class's own immediate children (vars/enums/consts/structs/functions/states), in TRUE
+    SOURCE order — `decl.decl_order` interleaved as written, each `VarDecl` expanded to its own
+    declared names. This is the piece the compiled `.u`'s Children chain cannot recover (it bins
+    properties and non-properties into separate sub-chains); see `reorder.name_creation_order`."""
+    names: list[str] = []
+    for item in decl.decl_order:
+        if isinstance(item, VarDecl):
+            names.extend(item.names)
+        else:
+            names.append(item.name)
+    return names
+
+
 def compile_package(src: str, env: InstallEnv, *,
                     order_override: tuple[list[str], list[str], list[str]] | None = None
                     ) -> CompiledPackage:
     """Compile UnrealScript `src` to a linked `CompiledPackage`, byte-exact vs UCC. `env` resolves the
     super's home package + CRC. Ordering is autonomous: a provisional compile is decoded and re-emitted
     in UCC's real name/import/export order (`reorder.true_order` — the runtime-dumped global index +
-    faithful qsort). `order_override=(names, imports, export_rows)` forces a specific order (used by
-    tests to pin bodies against a golden); otherwise it is derived."""
+    faithful qsort), with the class's own true top-level declaration order (`_top_level_name_order`,
+    from the parsed AST) supplying the NAME-table gather order the compiled bytes alone can't recover.
+    `order_override=(names, imports, export_rows)` forces a specific order (used by tests to pin
+    bodies against a golden); otherwise it is derived."""
     if order_override is None:
         from .reorder import true_order
         from .serialize import serialize as _serialize
-        return _compile_single(src, env, true_order(_serialize(_compile_single(src, env, None))))
+        decl = parse(src)
+        provisional = _compile_single(src, env, None)
+        ordered = true_order(_serialize(provisional), [decl.name],
+                             {decl.name: _top_level_name_order(decl)})
+        return _compile_single(src, env, ordered)
     return _compile_single(src, env, order_override)
 
 
@@ -1814,8 +1834,12 @@ def compile_package_dir(classes: dict[str, str], env: InstallEnv, *,
                     fh.write(_serialize(pkg))
         # Re-emit in UCC's real name/import/export order (decode the provisional bytes, run the
         # dumped-global-index tie-break) — the same autonomous ordering the single-class path uses.
+        # `order` (classes, supers-first = UCC's own compile order) + each class's true top-level
+        # declaration order (from its own AST, not the compiled/binned Children chain) supply the
+        # NAME-table gather order the decoded bytes alone can't recover (see `_top_level_name_order`).
         from .reorder import true_order
-        names, imports, export_rows = true_order(_serialize(pkg))
+        top_level_by_class = {cname: _top_level_name_order(decls[cname][0]) for cname in order}
+        names, imports, export_rows = true_order(_serialize(pkg), list(order), top_level_by_class)
         return _finalize_multi(b, units, package_name, override=(names, imports, export_rows))
     finally:
         shutil.rmtree(tmp, ignore_errors=True)

@@ -283,23 +283,30 @@ class _Decoder:
             add(i0)
         return order
 
-    def name_creation_order(self) -> list[str]:
-        """UCC's NAME-registration encounter order for own-new names = forward declaration order,
-        fully inline (RE'd 2026-09-13 from a live `AllocateNameEntry` capture of a real `UCC.exe make`
-        of `DavesBrushBuilders`, `core.dll` VA `0x1005cdc0` — see `findings-ordering-re.md`): a
-        function's PARAMS/return AND its body LOCALS all register immediately after the function
-        itself, in ONE single top-to-bottom pass. The capture showed `im` (a local of `Extrapolate3`)
-        registering directly between `Extrapolate3` and the next function `Extrapolate4`, and `dR`
-        (a local of `BuildCube`) directly between `Extrapolate5` and `BuildOctahedron` — a function's
-        locals are NOT deferred to a trailing pass over every function, contrary to the previous
-        two-pass model. Same recursion shape as `creation_order` (no special Function case)."""
-        scripttext = next((i for i, e in enumerate(self.p.exports)
-                           if self.class_disp(i) == "TextBuffer" and e["outer"] == self.class_i + 1),
-                          None)
-        order = [self.ekey(self.class_i)]
-        seen = {self.class_i}
-        if scripttext is not None:
-            order.append(self.ekey(scripttext)); seen.add(scripttext)
+    def class_indices(self) -> dict[str, int]:
+        """Every class export's display name -> its export index (0-based)."""
+        return {self.edisp(i): i for i, e in enumerate(self.p.exports) if e["cls"] == 0}
+
+    def name_creation_order(self, class_order: list[str] | None = None,
+                            top_level_by_class: dict[str, list[str]] | None = None) -> list[str]:
+        """UCC's NAME-registration encounter order for own-new names (RE'd 2026-09-13 from a live
+        `AllocateNameEntry` capture of a real `UCC.exe make` of `DavesBrushBuilders`, `core.dll` VA
+        `0x1005cdc0` — see `findings-ordering-re.md`): a function's PARAMS/return AND its body LOCALS
+        all register immediately after the function itself, in ONE single top-to-bottom pass (a
+        function's locals are NOT deferred to a trailing pass, contrary to the previous two-pass
+        model) — so within one field's own subtree, forward declaration order (`_decl_forward`) is
+        already the real registration order. What is NOT reproducible from decoded bytes at all: the
+        TOP-LEVEL order a class's own properties interleave with its enums/consts/structs/functions —
+        the compiled Children chain bins all non-property fields (reverse-decl) ahead of all
+        properties (forward-decl), genuinely losing that interleaving, while UCC's real registration
+        follows plain source-textual order. `top_level_by_class` (a class display name -> its true
+        top-level child names, in source order, computed by `compile.py` from the parsed AST before
+        that binning happens) supplies the missing order; omitted, this falls back to the (binned)
+        `_decl_forward` walk, same as before this parameter existed. `class_order` is the class
+        display names in the order UCC compiles them (needed for a multi-class package — a
+        single-class caller may omit both and get the original single-`class_i` behavior)."""
+        order: list[str] = []
+        seen: set[int] = set()
 
         def add(i0: int) -> None:
             if i0 in seen:
@@ -309,9 +316,26 @@ class _Decoder:
             for c in self._decl_forward(i0):
                 add(c)
 
-        for c in self._decl_forward(self.class_i):
-            add(c)
-        for i0 in range(len(self.p.exports)):             # leftover (array inners)
+        class_is = [self.class_i] if class_order is None else [
+            self.class_indices()[n] for n in class_order]
+        for class_i in class_is:
+            order.append(self.ekey(class_i)); seen.add(class_i)
+            scripttext = next((i for i, e in enumerate(self.p.exports)
+                               if self.class_disp(i) == "TextBuffer" and e["outer"] == class_i + 1),
+                              None)
+            if scripttext is not None:
+                order.append(self.ekey(scripttext)); seen.add(scripttext)
+            names_here = None if top_level_by_class is None else top_level_by_class.get(
+                self.edisp(class_i))
+            if names_here is None:
+                top_level = self._decl_forward(class_i)
+            else:
+                direct = self._chain(self._children_ref(class_i))
+                by_disp = {self.edisp(c).casefold(): c for c in direct}
+                top_level = [by_disp[n.casefold()] for n in names_here]
+            for c in top_level:
+                add(c)
+        for i0 in range(len(self.p.exports)):             # leftover (array inners, other classes)
             if i0 not in seen:
                 seen.add(i0); order.append(self.ekey(i0))
         return order
@@ -340,13 +364,17 @@ class _Decoder:
         return objs
 
 
-def true_order(u: bytes) -> tuple[list[str], list[str], list[tuple[str, tuple[str, ...]]]]:
+def true_order(u: bytes, class_order: list[str] | None = None,
+              top_level_by_class: dict[str, list[str]] | None = None
+              ) -> tuple[list[str], list[str], list[tuple[str, tuple[str, ...]]]]:
     """Decode compiled package `u` and return its (names, imports, export_rows) in UCC's table order.
     `export_rows` are (leaf display name, outer-chain) pairs (the shape `order_override` expects); the
-    outer-chain is outermost->immediate, disambiguating a leaf whose immediate outer repeats."""
+    outer-chain is outermost->immediate, disambiguating a leaf whose immediate outer repeats.
+    `class_order`/`top_level_by_class` feed `name_creation_order`'s AST-derived top-level order — see
+    its docstring; omit both to keep the old binned-`_decl_forward` behavior."""
     d = _Decoder(u)
     ordered = order_package(d.objinputs(), d.creation_order(), default_global_index(),
-                            name_creation=d.name_creation_order())
+                            name_creation=d.name_creation_order(class_order, top_level_by_class))
     exp_i = {d.ekey(i): i for i in range(len(d.p.exports))}
     export_rows = [(d.edisp(exp_i[k]), d.outer_chain(exp_i[k])) for k in ordered.exports]
     return ordered.names, ordered.imports, export_rows

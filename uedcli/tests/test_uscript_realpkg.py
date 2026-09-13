@@ -69,10 +69,38 @@ def test_realpkg_strict_byte_exact(pkg: str):
     content) with no `order_override` — `RahnemBrushBuilders` pins the value-only-name gather-order
     fix (a package self-name in `PackageImports` registers at class-header time; a defaultproperties
     tag VALUE registers after every member/function, per `ordering._gather_names`/`late_name_refs`).
-    `ExtendedBuilders` still fails on raw byte count (unrelated, likely multi-class); `DavesBrush
-    Builders` fails on name-table order (an enum-value sub-ordering gap) — both open, not this fix."""
+    `ExtendedBuilders` still fails on raw byte count (a qsort-tie permutation among a larger group of
+    real-pool + own-new names, not isolated); `DavesBrushBuilders` now diverges only on ONE isolated
+    pair (see `test_davesbrushbuilders_ast_order_recovers_enum_property_interleaving`) — both open,
+    not this fix."""
     r = gate(_compile(pkg), (_FIX / pkg / f"{pkg}.u").read_bytes())
     assert r.passed, f"{pkg}: " + " | ".join(r.messages)
+
+
+def test_davesbrushbuilders_ast_order_recovers_enum_property_interleaving():
+    """RE'd 2026-09-13 (`findings-ordering-re.md`): UCC's name-registration order follows TRUE
+    SOURCE-TEXTUAL order (a property and a later `var() enum` register side by side, exactly as
+    declared), but the compiled `.u`'s own Children chain bins ALL properties into one forward
+    sub-chain and ALL non-properties (enums/consts/structs/functions) into a separate reverse
+    sub-chain, losing that interleaving structurally. `compile._top_level_name_order` recovers it
+    from the parsed AST (`ClassDecl.decl_order`, before that binning happens) and threads it through
+    `reorder.true_order`'s `class_order`/`top_level_by_class` params.
+
+    Before this fix, `DavesBrushBuilders`'s name table (74 entries) diverged from the golden at
+    index 14 (the first of its two `var() enum` declarations) with cascading effects through most of
+    the table. After it, only ONE pair differs: `Core` (a real engine pool name) and
+    `DavesBrushBuilders` (the package's own self-name), both reference-count 1 and swapped — a
+    narrower, PRE-EXISTING qsort-tie-permutation bug (present, masked, before this fix too),
+    unrelated to enum/property interleaving and tracked separately."""
+    from uedcli.upackage import _parse_package
+
+    mine = _compile("DavesBrushBuilders")
+    golden = (_FIX / "DavesBrushBuilders" / "DavesBrushBuilders.u").read_bytes()
+    mn = list(_parse_package(mine, "<mine>", "mine").names)
+    gn = list(_parse_package(golden, "<golden>", "golden").names)
+    diffs = [i for i, (m, g) in enumerate(zip(mn, gn)) if m != g]
+    assert diffs == [21, 22], f"expected only the known Core/self-name tie at 21-22, got {diffs}"
+    assert set(mn[21:23]) == set(gn[21:23]) == {"Core", "DavesBrushBuilders"}
 
 
 def test_davesbrushbuilders_locals_register_inline_not_deferred():

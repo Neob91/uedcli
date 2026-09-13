@@ -154,6 +154,7 @@ class _Parser:
         functions: list[FuncDecl] = []
         states: list[StateDecl] = []
         callables: list[FuncDecl | StateDecl] = []
+        decl_order: list[object] = []  # members + callables, interleaved in TRUE source order
         replication: ReplBlock | None = None
         default_props: tuple[DefaultProp, ...] = ()
         exec_directives: list[str] = []
@@ -169,15 +170,19 @@ class _Parser:
                 continue
             kw = self._kw()
             if kw == "const":
-                members.append(self._parse_const())
+                decl = self._parse_const()
+                members.append(decl); decl_order.append(decl)
             elif kw == "enum":
-                members.append(self._parse_enum())
+                decl = self._parse_enum()
+                members.append(decl); decl_order.append(decl)
                 self._eat_op_optional(";")
             elif kw == "struct":
-                members.append(self._parse_struct())
+                decl = self._parse_struct()
+                members.append(decl); decl_order.append(decl)
                 self._eat_op_optional(";")
             elif kw == "var":
-                members.extend(self._parse_var())
+                decls = self._parse_var()
+                members.extend(decls); decl_order.extend(decls)
             elif kw == "replication":
                 replication = self._parse_replication()
             elif kw == "defaultproperties":
@@ -186,17 +191,18 @@ class _Parser:
                 cpptext_parts.append(self._parse_cpptext())
             else:
                 decl = self._parse_callable_or_state()
-                callables.append(decl)
+                callables.append(decl); decl_order.append(decl)
                 if isinstance(decl, StateDecl):
                     states.append(decl)
                 else:
                     functions.append(decl)
 
         members.extend(self._hoisted)  # inline enum/struct lifted out of struct members
+        decl_order.extend(self._hoisted)  # same (unresolved) position as in `members` above
         return ClassDecl(
             name=name, super_name=super_name, within=within, modifiers=tuple(modifiers),
             members=tuple(members), functions=tuple(functions), states=tuple(states),
-            callables=tuple(callables),
+            callables=tuple(callables), decl_order=tuple(decl_order),
             replication=replication, default_props=default_props,
             exec_directives=tuple(exec_directives), source=self.raw,
             cpptext="\n".join(cpptext_parts) if cpptext_parts else None)
