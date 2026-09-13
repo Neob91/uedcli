@@ -169,6 +169,27 @@ strict gate autonomously.
   in the fix: `decl_order` doesn't place a HOISTED nested enum/struct (one declared inline inside a
   struct body) correctly — `parser.py`'s own comment on `self._hoisted` admits it lands at "the same
   (unresolved) position as in `members`." Not exercised by any current fixture; no test covers it.
+- **Calling an inherited `final` function, and reading an inherited member variable, are both FIXED
+  (2026-09-13)**: an ordinary call to a function the class being compiled doesn't itself
+  declare/override, any `Super.Foo()` call (always an ancestor's function, even when the current
+  class overrides `Foo` under the same name — that case previously self-referenced the override
+  instead of the parent, silently), and reading an inherited member variable never declared locally,
+  all raised or mis-resolved because `compile.py`'s `resolve_inv` only knew the class's own
+  functions/members and existing imports. `lower.py`'s `CallTarget`/`Symbol` now carry the
+  function's/field's declaring class (`owner`) when it isn't the class being compiled; the token's
+  obj identity is `func:<Class>.<Name>`/`mem:<Class>.<Name>` for an inherited target
+  (`_final_call_ident`/`_member_ident`), bare otherwise. `compile.py`'s `_register_final_call_imports`/
+  `_register_member_var_imports` import the function/property from its declaring class after lowering
+  (the property import's Class is its concrete UProperty subclass, e.g. `IntProperty`), deduping onto
+  `_super_func_import`'s existing key format where they name the same function. `canon()`'s
+  qualifier-strip (needed because a decoded golden token only ever carries the bare name) covers both
+  prefixes. Verified against a live UT99 UCC compile: fixture `UscInheritFinal` (extends
+  `UWindowDialogClientWindow`) calls `SetSize`/`Super.Created()` and reads `WinWidth`/`WinHeight` —
+  `perm_gate` byte-exact; the strict gate's one diff is the pre-existing UT99 name-pool gap already
+  noted for `Fire` below, not new. The real community package `GiveMeItems` no longer hits either gap
+  (confirmed on `GMIClientWindow.uc`'s `Created()`, which reads both) but still doesn't fully
+  compile — a separate, unrelated blocker: its `#exec TEXTURE IMPORT`'s PCX asset isn't in the GitHub
+  mirror, see `dev/docs/board/inbox/givemeitems-blocked-by-missing-pcx-texture-asset/`.
 - `assert`/`do..until` lowering, and a two-pass "signature graph" for mutually-referencing
   same-package classes (blocks `UWeb`) — real, scoped gaps in `lower.py`/`compile.py`. Replication
   blocks and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented,

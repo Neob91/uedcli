@@ -472,6 +472,51 @@ fn serialize_model(py: Python<'_>, built: &Built) -> PyResult<Py<PyBytes>> {
     Ok(PyBytes::new_bound(py, &bytes).unbind())
 }
 
+/// One `zones::Portal`, marshalled flat: `(a, b, poly_flat, normal, w)` — `poly_flat` is the
+/// shared polygon's verts concatenated x,y,z (chunks of 3 reassemble it).
+type PortalTuple = (i32, i32, Vec<f32>, [f32; 3], f32);
+
+/// `leaf_portals` — `Built.model.leaf_portals` (the frozen portal graph `assign_leaves_and_zones`
+/// computes, consumed by `bake_lighting`'s permeating-light pass — `permeating_lights.rs`), or
+/// `None` if unset, as plain tuples. Neither `serialize_model` nor `model_read::parse` carry this
+/// field (it isn't part of the on-disk UModel format), so a cache that wants to reload a `Built`
+/// via `load_model` and still get the FROZEN graph — not `permeating_lights`' fresh-recompute
+/// fallback, the exact stale-portal bug `dev/docs/spikes/2026-09-13-portal-graph-frozen-before-
+/// optgeom/` fixed — must persist this separately (`preview_native.py`'s scene cache).
+#[pyfunction]
+fn leaf_portals(built: &Built) -> Option<Vec<PortalTuple>> {
+    built.model.leaf_portals.as_ref().map(|portals| {
+        portals
+            .iter()
+            .map(|p| (p.a, p.b, p.poly.iter().flat_map(|v| v.iter().copied()).collect(), p.normal, p.w))
+            .collect()
+    })
+}
+
+/// `load_model` — reconstruct a `Built` handle from a `serialize_model` body (`model_read::parse`,
+/// the writer's pinned inverse) plus its `leaf_portals` (from the function above, or `None`) — the
+/// two together are the full state a disk-cached CSG solve needs to rebake lighting FAITHFULLY
+/// without re-running `build_geometry_bspcsg` (`preview_native.py`'s scene cache). Passing `None`
+/// when the original build had `Some` would silently reintroduce the fresh-recompute bug `leaf_
+/// portals` above exists to avoid — the cache always saves and restores both together.
+#[pyfunction]
+#[pyo3(signature = (body, leaf_portals=None))]
+fn load_model(py: Python<'_>, body: &[u8], leaf_portals: Option<Vec<PortalTuple>>) -> PyResult<Built> {
+    let mut model = py.allow_threads(|| model_read::parse(body)).map_err(map_err)?;
+    model.leaf_portals = leaf_portals.map(|list| {
+        list.into_iter()
+            .map(|(a, b, poly_flat, normal, w)| crate::zones::Portal {
+                a,
+                b,
+                poly: poly_flat.chunks_exact(3).map(|c| [c[0], c[1], c[2]]).collect(),
+                normal,
+                w,
+            })
+            .collect()
+    });
+    Ok(Built { model })
+}
+
 // NOTE: the brief's RawPackageOut was a flat 13-tuple; pyo3's `IntoPy` is only implemented for
 // tuples up to 12 elements (compile error: "the trait `OkWrap<_>` is not implemented"). Fixed by
 // nesting the three (offset, count) pairs — same information, arity 10. Flag for Task 5.
@@ -908,6 +953,8 @@ fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(build_brush_model, m)?)?;
     m.add_function(wrap_pyfunction!(brush_lightmap_indices, m)?)?;
     m.add_function(wrap_pyfunction!(serialize_model, m)?)?;
+    m.add_function(wrap_pyfunction!(load_model, m)?)?;
+    m.add_function(wrap_pyfunction!(leaf_portals, m)?)?;
     m.add_function(wrap_pyfunction!(bake_lighting, m)?)?;
     m.add_function(wrap_pyfunction!(bake_radiance, m)?)?;
     m.add_function(wrap_pyfunction!(render_frame, m)?)?;
