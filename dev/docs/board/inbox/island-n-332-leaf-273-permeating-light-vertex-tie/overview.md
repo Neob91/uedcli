@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Island is byte-exact N=1..331 and bails at N=332: leaf 273 carries Light124 where UED22 leaves it out. Root-caused to a genuine vertex COINCIDENCE (a portal vertex shared exactly with an adjacent portal) that makes one FLinePlaneIntersection crossing land a hair below the shared point in native and a hair above it in a live editor capture -- same formula, same inputs, opposite sign of a sub-ULP residual. Not fixed; x87-vs-SSE double-rounding is now RULED UNLIKELY (see below) -- mechanism still unconfirmed. Second reproducer found: unatco-n-226-leaf-12-gets-a-permeating-light157."
+summary = "Island is byte-exact N=1..331 and bails at N=332: leaf 273 carries Light124 where UED22 leaves it out. Root-caused to a genuine vertex COINCIDENCE (a portal vertex shared exactly with an adjacent portal) that makes one FLinePlaneIntersection crossing land a hair below the shared point in native and a hair above it in a live editor capture -- same formula, same inputs, opposite sign of a sub-ULP residual. Not fixed; x87-vs-SSE double-rounding is now RULED UNLIKELY (see below) -- mechanism still unconfirmed. Second reproducer found: unatco-n-226-leaf-12-gets-a-permeating-light157. 2026-09-13: the FVector::SafeNormal x87-extended-precision candidate is REFUTED by a live fctrl probe (measured PC=10/double, matching native's f64 model exactly)."
 spikes = ["dev/docs/spikes/2026-09-07-gather-box-verdict/"]
 +++
 
@@ -179,3 +179,19 @@ containerd layer-export step (from 6.0 GB and then 7.4 GB free, both times on th
 1.05 GB image) — a hard host limit, not a fixable retry. Cleaned up after each attempt; host disk
 restored to ~7.4 GB free. Next step for whoever has working infra: run `fctrl_probe.py` against any
 small cached subset and read `$fctrl` — `0x037f` confirms, `0x027f` refutes.
+
+## 2026-09-13 — probe run; hypothesis REFUTED
+
+`dx-lum-uned-dbg:latest` now exists (cached from a prior session). Ran `fctrl_probe.py` against the
+cached Island N=332 subset (`_scratch/actor-parity/01_nyc_unatcoisland/N332/...`) — fixed one stale
+bug first (`ROOT = Path(__file__).resolve().parents[4]` pointed at `dev/`, not the repo root; changed
+to `parents[5]`). 30/30 `SafeNormal` hits report `fctrl=0x27f` — PC=`10` (double, 53-bit), the value
+that refutes the hypothesis. `SafeNormal`'s real sqrt+reciprocal chain runs at exactly the precision
+`fpoly.rs::safe_normal`'s Rust `f64` model already assumes; there is nothing to widen. No code change.
+
+Full writeup: `dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md`. The x87-precision line of
+inquiry is closed for both this item and `unatco-n-226-leaf-12-gets-a-permeating-light157`. The real
+mechanism behind the sub-ULP tie is still open; it needs single-stepping the real
+`SafeNormal`/`FLinePlaneIntersection` chain at the exact `162->275`/`275->273` crossing and diffing
+intermediate register values against native's own trace, not another control-word read. Not fixed, no
+mask; ladder still bails at N=332.

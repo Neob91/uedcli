@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "UNATCO is byte-exact N=1..225 and bails at N=226: world leaf 12's permeating-light run carries Light157, which UED22 leaves out. Root-caused (2026-09-12) to the SAME unresolved mechanism as island-n-332-leaf-273-permeating-light-vertex-tie: native's FLinePlaneIntersection lands the crossing exactly on a shared portal vertex (a true tie); a live editor capture of the identical crossing lands ~1 ULP off it. Not fixed, no mask. 2026-09-12 (2nd pass): fresh disassembly confirms FLinePlaneIntersection and the FPlane(A,B,C) cross-product ctor are bit-exact ports; the one place left that could diverge is FVector::SafeNormal's real x87 sqrt/reciprocal chain (core.dll, never covered by the Engine.dll/Editor.dll-only spike-41 census) running under an unconfirmed FPU precision-control setting. Live gdb confirmation blocked by this host's docker/containerd disk limits (see below); still open."
+summary = "UNATCO is byte-exact N=1..225 and bails at N=226: world leaf 12's permeating-light run carries Light157, which UED22 leaves out. Root-caused (2026-09-12) to the SAME unresolved mechanism as island-n-332-leaf-273-permeating-light-vertex-tie: native's FLinePlaneIntersection lands the crossing exactly on a shared portal vertex (a true tie); a live editor capture of the identical crossing lands ~1 ULP off it. Not fixed, no mask. 2026-09-13: the FVector::SafeNormal x87-extended-precision hypothesis is REFUTED by a live fctrl probe (measured PC=10/double, matching native's f64 model exactly) -- see dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md. Real mechanism still open; needs register-level single-stepping, not another precision-control read."
 spikes = ["dev/docs/spikes/2026-09-07-gather-box-verdict/", "dev/docs/spikes/2026-09-12-safenormal-fpu-precision/"]
 +++
 
@@ -168,3 +168,20 @@ a real precision-model correction, e.g. an x87-equivalent extended-precision emu
 `f64`, then re-verifying it does not move any of the already-passing near-tie cases this item and
 `island-n-332-leaf-273-permeating-light-vertex-tie` list (N=8, N19, N45, N93, N123, N153, and this
 item's own N=226 siblings) before trusting it against N=226/N=332 themselves.
+
+## 2026-09-13 — FPU precision-control hypothesis REFUTED; ran the probe
+
+Debug-editor infra now exists (`dx-lum-uned-dbg:latest`, cached). Ran `fctrl_probe.py` against the
+cached Island N=332 subset (same mechanism, PC can't change mid-process so any level's trunk settles
+it). Had to fix a stale bug first: `ROOT = Path(__file__).resolve().parents[4]` resolved to the `dev/`
+directory, not the repo root — off by one, fixed to `parents[5]`.
+
+Result: 30/30 `SafeNormal` hits report `fctrl=0x27f`. `0x027F` decodes to PC=`10` (double, 53-bit
+mantissa) — the value the probe's own docstring says REFUTES the hypothesis. `SafeNormal`'s real
+sqrt+reciprocal chain runs at 53-bit precision, which is exactly what `fpoly.rs::safe_normal`'s Rust
+`f64` model already assumes. No widening to port; no code change made.
+
+The sub-ULP tie's real mechanism is still open — it is NOT `SafeNormal`'s FPU precision. Full writeup:
+`dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md`. Next step per that spike: single-step
+the real `SafeNormal`/`FLinePlaneIntersection` chain at the exact crossing and diff intermediate
+register values against native's own trace — a control-word read can't narrow it further.

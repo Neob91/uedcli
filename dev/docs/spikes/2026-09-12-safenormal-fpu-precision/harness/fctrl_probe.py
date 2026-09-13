@@ -33,7 +33,7 @@ import sys
 import time
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[5]
 OLD_HARNESS = ROOT / "dev/docs/spikes/2026-07-15-native-materialize/harness"
 OLD_ORACLE = OLD_HARNESS / "editor-tree-oracle"
 LADDER = ROOT / "dev/docs/spikes/2026-09-03-incremental-actor-parity/harness"

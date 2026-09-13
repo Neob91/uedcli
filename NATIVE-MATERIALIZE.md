@@ -233,7 +233,11 @@ the permeating flood is where the campaign's leverage is.
   "x87 vs SSE" hypothesis very likely wrong — `spikes/2026-07-15-native-materialize/41-fp-model-x87-vs-sse.md`
   already showed this build's `Engine.dll`/`Editor.dll` are SSE2-only with zero x87 control-word use —
   so the real cause is more likely an unreplicated operation-order effect, still needing a register-level
-  gdb single-step to pin down.
+  gdb single-step to pin down. 2026-09-13: the follow-on candidate — `FVector::SafeNormal`'s x87
+  precision-control field running at PC=`11` (extended) instead of the PC=`10` (double) native's `f64`
+  model assumes — is REFUTED by a live `fctrl` probe (measured `0x027f`, i.e. PC=`10`, exactly matching
+  native's model). `dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md`. No code change; the
+  real mechanism is still open.
   N=116 needed no fix and was never a real divergence
   (`dev/docs/board/done/unatco-n-116-world-model2-light-runs-differ-on/`): the 941-against-940
   `Model.Lights` bail came from a STALE wheel. Cargo decides freshness by mtime, so a crate restored
@@ -359,7 +363,11 @@ the permeating flood is where the campaign's leverage is.
   bit-for-bit by hand, so this is not a wrong formula to correct, only an unresolved
   register-level effect. Not fixed; no mask added. Island's ladder cannot advance past N=332 until
   this closes — see the board item for the full trace and the next step (single-step the editor's
-  real `SafeNormal`/`FLinePlaneIntersection` under `gdb` at this exact crossing).
+  real `SafeNormal`/`FLinePlaneIntersection` under `gdb` at this exact crossing). 2026-09-13: the
+  `SafeNormal` x87-extended-precision candidate is REFUTED by a live `fctrl` probe (measured `0x027f`,
+  PC=`10`/double, exactly matching native's `f64` model) —
+  `dev/docs/spikes/2026-09-12-safenormal-fpu-precision/spike.md`. No code change; the register-level
+  single-step is still the open next step.
 - **OceanLab**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the
