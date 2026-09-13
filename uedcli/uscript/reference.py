@@ -71,9 +71,13 @@ def _exfil(container: str, path: str) -> bytes:
     return r.stdout
 
 
-def ucc_compile(container: str, package: str, classes: dict[str, str]) -> bytes:
+def ucc_compile(container: str, package: str, classes: dict[str, str],
+                 extra_files: dict[str, bytes] | None = None) -> bytes:
     """Compile a package `<package>` from `classes` (filename -> UnrealScript source, e.g.
     `{"Foo.uc": "class Foo expands Object;"}`) and return the built `<package>.u` bytes.
+
+    `extra_files` ({relative path -> bytes}, e.g. `{"Textures/Foo.PCX": pcx_bytes}`) are staged
+    under `/opt/<package>/` so a `#exec TEXTURE IMPORT FILE="Textures\\Foo.PCX"` resolves.
 
     CLEAN rebuild every call (stale `/opt/<package>` and `/opt/UED22/<package>.u` removed first) so
     results are reproducible. Success requires `UCC make` exit 0 AND `Success` in its output AND an
@@ -86,6 +90,14 @@ def ucc_compile(container: str, package: str, classes: dict[str, str]) -> bytes:
     _exec(container, "sh", "-c", f"rm -rf {pkg_dir} {built}; mkdir -p {pkg_dir}/Classes")
     for filename, source in classes.items():
         _exec(container, "sh", "-c", f"cat > {pkg_dir}/Classes/{filename}", input_text=source)
+    for relpath, data in (extra_files or {}).items():
+        dest = f"{pkg_dir}/{relpath}"
+        _exec(container, "sh", "-c", f"mkdir -p $(dirname {dest})")
+        r = subprocess.run(["docker", "exec", "-i", container, "sh", "-c", f"cat > {dest}"],
+                           input=data, capture_output=True, timeout=_EXFIL_TIMEOUT)
+        if r.returncode != 0:
+            raise UccError(f"could not stage {relpath!r} into {container}:{dest}: "
+                           f"{r.stderr.decode(errors='replace').strip()}")
 
     ini = inject_edit_package(_exec(container, "cat", _INI), package)
     _exec(container, "sh", "-c", f"cat > {_INI}", input_text=ini)

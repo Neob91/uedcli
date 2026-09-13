@@ -146,8 +146,17 @@ strict gate autonomously.
   both open (`findings-ordering-re.md`).
 - `assert`/`do..until` lowering, and a two-pass "signature graph" for mutually-referencing
   same-package classes (blocks `UWeb`) — real, scoped gaps in `lower.py`/`compile.py`. Replication
-  blocks and non-conversation `#exec` (texture/mesh/audio/font import codecs) remain fully
-  unimplemented, scoped out for now.
+  blocks and non-conversation `#exec` (mesh/audio/font import codecs) remain fully unimplemented,
+  scoped out for now. `#exec TEXTURE IMPORT` is RE'd but not wired in — see below.
+- **`#exec TEXTURE IMPORT`** (2026-09-13): the RE is done — `dev/docs/spikes/
+  2026-09-13-texture-import-re/spike.md` (PCX decode, the `UTexture`/`UPalette` body layout, the
+  mip-chain quantization algorithm) — but nothing is wired into `compile.py` yet
+  (`dev/docs/board/inbox/uscript-texture-import-compiler-integration/`). Two open sub-items the
+  integration needs to resolve: a texture's `InternalTime` property is a SECOND per-compile-random
+  field (needs an owner-approved gate exclusion, like the package GUID) and the mip-quantization
+  tie-break direction is unresolved for an exact-average edge case (real content is very unlikely
+  to hit it). This directly blocks the real community package `GiveMeItems`, which needs exactly
+  this directive.
 - Expected-type-directed operator overload resolution (e.g. an int-divide whose result narrows into
   an int field) — attempted twice and reverted; UCC's real tie-break rule is subtler than modeled.
 - **Corpus reality**: many stock packages (most of `ConSys`, `DeusEx`, even parts of `Extension`) are
