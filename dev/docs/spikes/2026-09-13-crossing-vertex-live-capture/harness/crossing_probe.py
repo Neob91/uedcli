@@ -137,19 +137,12 @@ def _dump_vec3(label: str, base_expr: str) -> str:
 
 
 def build_gdb_script(case: dict, max_hits: int) -> str:
-    fplane_cond = " && ".join([
-        _cond_vec3("$ebp+8", case["light"]),
-        _cond_vec3("$ebp+0x14", case["b"]),
-        _cond_vec3("$ebp+0x20", case["a"]),
-    ])
-    lpi_cond = " && ".join([
-        f"*(unsigned int*)(*(unsigned int*)($ebp+0xc)+0)=={case['p1'][0]:#x}",
-        f"*(unsigned int*)(*(unsigned int*)($ebp+0xc)+4)=={case['p1'][1]:#x}",
-        f"*(unsigned int*)(*(unsigned int*)($ebp+0xc)+8)=={case['p1'][2]:#x}",
-        f"*(unsigned int*)(*(unsigned int*)($ebp+0x10)+0)=={case['p2'][0]:#x}",
-        f"*(unsigned int*)(*(unsigned int*)($ebp+0x10)+4)=={case['p2'][1]:#x}",
-        f"*(unsigned int*)(*(unsigned int*)($ebp+0x10)+8)=={case['p2'][2]:#x}",
-    ])
+    # v2: NO value filter on the FPlane/LPI breakpoints themselves -- v1's exact (B,C) order match
+    # (clip[j], clip[jPrev]) never fired even once across Light124's whole 316-hit flood window,
+    # which means either the winding/edge-pairing native assumes doesn't match the editor's, or the
+    # decisive edge takes a different path than expected. Dump EVERY FPlane/LPI call inside the
+    # (now small, gated) armed window unconditionally and grep for the target coordinates afterwards
+    # -- more robust than guessing the exact argument order up front.
     light = case["light"]
     av_match = (f"*(unsigned int*)($act+0xd0)=={light[0]:#x} && "
                 f"*(unsigned int*)($act+0xd4)=={light[1]:#x} && "
@@ -169,7 +162,7 @@ set $lpi_hits = 0
 set $armed = 0
 set $av_hits = 0
 
-break *__FPLANE_ENTRY__ if {fplane_cond}
+break *__FPLANE_ENTRY__
 commands
 silent
 set $fp_hits = $fp_hits + 1
@@ -179,9 +172,6 @@ printf "FPLANE_ENTRY hit=%d this=%#x ", $fp_hits, $fp_this
 {_dump_vec3(" B", "$ebp+0x14")}
 {_dump_vec3(" C", "$ebp+0x20")}
 printf "\\n"
-if $fp_hits > __MAXHITS__
-delete 1
-end
 continue
 end
 disable 1
@@ -189,17 +179,15 @@ disable 1
 break *__FPLANE_EXIT__
 commands
 silent
-if $fp_hits > 0 && $fp_hits <= __MAXHITS__
 printf "FPLANE_EXIT  this=%#x "
 {_dump_vec3("Normal", "$esi+0")}
 printf " W=(%08x) [%.9g]", *(unsigned int*)($esi+0xc), *(float*)($esi+0xc)
 printf "\\n"
-end
 continue
 end
 disable 2
 
-break *__LPI_ENTRY__ if {lpi_cond}
+break *__LPI_ENTRY__
 commands
 silent
 set $lpi_hits = $lpi_hits + 1
@@ -213,9 +201,6 @@ set $pl = *(unsigned int*)($ebp+0x14)
 {_dump_vec3(" Normal", "$pl")}
 printf " W=(%08x) [%.9g]", *(unsigned int*)($pl+0xc), *(float*)($pl+0xc)
 printf "\\n"
-if $lpi_hits > __MAXHITS__
-delete 3
-end
 continue
 end
 disable 3
@@ -223,11 +208,9 @@ disable 3
 break *__LPI_EXIT__
 commands
 silent
-if $lpi_hits > 0 && $lpi_hits <= __MAXHITS__
 printf "LPI_EXIT "
 {_dump_vec3("crossing", "$eax")}
 printf "\\n"
-end
 continue
 end
 disable 4
