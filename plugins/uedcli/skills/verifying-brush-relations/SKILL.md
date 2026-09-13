@@ -86,6 +86,27 @@ while the counter moved past them. If the edit's intent is "extend this object,"
 at the moving face usually needs the SAME edit applied to it, not just a post-hoc check that it's
 still touching — decide this from the BEFORE snapshot, before you move anything.
 
+**A companion doesn't have to touch the SPECIFIC face you're moving — it can be flush against, or
+nested inside, a DIFFERENT face of the same brush.** A cupboard built into a counter's underside
+touches the counter's BOTTOM face, not the west face you're extending; a decorative trim strip on a
+raised ceiling sits flush against the ceiling's OWN edge, not the wall below it. Confirmed on real
+edits, repeatedly: a counter extension left two under-counter cupboards behind (one now shorter than
+the counter, one entirely outside it) because they related to the counter's bottom/footprint, not
+its moving west face; a ceiling raise moved a wall-mounted decorative trim without the alcove/niche
+it trims, because the trim was checked against the wall, not the ceiling that actually moved; a wall
+widen left a holo-projector device only partially repositioned. Don't scope the companion search to
+"things coincident with the ONE face I'm moving" — read the FULL Core Pattern sweep below (bare
+brush name, every face, every footprint category) and treat ANY `contains`/`coincident` relation on
+ANY face of the brush as a companion candidate, not just the ones on the face you touched.
+
+**When you find a companion (or a cosmetic consequence, like a texture that no longer matches) and
+can't cleanly resolve what should happen to it, STOP and ask — don't silently ship a guess.**
+Confirmed repeatedly: raising a ceiling left a visibly mismatched texture on the newly-exposed wall
+strip with no flag; widening a wall left one segment moved and the matching segment untouched,
+creating an ugly seam, with no flag; a companion niche was left unmoved next to a raised ceiling
+trim, with no flag. Silently doing the obvious 80% and hoping the rest doesn't matter is worse than
+asking — a wrong guess reads as confident and passes casual review, an honest question doesn't.
+
 **Companions can have their OWN companions — sweep transitively, not just once from the brush
 you're editing.** A companion you find via its relation to the face you're moving may itself be
 flush against something else that never touches that face at all. Confirmed on a real edit: five
@@ -181,6 +202,15 @@ This check is scoped to cross-brush RELATIONS — it doesn't cover texture or fl
 - **Picking the nearest/first plausible face for a vague direction without checking it against
   neighboring rooms.** An internal connecting wall can look just as valid a candidate as the true
   exterior wall — see "Confirm you're moving the right face first" above.
+- **Only checking for companions on the face you're moving.** A cupboard under a counter, a trim
+  strip on a ceiling — these touch a DIFFERENT face of the same brush, not the one you edited. See
+  "A companion doesn't have to touch the SPECIFIC face" above.
+- **Silently shipping a partial or guessed fix instead of asking.** A companion you're unsure how to
+  handle, a texture that no longer matches, a seam left by an incomplete edit — these all warrant a
+  question, not a confident-looking guess. See the paragraph on this above.
+- **Repositioning an engulfed point actor to "somewhere else" without checking the new spot is
+  clear.** Confirmed pushing an NPC and a pathnode straight into an adjacent wall — see the Known
+  limitation section below.
 
 ## Known limitation
 
@@ -200,6 +230,11 @@ uedcli actor find --overlapping-bbox=<new face plane ± a few uu, new extent> --
 
 An actor caught in the OLD slab but not the NEW one was mounted on the face you moved and is now
 detached — reposition it (or confirm it was never actually mounted) before calling the edit done.
+**Verify the NEW position is actually clear before calling it fixed** — `actor find
+--overlapping-bbox=<the actor's new bbox> --kind brush` against nearby solid brushes; confirmed on
+a real edit: an NPC and a pathnode "repositioned out of the way" were pushed straight into an
+adjacent wall, because the new spot was chosen as "away from the moved brush" without checking it
+against anything else nearby. "Somewhere else" is not the same as "somewhere clear."
 
 **This same blind spot cuts the other way too: growing a brush can push it INTO a point actor that
 was already standing nearby, unrelated to the face you moved.** An NPC in the room, a prop sitting
@@ -238,3 +273,10 @@ hall's own already-hollow volume. The same run then found and moved 10 of 15 bru
 five 3-piece post assemblies flush against that wall (2 of 3 per assembly — the connecting struts,
 touching only their own cap and floor plate, were never swept), leaving every one of the five
 split in two.
+
+A round of real grading across several independent edits surfaced the same "wrong face" and
+"different-face companion" failures again, plus two new ones: an NPC and a pathnode "repositioned
+out of the way" of a counter extension were pushed straight into an adjacent wall instead of
+somewhere actually clear, and multiple edits (a ceiling raise, a wall widen) left a visibly wrong
+texture or an incomplete-looking seam with no flag to the human reviewing it, when the agent could
+plainly see the mismatch in its own verification renders.
