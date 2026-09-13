@@ -98,7 +98,7 @@ def diagram_live_names(project, level, names, frame, highlight, out_path):
     if highlight and highlight not in names:
         names.append(highlight)
     args = ["actor", "diagram", *names,
-            "--layout", "quad", "--faces", "wire", "--brush-colors", "csg",
+            "--layout", "quad", "--mode", "wire", "--brush-colors", "csg",
             "--frame", frame, "--size", "1800", "--out", str(out_path)]
     if highlight:
         args += ["--highlight", highlight]
