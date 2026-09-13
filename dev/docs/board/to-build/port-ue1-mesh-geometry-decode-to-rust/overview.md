@@ -1,7 +1,7 @@
 +++
 priority = "p1"
 kind = "implement"
-summary = "Spec written + subagent-reviewed (2026-09-12) -- see spec.md. Ports the whole per-export mesh body (not just the hot arrays) into one Rust call, mirroring package_read.rs's pattern; deletion of the old Python decoders gated on the owner's visual sign-off over level photo + class preview renders across varied meshes in both Unreal Gold and Deus Ex. Needs plan.md next."
+summary = "Spec + plan written and subagent-reviewed (2026-09-12/13) -- see spec.md/plan.md. Ports the whole per-export mesh body into one Rust call (parse_mesh_raw), mirroring package_read.rs's pattern. Build must NOT delete the superseded Python decoders -- gated on the owner's visual sign-off over level photo + class preview renders across varied meshes in both Unreal Gold and Deus Ex."
 +++
 
 # Port UE1 mesh geometry decode to Rust
