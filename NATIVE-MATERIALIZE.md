@@ -301,6 +301,18 @@ divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), no
 - **UNATCO, N=226**: FIXED 2026-09-13 (`dev/docs/board/done/unatco-n-226-leaf-12-gets-a-permeating-light157/`)
   — see the portal-graph-freeze fix above. Re-verified byte-exact N=1..242 (was 225); not yet
   re-verified to its true new ceiling.
+  The re-verify sweep past 242 reached **byte-exact N=1..299** before bailing; N=299's bail was NOT a
+  parity divergence — a stray leftover editor container (from an earlier interrupted N=277 attempt) was
+  starving the host's rootless dockerd, and `packages.ensure_load`'s `dismiss_blocking_dialog` crashed
+  on a `docker exec` against it. Removing the stray container let N=299 build and gate clean, twice.
+  Along the way, fixed a real but unrelated latent bug: `NAV_SELF_REF` (`uedcli/native/unbuilt.py`) was
+  missing `Teleporter` from its self-package-reference whitelist, which could leak a level's own
+  (often hash-named) package into `_level_referenced_packages`'s manifest for an actor-subset whose
+  only self-ref is a Teleporter. Pushing one further N (300) hit a THIRD, different-shaped failure
+  three times running on fresh containers, consistent with genuine host-wide disk exhaustion at the
+  time (`/` and `/workspace/uedcli` both single-digit-GB from full) rather than a new content
+  divergence — not chased further to avoid spending more of an already-critical shared resource.
+  Full writeup: `dev/docs/board/inbox/unatco-n299-ref-build-crash-stray-container/`.
 - **NYC_Bar**: N=59 is FIXED (`dev/docs/board/done/nyc-bar-n-59-brush-region-zone-and-ued22/`) —
   its last three residuals (world-node `NF_IsFront`/`NF_IsBack`, the mover models' `LightMap`, and
   the mover `Polys`' `iLink`/`iBrushPoly`) were one thing: the moving-brush half of

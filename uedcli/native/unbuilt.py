@@ -52,8 +52,14 @@ class DegeneratePoly(ValueError):
 # An intra-level nav/zone ref (`PathNode'<pkg>.PathNode12'`, ...) -> its package qualifier, which for
 # a trunk imported from a shipped map is the level's OWN package name. The probe that finds that name,
 # for `rewrite_self_package_refs` and for `apply._level_referenced_packages` (which must not preload
-# the level's own package as a dependency).
-NAV_SELF_REF = re.compile(r"'([A-Za-z0-9_]+)\.(?:PathNode|PatrolPoint|HidePoint|ZoneInfo|LevelInfo)\d")
+# the level's own package as a dependency). Class list = every class the UNATCO/NYC_Bar corpus was
+# found self-qualifying this way (`Teleporter` added 2026-09-13: an actor subset whose only self-ref
+# is a Teleporter, with no PathNode/etc. self-ref alongside it, otherwise leaked the level's own
+# often-hash-named package into `_level_referenced_packages`'s manifest -- harmless for a full-level
+# materialize (some other actor's ref always also names it) but a real gap for the incremental
+# actor-subset ladder harness, which slices by trunk-order prefix).
+NAV_SELF_REF = re.compile(
+    r"'([A-Za-z0-9_]+)\.(?:PathNode|PatrolPoint|HidePoint|ZoneInfo|LevelInfo|Teleporter)\d")
 
 
 def _to_mylevel(value: str, self_pkgs: set[str]) -> str:

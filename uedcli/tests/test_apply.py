@@ -42,6 +42,22 @@ def test_level_referenced_packages_empty_for_a_bare_engine_only_level():
     assert applymod._level_referenced_packages(lvl) == []
 
 
+def test_level_referenced_packages_excludes_self_pkg_seen_only_via_teleporter():
+    # A trunk imported from a shipped map qualifies intra-level refs with the level's OWN (often
+    # hash-named) package. `NAV_SELF_REF` must recognize that self-ref even when the ONLY actor
+    # carrying it is a Teleporter -- an actor-count-limited subset (the incremental ladder harness)
+    # can easily include a Teleporter self-ref before any PathNode/PatrolPoint/HidePoint/ZoneInfo/
+    # LevelInfo one. Missing this leaked the level's own package into the OBJ LOAD manifest as if it
+    # were an external (unresolvable) dependency.
+    from uedcli.model import Actor, Level
+    lvl = Level()
+    lvl.actors["Teleporter0"] = Actor(name="Teleporter0", cls="Engine.Teleporter")
+    lvl.actors["Teleporter1"] = Actor(
+        name="Teleporter1", cls="Engine.Teleporter",
+        props=[("Target", "Teleporter'edaf1be8103d47699741c6968543b423.Teleporter0'")])
+    assert applymod._level_referenced_packages(lvl) == ["Engine"]
+
+
 def test_install_atomic_replaces_target_from_the_default_staging_dir(tmp_path):
     staging = tmp_path / "staging.dx"; staging.write_bytes(b"NEWBYTES")
     target = tmp_path / "Maps" / "Foo.dx"; target.parent.mkdir()
