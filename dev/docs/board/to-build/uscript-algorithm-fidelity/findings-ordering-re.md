@@ -487,3 +487,72 @@ as `DavesBrushBuilders`'s enum-tag scatter above, which needed a live `AllocateN
 resolve, not static reasoning. Not attempted this pass (no live UED22/winedbg environment
 available). Board item: `dev/docs/board/done/extendedbuilders-multi-class-defaultproperties/`.
 
+## Update (2026-09-13, later pass): ExtendedBuilders front-tie re-examined — three candidate causes
+## cleared by measurement, confirmed blocked on live capture, not a research dead end
+
+Re-checked all three angles the board item's own investigation left open — own-new gather timing for
+shared engine-pool names, class-1-tail/class-2-head interleaving, a possible refcount miscount —
+against the code as it stands post-`7c2cd1ea`. All three are cleared:
+
+- **Engine-pool names are gathered once, correctly.** `_gather_names`'s `seen` list dedups by
+  identity — a name is never re-touched or repositioned once added, regardless of which class's walk
+  reaches it. Moot check either way: all 11 names in the diverging name-table range (index 7-17:
+  `BuildCube`, `GetVertexCount`, `Editor`, `Core`, `GroupName`, `Vertex3f`, `Width`, `System`,
+  `EndBrush`, `Breadth`, `BeginBrush`) turn out to carry a REAL dumped `global_index` (`Core`=16,
+  `Editor`=18, `System`=204, the rest 4241-4289 — pre-existing names from `BrushBuilder`'s own script,
+  same "reused, never own-new" class `DavesBrushBuilders` already established for its own tied pair).
+  `order_package`'s presort (`sorted(gathered, key=by_name_index)`) sorts by this index NUMERICALLY, so
+  raw gather-array position is provably irrelevant for all 11 — confirmed by manually re-splicing each
+  into different raw-gather positions and observing zero change in `msvc_qsort`'s output.
+- **Class-boundary interleaving is already correct.** Decoded `mine`'s own compiled bytes and
+  `golden`'s bytes independently through `name_creation_order(class_order, top_level_by_class)` +
+  `_gather_names`: byte-identical 84-item gather arrays AND identical refcounts for every name, not
+  just the 11 in question. The `7c2cd1ea` per-class `late_name_refs` flush is doing its job.
+- **The refcounts are not miscounted.** Traced `BuildCube`/`GetVertexCount` (refcount 3, the pair
+  heading the tied range) to real provenance: each is a `<<FName` token in a function-call op (not an
+  object ref) — `BuildCube`: its own `FriendlyName` (1) + two calls in `ExtParallelepiped.Build`
+  (Hollow branch calls it twice) = 3. `GetVertexCount`: one call in `ExtParallelepiped.BuildCube` +
+  two in `ExtWave.BuildTerrain` = 3. Confirmed from real decoded body bytes in BOTH packages
+  independently, identical. The "genuinely tied" claim holds, on a verified-correct count.
+
+**New finding: a second, previously unreported divergence.** Name-table index 70-76: golden has
+`Vector, LRi, LRj, LRk, Ri, Rj, Rk`; ours has `LRi, LRj, LRk, Ri, Rj, Rk, Vector` (`Vector` moved to the
+tail of the run instead of the front). `Vector` carries a real global index (31) and refcount 0;
+`LRi`/`LRj`/`LRk` (`BuildCube`'s own params) and `Ri`/`Rj`/`Rk` (`Build`'s own locals) are genuinely
+own-new, refcount 0, no global index — their OWN mutual order is already right (matches golden), only
+`Vector`'s slot relative to them is wrong. Same bug class as `DavesBrushBuilders`'s still-open
+enum-tag scatter (an intrinsic/type name's registration point relative to a tied run of declared
+identifiers) — now confirmed present in a second package.
+
+**Corrected tier size**: the refcount=0 tier both this scatter and (via `msvc_qsort`'s whole-array
+recursion sensitivity) the front swap sit near is **39 names**, not the "~90" the prior pass estimated
+— `ScriptText`, `Direction`, `LRi/LRj/LRk`, `_tessellated`, `N/i/j/k`, `ReturnValue`, `Ri/Rj/Rk`,
+`dx/dy/dz`, `WidthSeg`, `DepthSeg`, `nbottom`, `X/Y`, `idx`, `WidthStep`, `DepthStep`, plus intrinsic
+type names with real global indices (`Package`, `Object`, `Class`, `Vector`, `Struct`,
+`FloatProperty`, `IntProperty`, `StructProperty`, `BoolProperty`, `Function`, `NameProperty`,
+`TextBuffer`, `BrushBuilder`). Still far past brute-force reach (39!), and — since the front-group
+swap sits in the refcount 2/3 tiers, OUTSIDE this refcount-0 tier — getting this tier's true order
+right could, in principle, resolve the front swap too as a side effect of a shifted recursion boundary
+(matches this board item's own prior observation that a tail change moved the front tie from index 12
+to index 7); untested, no way to try without the true order.
+
+**Conclusion: confirmed blocked on docker/winedbg availability in this environment, not a research
+dead end.** Every static angle available here is exhausted. What a live `AllocateNameEntry` capture
+(`core.dll` VA `0x1005cdc0`, `harness/dump_name_creation_order.py`) of a real `UCC.exe make` of
+`ExtendedBuilders` specifically needs to answer:
+
+1. Where does `Vector` (the `vector` type keyword, referenced only via each `LRi`/`LRj`/`LRk`/`Ri`/
+   `Rj`/`Rk` declaration's type-tail, never by an explicit `<<FName` in this package's own source)
+   actually get interned relative to those six params/locals?
+2. The true relative registration order of `BuildCube`/`GetVertexCount` (refcount 3) against
+   `Editor`/`Core`/`GroupName`/`Vertex3f`/`Width`/`System`/`EndBrush`/`Breadth`/`BeginBrush` (refcount
+   2) — all 11 already carry real dumped indices (independently validated: `FrameBuilder`/
+   `RahnemBrushBuilders`/`DavesBrushBuilders` contain several of the same names with no issue), so this
+   is either a dump correction for one of them, or (more likely) confirmation that `msvc_qsort`'s
+   recursion does something on THIS array's shape that the existing instruction-level disassembly
+   re-verification (covering the algorithm's structure, not every recursion shape) didn't catch — an
+   instrumented capture of the actual `SavePackage` sort call's input array would settle this directly.
+
+No code changed this pass (`uedcli/uscript/reorder.py`/`ordering.py` unmodified). Diagnostic scripts
+used were ephemeral (`_scratch/`, not committed — none produced a new checkable rule to pin).
+

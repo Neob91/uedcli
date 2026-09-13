@@ -213,6 +213,21 @@ strict gate autonomously.
   classes) — the SAME bug class as `DavesBrushBuilders`'s enum-tag scatter, which `findings-ordering-
   re.md` already concluded needs a live `AllocateNameEntry` capture, not more static reasoning, to
   pin. Not attempted here (no live UED22/winedbg environment in this sandbox).
+  **2026-09-13, follow-up static pass**: re-checked all three prior candidate causes (own-new gather
+  timing for engine-pool names, class-boundary interleaving, a refcount miscount) — all cleared by
+  direct measurement. All 11 names in the diverging range (`BuildCube`/`GetVertexCount`/`Editor`/
+  `Core`/`GroupName`/`Vertex3f`/`Width`/`System`/`EndBrush`/`Breadth`/`BeginBrush`) carry a REAL dumped
+  `global_index`, not "own-new" — gather-array raw position is provably moot for them (`sorted(...,
+  key=by_name_index)` ignores it). `mine`'s and `golden`'s decoded gather arrays and refcounts are
+  byte-identical across all 84 names, not just these 11 — the class-boundary fix is correct.
+  `BuildCube`/`GetVertexCount`'s refcount=3 is traced to real call-site `<<FName` tokens (declaration +
+  call sites), confirmed identical from both packages' own decoded bytes. A SECOND, previously
+  unreported divergence was found at name-table index 70-76 (`Vector` vs `BuildCube`'s params
+  `LRi`/`LRj`/`LRk` and `Build`'s locals `Ri`/`Rj`/`Rk`, all refcount 0) — the same bug class as
+  `DavesBrushBuilders`'s enum-tag scatter. The true ambiguous refcount=0 tier is 39 names (corrects the
+  earlier "~90" estimate), still far past brute-force reach. Confirmed blocked on docker/winedbg
+  availability, not a research dead end — full evidence and the precise live-capture questions in
+  `findings-ordering-re.md`'s 2026-09-13 update.
 - **Calling an inherited `final` function, and reading an inherited member variable, are both FIXED
   (2026-09-13)**: an ordinary call to a function the class being compiled doesn't itself
   declare/override, any `Super.Foo()` call (always an ancestor's function, even when the current
