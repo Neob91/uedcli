@@ -31,9 +31,9 @@ from .ast import ClassDecl, ConstDecl, EnumDecl, FuncDecl, StateDecl, StructDecl
 from .bytecode import Tok, encode_script
 from .crc import script_text_crc
 from .env import InstallEnv
-from .lower import (EX_FINAL_FUNCTION, EX_LABEL_TABLE, LowerError, Scope, build_scope, consts_of,
-                    enum_type_names, enums_of, local_funcs_of, lower_function, lower_state_body,
-                    members_of, _mem_size)
+from .lower import (EX_FINAL_FUNCTION, EX_INSTANCE_VARIABLE, EX_LABEL_TABLE, LowerError, Scope,
+                    build_scope, consts_of, enum_type_names, enums_of, local_funcs_of, lower_function,
+                    lower_state_body, members_of, _mem_size)
 from .model import (ClassBody, CompiledPackage, ConstBody, Dependency, EnumBody, Export, FunctionBody,
                     Import, Name, ObjectBody, PropertyBody, StateBody, StructBody, TextBufferBody,
                     TextureBody, TextureMip)
@@ -619,6 +619,7 @@ def _build_one_state(b: _Build, decl: ClassDecl, state: StateDecl, super_name: s
     except LowerError as e:
         raise NotImplementedError(f"cannot lower state {state.name!r}: {e}") from e
     _register_final_call_imports(b, toks)
+    _register_member_var_imports(b, toks, _member_graph(b))
     b.states[skey] = _State(key=skey, name=state.name, class_key=b.okey(f"class:{decl.name}"),
                             line=line, text_pos=text_pos, toks=tuple(toks),
                             script_size=sum(_mem_size(t) for t in toks))
@@ -691,6 +692,7 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
 
     _register_struct_member_imports(b, toks, _struct_var_map(b, fkey), _member_graph(b))
     _register_final_call_imports(b, toks)
+    _register_member_var_imports(b, toks, _member_graph(b))
 
     b.funcs[fkey] = _Func(key=fkey, name=func.name, class_key=b.okey(f"class:{decl.name}"),
                           line=line, text_pos=text_pos,
@@ -1349,6 +1351,36 @@ def _register_final_call_imports(b: _Build, toks) -> None:
                 outer = _add_import(b, owner_cls)
                 b.imports[ident] = _ImportSpec(class_package="Core", class_name="Function",
                                                outer=outer, object_name=func_name)
+        for kind, val in t.parts:
+            if kind == "sub":
+                walk(val)
+            elif kind == "parms":
+                for s in val:
+                    walk(s)
+
+    for t in toks:
+        walk(t)
+
+
+def _register_member_var_imports(b: _Build, toks, graph: ClassGraph) -> None:
+    """After lowering, import the target of every INHERITED instance-variable access (a member field
+    the class being compiled doesn't itself declare/override). `lower.py` marks such an access's obj
+    identity `mem:<Class>.<Name>` (never a bare identifier, reserved for the class's own field,
+    resolved as a same-package export) — same shape as `_register_final_call_imports`, but a Property
+    import (the field's concrete UProperty subclass, e.g. IntProperty) rather than a Function import."""
+    def walk(t) -> None:
+        if t.op == EX_INSTANCE_VARIABLE:
+            ident = next((v for k, v in t.parts if k == "obj"), None)
+            if ident is not None and ident.startswith("mem:") and ident not in b.imports:
+                owner_cls, field = ident[len("mem:"):].rsplit(".", 1)
+                label = graph.member_type(owner_cls, field)
+                if label is None or label not in _SCALAR_KINDS:
+                    raise NotImplementedError(
+                        f"inherited member {owner_cls}.{field}: type {label!r} unsupported")
+                outer = _add_import(b, owner_cls)
+                b.imports[ident] = _ImportSpec(class_package="Core",
+                                               class_name=_SCALAR_KINDS[label].prop_class,
+                                               outer=outer, object_name=field)
         for kind, val in t.parts:
             if kind == "sub":
                 walk(val)

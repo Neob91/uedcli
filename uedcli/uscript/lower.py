@@ -116,8 +116,19 @@ def _value_size(t: str, graph=None) -> int:
 
 @dataclass(frozen=True, kw_only=True)
 class Symbol:
+    """A resolved identifier. `owner` is the class that actually DECLARES a `"member"` symbol, set
+    only when that isn't the class being compiled (an inherited field reached via a `ClassGraph`) —
+    same role `CallTarget.owner` plays for an inherited final-function call."""
     storage: str                    # "local" | "member"
     type: str
+    owner: str | None = None
+
+
+def _member_ident(field: str, owner: str | None) -> str:
+    """The `EX_InstanceVariable` obj identity for `field` — a bare name for the class's own member
+    (resolves to a same-package export), else `mem:<owner>.<field>` so `compile.py` knows to import
+    the property from its declaring class (mirrors `_final_call_ident` for functions)."""
+    return field if owner is None else f"mem:{owner}.{field}"
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -206,7 +217,8 @@ class Scope:
         if self.graph and self.super_name:
             t = self.graph.member_type(self.super_name, name)
             if t is not None:
-                return Symbol(storage="member", type=t)
+                owner = self.graph.member_owner(self.super_name, name)
+                return Symbol(storage="member", type=t, owner=owner)
         return None
 
     def func(self, name: str) -> CallTarget | None:
@@ -233,6 +245,18 @@ class Scope:
             return self.graph.member_type(self.super_name, field) if (
                 self.graph and self.super_name) else None
         return self.graph.member_type(cls, field) if (self.graph and cls) else None
+
+    def member_owner_of(self, obj_type: str, field: str) -> str | None:
+        """The declaring class of `field` on `obj_type` (an OBJECT type), when it differs from the
+        class being compiled — None for the class's own declared field (bare identity) or a struct
+        field (a `StructMember` token, handled by a separate import mechanism)."""
+        cls = _class_of(obj_type)
+        if self._is_own(cls):
+            if field.casefold() in self._members:
+                return None
+            return (self.graph.member_owner(self.super_name, field)
+                    if (self.graph and self.super_name) else None)
+        return self.graph.member_owner(cls, field) if (self.graph and cls) else None
 
     def method_of(self, obj_type: str, name: str) -> CallTarget | None:
         cls = _class_of(obj_type)
@@ -807,8 +831,9 @@ class _Lowerer:
             if cexpr is not None:
                 return self.expr(cexpr)
             raise LowerError(f"unresolved identifier {e.text!r}")
-        op = EX_INSTANCE_VARIABLE if sym.storage == "member" else EX_LOCAL_VARIABLE
-        return self._var(op, e.text, sym.type), sym.type
+        if sym.storage == "member":
+            return self._var(EX_INSTANCE_VARIABLE, _member_ident(e.text, sym.owner), sym.type), sym.type
+        return self._var(EX_LOCAL_VARIABLE, e.text, sym.type), sym.type
 
     @staticmethod
     def _var(op: int, field: str, ty: str) -> Tok:
@@ -832,7 +857,8 @@ class _Lowerer:
             ftype = self.scope.member_of(base_type, field)
             if ftype is None:
                 raise LowerError(f"unresolved member {base_type}.{field}")
-            member = self._var(EX_INSTANCE_VARIABLE, field, ftype)
+            owner = self.scope.member_owner_of(base_type, field)
+            member = self._var(EX_INSTANCE_VARIABLE, _member_ident(field, owner), ftype)
             return self._context(base_tok, base_type, member, ftype), ftype
         raise LowerError(f"member access on non-object/struct type {base_type!r}")
 
@@ -1025,17 +1051,19 @@ def canon(tok: Tok) -> Tok:
     editor spells locals/params from its boot global name pool (e.g. `A`, `X`), not the source — the
     owner+opus-blessed FName-case exclusion. Comparing canon() forms ignores that spelling.
 
-    An `EX_FinalFunction` obj identity for an inherited function carries a `func:<Class>.<Name>`
-    qualifier (`_final_call_ident`) so `compile.py`'s `resolve_inv` can find the right cross-class
-    import — but the real compiled bytecode only ever stores the target object's own bare NAME
-    (`upackage.Package.name_of_ref` never qualifies it), so a decoded golden token has just `<name>`.
-    Strip the qualifier here, not at the lowering site, so the qualified form still does its real job
-    (disambiguating the import) right up until the moment two token trees are compared as data."""
+    An `EX_FinalFunction`/`EX_InstanceVariable` obj identity for an inherited function/member carries a
+    `func:<Class>.<Name>`/`mem:<Class>.<Name>` qualifier (`_final_call_ident`/`_member_ident`) so
+    `compile.py`'s `resolve_inv` can find the right cross-class import — but the real compiled
+    bytecode only ever stores the target object's own bare NAME (`upackage.Package.name_of_ref` never
+    qualifies it), so a decoded golden token has just `<name>`. Strip the qualifier here, not at the
+    lowering site, so the qualified form still does its real job (disambiguating the import) right up
+    until the moment two token trees are compared as data."""
     parts = []
     for part in tok.parts:
         match part:
             case ("obj", ident) | ("name", ident):
-                if part[0] == "obj" and ident.startswith("func:") and "." in ident:
+                if (part[0] == "obj" and "." in ident
+                        and ident.split(":", 1)[0] in ("func", "mem")):
                     ident = ident.rsplit(".", 1)[1]
                 parts.append((part[0], ident.casefold()))
             case ("sub", t):

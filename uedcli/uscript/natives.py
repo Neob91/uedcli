@@ -308,6 +308,7 @@ class ClassSig:
     package: str
     super_name: str | None
     members: dict[str, str]                 # casefolded field name -> type label
+    member_owner: dict[str, str]             # casefolded field name -> declaring class's real name
     functions: dict[str, FuncBody]          # casefolded function name -> its FuncBody
 
 
@@ -474,12 +475,15 @@ class ClassGraph:
         e = pkg.exports[idx1 - 1]
         super_name = pkg.name_of_ref(e["sup"]) if e["sup"] != 0 else None
         members: dict[str, str] = {}
+        member_owner: dict[str, str] = {}
         functions: dict[str, FuncBody] = {}
         if super_name:
             sup = self.class_sig(super_name)
             if sup is not None:
                 members.update(sup.members)
+                member_owner.update(sup.member_owner)
                 functions.update(sup.functions)
+        own_name = pkg.names[e["nm"]]
         cur = _class_children(pkg, idx1)
         for _ in range(4096):
             if cur <= 0:
@@ -488,19 +492,28 @@ class ClassGraph:
             kind = pkg.name_of_ref(ee["cls"])
             if kind in PROPERTY_TYPES:
                 prop = _decode_property(pkg, cur, "")
-                members[pkg.names[ee["nm"]].casefold()] = prop_type_label(prop)
+                nm_cf = pkg.names[ee["nm"]].casefold()
+                members[nm_cf] = prop_type_label(prop)
+                member_owner[nm_cf] = own_name
             elif kind == "Function":
                 fb = read_function(pkg, cur)
                 functions[fb.name.casefold()] = fb
             cur = _field_next(pkg, cur)
-        sig = ClassSig(name=pkg.names[e["nm"]], package=pkg.name, super_name=super_name,
-                       members=members, functions=functions)
+        sig = ClassSig(name=own_name, package=pkg.name, super_name=super_name,
+                       members=members, member_owner=member_owner, functions=functions)
         self._cache[key] = sig
         return sig
 
     def member_type(self, class_name: str, field: str) -> str | None:
         sig = self.class_sig(class_name)
         return sig.members.get(field.casefold()) if sig else None
+
+    def member_owner(self, class_name: str, field: str) -> str | None:
+        """The real name of the class that DECLARES `field` (own or inherited via `class_name`'s super
+        chain) — None if unresolved. Used to import an inherited member with the correct Outer, the
+        same role `FuncBody.class_name` plays for an inherited final-function call."""
+        sig = self.class_sig(class_name)
+        return sig.member_owner.get(field.casefold()) if sig else None
 
     def function(self, class_name: str, name: str) -> FuncBody | None:
         sig = self.class_sig(class_name)
