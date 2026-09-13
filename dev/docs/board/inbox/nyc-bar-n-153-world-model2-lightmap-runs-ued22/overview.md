@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "NYC_Bar bails at N=153: root-caused to native's world gather/raytrace not treating a closed Mover (DeusExMover9) as an occluder, so Light5 wrongly lights 3 world stair-tread surfs through the door and wrongly fails to light the door's own face. Not fixed -- needs a structural change unifying the world and mover light bakes."
+summary = "NYC_Bar bails at N=153: Light5 wrongly lights 3 world stair-tread surfs UED22 leaves dark, and native never lights the closed door's (DeusExMover9) own face either. Live gdb capture (2026-09-13) confirmed the door's mover-mirrored BSP surf IS a real static-tree node and DOES get moving-brush-filtered during Light5's gather -- but in a DIFFERENT cube-map face pass than the one visiting the tread surfs, so it cannot be occluding them by rasterization. illuminateSurf's per-lumel raytrace is never even invoked for the 3 tread surfs (0 hits) with any light, and the gather-commit routine (0x100a4ba0) has no occlusion test beyond the already-ruled-out plane-distance cull -- so GetVisibleSurfs itself must be excluding them, via a mechanism not yet found (likely zone/portal reachability, possibly UNRELATED to the mover). The original mover-occlusion theory does not survive this capture. Not fixed; no mask; next step below."
 +++
 
 # NYC_Bar N=153 — three world `LightMap` records get a light run UED22 leaves empty
@@ -154,8 +154,81 @@ gather/raytrace when `DeusExMover9` is closed — same method already used for
 `island-n-332-leaf-273-permeating-light-vertex-tie` and `unatco-n-226-leaf-12-gets-a-permeating-
 light157`. No mask added; `visible_surfs.rs`/`light.rs`/`unbuilt.py` unchanged this pass.
 
+## Live gdb capture (2026-09-13) — the moving-brush theory does NOT survive contact
+
+Per the standing method (Island N=332 / UNATCO N=226 style), captured a real UED22 `LIGHT APPLY`
+run on the N=153 subset live under gdb, harness committed at
+`dev/docs/spikes/2026-09-13-nycbar-n153-mover-occlusion/`.
+
+**`mover_occlusion_probe.py`** (breaks in `render.dll`'s `URender::GetVisibleSurfs`/`OccludeBsp`,
+addresses confirmed by fresh live disassembly, `harness/disasm_probe.py` → `logs/disasm.log`):
+
+- **`Level->BrushTracker` IS non-NULL during `LIGHT APPLY`** — settles the "NOT determined" question
+  in `port-urender-getvisiblesurfs-so-each-light-gets/overview.md`.
+- **A real static-tree `FBspNode` DOES carry a dynamic `iSurf`** (310–315, the door's 6
+  mover-mirrored surfs) — `SurfIsDynamic` fires true on it during Light5's gather. This CONTRADICTS
+  this item's own 2026-09-12 static-disassembly finding ("no node's iSurf is ever set to a dynamic
+  index by either `Attach` or `Update`") — some third mechanism (not yet found, likely CSG reserving
+  the opening node's `iSurf` for the mover at initial build) does assign it. Worth a separate finding.
+- **But** the moving-brush filter, read correctly this time via live disassembly, does NOT prune the
+  node's subtree — it only SKIPS THE BOX-OCCLUSION TEST for that one node (`or $0x10,0x37(%edi)` is
+  never reached; execution jumps to the same place a `iRenderBound==-1` early-out reaches), then the
+  node still runs through `IsFront`/frustum/backface/zone-reachability/emission like any other node.
+- **The dynamic-surf node and the 3 tread-surf nodes are NEVER visited in the same cube-map face
+  pass** for Light5 (checked directly against the per-hit sequence log): the dynamic hits cluster in
+  one face's traversal window, the tread hits in two DIFFERENT, non-overlapping windows. Since
+  `OccludeBsp`'s opaque-subtracts-spans occlusion only accumulates within ONE face's shared span
+  buffer, the door's surf cannot be occluding the treads by rasterization — they're never in the same
+  raster pass at all.
+
+**`illuminate_ray_probe.py`** (breaks in `illuminateSurf`'s own per-lumel `LineCheck` call,
+`Editor.dll 0x100a5a04`/`0x100a5a07`, conditioned on `iSurf ∈ {67,95,97}`): `illuminateSurf` IS
+entered once per target surf (`SURF_ENTER` fires exactly 3 times, matching "called once per lit
+static surface") but **the shadow-ray call site never fires even once** for any of them. Per the
+pipeline (§1 reset → §2 gather → §3 allocate → §4 raytrace), this means these 3 surfaces' per-surface
+light list is EMPTY by raytrace time — Light5 was never committed to it.
+
+**`gather_disasm_probe.py`** (full live disassembly of `0x100a4ba0`..`0x100a5010`, the gather's
+per-surf commit loop that runs AFTER `GetVisibleSurfs` returns its `iSurfs` set, per surf per light):
+decoded completely. The only two gates in this whole routine are (1) a light-flag bit test
+(`bSpecialLit`-shaped) and (2) the already-known-and-ruled-out perpendicular plane-distance vs
+`WorldLightRadius` cull. **No LineCheck, no BrushTracker reference, no other occlusion test exists
+in this function.** So if `GetVisibleSurfs` itself had returned surf 95/97/67 in Light5's `iSurfs`
+set, they WOULD have been committed to the light list (both known gates pass them: right light-flag
+class, and 145–161 uu << Light5's 325 uu radius).
+
+**Conclusion: `GetVisibleSurfs`'s own cube-map render must be excluding these 3 surfaces from
+Light5's visible set**, and it is NOT via the moving-brush filter (ruled out above by traversal-order
+evidence) and NOT via the known plane-distance cull (ruled out by measurement, 2026-09-07). An
+earlier weaker read of this same session's `mover_occlusion_probe.py` log (matching `AddUniqueItem`
+hits to Light5's call by sequence-number proximity) appeared to show surf 67/95/97 being added to
+Light5's visible set — that was almost certainly a FALSE POSITIVE: `TArray<INT>::AddUniqueItem` is a
+single shared template instantiation called from many unrelated places in `render.dll`, and the
+tighter, unambiguous `illuminate_ray_probe.py` evidence (reading `illuminateSurf`'s own `iSurf` stack
+arg directly, no correlation needed) contradicts it. Trust the direct read.
+
+The real mechanism inside `GetVisibleSurfs` is still open — the two leading unexplored candidates are
+(a) zone/portal reachability (step 10 in the port-urender doc: a zone's span buffer never gets
+"reachable" until a visible `PF_Portal` surf merges spans into it — this could be a purely geometric
+fact about the doorway portal's visibility from Light5's exact position, UNRELATED to the mover's
+open/closed state, making the original "closed door occludes" framing a coincidence of geometry
+rather than the true cause), or (b) something in the box/frustum/backface filters specific to these
+nodes' geometry that native's `visible_surfs.rs` port models differently. Neither is confirmed. **Do
+not guess a fix from this alone** — next step is instrumenting `GetVisibleSurfs`'s per-node zone/
+portal bookkeeping (`ActiveZoneMask`, `ZoneSpan[].ValidLines`, the `MergeWith` calls) for Light5's
+specific call, the same way this session instrumented the moving-brush filter.
+
+The mirror-image half (`model_deusexmover9`'s own face not lit by Light5) is UNCHANGED and still
+explained by the already-known, separate gap: `unbuilt.light_apply_movers` never runs the raytrace
+half of `illuminateSurf` for a mover's own polys (`nyc-bar-n-59-brush-region-zone-and-ued22`'s spike,
+"loose ends" — movers always get `iLightActors=-1`). That gap is real and understood; it is not what
+this session's capture was investigating.
+
 ## Repro
 
     ladder_run.py --dx dev/games/deusex/Maps/02_NYC_Bar.dx --from 153 --to 153 --keep-native
     model_dump.py <native_N153.dx> <ref_N153.dx> Model2
     model_dump.py <native_N153.dx> <ref_N153.dx> model_deusexmover9   # the mirror-image half
+
+Live-capture harness (2026-09-13): `dev/docs/spikes/2026-09-13-nycbar-n153-mover-occlusion/harness/`
+(`disasm_probe.py`, `mover_occlusion_probe.py`, `illuminate_ray_probe.py`, `gather_disasm_probe.py`).
