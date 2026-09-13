@@ -35,15 +35,15 @@ def test_corrupt_cache_file_reads_as_a_miss(tmp_path):
     pc.store_geometry(proj, "lvl", "abc123abc123", (b"x", [], [], []))
     d = pc._dir(proj)
     for p in d.glob("scenegeo*"):
-        p.write_bytes(b"not a pickle at all")
+        p.write_bytes(b"not valid marshal data at all")
     assert pc.load_geometry(proj, "lvl", "abc123abc123") is None
 
 
 def test_sweep_old_versions_deletes_old_but_keeps_current(tmp_path):
     proj = _proj(tmp_path)
     d = pc._dir(proj)
-    old_geo = d / "scenegeo0__lvl__abc123abc123.pkl"
-    old_lit = d / "scenelit0__lvl__abc123abc123def456def456.pkl"
+    old_geo = d / "scenegeo0__lvl__abc123abc123.marshal"
+    old_lit = d / "scenelit0__lvl__abc123abc123def456def456.marshal"
     old_geo.write_bytes(b"stale")
     old_lit.write_bytes(b"stale")
     pc.store_geometry(proj, "lvl", "abc123abc123", (b"fresh", [], [], []))

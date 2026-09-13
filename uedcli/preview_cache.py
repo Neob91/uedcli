@@ -8,17 +8,26 @@ uses (`.uedcli/preview/`, `_compose_stem`/`_prune_prefix`, `PREVIEW_KEEP`-bounde
 just costs a rebuild, never serves a stale scene (`preview_native._scene_hashes` errs strict the
 same way `normalize.canonical_level_hash` does).
 
-`_CACHE_VERSION` is baked into the filename PREFIX, not read from the pickled payload — same reason
+Serialized with `marshal`, NOT `pickle` — same reasoning as `schema_cache.py` (its own module
+docstring: "marshal has no pickle RCE"). `.uedcli/preview/` holds only cache entries this same
+user's own uedcli process wrote, but a cache file's whole point is that something OTHER than the
+call that wrote it reads it back later, so it is exactly the kind of file that should stay safe to
+load even if tampered with (a shared machine, a stale NFS mount, a restored backup) — `pickle` would
+let a crafted file execute arbitrary code on load; `marshal` only ever produces plain Python
+built-ins (int/float/bytes/str/tuple/list/dict/None/bool/…), which is everything every payload here
+actually needs.
+
+`_CACHE_VERSION` is baked into the filename PREFIX, not read from the cached payload — same reason
 `schema_cache.py` puts its version in the cache key rather than inside the cached bytes: a payload
-whose shape changed across a uedcli version must never be unpickled and unpacked into new code that
-expects a different shape (`ValueError`, not a clean miss). A version bump makes an old-version file
-invisible to `_prune_prefix`'s prefix glob (it would otherwise sit on disk forever, unlike
-`schema_cache.py`'s own versioned dirs, which its `sweep()` reclaims) — `_sweep_old_versions` below
-deletes any file from a prior version on the next write, so a bump needs no separate migration step.
+whose shape changed across a uedcli version must never be unmarshalled and unpacked into new code
+that expects a different shape (a `ValueError`/`KeyError`, not a clean miss). A version bump makes an
+old-version file invisible to `_prune_prefix`'s prefix glob (it would otherwise sit on disk forever,
+unlike `schema_cache.py`'s own versioned dirs, which its `sweep()` reclaims) — `_sweep_old_versions`
+below deletes any file from a prior version on the next write, so a bump needs no migration step.
 """
 from __future__ import annotations
 
-import pickle
+import marshal
 import re
 from pathlib import Path
 
@@ -52,14 +61,18 @@ def _load(path: Path):
     if not path.is_file():
         return None
     try:
-        return pickle.loads(path.read_bytes())
-    except (pickle.UnpicklingError, EOFError, ValueError, TypeError):
-        return None                          # a corrupt/partial file reads as a miss, never a crash
+        return marshal.loads(path.read_bytes())
+    except Exception:
+        # Broad except deliberately, matching `schema_cache.py::_disc_loads`'s own precedent:
+        # `marshal` can raise a variety of exception types on malformed/truncated input, and every
+        # one of them means the same thing here — a corrupt/partial file reads as a miss, never a
+        # crash.
+        return None
 
 
 def _store(path: Path, payload) -> None:
     tmp = path.with_name(path.name + ".tmp")
-    tmp.write_bytes(pickle.dumps(payload))
+    tmp.write_bytes(marshal.dumps(payload))
     tmp.replace(path)                        # atomic swap — a reader never sees a partial file
 
 
@@ -71,12 +84,12 @@ def load_geometry(project, level_name: str, geom_hash12: str):
     recompute). `polys_no_light` entries omit the trailing lightmap field; `i_surf_by_poly[i]` is
     the world-BSP surf index feeding `polys_no_light[i]`'s eventual lightmap (None for a mover/mesh
     poly, which never gets one)."""
-    return _load(_dir(project) / f"{_compose_stem(_GEO_PREFIX, level_name, geom_hash12)}.pkl")
+    return _load(_dir(project) / f"{_compose_stem(_GEO_PREFIX, level_name, geom_hash12)}.marshal")
 
 
 def store_geometry(project, level_name: str, geom_hash12: str, payload) -> None:
     d = _dir(project)
-    target = d / f"{_compose_stem(_GEO_PREFIX, level_name, geom_hash12)}.pkl"
+    target = d / f"{_compose_stem(_GEO_PREFIX, level_name, geom_hash12)}.marshal"
     _store(target, payload)
     _prune_prefix(d, _GEO_PREFIX, protect=target)
     _sweep_old_versions(d)
@@ -86,12 +99,12 @@ def load_scene(project, level_name: str, geom_hash12: str, light_hash12: str):
     """The cached fully-lit `(polys, texture_table)` for this exact geometry+light combination
     (both hashes must match), or None."""
     stem = _compose_stem(_LIT_PREFIX, level_name, geom_hash12 + light_hash12)
-    return _load(_dir(project) / f"{stem}.pkl")
+    return _load(_dir(project) / f"{stem}.marshal")
 
 
 def store_scene(project, level_name: str, geom_hash12: str, light_hash12: str, payload) -> None:
     d = _dir(project)
-    target = d / f"{_compose_stem(_LIT_PREFIX, level_name, geom_hash12 + light_hash12)}.pkl"
+    target = d / f"{_compose_stem(_LIT_PREFIX, level_name, geom_hash12 + light_hash12)}.marshal"
     _store(target, payload)
     _prune_prefix(d, _LIT_PREFIX, protect=target)
     _sweep_old_versions(d)
