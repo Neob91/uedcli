@@ -210,6 +210,91 @@ once before merge. P1 test surface:
 - `serve` endpoints: read-only contract (no endpoint writes the trunk); error paths return
   structured errors, not tracebacks.
 
+## P1 GUI — settled details
+
+Decided with the owner (2026-09-13). These bind the P1 build.
+
+**Stack.** Frontend: React + TypeScript + react-three-fiber (three.js) + Vite, in an isolated `web/`
+dir. Backend: FastAPI + uvicorn wrapping the model-side library. (Adds a Node/Vite toolchain to the
+repo — kept out of the Python package.)
+
+**Layout.** Classic UnrealEd quad: Top / Front / Side orthographic + one Perspective, always
+visible; double-click a pane to maximize/restore. Organization panel + inspector dock left; audit
+change-list docks bottom.
+
+**Camera (faithful UnrealEd 1.x drag-fly).** Perspective: LMB-drag = dolly forward/back + turn/yaw;
+RMB-drag = look in place; LMB+RMB-drag = pan (up/down + strafe). Ortho: drag-pan + both-button-drag
+zoom, plus modern scroll-zoom. One addition: **Alt-drag orbits** around the selection. (Verified
+against the Unreal/BeyondUnreal Mouse-Control wikis; the original is mouse-only, no WASD.)
+
+**Selection & inspector (read-only).** LMB *tap* (below the camera-fly drag threshold) selects in
+any pane; Ctrl+tap multi-selects; ortho marquee; clicking an actor in the tree selects + frames it.
+One selection, highlighted across all four panes + tree + inspector. The inspector shows name, class,
+transform, folder, labels, `order_value`, then the full raw T3D property set (grouped, collapsible);
+in audit mode changed properties show old→new inline.
+
+**Shading & actor representation.** Full UnrealEd-like view modes per viewport: textured+lit (native
+lightmap bake) / textured-unlit / flat / wireframe. Brushes draw textured+lit; non-brush actors draw
+as their real meshes when the `--native` path renders them (`meshrender`), else a class-coloured
+box/sprite.
+
+**Loading & performance.** Cold open (no cache): draw the authored brush shapes as **wireframe
+instantly from the trunk** (no solve), show a "solving BSP + lighting…" progress, then swap to the
+solved+lit scene when the (~24 s) solve finishes. **Delivery: textures load first, then geometry**, so
+solved geometry paints already-textured (no untextured→textured pop). Re-solve after a change keeps
+the current scene visible with an "updating" badge and swaps when ready (no blank flicker); the solve
+runs on a background worker, **latest-wins** (a newer change supersedes an in-flight solve); a
+light-only change reuses the cached geometry (the `preview_cache` geometry/light hash split).
+
+**Structure & navigation.** In-GUI **level picker**, one level open at a time; switching loads that
+level's scene + its snapshot history. Organization panel = a **folder tree** (primary hierarchy;
+select a node → select/frame its actors) + **label filter facets** (toggle chips, OR-combined,
+matching `actor find --label`) + a find box mirroring `actor find` (name/class/`--prop` + folder
+globstar + label glob). "(no folder)"/"(no label)" nodes reach the unset sets (`--no-folder`/
+`--no-label`).
+
+**Audit UX.** Compare any two states via a **timeline + A/B pickers**; default before = the state just
+before the latest change, after = current. The change list groups **by category** (added / removed /
+prop-changed[incl. moved] / poly-changed[incl. retextured] / order / folder / label / other) with
+one-click regroup by folder or flat-by-actor. Clicking a change auto-frames the union bbox of its
+old+new state; next/prev walks the list. Compare visualization **auto-picks by change type**
+(onion-skin for moves/geometry, A/B flip for appearance; split-screen also available), overridable
+per change.
+
+**Snapshots (the audit store; `safety.md` GUI exemption).** A **content-addressed dedup store** under
+the gitignored `.uedcli/`: each actor file is a hash-keyed compressed blob; a snapshot is a manifest
+`{timestamp, level, {actor-name → hash}, changed-count}`. Unchanged actors are shared across
+snapshots, so many snapshots stay small. A file-watcher on the level's trunk dir takes one snapshot
+per settled write-burst (debounced ~300–500 ms; a multi-verb AI task coalesces to one snapshot).
+Per-level scope. **Disk-budget LRU** (configurable cap, ~500 MB default); pruning frees only blobs no
+surviving snapshot references. The store carries no author claim (a working-tree write has none) and
+is **independent of git** — a snapshot survives a `git reset` that discards the git history, until
+LRU-pruned.
+
+**Timeline with git.** Two lanes on one time axis — a **snapshot lane** and a **commit lane** —
+cross-linked by content-hash match (a snapshot equal to a commit's tree is badged "committed as
+`<sha>`"). A commit with no snapshot is still diffable (its trees are read from git on demand); a
+snapshot never committed is diffable from the store. Either lane can be toggled.
+
+**Theme & look.** Dark-first, with a light + system-follow toggle. Semantic colours — added=green,
+removed=red, prop/moved=amber, poly/retextured=violet, order=teal, folder=blue, label=magenta,
+other=gray; selection = bright cyan/white outline; onion-skin old = translucent desaturated ghost,
+new = solid (removed tints red, added tints green). Exact shades tuned for dark+light contrast at
+build.
+
+**Keybindings.** Camera drags + Alt-orbit + scroll (above); `F` frame selected; double-click pane =
+maximize; `1`–`4` = wireframe / unlit / flat / lit (focused pane); `[`/`]` prev/next change; `Space`
+A/B flip; `O`/`P`/`S` onion / split / flip; `Ctrl+click` multi-select; `Esc` deselect; `/` or
+`Ctrl+F` focus search.
+
+**Grid & coordinates.** Ortho panes show an adaptive **Unreal-Units** grid; a UU coordinate readout
+follows the cursor; the selected actor's location/size is shown; grid toggle.
+
+**Not yet decided (P1, open):** empty/error/loading state details (no level open, solve failure, no
+snapshots yet, no git repo, missing texture) and inspector niceties (jump to a referenced actor via
+`Base`/`Owner`, texture thumbnails, copy value). Left to the plan / build-time discretion unless the
+owner rules otherwise.
+
 ## Deferred (scope boundaries, not specified here)
 
 - **P2 — editing.** Human edits via the model-side write path, under the standing **flock +
