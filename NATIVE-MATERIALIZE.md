@@ -138,6 +138,20 @@ background script is for. An agent asked to push a range may find real failures 
 same pass (good — do not stop it mid-diagnosis just because it also ran some sweeping); the ruling is
 about not STARTING an agent for the mechanical part, not about interrupting one that has found real work.
 
+### Sweeping multiple levels: ONE LEVEL AT A TIME (owner ruling, 2026-09-14)
+
+The editor build is heavy (a full wine/UnrealEd boot per N) and the host's docker daemon/memory is
+often shared with unrelated concurrent sessions — running two levels' sweeps at once (or a sweep
+alongside a manual verification build) has caused real OOM kills. Only ever have ONE level's ladder
+actively building at a time, across the whole session (the mechanical script AND any manual/one-off
+verification runs).
+
+Across the tracked levels, always advance whichever has the LOWEST currently-verified N (absolute,
+not a percentage of its own total actor count) — this naturally interleaves the levels so none races
+far ahead while others sit idle. Once that level's N exceeds the next-lowest level's N, switch to the
+new lowest. A level that bails stops (see above) and drops out of rotation until its fix lands; the
+others keep rotating among themselves the same way.
+
 ### The Parity Ladder artifact — MUST be kept current (owner ruling, 2026-09-05)
 
 The campaign's live status — highest byte-exact N per level, and what blocks the next N — is published
