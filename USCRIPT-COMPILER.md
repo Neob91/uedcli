@@ -114,6 +114,7 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 | UscAutoEmitDefaultsUT99 | UT99 | 1 | perm only | controlled: pins the substrate-aware `_auto_emit_defaults` fix (below) — an object + every scalar type, explicit empty `defaultproperties{}`, no auto-zero tag under UT99; residual is the same UT99 own-name-pool gap as `Fire` |
 | **UWeb** | UT99 | 7 | perm only | **real corpus package**, full byte match at the permutation level (identity/order/case-tolerant) — the substrate-aware `_auto_emit_defaults` fix below was the last blocker; residual is the same UT99 own-name-pool gap as `Fire` |
 | UscIpAddrProbe | UT99 | 1 | perm only | controlled: pins the cross-package-struct-type-resolution fix (below) — a member var AND a function param both typed to `IpDrv.InternetLink.IpAddr`, plus struct-member access on both; residual is the same UT99 own-name-pool gap as `Fire` |
+| UscImportIdentityProbe | UED22 | 1 | perm only | controlled: pins the cross-package import-identity-collision fix (below) — a class (`GameReplicationInfo`) and an inherited field sharing that same display name, both needing separate import rows; residual is the same open import/name table order tie-break `ExtendedBuilders` hits |
 
 Controlled (non-corpus) fixtures `UscHello`/`UscVars`/`UscBB`/`UscFn`/`UscW`/`UscSt` all pass the
 strict gate autonomously.
@@ -571,25 +572,38 @@ strict gate autonomously.
   same pre-existing UT99 own-name-pool gap as `Fire`/`UWeb`. `dev/docs/board/done/
   uscript-cross-package-struct-type-not-resolved/`.
 
-  `IpServer` itself is STILL NOT a corpus win: past this gap it hits two further, NEW, unrelated gaps,
-  both found reattempting it and building the regression fixture above, both scoped out (small-fix cap
-  for this session) rather than chased:
-  - `Level.Game.GameReplicationInfo.Region` (`UdpServerQuery.ParseQuery`) raises
+  `IpServer` itself is STILL NOT a corpus win, but one of its two remaining gaps is now FIXED:
+  - **The cross-package import-identity collision is FIXED (2026-09-14).**
+    `Level.Game.GameReplicationInfo.Region` (`UdpServerQuery.ParseQuery`) used to raise
     `KeyError: 'GameReplicationInfo'` — `GameInfo`'s own member field `GameReplicationInfo` is named
-    identically to its type, the class `Engine.GameReplicationInfo`. `compile._imports_by_display`
-    (and, deeper, `reorder._Decoder`'s whole import-identity model) keys an import purely by its bare
-    display name, so two DIFFERENT imports sharing one name collide onto a single identity and one
-    never lands in the final import table. Not small: fixing it needs each import to carry a unique
-    internal key the way an export already does (`ekey`), threaded through `reorder.py`'s ref
-    resolution AND `ordering.order_package`'s refcount tally, not just the final relabeling step.
-    `dev/docs/board/inbox/uscript-cross-package-import-identity-collides/`.
+    identically to its type, the class `Engine.GameReplicationInfo`, and every step of the ordering
+    pipeline (`compile._imports_by_display`, and, deeper, `reorder._Decoder`'s whole import-identity
+    model) resolved an import purely by its bare display name, so the two same-named rows collided
+    onto one identity and one silently dropped from the import table. Fixed by giving every import a
+    disambiguated identity end to end, mirroring the export `ekey`/`func:`/`mem:` pattern already used
+    elsewhere: `reorder._Decoder` keys each import row by its own table index (`ikey`, parallel to
+    `ekey`) instead of its display spelling, threaded through `objkey`/`streams`/
+    `_class_split_streams` (every raw-ref-to-identity resolution) and `ordering.order_package`'s
+    refcount tally/gather (`o.class_name` — always an unambiguous engine META-TYPE spelling — now
+    resolves through a separate display-keyed map, since it's no longer findable via the
+    identity-keyed one); `reorder.true_order` returns import rows as `(display, outer display)` pairs,
+    the same disambiguation `export_rows` already carried; `compile._imports_by_display` maps a row
+    back to its `b.imports` key by `(display, outer)` when the bare display alone is ambiguous.
+    Verified with a new controlled fixture, `UscImportIdentityProbe` (reproduces the exact
+    `GameInfo.GameReplicationInfo` shape) — `perm_gate` byte-exact against a fresh UED22 UCC build;
+    the strict gate's one residual is the SAME already-tracked import/name table order tie-break gap
+    `ExtendedBuilders` hits, not anything this fix touches. Re-attempting real `IpServer`: it now
+    compiles the WHOLE package with no exception (was: crashed on `ParseQuery`'s first line). Full
+    offline and integration uscript suites re-verified green, no regression on any previously
+    byte-exact/perm-exact package. `dev/docs/board/done/uscript-cross-package-import-identity-collides/`.
   - `MasterServerIpAddr.Addr = Addr.Addr;` (`UdpServerUplink.Resolved`, and the same shape in
     `ParseQuery`/`SendQueryPacket`/…) — the param `Addr` and the `IpAddr` struct's own field `Addr`
     share a name; the compiled `StructMember` token's field identity resolves to the PARAM's own
     export instead of the imported struct field, a silent wrong-bytes bug (no exception, only visible
     via `perm_gate`). Root cause not traced past `lower.py`'s struct-member lowering emitting a bare
-    field-name string for a later pass to resolve. `dev/docs/board/inbox/
-    uscript-struct-member-access-confuses-a-local/`.
+    field-name string for a later pass to resolve. NOT fixed here (out of scope for the import-identity
+    pass above) — this is now the ONLY blocker `perm_gate` finds on a fresh re-attempt of the whole
+    package. `dev/docs/board/inbox/uscript-struct-member-access-confuses-a-local/`.
   Sources+golden saved offline at `_scratch/uscript_survey/IpServer/` (not committed — scratch).
 - **Cross-campaign flag**: `uedcli/native/saveorder.py` (the map-parity path) has its own copy of the
   same CRT `qsort` — worth checking it isn't the mis-ported classic variant we initially (wrongly)

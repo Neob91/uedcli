@@ -34,22 +34,39 @@ class _Decoder:
     def ekey(self, i0: int) -> str:
         return f"E{i0}"
 
+    def ikey(self, j: int) -> str:
+        """A per-ROW import identity key, distinct from its display spelling: two import rows can
+        share a display name (a class `Foo` vs. an inherited field also spelled `Foo` — real, distinct
+        global engine objects) and must stay distinguishable through `ObjInput`/`order_package`, the
+        same reason an export gets `ekey`."""
+        return f"I{j}"
+
     def edisp(self, i0: int) -> str:
         return self.p.names[self.p.exports[i0]["nm"]]
 
     def idisp(self, j: int) -> str:
         return self.p.names[self.p.imports[j][3]]
 
+    def import_outer_key(self, j: int) -> str | None:
+        """Import `j`'s outer, as an IDENTITY key (another import's `ikey`, or None at the top)."""
+        _cp, _cn, pi, _on = self.p.imports[j]
+        return self.ikey(-pi - 1) if pi < 0 else None
+
+    def import_outer_disp(self, j: int) -> str | None:
+        """Import `j`'s outer, as its bare DISPLAY spelling."""
+        _cp, _cn, pi, _on = self.p.imports[j]
+        return self.idisp(-pi - 1) if pi < 0 else None
+
     def ename(self, idx: int) -> str:
         return self.p.names[idx]
 
     def objkey(self, ref: int) -> str | None:
-        """A ref's identity for `obj_refs`: an export KEY, an import DISPLAY name, or None (ref 0)."""
+        """A ref's identity for `obj_refs`: an export KEY, an import KEY, or None (ref 0)."""
         if ref == 0:
             return None
         if ref > 0:
             return self.ekey(ref - 1)
-        return self.idisp(-ref - 1)
+        return self.ikey(-ref - 1)
 
     def outer_disp(self, outer_ref: int) -> str | None:
         if outer_ref <= 0:
@@ -331,18 +348,21 @@ class _Decoder:
                                  late_name_refs=tuple(late_names)))
         for j in range(len(self.p.imports)):
             cp, cn, pi, on = self.p.imports[j]
-            objs.append(ObjInput(name=self.idisp(j), display=self.idisp(j),
+            objs.append(ObjInput(name=self.ikey(j), display=self.idisp(j),
                                  class_name=self.p.names[cn],
-                                 outer=(self.idisp(-pi - 1) if pi < 0 else None), in_package=False))
+                                 outer=self.import_outer_key(j), in_package=False))
         return objs
 
 
 def true_order(u: bytes, class_order: list[str] | None = None,
               top_level_by_class: dict[str, list[str]] | None = None
-              ) -> tuple[list[str], list[str], list[tuple[str, tuple[str, ...]]]]:
-    """Decode compiled package `u` and return its (names, imports, export_rows) in UCC's table order.
-    `export_rows` are (leaf display name, outer-chain) pairs (the shape `order_override` expects); the
-    outer-chain is outermost->immediate, disambiguating a leaf whose immediate outer repeats.
+              ) -> tuple[list[str], list[tuple[str, str | None]], list[tuple[str, tuple[str, ...]]]]:
+    """Decode compiled package `u` and return its (names, import_rows, export_rows) in UCC's table
+    order. `export_rows` are (leaf display name, outer-chain) pairs (the shape `order_override`
+    expects); the outer-chain is outermost->immediate, disambiguating a leaf whose immediate outer
+    repeats. `import_rows` are (display name, outer display name) pairs, the same disambiguation for
+    imports — a class and an inherited field can share a display name (`compile._imports_by_display`'s
+    docstring), so bare display alone cannot always map an import row back to its compiled identity.
     `class_order`/`top_level_by_class` feed `name_creation_order`'s AST-derived top-level order — see
     its docstring; omit both to keep the old binned-`_decl_forward` behavior. The SAME walk drives
     both the export gather and the name gather (`name_creation_order`'s docstring: object creation and
@@ -352,4 +372,6 @@ def true_order(u: bytes, class_order: list[str] | None = None,
     ordered = order_package(d.objinputs(), creation, default_global_index(), name_creation=creation)
     exp_i = {d.ekey(i): i for i in range(len(d.p.exports))}
     export_rows = [(d.edisp(exp_i[k]), d.outer_chain(exp_i[k])) for k in ordered.exports]
-    return ordered.names, ordered.imports, export_rows
+    imp_i = {d.ikey(j): j for j in range(len(d.p.imports))}
+    import_rows = [(d.idisp(imp_i[k]), d.import_outer_disp(imp_i[k])) for k in ordered.imports]
+    return ordered.names, import_rows, export_rows

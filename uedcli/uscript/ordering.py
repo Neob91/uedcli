@@ -114,7 +114,13 @@ class ObjInput:
     `name` is a package-unique KEY (drives export ordering + `obj_refs`/`class_name`/`outer`
     resolution). `display` is the object's FName spelling for the NAME table (defaults to `name`);
     exports whose display name repeats across the package — a param `A` of two functions — need
-    distinct keys but share a display. `name_refs` / `obj_refs` are the body's ordered `<<FName`
+    distinct keys but share a display. An import can collide the same way: a class and an inherited
+    member field can share a display (e.g. class `GameReplicationInfo` vs. `GameInfo`'s own field
+    `GameReplicationInfo`) — real, distinct global engine objects the real import table carries as two
+    separate rows, so callers building import `ObjInput`s must give each a unique `name` (never the
+    bare display alone) and set `display` explicitly. `outer`, for an import, is likewise the OUTER's
+    `name` (its identity key, resolved back to a display by `_gather_names`/`_reference_counts` via
+    `by`/`by_disp`), not its bare spelling. `name_refs` / `obj_refs` are the body's ordered `<<FName`
     (display names) and `<<UObject` (object KEYS or import display names) emission streams, which set
     the sort keys. `late_name_refs` are `<<FName` refs that register at a LATER compile point than the
     rest of the body — currently just a class's defaultproperties tag stream, compiled after every
@@ -182,7 +188,9 @@ def order_package(objs: list[ObjInput], creation_order: list[str],
                        lambda x, y: name_key.get(y, 0) - name_key.get(x, 0))
 
     exp_gather = [n for n in creation_order if n in tagexp]
-    imp_gather = sorted((o.name for o in objs if not o.in_package), key=by_obj_index)
+    imp_by_name = {o.name: o for o in objs if not o.in_package}
+    imp_gather = sorted((o.name for o in objs if not o.in_package),
+                        key=lambda n: by_obj_index(imp_by_name[n].disp))
     exports = msvc_qsort(exp_gather, lambda x, y: obj_key.get(y, 0) - obj_key.get(x, 0))
     imports = msvc_qsort(imp_gather, lambda x, y: obj_key.get(y, 0) - obj_key.get(x, 0))
     return Ordered(names=names, imports=imports, exports=exports,
@@ -196,9 +204,16 @@ def order_exports(objs: list[ObjInput], creation_order: list[str]) -> list[str]:
 
 def _reference_counts(objs, creation_order, by, tagexp):
     """Simulate the import-tag pass: per body, count each `<<FName` and each `<<UObject`
-    (`operator<<(UObject)` recurses into an import's outer chain), then the explicit `<<Class`."""
+    (`operator<<(UObject)` recurses into an import's outer chain), then the explicit `<<Class`.
+
+    `by` is keyed by each object's disambiguated IDENTITY (`.name`) — an import's `.name` need not be
+    its display spelling (two imports can share a display, e.g. a class `GameReplicationInfo` and an
+    inherited field `GameInfo.GameReplicationInfo` also named `GameReplicationInfo` — see
+    `ObjInput`'s docstring). `o.class_name` is always an engine META-TYPE spelling (`IntProperty`,
+    `Function`, `Class`, …), never ambiguous, so it resolves through a separate DISPLAY-keyed map."""
     name_key: dict[str, int] = {}
     obj_key: dict[str, int] = {}
+    by_disp = {o.disp: o for o in objs if not o.in_package}
 
     def ser_obj(nm: str | None) -> None:
         if nm is None or nm == "None" or nm not in by:
@@ -210,6 +225,11 @@ def _reference_counts(objs, creation_order, by, tagexp):
         if o.outer is not None:
             ser_obj(o.outer)
 
+    def ser_class(name: str | None) -> None:
+        o = by_disp.get(name) if name is not None else None
+        if o is not None:
+            ser_obj(o.name)
+
     for nm in creation_order:
         o = by.get(nm)
         if o is None or not o.in_package:
@@ -220,7 +240,7 @@ def _reference_counts(objs, creation_order, by, tagexp):
             name_key[r] = name_key.get(r, 0) + 1
         for r in o.obj_refs:
             ser_obj(r)
-        ser_obj(o.class_name)
+        ser_class(o.class_name)
     return name_key, obj_key
 
 
@@ -239,12 +259,23 @@ def _gather_names(objs, creation_order, by):
     "Landscape"` sorts after a function param declared later in source than the property it
     defaults). For a single-class package this is still one flush after the whole (only) class's main
     walk, unchanged. Only relative order among names absent from `global_index` matters — anything
-    with a real global index is re-sorted by that below regardless of gather position."""
+    with a real global index is re-sorted by that below regardless of gather position.
+
+    `o.outer`/`o.class_name` may be a disambiguated IDENTITY, not a display spelling (see
+    `_reference_counts`'s docstring) — `outer_disp`/`by_disp` resolve each back to the display string
+    the NAME table actually wants before gathering it."""
     seen: list[str] = []
+    by_disp = {o.disp: o for o in objs if not o.in_package}
 
     def add(n: str | None) -> None:
         if n is not None and n not in seen:
             seen.append(n)
+
+    def outer_disp(o) -> str | None:
+        if o.outer is None:
+            return None
+        ob = by.get(o.outer)
+        return ob.disp if ob is not None else o.outer
 
     add("None")
     pending_late: list[str] = []
@@ -267,7 +298,7 @@ def _gather_names(objs, creation_order, by):
             # ahead of the class's first member, not ahead of the class's own name too.
             add(o.name_refs[1])
         add(o.disp)
-        add(o.outer)
+        add(outer_disp(o))
         for r in o.name_refs:
             add(r)
         pending_late.extend(o.late_name_refs)
@@ -278,11 +309,11 @@ def _gather_names(objs, creation_order, by):
         if o.in_package:
             continue
         add(o.disp)
-        add(o.outer)
+        add(outer_disp(o))
         add(o.class_name)
-        co = by.get(o.class_name)
+        co = by_disp.get(o.class_name)
         if co is not None:
-            add(co.outer)
+            add(outer_disp(co))
     for r in pending_late:                            # the LAST (or only) class's defaultproperties
         add(r)
     return seen

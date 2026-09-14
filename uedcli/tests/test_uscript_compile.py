@@ -66,12 +66,18 @@ def _env() -> InstallEnv:
     return InstallEnv([_UED22])
 
 
-def _golden_orders(pkg) -> tuple[list[str], list[str], list[tuple[str, tuple[str, ...]]]]:
-    """(names, imports, export_rows) read straight from a decoded golden. Each export row is
+def _golden_orders(pkg) -> tuple[list[str], list[tuple[str, str | None]],
+                                 list[tuple[str, tuple[str, ...]]]]:
+    """(names, import_rows, export_rows) read straight from a decoded golden. Each export row is
     (leaf name, outer-chain outermost->immediate) — the chain disambiguates duplicate names functions
-    introduce (a param `A` of `F5` vs of `F7`, three `ReturnValue`s, …); empty for the class itself."""
+    introduce (a param `A` of `F5` vs of `F7`, three `ReturnValue`s, …); empty for the class itself.
+    Each import row is (display name, outer display name) — the same disambiguation for two imports
+    sharing a display (`compile._imports_by_display`'s docstring)."""
     names = list(pkg.names)
-    imports = [pkg.names[on] for (_cp, _cn, _pi, on) in pkg.imports]
+
+    def import_outer(pi):
+        return None if pi >= 0 else pkg.names[pkg.imports[-pi - 1][3]]
+    imports = [(pkg.names[on], import_outer(pi)) for (_cp, _cn, pi, on) in pkg.imports]
 
     def chain(e):
         out, outer = [], e["outer"]

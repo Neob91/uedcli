@@ -358,7 +358,8 @@ def _top_level_name_order(decl: ClassDecl) -> list[str]:
 
 
 def compile_package(src: str, env: InstallEnv, *,
-                    order_override: tuple[list[str], list[str], list[str]] | None = None,
+                    order_override: tuple[list[str], list[tuple[str, str | None]],
+                                          list[tuple[str, tuple[str, ...]]]] | None = None,
                     texture_files: dict[str, bytes] | None = None) -> CompiledPackage:
     """Compile UnrealScript `src` to a linked `CompiledPackage`, byte-exact vs UCC. `env` resolves the
     super's home package + CRC. `texture_files` maps a `#exec TEXTURE IMPORT FILE=` path (as written,
@@ -380,7 +381,8 @@ def compile_package(src: str, env: InstallEnv, *,
 
 
 def _compile_single(src: str, env: InstallEnv,
-                    order_override: tuple[list[str], list[str], list[str]] | None,
+                    order_override: tuple[list[str], list[tuple[str, str | None]],
+                                          list[tuple[str, tuple[str, ...]]]] | None,
                     texture_files: dict[str, bytes] | None = None) -> CompiledPackage:
     decl = parse(src)
     _reject_unsupported(decl)
@@ -1582,7 +1584,7 @@ def _general_orders(b: _Build, class_name: str, super_name: str, config_name: st
                              in_package=True, name_refs=nrefs, obj_refs=orefs))
     for objname, spec in b.imports.items():
         objs.append(ObjInput(name=objname, class_name=spec.class_name, outer=spec.outer,
-                             in_package=False))
+                             display=spec.object_name, in_package=False))
 
     ordered = order_package(objs, creation, default_global_index())
     export_rows = [ident[k] for k in ordered.exports]
@@ -1783,7 +1785,7 @@ def _scalar_obj_inputs(class_name, super_name, members, imports, name_values=())
         obj_refs=(super_name, "ScriptText", *child, class_name, super_name, "Object")))
     for objname, spec in imports.items():
         objs.append(ObjInput(name=objname, class_name=spec.class_name, outer=spec.outer,
-                             in_package=False))
+                             display=spec.object_name, in_package=False))
     creation = [class_name, "ScriptText", *(p.name for p in members)]
     return objs, creation
 
@@ -2466,13 +2468,37 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
         texture_keys=tuple(k for k in b.textures if k.startswith(b.prefix)))
 
 
-def _imports_by_display(b: _Build, display_order: list[str]) -> list[str]:
-    """Map an order of import DISPLAY names (object names, as `reorder.true_order` yields them) to
-    `b.imports` KEYS — a function import is keyed `func:<Class>.<Name>`, not its bare object name."""
+def _imports_by_display(b: _Build, display_order: list[tuple[str, str | None]]) -> list[str]:
+    """Map an order of (display name, outer display name) import identity pairs — as
+    `reorder.true_order` yields them — to `b.imports` KEYS — a function/member import is keyed
+    `func:<Class>.<Name>`/`mem:<Class>.<Name>`, not its bare object name.
+
+    Bare display name alone is AMBIGUOUS: a class and an inherited member field can share one (real
+    UT99 `IpServer`: `GameInfo`'s own field `GameReplicationInfo` is named identically to its type,
+    the class `Engine.GameReplicationInfo` — two distinct global engine objects, two distinct import
+    rows). The outer disambiguates them, the same reason an `order_override`'s EXPORT rows carry an
+    outer-chain (`_export_refs`'s docstring) instead of a bare name. Falls back to the bare-display
+    map only when it is unambiguous (the common case — most imports are the only one of their name)."""
+    def outer_disp(spec: _ImportSpec) -> str | None:
+        return None if spec.outer is None else b.imports[spec.outer].object_name
+
+    by_id: dict[tuple[str, str | None], str] = {}
     by_disp: dict[str, str] = {}
+    disp_count: dict[str, int] = {}
     for key, spec in b.imports.items():
-        by_disp.setdefault(spec.object_name.casefold(), key)
-    return [by_disp[n.casefold()] for n in display_order]
+        disp_cf = spec.object_name.casefold()
+        disp_count[disp_cf] = disp_count.get(disp_cf, 0) + 1
+        od = outer_disp(spec)
+        by_id.setdefault((disp_cf, None if od is None else od.casefold()), key)
+        by_disp.setdefault(disp_cf, key)
+
+    def resolve(disp: str, outer: str | None) -> str:
+        disp_cf = disp.casefold()
+        if disp_count.get(disp_cf, 0) > 1:
+            return by_id[(disp_cf, None if outer is None else outer.casefold())]
+        return by_disp[disp_cf]
+
+    return [resolve(disp, outer) for disp, outer in display_order]
 
 
 def _multi_key_identity(b: _Build, units: list[_ClassUnit]) -> dict[str, tuple[str, tuple[str, ...]]]:
@@ -2509,7 +2535,8 @@ def _multi_key_identity(b: _Build, units: list[_ClassUnit]) -> dict[str, tuple[s
 
 
 def _finalize_multi(b: _Build, units: list[_ClassUnit], package_name: str,
-                    override: tuple[list[str], list[str], list[tuple[str, str | None]]] | None = None
+                    override: tuple[list[str], list[tuple[str, str | None]],
+                                    list[tuple[str, tuple[str, ...]]]] | None = None
                     ) -> CompiledPackage:
     """Order the shared tables and emit the linked `CompiledPackage`. Without `override` a provisional
     order is used (the caller re-derives the real order via `reorder.true_order` and calls again with
