@@ -2324,8 +2324,9 @@ fn collect_repartition_frontier(model: &Model, ni: i32, list_a: &mut Vec<i32>, l
 /// Re-partition every frontier slot that grew a subtree during the detail-brush loop
 /// (`bspRepartition(Model, iChild, 2)`, `Editor.dll 0x1004aa3f`/`0x1004aa90`): reconstruct the
 /// subtree's polygons (`make_ed_polys`) and rebuild via `split_poly_list` onto the same parent
-/// slot. `list_a` grafts onto `NODE_BACK` (native's `i_back` = editor's iFront), `list_b` onto
-/// `NODE_FRONT`. Leaves old subtree nodes as orphans — caller must run
+/// slot. `list_a` grafts onto `NODE_BACK`, `list_b` onto `NODE_FRONT` — no native/editor swap here
+/// (see `collect_repartition_frontier`'s doc: this is the `split_poly_list`-built tree, not the
+/// swapped incremental one). Leaves old subtree nodes as orphans — caller must run
 /// `compact_unreachable_nodes` after, `bsp_refresh` does NOT collect them (surfs/verts only).
 /// Port of `bspRepartition`'s per-subtree call (`Editor.dll 0x10049fc0`), called once per
 /// `collect_repartition_frontier` entry. **The real editor's call is a NODE no-op that PERMANENTLY
