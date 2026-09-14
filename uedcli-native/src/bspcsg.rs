@@ -2272,6 +2272,35 @@ pub(crate) fn compact_unreachable_nodes(model: &mut Model) -> Vec<i32> {
 }
 
 /// Port of `sub_49380` (`Editor.dll 0x10049380`) — see `unatco-verts-points-residual-after-the-zone`.
+///
+/// ORDER (fresh disassembly, `wanchai-n59-mover-polys-model2-diverges`, 2026-09-14): at each node
+/// `sub_49380` checks/recurses `iFront` (`+0x24`, into `List1`) BEFORE `iBack` (`+0x20`, into
+/// `List2`) — confirmed instruction-for-instruction (`0x100493be`..`0x100493fd`: the `iFront`
+/// check/recurse block precedes the `iBack` one in the function body). The previous port checked
+/// `i_back`/`list_a` first.
+///
+/// NO SWAP AT THIS CALL SITE — do not confuse this with the well-established native/engine
+/// `iFront`/`iBack` swap (e.g. `find_nearest_vertex`'s doc, and `repartition_frontier`'s own "native's
+/// `i_back` = editor's iFront"): that swap is a property of the ORIGINAL Pass-1 incremental CSG tree
+/// (`bsp_brush_csg`'s own node placement). This function runs on the tree `split_poly_list` built —
+/// the whole-tree structural repartition just above (`bsp_build`) rebuilds `model.nodes` from
+/// scratch via `split_poly_list`, and `split_poly_list` (`Editor.dll 0x34530`) is a literal,
+/// unswapped port: its own `NODE_FRONT`/`NODE_BACK` recursion (below) is `FPoly::split_with_plane`'s
+/// real `Front`/`Back` classification, matching the editor's `FrontList`/`BackList` directly (see
+/// its doc comment). So on THIS tree, native's `i_front`/`i_back` already ARE the editor's real
+/// `iFront`/`iBack`, no translation needed — `list_b` (this function's `i_front`-empty collector)
+/// is the direct `List1` counterpart and must run first, matching `sub_49380` as disassembled.
+///
+/// This only matters when TWO OR MORE frontier slots each grow a subtree in the same repartition
+/// pass — the relative order of the resulting `repartition_frontier` calls decides which subtree's
+/// soup ends up in `Model.Polys`, since each call overwrites it (see that function's own doc).
+/// WanChai N=59 is the first case in this campaign with two: an existing detail brush's slot
+/// (`Brush323`/`Brush324`, already grown by N=58) and a brand new one (`Brush904`). Checking
+/// `i_back` first visited the new one first and the old one last, so the OLD (stale) soup won;
+/// live-captured against the real editor (`repart_order_trace.py`) confirms it calls the
+/// `Brush323`/`324` subtree's repartition (its own `sub_49380`-collected slot, node `449`) before
+/// `Brush904`'s (node `467`) — the SAME two node indices native's own tree uses for these two
+/// subtrees — so `Brush904`'s soup, correctly, is what UED22 saves.
 fn collect_repartition_frontier(model: &Model, ni: i32, list_a: &mut Vec<i32>, list_b: &mut Vec<i32>) {
     if ni < 0 {
         return;
@@ -2280,23 +2309,24 @@ fn collect_repartition_frontier(model: &Model, ni: i32, list_a: &mut Vec<i32>, l
         let n = &model.nodes[ni as usize];
         (n.i_back, n.i_front)
     };
-    if i_back == -1 {
-        list_a.push(ni);
-    } else {
-        collect_repartition_frontier(model, i_back, list_a, list_b);
-    }
     if i_front == -1 {
         list_b.push(ni);
     } else {
         collect_repartition_frontier(model, i_front, list_a, list_b);
+    }
+    if i_back == -1 {
+        list_a.push(ni);
+    } else {
+        collect_repartition_frontier(model, i_back, list_a, list_b);
     }
 }
 
 /// Re-partition every frontier slot that grew a subtree during the detail-brush loop
 /// (`bspRepartition(Model, iChild, 2)`, `Editor.dll 0x1004aa3f`/`0x1004aa90`): reconstruct the
 /// subtree's polygons (`make_ed_polys`) and rebuild via `split_poly_list` onto the same parent
-/// slot. `list_a` grafts onto `NODE_BACK` (native's `i_back` = editor's iFront), `list_b` onto
-/// `NODE_FRONT`. Leaves old subtree nodes as orphans — caller must run
+/// slot. `list_a` grafts onto `NODE_BACK`, `list_b` onto `NODE_FRONT` — no native/editor swap here
+/// (see `collect_repartition_frontier`'s doc: this is the `split_poly_list`-built tree, not the
+/// swapped incremental one). Leaves old subtree nodes as orphans — caller must run
 /// `compact_unreachable_nodes` after, `bsp_refresh` does NOT collect them (surfs/verts only).
 /// Port of `bspRepartition`'s per-subtree call (`Editor.dll 0x10049fc0`), called once per
 /// `collect_repartition_frontier` entry. **The real editor's call is a NODE no-op that PERMANENTLY
@@ -3577,8 +3607,8 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
     passes::bsp_refresh_points_vectors_stale_orphans(&mut model);
     if stage_counts {
         eprintln!(
-            "STAGE post-repartition-frontier nodes={} verts={} points={}",
-            model.nodes.len(), model.verts.len(), model.points.len()
+            "STAGE post-repartition-frontier nodes={} verts={} points={} polys={}",
+            model.nodes.len(), model.verts.len(), model.points.len(), model.polys.len()
         );
     }
 
@@ -5936,6 +5966,39 @@ mod tests {
                    "nodes keep the dense on-disk surf index");
         assert_eq!(g.polys.iter().map(|p| p.i_link).collect::<Vec<_>>(), vec![0, 2, 3],
                    "soup iLink takes the canon rank, gapping the merged-away surf");
+    }
+
+    /// REGRESSION (`wanchai-n59-mover-polys-model2-diverges`) — `collect_repartition_frontier`
+    /// (the port of `sub_49380`) must visit the `i_front`-empty branch of each node BEFORE the
+    /// `i_back`-empty branch. Fresh disassembly of `Editor.dll 0x10049380` confirms `sub_49380`
+    /// checks/recurses `iFront` (`+0x24`, into `List1`) before `iBack` (`+0x20`, into `List2`); the
+    /// previous port checked `i_back`/`list_a` first. That only shows once TWO OR MORE frontier
+    /// slots each grow a subtree in the same `repartition_frontier` pass — its last call wins
+    /// `Model.Polys` (each call overwrites it), so the wrong intra-list order picks the wrong
+    /// subtree's soup as the saved package's world `Polys`. WanChai N=59 is the first case in this
+    /// campaign with two: live-captured against the real editor (`repart_order_trace.py`,
+    /// `dev/docs/spikes/2026-09-14-wanchai-n59-semisolid-repartition-order/`), it calls the
+    /// pre-existing detail brush's subtree repartition BEFORE the brand new one's — exactly the
+    /// order this test pins.
+    #[test]
+    fn frontier_collector_visits_ifront_branch_before_iback_branch() {
+        let plane = Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+        let mut m = Model::default();
+        // node 0 = root: i_back -> node 1, i_front -> node 2 (both leaves).
+        let mut root = BspNode::leaf(plane, 0, 0, 0);
+        root.i_back = 1;
+        root.i_front = 2;
+        m.nodes = vec![root, BspNode::leaf(plane, 1, 0, 0), BspNode::leaf(plane, 2, 0, 0)];
+
+        let mut list_a = Vec::new();
+        let mut list_b = Vec::new();
+        collect_repartition_frontier(&m, 0, &mut list_a, &mut list_b);
+
+        // Both leaves qualify for both lists (i_front == i_back == -1 on each). `sub_49380`
+        // recurses into the root's i_front child (node 2) before its i_back child (node 1), so
+        // node 2 is discovered — and pushed — first in EITHER list.
+        assert_eq!(list_b, vec![2, 1], "the i_front-empty list must reflect an i_front-first walk");
+        assert_eq!(list_a, vec![2, 1], "the i_back-empty list must reflect an i_front-first walk too");
     }
 
     /// Round 15 golden pin (`dev/docs/spikes/2026-09-01-dx-pbase-points-trace/`): `DX.dx`'s

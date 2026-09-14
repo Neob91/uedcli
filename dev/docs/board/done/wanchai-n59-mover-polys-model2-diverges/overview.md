@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "WanChai N=59: adding a PF_Semisolid CSG_Add brush collapses UED22's world Model2.Polys soup from 16 polys to 1 (just the new brush's own); native keeps ~16 unchanged. Root mechanism not identified -- needs bspBrushCSG/bspOptGeom RE for Semisolid Add."
+summary = "FIXED 2026-09-14: collect_repartition_frontier (sub_49380 port) recursed i_back before i_front; the real editor checks iFront first (Editor.dll 0x10049380, disassembly + live capture). WanChai N=1..59 re-verified PASS; UNATCO/NYC_Bar/Island/OceanLab spot-checked unaffected."
 +++
 
 # WanChai N=59 — world Model2 Polys soup collapses to 1 poly (editor-side), not reproduced by native
@@ -90,8 +90,24 @@ Then decode `Model2`'s `Polys` export (`export_identity == "polys polys@model mo
 `_polys_tail`'s raw token list as one-token-per-poly; group into 6-token runs (see above) or count
 `("O", "brush ...")` owner tokens to get the true poly count.
 
-## Status: not fixed, ceiling unchanged
+## Status: FIXED 2026-09-14
 
-WanChai stays at byte-exact N=1..58, bails at N=59. No fix applied, no exclusion proposed. This
-needs the RE step above before a faithful fix is possible. Left in `inbox/` with these findings for
-the next session; do not move to `to-spike/`/`done/` until the mechanism is identified.
+Root-caused via live gdb capture (`dev/docs/spikes/2026-09-14-wanchai-n59-semisolid-repartition-order/`,
+`repart_order_trace.py`) plus fresh disassembly of `Editor.dll 0x10049380` (`sub_49380`, the frontier
+collector `bspRepartition`'s per-child loop reads). Not a `bspBrushCSG`/`bspOptGeom` semisolid-branch
+issue as originally suspected — the world `Model.Polys` soup collapse is a side effect of an existing,
+correct mechanism (`repartition_frontier`: the LAST frontier subtree repartitioned each pass wins
+`Model.Polys`, since every call overwrites it) hitting a case it had never exercised before: TWO
+frontier slots (the pre-existing `Brush323`/`Brush324` detail-brush pair, and the new `Brush904`)
+both grow a subtree in the same pass. `collect_repartition_frontier` (`uedcli-native/src/bspcsg.rs`)
+recursed a node's `i_back` child before its `i_front` child; the real `sub_49380` recurses `iFront`
+first (`0x100493be`-`0x100493fd`, both statically disassembled and live-captured against the actual
+WanChai N=59 `MAP REBUILD`). Swapping the recursion order fixes it — a one-function, 8-line diff, no
+new mechanism needed.
+
+Verified: `native_N59.dx`'s world `Model.Polys` now matches `ref_N59.dx` exactly (1 poly, `Brush904`'s
+own, byte-identical); `parity_gate.py` PASSes N=59; `ladder_run.py --dx .../06_HongKong_WanChai_Market.dx
+--from 1 --to 59` PASSes the whole ladder (no regression on N=1..58, previously the ceiling). This
+touches native's shared CSG core, so also spot-checked (single-N, unaffected): UNATCO N=225, NYC_Bar
+N=152, Island N=331, OceanLab N=202. Pinned by a new cargo unit test,
+`bspcsg.rs::tests::frontier_collector_visits_ifront_branch_before_iback_branch`.
