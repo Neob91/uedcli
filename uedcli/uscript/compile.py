@@ -749,7 +749,7 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
         # UCC build of `WebApplication.Init/Cleanup/Query` (UWeb), all three bodyless and non-native.
         toks = [Tok(EX_RETURN, (("sub", Tok(EX_NOTHING)),))]
 
-    _register_struct_member_imports(b, toks, _struct_var_map(b, fkey), _member_graph(b))
+    _register_struct_member_imports(b, toks, _member_graph(b))
     _register_final_call_imports(b, toks)
     _register_member_var_imports(b, toks, _member_graph(b))
     _register_cast_class_imports(b, toks)
@@ -1352,81 +1352,34 @@ def _add_struct_import(b: _Build, graph: ClassGraph, struct_name: str) -> str:
     return spelled
 
 
-def _add_struct_member_import(b: _Build, graph: ClassGraph, struct_name: str, field: str) -> None:
+def _add_struct_member_import(b: _Build, graph: ClassGraph, ident: str, struct_name: str,
+                              field: str) -> None:
     """Import a struct member property (e.g. `Core.Object.Vector.X`, a FloatProperty), referenced by a
-    `StructMember` (0x36) bytecode token. Outer = the struct import."""
+    `StructMember` (0x36) bytecode token. Outer = the struct import. Keyed by the qualified
+    `smem:<Struct>.<Field>` ident (`lower._struct_member_ident`), never the bare field name — a bare
+    key would let `resolve_inv`'s local/param lookup shadow it (a param sharing the field's name, e.g.
+    real UT99 `IpAddr`'s own `Addr` field vs a param also named `Addr`)."""
     skey = _add_struct_import(b, graph, struct_name)
     label = graph.struct_member_type(struct_name, field)
     if label is None or label not in _SCALAR_KINDS:
         raise NotImplementedError(f"struct member {struct_name}.{field}: type {label!r} unsupported")
     prop_class = _SCALAR_KINDS[label].prop_class
-    spelled = field
-    existing = b.imports.get(spelled)
-    if existing is not None and existing.outer != skey:
-        raise NotImplementedError(f"ambiguous struct-member import {spelled!r} "
-                                  f"({existing.outer} vs {skey})")
-    b.imports.setdefault(spelled, _ImportSpec(class_package="Core", class_name=prop_class,
-                                              outer=skey, object_name=spelled))
+    b.imports.setdefault(ident, _ImportSpec(class_package="Core", class_name=prop_class,
+                                            outer=skey, object_name=field))
 
 
-def _struct_var_map(b: _Build, fkey: str) -> dict[str, str]:
-    """Casefolded name -> struct spelled-name, for this function's struct params/locals and the class's
-    struct member vars — but only IMPORTED (built-in/cross-package) structs, whose members become
-    imports. Local-struct members resolve via in-package exports, so are excluded."""
-    local_struct_keys = set(b.structs)
-    out: dict[str, str] = {}
-    for p in b.props.values():
-        if p.prop_class != "StructProperty" or not (p.outer_key == fkey or p.in_class_chain):
-            continue
-        tail = [s.key for s in p.type_tail if s.key]
-        if tail and tail[0] not in local_struct_keys:
-            out[p.name.casefold()] = tail[0]              # import key == struct object name
-    return out
-
-
-def _register_struct_member_imports(b: _Build, toks, name_to_struct: dict[str, str],
-                                    graph: ClassGraph) -> None:
-    """After lowering, create an import for every struct member a `StructMember` token references. The
-    token carries only the field name, so the owning struct is derived from the base sub-expression
-    (a struct-typed variable, or a nested struct member)."""
-    def struct_of(base) -> str | None:
-        op = base.op
-        if op in (0x00, 0x01, 0x02):                      # Local/Instance/Default Variable
-            for kind, val in base.parts:
-                if kind == "obj":
-                    return name_to_struct.get(val.casefold())
-            return None
-        if op == 0x2D:                                    # BoolVariable wraps a variable
-            for kind, val in base.parts:
-                if kind == "sub":
-                    return struct_of(val)
-            return None
-        if op == 0x36:                                    # nested struct member returning a struct
-            fld = sub = None
-            for kind, val in base.parts:
-                if kind == "obj":
-                    fld = val
-                elif kind == "sub":
-                    sub = val
-            st = struct_of(sub) if sub is not None else None
-            if st is None:
-                return None
-            inner = graph.struct_member_type(st, fld)
-            return inner.split(":", 1)[1] if inner and inner.startswith("struct:") else None
-        return None
-
+def _register_struct_member_imports(b: _Build, toks, graph: ClassGraph) -> None:
+    """After lowering, create an import for every struct member a `StructMember` token references.
+    `lower.py` tags the token's field identity `smem:<Struct>.<Field>` directly — the owning struct is
+    already known at lowering time (`lower._ex_member` has the base expression's resolved type), so
+    unlike the qualifier-stripped `func:`/`mem:` idents this needs no post-hoc re-derivation from the
+    base sub-expression."""
     def walk(t) -> None:
         if t.op == 0x36:
-            fld = sub = None
-            for kind, val in t.parts:
-                if kind == "obj":
-                    fld = val
-                elif kind == "sub":
-                    sub = val
-            st = struct_of(sub) if sub is not None else None
-            if st is None:
-                raise NotImplementedError(f"struct-member access .{fld}: owning struct unresolved")
-            _add_struct_member_import(b, graph, st, fld)
+            ident = next((v for k, v in t.parts if k == "obj"), None)
+            if ident is not None and ident.startswith("smem:"):
+                struct_name, field = ident[len("smem:"):].rsplit(".", 1)
+                _add_struct_member_import(b, graph, ident, struct_name, field)
         for kind, val in t.parts:
             if kind == "sub":
                 walk(val)

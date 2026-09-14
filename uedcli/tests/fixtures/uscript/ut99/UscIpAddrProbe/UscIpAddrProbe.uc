@@ -4,8 +4,12 @@ class UscIpAddrProbe extends UdpLink;
 // InternetLink) - the real gap real UT99 IpServer.UdpServerUplink.MasterServerIpAddr hit.
 var IpAddr Target;
 
-function SetTarget(IpAddr NewTarget)
+// The param is named `Addr`, same as IpAddr's own field `Addr` - the real UT99
+// IpServer.UdpServerUplink.Resolved shape (`MasterServerIpAddr.Addr = Addr.Addr;`). A bare
+// `StructMember` field identity used to resolve to the PARAM's own export instead of the
+// struct field's import (uscript-struct-member-access-confuses-a-local).
+function SetTarget(IpAddr Addr)
 {
-	Target.Addr = NewTarget.Addr;
-	Target.Port = NewTarget.Port;
+	Target.Addr = Addr.Addr;
+	Target.Port = Addr.Port;
 }

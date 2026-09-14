@@ -115,6 +115,7 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 | **UWeb** | UT99 | 7 | perm only | **real corpus package**, full byte match at the permutation level (identity/order/case-tolerant) — the substrate-aware `_auto_emit_defaults` fix below was the last blocker; residual is the same UT99 own-name-pool gap as `Fire` |
 | UscIpAddrProbe | UT99 | 1 | perm only | controlled: pins the cross-package-struct-type-resolution fix (below) — a member var AND a function param both typed to `IpDrv.InternetLink.IpAddr`, plus struct-member access on both; residual is the same UT99 own-name-pool gap as `Fire` |
 | UscImportIdentityProbe | UED22 | 1 | perm only | controlled: pins the cross-package import-identity-collision fix (below) — a class (`GameReplicationInfo`) and an inherited field sharing that same display name, both needing separate import rows; residual is the same open import/name table order tie-break `ExtendedBuilders` hits |
+| **IpServer** | UT99 | 2 | perm only | **real corpus package** — with the struct-member identity fix below (a param and the struct field it accesses sharing a name, e.g. `IpAddr Addr`'s own `.Addr`), the last of a chain of gaps this package surfaced (assert, byte→string, static-through-instance call, import-identity collision) is closed; compiles end to end, `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as `Fire`/`UWeb` |
 
 Controlled (non-corpus) fixtures `UscHello`/`UscVars`/`UscBB`/`UscFn`/`UscW`/`UscSt` all pass the
 strict gate autonomously.
@@ -572,7 +573,8 @@ strict gate autonomously.
   same pre-existing UT99 own-name-pool gap as `Fire`/`UWeb`. `dev/docs/board/done/
   uscript-cross-package-struct-type-not-resolved/`.
 
-  `IpServer` itself is STILL NOT a corpus win, but one of its two remaining gaps is now FIXED:
+  `IpServer` itself was still not a corpus win at this point, but one of its two remaining gaps was
+  now FIXED:
   - **The cross-package import-identity collision is FIXED (2026-09-14).**
     `Level.Game.GameReplicationInfo.Region` (`UdpServerQuery.ParseQuery`) used to raise
     `KeyError: 'GameReplicationInfo'` — `GameInfo`'s own member field `GameReplicationInfo` is named
@@ -596,15 +598,30 @@ strict gate autonomously.
     compiles the WHOLE package with no exception (was: crashed on `ParseQuery`'s first line). Full
     offline and integration uscript suites re-verified green, no regression on any previously
     byte-exact/perm-exact package. `dev/docs/board/done/uscript-cross-package-import-identity-collides/`.
-  - `MasterServerIpAddr.Addr = Addr.Addr;` (`UdpServerUplink.Resolved`, and the same shape in
+  - **The struct-member/local name collision is FIXED (2026-09-14).**
+    `MasterServerIpAddr.Addr = Addr.Addr;` (`UdpServerUplink.Resolved`, and the same shape in
     `ParseQuery`/`SendQueryPacket`/…) — the param `Addr` and the `IpAddr` struct's own field `Addr`
-    share a name; the compiled `StructMember` token's field identity resolves to the PARAM's own
-    export instead of the imported struct field, a silent wrong-bytes bug (no exception, only visible
-    via `perm_gate`). Root cause not traced past `lower.py`'s struct-member lowering emitting a bare
-    field-name string for a later pass to resolve. NOT fixed here (out of scope for the import-identity
-    pass above) — this is now the ONLY blocker `perm_gate` finds on a fresh re-attempt of the whole
-    package. `dev/docs/board/inbox/uscript-struct-member-access-confuses-a-local/`.
-  Sources+golden saved offline at `_scratch/uscript_survey/IpServer/` (not committed — scratch).
+    share a name; the compiled `EX_StructMember` token's field identity was the bare field name, and
+    `compile.resolve_inv`'s local-then-import lookup order let the param's own export shadow the
+    struct field's import — a silent wrong-bytes bug, no exception, only visible via `perm_gate`.
+    Fixed the same way the campaign already fixed the analogous inherited-call/-member collision:
+    `lower._struct_member_ident` now always qualifies the token's identity `smem:<Struct>.<Field>`
+    (mirroring `func:`/`mem:`), stripped in `canon()` before comparing against decoded golden
+    bytecode. The owning struct is already known at lowering time (`lower._ex_member`'s own type
+    inference), so `compile._register_struct_member_imports` no longer needs to re-derive it by
+    walking the base sub-expression — the old `_struct_var_map`/`struct_of` machinery is deleted.
+    Verified against a live UT99 UCC build: `UscIpAddrProbe`'s param reverted `NewTarget` → `Addr`
+    (the real `IpServer` shape) reproduces the bug exactly (confirmed failing without the fix, passing
+    with it) and is now the fixture's permanent regression. `dev/docs/board/done/
+    uscript-struct-member-access-confuses-a-local/`.
+
+  **With both gaps fixed, `IpServer` is now a real corpus win.** It compiles end to end and reaches
+  `perm_gate` byte-exact against a fresh UT99 UCC build; the strict gate's only residual is the same
+  pre-existing UT99 own-name-pool gap already noted for `Fire`/`UWeb`. Committed as a proper fixture
+  (`fixtures/uscript/ut99/IpServer/`, `test_uscript_ut99.py`'s `_PACKAGES`), verified both offline
+  (committed golden) and docker-gated (`test_ut99_matches_fresh_ucc`, an independent fresh rebuild).
+  Full offline and integration uscript suites re-verified green, no regression on any previously
+  byte-exact/perm-exact package.
 - **Cross-campaign flag**: `uedcli/native/saveorder.py` (the map-parity path) has its own copy of the
   same CRT `qsort` — worth checking it isn't the mis-ported classic variant we initially (wrongly)
   suspected here (board item `saveorder-msvc-qsort-misport`).

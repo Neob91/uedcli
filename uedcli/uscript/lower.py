@@ -132,6 +132,19 @@ def _member_ident(field: str, owner: str | None) -> str:
     return field if owner is None else f"mem:{owner}.{field}"
 
 
+def _struct_member_ident(field: str, struct_name: str) -> str:
+    """The `EX_StructMember` obj identity for `<struct>.<field>` — always `smem:<Struct>.<Field>`,
+    never the bare field name. Every struct type this compiler currently resolves (local or
+    cross-package) is import-resolved (`compile._add_struct_member_import`), so this always returns
+    qualified for now; a locally-declared struct's own field members exporting instead of importing
+    is untested (no fixture exercises it — see `dev/docs/board/inbox/
+    uscript-local-struct-member-access-untested/`). Qualifying it stops `compile.resolve_inv`'s
+    bare-name lookup (locals, then members, then imports) from confusing the field with a same-named
+    local/param — the real UT99 `IpAddr Addr` parameter's own `.Addr` field access (`Addr.Addr`) used
+    to resolve to the PARAM's export instead of the struct field's import."""
+    return f"smem:{struct_name}.{field}"
+
+
 @dataclass(frozen=True, kw_only=True)
 class CallTarget:
     """A resolved call target — script (Virtual/Final) or native — with its signature. `owner` is the
@@ -868,7 +881,8 @@ class _Lowerer:
             ftype = self.scope.member_of(base_type, field)
             if ftype is None:
                 raise LowerError(f"unresolved struct member {base_type}.{field}")
-            tok = Tok(EX_STRUCT_MEMBER, (("obj", field), ("sub", base_tok)))
+            ident = _struct_member_ident(field, _class_of(base_type))
+            tok = Tok(EX_STRUCT_MEMBER, (("obj", ident), ("sub", base_tok)))
             if ftype == "bool":                         # a bool struct field reads via BoolVariable
                 tok = Tok(EX_BOOL_VARIABLE, (("sub", tok),))
             return tok, ftype
@@ -1088,18 +1102,19 @@ def canon(tok: Tok) -> Tok:
     owner+opus-blessed FName-case exclusion. Comparing canon() forms ignores that spelling.
 
     An `EX_FinalFunction`/`EX_InstanceVariable` obj identity for an inherited function/member carries a
-    `func:<Class>.<Name>`/`mem:<Class>.<Name>` qualifier (`_final_call_ident`/`_member_ident`) so
-    `compile.py`'s `resolve_inv` can find the right cross-class import — but the real compiled
-    bytecode only ever stores the target object's own bare NAME (`upackage.Package.name_of_ref` never
-    qualifies it), so a decoded golden token has just `<name>`. Strip the qualifier here, not at the
-    lowering site, so the qualified form still does its real job (disambiguating the import) right up
-    until the moment two token trees are compared as data."""
+    `func:<Class>.<Name>`/`mem:<Class>.<Name>` qualifier (`_final_call_ident`/`_member_ident`), and an
+    `EX_StructMember` obj identity always carries `smem:<Struct>.<Field>` (`_struct_member_ident`), so
+    `compile.py`'s `resolve_inv` can find the right import — but the real compiled bytecode only ever
+    stores the target object's own bare NAME (`upackage.Package.name_of_ref` never qualifies it), so a
+    decoded golden token has just `<name>`. Strip the qualifier here, not at the lowering site, so the
+    qualified form still does its real job (disambiguating the import) right up until the moment two
+    token trees are compared as data."""
     parts = []
     for part in tok.parts:
         match part:
             case ("obj", ident) | ("name", ident):
                 if (part[0] == "obj" and "." in ident
-                        and ident.split(":", 1)[0] in ("func", "mem")):
+                        and ident.split(":", 1)[0] in ("func", "mem", "smem")):
                     ident = ident.rsplit(".", 1)[1]
                 parts.append((part[0], ident.casefold()))
             case ("sub", t):

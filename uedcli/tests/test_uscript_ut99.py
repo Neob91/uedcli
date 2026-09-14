@@ -33,8 +33,18 @@ Fixtures (each isolates a compiler gap fixed for the first UT99 packages):
                      package (`IpDrv`'s `IpAddr`, on `InternetLink`), plus struct-member access on
                      both (`.Addr`/`.Port`) - the gap real UT99 `IpServer.UdpServerUplink.
                      MasterServerIpAddr` hit (`_resolve_var_type` only resolved a struct type declared
-                     in the CURRENTLY-COMPILING package). `perm_gate` byte-exact; the strict gate's
-                     only residual is the same pre-existing UT99 own-name-pool gap as `Fire`/`UWeb`.
+                     in the CURRENTLY-COMPILING package). The param is named `Addr`, same as `IpAddr`'s
+                     own field `Addr` (real `IpServer.UdpServerUplink.Resolved`'s exact shape) - a bare
+                     `StructMember` field identity used to resolve to the PARAM's own export instead of
+                     the struct field's import (`uscript-struct-member-access-confuses-a-local`, now
+                     fixed: the identity is always qualified `smem:<Struct>.<Field>`). `perm_gate`
+                     byte-exact; the strict gate's only residual is the same pre-existing UT99
+                     own-name-pool gap as `Fire`/`UWeb`.
+  - `IpServer`     - the real stock UT99 package (2 classes, `UdpServerQuery`/`UdpServerUplink`) the
+                     `UscIpAddrProbe`/assert/byte-to-string/static-call/import-identity gaps above were
+                     all found chasing. With the struct-member fix it compiles end to end and reaches
+                     `perm_gate` byte-exact; the strict gate's only residual is the same pre-existing
+                     UT99 own-name-pool gap as `Fire`/`UWeb`.
 """
 from __future__ import annotations
 
@@ -57,7 +67,7 @@ _FIX = Path(__file__).resolve().parent / "fixtures" / "uscript" / "ut99"
 
 # (package, export count) - the byte-parity corpus; count pins export-identity coverage.
 _PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritFinal", 5),
-            ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154), ("UscIpAddrProbe", 5)]
+            ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154), ("UscIpAddrProbe", 5), ("IpServer", 154)]
 
 # Extra stock EditPackages a fixture's super chain needs loaded (`_edit_packages_upto`'s
 # content-safe base only covers Core/Engine/Editor) — only needed for the DOCKER-gated rebuild.
