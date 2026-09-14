@@ -325,7 +325,10 @@ export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSele
       onWheel={onWheel}
       onContextMenu={onContextMenu}
     >
-      <Canvas flat>
+      {/* far spans a whole UE1 level (world is +/-32768 UU, so ~65k across); R3F's default far=1000
+          clipped distant geometry to the background ("further objects render black"). near=1 keeps
+          z-precision over that range. */}
+      <Canvas flat camera={{ fov: 75, near: 1, far: 131072 }}>
         <CameraRig pose={pose} cameraRef={cameraRef} />
         <mesh geometry={bufferGeometry} material={materials} />
         <SelectionHighlight box={selectionBox} />
