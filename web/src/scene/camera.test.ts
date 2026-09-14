@@ -35,11 +35,18 @@ describe('dollyAndTurn (LMB-drag)', () => {
     expect(got.pitch).toBe(0)
   })
 
-  it('a vertical drag dollies along the (new) forward vector', () => {
+  it('a vertical drag moves forward in the horizontal plane', () => {
     const got = dollyAndTurn(IDENTITY, 0, -5, UNIT_SPEEDS) // drag "up" (negative screen dy)
-    expect(got.position[0]).toBeCloseTo(5) // forward is +X at yaw=0; moves forward by 5
+    expect(got.position[0]).toBeCloseTo(5) // horizontal forward is +X at yaw=0; moves forward by 5
     expect(got.position[1]).toBeCloseTo(0)
     expect(got.position[2]).toBeCloseTo(0)
+  })
+
+  it('NEVER changes Z even when pitched (the Z-leak fix)', () => {
+    const pitched = { position: [0, 0, 0] as [number, number, number], pitch: 45, yaw: 0 }
+    const got = dollyAndTurn(pitched, 0, -5, UNIT_SPEEDS)
+    expect(got.position[2]).toBeCloseTo(0) // pitched-forward has a Z component; horizontal move ignores it
+    expect(got.position[0]).toBeCloseTo(5) // still moves 5 along +X
   })
 })
 
@@ -58,6 +65,16 @@ describe('look (RMB-drag)', () => {
 })
 
 describe('pan (LMB+RMB-drag)', () => {
+  it('when pitched, strafe stays in XY and vertical is pure Z', () => {
+    const pitched = { position: [0, 0, 0] as [number, number, number], pitch: 45, yaw: 0 }
+    const strafe = pan(pitched, 3, 0, UNIT_SPEEDS) // horizontal drag -> strafe along right (XY)
+    expect(strafe.position[2]).toBeCloseTo(0) // right is horizontal, so no Z
+    const vertical = pan(pitched, 0, -4, UNIT_SPEEDS) // vertical drag -> world Z only
+    expect(vertical.position[0]).toBeCloseTo(0)
+    expect(vertical.position[1]).toBeCloseTo(0)
+    expect(vertical.position[2]).toBeCloseTo(4)
+  })
+
   it('strafes along right and pans along up, with no rotation', () => {
     const got = pan(IDENTITY, 3, -4, UNIT_SPEEDS)
     // at yaw=0: right=(0,1,0), up=(0,0,1); dx=3 along right, -dy=4 along up

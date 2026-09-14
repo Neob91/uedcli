@@ -63,7 +63,9 @@ export function cameraBasis(pitch: number, yaw: number): { forward: Vec3; right:
   return { forward, right, up }
 }
 
-/** LMB-drag: dolly forward/back (vertical drag) + turn/yaw (horizontal drag). */
+/** LMB-drag: move forward/back in the HORIZONTAL plane (vertical drag) + turn/yaw (horizontal drag).
+ * Movement is along the yaw direction projected onto XY (`[cos(yaw), sin(yaw), 0]`), NEVER Z, so a
+ * pitched camera still "walks" level along the ground (classic UnrealEd; Z is LMB+RMB's job). */
 export function dollyAndTurn(
   pose: CameraPose,
   dx: number,
@@ -71,8 +73,9 @@ export function dollyAndTurn(
   speeds: CameraSpeeds = DEFAULT_SPEEDS,
 ): CameraPose {
   const yaw = wrapYaw(pose.yaw - dx * speeds.yawPerPixel)
-  const { forward } = cameraBasis(pose.pitch, yaw)
-  const position = addScaled(pose.position, forward, -dy * speeds.dollyPerPixel)
+  const y = yaw * DEG2RAD
+  const horizForward: Vec3 = [Math.cos(y), Math.sin(y), 0]
+  const position = addScaled(pose.position, horizForward, -dy * speeds.dollyPerPixel)
   return { position, pitch: pose.pitch, yaw }
 }
 
@@ -88,16 +91,19 @@ export function look(
   return { position: pose.position, pitch, yaw }
 }
 
-/** LMB+RMB-drag: pan -- strafe (horizontal drag) + vertical pan (vertical drag), no rotation. */
+/** LMB+RMB-drag: pan -- strafe in XY (horizontal drag) + move along world Z (vertical drag), no
+ * rotation. Vertical is pure world-up so LMB+RMB is the ONE gesture that changes Z (`right` is always
+ * horizontal, so strafe never leaks Z either). */
 export function pan(
   pose: CameraPose,
   dx: number,
   dy: number,
   speeds: CameraSpeeds = DEFAULT_SPEEDS,
 ): CameraPose {
-  const { right, up } = cameraBasis(pose.pitch, pose.yaw)
+  const { right } = cameraBasis(pose.pitch, pose.yaw)
+  const worldUp: Vec3 = [0, 0, 1]
   let position = addScaled(pose.position, right, dx * speeds.panPerPixel)
-  position = addScaled(position, up, -dy * speeds.panPerPixel)
+  position = addScaled(position, worldUp, -dy * speeds.panPerPixel)
   return { position, pitch: pose.pitch, yaw: pose.yaw }
 }
 
