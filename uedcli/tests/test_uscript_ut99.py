@@ -56,6 +56,28 @@ Fixtures (each isolates a compiler gap fixed for the first UT99 packages):
                      byte-exact; the strict gate's only residual is the same pre-existing UT99
                      own-name-pool gap as `Fire`/`UWeb`/`IpServer` (a `Name` literal, `'Enforcer'`,
                      naming a real `BotPack` class the UT99 name-pool dump doesn't cover).
+  - `ASPMutator`   - a real community mutator (github.com/rxut/AdvancedSpawnPoints), a `Botpack`-
+                     dependent mutator (`TournamentPlayer`/`UTTeleportEffect`/`TeamGamePlus`) that
+                     needed the Botpack-load fix (`fetch_ut99.sh`'s `Sounds/` fetch, below) plus five
+                     further real gaps: `class<T>`/cross-package type discovery only walked a class's
+                     own super, not member/param/local var TYPES (`compile._extra_super_packages`,
+                     now transitive via a resolved class's own `package_imports`); `Vect(x,y,z)`/
+                     `Rot(p,y,r)` literals were entirely unimplemented (`EX_VectorConst`/
+                     `EX_RotationConst`, `lower._vec_or_rot_literal`); a Vector/Rotator operand of the
+                     string-concat operators (`@`/`$`) needs `EX_VectorToString`(0x58)/
+                     `EX_RotatorToString`(0x59), not in the flat scalar `_CONV` table; a compound-
+                     assignment operator (`-=`/`*=`/…) must match its `out` LHS param EXACTLY, never
+                     widen it the way an ordinary binary operator's overload search does
+                     (`Catalog.compound_assign_operator`); a `for` loop's UPDATE clause's own Context
+                     dependency is recorded TWICE by real UCC — once in source-textual header order
+                     (right after the init clause's) and again at its natural bytecode-emission
+                     position after the body (`lower._st_for`); and an EXPLICIT default assignment
+                     equal to its own type's zero value gets no defaultproperties tag under UT99
+                     (`bDebugMode=False` alongside `bEnabled=True` — same sibling `var` line, only the
+                     zero one is dropped), extending the existing "UT99 never auto-emits a zero
+                     default" rule from unset properties to explicitly-assigned-zero ones too
+                     (`compile._emit_default`). `perm_gate` byte-exact; the strict gate's only residual
+                     is the same pre-existing UT99 own-name-pool gap as the other UT99 packages.
 """
 from __future__ import annotations
 
@@ -70,7 +92,7 @@ from uedcli.uscript.compile import compile_package_dir
 from uedcli.uscript.env import InstallEnv
 from uedcli.uscript.gate import perm_gate
 from uedcli.uscript.reference_ut99 import (UccError, ucc_compile_ut99, ucc_decompile_ut99,
-                                           ut99_container, ut99_substrate_dir)
+                                           ut99_container, ut99_sounds_dir, ut99_substrate_dir)
 from uedcli.uscript.serialize import serialize
 
 _PKG_MAGIC = 0x9E2A83C1
@@ -79,12 +101,12 @@ _FIX = Path(__file__).resolve().parent / "fixtures" / "uscript" / "ut99"
 # (package, export count) - the byte-parity corpus; count pins export-identity coverage.
 _PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritFinal", 5),
             ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154), ("UscIpAddrProbe", 5), ("IpServer", 154),
-            ("NoGunsMutator", 9)]
+            ("NoGunsMutator", 9), ("ASPMutator", 61)]
 
 # Extra stock EditPackages a fixture's super chain needs loaded (`_edit_packages_upto`'s
 # content-safe base only covers Core/Engine/Editor) — only needed for the DOCKER-gated rebuild.
 _DEPS: dict[str, tuple[str, ...]] = {"UscInheritFinal": ("UWindow",), "UWeb": ("IpDrv",),
-                                     "UscIpAddrProbe": ("IpDrv",)}
+                                     "UscIpAddrProbe": ("IpDrv",), "ASPMutator": ("Botpack",)}
 
 
 def _docker_up() -> bool:
@@ -99,6 +121,7 @@ def _docker_up() -> bool:
 def _substrate_present() -> bool:
     try:
         ut99_substrate_dir()
+        ut99_sounds_dir()
         return True
     except UccError:
         return False

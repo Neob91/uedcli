@@ -26,6 +26,7 @@ from .natives import Catalog, FuncBody
 # opcodes
 EX_LOCAL_VARIABLE = 0x00
 EX_INSTANCE_VARIABLE = 0x01
+EX_DEFAULT_VARIABLE = 0x02
 EX_RETURN = 0x04
 EX_SWITCH = 0x05
 EX_JUMP = 0x06
@@ -44,6 +45,7 @@ EX_BOOL_VARIABLE = 0x2D
 EX_LET_BOOL = 0x14
 EX_END_FUNCTION_PARMS = 0x16
 EX_SELF = 0x17
+EX_CLASS_CONTEXT = 0x12
 EX_CONTEXT = 0x19
 EX_STRUCT_MEMBER = 0x36
 EX_VIRTUAL_FUNCTION = 0x1B
@@ -53,6 +55,8 @@ EX_INT_CONST = 0x1D
 EX_FLOAT_CONST = 0x1E
 EX_STRING_CONST = 0x1F
 EX_OBJECT_CONST = 0x20
+EX_ROTATION_CONST = 0x22
+EX_VECTOR_CONST = 0x23
 EX_BYTE_CONST = 0x24
 EX_DYNAMIC_CAST = 0x2E
 EX_NAME_CONST = 0x21
@@ -65,6 +69,8 @@ EX_INT_CONST_BYTE = 0x2C
 EX_ITERATOR_POP = 0x30
 EX_ITERATOR_NEXT = 0x31
 EX_ITERATOR = 0x2F
+EX_VECTOR_TO_STRING = 0x58
+EX_ROTATOR_TO_STRING = 0x59
 EX_EXTENDED_NATIVE = 0x60
 EX_FIRST_NATIVE = 0x70
 
@@ -658,9 +664,11 @@ class _Lowerer:
             op = EX_LET_BOOL if ltype == "bool" else EX_LET
             self.body.tok(Tok(op, (("sub", ltok), ("sub", rtok))))
             return
-        # compound assignment (`+=` …) is an operator over (out lhs, rhs)
+        # compound assignment (`+=` …) is an operator over (out lhs, rhs) -- the LHS param is `out`,
+        # so its overload must match the target's OWN type exactly (`compound=True`; see
+        # `Catalog.compound_assign_operator`), never widen it the way an ordinary binary op would.
         rtok, rtype = self.expr(rhs)
-        self.body.tok(self._binary(s.text, ltok, ltype, rtok, rtype)[0])
+        self.body.tok(self._binary(s.text, ltok, ltype, rtok, rtype, compound=True)[0])
 
     def _st_return(self, s) -> None:
         if not s.exprs:
@@ -705,6 +713,21 @@ class _Lowerer:
         self.body.place(end)
 
     def _st_for(self, s) -> None:
+        """Init/cond bytecode-emit in their natural, already-early position (before the body), so
+        their Dependency recording needs no special handling. The update clause is different: it
+        bytecode-emits after the body (real execution order), but real UCC records its Context
+        dependencies twice -- once right after the cond clause's (source-textual header order,
+        init/cond/update, before the body) and again at its natural bytecode position after the body
+        -- probed live, `ASPMutator`'s real `for (O=Level.PawnList; O!=None; O=O.NextPawn)
+        {PRI=O.PlayerReplicationInfo; ...}`: golden's Dependencies array is `LevelInfo(init),
+        Pawn(update), Pawn(body), PlayerReplicationInfo(body) x2, Pawn(update again)` -- five
+        once-only body/init entries plus the update's Pawn dependency both before and after them
+        (this fixture's own `cond`, `O!=None`, has no Context of its own, so it can't distinguish
+        init/update/cond from init/cond/update -- header-textual order is the safer assumption until
+        a dependency-bearing `cond` is measured). The first occurrence is a throwaway
+        `self._value(update)` call (discards its token, keeps only the `_record_dep` side effect),
+        placed after `cond`'s own (real) lowering; the second is the real, bytecode-emitting
+        lowering below, left unsuppressed."""
         init, cond, update = s.exprs
         if init.op != "empty":
             self.body.tok(self._value(init))
@@ -715,6 +738,8 @@ class _Lowerer:
         if cond.op != "empty":
             ctok, _ = self.expr(cond)
             self.body.jump_if_not(ctok, end)
+        if update.op != "empty":
+            self._value(update)                     # throwaway: records the header-order dependency
         self.break_targets.append(end)
         self.continue_targets.append(cont)
         for inner in s.body:
@@ -723,7 +748,7 @@ class _Lowerer:
         self.break_targets.pop()
         self.body.place(cont)
         if update.op != "empty":
-            self.body.tok(self._value(update))
+            self.body.tok(self._value(update))      # real: records the natural-position dependency
         self.body.jump(top)
         self.body.place(end)
 
@@ -788,7 +813,7 @@ class _Lowerer:
                 op = EX_LET_BOOL if ltype == "bool" else EX_LET
                 return Tok(op, (("sub", ltok), ("sub", rtok)))
             rtok, rtype = self.expr(e.children[1])
-            return self._binary(e.text, ltok, ltype, rtok, rtype)[0]
+            return self._binary(e.text, ltok, ltype, rtok, rtype, compound=True)[0]
         return self.expr(e)[0]
 
     def expr(self, e: Expr) -> tuple[Tok, str]:
@@ -874,9 +899,33 @@ class _Lowerer:
         return Tok(EX_BOOL_VARIABLE, (("sub", var),)) if ty == "bool" else var
 
     def _ex_member(self, e):
-        """`base.field`: struct field -> StructMember(0x36); object field -> Context(0x19)."""
-        base_tok, base_type = self.expr(e.children[0])
+        """`base.field`: struct field -> StructMember(0x36); object field -> Context(0x19).
+        `class'X'.default.field` is a special two-level form: `.default` is a compile-time-only
+        qualifier with no bytecode of its own, so `class'X'.default` never lowers as its own
+        sub-expression -- probed live against UED22 UCC (`X = class'A'.default.Foo`): the class
+        literal (ObjectConst) becomes the base of a ClassContext(0x12) -- NOT the ordinary
+        Context(0x19) -- wrapping a DefaultVariable(0x02) member token in place of the
+        InstanceVariable(0x01) an ordinary object member access would use."""
         field = e.text
+        inner = e.children[0]
+        if inner.op == "member" and inner.text.casefold() == "default":
+            cls_lit = inner.children[0]
+            if cls_lit.op != "objref" or cls_lit.text.casefold() != "class":
+                raise LowerError("'default' qualifier needs a class literal base")
+            base_tok, _lit_type = self.expr(cls_lit)          # EX_OBJECT_CONST for the class literal
+            leaf = str(cls_lit.value).rsplit(".", 1)[-1] if cls_lit.value else cls_lit.text
+            base_type = f"object:{leaf.casefold()}"
+            ftype = self.scope.member_of(base_type, field)
+            if ftype is None:
+                raise LowerError(f"unresolved default member {base_type}.{field}")
+            owner = self.scope.member_owner_of(base_type, field)
+            member = self._var(EX_DEFAULT_VARIABLE, _member_ident(field, owner), ftype)
+            # the class-literal expression's OWN type (`Class`, the metaclass) records its own
+            # Dependency entry before the ClassContext's usual one for the target class -- probed
+            # live: `class'A'.default.Foo` -> Dependencies gets Core.Class THEN A, every occurrence.
+            self._record_dep("object:class")
+            return self._context(base_tok, base_type, member, ftype, op=EX_CLASS_CONTEXT), ftype
+        base_tok, base_type = self.expr(inner)
         if _is_struct(base_type):
             ftype = self.scope.member_of(base_type, field)
             if ftype is None:
@@ -896,22 +945,29 @@ class _Lowerer:
         raise LowerError(f"member access on non-object/struct type {base_type!r}")
 
     def _context(self, base: Tok, base_type: str, member: Tok, member_type: str, *,
-                record: bool = True) -> Tok:
+                record: bool = True, op: int = EX_CONTEXT) -> Tok:
         if record:
             self._record_dep(base_type)
         size = _value_size(member_type, self.scope.graph)
         skip = struct.pack("<H", _mem_size(member)) + bytes((size,))
-        return Tok(EX_CONTEXT, (("sub", base), ("raw", skip), ("sub", member)))
+        return Tok(op, (("sub", base), ("raw", skip), ("sub", member)))
 
     def _record_dep(self, base_type: str) -> None:
         """Record a `Dependency` (deep=0) for the class behind a Context, unless it's self/super
         (those already carry their own deep=1 entry). UCC records ONE entry per syntactic Context
         occurrence -- NOT deduped by class (measured against real UWeb, 2026-09-13: `HelloWeb`'s
-        `WebRequest`/`WebResponse` params repeat a dozen+ times each)."""
+        `WebRequest`/`WebResponse` params repeat a dozen+ times each). `Class` (the metaclass a
+        `class'X'` literal's own type is) is a special case: it's a bootstrap Core type with no
+        `ClassSig` (no members/ScriptText to decode), so it can't resolve via `class_sig` the way an
+        ordinary class does -- `compile._add_import` already falls back to a bare Core import for any
+        unresolvable class, which is exactly right for `Class` itself."""
         if self.extra_deps is None or not _is_object(base_type):
             return
         cf = base_type.split(":", 1)[1]
         if cf == (self.scope.class_name or "").casefold() or cf == (self.scope.super_name or "").casefold():
+            return
+        if cf == "class":
+            self.extra_deps.append("Class")
             return
         sig = self.scope.graph.class_sig(cf) if self.scope.graph else None
         if sig is None:
@@ -954,9 +1010,10 @@ class _Lowerer:
         rtok, rtype = self.expr(e.children[1])
         return self._binary(e.text, ltok, ltype, rtok, rtype)
 
-    def _binary(self, op: str, ltok, ltype, rtok, rtype) -> tuple[Tok, str]:
+    def _binary(self, op: str, ltok, ltype, rtok, rtype, *, compound: bool = False) -> tuple[Tok, str]:
         sym = _WORD_OPS.get(op.lower(), op)
-        fb = self.cat.binary_operator(sym, ltype, rtype)
+        fb = (self.cat.compound_assign_operator(sym, ltype, rtype) if compound
+              else self.cat.binary_operator(sym, ltype, rtype))
         if fb is None:
             raise LowerError(f"no operator {op!r} for ({ltype}, {rtype})")
         # UCC folds a constant LEFT operand into the param type, but converts the right at runtime.
@@ -1019,6 +1076,8 @@ class _Lowerer:
 
     def _call_named(self, name: str, args) -> tuple[Tok, str]:
         low = name.casefold()
+        if low in ("vect", "rot") and len(args) == 3:    # `Vect(x,y,z)`/`Rot(p,y,r)` literal
+            return self._vec_or_rot_literal(low, args)
         if low in _PRIMITIVE_TYPES and len(args) == 1:  # primitive cast `int(x)`
             tok, ty = self.expr(args[0])
             return self._coerce(tok, ty, low), low
@@ -1041,6 +1100,25 @@ class _Lowerer:
                 raise LowerError(f"unresolved function {name!r}")
             tgt = _target_of(fb)
         return self._emit_target(tgt, arg_toks, arg_types)
+
+    def _vec_or_rot_literal(self, kind: str, args) -> tuple[Tok, str]:
+        """`Vect(X,Y,Z)` -> VectorConst(0x23, 3 floats); `Rot(P,Y,R)` -> RotationConst(0x22, 3 ints) --
+        a compiler intrinsic, not a native function call (`bytecode.py` already decodes both as a bare
+        12-byte payload, never wired up from the lowering side until now). Each arg must fold to a
+        constant number (a literal, or a unary-minus'd one) -- the same requirement a real `vect`/`rot`
+        literal has; a non-constant arg is a genuine LowerError, not a guess."""
+        vals = []
+        for a in args:
+            tok, _ty = self.expr(a)
+            v = _const_num(tok)
+            if v is None:
+                raise LowerError(f"{kind}(...) argument is not a constant number")
+            vals.append(v)
+        if kind == "vect":
+            raw = b"".join(struct.pack("<f", float(v)) for v in vals)
+            return Tok(EX_VECTOR_CONST, (("raw", raw),)), "struct:vector"
+        raw = b"".join(struct.pack("<i", int(v)) for v in vals)
+        return Tok(EX_ROTATION_CONST, (("raw", raw),)), "struct:rotator"
 
     def _call_method(self, base: Expr, name: str, args) -> tuple[Tok, str]:
         base_tok, base_type = self.expr(base)
@@ -1086,6 +1164,10 @@ class _Lowerer:
             return tok                                  # NoObject already the right null const
         if (_is_object(ftype) or ftype == "class") and ttype == "string":
             return Tok(0x56, (("sub", tok),))            # ObjectToString (probed: object AND class)
+        if ftype == "struct:vector" and ttype == "string":
+            return Tok(EX_VECTOR_TO_STRING, (("sub", tok),))   # probed: `"..." @ V` (UscVec2Str)
+        if ftype == "struct:rotator" and ttype == "string":
+            return Tok(EX_ROTATOR_TO_STRING, (("sub", tok),))  # probed: `"..." @ R` (UscVec2Str)
         if fold and ttype in ("int", "float", "byte"):
             cv = _const_num(tok)                        # a numeric literal folds at compile time
             if cv is not None:

@@ -206,6 +206,26 @@ class Catalog:
                  if not f.is_preoperator and len(f.param_types) == 2]
         return _best(cands, (left, right))
 
+    def compound_assign_operator(self, symbol: str, left: str, right: str) -> FuncBody | None:
+        """A compound-assignment operator (`+=`/`-=`/…) overload whose first param matches `left`
+        exactly — that param is `out` (it writes back into the assignment target's own storage), so
+        unlike an ordinary binary operator it can never widen: real UCC picks the target's own-type
+        overload and narrows the RHS instead (probed live, `ASPMutator`'s real
+        `CurrentScore -= (SpawnDist * SpawnNearLastPenalty)`, `int -= float*float`: golden uses the
+        `int -= int` overload with the RHS FloatToInt'd, not `float -= float` with `CurrentScore`
+        IntToFloat'd — this compiler previously widened the LHS instead). The RHS isn't scored by
+        `_match_cost`/`_WIDEN` (that table only models WIDENING conversions, so a `float` RHS
+        narrowing into an `int -= int` overload's RHS would score as unmatched) — the exact-LHS
+        filter already leaves at most one candidate per real catalog (`-=`: one overload each for
+        int/float/byte/vector/rotator), and `_binary`'s own `_coerce` call already narrows the RHS
+        via the existing scalar `_CONV` table, same as any other coercion."""
+        cands = [f for f in self._by_op.get(symbol, ())
+                 if not f.is_preoperator and len(f.param_types) == 2
+                 and f.param_types[0] == left]
+        if len(cands) == 1:
+            return cands[0]
+        return _best(cands, (left, right))
+
     def unary_operator(self, symbol: str, operand: str, *, pre: bool) -> FuncBody | None:
         cands = [f for f in self._by_op.get(symbol, ())
                  if f.is_preoperator == pre and len(f.param_types) == 1]
@@ -250,6 +270,9 @@ def _match_cost(params: tuple[str, ...], args: tuple[str, ...]) -> int | None:
         if is_object(got) and want == "string":
             total += 4                                  # object -> string (ToString) coercion
             continue
+        if got in ("struct:vector", "struct:rotator") and want == "string":
+            total += 4                                  # Vector/Rotator -> string (ToString) coercion
+            continue                                    # probed live: `"..." @ V`/`"..." @ R`
         if (is_struct(want) or is_struct(got)) and want != got:
             return None                                 # struct params need the exact struct
         step = _WIDEN.get((got, want))

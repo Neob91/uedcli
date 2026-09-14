@@ -29,10 +29,10 @@ from .ast import ClassDecl, ConstDecl, EnumDecl, FuncDecl, StateDecl, StructDecl
 from .bytecode import Tok, encode_script
 from .crc import script_text_crc
 from .env import InstallEnv
-from .lower import (EX_DYNAMIC_CAST, EX_FINAL_FUNCTION, EX_INSTANCE_VARIABLE, EX_LABEL_TABLE,
-                    EX_METACAST, EX_NOTHING, EX_OBJECT_CONST, EX_RETURN, LowerError, Scope,
-                    build_scope, consts_of, enum_type_names, enums_of, local_funcs_of, lower_function,
-                    lower_state_body, members_of, _mem_size)
+from .lower import (EX_DEFAULT_VARIABLE, EX_DYNAMIC_CAST, EX_FINAL_FUNCTION, EX_INSTANCE_VARIABLE,
+                    EX_LABEL_TABLE, EX_METACAST, EX_NOTHING, EX_OBJECT_CONST, EX_RETURN, LowerError,
+                    Scope, build_scope, consts_of, enum_type_names, enums_of, local_funcs_of,
+                    lower_function, lower_state_body, members_of, _mem_size)
 from .model import (ClassBody, CompiledPackage, ConstBody, Dependency, EnumBody, Export, FunctionBody,
                     Import, Name, ObjectBody, PropertyBody, StateBody, StructBody, TextBufferBody,
                     TextureBody, TextureMip)
@@ -1170,12 +1170,21 @@ def _emit_default(b: _Build, pname: str, ptype: int, array_dim: int, struct_name
     for idx in range(array_dim):
         arr_idx = None if array_dim == 1 else idx
         expr = values.get((pname, idx)) or (values.get((pname, None)) if array_dim == 1 else None)
-        if expr is None and not b.emit_zero_defaults:
-            continue                                     # explicit-only class: skip an unset element
-        if ptype == PT_BYTE and expr is not None and expr.op == "name":
+        is_enum_default = ptype == PT_BYTE and expr is not None and expr.op == "name"
+        if is_enum_default:
             value = _byte_enum_ordinal(b, pname, expr)   # an enum-constant default → its ordinal byte
         else:
             value = _scalar_default(pname, ptype, expr)
+        # `emit_zero_defaults=False` (UT99): no tag for a type-zero value, whether the property was
+        # left unset OR explicitly assigned its own zero -- probed live against UT99 UCC (the real
+        # `ASPMutator`'s `bDebugMode=False` gets no defaultproperties tag, while its sibling
+        # `bEnabled=True`/`bAdvancedSpawns=True`/`bSafeSpawns=True` on the SAME multi-name `var`
+        # declaration all do) -- an explicit zero write is indistinguishable from never setting it.
+        # Only measured for a plain scalar; an explicit enum-constant default (`is_enum_default`)
+        # whose ordinal happens to be 0 is never suppressed, matching prior (unmeasured-but-never-
+        # wrong) behavior -- see `dev/docs/board/inbox/` for the open question.
+        if not b.emit_zero_defaults and not is_enum_default and value == _SCALAR_ZERO[ptype]:
+            continue
         b.default_props.append(Prop(pname, ptype, value, array_index=arr_idx))
 
 
@@ -1282,6 +1291,16 @@ def _class_meta_ref(b: _Build, meta: str) -> _RefSpec:
         real = b.in_pkg_class_names[meta.casefold()]
         return _RefSpec(key=f"{real}::class:{real}", is_export=True)
     return _RefSpec(key=_add_import(b, meta), is_export=False)
+
+
+def _extra_dep_crc(env: InstallEnv, dep: str) -> int:
+    """The `script_text_crc` for an extra (deep=0) `Dependency` entry. `Class` (the metaclass a
+    `class'X'` literal's own type is -- see `lower._record_dep`) is a bootstrap Core type with no
+    `ScriptText` to CRC and no `.u` export `resolve_class` can find; real UCC's own Dependency entry
+    for it carries CRC 0 (live-probed against UED22 UCC, `class'X'.default.Field` access)."""
+    if dep.casefold() == "class":
+        return 0
+    return env.resolve_class(dep).self_crc
 
 
 def _add_import(b: _Build, obj: str) -> str:
@@ -1442,14 +1461,16 @@ def _member_import_prop_class(label: str | None) -> str | None:
 
 def _register_member_var_imports(b: _Build, toks, graph: ClassGraph) -> None:
     """After lowering, import the target of every INHERITED instance-variable access (a member field
-    the class being compiled doesn't itself declare/override) OR one reached through an object typed
-    to a same-package SIBLING class. `lower.py` marks such an access's obj identity `mem:<Class>.<Name>`
-    (never a bare identifier, reserved for the class's own field, resolved as a same-package export) —
-    same shape as `_register_final_call_imports`, but a Property import (the field's concrete
-    UProperty subclass, e.g. IntProperty) rather than a Function import. When `<Class>` is one of THIS
-    package's own classes, no import is registered — see `_register_final_call_imports`."""
+    the class being compiled doesn't itself declare/override), one reached through an object typed
+    to a same-package SIBLING class, or a `class'X'.default.Field` read (`EX_DEFAULT_VARIABLE`, the
+    SAME identity/import shape, `lower._ex_member`'s "`.default`" branch). `lower.py` marks such an
+    access's obj identity `mem:<Class>.<Name>` (never a bare identifier, reserved for the class's own
+    field, resolved as a same-package export) — same shape as `_register_final_call_imports`, but a
+    Property import (the field's concrete UProperty subclass, e.g. IntProperty) rather than a
+    Function import. When `<Class>` is one of THIS package's own classes, no import is registered —
+    see `_register_final_call_imports`."""
     def walk(t) -> None:
-        if t.op == EX_INSTANCE_VARIABLE:
+        if t.op in (EX_INSTANCE_VARIABLE, EX_DEFAULT_VARIABLE):
             ident = next((v for k, v in t.parts if k == "obj"), None)
             if ident is not None and ident.startswith("mem:") and ident not in b.imports:
                 owner_cls, field = ident[len("mem:"):].rsplit(".", 1)
@@ -2020,7 +2041,7 @@ def _class_export(b, class_name, super_name, super_crc, crlf_source, class_flags
                                      script_text_crc=script_text_crc(crlf_source)),
                           Dependency(cls=imp_ref[super_name], deep=1, script_text_crc=super_crc),
                           *(Dependency(cls=imp_ref[_add_import(b, dep)], deep=0,
-                                      script_text_crc=b.env.resolve_class(dep).self_crc)
+                                      script_text_crc=_extra_dep_crc(b.env, dep))
                             for dep in b.extra_deps)),
             package_imports=(name_index[class_name], name_index["Core"]),
             class_within=imp_ref[within_key], class_config_name=name_index[config_name],
@@ -2321,17 +2342,55 @@ def _referenced_in_pkg(decl: ClassDecl, in_pkg_cf: set[str]) -> list[str]:
 
 
 def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[str]:
-    """Non-Core/Engine home packages of any cross-package super — loaded into the lowering graph and
-    catalog so inherited members/functions resolve (a `BrushBuilder` subclass pulls in `Editor`)."""
+    """Non-Core/Engine home packages of any class TYPE this package's own classes reference —
+    supers, member/param/local var types, `array<T>` element types, and `class<T>` meta types —
+    loaded into the lowering graph and catalog so inherited members/functions resolve. A
+    `BrushBuilder` subclass pulls in `Editor` (the super case); a real UT99 mutator with
+    `local UTTeleportEffect TelEff; TelEff.Destroy();` pulls in `Botpack` the same way — calling a
+    method through ANY typed reference needs that reference's home package indexed, not just the
+    compiling class's own super chain (found compiling the real `ASPMutator` community mutator,
+    whose `Destroy()` call through a `Botpack`-typed local raised `unresolved method
+    object:utteleporteffect.Destroy` — `ClassGraph` only resolves a class present in its own indexed
+    package set, by design; the gap was this discovery pass never looking past the super chain). A
+    discovered class's own `package_imports` (its complete transitive super-chain package set, e.g.
+    `UTTeleportEffect`'s is `(Botpack, UnrealShare, Engine, Core)` — its super `PawnTeleportEffect`
+    lives in UnrealShare, not Botpack) are added too, not just its own home package — one level of
+    package discovery isn't enough for a transitive super chain crossing a third package."""
     out: list[str] = []
+
+    def add(name: str | None) -> None:
+        if name is None or name.casefold() in in_pkg_cf or name.casefold() in _SCALAR_KINDS \
+                or name.casefold() in ("class", "array"):
+            return
+        info = env.resolve_class(name)
+        if info is None:
+            return
+        for pkg in info.package_imports:
+            if pkg.casefold() not in ("core", "engine") and pkg not in out:
+                out.append(pkg)
+
+    def add_type(tr) -> None:
+        if tr is None:
+            return
+        add(tr.base)
+        add_type(tr.inner)
+        add(tr.meta_class)
+
     for decl, _src in decls.values():
-        sup = decl.super_name
-        if sup is None or sup.casefold() in in_pkg_cf:
-            continue
-        info = env.resolve_class(sup)
-        if info is not None and info.package.casefold() not in ("core", "engine") \
-                and info.package not in out:
-            out.append(info.package)
+        add(decl.super_name)
+        for m in decl.members:
+            if isinstance(m, VarDecl):
+                add_type(m.type)
+            elif isinstance(m, StructDecl):
+                for sm in m.members:
+                    add_type(sm.type)
+        funcs = list(decl.functions) + [f for s in decl.states for f in s.funcs]
+        for f in funcs:
+            add_type(f.return_type)
+            for p in f.params:
+                add_type(p.type)
+            for lv in f.locals:
+                add_type(lv.type)
     return out
 
 
@@ -2881,7 +2940,7 @@ def _multi_class_export(b: _Build, u: _ClassUnit, name_index, exp_ref, imp_ref, 
         if sib is not None:                               # a same-package sibling -> an EXPORT dep
             return Dependency(cls=exp_ref[sib.class_key], deep=0, script_text_crc=sib.self_crc)
         return Dependency(cls=imp_ref[_add_import(b, dep)], deep=0,
-                          script_text_crc=b.env.resolve_class(dep).self_crc)
+                          script_text_crc=_extra_dep_crc(b.env, dep))
 
     extra_deps = tuple(extra_dep(dep) for dep in u.extra_deps)
     return Export(

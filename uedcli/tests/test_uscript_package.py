@@ -202,6 +202,58 @@ _PACKAGES: dict[str, dict[str, str]] = {
             "var ENDBase Base;\n\n"
             "defaultproperties\n{\n    Base=None\n}\n"),
     },
+    "UscDefProbe": {
+        # `class'X'.default.Field` (found compiling the real UT99 `UTServerAdmin`, blocked on a
+        # separate `class<T>` meta-type gap -- see USCRIPT-COMPILER.md): a `ClassContext`(0x12)
+        # wrapping a `DefaultVariable`(0x02) member token, not the ordinary object Context(0x19)/
+        # InstanceVariable(0x01) pair -- and the class-literal's OWN type (`Class`) gets its own
+        # Dependency entry (CRC 0, a bootstrap Core type) ahead of the target class's.
+        "UscDefProbeA.uc": (
+            "class UscDefProbeA extends Object;\nvar int Foo;\nvar string Bar;\n"
+            "defaultproperties\n{\n    Foo=42\n    Bar=\"hi\"\n}\n"),
+        "UscDefProbeB.uc": (
+            "class UscDefProbeB extends Object;\n"
+            "function int GetFoo()\n{\n    local int X;\n"
+            "    X = class'UscDefProbeA'.default.Foo;\n    return X;\n}\n"
+            "function string GetBar()\n{\n    return class'UscDefProbeA'.default.Bar;\n}\n"),
+    },
+    "UscVectRot": {
+        # `Vect(x,y,z)`/`Rot(p,y,r)` literals (`VectorConst`(0x23)/`RotationConst`(0x22)) were
+        # entirely unimplemented -- found compiling the real `ASPMutator` community mutator.
+        "UscVectRot.uc": (
+            "class UscVectRot extends Object;\n"
+            "function Vector V1()\n{\n    return Vect(1,2,3);\n}\n"
+            "function Rotator R1()\n{\n    return Rot(100,200,300);\n}\n"),
+    },
+    "UscCompoundAssign": {
+        # `CurrentScore -= (SpawnDist * SpawnNearLastPenalty)` -- `int -= float*float` -- found
+        # compiling the real `ASPMutator`: the compound-assign operator's `out` LHS param must match
+        # the target's OWN type EXACTLY (picks `int -= int`, narrowing the RHS), never widen the LHS
+        # to find a `float -= float` overload the way an ordinary binary op's search would.
+        "UscCompoundAssign.uc": (
+            "class UscCompoundAssign extends Object;\n"
+            "function int F()\n{\n"
+            "    local int CurrentScore;\n"
+            "    local float SpawnDist, SpawnNearLastPenalty;\n"
+            "    CurrentScore = 10;\n"
+            "    SpawnDist = 2.0;\n"
+            "    SpawnNearLastPenalty = 1.5;\n"
+            "    CurrentScore -= (SpawnDist * SpawnNearLastPenalty);\n"
+            "    return CurrentScore;\n}\n"),
+    },
+    "UscForDep": {
+        # A `for` loop's UPDATE clause Context dependency is recorded TWICE by real UCC: once in
+        # source-textual header order (right after init) and again at its natural bytecode-emission
+        # position after the body -- found compiling the real `ASPMutator`'s
+        # `for (O=Level.PawnList; O!=None; O=O.NextPawn) {PRI=O.PlayerReplicationInfo; ...}`.
+        "UscForDepA.uc": "class UscForDepA extends Object;\nvar UscForDepA Next;\nvar int Tag;\n",
+        "UscForDepB.uc": (
+            "class UscForDepB extends Object;\n"
+            "function int F(UscForDepA First)\n{\n"
+            "    local UscForDepA Cur;\n    local int Total;\n"
+            "    for (Cur = First; Cur != None; Cur = Cur.Next) {\n"
+            "        Total += Cur.Tag;\n    }\n    return Total;\n}\n"),
+    },
 }
 
 
@@ -335,6 +387,40 @@ def test_explicit_none_object_default_same_as_unset():
     path) instead of `_emit_default`'s old unconditional raise for any explicit object default. Blocked
     real UWeb's `WebApplication.WebServer`/`WebConnection.WebServer`."""
     _check("ExplicitNoneDefault")
+
+
+def test_class_literal_default_field_access():
+    """`class'X'.default.Field` -- found compiling the real UT99 `UTServerAdmin`
+    (`TempClass.Default.GameName`, blocked on a separate `class<T>` meta-type-tracking gap this
+    fixture does NOT need, since it uses a literal `class'X'`, not a `class<T>`-typed variable).
+    `ClassContext`(0x12) wraps a `DefaultVariable`(0x02) member token, not the ordinary object
+    Context(0x19)/InstanceVariable(0x01) pair; the class literal's own type (`Class`) also gets its
+    own Dependency entry (CRC 0) ahead of the target class's."""
+    _check("UscDefProbe")
+
+
+def test_vect_rot_literals():
+    """`Vect(x,y,z)`/`Rot(p,y,r)` literal constructors -- `VectorConst`(0x23, 3 floats)/
+    `RotationConst`(0x22, 3 raw ints, no unit conversion) -- found compiling the real `ASPMutator`
+    community mutator (`foreach AllActors(class'PlayerStart', PS)`'s `RecentGlobalSpawns[j] !=
+    vect(0,0,0)` guard)."""
+    _check("UscVectRot")
+
+
+def test_compound_assign_matches_lhs_type_exactly():
+    """`CurrentScore -= (SpawnDist * SpawnNearLastPenalty)` (`int -= float*float`) -- the compound-
+    assign operator's `out` LHS param must match the assignment target's type EXACTLY (picks
+    `int -= int`, narrowing the RHS), never widen the LHS the way an ordinary binary op's overload
+    search would (`float -= float`). Found compiling the real `ASPMutator`."""
+    _check("UscCompoundAssign")
+
+
+def test_for_loop_update_clause_dependency_recorded_twice():
+    """A `for` loop's UPDATE clause's own Context dependency (`Cur.Next`) is recorded TWICE by real
+    UCC: once in source-textual header order (right after `init`'s) and again at its natural
+    bytecode-emission position after the body. Found compiling the real `ASPMutator`'s
+    `for (O=Level.PawnList; O!=None; O=O.NextPawn) {PRI=O.PlayerReplicationInfo; ...}`."""
+    _check("UscForDep")
 
 
 def test_perm_gate_catches_wrong_body():

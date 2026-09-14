@@ -29,7 +29,7 @@ from ..driver import to_z_path
 from ..stub import _exec, ephemeral_build_container
 from .reference import UccError
 
-__all__ = ["UccError", "ut99_container", "ut99_substrate_dir",
+__all__ = ["UccError", "ut99_container", "ut99_substrate_dir", "ut99_sounds_dir",
            "ucc_compile_ut99", "ucc_decompile_ut99"]
 
 _RO_MOUNT = "/opt/UT99-ro"                 # host UT99 System, bind-mounted read-only
@@ -83,14 +83,29 @@ def ut99_substrate_dir():
     return d
 
 
+def ut99_sounds_dir():
+    """Host path of the UT99 `Sounds/` substrate (`uned/UT99/Sounds`, the CD's `Sounds/*.uax` — voice
+    and ambience packages). `Botpack.u` itself references several of these (bot voice packs), so
+    LOADING Botpack as a prebuilt dependency needs them resolvable on `Paths=../Sounds/*.uax`, even
+    for a target package with no audio of its own. Raises `UccError` if absent, same as
+    `ut99_substrate_dir`."""
+    d = tool_assets.uned_dir() / "UT99" / "Sounds"
+    if not (d / "Female2Voice.uax").is_file():
+        raise UccError(f"UT99 Sounds substrate missing at {d} — run uedcli/uscript/fetch_ut99.sh")
+    return d
+
+
 @contextmanager
 def ut99_container(*, state_dir):
     """Spin a no-GUI build container with the UT99 substrate mounted read-only, copy it to a writable
     `/opt/UT99/System`, yield the container name, tear it down. The mount also lands in the (unused)
     UED22 crafted ini's Paths — harmless, since every UT99 call runs with CWD `/opt/UT99/System` and
-    UT99's own ini."""
+    UT99's own ini. `Sounds/` mounts directly at the game-root path the ini's own
+    `Paths=../Sounds/*.uax` expects — read-only, no copy needed (nothing writes into it)."""
     host = str(ut99_substrate_dir())
-    mounts = [Mount(host_dir=host, container_dir=_RO_MOUNT)]
+    sounds_host = str(ut99_sounds_dir())
+    mounts = [Mount(host_dir=host, container_dir=_RO_MOUNT),
+              Mount(host_dir=sounds_host, container_dir=f"{_GAME_ROOT}/Sounds")]
     with ephemeral_build_container(state_dir=state_dir, mounts=mounts) as name:
         # UT99's appInit needs a User.ini to exist (else it aborts "MisingIni"); the CD ships one
         # via DefUser.ini we don't fetch, so synthesize it from UnrealTournament.ini.

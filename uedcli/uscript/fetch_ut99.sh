@@ -50,6 +50,31 @@ done
 echo "== UCC.exe =="
 fetch "UCC.exe" 1024
 
+# Botpack.u itself references several bot-voice sound packages (Announcer/BossVoice/Female1Voice/
+# Female2Voice/Male1Voice/Male2Voice — found by decompiling Botpack and grepping its Sound'Pkg.Name'
+# refs) and fails to load without them (`Warning: Failed to load 'Botpack.u': Can't find file for
+# package 'Female2Voice'`, misdiagnosed at first as a UCC freshness-check quirk — see
+# USCRIPT-COMPILER.md). They live on the CD's `Sounds/` dir (`Paths=../Sounds/*.uax` in the ini),
+# not `System/`, and reference_ut99.ut99_container mounts uned/UT99/Sounds/ at that game-root path.
+SOUNDS_BASE="https://archive.org/download/ut-goty/UT_GOTY_CD1.iso/Sounds%2F"
+SOUNDS_DEST="uned/UT99/Sounds"
+mkdir -p "$SOUNDS_DEST"
+echo "== Botpack's own sound-package deps (.uax) =="
+for s in Announcer BossVoice Female1Voice Female2Voice Male1Voice Male2Voice; do
+  out="$SOUNDS_DEST/$s.uax"
+  if [[ -f "$out" && $(wc -c <"$out") -ge 128 ]]; then
+    echo "  skip $s.uax ($(wc -c <"$out") bytes)"
+  else
+    echo "  get  $s.uax"
+    timeout 300 curl -fsSL "${SOUNDS_BASE}${s}.uax" -o "$out"
+    sz=$(wc -c <"$out")
+    head=$(head -c 4 "$out")
+    if [[ "$sz" -lt 128 || "$head" != "$U_MAGIC" ]]; then
+      echo "FAIL $s.uax: $sz bytes, magic $(head -c 4 "$out" | od -An -tx1)"; rm -f "$out"; exit 1
+    fi
+  fi
+done
+
 # .int (localization) and inis are best-effort: not needed to compile, and some are absent
 # on the CD or served empty. A missing one is not fatal.
 try_fetch() {  # <filename> <min_bytes>
