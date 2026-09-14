@@ -22,6 +22,8 @@ from ..model import CoordinateError
 from ..pkg_cache import CacheWriteError as PkgCacheWriteError
 from ..schema_cache import CacheWriteError
 from ..uprops import SchemaError
+from ..serve.errors import error_to_status  # the shared (status, message) classification; `serve`
+                                             # uses http_status directly, dispatch always exits 2
 from .errors import CommandError, ProjectError
 
 
@@ -29,46 +31,54 @@ def dispatch(args) -> int:
     try:
         return _dispatch(args)
     except CommandError as e:                            # command + project + level-selection errors
-        print(e.message, file=sys.stderr)                # (ProjectError and LevelSelectionError subclass it)
+        _, message = error_to_status(e)                  # (ProjectError and LevelSelectionError subclass it)
+        print(message, file=sys.stderr)
         return 2
     except ConfigError as e:
-        print(str(e), file=sys.stderr)
+        _, message = error_to_status(e)
+        print(message, file=sys.stderr)
         return 2
     except CoordinateError as e:
         # A coordinate that cannot be written as T3D at all (non-finite, or past emit.MAX_COORD).
         # Raised from the single write path, so it covers every generator and every mutating verb
         # rather than one flag on one shape.
-        print(f"invalid coordinate: {e}", file=sys.stderr)
+        _, message = error_to_status(e)
+        print(message, file=sys.stderr)
         return 2
     except GeometryError as e:
         # Degenerate/invalid brush geometry from a model-side verb (actor add, brush clip/vertex,
         # mover key, the brush builders, stash/prefab apply) — the message carries a precise per-poly
         # diagnostic; surface it, never a traceback. (`level materialize` catches its own build-time
         # GeometryError locally with a "materialize failed" message.)
-        print(f"invalid brush geometry: {e}", file=sys.stderr)
+        _, message = error_to_status(e)
+        print(message, file=sys.stderr)
         return 2
     except (DriverError, TimeoutError) as e:
         # Any editor-driving verb (level materialize/preview) whose ephemeral editor is wedged or
         # crashes mid-drive → clean error, never a traceback. (`EditorNotReadyError` subclasses
         # TimeoutError, so a startup death lands here too.)
-        print(f"editor error: {e}", file=sys.stderr)
+        _, message = error_to_status(e)
+        print(message, file=sys.stderr)
         return 2
     except ClassRefError as e:
         # An unknown/ambiguous class ref reached the top level (a `class` verb or an ingest gate that
         # didn't translate it locally) → clean exit 2, never a traceback.
-        print(str(e), file=sys.stderr)
+        _, message = error_to_status(e)
+        print(message, file=sys.stderr)
         return 2
     except SchemaError as e:
         # A `.u` layout desync (a corrupt package on the path) surfacing from a class/schema read —
         # the corrupt-package backstop so it never tracebacks (dispatch did NOT catch this before).
-        print(f"schema error: {e}", file=sys.stderr)
+        _, message = error_to_status(e)
+        print(message, file=sys.stderr)
         return 2
     except (CacheWriteError, PkgCacheWriteError) as e:
         # A persistent cache (schema or on-disk package) is unwritable (classically a root-owned
         # ~/.uedcli/cache from a container run). Surfaced with an actionable fix, never swallowed —
         # a dead cache otherwise re-decodes every package every run with no hint why (2026-07-18).
         # The message is self-contained (chown hint + the relevant UEDCLI_*_CACHE=off escape hatch).
-        print(str(e), file=sys.stderr)
+        _, message = error_to_status(e)
+        print(message, file=sys.stderr)
         return 2
     except BrokenPipeError:
         # stdout consumer went away (`uedcli … | head`) — the conventional silent exit, not an
@@ -80,7 +90,8 @@ def dispatch(args) -> int:
         # disk, …): the message names the path; a raw PermissionError/NotADirectoryError traceback
         # must never reach the user (review fix, 2026-07-18). Ordered AFTER TimeoutError (an
         # OSError subclass) so editor timeouts keep their specific message.
-        print(f"filesystem error: {e}", file=sys.stderr)
+        _, message = error_to_status(e)
+        print(message, file=sys.stderr)
         return 2
 
 
@@ -109,6 +120,11 @@ def _dispatch(args) -> int:
     if args.cmd == "level":
         from .commands import level as level_cmd
         return level_cmd.run(args)
+
+    # --- serve: the read-only browser GUI backend (blocks until Ctrl-C) ---
+    if args.cmd == "serve":
+        from .commands import serve as serve_cmd
+        return serve_cmd.run(args)
 
     # --- event group: read-only Tag<->Event wiring analysis over the current level (no editor) ---
     if args.cmd == "event":

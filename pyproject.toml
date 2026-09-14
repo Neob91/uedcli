@@ -8,10 +8,14 @@ version = "0.1.0"
 description = "Editor-automation CLI for UnrealEngine-1 games (Deus Ex substrate) — queryable, scriptable, auditable level design as text"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-# Pillow is the ONLY third-party runtime dependency (texture-catalog decode); everything else
-# uedcli imports is stdlib. Pinned to a floor for the deterministic NEAREST-resample color
-# derivation (dev/docs/direction/asset-catalog.md, 2026-06-22).
-dependencies = ["Pillow>=11"]
+# Pillow is texture-catalog decode; fastapi/uvicorn/watchfiles/httpx back `uedcli serve` (the human
+# GUI backend, dev/docs/board/to-plan/uedcli-human-gui/). Everything else uedcli imports is stdlib.
+# Pillow is pinned to a floor for the deterministic NEAREST-resample color derivation
+# (dev/docs/direction/asset-catalog.md, 2026-06-22).
+# `websockets` is required for uvicorn's WebSocket support -- plain `uvicorn` (no extras) ships
+# only its HTTP/1.1 (h11) implementation and 404s any WS upgrade request without it.
+dependencies = ["Pillow>=11", "fastapi>=0.115", "uvicorn>=0.32", "watchfiles>=0.24", "httpx>=0.27",
+                "websockets>=13"]
 
 [project.scripts]
 uedcli = "uedcli.cli.main:main"
@@ -19,7 +23,7 @@ uedcli = "uedcli.cli.main:main"
 [tool.setuptools]
 # Explicit static list (NOT find_packages) so the `uedcli.tests` subpackage + fixtures never ship
 # in the wheel. If this ever becomes a find directive, add `exclude = ["uedcli.tests*"]`.
-packages = ["uedcli", "uedcli.uprops", "uedcli.propedit", "uedcli.cli", "uedcli.cli.parsers", "uedcli.cli.commands", "uedcli.cli.commands.actor", "uedcli.cli.commands.brush"]
+packages = ["uedcli", "uedcli.uprops", "uedcli.propedit", "uedcli.serve", "uedcli.cli", "uedcli.cli.parsers", "uedcli.cli.commands", "uedcli.cli.commands.actor", "uedcli.cli.commands.brush"]
 
 [tool.setuptools.package-data]
 # No non-Python data files ship inside the package (the substrate/editor live in the Docker

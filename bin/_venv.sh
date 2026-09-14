@@ -16,7 +16,7 @@ UEDCLI_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 VENV="${UEDCLI_VENV:-$UEDCLI_DIR/.venv}"
 PY="$VENV/bin/python"
 _DEPS_MARKER="$VENV/.uedcli-deps"
-_DEPS_SPEC="Pillow>=11 pytest>=8,<9 pytest-xdist>=3,<4"
+_DEPS_SPEC="Pillow>=11 pytest>=8,<9 pytest-xdist>=3,<4 fastapi>=0.115 uvicorn>=0.32 watchfiles>=0.24 httpx>=0.27 websockets>=13"
 
 ensure_venv() {
   if [ -x "$PY" ] && [ "$(cat "$_DEPS_MARKER" 2>/dev/null || true)" = "$_DEPS_SPEC" ] \

@@ -22,6 +22,7 @@ from .parsers import (
     music,
     prefab,
     project,
+    serve,
     sound,
     stash,
     substrate,
@@ -54,6 +55,7 @@ def build_parser() -> argparse.ArgumentParser:
     substrate.register(sub)
     cache.register(sub)
     uscript.register(sub)
+    serve.register(sub)
 
     return p
 
