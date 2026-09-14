@@ -35,7 +35,20 @@ Three linked decisions:
 
 ## Answer
 
-**Decision 1 (human edit persistence): staging + explicit Save.** Ruled 2026-09-14 — edits are
-NOT written to the trunk directly; they accumulate in a model-side staging area, and Save is the
-only path that promotes them into the trunk via the model-side write path. Decisions 2 and 3 stay
-open.
+**Decision 1 (human edit persistence): staging + explicit Save.** Ruled 2026-09-14 — edits are NOT
+written to the trunk directly. The staging buffer reuses the EXISTING `stash` mechanism
+(`stash_register.py`/`stashlib.py`) rather than a new store: a stash-shaped entry (same per-actor
+T3D tree, `.uedcli/stash/`) holds the in-progress edit; Save applies that entry's actors into the
+trunk via the model-side write path. No new on-disk format. (Distinct from the audit-snapshot
+store in spec.md's "Snapshots" section, which is an automatic, content-addressed history of
+already-written trunk states for audit diffing — it only sees a staged edit once Save lands it,
+same as any other write; it is not where the staging buffer itself lives.)
+
+**Save-time conflict handling:** ruled 2026-09-14 — if the trunk changed (e.g. an AI edit) for an
+actor also touched by the staged edit since staging began, Save does NOT proceed silently. It warns,
+names exactly which actors changed underneath the staged edit, and requires explicit user
+confirmation before merging — never a silent overwrite in either direction. Exact merge mechanics
+(whole-actor-replace after confirm vs. a per-property merge) are still open — worth pinning down
+before P2 is built, not needed to unblock P1.
+
+Decisions 2 and 3 stay open.
