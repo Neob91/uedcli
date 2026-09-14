@@ -45,6 +45,17 @@ Fixtures (each isolates a compiler gap fixed for the first UT99 packages):
                      all found chasing. With the struct-member fix it compiles end to end and reaches
                      `perm_gate` byte-exact; the strict gate's only residual is the same pre-existing
                      UT99 own-name-pool gap as `Fire`/`UWeb`.
+  - `NoGunsMutator` - a real community mutator (github.com/vumaq/ut99-mutators), hand-authored with NO
+                     `defaultproperties` block and a trailing blank line in the source file — a shape
+                     no prior fixture exercised (every earlier source always had a `defaultproperties`
+                     tag, even an empty one). `compile._script_text`'s no-`defaultproperties` branch
+                     returned the raw source verbatim, so the stored `ScriptText` (and its
+                     `appStrCrc`-derived self-dependency CRC) carried an extra trailing blank line real
+                     UCC's own capture drops. Fixed: that branch now strips trailing wholly-blank
+                     line(s), keeping exactly the newline terminating the last real line. `perm_gate`
+                     byte-exact; the strict gate's only residual is the same pre-existing UT99
+                     own-name-pool gap as `Fire`/`UWeb`/`IpServer` (a `Name` literal, `'Enforcer'`,
+                     naming a real `BotPack` class the UT99 name-pool dump doesn't cover).
 """
 from __future__ import annotations
 
@@ -67,7 +78,8 @@ _FIX = Path(__file__).resolve().parent / "fixtures" / "uscript" / "ut99"
 
 # (package, export count) - the byte-parity corpus; count pins export-identity coverage.
 _PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritFinal", 5),
-            ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154), ("UscIpAddrProbe", 5), ("IpServer", 154)]
+            ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154), ("UscIpAddrProbe", 5), ("IpServer", 154),
+            ("NoGunsMutator", 9)]
 
 # Extra stock EditPackages a fixture's super chain needs loaded (`_edit_packages_upto`'s
 # content-safe base only covers Core/Engine/Editor) — only needed for the DOCKER-gated rebuild.

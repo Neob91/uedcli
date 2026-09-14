@@ -116,6 +116,7 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 | UscIpAddrProbe | UT99 | 1 | perm only | controlled: pins the cross-package-struct-type-resolution fix (below) — a member var AND a function param both typed to `IpDrv.InternetLink.IpAddr`, plus struct-member access on both; residual is the same UT99 own-name-pool gap as `Fire` |
 | UscImportIdentityProbe | UED22 | 1 | perm only | controlled: pins the cross-package import-identity-collision fix (below) — a class (`GameReplicationInfo`) and an inherited field sharing that same display name, both needing separate import rows; residual is the same open import/name table order tie-break `ExtendedBuilders` hits |
 | **IpServer** | UT99 | 2 | perm only | **real corpus package** — with the struct-member identity fix below (a param and the struct field it accesses sharing a name, e.g. `IpAddr Addr`'s own `.Addr`), the last of a chain of gaps this package surfaced (assert, byte→string, static-through-instance call, import-identity collision) is closed; compiles end to end, `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as `Fire`/`UWeb` |
+| **NoGunsMutator** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/vumaq/ut99-mutators) — hand-authored with no `defaultproperties` block and a trailing blank line, a source shape no prior fixture had; exposed a `_script_text` bug (see below), now fixed; `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as `Fire`/`UWeb`/`IpServer` |
 
 Controlled (non-corpus) fixtures `UscHello`/`UscVars`/`UscBB`/`UscFn`/`UscW`/`UscSt` all pass the
 strict gate autonomously.
@@ -622,6 +623,33 @@ strict gate autonomously.
   (committed golden) and docker-gated (`test_ut99_matches_fresh_ucc`, an independent fresh rebuild).
   Full offline and integration uscript suites re-verified green, no regression on any previously
   byte-exact/perm-exact package.
+- **`ScriptText`'s no-`defaultproperties` trailing-blank-line trim is FIXED (2026-09-14)**, found
+  compiling the real community mutator `NoGunsMutator` (`github.com/vumaq/ut99-mutators`, UT99). Every
+  prior fixture's source always had a `defaultproperties` block, even an empty one (real UCC's own
+  `batchexport` always emits one) — `compile._script_text`'s no-block branch (`return source`
+  unchanged) was never exercised against a hand-authored source lacking one entirely. `NoGunsMutator`
+  has none, and its source file — as authored on GitHub — ends with a trailing blank line after the
+  class's final `}`. UCC's own `ScriptText` capture drops it (and so does its `appStrCrc`-derived
+  self-`Dependency` CRC, computed over the same stored text): golden's stored text ends `}\r\n`, ours
+  ended `}\r\n\r\n`. Fixed: the no-`defaultproperties` branch now strips trailing wholly-blank line(s),
+  keeping exactly the newline terminating the last real line
+  (`re.sub(r"(\r\n|\r|\n)[ \t\r\n]*\Z", r"\1", source)`) — the `defaultproperties`-truncation branch is
+  untouched (already byte-exact on every existing fixture). Verified: every existing no-
+  `defaultproperties` fixture (`UscW`/`UscFn`/`UscAssertObjToStr`/`UscByteToStr`/
+  `UscStaticThroughInstance`/`UscImportIdentityProbe`/`UscStateForeach`/`UscInheritFinal`/
+  `UscTexAsym4x4`/`UscIpAddrProbe`/`UscTextPos`) already ends its file with a single trailing newline
+  and no blank line, so the fix is a no-op for all of them — confirmed by the full offline uscript
+  suite staying green (247 passed) with no fixture's golden changing. `NoGunsMutator` now reaches
+  `perm_gate` byte-exact against a fresh UT99 UCC build (both the committed golden and an independent
+  docker-gated rebuild, `test_ut99_matches_fresh_ucc`); the strict gate's only residual is the same
+  pre-existing UT99 own-name-pool gap as `Fire`/`UWeb`/`IpServer` (here: a bare `Name` literal,
+  `'Enforcer'`, naming a real `BotPack` class not in the UT99 name-pool dump — confirmed harmless to
+  `perm_gate`, since bytecode `Name` tokens are casefolded before comparison; only the strict gate's
+  table order/case is affected, the same as every other UT99 corpus package). `NoGunsMutator` is a real
+  corpus win — `fixtures/uscript/ut99/NoGunsMutator/`, `test_uscript_ut99.py`'s `_PACKAGES`. A related,
+  NOT fixed, out-of-scope-for-this-change infra gap found along the way (ruled out as unrelated to this
+  package, which needs no `Botpack` dependency): `dev/docs/board/inbox/
+  ut99-ucc-make-treats-botpack-as-needing-rebuild/`.
 - **Cross-campaign flag**: `uedcli/native/saveorder.py` (the map-parity path) has its own copy of the
   same CRT `qsort` — worth checking it isn't the mis-ported classic variant we initially (wrongly)
   suspected here (board item `saveorder-msvc-qsort-misport`).

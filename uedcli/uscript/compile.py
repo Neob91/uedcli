@@ -2031,9 +2031,19 @@ def _class_export(b, class_name, super_name, super_crc, crlf_source, class_flags
 # ── helpers ───────────────────────────────────────────────────────────────────────────────────────
 def _script_text(source: str) -> str:
     """The text UCC stores in `ScriptText`: the class source up to (not including) the
-    `defaultproperties` block, which the compiler consumes separately."""
+    `defaultproperties` block, which the compiler consumes separately. With NO `defaultproperties`
+    block, UCC's own capture drops any wholly-blank trailing line(s) the source file ends with,
+    keeping exactly the newline that terminates the last real line (measured on `NoGunsMutator`, a
+    hand-authored community mutator with no `defaultproperties` and a trailing blank line — a
+    community source shape no prior fixture, which always had `defaultproperties`, exercised). A
+    source with no trailing newline at all is a different, unmeasured shape and is left untouched
+    rather than guessed at."""
     m = re.search(r"(?im)^[ \t]*defaultproperties\b", source)
-    return source[:m.start()] if m else source
+    if m:
+        return source[:m.start()]
+    if not re.search(r"(\r\n|\r|\n)\Z", source):
+        return source
+    return re.sub(r"(\r\n|\r|\n)(?:[ \t]*(?:\r\n|\r|\n))*\Z", r"\1", source)
 
 
 def _to_crlf(text: str) -> str:

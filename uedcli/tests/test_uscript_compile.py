@@ -10,7 +10,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from uedcli.upackage import load_package
-from uedcli.uscript.compile import compile_package
+from uedcli.uscript.compile import _script_text, compile_package
 from uedcli.uscript.env import InstallEnv
 from uedcli.uscript.gate import gate
 from uedcli.uscript.serialize import serialize
@@ -151,3 +151,14 @@ def test_export_order_matches_golden_without_override():
         auto = compile_package(_SOURCES[class_name], _env())
         got = [auto.names[e.name].text for e in auto.exports]
         assert got == [name for name, _outer in golden_exports], f"{class_name}: {got}"
+
+
+def test_script_text_no_defaultproperties():
+    """With no `defaultproperties` block, `_script_text` drops trailing wholly-blank line(s)
+    (measured on `NoGunsMutator`, `test_uscript_ut99.py`) but leaves a source with no trailing
+    newline at all untouched — that shape is unmeasured, not guessed at."""
+    body = "class Foo expands Object;\n\nfunction F() {\n}"
+    assert _script_text(body + "\n") == body + "\n"                # single trailing newline: no-op
+    assert _script_text(body + "\n\n") == body + "\n"               # one trailing blank line: dropped
+    assert _script_text(body + "\n\n   \n") == body + "\n"          # blank line w/ trailing spaces
+    assert _script_text(body + "\n\n   ") == body + "\n\n   "       # no final newline: untouched
