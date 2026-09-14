@@ -35,4 +35,7 @@ Three linked decisions:
 
 ## Answer
 
-<!-- Empty = open. -->
+**Decision 1 (human edit persistence): staging + explicit Save.** Ruled 2026-09-14 — edits are
+NOT written to the trunk directly; they accumulate in a model-side staging area, and Save is the
+only path that promotes them into the trunk via the model-side write path. Decisions 2 and 3 stay
+open.
