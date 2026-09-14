@@ -512,7 +512,8 @@ def build_scene(level, search_files, index, *, defaults, project=None,
     # are lights (`level materialize` uses `bake_lighting` alone; `level photo --native`
     # additionally needs `bake_radiance`'s lit RGB buffer, since its rasterizer has no render-time
     # light evaluation of its own).
-    from .native.materialize import gather_light_colors, gather_lights
+    from .native.materialize import (_model_point_region, gather_light_colors,
+                                      gather_lights)
     lights = gather_lights(level, defaults=defaults)
     lights_ffi = [(loc, radius, special) for _n, loc, radius, special in lights]
     colors_ffi = gather_light_colors(level, lights, defaults=defaults)
@@ -643,6 +644,14 @@ def build_scene(level, search_files, index, *, defaults, project=None,
                 continue                                     # brushes/movers handled above
             tris, skins, mesh, mesh_ref = _mesh_actor_polys(actor, index, search_files)
             if not tris:
+                continue
+            # A mesh actor whose Location sits in SOLID space (a leaf carved out of nothing) is not
+            # drawn — the engine never renders an actor in a solid leaf (board `meshes-in-solid-
+            # space-render-in-photo-and-gui`). `_model_point_region`'s BSP descent returns i_leaf -1
+            # in solid space; a carved-open leaf always has i_leaf >= 0. Rule is the actor's own
+            # Location point (the simplest faithful test), not its bounds.
+            loc = tuple(float(c) for c in (actor.location or (0.0, 0.0, 0.0)))
+            if _model_point_region(model, loc)[0] < 0:
                 continue
             # This actor's own skin-relevant override, once -- () for the common no-override actor
             # (keeps `index_for_decoded`'s cache hit rate), a real fingerprint only when it states

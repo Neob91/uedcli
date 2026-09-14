@@ -21,41 +21,52 @@ function quad(overrides: Partial<ScenePoly> = {}): ScenePoly {
 const EMPTY_ATLAS: AtlasPayload = { width: 1, height: 1, manifest: {}, png_base64: '' }
 
 describe('buildGeometryData', () => {
-  it('fan-triangulates a quad into 2 triangles (6 verts)', () => {
+  it('fan-triangulates a quad into 2 triangles (6 verts) in one group', () => {
     const got = buildGeometryData([quad()], EMPTY_ATLAS)
     expect(got.positions.length).toBe(6 * 3)
     expect(got.uvs.length).toBe(6 * 2)
-    expect(got.groups.nonMasked).toEqual({ start: 0, count: 6 })
-    expect(got.groups.masked).toEqual({ start: 6, count: 0 })
+    expect(got.groups).toEqual([{ texIndex: -1, masked: false, start: 0, count: 6 }])
   })
 
-  it('splits masked and non-masked polys into separate contiguous groups', () => {
-    const got = buildGeometryData([quad({ masked: false }), quad({ masked: true })], EMPTY_ATLAS)
-    expect(got.groups.nonMasked).toEqual({ start: 0, count: 6 })
-    expect(got.groups.masked).toEqual({ start: 6, count: 6 })
-    expect(got.positions.length).toBe(12 * 3)
+  it('groups by (texture, masked) pair -- one group per distinct texture', () => {
+    const got = buildGeometryData(
+      [quad({ tex_index: 0 }), quad({ tex_index: 1 }), quad({ tex_index: 0, masked: true })],
+      { width: 16, height: 16, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 }, '1': { x: 8, y: 0, w: 8, h: 8 } }, png_base64: '' },
+    )
+    // three distinct (texIndex, masked) buckets, in first-seen order, each 6 verts.
+    expect(got.groups).toEqual([
+      { texIndex: 0, masked: false, start: 0, count: 6 },
+      { texIndex: 1, masked: false, start: 6, count: 6 },
+      { texIndex: 0, masked: true, start: 12, count: 6 },
+    ])
+    expect(got.positions.length).toBe(18 * 3)
+  })
+
+  it('splits masked and non-masked polys of one texture into separate groups', () => {
+    const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' }
+    const got = buildGeometryData([quad({ tex_index: 0 }), quad({ tex_index: 0, masked: true })], atlas)
+    expect(got.groups).toEqual([
+      { texIndex: 0, masked: false, start: 0, count: 6 },
+      { texIndex: 0, masked: true, start: 6, count: 6 },
+    ])
   })
 
   it('skips a degenerate poly (fewer than 3 verts) without crashing', () => {
     const got = buildGeometryData([quad({ verts: [0, 0, 0, 1, 0, 0] })], EMPTY_ATLAS)
     expect(got.positions.length).toBe(0)
+    expect(got.groups).toEqual([])
   })
 
-  it('maps a textured poly into its atlas rect, tiling texel coordinates', () => {
-    const atlas: AtlasPayload = {
-      width: 100,
-      height: 100,
-      manifest: { '0': { x: 10, y: 20, w: 8, h: 8 } },
-      png_base64: '',
-    }
-    // The quad's second vertex (1,0,0) is 1 unit along `tu` from `base` -- inside the 8x8 tile.
-    const got = buildGeometryData([quad({ tex_index: 0 })], atlas)
-    // First triangle is verts [0, 1, 2]; vertex index 1 (the quad's second vertex) is the 2nd
-    // entry emitted (uv index 1).
-    const u = got.uvs[1 * 2]
-    const v = got.uvs[1 * 2 + 1]
-    expect(u).toBeCloseTo((10 + 1) / 100)
-    expect(v).toBeCloseTo(20 / 100)
+  it('tiles UVs raw over the texture size -- a surface spanning 8 tiles goes 0..8 in U, not collapsed', () => {
+    // A floor quad 64 units wide over an 8x8 texture spans 8 tiles: U runs 0..8, never a single
+    // repeated texel (the atlas-mod bug that collapsed every corner to the same UV).
+    const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' }
+    const floor = quad({ verts: [0, 0, 0, 64, 0, 0, 64, 64, 0, 0, 64, 0], tex_index: 0 })
+    const got = buildGeometryData([floor], atlas)
+    const us: number[] = []
+    for (let i = 0; i < got.uvs.length; i += 2) us.push(got.uvs[i])
+    expect(Math.min(...us)).toBeCloseTo(0)
+    expect(Math.max(...us)).toBeCloseTo(8) // 64 texels / 8-wide texture = 8 tiles, not mod'd to 0
   })
 
   it('leaves an untextured poly (tex_index -1) at UV (0,0)', () => {

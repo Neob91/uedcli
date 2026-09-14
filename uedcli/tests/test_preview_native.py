@@ -496,6 +496,20 @@ def _mesh_poly_count(actor, index) -> int:
     return len(polys) - len(baseline)
 
 
+def test_mesh_in_solid_space_is_not_rendered():
+    """A DT_Mesh actor whose Location is in SOLID space (a leaf carved out of nothing) is not drawn
+    — the engine never renders an actor in a solid leaf (board `meshes-in-solid-space-render-in-
+    photo-and-gui`). Rule: the actor's Location point-region, i_leaf < 0 = solid. `cube_room()`
+    carves open space around the origin, so a crate at the origin renders and one far outside is
+    solid and absent."""
+    index = _ued22_index()
+    solid = Actor(name="Crate", cls=MESH_CLASS,
+                  location=(Decimal(100000), Decimal(0), Decimal(0)))
+    assert _mesh_poly_count(solid, index) == 0
+    open_space = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    assert _mesh_poly_count(open_space, index) > 0
+
+
 def test_drawtype_instance_override_decides_what_renders():
     """`DrawType` resolves instance-override-else-class-default, like `Mesh` right beside it and like
     `cli/rendering.py::_resolve_point_render` — reading only the class default rendered a DT_None

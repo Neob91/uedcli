@@ -1,32 +1,37 @@
-// Scene payload -> a drawable geometry: flat position/UV buffers plus a masked/non-masked group
-// split (Viewport3D.tsx's two-group material split, so the atlas alpha test only applies to polys
-// whose `masked` flag is set -- a non-masked poly using a texture whose mask marks index-0 texels
-// must still render solid). Pure and framework-free so it's testable without a WebGL context.
+// Scene payload -> a drawable geometry: flat position/UV buffers split into one group per
+// (texture, masked?) pair. Each group draws with its OWN THREE.Texture (RepeatWrapping), so a world
+// BSP surface can tile its texture across many repeats -- UVs are the RAW texel coordinates divided
+// by the texture's own size (0..N over N tiles), NOT packed into a shared atlas rect (which collapsed
+// a whole-tile-spanning surface to one texel; Viewport3D.tsx extracts a per-texture texture from the
+// atlas image). Pure and framework-free so it's testable without a WebGL context.
 import type { AtlasPayload } from '../api'
 import type { ScenePoly } from '../api'
 
+/** One contiguous [start, count] triangle-vertex range (three.js BufferGeometry group semantics:
+ * start/count counted in VERTICES, matching a non-indexed geometry), tagged with the texture and
+ * mask state it must draw with. `texIndex` -1 is untextured (flat grey, no map). Viewport3D maps
+ * each group to a material. */
+export interface GeometryGroup {
+  texIndex: number
+  masked: boolean
+  start: number
+  count: number
+}
+
 export interface GeometryData {
   positions: Float32Array // flat [x,y,z, ...], one triangle's 3 verts at a time
-  uvs: Float32Array // flat [u,v, ...], atlas-space, aligned with `positions`
-  /** Contiguous [start, count] triangle-vertex ranges for the non-masked and masked groups (three.js
-   * BufferGeometry group semantics: start/count are counted in VERTICES, matching a non-indexed
-   * geometry). Either may be empty (count 0) if the scene has no polys of that kind. */
-  groups: { nonMasked: { start: number; count: number }; masked: { start: number; count: number } }
+  uvs: Float32Array // flat [u,v, ...], texture-space (1.0 = one tile), aligned with `positions`
+  groups: GeometryGroup[] // one per (texIndex, masked) pair present, in first-seen order
 }
 
 function dot(a: number[], b: number[]): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-function mod(v: number, m: number): number {
-  if (m <= 0) return 0
-  return ((v % m) + m) % m
-}
-
-/** One poly's per-vertex atlas UVs, tiling the source texture within its atlas rect (texel
- * coordinates wrap into [0, w) x [0, h) before mapping into the rect -- an approximation: an
- * atlas-packed texture can't repeat past its own tile boundary without bleeding, which Slice 1's
- * unlit draw accepts (the pixel-identical still is the Slice 2 photo endpoint, not this viewport). */
+/** One poly's per-vertex UVs in the source texture's own coordinate space: the raw texel
+ * coordinate divided by the texture's size, so a surface spanning N tiles yields UVs 0..N and
+ * RepeatWrapping tiles the texture. No `mod`, no atlas rect. The texture's size is the manifest
+ * rect's w/h (one rect = one whole texture). Untextured (tex_index < 0 / no rect) -> (0,0). */
 function polyUVs(poly: ScenePoly, atlas: AtlasPayload): [number, number][] {
   const rect = atlas.manifest[String(poly.tex_index)]
   if (poly.tex_index < 0 || !rect) {
@@ -38,9 +43,7 @@ function polyUVs(poly: ScenePoly, atlas: AtlasPayload): [number, number][] {
     const rel = [v[0] - poly.base[0], v[1] - poly.base[1], v[2] - poly.base[2]]
     const texelU = dot(rel, poly.tu) + poly.pan[0]
     const texelV = dot(rel, poly.tv) + poly.pan[1]
-    const u = (rect.x + mod(texelU, rect.w)) / atlas.width
-    const v2 = (rect.y + mod(texelV, rect.h)) / atlas.height
-    out.push([u, v2])
+    out.push([texelU / rect.w, texelV / rect.h])
   }
   return out
 }
@@ -61,32 +64,40 @@ function appendTriangleFan(
   }
 }
 
+interface Bucket {
+  texIndex: number
+  masked: boolean
+  pos: number[]
+  uv: number[]
+}
+
 export function buildGeometryData(polys: ScenePoly[], atlas: AtlasPayload): GeometryData {
-  const nonMaskedPos: number[] = []
-  const nonMaskedUV: number[] = []
-  const maskedPos: number[] = []
-  const maskedUV: number[] = []
+  const buckets = new Map<string, Bucket>()
+  const order: string[] = []
 
   for (const poly of polys) {
     if (poly.verts.length < 9) continue // degenerate (<3 verts): nothing to draw
     const uvs = polyUVs(poly, atlas)
-    if (poly.masked) {
-      appendTriangleFan(poly, uvs, maskedPos, maskedUV)
-    } else {
-      appendTriangleFan(poly, uvs, nonMaskedPos, nonMaskedUV)
+    const key = `${poly.tex_index}:${poly.masked ? 1 : 0}`
+    let bucket = buckets.get(key)
+    if (!bucket) {
+      bucket = { texIndex: poly.tex_index, masked: poly.masked, pos: [], uv: [] }
+      buckets.set(key, bucket)
+      order.push(key)
     }
+    appendTriangleFan(poly, uvs, bucket.pos, bucket.uv)
   }
 
-  const positions = new Float32Array([...nonMaskedPos, ...maskedPos])
-  const uvs = new Float32Array([...nonMaskedUV, ...maskedUV])
-  const nonMaskedCount = nonMaskedPos.length / 3
-  const maskedCount = maskedPos.length / 3
-  return {
-    positions,
-    uvs,
-    groups: {
-      nonMasked: { start: 0, count: nonMaskedCount },
-      masked: { start: nonMaskedCount, count: maskedCount },
-    },
+  const positions: number[] = []
+  const uvs: number[] = []
+  const groups: GeometryGroup[] = []
+  for (const key of order) {
+    const bucket = buckets.get(key) as Bucket
+    const start = positions.length / 3
+    positions.push(...bucket.pos)
+    uvs.push(...bucket.uv)
+    groups.push({ texIndex: bucket.texIndex, masked: bucket.masked, start, count: bucket.pos.length / 3 })
   }
+
+  return { positions: new Float32Array(positions), uvs: new Float32Array(uvs), groups }
 }

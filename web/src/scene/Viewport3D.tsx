@@ -23,44 +23,59 @@ import type { Ray } from './selection'
 
 const INITIAL_POSE: CameraPose = { position: [0, -500, 200], pitch: -10, yaw: 90 }
 
-/** Loads the atlas PNG into a `THREE.Texture`, disposing the PREVIOUSLY committed texture once a
- * new one replaces it (every live-reload swaps `atlas`, so without this every reload cycle leaked
- * one full-size GPU texture -- review finding). `currentRef` tracks what's actually live (in state
- * or in flight); an unmount (or a load that lost the race) disposes through it too. */
-function useAtlasTexture(atlas: AtlasPayload): THREE.Texture | null {
-  const [texture, setTexture] = useState<THREE.Texture | null>(null)
-  const currentRef = useRef<THREE.Texture | null>(null)
+/** Extracts one `THREE.Texture` per atlas entry, keyed by `tex_index`, by drawing that entry's rect
+ * out of the atlas image onto its own canvas -- so each texture can tile with RepeatWrapping (a
+ * shared atlas can't repeat past a tile boundary; bug A). NearestFilter matches the low-res look;
+ * `flipY=false` keeps the atlas's image-row UV convention (V grows downward). Every live-reload
+ * swaps `atlas` and rebuilds the map, disposing the previous textures so nothing leaks; `currentRef`
+ * tracks what's live for the unmount / lost-race cleanup too. */
+function useTextures(atlas: AtlasPayload): Map<number, THREE.Texture> {
+  const [textures, setTextures] = useState<Map<number, THREE.Texture>>(() => new Map())
+  const currentRef = useRef<Map<number, THREE.Texture>>(new Map())
 
   useEffect(() => {
     let disposed = false
-    const loader = new THREE.TextureLoader()
-    loader.load(`data:image/png;base64,${atlas.png_base64}`, (tex) => {
-      if (disposed) {
-        tex.dispose()
-        return
+    const img = new Image()
+    img.onload = () => {
+      if (disposed) return
+      const next = new Map<number, THREE.Texture>()
+      for (const [key, rect] of Object.entries(atlas.manifest)) {
+        const canvas = document.createElement('canvas')
+        canvas.width = rect.w
+        canvas.height = rect.h
+        const ctx = canvas.getContext('2d')
+        if (!ctx) continue
+        ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h)
+        const tex = new THREE.CanvasTexture(canvas)
+        tex.wrapS = THREE.RepeatWrapping
+        tex.wrapT = THREE.RepeatWrapping
+        tex.magFilter = THREE.NearestFilter
+        tex.minFilter = THREE.NearestFilter
+        tex.flipY = false
+        tex.needsUpdate = true
+        next.set(Number(key), tex)
       }
-      tex.magFilter = THREE.NearestFilter
-      tex.minFilter = THREE.NearestFilter
-      tex.flipY = false // our atlas UVs are computed image-row-style (y grows downward)
-      tex.needsUpdate = true
-      currentRef.current?.dispose()
-      currentRef.current = tex
-      setTexture(tex)
-    })
+      currentRef.current.forEach((t) => t.dispose())
+      currentRef.current = next
+      setTextures(next)
+    }
+    img.src = `data:image/png;base64,${atlas.png_base64}`
     return () => {
       disposed = true
     }
-  }, [atlas.png_base64])
+  }, [atlas.png_base64, atlas.manifest])
 
   useEffect(() => {
     return () => {
-      currentRef.current?.dispose() // unmount: release whatever texture is still held
-      currentRef.current = null
+      currentRef.current.forEach((t) => t.dispose()) // unmount: release whatever's still held
+      currentRef.current = new Map()
     }
   }, [])
 
-  return texture
+  return textures
 }
+
+const UNTEXTURED_GREY = 0x808080
 
 /** Applies `pose` to the R3F default camera every frame -- Z-up (`camera.up`), aimed via
  * `lookAt` rather than a manual quaternion (keeps roll disambiguation simple and correct for a
@@ -108,7 +123,7 @@ export function Viewport3D({ scene, atlas, selectedName = null, onSelectActor }:
   const drag = useRef<DragTracker | null>(null)
   const cameraRef = useRef<THREE.Camera | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const texture = useAtlasTexture(atlas)
+  const textures = useTextures(atlas)
 
   const selectedActor = useMemo(
     () => scene.actors.find((a) => a.name === selectedName) ?? null,
@@ -132,43 +147,52 @@ export function Viewport3D({ scene, atlas, selectedName = null, onSelectActor }:
     )
   }, [selectedActor])
 
-  const bufferGeometry = useMemo(() => {
+  // One draw group per (texture, masked?) pair, each with its own tiling material. Untextured
+  // groups (tex_index < 0) get a flat grey material with no map. Identical (texture, masked) pairs
+  // dedupe onto one material. Built together so the geometry's group -> material-index mapping stays
+  // consistent.
+  const { bufferGeometry, materials } = useMemo(() => {
     const built = buildGeometryData(scene.polys, atlas)
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(built.positions, 3))
     geo.setAttribute('uv', new THREE.BufferAttribute(built.uvs, 2))
     geo.clearGroups()
-    if (built.groups.nonMasked.count > 0) {
-      geo.addGroup(built.groups.nonMasked.start, built.groups.nonMasked.count, 0)
-    }
-    if (built.groups.masked.count > 0) {
-      geo.addGroup(built.groups.masked.start, built.groups.masked.count, 1)
+    const mats: THREE.Material[] = []
+    const matIndex = new Map<string, number>()
+    for (const group of built.groups) {
+      if (group.count === 0) continue
+      const key = `${group.texIndex}:${group.masked ? 1 : 0}`
+      let index = matIndex.get(key)
+      if (index === undefined) {
+        const map = group.texIndex >= 0 ? (textures.get(group.texIndex) ?? null) : null
+        index = mats.length
+        mats.push(
+          map
+            ? new THREE.MeshBasicMaterial({
+                map,
+                side: THREE.DoubleSide,
+                alphaTest: group.masked ? 0.5 : 0,
+              })
+            : new THREE.MeshBasicMaterial({ color: UNTEXTURED_GREY, side: THREE.DoubleSide }),
+        )
+        matIndex.set(key, index)
+      }
+      geo.addGroup(group.start, group.count, index)
     }
     geo.computeVertexNormals()
-    return geo
-  }, [scene, atlas])
+    return { bufferGeometry: geo, materials: mats }
+  }, [scene, atlas, textures])
 
   // Every live-reload replaces `bufferGeometry`/`materials` with fresh THREE objects; without an
-  // explicit dispose the PREVIOUS ones (a full geometry buffer, two materials) leak every cycle
-  // (review finding). The cleanup closes over the value from the render it belongs to, so it
-  // always disposes the one being REPLACED, and disposes the final one on unmount too.
+  // explicit dispose the PREVIOUS ones (a full geometry buffer, its materials) leak every cycle.
+  // The cleanup closes over the value from the render it belongs to, so it always disposes the one
+  // being REPLACED, and disposes the final one on unmount too.
   useEffect(() => {
-    return () => bufferGeometry.dispose()
-  }, [bufferGeometry])
-
-  const materials = useMemo(() => {
-    const plain = new THREE.MeshBasicMaterial({ map: texture, side: THREE.DoubleSide })
-    const masked = new THREE.MeshBasicMaterial({
-      map: texture,
-      side: THREE.DoubleSide,
-      alphaTest: 0.5,
-    })
-    return [plain, masked]
-  }, [texture])
-
-  useEffect(() => {
-    return () => materials.forEach((m) => m.dispose())
-  }, [materials])
+    return () => {
+      bufferGeometry.dispose()
+      materials.forEach((m) => m.dispose())
+    }
+  }, [bufferGeometry, materials])
 
   const onPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
     drag.current = { startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY }
@@ -239,7 +263,7 @@ export function Viewport3D({ scene, atlas, selectedName = null, onSelectActor }:
     >
       <Canvas>
         <CameraRig pose={pose} cameraRef={cameraRef} />
-        {texture && <mesh geometry={bufferGeometry} material={materials} />}
+        <mesh geometry={bufferGeometry} material={materials} />
         <SelectionHighlight box={selectionBox} />
       </Canvas>
     </div>
