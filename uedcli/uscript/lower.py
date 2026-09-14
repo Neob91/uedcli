@@ -380,6 +380,7 @@ _CONV: dict[tuple[str, str], int] = {
     ("int", "byte"): 0x3D, ("int", "bool"): 0x3E, ("int", "float"): 0x3F,
     ("float", "int"): 0x44,
     ("string", "int"): 0x4A, ("string", "float"): 0x4C,
+    ("byte", "string"): 0x52,
     ("int", "string"): 0x53, ("bool", "string"): 0x54, ("float", "string"): 0x55,
     ("name", "string"): 0x57,
 }
@@ -960,6 +961,11 @@ class _Lowerer:
             base = callee.children[0]
             if base.op == "super":                      # super.Method() / Super(Class).Method()
                 return self._call_super(base.text, callee.text, args)
+            if base.op == "member" and base.text.casefold() == "static":
+                # `X.static.Method(...)`: a static function called through an instance. Live-probed
+                # (2026-09-14): bytecode is identical to `X.Method(...)` -- `.static.` is a
+                # compile-time-only permission marker, no separate opcode.
+                return self._call_method(base.children[0], callee.text, args)
             return self._call_method(base, callee.text, args)
         raise LowerError(f"call target {callee.op!r} not supported yet")
 

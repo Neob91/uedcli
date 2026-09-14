@@ -539,12 +539,34 @@ strict gate autonomously.
   asset-fetch effort, out of scope here.
   `IpServer` (2 classes, `UdpServerQuery`/`UdpServerUplink`) IS content-free and round-trips cleanly
   through UT99's own UCC — a real candidate, not yet a corpus win. Compiling it surfaced the `assert`
-  and object/class->string gaps above (now fixed) and ONE more, NOT yet fixed: a `byte -> string`
-  conversion (`PlayerReplicationInfo.Team`, a byte field, read through a `$` string concat in
-  `GetPlayer`) — `_CONV` has no entry for it and the exact opcode is unconfirmed (probing was blocked
-  by host-wide docker/OCI resource exhaustion this session, not a code question). Sources+golden
-  saved offline at `_scratch/uscript_survey/IpServer/` (not committed — scratch). See
-  `dev/docs/board/inbox/uscript-byte-to-string-conversion-missing/`.
+  and object/class->string gaps above (now fixed) and a `byte -> string` conversion gap, also now
+  FIXED (2026-09-14): `("byte", "string")` = `0x52`, live-probed against a fresh UED22 UCC compile of
+  `local byte B; S = string(B);` — one free slot before `int->string` (`0x53`) in UCC's conversion
+  block, contrary to the earlier "fully packed, no free slot" assumption. Added to `_CONV`; regression
+  `test_uscript_bytetostring.py` (`UscByteToStr` fixture, both the committed-golden and docker-gated
+  fresh-UCC checks). `dev/docs/board/done/uscript-byte-to-string-conversion-missing/`.
+  Re-attempting `IpServer` with the fix compiled past the `Team` line into a second gap, also now
+  FIXED (2026-09-14): `P.static.GetMultiSkin(P, SkinName, FaceName)` — a `static` function called
+  THROUGH AN INSTANCE expression (`P`, a `PlayerPawn`) — parsed fine (`static` is an ordinary member
+  name mid-chain) but `lower.py`'s `_ex_call` tried to resolve `P.static` itself as a real member,
+  raising `unresolved member object:playerpawn.static`. Live-probed: `X.static.Method(args)` and
+  `X.Method(args)` compile to BYTE-IDENTICAL bytecode — `.static.` is a compile-time-only permission
+  marker, no separate opcode. Fixed by unwrapping a `.static.` member sitting between a call target
+  and its base before resolving the call. Regression `test_uscript_staticcall.py` (function-level
+  bytecode compare, not the whole-package gate — the fixture's class body hits an unrelated,
+  pre-existing Dependencies-array gap, `dev/docs/board/inbox/uscript-same-class-typed-param-context-
+  under/`, found as a byproduct and not chased). `dev/docs/board/done/uscript-static-through-instance-
+  member-call-p/`.
+  `IpServer` now compiles past BOTH gaps and hits a THIRD, different-class gap:
+  `UdpServerUplink.MasterServerIpAddr` is `var IpAddr MasterServerIpAddr;` — `IpAddr`, a struct
+  declared in `Engine`, not in the compiling package. `_resolve_var_type` only resolves a struct type
+  through `b.local_structs` (structs declared in the CURRENTLY-COMPILING package); nothing resolves a
+  struct DECLARATION from another already-compiled package (unlike enum tags, which already do this
+  cross-package). Bigger than a call-site fix — needs a struct lookup mirroring
+  `ClassGraph.enum_ordinal`'s cross-package enum resolution. Not fixed here, scoped out.
+  `IpServer` is still NOT a corpus win. Sources+golden saved offline at
+  `_scratch/uscript_survey/IpServer/` (not committed — scratch). See
+  `dev/docs/board/inbox/uscript-cross-package-struct-type-not-resolved/`.
 - **Cross-campaign flag**: `uedcli/native/saveorder.py` (the map-parity path) has its own copy of the
   same CRT `qsort` — worth checking it isn't the mis-ported classic variant we initially (wrongly)
   suspected here (board item `saveorder-msvc-qsort-misport`).
