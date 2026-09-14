@@ -955,6 +955,10 @@ def _resolve_var_type(b: _Build, m: VarDecl, pname: str
     if base in b.local_structs:
         return ("StructProperty", 0, (_RefSpec(key=b.okey(f"struct:{base}"), is_export=True),),
                 PT_STRUCT, base)
+    graph = _member_graph(b)                              # a built-in/cross-package struct (Vector,
+    if graph.is_struct_name(base):                         # IpAddr, …) — same shape as
+        skey = _add_struct_import(b, graph, base)           # `_func_prop_type`/`_resolve_array_type`
+        return ("StructProperty", 0, (_RefSpec(key=skey, is_export=False),), PT_STRUCT, skey)
     if base.casefold() == "class":
         _add_import(b, "Class")
         return ("ClassProperty", 0, (_RefSpec(key="Class", is_export=False),

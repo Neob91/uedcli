@@ -113,6 +113,7 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 | pkg_Mutual | UED22 | 2 | perm only | controlled: two SIBLING classes referencing each other MUTUALLY — the two-pass signature-graph proof (see below); residual is the same open name-table qsort-tie class as ExtendedBuilders |
 | UscAutoEmitDefaultsUT99 | UT99 | 1 | perm only | controlled: pins the substrate-aware `_auto_emit_defaults` fix (below) — an object + every scalar type, explicit empty `defaultproperties{}`, no auto-zero tag under UT99; residual is the same UT99 own-name-pool gap as `Fire` |
 | **UWeb** | UT99 | 7 | perm only | **real corpus package**, full byte match at the permutation level (identity/order/case-tolerant) — the substrate-aware `_auto_emit_defaults` fix below was the last blocker; residual is the same UT99 own-name-pool gap as `Fire` |
+| UscIpAddrProbe | UT99 | 1 | perm only | controlled: pins the cross-package-struct-type-resolution fix (below) — a member var AND a function param both typed to `IpDrv.InternetLink.IpAddr`, plus struct-member access on both; residual is the same UT99 own-name-pool gap as `Fire` |
 
 Controlled (non-corpus) fixtures `UscHello`/`UscVars`/`UscBB`/`UscFn`/`UscW`/`UscSt` all pass the
 strict gate autonomously.
@@ -557,16 +558,39 @@ strict gate autonomously.
   pre-existing Dependencies-array gap, `dev/docs/board/inbox/uscript-same-class-typed-param-context-
   under/`, found as a byproduct and not chased). `dev/docs/board/done/uscript-static-through-instance-
   member-call-p/`.
-  `IpServer` now compiles past BOTH gaps and hits a THIRD, different-class gap:
+  `IpServer` then compiled past BOTH gaps and hit a THIRD, different-class gap:
   `UdpServerUplink.MasterServerIpAddr` is `var IpAddr MasterServerIpAddr;` — `IpAddr`, a struct
-  declared in `Engine`, not in the compiling package. `_resolve_var_type` only resolves a struct type
-  through `b.local_structs` (structs declared in the CURRENTLY-COMPILING package); nothing resolves a
-  struct DECLARATION from another already-compiled package (unlike enum tags, which already do this
-  cross-package). Bigger than a call-site fix — needs a struct lookup mirroring
-  `ClassGraph.enum_ordinal`'s cross-package enum resolution. Not fixed here, scoped out.
-  `IpServer` is still NOT a corpus win. Sources+golden saved offline at
-  `_scratch/uscript_survey/IpServer/` (not committed — scratch). See
-  `dev/docs/board/inbox/uscript-cross-package-struct-type-not-resolved/`.
+  declared in `IpDrv` (on `InternetLink`), not in the compiling package. `_resolve_var_type` was the
+  ONE type-resolution site still missing the cross-package-struct branch `_func_prop_type`/
+  `_resolve_array_type` already had (`_member_graph(b).is_struct_name(base)` + `_add_struct_import`,
+  the same mechanism `Vector`/`Rotator`/… already use) — **FIXED 2026-09-14**, added mirroring those
+  two exactly, no `IpAddr`/`IpServer` special-casing. Regression: `UscIpAddrProbe`
+  (`uedcli/tests/fixtures/uscript/ut99/UscIpAddrProbe/`, `test_uscript_ut99.py`) — a member var AND a
+  function param both typed to `IpDrv.InternetLink.IpAddr`, plus struct-member access on both —
+  `perm_gate` byte-exact against a fresh live UT99 UCC build; the strict gate's only residual is the
+  same pre-existing UT99 own-name-pool gap as `Fire`/`UWeb`. `dev/docs/board/done/
+  uscript-cross-package-struct-type-not-resolved/`.
+
+  `IpServer` itself is STILL NOT a corpus win: past this gap it hits two further, NEW, unrelated gaps,
+  both found reattempting it and building the regression fixture above, both scoped out (small-fix cap
+  for this session) rather than chased:
+  - `Level.Game.GameReplicationInfo.Region` (`UdpServerQuery.ParseQuery`) raises
+    `KeyError: 'GameReplicationInfo'` — `GameInfo`'s own member field `GameReplicationInfo` is named
+    identically to its type, the class `Engine.GameReplicationInfo`. `compile._imports_by_display`
+    (and, deeper, `reorder._Decoder`'s whole import-identity model) keys an import purely by its bare
+    display name, so two DIFFERENT imports sharing one name collide onto a single identity and one
+    never lands in the final import table. Not small: fixing it needs each import to carry a unique
+    internal key the way an export already does (`ekey`), threaded through `reorder.py`'s ref
+    resolution AND `ordering.order_package`'s refcount tally, not just the final relabeling step.
+    `dev/docs/board/inbox/uscript-cross-package-import-identity-collides/`.
+  - `MasterServerIpAddr.Addr = Addr.Addr;` (`UdpServerUplink.Resolved`, and the same shape in
+    `ParseQuery`/`SendQueryPacket`/…) — the param `Addr` and the `IpAddr` struct's own field `Addr`
+    share a name; the compiled `StructMember` token's field identity resolves to the PARAM's own
+    export instead of the imported struct field, a silent wrong-bytes bug (no exception, only visible
+    via `perm_gate`). Root cause not traced past `lower.py`'s struct-member lowering emitting a bare
+    field-name string for a later pass to resolve. `dev/docs/board/inbox/
+    uscript-struct-member-access-confuses-a-local/`.
+  Sources+golden saved offline at `_scratch/uscript_survey/IpServer/` (not committed — scratch).
 - **Cross-campaign flag**: `uedcli/native/saveorder.py` (the map-parity path) has its own copy of the
   same CRT `qsort` — worth checking it isn't the mis-ported classic variant we initially (wrongly)
   suspected here (board item `saveorder-msvc-qsort-misport`).

@@ -29,6 +29,12 @@ Fixtures (each isolates a compiler gap fixed for the first UT99 packages):
   - `UWeb`         - the real stock UT99 package (7 classes): the corpus win this fixture set was
                      building toward. `perm_gate` byte-exact; the strict gate's only residual is the
                      pre-existing UT99 own-name-pool gap already noted for `Fire` (`USCRIPT-COMPILER.md`).
+  - `UscIpAddrProbe` - a member var AND a function param typed to a struct declared in a DIFFERENT
+                     package (`IpDrv`'s `IpAddr`, on `InternetLink`), plus struct-member access on
+                     both (`.Addr`/`.Port`) - the gap real UT99 `IpServer.UdpServerUplink.
+                     MasterServerIpAddr` hit (`_resolve_var_type` only resolved a struct type declared
+                     in the CURRENTLY-COMPILING package). `perm_gate` byte-exact; the strict gate's
+                     only residual is the same pre-existing UT99 own-name-pool gap as `Fire`/`UWeb`.
 """
 from __future__ import annotations
 
@@ -51,11 +57,12 @@ _FIX = Path(__file__).resolve().parent / "fixtures" / "uscript" / "ut99"
 
 # (package, export count) - the byte-parity corpus; count pins export-identity coverage.
 _PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritFinal", 5),
-            ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154)]
+            ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154), ("UscIpAddrProbe", 5)]
 
 # Extra stock EditPackages a fixture's super chain needs loaded (`_edit_packages_upto`'s
 # content-safe base only covers Core/Engine/Editor) — only needed for the DOCKER-gated rebuild.
-_DEPS: dict[str, tuple[str, ...]] = {"UscInheritFinal": ("UWindow",), "UWeb": ("IpDrv",)}
+_DEPS: dict[str, tuple[str, ...]] = {"UscInheritFinal": ("UWindow",), "UWeb": ("IpDrv",),
+                                     "UscIpAddrProbe": ("IpDrv",)}
 
 
 def _docker_up() -> bool:
