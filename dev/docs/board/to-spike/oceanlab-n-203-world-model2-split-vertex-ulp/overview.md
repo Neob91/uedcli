@@ -143,3 +143,35 @@ tree divergence from some prior actor/N), or does it HIT onto the nearby point (
 genuinely differs here, same shape as N8 but reversed)? Settling this needs the live capture above,
 run when the shared host's disk is not mid-swing. Exact recipe, breakpoint address, and query bits are
 unchanged from the prior update and ready to run as-is. No fix, no mask, no exclusion proposed.
+
+## 2026-09-14 update — live capture ran: UED22 ALSO misses; narrowed to a dead-node ghost point
+
+Disk was calm this session (`df -h /` steady at 12-16G free throughout); the debug image build
+(`dx-lum-uned-dbg`, gdb added on top of the already-present `ued-x86-runtime` base) cost under a
+minute. Ran the exact recipe the prior update left ready. Full writeup + committed harness:
+`dev/docs/spikes/2026-09-14-oceanlab-n203-addpoint-capture/`.
+
+**The open question is answered: UED22's own `FindNearestVertex` MISSES too** (`dist=-1.0`, the same
+sentinel the N=8 probe used), both times, for both of Brush483's two divergent points. Native's FNV
+descent is faithful at this call — it is not the bug. A follow-up static trace (reverted after use,
+not committed — see the spike for why) walked native's own `model.points` at each points-GC
+checkpoint and found the exact downstream mechanism: the pre-existing wall-crossing point
+(`0xc3800002`) survives the add only as a "ghost" reference from a surf whose owning NODE is already
+DEAD (spliced out of the live tree by `bsp_cleanup`'s FWTB-DEAD splice) by the time Brush483's own
+add runs. `compact_points_to_surf_bases` keeps the point alive anyway (its rule doesn't check node
+liveness), but that ghost surf itself is discarded one line later, and repartition's soup-rebuild
+(`make_ed_polys`) only walks LIVE reachable nodes — so nothing ever re-derives a surf at that exact
+coordinate again. `bsp_refresh_points_vectors` correctly drops the now-truly-orphaned point right
+after, and by the time `bsp_opt_geom`'s `merge_near_points` runs, there is nothing left to weld
+Brush483's new point onto.
+
+Every individual step in this chain is already a faithful, independently live-verified piece of the
+port — none of them is locally wrong. The remaining question is upstream of all of it: is this
+wall-face node ALSO dead at the equivalent point in UED22's real incremental tree, or does UED22 keep
+it (or an equivalent live node at the same spot) alive through to its own `bspOptGeom`? Settling that
+needs a DIFFERENT live capture — of the real editor's own `Model->Points`/`Model->Nodes` state at the
+`bspBuild`/`bspRefresh` checkpoints, which needs locating `bspOptGeom`'s own `Model*` argument and
+`TArray` layout, not yet done. A materially new, larger RE task, out of scope for this pass — not
+attempted (`NATIVE-MATERIALIZE.md` prime directive: measure, don't guess a fix for an unconfirmed
+mechanism). Still not resolved; no fix, no mask. OceanLab's ceiling is unchanged (byte-exact N=1..202,
+re-confirmed unchanged this session).
