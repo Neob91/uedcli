@@ -36,13 +36,13 @@ Three linked decisions:
 ## Answer
 
 **Decision 1 (human edit persistence): staging + explicit Save.** Ruled 2026-09-14 — edits are NOT
-written to the trunk directly. The staging buffer reuses the EXISTING `stash` mechanism
-(`stash_register.py`/`stashlib.py`) rather than a new store: a stash-shaped entry (same per-actor
-T3D tree, `.uedcli/stash/`) holds the in-progress edit; Save applies that entry's actors into the
-trunk via the model-side write path. No new on-disk format. (Distinct from the audit-snapshot
-store in spec.md's "Snapshots" section, which is an automatic, content-addressed history of
-already-written trunk states for audit diffing — it only sees a staged edit once Save lands it,
-same as any other write; it is not where the staging buffer itself lives.)
+written to the trunk directly. Superseding an earlier draft of this answer that proposed reusing
+`stash`: the staging buffer instead reuses the **audit-snapshot store** already defined in spec.md's
+"Snapshots" section (content-addressed dedup blobs + a manifest, under the gitignored `.uedcli/`) —
+not the `stash` porcelain mechanism (`stash_register.py`), which stays a separate, user-facing,
+manually-named register. A staged (unsaved) edit is a snapshot in that same store; Save applies its
+actors into the trunk via the model-side write path. Later: disaster recovery from this store (e.g.
+the GUI crashing mid-edit) is a natural extension, not built now.
 
 **Save-time conflict handling:** ruled 2026-09-14 — if the trunk changed (e.g. an AI edit) for an
 actor also touched by the staged edit since staging began, Save does NOT proceed silently. It warns,
