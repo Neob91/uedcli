@@ -122,6 +122,12 @@ involved). To audit them, a *before* state must survive the instant write:
 - **File watcher → live reload.** When the trunk changes, `serve` pushes a WS event; the client
   re-fetches the scene and redraws. This is how AI changes appear live in the GUI.
 
+  **Superseded (2026-09-14) by `dev/docs/board/to-spec/gui-explicit-rebuild-pinned-build-state-mode/
+  spec.md`**: the watcher no longer auto-pushes a silent reload. A settled trunk change instead
+  flips a "changes available" signal; the trunk/actor view only refreshes via an explicit **Load**
+  action, and solved geometry only refreshes via a separate explicit **Rebuild** — matching
+  UnrealEd's own explicit-build model rather than auto-updating. See that spec for the full design.
+
 **Semantic diff.** Between two states (each: the live trunk, a snapshot, or — if git is present — a
 commit), `serve` computes a per-actor change list:
 
@@ -246,6 +252,15 @@ the current scene visible with an "updating" badge and swaps when ready (no blan
 runs on a background worker, **latest-wins** (a newer change supersedes an in-flight solve); a
 light-only change reuses the cached geometry (the `preview_cache` geometry/light hash split).
 
+**Superseded (2026-09-14) by `dev/docs/board/to-spec/gui-explicit-rebuild-pinned-build-state-mode/
+spec.md`**: no automatic background solve. Cold-open (or opening a level with no saved build) shows
+wireframe from the trunk and **stays wireframe-only** until an explicit **Rebuild** — matching
+UnrealEd (a level shows nothing built until you Build, ever). A level that already has a SAVED build
+opens already-lit immediately (the pin is restored from the on-disk pointer at Load). "Re-solve
+after a change" is also superseded: a trunk change never triggers a re-solve by itself; only an
+explicit Rebuild does, against whatever the current Loaded view is. See that spec for the full
+design.
+
 **Structure & navigation.** In-GUI **level picker**, one level open at a time; switching loads that
 level's scene + its snapshot history. Organization panel = a **folder tree** (primary hierarchy;
 select a node → select/frame its actors) + **label filter facets** (toggle chips, OR-combined,
@@ -294,6 +309,11 @@ follows the cursor; the selected actor's location/size is shown; grid toggle.
 snapshots yet, no git repo, missing texture) and inspector niceties (jump to a referenced actor via
 `Base`/`Owner`, texture thumbnails, copy value). Left to the plan / build-time discretion unless the
 owner rules otherwise.
+
+**Also open:** the exact rendering definition of the "flat" shading mode (listed above alongside
+wireframe/unlit/lit) was never pinned down against real UnrealEd behavior — needs the same
+RE-and-verify treatment as other UnrealEd facts in this codebase before Slice 2 build reaches it,
+not assumed from general knowledge.
 
 ## Deferred (scope boundaries, not specified here)
 
