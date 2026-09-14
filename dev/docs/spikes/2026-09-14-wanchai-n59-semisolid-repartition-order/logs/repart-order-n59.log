@@ -1,0 +1,97 @@
+[New LWP 144]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 172]
+[New LWP 173]
+[New LWP 174]
+[New LWP 175]
+[New LWP 176]
+[New LWP 177]
+[New LWP 178]
+[New LWP 179]
+[New LWP 180]
+[New LWP 181]
+[New LWP 197]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f04cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x100355e0
+Breakpoint 2 at 0x10049fc0
+Breakpoint 3 at 0x1004a05f
+Breakpoint 4 at 0x10034e80
+ORACLE_ATTACHED
+[New Thread 0x9adfb40 (LWP 392)]
+[New Thread 0xab2fb40 (LWP 393)]
+[New Thread 0xc4bfb40 (LWP 412)]
+BRUSHCSG idx=1 actor=0xd0a762c model=0xd012254
+ADD call=0 ilink=0 nv=4 base=-1920.0000,-1920.0000,3584.0000
+BRUSHCSG idx=2 actor=0xd0a78a4 model=0xd012254
+BRUSHCSG idx=3 actor=0xd0a7b1c model=0xd012254
+BRUSHCSG idx=4 actor=0xd0a7d94 model=0xd012254
+BRUSHCSG idx=5 actor=0xd0a800c model=0xd012254
+BRUSHCSG idx=6 actor=0xd0aa11c model=0xd012254
+BRUSHCSG idx=7 actor=0xd0b1f64 model=0xd012254
+BRUSHCSG idx=8 actor=0xd0b5f8c model=0xd012254
+BRUSHCSG idx=9 actor=0xd0b6204 model=0xd012254
+BRUSHCSG idx=10 actor=0xd0ba2ac model=0xd012254
+BRUSHCSG idx=11 actor=0xd0ba524 model=0xd012254
+BRUSHCSG idx=12 actor=0xd0be5ec model=0xd012254
+BRUSHCSG idx=13 actor=0xd0be864 model=0xd012254
+BRUSHCSG idx=14 actor=0xd0c28ec model=0xd012254
+BRUSHCSG idx=15 actor=0xd0c2b64 model=0xd012254
+BRUSHCSG idx=16 actor=0xd0d5de4 model=0xd012254
+BRUSHCSG idx=17 actor=0xd0eabec model=0xd012254
+BRUSHCSG idx=18 actor=0xd0d605c model=0xd012254
+BRUSHCSG idx=19 actor=0xd0f594c model=0xd012254
+BRUSHCSG idx=20 actor=0xd0a1d9c model=0xd012254
+BRUSHCSG idx=21 actor=0xd0f5bc4 model=0xd012254
+BRUSHCSG idx=22 actor=0xd0fc244 model=0xd012254
+BRUSHCSG idx=23 actor=0xd0fc4bc model=0xd012254
+BRUSHCSG idx=24 actor=0xd10025c model=0xd012254
+BRUSHCSG idx=25 actor=0xd103ffc model=0xd012254
+BRUSHCSG idx=26 actor=0xd107d9c model=0xd012254
+BRUSHCSG idx=27 actor=0xd108014 model=0xd012254
+BRUSHCSG idx=28 actor=0xd10a0ec model=0xd012254
+BRUSHCSG idx=29 actor=0xd1275ec model=0xd012254
+BRUSHCSG idx=30 actor=0xd127864 model=0xd012254
+BRUSHCSG idx=31 actor=0xd127adc model=0xd012254
+BRUSHCSG idx=32 actor=0xd127d54 model=0xd012254
+BRUSHCSG idx=33 actor=0xd12b8dc model=0xd012254
+BRUSHCSG idx=34 actor=0xd11ff0c model=0xd012254
+BRUSHCSG idx=35 actor=0xd135704 model=0xd012254
+BRUSHCSG idx=36 actor=0xd120184 model=0xd012254
+BRUSHCSG idx=37 actor=0xd13990c model=0xd012254
+BRUSHCSG idx=38 actor=0xd1203fc model=0xd012254
+BRUSHCSG idx=39 actor=0xd13d954 model=0xd012254
+BRUSHCSG idx=40 actor=0xd104274 model=0xd012254
+BRUSHCSG idx=41 actor=0xd14199c model=0xd012254
+BRUSHCSG idx=42 actor=0xd1044ec model=0xd012254
+CALL idx=1 model=0xd012254 child=0 after_bcsg=42
+ADD call=1 ilink=88 nv=4 base=0.0009,-3072.0002,-56.0000
+STAGEEND idx=1
+BRUSHCSG idx=43 actor=0xd10a364 model=0xd012254
+BRUSHCSG idx=44 actor=0xd123bb4 model=0xd012254
+BRUSHCSG idx=45 actor=0xd1459e4 model=0xd012254
+CALL idx=2 model=0xd012254 child=449 after_bcsg=45
+ADD call=2 ilink=295 nv=4 base=-489.3726,-512.0000,3200.0000
+STAGEEND idx=2
+CALL idx=3 model=0xd012254 child=467 after_bcsg=45
+ADD call=3 ilink=311 nv=4 base=-128.0000,-254.0000,704.0000
+STAGEEND idx=3
