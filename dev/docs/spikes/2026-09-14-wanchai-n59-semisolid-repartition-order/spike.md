@@ -39,8 +39,27 @@ pre-Pass-2 step) — then 3 more `bspBrushCSG` calls (the detail/Pass-2 loop: `B
 
 `child=449` (the Brush323/324 subtree) runs BEFORE `child=467` (Brush904's) — the real editor's
 `Model.Polys` ends up as `child=467`'s soup (Brush904's single poly), matching UED22's golden
-exactly. This is also the SAME node indices native's own tree uses for these two subtrees
-(coincidence of otherwise-exact tree building), which is what let a single-line reorder fix it.
+exactly. This is also the SAME node indices native's own tree uses for these two subtrees — both
+builds' post-repartition trees are otherwise structurally identical, which is what let a
+single-line reorder fix it and what lets this capture's node numbers be read directly against
+native's own diagnostic dump.
+
+## Why no `iFront`/`iBack` swap applies here
+
+`bspcsg.rs` documents, in several OTHER places (`repartition_frontier`'s own doc,
+`find_nearest_vertex`), that native's incrementally-CSG-built tree (`bsp_brush_csg`'s own node
+placement, Pass 1) has `i_front`/`i_back` SWAPPED relative to the engine's real `iFront`/`iBack` —
+an independently-established fact for THAT tree. `collect_repartition_frontier` does not walk that
+tree: it runs after the whole-tree structural repartition (`bsp_build`) has already replaced
+`model.nodes` from scratch via `split_poly_list`. `split_poly_list` (`Editor.dll 0x34530`) is a
+literal, unswapped port — its own recursion order (`NODE_FRONT` before `NODE_BACK`, `bspcsg.rs`
+~line 2155) follows `FPoly::split_with_plane`'s real `Front`/`Back` classification, matching the
+editor's own `FrontList`/`BackList` directly (see that function's doc comment; not modified by this
+change). So on the tree `collect_repartition_frontier` actually sees, native's `i_front`/`i_back`
+already coincide with the editor's real `iFront`/`iBack` — no translation needed, and the fix
+(check `i_front` first) is a direct, unswapped port of `sub_49380`'s disassembled order. The doc
+comment on `collect_repartition_frontier` spells this distinction out explicitly, since a reader
+who only knows the OTHER (correctly swapped) convention would otherwise read this fix as backwards.
 
 ## Fix
 

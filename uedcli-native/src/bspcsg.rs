@@ -2276,18 +2276,31 @@ pub(crate) fn compact_unreachable_nodes(model: &mut Model) -> Vec<i32> {
 /// ORDER (fresh disassembly, `wanchai-n59-mover-polys-model2-diverges`, 2026-09-14): at each node
 /// `sub_49380` checks/recurses `iFront` (`+0x24`, into `List1`) BEFORE `iBack` (`+0x20`, into
 /// `List2`) — confirmed instruction-for-instruction (`0x100493be`..`0x100493fd`: the `iFront`
-/// check/recurse block precedes the `iBack` one in the function body). This function's own
-/// `i_front`/`list_b` pairing is that same iFront/List1 half, so it must run FIRST too — the
-/// previous port checked `i_back`/`list_a` first, which only matters when TWO OR MORE frontier
-/// slots each grow a subtree in the same repartition pass (the relative order of the resulting
-/// `repartition_frontier` calls then decides which subtree's soup ends up in `Model.Polys`, since
-/// each call overwrites it — see that function's own doc). WanChai N=59 is the first case in this
-/// campaign with two: an existing detail brush's slot (`Brush323`/`Brush324`, already grown by
-/// N=58) and a brand new one (`Brush904`). Checking `i_back` first visited the new one first and
-/// the old one last, so the OLD (stale) soup won; live-captured against the real editor
-/// (`repart_order_trace.py`) confirms it calls the `Brush323`/`324` subtree's repartition (its own
-/// `sub_49380`-collected slot) before `Brush904`'s, so `Brush904`'s soup — correctly — is what
-/// UED22 saves.
+/// check/recurse block precedes the `iBack` one in the function body). The previous port checked
+/// `i_back`/`list_a` first.
+///
+/// NO SWAP AT THIS CALL SITE — do not confuse this with the well-established native/engine
+/// `iFront`/`iBack` swap (e.g. `find_nearest_vertex`'s doc, and `repartition_frontier`'s own "native's
+/// `i_back` = editor's iFront"): that swap is a property of the ORIGINAL Pass-1 incremental CSG tree
+/// (`bsp_brush_csg`'s own node placement). This function runs on the tree `split_poly_list` built —
+/// the whole-tree structural repartition just above (`bsp_build`) rebuilds `model.nodes` from
+/// scratch via `split_poly_list`, and `split_poly_list` (`Editor.dll 0x34530`) is a literal,
+/// unswapped port: its own `NODE_FRONT`/`NODE_BACK` recursion (below) is `FPoly::split_with_plane`'s
+/// real `Front`/`Back` classification, matching the editor's `FrontList`/`BackList` directly (see
+/// its doc comment). So on THIS tree, native's `i_front`/`i_back` already ARE the editor's real
+/// `iFront`/`iBack`, no translation needed — `list_b` (this function's `i_front`-empty collector)
+/// is the direct `List1` counterpart and must run first, matching `sub_49380` as disassembled.
+///
+/// This only matters when TWO OR MORE frontier slots each grow a subtree in the same repartition
+/// pass — the relative order of the resulting `repartition_frontier` calls decides which subtree's
+/// soup ends up in `Model.Polys`, since each call overwrites it (see that function's own doc).
+/// WanChai N=59 is the first case in this campaign with two: an existing detail brush's slot
+/// (`Brush323`/`Brush324`, already grown by N=58) and a brand new one (`Brush904`). Checking
+/// `i_back` first visited the new one first and the old one last, so the OLD (stale) soup won;
+/// live-captured against the real editor (`repart_order_trace.py`) confirms it calls the
+/// `Brush323`/`324` subtree's repartition (its own `sub_49380`-collected slot, node `449`) before
+/// `Brush904`'s (node `467`) — the SAME two node indices native's own tree uses for these two
+/// subtrees — so `Brush904`'s soup, correctly, is what UED22 saves.
 fn collect_repartition_frontier(model: &Model, ni: i32, list_a: &mut Vec<i32>, list_b: &mut Vec<i32>) {
     if ni < 0 {
         return;
