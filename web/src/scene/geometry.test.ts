@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { AtlasPayload, ScenePoly } from '../api'
+import type { AtlasPayload, LightmapPayload, ScenePoly } from '../api'
 import { buildGeometryData } from './geometry'
 
 function quad(overrides: Partial<ScenePoly> = {}): ScenePoly {
@@ -25,7 +25,9 @@ describe('buildGeometryData', () => {
     const got = buildGeometryData([quad()], EMPTY_ATLAS)
     expect(got.positions.length).toBe(6 * 3)
     expect(got.uvs.length).toBe(6 * 2)
-    expect(got.groups).toEqual([{ texIndex: -1, masked: false, start: 0, count: 6 }])
+    expect(got.uv1.length).toBe(6 * 2)
+    expect(got.colors.length).toBe(6 * 3)
+    expect(got.groups).toEqual([{ texIndex: -1, masked: false, lit: false, start: 0, count: 6 }])
   })
 
   it('groups by (texture, masked) pair -- one group per distinct texture', () => {
@@ -33,11 +35,10 @@ describe('buildGeometryData', () => {
       [quad({ tex_index: 0 }), quad({ tex_index: 1 }), quad({ tex_index: 0, masked: true })],
       { width: 16, height: 16, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 }, '1': { x: 8, y: 0, w: 8, h: 8 } }, png_base64: '' },
     )
-    // three distinct (texIndex, masked) buckets, in first-seen order, each 6 verts.
     expect(got.groups).toEqual([
-      { texIndex: 0, masked: false, start: 0, count: 6 },
-      { texIndex: 1, masked: false, start: 6, count: 6 },
-      { texIndex: 0, masked: true, start: 12, count: 6 },
+      { texIndex: 0, masked: false, lit: false, start: 0, count: 6 },
+      { texIndex: 1, masked: false, lit: false, start: 6, count: 6 },
+      { texIndex: 0, masked: true, lit: false, start: 12, count: 6 },
     ])
     expect(got.positions.length).toBe(18 * 3)
   })
@@ -46,8 +47,8 @@ describe('buildGeometryData', () => {
     const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' }
     const got = buildGeometryData([quad({ tex_index: 0 }), quad({ tex_index: 0, masked: true })], atlas)
     expect(got.groups).toEqual([
-      { texIndex: 0, masked: false, start: 0, count: 6 },
-      { texIndex: 0, masked: true, start: 6, count: 6 },
+      { texIndex: 0, masked: false, lit: false, start: 0, count: 6 },
+      { texIndex: 0, masked: true, lit: false, start: 6, count: 6 },
     ])
   })
 
@@ -58,8 +59,6 @@ describe('buildGeometryData', () => {
   })
 
   it('tiles UVs raw over the texture size -- a surface spanning 8 tiles goes 0..8 in U, not collapsed', () => {
-    // A floor quad 64 units wide over an 8x8 texture spans 8 tiles: U runs 0..8, never a single
-    // repeated texel (the atlas-mod bug that collapsed every corner to the same UV).
     const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' }
     const floor = quad({ verts: [0, 0, 0, 64, 0, 0, 64, 64, 0, 0, 64, 0], tex_index: 0 })
     const got = buildGeometryData([floor], atlas)
@@ -69,8 +68,55 @@ describe('buildGeometryData', () => {
     expect(Math.max(...us)).toBeCloseTo(8) // 64 texels / 8-wide texture = 8 tiles, not mod'd to 0
   })
 
-  it('leaves an untextured poly (tex_index -1) at UV (0,0)', () => {
+  it('leaves an untextured poly (tex_index -1) at base UV (0,0)', () => {
     const got = buildGeometryData([quad()], EMPTY_ATLAS)
     expect(Array.from(got.uvs)).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0])
+  })
+
+  it('shades an unlit poly per-face with the KEY_LIGHT flat shade (matching render.rs)', () => {
+    // The XY-plane quad's Newell normal is (0,0,2); |n·KEY_LIGHT|/|n| = 0.707, so shade =
+    // 0.55 + 0.45*0.707 = 0.8682 -- the same grey in all 3 channels, all 6 verts.
+    const got = buildGeometryData([quad()], EMPTY_ATLAS)
+    for (let i = 0; i < got.colors.length; i++) expect(got.colors[i]).toBeCloseTo(0.8682, 3)
+  })
+
+  const LIT_ATLAS: LightmapPayload = {
+    width: 16,
+    height: 16,
+    intensity: 2,
+    manifest: { '0': { x: 1, y: 1, w: 2, h: 2 } },
+    png_base64: '',
+  }
+
+  it('emits a lit group with white vertex colours and atlas uv1 for a poly with a lightmap+rect', () => {
+    const lit = quad({ lightmap: { origin: [0, 0, 0], u_step: [1, 0, 0], v_step: [0, 1, 0], u_size: 2, v_size: 2 } })
+    const got = buildGeometryData([lit], EMPTY_ATLAS, LIT_ATLAS)
+    expect(got.groups).toEqual([{ texIndex: -1, masked: false, lit: true, start: 0, count: 6 }])
+    // Lit verts carry white colour (the lightmap does the shading, not the flat shade).
+    for (let i = 0; i < got.colors.length; i++) expect(got.colors[i]).toBe(1)
+    // Vertex v0 at world (0,0,0): lu=lv=0 -> atlas texel centre (rect.x+0.5)/16 = 1.5/16.
+    expect(got.uv1[0]).toBeCloseTo(1.5 / 16, 5)
+    expect(got.uv1[1]).toBeCloseTo(1.5 / 16, 5)
+  })
+
+  it('treats a poly with a lightmap frame but no packed rect as unlit', () => {
+    const lit = quad({ lightmap: { origin: [0, 0, 0], u_step: [1, 0, 0], v_step: [0, 1, 0], u_size: 2, v_size: 2 } })
+    const noRect: LightmapPayload = { width: 16, height: 16, intensity: 2, manifest: {}, png_base64: '' }
+    const got = buildGeometryData([lit], EMPTY_ATLAS, noRect)
+    expect(got.groups[0].lit).toBe(false)
+  })
+
+  it('splits a lit and an unlit poly of the same texture into separate groups', () => {
+    const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' }
+    const litFrame = { origin: [0, 0, 0], u_step: [1, 0, 0], v_step: [0, 1, 0], u_size: 2, v_size: 2 }
+    const got = buildGeometryData(
+      [quad({ tex_index: 0, lightmap: litFrame }), quad({ tex_index: 0 })],
+      atlas,
+      LIT_ATLAS,
+    )
+    expect(got.groups).toEqual([
+      { texIndex: 0, masked: false, lit: true, start: 0, count: 6 },
+      { texIndex: 0, masked: false, lit: false, start: 6, count: 6 },
+    ])
   })
 })

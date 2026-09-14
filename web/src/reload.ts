@@ -2,12 +2,13 @@
 // swaps when ready (no blank flicker)"): on a WS reload push, refetch the scene+atlas and hand
 // them to the caller only once BOTH resolve. The caller's displayed state is therefore never
 // blanked mid-reload -- it stays exactly what it was until the new payload is ready.
-import { fetchAtlas, fetchScene, openReloadSocket } from './api'
-import type { AtlasPayload, ScenePayload } from './api'
+import { fetchAtlas, fetchLightmap, fetchScene, openReloadSocket } from './api'
+import type { AtlasPayload, LightmapPayload, ScenePayload } from './api'
 
 export interface LevelState {
   scene: ScenePayload
   atlas: AtlasPayload
+  lightmap: LightmapPayload
 }
 
 export interface ReloadSubscription {
@@ -34,10 +35,10 @@ export function subscribeReload(
   const ws = openReloadSocket(() => {
     const thisGeneration = ++generation
     onReloadStart?.()
-    Promise.all([fetchScene(level), fetchAtlas(level)])
-      .then(([scene, atlas]) => {
+    Promise.all([fetchScene(level), fetchAtlas(level), fetchLightmap(level)])
+      .then(([scene, atlas, lightmap]) => {
         if (thisGeneration !== generation) return // a newer reload has already superseded this one
-        onReady({ scene, atlas })
+        onReady({ scene, atlas, lightmap })
       })
       .catch(() => {
         // Leave the stale scene visible; the next settled trunk change gets another try.

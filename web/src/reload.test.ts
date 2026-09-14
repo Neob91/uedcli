@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import type { AtlasPayload, ScenePayload } from './api'
+import type { AtlasPayload, LightmapPayload, ScenePayload } from './api'
 
-const { fetchSceneMock, fetchAtlasMock, openReloadSocketMock, fakeSocket } = vi.hoisted(() => {
+const { fetchSceneMock, fetchAtlasMock, fetchLightmapMock, openReloadSocketMock, fakeSocket } = vi.hoisted(() => {
   const fakeSocket = { close: vi.fn() }
   return {
     fetchSceneMock: vi.fn(),
     fetchAtlasMock: vi.fn(),
+    fetchLightmapMock: vi.fn(),
     openReloadSocketMock: vi.fn(),
     fakeSocket,
   }
@@ -15,6 +16,7 @@ const { fetchSceneMock, fetchAtlasMock, openReloadSocketMock, fakeSocket } = vi.
 vi.mock('./api', () => ({
   fetchScene: fetchSceneMock,
   fetchAtlas: fetchAtlasMock,
+  fetchLightmap: fetchLightmapMock,
   openReloadSocket: openReloadSocketMock,
 }))
 
@@ -31,10 +33,13 @@ function deferred<T>() {
 
 const SCENE: ScenePayload = { polys: [], actors: [] }
 const ATLAS: AtlasPayload = { width: 1, height: 1, manifest: {}, png_base64: '' }
+const LIGHTMAP: LightmapPayload = { width: 1, height: 1, intensity: 1, manifest: {}, png_base64: '' }
 
 beforeEach(() => {
   fetchSceneMock.mockReset()
   fetchAtlasMock.mockReset()
+  fetchLightmapMock.mockReset()
+  fetchLightmapMock.mockResolvedValue(LIGHTMAP) // default; tests needing a pending/rejected one override
   openReloadSocketMock.mockReset()
   fakeSocket.close.mockReset()
   openReloadSocketMock.mockImplementation((onReload: () => void) => {
@@ -57,6 +62,7 @@ describe('subscribeReload', () => {
     ;(fakeSocket as unknown as { trigger: () => void }).trigger()
     expect(fetchSceneMock).toHaveBeenCalledWith('TestLevel')
     expect(fetchAtlasMock).toHaveBeenCalledWith('TestLevel')
+    expect(fetchLightmapMock).toHaveBeenCalledWith('TestLevel')
   })
 
   it('does not call onReady until BOTH the scene and atlas refetch resolve (no blank intermediate)', async () => {
@@ -80,7 +86,7 @@ describe('subscribeReload', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(onReady).toHaveBeenCalledTimes(1)
-    expect(onReady).toHaveBeenCalledWith({ scene: SCENE, atlas: ATLAS })
+    expect(onReady).toHaveBeenCalledWith({ scene: SCENE, atlas: ATLAS, lightmap: LIGHTMAP })
   })
 
   it('calls onReloadStart immediately, before the refetch resolves', () => {
@@ -131,7 +137,7 @@ describe('subscribeReload', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(onReady).toHaveBeenCalledTimes(1)
-    expect(onReady).toHaveBeenCalledWith({ scene: SCENE, atlas: ATLAS_NEW })
+    expect(onReady).toHaveBeenCalledWith({ scene: SCENE, atlas: ATLAS_NEW, lightmap: LIGHTMAP })
 
     // The OLDER push (#1) resolves after -- must be silently ignored, not applied.
     scene1.resolve(SCENE)

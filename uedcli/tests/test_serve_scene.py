@@ -133,4 +133,8 @@ def test_scene_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypatch)
     assert any(lm is not None for lm in lightmaps)   # the light actually produced baked radiance
     for lm in lightmaps:
         if lm is not None:
-            assert isinstance(lm[-1], list) and all(isinstance(v, float) for v in lm[-1])
+            # The frame only (RGB is stripped -- it ships in the lightmap atlas, not per-poly).
+            assert set(lm) == {"origin", "u_step", "v_step", "u_size", "v_size"}
+            assert len(lm["origin"]) == 3 and len(lm["u_step"]) == 3 and len(lm["v_step"]) == 3
+            assert isinstance(lm["u_size"], int) and isinstance(lm["v_size"], int)
+            assert "rgb" not in lm

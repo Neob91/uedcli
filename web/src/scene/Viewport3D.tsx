@@ -1,9 +1,11 @@
-// R3F perspective viewport: draws the scene payload's polys textured+unlit through the atlas
-// (MeshBasicMaterial -- no lights, no lightmap; Slice 2 turns build_scene's carried `lightmap`
-// field into the lit shading mode), owns the faithful UnrealEd drag-fly camera (spec, "Camera"),
-// and click-to-select (spec, "Selection & inspector"). This is the ONLY place model data meets
-// three.js -- Viewport3D draws what `serve` hands it and owns no model/diff/solve logic of its
-// own (spec, "The client").
+// R3F perspective viewport: draws the scene payload's polys textured+lit, matching `level photo
+// --native`'s render.rs. Each poly draws base-texture * shading with MeshBasicMaterial (still no
+// scene lights): a lightmapped world surf multiplies by its baked lumel grid (the lightmap atlas,
+// sampled through a second `uv1` set); every other poly multiplies by a per-face KEY_LIGHT flat
+// shade carried in per-vertex colours (render.rs's own fallback for unlit surfs). Owns the
+// faithful UnrealEd drag-fly camera (spec, "Camera") and click-to-select. This is the ONLY place
+// model data meets three.js -- Viewport3D draws what `serve` hands it and owns no model/diff/solve
+// logic of its own (spec, "The client").
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   MouseEvent as ReactMouseEvent,
@@ -14,7 +16,7 @@ import type {
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
-import type { AtlasPayload, ScenePayload } from '../api'
+import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
 import type { CameraPose, Vec3 } from './camera'
 import { cameraBasis, dollyAndTurn, look, orbit, pan, zoom } from './camera'
 import { buildGeometryData } from './geometry'
@@ -75,6 +77,58 @@ function useTextures(atlas: AtlasPayload): Map<number, THREE.Texture> {
   return textures
 }
 
+/** Decodes the lightmap atlas PNG into one `THREE.Texture` on `uv1` (channel 1, the second UV set
+ * the geometry carries for lit polys). NearestFilter + ClampToEdge match render.rs's nearest,
+ * edge-clamped lumel sampling (the atlas's 1-lumel gutter absorbs the clamp); `NoColorSpace` keeps
+ * the stored multiplier linear (no sRGB decode); `flipY=false` matches the image-row V convention.
+ * `null` (no lit polys) when the payload is absent or empty. Disposes on swap/unmount. */
+function useLightmapTexture(lightmap: LightmapPayload | null): THREE.Texture | null {
+  const [texture, setTexture] = useState<THREE.Texture | null>(null)
+  const currentRef = useRef<THREE.Texture | null>(null)
+
+  useEffect(() => {
+    if (!lightmap || Object.keys(lightmap.manifest).length === 0) {
+      currentRef.current?.dispose()
+      currentRef.current = null
+      // Clear a stale texture when a level has (or loses) all its lights -- a genuine external-
+      // system sync, not derivable during render.
+      // oxlint-disable-next-line react/set-state-in-effect
+      setTexture(null)
+      return
+    }
+    let disposed = false
+    const img = new Image()
+    img.onload = () => {
+      if (disposed) return
+      const tex = new THREE.Texture(img)
+      tex.channel = 1
+      tex.wrapS = THREE.ClampToEdgeWrapping
+      tex.wrapT = THREE.ClampToEdgeWrapping
+      tex.magFilter = THREE.NearestFilter
+      tex.minFilter = THREE.NearestFilter
+      tex.colorSpace = THREE.NoColorSpace
+      tex.flipY = false
+      tex.needsUpdate = true
+      currentRef.current?.dispose()
+      currentRef.current = tex
+      setTexture(tex)
+    }
+    img.src = `data:image/png;base64,${lightmap.png_base64}`
+    return () => {
+      disposed = true
+    }
+  }, [lightmap])
+
+  useEffect(() => {
+    return () => {
+      currentRef.current?.dispose()
+      currentRef.current = null
+    }
+  }, [])
+
+  return texture
+}
+
 const UNTEXTURED_GREY = 0x808080
 
 /** Applies `pose` to the R3F default camera every frame -- Z-up (`camera.up`), aimed via
@@ -107,6 +161,7 @@ function SelectionHighlight({ box }: { box: THREE.Box3 | null }) {
 export interface Viewport3DProps {
   scene: ScenePayload
   atlas: AtlasPayload
+  lightmap: LightmapPayload | null
   selectedName?: string | null
   onSelectActor?: (name: string | null) => void
 }
@@ -118,12 +173,13 @@ interface DragTracker {
   lastY: number
 }
 
-export function Viewport3D({ scene, atlas, selectedName = null, onSelectActor }: Viewport3DProps) {
+export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSelectActor }: Viewport3DProps) {
   const [pose, setPose] = useState<CameraPose>(INITIAL_POSE)
   const drag = useRef<DragTracker | null>(null)
   const cameraRef = useRef<THREE.Camera | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const textures = useTextures(atlas)
+  const lightmapTexture = useLightmapTexture(lightmap)
 
   const selectedActor = useMemo(
     () => scene.actors.find((a) => a.name === selectedName) ?? null,
@@ -147,41 +203,49 @@ export function Viewport3D({ scene, atlas, selectedName = null, onSelectActor }:
     )
   }, [selectedActor])
 
-  // One draw group per (texture, masked?) pair, each with its own tiling material. Untextured
-  // groups (tex_index < 0) get a flat grey material with no map. Identical (texture, masked) pairs
-  // dedupe onto one material. Built together so the geometry's group -> material-index mapping stays
-  // consistent.
+  // One draw group per (texture, masked?, lit?) triple, each with its own material. The base map
+  // tiles on `uv`; per-vertex `color` carries the KEY_LIGHT flat shade (unlit) or white (lit); a
+  // lit group additionally samples the shared lightmap texture on `uv1` (`base*color*lightMap`, the
+  // render.rs product). Untextured groups (tex_index < 0) get a flat grey base. Built together so
+  // the geometry's group -> material-index mapping stays consistent.
   const { bufferGeometry, materials } = useMemo(() => {
-    const built = buildGeometryData(scene.polys, atlas)
+    const built = buildGeometryData(scene.polys, atlas, lightmap)
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(built.positions, 3))
     geo.setAttribute('uv', new THREE.BufferAttribute(built.uvs, 2))
+    geo.setAttribute('uv1', new THREE.BufferAttribute(built.uv1, 2))
+    geo.setAttribute('color', new THREE.BufferAttribute(built.colors, 3))
     geo.clearGroups()
     const mats: THREE.Material[] = []
     const matIndex = new Map<string, number>()
+    const intensity = lightmap?.intensity ?? 1
     for (const group of built.groups) {
       if (group.count === 0) continue
-      const key = `${group.texIndex}:${group.masked ? 1 : 0}`
+      const lit = group.lit && lightmapTexture !== null
+      const key = `${group.texIndex}:${group.masked ? 1 : 0}:${lit ? 1 : 0}`
       let index = matIndex.get(key)
       if (index === undefined) {
         const map = group.texIndex >= 0 ? (textures.get(group.texIndex) ?? null) : null
+        const params: THREE.MeshBasicMaterialParameters = {
+          side: THREE.DoubleSide,
+          vertexColors: true,
+          alphaTest: group.masked ? 0.5 : 0,
+        }
+        if (map) params.map = map
+        else params.color = UNTEXTURED_GREY
+        if (lit) {
+          params.lightMap = lightmapTexture
+          params.lightMapIntensity = intensity
+        }
         index = mats.length
-        mats.push(
-          map
-            ? new THREE.MeshBasicMaterial({
-                map,
-                side: THREE.DoubleSide,
-                alphaTest: group.masked ? 0.5 : 0,
-              })
-            : new THREE.MeshBasicMaterial({ color: UNTEXTURED_GREY, side: THREE.DoubleSide }),
-        )
+        mats.push(new THREE.MeshBasicMaterial(params))
         matIndex.set(key, index)
       }
       geo.addGroup(group.start, group.count, index)
     }
     geo.computeVertexNormals()
     return { bufferGeometry: geo, materials: mats }
-  }, [scene, atlas, textures])
+  }, [scene, atlas, lightmap, textures, lightmapTexture])
 
   // Every live-reload replaces `bufferGeometry`/`materials` with fresh THREE objects; without an
   // explicit dispose the PREVIOUS ones (a full geometry buffer, its materials) leak every cycle.
@@ -261,7 +325,7 @@ export function Viewport3D({ scene, atlas, selectedName = null, onSelectActor }:
       onWheel={onWheel}
       onContextMenu={onContextMenu}
     >
-      <Canvas>
+      <Canvas flat>
         <CameraRig pose={pose} cameraRef={cameraRef} />
         <mesh geometry={bufferGeometry} material={materials} />
         <SelectionHighlight box={selectionBox} />

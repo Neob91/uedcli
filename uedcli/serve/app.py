@@ -19,6 +19,7 @@ from ..cli import resources
 from ..cli.errors import CommandError
 from ..preview_native import build_scene as _build_scene
 from .errors import error_to_status
+from .lightmap import build_lightmap_atlas
 from .scene import build_scene_payload
 from .textures import build_atlas
 from .watch import TrunkWatcher
@@ -135,6 +136,26 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         return {
             "width": width,
             "height": height,
+            "manifest": manifest,
+            "png_base64": base64.b64encode(png_bytes).decode("ascii"),
+        }
+
+    @app.get("/api/level/{level_name}/lightmap")
+    def lightmap(level_name: str) -> dict:
+        # Same cached solve as /scene and /atlas (a `preview_cache` hit under `solve_lock`); only
+        # its poly list is needed here (the baked lumel grids), the texture table is discarded.
+        # `intensity` is the atlas's global multiplier scale — the client's `lightMapIntensity`.
+        _require_level(level_name)
+        search_files, index, defaults = _scene_inputs(project)
+        lvl, *_ = trunk.read_level_with_bodies(maps_root / level_name)
+        with solve_lock:
+            polys, _texture_table = _build_scene(lvl, search_files, index, defaults=defaults,
+                                                 project=project, level_name=level_name)
+        png_bytes, manifest, width, height, intensity = build_lightmap_atlas(polys)
+        return {
+            "width": width,
+            "height": height,
+            "intensity": intensity,
             "manifest": manifest,
             "png_base64": base64.b64encode(png_bytes).decode("ascii"),
         }

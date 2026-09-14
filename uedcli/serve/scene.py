@@ -17,14 +17,27 @@ _ZERO3 = (Decimal(0), Decimal(0), Decimal(0))
 
 
 @dataclass(frozen=True, kw_only=True)
+class LightmapFrame:
+    """A lit surf's world-space lumel-sampling frame: a lumel's world position is
+    `origin + u_step*u + v_step*v`, `u`/`v` in `[0, u_size)`/`[0, v_size)`. The baked lumel RGB
+    does NOT ride here — it ships packed in the lightmap atlas (`/api/level/{level}/lightmap`),
+    keyed by poly index. The client turns each vertex into a lumel UV from this frame (`lu =
+    (pos-origin)·u_step / (u_step·u_step)`, same for `lv` — matching `render.rs`'s own convention)
+    and nearest-samples the atlas."""
+    origin: list[float]
+    u_step: list[float]
+    v_step: list[float]
+    u_size: int
+    v_size: int
+
+
+@dataclass(frozen=True, kw_only=True)
 class ScenePoly:
     """One render-ready polygon, mirroring `build_scene`'s own per-poly tuple field-for-field (see
     its module docstring): world verts (flat x,y,z triples), the base-UV frame, the texture-table
-    index, the alpha-test gate, the raw merged `PolyFlags`, and the baked lightmap patch (carried,
-    unused by Slice 1's unlit draw — Slice 2 turns it into the lit shading mode). Its RGB buffer
-    (`build_scene`'s `bake_radiance` binding) is a plain `list[float]`, not `bytes` — already
-    JSON-safe as-is, verified against the real HTTP route with a real light-bearing fixture
-    (`test_scene_route_returns_200_with_a_json_safe_payload`)."""
+    index, the alpha-test gate, the raw merged `PolyFlags`, and the lit surf's `LightmapFrame` (the
+    baked lumel RGB itself is stripped here and packed in the lightmap atlas instead — the frame is
+    all the client needs to compute per-vertex lumel UVs)."""
     verts: list[float]
     base: list[float]
     tu: list[float]
@@ -33,7 +46,7 @@ class ScenePoly:
     tex_index: int
     masked: bool
     flags: int
-    lightmap: tuple | None
+    lightmap: LightmapFrame | None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -60,6 +73,16 @@ class ScenePayload:
     actors: list[SceneActor]
 
 
+def _lightmap_frame(lightmap: tuple | None) -> LightmapFrame | None:
+    """`build_scene`'s per-poly lightmap tuple `(origin, u_step, v_step, u_size, v_size, rgb)` →
+    the frame the client needs (RGB dropped — it goes in the atlas), or None for an unlit poly."""
+    if lightmap is None:
+        return None
+    origin, u_step, v_step, u_size, v_size, _rgb = lightmap
+    return LightmapFrame(origin=list(origin), u_step=list(u_step), v_step=list(v_step),
+                         u_size=u_size, v_size=v_size)
+
+
 def build_scene_payload(project, level_name: str, index, defaults, search_files) -> ScenePayload:
     """Load the trunk once (a lock-free read, read-only-safe) and build its scene: the solved,
     lit-but-undrawn polygons from `build_scene` (a `preview_cache` hit reuses the ~24s CSG solve
@@ -74,7 +97,7 @@ def build_scene_payload(project, level_name: str, index, defaults, search_files)
                                         project=project, level_name=level_name)
     scene_polys = [
         ScenePoly(verts=verts, base=list(base), tu=list(tu), tv=list(tv), pan=list(pan),
-                 tex_index=tex_index, masked=masked, flags=flags, lightmap=lightmap)
+                 tex_index=tex_index, masked=masked, flags=flags, lightmap=_lightmap_frame(lightmap))
         for verts, base, tu, tv, pan, tex_index, masked, flags, lightmap in polys
     ]
     actors = []

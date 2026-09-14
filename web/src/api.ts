@@ -2,6 +2,17 @@
 // routes return field-for-field — see uedcli/serve/scene.py (ScenePoly/SceneActor), textures.py
 // (the atlas manifest), and app.py's /ws reload message.
 
+/** A lit surf's world-space lumel-sampling frame (uedcli/serve/scene.py::LightmapFrame). A lumel's
+ * world position is `origin + u_step*u + v_step*v`; the client derives a per-vertex lumel UV from
+ * it and samples the lightmap atlas. The baked lumel RGB is NOT here -- it's in the atlas. */
+export interface LightmapFrame {
+  origin: number[]
+  u_step: number[]
+  v_step: number[]
+  u_size: number
+  v_size: number
+}
+
 export interface ScenePoly {
   verts: number[] // flat world-space [x,y,z, x,y,z, ...] ring
   base: number[] // [x,y,z] base-UV frame origin
@@ -11,7 +22,7 @@ export interface ScenePoly {
   tex_index: number // index into the atlas manifest, or -1 (untextured -> flat grey)
   masked: boolean // alpha-test this poly against the atlas's mask channel
   flags: number // raw merged PolyFlags
-  lightmap: unknown | null // baked lightmap patch; unused by Slice 1's unlit draw
+  lightmap: LightmapFrame | null // lit-surf sampling frame; null = unlit (flat KEY_LIGHT shade)
 }
 
 export interface SceneActor {
@@ -43,6 +54,17 @@ export interface AtlasPayload {
   width: number
   height: number
   manifest: Record<string, AtlasRect>
+  png_base64: string
+}
+
+/** The lightmap atlas (uedcli/serve/lightmap.py): every lit poly's baked lumel grid packed into
+ * one image, keyed by POLY INDEX (not texture index). `intensity` is the global multiplier scale
+ * -- the client's `lightMapIntensity`, so `sampledTexel * intensity` recovers the baked value. */
+export interface LightmapPayload {
+  width: number
+  height: number
+  intensity: number
+  manifest: Record<string, AtlasRect> // poly index -> interior lumel rect
   png_base64: string
 }
 
@@ -78,6 +100,10 @@ export function fetchScene(level: string): Promise<ScenePayload> {
 
 export function fetchAtlas(level: string): Promise<AtlasPayload> {
   return fetchJson<AtlasPayload>(`/api/level/${encodeURIComponent(level)}/atlas`)
+}
+
+export function fetchLightmap(level: string): Promise<LightmapPayload> {
+  return fetchJson<LightmapPayload>(`/api/level/${encodeURIComponent(level)}/lightmap`)
 }
 
 /** Open the live-reload WebSocket and call `onReload` for every settled trunk-change push

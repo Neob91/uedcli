@@ -1,37 +1,41 @@
-// Scene payload -> a drawable geometry: flat position/UV buffers split into one group per
-// (texture, masked?) pair. Each group draws with its OWN THREE.Texture (RepeatWrapping), so a world
-// BSP surface can tile its texture across many repeats -- UVs are the RAW texel coordinates divided
-// by the texture's own size (0..N over N tiles), NOT packed into a shared atlas rect (which collapsed
-// a whole-tile-spanning surface to one texel; Viewport3D.tsx extracts a per-texture texture from the
-// atlas image). Pure and framework-free so it's testable without a WebGL context.
-import type { AtlasPayload } from '../api'
-import type { ScenePoly } from '../api'
+// Scene payload -> a drawable geometry: flat position/UV/color buffers split into one group per
+// (texture, masked?, lightmap?) triple. Each group draws with its OWN THREE.Texture
+// (RepeatWrapping) for the base map. Lit polys additionally carry a second UV set (`uv1`) into the
+// lightmap atlas; unlit polys carry a per-vertex KEY_LIGHT flat shade in `colors`. This mirrors
+// `level photo --native`'s render.rs: a lightmapped world surf is base*lumel; everything else is
+// base*flatShade. Pure and framework-free so it's testable without a WebGL context.
+import type { AtlasPayload, LightmapPayload, ScenePoly } from '../api'
+
+/** The fixed key-light direction render.rs shades unlit faces against (render.rs `KEY_LIGHT`). */
+const KEY_LIGHT: [number, number, number] = [-0.408, -0.577, 0.707]
 
 /** One contiguous [start, count] triangle-vertex range (three.js BufferGeometry group semantics:
- * start/count counted in VERTICES, matching a non-indexed geometry), tagged with the texture and
- * mask state it must draw with. `texIndex` -1 is untextured (flat grey, no map). Viewport3D maps
- * each group to a material. */
+ * start/count counted in VERTICES, matching a non-indexed geometry), tagged with the texture, mask
+ * state, and whether it draws with the lightmap atlas. `texIndex` -1 is untextured (flat grey base,
+ * still shaded/lit). Viewport3D maps each group to a material. */
 export interface GeometryGroup {
   texIndex: number
   masked: boolean
+  lit: boolean
   start: number
   count: number
 }
 
 export interface GeometryData {
   positions: Float32Array // flat [x,y,z, ...], one triangle's 3 verts at a time
-  uvs: Float32Array // flat [u,v, ...], texture-space (1.0 = one tile), aligned with `positions`
-  groups: GeometryGroup[] // one per (texIndex, masked) pair present, in first-seen order
+  uvs: Float32Array // base-texture UV [u,v, ...], texture-space (1.0 = one tile), aligned with positions
+  uv1: Float32Array // lightmap-atlas UV [u,v, ...] (normalized), (0,0) for unlit verts
+  colors: Float32Array // per-vertex [r,g,b, ...]: flat KEY_LIGHT shade for unlit, white for lit
+  groups: GeometryGroup[] // one per (texIndex, masked, lit) triple present, in first-seen order
 }
 
 function dot(a: number[], b: number[]): number {
   return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-/** One poly's per-vertex UVs in the source texture's own coordinate space: the raw texel
- * coordinate divided by the texture's size, so a surface spanning N tiles yields UVs 0..N and
- * RepeatWrapping tiles the texture. No `mod`, no atlas rect. The texture's size is the manifest
- * rect's w/h (one rect = one whole texture). Untextured (tex_index < 0 / no rect) -> (0,0). */
+/** One poly's per-vertex base-texture UVs in the source texture's own coordinate space: the raw
+ * texel coordinate divided by the texture's size, so a surface spanning N tiles yields UVs 0..N and
+ * RepeatWrapping tiles the texture. Untextured (tex_index < 0 / no rect) -> (0,0). */
 function polyUVs(poly: ScenePoly, atlas: AtlasPayload): [number, number][] {
   const rect = atlas.manifest[String(poly.tex_index)]
   if (poly.tex_index < 0 || !rect) {
@@ -39,27 +43,76 @@ function polyUVs(poly: ScenePoly, atlas: AtlasPayload): [number, number][] {
   }
   const out: [number, number][] = []
   for (let i = 0; i < poly.verts.length; i += 3) {
-    const v = [poly.verts[i], poly.verts[i + 1], poly.verts[i + 2]]
-    const rel = [v[0] - poly.base[0], v[1] - poly.base[1], v[2] - poly.base[2]]
-    const texelU = dot(rel, poly.tu) + poly.pan[0]
-    const texelV = dot(rel, poly.tv) + poly.pan[1]
-    out.push([texelU / rect.w, texelV / rect.h])
+    const rel = [poly.verts[i] - poly.base[0], poly.verts[i + 1] - poly.base[1], poly.verts[i + 2] - poly.base[2]]
+    out.push([(dot(rel, poly.tu) + poly.pan[0]) / rect.w, (dot(rel, poly.tv) + poly.pan[1]) / rect.h])
   }
   return out
 }
 
-/** Fan-triangulate a convex n-gon ring (BSP node polys are convex) into flat position/UV arrays. */
+/** One lit poly's per-vertex lightmap-atlas UVs (normalized), or `null` when the poly has no
+ * lightmap or no packed rect. Per vertex the lumel coordinate is `lu = (pos-origin)·u_step /
+ * (u_step·u_step)` (same for lv) -- render.rs's exact convention -- then mapped to the atlas texel
+ * centre `(rect.x + lu + 0.5) / atlasW` so nearest-sampling picks lumel round(lu), matching
+ * render.rs's `round().clamp()`; the 1-lumel gutter absorbs the clamp past an edge. */
+function lightmapUVs(poly: ScenePoly, polyIndex: number, lm: LightmapPayload | null): [number, number][] | null {
+  if (!poly.lightmap || !lm) return null
+  const rect = lm.manifest[String(polyIndex)]
+  if (!rect) return null
+  const { origin, u_step, v_step } = poly.lightmap
+  const uu = dot(u_step, u_step)
+  const vv = dot(v_step, v_step)
+  if (uu <= 1e-12 || vv <= 1e-12) return null // degenerate frame -> treat as unlit
+  const out: [number, number][] = []
+  for (let i = 0; i < poly.verts.length; i += 3) {
+    const rel = [poly.verts[i] - origin[0], poly.verts[i + 1] - origin[1], poly.verts[i + 2] - origin[2]]
+    const lu = dot(rel, u_step) / uu
+    const lv = dot(rel, v_step) / vv
+    out.push([(rect.x + lu + 0.5) / lm.width, (rect.y + lv + 0.5) / lm.height])
+  }
+  return out
+}
+
+/** Per-face flat brightness for an unlit poly, exactly render.rs's `0.55 + 0.45*|n·KEY_LIGHT|/|n|`
+ * with `n` the Newell normal of the ring (degenerate ring -> 1.0, unshaded). */
+function flatShade(poly: ScenePoly): number {
+  let nx = 0
+  let ny = 0
+  let nz = 0
+  const n = poly.verts.length / 3
+  for (let i = 0; i < n; i++) {
+    const a = i * 3
+    const b = ((i + 1) % n) * 3
+    const ax = poly.verts[a]
+    const ay = poly.verts[a + 1]
+    const az = poly.verts[a + 2]
+    const bx = poly.verts[b]
+    const by = poly.verts[b + 1]
+    const bz = poly.verts[b + 2]
+    nx += (ay - by) * (az + bz)
+    ny += (az - bz) * (ax + bx)
+    nz += (ax - bx) * (ay + by)
+  }
+  const len = Math.hypot(nx, ny, nz)
+  if (len <= 1e-6) return 1.0
+  return 0.55 + 0.45 * Math.abs(nx * KEY_LIGHT[0] + ny * KEY_LIGHT[1] + nz * KEY_LIGHT[2]) / len
+}
+
+/** Fan-triangulate a convex n-gon ring (BSP node polys are convex) into the flat output arrays. */
 function appendTriangleFan(
   poly: ScenePoly,
   uvs: [number, number][],
-  positions: number[],
-  uvOut: number[],
+  lmUVs: [number, number][] | null,
+  shade: number,
+  out: Bucket,
 ): void {
   const n = poly.verts.length / 3
   for (let i = 1; i < n - 1; i++) {
     for (const idx of [0, i, i + 1]) {
-      positions.push(poly.verts[idx * 3], poly.verts[idx * 3 + 1], poly.verts[idx * 3 + 2])
-      uvOut.push(uvs[idx][0], uvs[idx][1])
+      out.pos.push(poly.verts[idx * 3], poly.verts[idx * 3 + 1], poly.verts[idx * 3 + 2])
+      out.uv.push(uvs[idx][0], uvs[idx][1])
+      out.uv1.push(lmUVs ? lmUVs[idx][0] : 0, lmUVs ? lmUVs[idx][1] : 0)
+      if (lmUVs) out.color.push(1, 1, 1) // lit: lightmap does the shading, vertex colour is a no-op
+      else out.color.push(shade, shade, shade)
     }
   }
 }
@@ -67,37 +120,56 @@ function appendTriangleFan(
 interface Bucket {
   texIndex: number
   masked: boolean
+  lit: boolean
   pos: number[]
   uv: number[]
+  uv1: number[]
+  color: number[]
 }
 
-export function buildGeometryData(polys: ScenePoly[], atlas: AtlasPayload): GeometryData {
+export function buildGeometryData(
+  polys: ScenePoly[],
+  atlas: AtlasPayload,
+  lightmap: LightmapPayload | null = null,
+): GeometryData {
   const buckets = new Map<string, Bucket>()
   const order: string[] = []
 
-  for (const poly of polys) {
-    if (poly.verts.length < 9) continue // degenerate (<3 verts): nothing to draw
+  polys.forEach((poly, polyIndex) => {
+    if (poly.verts.length < 9) return // degenerate (<3 verts): nothing to draw
     const uvs = polyUVs(poly, atlas)
-    const key = `${poly.tex_index}:${poly.masked ? 1 : 0}`
+    const lmUVs = lightmapUVs(poly, polyIndex, lightmap)
+    const lit = lmUVs !== null
+    const key = `${poly.tex_index}:${poly.masked ? 1 : 0}:${lit ? 1 : 0}`
     let bucket = buckets.get(key)
     if (!bucket) {
-      bucket = { texIndex: poly.tex_index, masked: poly.masked, pos: [], uv: [] }
+      bucket = { texIndex: poly.tex_index, masked: poly.masked, lit, pos: [], uv: [], uv1: [], color: [] }
       buckets.set(key, bucket)
       order.push(key)
     }
-    appendTriangleFan(poly, uvs, bucket.pos, bucket.uv)
-  }
+    appendTriangleFan(poly, uvs, lmUVs, lit ? 1 : flatShade(poly), bucket)
+  })
 
   const positions: number[] = []
   const uvs: number[] = []
+  const uv1: number[] = []
+  const colors: number[] = []
   const groups: GeometryGroup[] = []
   for (const key of order) {
     const bucket = buckets.get(key) as Bucket
     const start = positions.length / 3
     positions.push(...bucket.pos)
     uvs.push(...bucket.uv)
-    groups.push({ texIndex: bucket.texIndex, masked: bucket.masked, start, count: bucket.pos.length / 3 })
+    uv1.push(...bucket.uv1)
+    colors.push(...bucket.color)
+    groups.push({ texIndex: bucket.texIndex, masked: bucket.masked, lit: bucket.lit, start, count: bucket.pos.length / 3 })
   }
 
-  return { positions: new Float32Array(positions), uvs: new Float32Array(uvs), groups }
+  return {
+    positions: new Float32Array(positions),
+    uvs: new Float32Array(uvs),
+    uv1: new Float32Array(uv1),
+    colors: new Float32Array(colors),
+    groups,
+  }
 }

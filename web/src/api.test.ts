@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { fetchAtlas, fetchScene } from './api'
+import { fetchAtlas, fetchLightmap, fetchScene } from './api'
 
 describe('fetchScene', () => {
   it('returns the typed payload from /api/level/<level>/scene', async () => {
@@ -68,5 +68,25 @@ describe('fetchAtlas', () => {
 
     expect(got).toEqual(payload)
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/atlas')
+  })
+})
+
+describe('fetchLightmap', () => {
+  it('returns the typed lightmap payload', async () => {
+    const payload = {
+      width: 8,
+      height: 8,
+      intensity: 2.5,
+      manifest: { '3': { x: 1, y: 1, w: 4, h: 4 } },
+      png_base64: 'YWJj',
+    }
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify(payload), { status: 200 }),
+    ) as unknown as typeof fetch
+
+    const got = await fetchLightmap('TestLevel')
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/lightmap')
   })
 })
