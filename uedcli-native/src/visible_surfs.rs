@@ -1205,9 +1205,15 @@ fn traverse(
                         Some((a.parse::<i32>().ok()?, b.parse::<i32>().ok()?))
                     });
                     // Per-row dump only for a NAMED surf — the whole-traversal mode (`s == -1`)
-                    // would print every row of every rasterized node.
-                    if trace.is_some_and(|(_, s)| s == n.i_surf)
-                        || row_band.is_some_and(|(y0, y1)| rows.iter().any(|&(y, _, _)| y >= y0 && y < y1))
+                    // would print every row of every rasterized node. `row_band` must ALSO require
+                    // `trace.is_some()` (this light matches `UEDCLI_VISGATE_TRACE_LOC`) -- without
+                    // it, the row-band branch fired for EVERY light's own gather in the parallel
+                    // (rayon) bake, not just the traced one, interleaving unrelated lights' rows in
+                    // the log (found 2026-09-15 re-running this probe: a clean single-light capture
+                    // needs this gate).
+                    if trace.is_some()
+                        && (trace.is_some_and(|(_, s)| s == n.i_surf)
+                            || row_band.is_some_and(|(y0, y1)| rows.iter().any(|&(y, _, _)| y >= y0 && y < y1)))
                     {
                         for &(y, wx0, wx1) in &rows {
                             if row_band.is_some_and(|(y0, y1)| y < y0 || y >= y1) {
