@@ -47,4 +47,7 @@ Options (not exhaustive):
 
 ## Answer
 
-<!-- Empty = open. Write the decision here. -->
+Not decided yet — before picking an option, confirm which mechanism actually produces UED22's extra
+orphan slot: trace which node's pre-merge `NumVertices` differs between native and a fresh UED22
+capture (the concrete next step `overview.md`'s "Not yet closed" note already names). Do this first
+when this item is next picked up. *(Owner, 2026-09-15.)*
