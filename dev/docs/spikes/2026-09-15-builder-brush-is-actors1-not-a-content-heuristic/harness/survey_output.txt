@@ -1,0 +1,38 @@
+=== showcase_unatcohq: 1437 actors (from /tmp/showcase_unatcohq_ov.tsv), read-errors: 0 ===
+  lowest-ranked 5 actors:
+    LevelInfo0	i	Begin Actor Class=Engine.LevelInfo	0
+    Brush74	r	Begin Actor Class=Engine.Brush	0
+    Brush82	v	Begin Actor Class=Engine.Brush	1
+    Brush777	x	Begin Actor Class=Engine.Brush	1
+    Brush527	y	Begin Actor Class=Engine.Brush	1
+  CsgOper-less Class=...Brush actors:
+    Brush74  order_value=r
+
+=== showcase_island: 901 actors (from /tmp/showcase_island_ov.tsv), read-errors: 0 ===
+  lowest-ranked 5 actors:
+    LevelInfo0	i	Begin Actor Class=Engine.LevelInfo	0
+    Brush296	r	Begin Actor Class=Engine.Brush	0
+    Brush570	v	Begin Actor Class=Engine.Brush	1
+    Brush1104	x	Begin Actor Class=Engine.Brush	1
+    Brush686	y	Begin Actor Class=Engine.Brush	1
+  CsgOper-less Class=...Brush actors:
+    Brush296  order_value=r
+
+=== showcase_bar: 487 actors (from /tmp/showcase_bar_ov.tsv), read-errors: 0 ===
+  lowest-ranked 5 actors:
+    LevelInfo0	i	Begin Actor Class=Engine.LevelInfo	0
+    Toilet0	r	Begin Actor Class=DeusEx.Toilet	0
+    Toilet2	v	Begin Actor Class=DeusEx.Toilet	0
+    Pinball0	x	Begin Actor Class=DeusEx.Pinball	0
+    PoolTableLight0	y	Begin Actor Class=DeusEx.PoolTableLight	0
+  CsgOper-less Class=...Brush actors:
+
+=== showcase_wanchai_market: 2288 actors (from /tmp/showcase_wanchai_market_ov.tsv), read-errors: 0 ===
+  lowest-ranked 5 actors:
+    LevelInfo0	i	Begin Actor Class=Engine.LevelInfo	0
+    Brush3675	r	Begin Actor Class=Engine.Brush	1
+    Brush82	v	Begin Actor Class=Engine.Brush	1
+    Brush1653	x	Begin Actor Class=Engine.Brush	1
+    Brush84	y	Begin Actor Class=Engine.Brush	1
+  CsgOper-less Class=...Brush actors:
+
