@@ -254,6 +254,101 @@ _PACKAGES: dict[str, dict[str, str]] = {
             "    for (Cur = First; Cur != None; Cur = Cur.Next) {\n"
             "        Total += Cur.Tag;\n    }\n    return Total;\n}\n"),
     },
+    "DefaultMetaClass": {
+        # `class<T>.default.Field` -- found compiling real UT99 `UTServerAdmin`
+        # (`TempClass.Default.GameName`, `GameClass.Default.MapListType.Default.Maps`): `type_label`
+        # collapses every `class<T>` to the bare string "class", losing `T` -- `lower._meta_class_of`
+        # recovers it via a side-effect-free AST walk. Four shapes in one class: a `class<T>` LOCAL
+        # assigned via a metaclass cast (`ViaLocal`), an INLINE metaclass cast used directly as the
+        # `.default` base (`ViaInlineCast`), an OBJECT INSTANCE `.default` (uses the ordinary
+        # Context(0x19), not ClassContext(0x12), and records only ONE Dependency entry, not two --
+        # `ViaInstance`), and a NESTED `class<T>`-typed FIELD reached through another `.default`
+        # (`ViaNestedField`, needs the new `member_meta`/`Scope.member_meta_of` channel).
+        "MPBase.uc": "class MPBase expands Object;\nvar int Health;\ndefaultproperties\n{\n    Health=5\n}\n",
+        "MPSub.uc": "class MPSub expands MPBase;\nvar class<MPBase> SubField;\n",
+        "MPUser.uc": (
+            "class MPUser expands Object;\n"
+            "function int ViaLocal(Object O)\n{\n"
+            "    local class<MPBase> C;\n"
+            "    C = class<MPBase>(O);\n"
+            "    return C.Default.Health;\n}\n"
+            "function int ViaInlineCast(Object O)\n{\n"
+            "    return class<MPBase>(O).Default.Health;\n}\n"
+            "function int ViaInstance(MPBase B)\n{\n"
+            "    return B.Default.Health;\n}\n"
+            "function int ViaNestedField(Object O)\n{\n"
+            "    local class<MPSub> S;\n"
+            "    S = class<MPSub>(O);\n"
+            "    return S.Default.SubField.Default.Health;\n}\n"),
+    },
+    "ArrayCountDefault": {
+        # `ArrayCount(...)` on a `.default` chain -- a pure compile-time constant substitution (the
+        # field's declared ArrayDim), yet real UCC still resolves + records every Dependency entry
+        # evaluating the (discarded) argument normally would have -- `lower._array_count_dim`/
+        # `_record_default_chain_deps`. Both a one-level (`ViaDefault`) and a nested (`ViaNested`,
+        # `class<T>`-typed FIELD reached via another `.default`) chain.
+        "AC2Base.uc": "class AC2Base expands Object;\nvar string Maps[6];\ndefaultproperties\n{\n}\n",
+        "AC2Sub.uc": "class AC2Sub expands Object;\nvar class<AC2Base> MapListType;\n",
+        "AC2User.uc": (
+            "class AC2User expands Object;\n"
+            "function int ViaDefault(Object O)\n{\n"
+            "    local class<AC2Base> C;\n"
+            "    C = class<AC2Base>(O);\n"
+            "    return ArrayCount(C.Default.Maps);\n}\n"
+            "function int ViaNested(Object O)\n{\n"
+            "    local class<AC2Sub> S;\n"
+            "    S = class<AC2Sub>(O);\n"
+            "    return ArrayCount(S.Default.MapListType.Default.Maps);\n}\n"),
+    },
+    "ClassStaticCall": {
+        # `ClassRef.Static.Method(...)` -- a function called dynamically through a `class<T>`
+        # reference uses the SAME ClassContext(0x12) wrapper `.default` field access uses, here
+        # wrapping a VirtualFunction call instead of a DefaultVariable -- `lower._call_method`. Found
+        # compiling real UT99 `UTServerAdmin`'s `GameClass.Static.StaticSaveConfig()`.
+        "SCBase.uc": (
+            "class SCBase expands Object;\nvar int Num;\n"
+            "static function int GetNum()\n{\n    return 5;\n}\n"
+            "function int GetNumInst()\n{\n    return 6;\n}\n"),
+        "SCUser.uc": (
+            "class SCUser expands Object;\n"
+            "function int ViaClassStatic(Object O)\n{\n"
+            "    local class<SCBase> C;\n"
+            "    C = class<SCBase>(O);\n"
+            "    return C.Static.GetNum();\n}\n"
+            "function CallVoid(Object O)\n{\n"
+            "    local class<SCBase> C;\n"
+            "    C = class<SCBase>(O);\n"
+            "    C.Static.GetNum();\n}\n"),
+    },
+    "ClassToStringConcat": {
+        # `"..." $/@ SomeClassRef` -- the `_match_cost` operator-overload search never let a `class`
+        # operand widen into a `string` parameter, even though `_coerce`'s `ObjectToString` codegen
+        # already handled a class (only the SEARCH was missing the rule) -- found compiling real UT99
+        # `UTServerAdmin`'s `"...?game="$Level.Game.Class$...`.
+        "CCUser.uc": (
+            "class CCUser expands Object;\n"
+            "function string Concat(Object O)\n{\n    return \"prefix=\" $ O.Class;\n}\n"
+            "function string ConcatAt(Object O)\n{\n    return \"prefix=\" @ O.Class;\n}\n"),
+    },
+    "StringToBool": {
+        # `bool(SomeString)` -- `("string","bool")` = `0x4B`, a free slot between the already-known
+        # `string->int`(`0x4A`)/`string->float`(`0x4C`) -- found compiling real UT99 `UTServerAdmin`'s
+        # `bool(WeaponsStay)`.
+        "SBUser.uc": "class SBUser expands Object;\nfunction bool F(string S)\n{\n    return bool(S);\n}\n",
+    },
+    "SelfDep": {
+        # A Context whose target is the COMPILING CLASS ITSELF still gets its own deep=0 Dependency
+        # entry -- real UCC does NOT dedupe by class at all (an earlier version of `_record_dep`
+        # wrongly skipped self, assuming its own deep=1 self-Dependency already covered it). Found
+        # compiling real UT99 `ListItem`, a self-referencing linked-list class whose own methods
+        # Context through `local ListItem T; ... T.Next`/`.Tag` throughout.
+        "SelfDepNode.uc": (
+            "class SelfDepNode expands Object;\nvar SelfDepNode Next;\nvar int Tag;\n"
+            "function int SumNext(SelfDepNode Start)\n{\n"
+            "    local SelfDepNode T;\n    local int Total;\n"
+            "    for (T = Start; T != None; T = T.Next)\n        Total += T.Tag;\n"
+            "    return Total;\n}\n"),
+    },
 }
 
 
@@ -421,6 +516,49 @@ def test_for_loop_update_clause_dependency_recorded_twice():
     bytecode-emission position after the body. Found compiling the real `ASPMutator`'s
     `for (O=Level.PawnList; O!=None; O=O.NextPawn) {PRI=O.PlayerReplicationInfo; ...}`."""
     _check("UscForDep")
+
+
+def test_class_typed_variable_default_field_access():
+    """`class<T>.default.Field` -- a `class<T>` LOCAL (via a metaclass cast), an INLINE metaclass
+    cast, an OBJECT INSTANCE (ordinary Context, not ClassContext, one Dependency not two), and a
+    NESTED `class<T>`-typed field reached through another `.default`. Found compiling the real UT99
+    `UTServerAdmin` (`TempClass.Default.GameName`, `GameClass.Default.MapListType.Default.Maps`)."""
+    _check("DefaultMetaClass")
+
+
+def test_array_count_on_default_chain():
+    """`ArrayCount(...)` on a `.default` chain (one-level and nested) -- a pure compile-time constant
+    (the field's declared ArrayDim), yet every Dependency entry evaluating the discarded argument
+    normally would have is still recorded. Found compiling the real UT99 `UTServerAdmin`."""
+    _check("ArrayCountDefault")
+
+
+def test_class_ref_static_method_call():
+    """`ClassRef.Static.Method(...)` -- a function called through a `class<T>` reference uses the
+    same ClassContext(0x12) wrapper `.default` field access uses, wrapping a VirtualFunction call.
+    Found compiling the real UT99 `UTServerAdmin`'s `GameClass.Static.StaticSaveConfig()`."""
+    _check("ClassStaticCall")
+
+
+def test_class_to_string_concat_operator():
+    """`"..." $/@ SomeClassRef` -- the binary-operator overload search never let a `class` operand
+    widen into `string`, even though `_coerce`'s `ObjectToString` codegen already handled it. Found
+    compiling the real UT99 `UTServerAdmin`'s `"...?game="$Level.Game.Class$...`."""
+    _check("ClassToStringConcat")
+
+
+def test_string_to_bool_conversion():
+    """`bool(SomeString)` = conversion opcode `0x4B`, a free slot between `string->int`(`0x4A`) and
+    `string->float`(`0x4C`). Found compiling the real UT99 `UTServerAdmin`'s `bool(WeaponsStay)`."""
+    _check("StringToBool")
+
+
+def test_self_typed_context_gets_own_dependency():
+    """A Context whose target is the COMPILING CLASS ITSELF still gets its own deep=0 Dependency
+    entry -- real UCC does not dedupe Dependencies by class at all, even for self. Found compiling the
+    real UT99 `ListItem` (a self-referencing linked-list class Contexting through
+    `local ListItem T; ... T.Next`/`.Tag` throughout its own methods)."""
+    _check("SelfDep")
 
 
 def test_perm_gate_catches_wrong_body():

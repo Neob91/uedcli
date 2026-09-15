@@ -32,12 +32,14 @@ from .env import InstallEnv
 from .lower import (EX_DEFAULT_VARIABLE, EX_DYNAMIC_CAST, EX_FINAL_FUNCTION, EX_INSTANCE_VARIABLE,
                     EX_LABEL_TABLE, EX_METACAST, EX_NOTHING, EX_OBJECT_CONST, EX_RETURN, LowerError,
                     Scope, build_scope, consts_of, enum_type_names, enums_of, local_funcs_of,
-                    lower_function, lower_state_body, members_of, _mem_size)
+                    lower_function, lower_state_body, members_array_dim_of, members_meta_of,
+                    members_of, _mem_size)
 from .model import (ClassBody, CompiledPackage, ConstBody, Dependency, EnumBody, Export, FunctionBody,
                     Import, Name, ObjectBody, PropertyBody, StateBody, StructBody, TextBufferBody,
                     TextureBody, TextureMip)
 from .global_index import default_global_index, engine_name_pool, highlight_name_pool, pool_case
-from .natives import ClassGraph, ClassSig, FuncBody, load_catalog, load_graph, prop_type_label
+from .natives import (FUNC_NET, FUNC_NET_RELIABLE, ClassGraph, ClassSig, FuncBody, load_catalog,
+                      load_graph, prop_type_label)
 from .ordering import ObjInput, order_package
 from .parser import parse
 from . import texture_import
@@ -250,6 +252,7 @@ class _Func:
     toks: tuple                      # lowered token stream (list[Tok])
     script_size: int                 # in-memory ScriptSize (sum of _mem_size)
     super_ref_key: str | None = None  # import key of an overridden inherited function (else 0)
+    rep_offset: int | None = None    # inherited from an overridden FUNC_Net function; else None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -396,7 +399,7 @@ def _compile_single(src: str, env: InstallEnv,
                                   f"{super_info.package!r}) — deeper rung")
 
     crlf_source = _to_crlf(_script_text(decl.source or src))
-    class_flags, config_name, within_key = _class_header(decl, env)
+    class_flags, config_name, within_key = _class_header(decl, env, super_info.config_name)
     class_flags |= super_info.class_flags & _CLASS_INHERIT_MASK
 
     b = _Build(class_name=class_name, env=env, class_object_flags=_class_object_flags(decl),
@@ -517,9 +520,17 @@ def _build_texture_imports(b: _Build, decl: ClassDecl, texture_files: dict[str, 
 
 
 # ── class header ────────────────────────────────────────────────────────────────────────────────
-def _class_header(decl: ClassDecl, env: InstallEnv) -> tuple[int, str, str]:
-    """Returns (ClassFlags, ClassConfigName, ClassWithin import-object-name). Default within=Object,
-    config=System."""
+def _class_header(decl: ClassDecl, env: InstallEnv, super_config_name: str = "System"
+                  ) -> tuple[int, str, str]:
+    """Returns (ClassFlags, ClassConfigName, ClassWithin import-object-name). Default within=Object.
+    A BARE `config;` modifier (no explicit name) INHERITS the super's own ClassConfigName rather than
+    resetting to `System` — live-probed (`dev/docs/spikes/2026-09-14-utserveradmin-class-ref-gaps/
+    probe_config_name_inheritance.py`): real UT99 `Engine.
+    MessagingSpectator`/`Engine.Spectator` are both `config(User)`-declared (`'User'`, not `'System'`),
+    and a subclass with bare `config;` (e.g. real `UTServerAdminSpectator`) keeps `'User'`. A class
+    with NO `config` modifier at all is left at the prior, unverified default (`"System"`) — only the
+    evidenced bare-`config;` shape changes; whether ConfigName ALSO inherits with no `config` keyword
+    present at all is untested, not guessed at here."""
     flags = _CLASS_FLAGS_BASE
     config_name = "System"
     within_key = "Object"
@@ -527,7 +538,7 @@ def _class_header(decl: ClassDecl, env: InstallEnv) -> tuple[int, str, str]:
         head, _, arg = mod.partition("(")
         arg = arg[:-1] if arg.endswith(")") else arg
         if head == "config":
-            config_name = arg or "System"
+            config_name = arg or super_config_name
         elif head in _CLASS_MODIFIER_FLAGS:
             flags |= _CLASS_MODIFIER_FLAGS[head]
         else:
@@ -635,6 +646,8 @@ def _build_callables(b: _Build, decl: ClassDecl, super_name: str, crlf_source: s
     catalog = b.catalog_override if b.catalog_override is not None else load_catalog(search_dir)
     enames = enum_type_names(decl.members)
     members = members_of(decl.members, graph)
+    members_meta = members_meta_of(decl.members)
+    members_array_dim = members_array_dim_of(decl.members)
     lfuncs = local_funcs_of(decl.functions, graph, enames)
     enums = enums_of(decl.members)
     consts = consts_of(decl.members)
@@ -648,20 +661,22 @@ def _build_callables(b: _Build, decl: ClassDecl, super_name: str, crlf_source: s
     for item in decl.callables:
         if isinstance(item, StateDecl):
             line, text_pos = state_pos[id(item)]
-            _build_one_state(b, decl, item, super_name, graph, catalog, members, lfuncs, line,
-                             text_pos, enums, consts, dep_slices)
+            _build_one_state(b, decl, item, super_name, graph, catalog, members, members_meta,
+                             members_array_dim, lfuncs, line, text_pos, enums, consts, dep_slices)
         else:
             line, text_pos = func_pos[id(item)]
-            _build_one_function(b, decl, item, super_name, graph, catalog, members, lfuncs, line,
-                                text_pos, enames, enums, consts, dep_slices)
+            _build_one_function(b, decl, item, super_name, graph, catalog, members, members_meta,
+                                members_array_dim, lfuncs, line, text_pos, enames, enums, consts,
+                                dep_slices)
     b.extra_deps = [dep for slice_ in reversed(dep_slices) for dep in slice_]
 
 
 def _build_one_state(b: _Build, decl: ClassDecl, state: StateDecl, super_name: str, graph, catalog,
-                     members, lfuncs, line: int, text_pos: int, enums, consts,
-                     dep_slices: list[list[str]]) -> None:
+                     members, members_meta, members_array_dim, lfuncs, line: int, text_pos: int,
+                     enums, consts, dep_slices: list[list[str]]) -> None:
     skey = b.okey(f"state:{state.name}")
-    scope = Scope(locals_={}, own_members=members, own_funcs={f.name: f for f in lfuncs},
+    scope = Scope(locals_={}, own_members=members, own_members_meta=members_meta,
+                 own_members_array_dim=members_array_dim, own_funcs={f.name: f for f in lfuncs},
                  class_name=decl.name, super_name=super_name, graph=graph, enums=enums, consts=consts)
     own_deps: list[str] = []
     try:
@@ -710,12 +725,26 @@ def _state_positions(crlf: str, states) -> list[tuple[int, int]]:
 
 
 def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: str, graph, catalog,
-                        members, lfuncs, line: int, text_pos: int, enames, enums, consts,
-                        dep_slices: list[list[str]]) -> None:
+                        members, members_meta, members_array_dim, lfuncs, line: int, text_pos: int,
+                        enames, enums, consts, dep_slices: list[list[str]]) -> None:
     if func.kind not in ("function", "event"):
         raise NotImplementedError(f"function kind {func.kind!r} not supported yet ({func.name!r})")
     fkey = b.okey(f"fn:{func.name}")
     flags = _func_flags(func) | (FUNC_DEFINED if func.has_body else 0)  # native flag via modifier
+    # An override inherits FUNC_Net (+FUNC_NetReliable) + RepOffset from the function it overrides —
+    # replication is a property of the FUNCTION ITSELF (its `replication` block lives on the
+    # DECLARING class), not redeclared per override. `replication` blocks in the class being compiled
+    # aren't supported yet (`_reject_unsupported`), so this is the only source of FUNC_Net for now —
+    # live-probed against real UT99 `UTServerAdminSpectator` (extends `Engine.MessagingSpectator`,
+    # itself extending `PlayerPawn`): `ClientMessage`/`ClientVoiceMessage`/`TeamMessage`/
+    # `ReceiveLocalizedMessage`, all bodyless overrides with no local `replication` block, each carry
+    # the SAME FunctionFlags/RepOffset as `PlayerPawn`'s own declaration (`0x40|0x80`, i.e. a
+    # `reliable` replicated function — FUNC_NetReliable always travels with FUNC_Net together).
+    super_fb = graph.function(super_name, func.name) if graph else None
+    rep_offset = None
+    if super_fb is not None and super_fb.flags & FUNC_NET:
+        flags |= super_fb.flags & (FUNC_NET | FUNC_NET_RELIABLE)
+        rep_offset = super_fb.rep_offset
 
     child_keys: list[str] = []
     local_by_name: dict[str, str] = {}
@@ -732,8 +761,9 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
             child_keys.append(lkey); local_by_name[n.casefold()] = lkey
 
     if func.has_body:
-        scope = build_scope(func, members=members, funcs=lfuncs, class_name=decl.name,
-                            super_name=super_name, graph=graph,
+        scope = build_scope(func, members=members, members_meta=members_meta,
+                            members_array_dim=members_array_dim, funcs=lfuncs,
+                            class_name=decl.name, super_name=super_name, graph=graph,
                             enums=enums, enum_names=enames, consts=consts)
         own_deps: list[str] = []
         try:
@@ -759,7 +789,8 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
                           function_flags=flags, child_keys=tuple(child_keys),
                           local_by_name=local_by_name, toks=tuple(toks),
                           script_size=sum(_mem_size(t) for t in toks),
-                          super_ref_key=_super_func_import(b, super_name, func.name, graph))
+                          super_ref_key=_super_func_import(b, super_name, func.name, graph),
+                          rep_offset=rep_offset)
     b.chain_fields.append((fkey, False))
 
 
@@ -1306,7 +1337,10 @@ def _extra_dep_crc(env: InstallEnv, dep: str) -> int:
 def _add_import(b: _Build, obj: str) -> str:
     """Ensure `obj` (a class or the Core package) is imported; return its import key (object name).
     A Core class imports with outer=Core; a class in another package pulls in that package import
-    (not into `PackageImports` — see `_build_class_unit`'s `package_imports` comment)."""
+    (not into `PackageImports` — see `_build_class_unit`'s `package_imports` comment). A class with
+    NO exported script body anywhere on the search path (a fully-native class, e.g. UT99's
+    `Engine.NetConnection` — see `env.class_home_from_imports`) falls back to its home package as
+    discovered from another package's own IMPORT table, rather than defaulting to Core."""
     if obj == "Core":
         return obj
     existing = obj if obj in b.imports else next(       # FName is case-insensitive: `texture` (a member
@@ -1314,11 +1348,11 @@ def _add_import(b: _Build, obj: str) -> str:
     if existing is not None:
         return existing
     info = b.env.resolve_class(obj)
-    if info is None or info.package.casefold() == "core":
+    pkg = info.package if info is not None else b.env.import_only_class_package(obj)
+    if pkg is None or pkg.casefold() == "core":
         b.imports[obj] = _ImportSpec(class_package="Core", class_name="Class", outer="Core",
                                      object_name=obj)
         return obj
-    pkg = info.package
     if pkg not in b.imports:
         b.imports[pkg] = _ImportSpec(class_package="Core", class_name="Package", outer=None,
                                      object_name=pkg)
@@ -1358,6 +1392,18 @@ def _struct_location(graph: ClassGraph, struct_name: str):
     return pkg, pkg.name_of_ref(e["outer"]), pkg.names[e["nm"]]
 
 
+def _existing_import_key(b: _Build, ident: str) -> str | None:
+    """The existing `b.imports` key matching `ident` case-insensitively (FName identity), or None.
+    Two SOURCE occurrences of the same inherited field/function/struct member differing only in case
+    (real UT99 `UTServerAdmin`: `GameReplicationInfo.MOTDLine1` vs `.MOTDline1`) must dedupe onto ONE
+    import row — the same rule `_add_import` already applies to a plain class/package name. Without
+    this, two b.imports entries end up representing the "same" identity, and whichever one
+    `_imports_by_display`'s ambiguous-name tie-break keeps can differ from the one a token's own
+    (differently-cased) `resolve_inv` lookup expects, a silent `KeyError` at encode time."""
+    return ident if ident in b.imports else next(
+        (k for k in b.imports if k.casefold() == ident.casefold()), None)
+
+
 def _add_struct_import(b: _Build, graph: ClassGraph, struct_name: str) -> str:
     """Import a struct object (e.g. `Core.Object.Vector`): Class=Struct, Outer=its declaring class.
     Returns the import key (the struct's object name)."""
@@ -1377,14 +1423,17 @@ def _add_struct_member_import(b: _Build, graph: ClassGraph, ident: str, struct_n
     `StructMember` (0x36) bytecode token. Outer = the struct import. Keyed by the qualified
     `smem:<Struct>.<Field>` ident (`lower._struct_member_ident`), never the bare field name — a bare
     key would let `resolve_inv`'s local/param lookup shadow it (a param sharing the field's name, e.g.
-    real UT99 `IpAddr`'s own `Addr` field vs a param also named `Addr`)."""
+    real UT99 `IpAddr`'s own `Addr` field vs a param also named `Addr`). Dedupes case-insensitively
+    (`_existing_import_key`) — two occurrences differing only in case are the SAME struct member."""
+    if _existing_import_key(b, ident) is not None:
+        return
     skey = _add_struct_import(b, graph, struct_name)
     label = graph.struct_member_type(struct_name, field)
     if label is None or label not in _SCALAR_KINDS:
         raise NotImplementedError(f"struct member {struct_name}.{field}: type {label!r} unsupported")
     prop_class = _SCALAR_KINDS[label].prop_class
-    b.imports.setdefault(ident, _ImportSpec(class_package="Core", class_name=prop_class,
-                                            outer=skey, object_name=field))
+    b.imports[ident] = _ImportSpec(class_package="Core", class_name=prop_class,
+                                   outer=skey, object_name=field)
 
 
 def _register_struct_member_imports(b: _Build, toks, graph: ClassGraph) -> None:
@@ -1424,7 +1473,7 @@ def _register_final_call_imports(b: _Build, toks) -> None:
     def walk(t) -> None:
         if t.op == EX_FINAL_FUNCTION:
             ident = next((v for k, v in t.parts if k == "obj"), None)
-            if ident is not None and ident.startswith("func:") and ident not in b.imports:
+            if ident is not None and ident.startswith("func:") and _existing_import_key(b, ident) is None:
                 owner_cls, func_name = ident[len("func:"):].rsplit(".", 1)
                 if owner_cls.casefold() not in b.in_pkg_class_names:
                     outer = _add_import(b, owner_cls)
@@ -1468,11 +1517,13 @@ def _register_member_var_imports(b: _Build, toks, graph: ClassGraph) -> None:
     field, resolved as a same-package export) — same shape as `_register_final_call_imports`, but a
     Property import (the field's concrete UProperty subclass, e.g. IntProperty) rather than a
     Function import. When `<Class>` is one of THIS package's own classes, no import is registered —
-    see `_register_final_call_imports`."""
+    see `_register_final_call_imports`. Dedupes case-insensitively (`_existing_import_key`): real UT99
+    `UTServerAdmin` reads `GameReplicationInfo.MOTDLine1` in one place and writes `.MOTDline1` in
+    another — the SAME field, case-insensitive `FName`, one import row."""
     def walk(t) -> None:
         if t.op in (EX_INSTANCE_VARIABLE, EX_DEFAULT_VARIABLE):
             ident = next((v for k, v in t.parts if k == "obj"), None)
-            if ident is not None and ident.startswith("mem:") and ident not in b.imports:
+            if ident is not None and ident.startswith("mem:") and _existing_import_key(b, ident) is None:
                 owner_cls, field = ident[len("mem:"):].rsplit(".", 1)
                 if owner_cls.casefold() not in b.in_pkg_class_names:
                     label = graph.member_type(owner_cls, field)
@@ -1981,7 +2032,8 @@ def _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, i
                 next_field=next_lookup.get(fkey, 0), children=children,
                 friendly_name=nidx(fn.name), line=fn.line, text_pos=fn.text_pos,
                 script=encode_script(list(fn.toks), resolver(fn)), script_size=fn.script_size,
-                inative=0, oper_precedence=0, function_flags=fn.function_flags))
+                inative=0, oper_precedence=0, function_flags=fn.function_flags,
+                rep_offset=fn.rep_offset))
 
 
 def _build_state_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs) -> None:
@@ -2040,7 +2092,10 @@ def _class_export(b, class_name, super_name, super_crc, crlf_source, class_flags
             dependencies=(Dependency(cls=exp_ref[f"class:{class_name}"], deep=1,
                                      script_text_crc=script_text_crc(crlf_source)),
                           Dependency(cls=imp_ref[super_name], deep=1, script_text_crc=super_crc),
-                          *(Dependency(cls=imp_ref[_add_import(b, dep)], deep=0,
+                          *(Dependency(cls=exp_ref[f"class:{class_name}"], deep=0,
+                                      script_text_crc=script_text_crc(crlf_source))
+                            if dep.casefold() == class_name.casefold() else
+                            Dependency(cls=imp_ref[_add_import(b, dep)], deep=0,
                                       script_text_crc=_extra_dep_crc(b.env, dep))
                             for dep in b.extra_deps)),
             package_imports=(name_index[class_name], name_index["Core"]),
@@ -2133,18 +2188,28 @@ def _prepass_signatures(decls: dict[str, tuple[ClassDecl, str]], disk_graph: Cla
         decl, _src = decls[by_cf[cf]]
         members: dict[str, str] = {}
         member_owner: dict[str, str] = {}
+        member_meta: dict[str, str] = {}
+        member_array_dim: dict[str, int] = {}
         functions: dict[str, FuncBody] = {}
         if decl.super_name:
             sup = sig_of(decl.super_name)
             if sup is not None:
                 members.update(sup.members)
                 member_owner.update(sup.member_owner)
+                member_meta.update(sup.member_meta)
+                member_array_dim.update(sup.member_array_dim)
                 functions.update(sup.functions)
         enames = enum_type_names(decl.members)
         for n, label in members_of(decl.members, disk_graph).items():
             ncf = n.casefold()
             members[ncf] = label
             member_owner[ncf] = decl.name
+        member_meta.update({n.casefold(): m for n, m in members_meta_of(decl.members).items()})
+        for m in decl.members:
+            if isinstance(m, VarDecl):
+                dim = _dim_value(m.array_dim)
+                for n in m.names:
+                    member_array_dim[n.casefold()] = dim
         for f in local_funcs_of(decl.functions, disk_graph, enames):
             functions[f.name.casefold()] = FuncBody(
                 name=f.name, package="", class_name=decl.name, script_size=0, tokens=(),
@@ -2154,7 +2219,8 @@ def _prepass_signatures(decls: dict[str, tuple[ClassDecl, str]], disk_graph: Cla
         enums = {tag.casefold(): ordinal for m in decl.members if isinstance(m, EnumDecl)
                 for ordinal, tag in enumerate(m.values)}
         sig = ClassSig(name=decl.name, package="", super_name=decl.super_name,
-                       members=members, member_owner=member_owner, functions=functions, enums=enums)
+                       members=members, member_owner=member_owner, functions=functions, enums=enums,
+                       member_meta=member_meta, member_array_dim=member_array_dim)
         sigs[cf] = sig
         building.discard(cf)
         return sig
@@ -2376,6 +2442,32 @@ def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[s
         add_type(tr.inner)
         add(tr.meta_class)
 
+    def add_expr_class_lits(e) -> None:
+        """A CLASS LITERAL (`class'X'`) or metaclass cast (`class<X>(...)`) inside a function/state
+        BODY, not just a declared var/param/local/return TYPE — needed because such a literal names
+        its own package without any declaration anywhere naming it (found compiling the real
+        `UTServerAdmin`: `class'UdpServerUplink'.default.DoUplink`, `UdpServerUplink` living in
+        `IpServer`, a package no declared type in `UTServerAdmin` itself ever names)."""
+        if e.op == "objref" and e.text.casefold() == "class" and e.value:
+            add(str(e.value).rsplit(".", 1)[-1])
+        elif e.op == "call" and e.children and e.children[0].op == "name" \
+                and e.children[0].text.casefold().startswith("class<"):
+            meta = e.children[0].text[len("class<"):-1].strip()
+            if meta:
+                add(meta.rsplit(".", 1)[-1])
+        for c in e.children:
+            add_expr_class_lits(c)
+
+    def add_stmt_class_lits(stmts) -> None:
+        for s in stmts:
+            for e in s.exprs:
+                add_expr_class_lits(e)
+            for cond, body in s.clauses:
+                if cond is not None:
+                    add_expr_class_lits(cond)
+                add_stmt_class_lits(body)
+            add_stmt_class_lits(s.body)
+
     for decl, _src in decls.values():
         add(decl.super_name)
         for m in decl.members:
@@ -2391,6 +2483,9 @@ def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[s
                 add_type(p.type)
             for lv in f.locals:
                 add_type(lv.type)
+            add_stmt_class_lits(f.body)
+        for s in decl.states:
+            add_stmt_class_lits(s.body)
     return out
 
 
@@ -2411,6 +2506,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
         super_class_flags = super_unit.class_flags
         super_pkg_imports = super_unit.package_imports
         super_probe_mask = super_unit.probe_mask
+        super_config_name = super_unit.config_name
     else:
         info = env.resolve_class(super_name)
         if info is None:
@@ -2419,6 +2515,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
         super_class_flags = info.class_flags
         super_pkg_imports = info.package_imports
         super_probe_mask = info.probe_mask
+        super_config_name = info.config_name
 
     b.prefix = f"{class_name}::"
     b.class_name = class_name
@@ -2433,7 +2530,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
     b.catalog_override = catalog
 
     crlf_source = _to_crlf(_script_text(src))
-    class_flags, config_name, within_key = _class_header(decl, env)
+    class_flags, config_name, within_key = _class_header(decl, env, super_config_name)
     b.emit_zero_defaults = _auto_emit_defaults(
         decl, class_flags | (super_class_flags & _CLASS_INHERIT_MASK), substrate=env.substrate)
 
@@ -2871,7 +2968,8 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
                 next_field=next_lookup.get(fkey, 0), children=children,
                 friendly_name=nidx(fn.name), line=fn.line, text_pos=fn.text_pos,
                 script=encode_script(list(fn.toks), resolver(fn)), script_size=fn.script_size,
-                inative=0, oper_precedence=0, function_flags=fn.function_flags))
+                inative=0, oper_precedence=0, function_flags=fn.function_flags,
+                rep_offset=fn.rep_offset))
 
 
 def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs) -> None:

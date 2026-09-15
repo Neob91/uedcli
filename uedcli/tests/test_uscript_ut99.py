@@ -78,6 +78,65 @@ Fixtures (each isolates a compiler gap fixed for the first UT99 packages):
                      default" rule from unset properties to explicitly-assigned-zero ones too
                      (`compile._emit_default`). `perm_gate` byte-exact; the strict gate's only residual
                      is the same pre-existing UT99 own-name-pool gap as the other UT99 packages.
+  - `UTServerAdmin` - a real stock UT99 package (4 classes: `UTServerAdmin`/`UTImageServer`/
+                     `UTServerAdminSpectator`/`ListItem`), needed eight further real gaps, all now
+                     fixed: (1) `class<T>`-typed local/param/member/metacast `.default` field access
+                     (`TempClass.Default.GameName`) — `type_label` collapses every `class<T>` to the
+                     bare string "class", losing `T`; `lower._meta_class_of` recovers it via a
+                     side-effect-free AST walk (a class literal, a metaclass cast, a declared
+                     `class<T>` symbol, or, recursing, a nested `class<T>`-typed FIELD read through
+                     another `.default`), backed by a NEW parallel `member_meta`/`member_array_dim`
+                     channel (`natives.ClassSig`) alongside the existing type-label one — every
+                     existing "class"-typed check (casts, `_CONV`, value-size) stays untouched. An
+                     OBJECT-INSTANCE `.default` (`SomeActor.default.Field`) uses the ORDINARY
+                     Context(0x19) instead of ClassContext(0x12) and records only ONE Dependency
+                     entry (no extra "Class" one) — live-probed, both shapes. (2) `ArrayCount(...)` — a
+                     pure COMPILE-TIME constant substitution (the field's declared ArrayDim, via the
+                     same `member_array_dim` channel), yet still records every Dependency entry
+                     evaluating its argument normally would have (`lower._array_count_dim`/
+                     `_record_default_chain_deps`) — live-probed. (3) `ClassRef.Static.Method(...)` (a
+                     function called dynamically through a `class<T>` reference) uses the SAME
+                     ClassContext(0x12) wrapper `.default` uses, wrapping a VirtualFunction call
+                     instead of a DefaultVariable (`lower._call_method`) — live-probed. (4) a class
+                     with NO exported script body ANYWHERE on the search path but reachable as an
+                     IMPORT elsewhere (`Engine.NetConnection`, fully native, no `.uc` source at all) is
+                     still a valid cast target — `env.class_home_from_imports` scans every package's
+                     own IMPORT table (not just exports) for a `Core.Class`-typed row, a purely static
+                     decode of data already on disk, no live capture needed. (5) `"..." $/@
+                     SomeClassRef` (a `class`-typed operand of the string-concat operators) — the
+                     `_match_cost` overload search never allowed `class` to widen into `string`, even
+                     though `_coerce`'s `ObjectToString` codegen already handled it — live-probed. (6)
+                     `bool(SomeString)` — `("string","bool")` = `0x4B`, a free slot between the
+                     already-known `string->int`(`0x4A`)/`string->float`(`0x4C`) — live-probed. (7) two
+                     SOURCE occurrences of the SAME inherited field/function/struct member differing
+                     only in CASE (`GameReplicationInfo.MOTDLine1` read, `.MOTDline1` written) used to
+                     register as TWO SEPARATE (ambiguous) import rows — `compile._existing_import_key`
+                     dedupes case-insensitively (`FName` identity) at all three registration sites
+                     (member/final-call/struct-member imports), the same rule `_add_import` already
+                     applied to plain class/package names. (8) a bare expression-statement whose call
+                     RETURNS A STRING (`Level.ConsoleCommand(...);`, result discarded) wraps in
+                     `EatString`(0x0E) — live-probed; only the string case is verified, any other
+                     discarded non-trivial type is untouched. Two further, smaller gaps: an
+                     OVERRIDING function inherits `FUNC_Net`(+`FUNC_NetReliable`) and `RepOffset` from
+                     the function it overrides (replication is a property of the function itself, not
+                     redeclared per override — `replication` blocks aren't implemented yet, so this is
+                     the only source for now) — live-probed against real `UTServerAdminSpectator`
+                     overriding `PlayerPawn`'s messaging functions; a bare `config;` modifier (no
+                     explicit name) INHERITS the super's `ClassConfigName` (`Engine.MessagingSpectator`
+                     is `config(User)`, not the default `System`) rather than resetting to `System` —
+                     live-probed. A NINTH, unrelated bug found along the way: `_record_dep` used to
+                     SKIP a Context whose target was the COMPILING CLASS ITSELF (assumed redundant with
+                     its own deep=1 self-Dependency entry) — real UCC does NOT dedupe by class at all,
+                     confirmed on `ListItem` (a self-referencing linked-list class whose own methods
+                     Context through `local ListItem T; ... T.Next`/`.Tag` throughout) and a controlled
+                     probe (`SelfDepNode`); the "super" half of the old skip was dead code (`Super.Foo()`
+                     never goes through `_record_dep` at all). `perm_gate` byte-exact against a fresh
+                     UT99 UCC build; the strict gate's only residual is the same pre-existing UT99
+                     own-name-pool gap as the other UT99 packages.
+  - `UscNetConnectionProbe` - controlled: pins gap (4) from `UTServerAdmin` above in isolation --
+                     `NetConnection(O) != None` (a cast to a class with NO exported script body
+                     ANYWHERE on the search path, fully native, no `.uc` source at all) resolves via
+                     `env.class_home_from_imports` scanning another package's own IMPORT table.
 """
 from __future__ import annotations
 
@@ -101,12 +160,14 @@ _FIX = Path(__file__).resolve().parent / "fixtures" / "uscript" / "ut99"
 # (package, export count) - the byte-parity corpus; count pins export-identity coverage.
 _PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritFinal", 5),
             ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154), ("UscIpAddrProbe", 5), ("IpServer", 154),
-            ("NoGunsMutator", 9), ("ASPMutator", 61)]
+            ("NoGunsMutator", 9), ("ASPMutator", 61), ("UTServerAdmin", 353),
+            ("UscNetConnectionProbe", 5)]
 
 # Extra stock EditPackages a fixture's super chain needs loaded (`_edit_packages_upto`'s
 # content-safe base only covers Core/Engine/Editor) — only needed for the DOCKER-gated rebuild.
 _DEPS: dict[str, tuple[str, ...]] = {"UscInheritFinal": ("UWindow",), "UWeb": ("IpDrv",),
-                                     "UscIpAddrProbe": ("IpDrv",), "ASPMutator": ("Botpack",)}
+                                     "UscIpAddrProbe": ("IpDrv",), "ASPMutator": ("Botpack",),
+                                     "UTServerAdmin": ("UWindow", "IpDrv", "Botpack")}
 
 
 def _docker_up() -> bool:

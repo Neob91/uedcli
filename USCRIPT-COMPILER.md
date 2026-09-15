@@ -118,9 +118,51 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 | **IpServer** | UT99 | 2 | perm only | **real corpus package** — with the struct-member identity fix below (a param and the struct field it accesses sharing a name, e.g. `IpAddr Addr`'s own `.Addr`), the last of a chain of gaps this package surfaced (assert, byte→string, static-through-instance call, import-identity collision) is closed; compiles end to end, `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as `Fire`/`UWeb` |
 | **NoGunsMutator** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/vumaq/ut99-mutators) — hand-authored with no `defaultproperties` block and a trailing blank line, a source shape no prior fixture had; exposed a `_script_text` bug (see below), now fixed; `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as `Fire`/`UWeb`/`IpServer` |
 | **ASPMutator** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/rxut/AdvancedSpawnPoints) — a `Botpack`-dependent mutator; needed the Botpack-load fix (below) plus five further real gaps (cross-package type discovery, `Vect`/`Rot` literals, Vector/Rotator→string, compound-assign operator overload, `for`-loop update-clause dependency double-recording, explicit-zero-default suppression), all now fixed; `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as the other UT99 packages. Review (2026-09-14) caught the compound-assign fix not reaching the `for`-loop update path, the struct-member half of cross-package type discovery, the `for`-loop dependency landing in init/update/cond order instead of init/cond/update, and a docker-gate skip check missing the new Sounds substrate — all fixed; the zero-default suppression was scoped back to only the measured plain-scalar case (an explicit zero-ordinal enum default is left unsuppressed, open question filed) |
+| **UTServerAdmin** | UT99 | 4 | perm only | **real stock UT99 package** (`UTServerAdmin`/`UTImageServer`/`UTServerAdminSpectator`/`ListItem`) — needed nine further real gaps, all now fixed (see below); `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as the other UT99 packages |
 
 Controlled (non-corpus) fixtures `UscHello`/`UscVars`/`UscBB`/`UscFn`/`UscW`/`UscSt` all pass the
 strict gate autonomously.
+
+**`UTServerAdmin` (2026-09-14):** the `class<T>`-typed-variable `.default` gap
+(`dev/docs/board/done/class-t-typed-variable-s-default-field-needs/`) was tractable after all. Full
+finding-by-finding detail (each live-probed, each with a committed regression):
+`dev/docs/spikes/2026-09-14-utserveradmin-class-ref-gaps/spike.md`. Summary:
+
+1. `class<T>.default.Field` (a `class<T>` local/param/member/metaclass cast, or a nested `class<T>`-
+   typed FIELD reached through another `.default`) — `type_label` collapses every `class<T>` to the
+   bare string "class", losing `T`; `lower._meta_class_of` recovers it via a side-effect-free AST
+   walk, backed by a new parallel `member_meta`/`member_array_dim` channel (`natives.ClassSig`)
+   alongside the existing type-label one. An OBJECT-INSTANCE `.default` uses the ordinary
+   Context(0x19), not ClassContext(0x12), and records only one Dependency entry, not two.
+2. `ArrayCount(...)` on a `.default` chain — a pure compile-time constant (the field's ArrayDim),
+   yet every Dependency entry evaluating the discarded argument normally would have is still
+   recorded (`lower._array_count_dim`/`_record_default_chain_deps`).
+3. `ClassRef.Static.Method(...)` — the SAME ClassContext(0x12) wrapper `.default` uses, wrapping a
+   VirtualFunction call instead of a DefaultVariable (`lower._call_method`).
+4. A class with NO exported script body anywhere on the search path but reachable as an IMPORT
+   elsewhere (`Engine.NetConnection`, fully native, no `.uc` source at all) is still a valid cast
+   target — `env.class_home_from_imports` scans another package's own IMPORT table, a purely static
+   decode, no live capture needed.
+5. `"..." $/@ SomeClassRef` — the operator-overload search never let `class` widen into `string`,
+   even though `_coerce`'s `ObjectToString` codegen already handled it.
+6. `bool(SomeString)` = conversion opcode `0x4B`, a free slot between `string->int`(`0x4A`)/
+   `string->float`(`0x4C`).
+7. Two SOURCE occurrences of the same inherited field/function/struct member differing only in
+   CASE used to register as two separate (ambiguous) import rows — `compile._existing_import_key`
+   dedupes case-insensitively at all three import-registration sites.
+8. A bare expression-statement whose call returns a STRING (result discarded) wraps in
+   `EatString`(0x0E) — only the string case is verified.
+9. An overriding function inherits `FUNC_Net`(+`FUNC_NetReliable`)/`RepOffset` from the function it
+   overrides (replication is a property of the function itself); a bare `config;` modifier (no
+   explicit name) inherits the super's `ClassConfigName` rather than resetting to `System`
+   (`Engine.MessagingSpectator` is `config(User)`).
+
+A tenth, unrelated bug found along the way: `_record_dep` wrongly SKIPPED a Context whose target was
+the compiling class itself (assumed redundant with its own deep=1 self-Dependency) — real UCC does
+not dedupe `Dependencies` by class at all, even for self (confirmed on real `ListItem`, a self-
+referencing linked-list class, and a controlled `SelfDepNode` probe). Two smaller gaps found but NOT
+chased (filed to the board): `ArrayCount` on a plain non-`.default` member access, and a same-package
+inherited `defaultproperties` override crash.
 
 ## Key RE findings (crux facts, detail in `dev/docs/unrealed/unrealscript/`)
 
