@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { OrthoPose } from './orthoCamera'
-import { orthoBasis, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
+import { orthoBasis, orthoDragZoom, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
 
 describe('orthoBasis', () => {
   it('TOP looks down -Z, +X screen-right, +Y screen-down (-Y up)', () => {
@@ -75,6 +75,24 @@ describe('orthoZoom', () => {
   it('does not clamp a zoom that stays within range', () => {
     const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 4 }
     expect(orthoZoom(pose, 120).worldUnitsPerPixel).toBeCloseTo(8)
+  })
+})
+
+describe('orthoDragZoom', () => {
+  // Regression (owner report): both-button-drag zoom in the ortho panes was inverted.
+  it('a downward drag (positive dyPx) zooms IN -- decreases worldUnitsPerPixel', () => {
+    const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 4 }
+    expect(orthoDragZoom(pose, 120).worldUnitsPerPixel).toBeCloseTo(2)
+  })
+
+  it('an upward drag (negative dyPx) zooms OUT -- increases worldUnitsPerPixel', () => {
+    const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 4 }
+    expect(orthoDragZoom(pose, -120).worldUnitsPerPixel).toBeCloseTo(8)
+  })
+
+  it('leaves center unchanged', () => {
+    const pose: OrthoPose = { center: [1, 2, 3], worldUnitsPerPixel: 4 }
+    expect(orthoDragZoom(pose, 60).center).toEqual([1, 2, 3])
   })
 })
 

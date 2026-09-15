@@ -18,7 +18,7 @@ import { GridOverlay } from './GridOverlay'
 import { MARKER_COLOR } from './markers'
 import { PointActorMarker } from './PointActorMarker'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
-import { orthoBasis, orthoFrameFit, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
+import { orthoBasis, orthoDragZoom, orthoFrameFit, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
 import { RadiiOverlays } from './RadiiOverlays'
 import { useSceneResourcesContext } from './SceneResourcesContext'
 import { SelectionHighlight } from './SelectionHighlight'
@@ -221,11 +221,12 @@ export function OrthoViewport({
     () => ({
       onDrag: (dx, dy, buttons) => {
         setPose((prev) => {
-          // Both mouse buttons together: zoom (dy-driven), matching the main spec's ortho "Camera"
-          // paragraph ("drag-pan + both-button-drag zoom"); a plain single-button drag pans. Ortho
-          // marquee-select (plain LMB-drag, classic UnrealEd) is explicitly deferred -- see
-          // dev/docs/board/inbox/ortho-marquee-drag-select-rubber-band-multi/.
-          if ((buttons & 1) !== 0 && (buttons & 2) !== 0) return orthoZoom(prev, dy)
+          // Both mouse buttons together: zoom (dy-driven -- drag down zooms in, drag up zooms out;
+          // `orthoDragZoom`'s own sign convention, the OPPOSITE of `orthoZoom`'s wheel-delta one),
+          // matching the main spec's ortho "Camera" paragraph ("drag-pan + both-button-drag zoom");
+          // a plain single-button drag pans. Ortho marquee-select (plain LMB-drag, classic UnrealEd)
+          // is explicitly deferred -- see dev/docs/board/inbox/ortho-marquee-drag-select-rubber-band-multi/.
+          if ((buttons & 1) !== 0 && (buttons & 2) !== 0) return orthoDragZoom(prev, dy)
           return orthoPan(prev, axis, dx, dy)
         })
       },

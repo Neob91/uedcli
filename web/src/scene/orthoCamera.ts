@@ -124,6 +124,19 @@ export function orthoFrameFit(
   return { center, worldUnitsPerPixel }
 }
 
+/** Both-mouse-button drag zoom (the ortho panes' "drag-pan + both-button-drag zoom" gesture,
+ * `OrthoViewport.tsx`'s pointer-buttons branch): dragging the mouse DOWN (positive `dyPx`, screen-
+ * space `movementY`) zooms IN, dragging UP zooms OUT -- the OPPOSITE sign from `orthoZoom`'s own
+ * wheel-delta convention above (scroll down/away zooms OUT), since a mouse drag and a wheel notch
+ * are different gestures with their own separately-established directions here; conflating the two
+ * signs (passing `dyPx` straight through to `orthoZoom`) was the original bug (owner report:
+ * both-button-drag zoom was inverted). NOT the projection-mirror bug family (`dev/docs/GUI.md`
+ * "Camera & projection") -- that family is entirely about the screen-right/`dx` axis (yaw sign, A/D
+ * strafe, fan winding); this is a `dy` gesture-to-gesture sign mismatch, unrelated to it. */
+export function orthoDragZoom(pose: OrthoPose, dyPx: number): OrthoPose {
+  return orthoZoom(pose, -dyPx)
+}
+
 // `THREE.Raycaster.params.Line.threshold` (an ordinary `Line`/`LineSegments`' hit-test tolerance,
 // unlike `Line2`'s, which is already screen-space) is a WORLD-UNIT distance -- a fixed value means
 // the click tolerance shrinks in screen terms as you zoom out (`worldUnitsPerPixel` grows), to the
