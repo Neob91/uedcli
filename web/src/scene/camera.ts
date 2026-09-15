@@ -65,28 +65,37 @@ export function cameraBasis(pitch: number, yaw: number): { forward: Vec3; right:
 
 /** LMB-drag: move forward/back in the HORIZONTAL plane (vertical drag) + turn/yaw (horizontal drag).
  * Movement is along the yaw direction projected onto XY (`[cos(yaw), sin(yaw), 0]`), NEVER Z, so a
- * pitched camera still "walks" level along the ground (classic UnrealEd; Z is LMB+RMB's job). */
+ * pitched camera still "walks" level along the ground (classic UnrealEd; Z is LMB+RMB's job).
+ *
+ * Yaw is `pose.yaw + dx*speed` (dragging screen-right turns the view right, i.e. `forward` sweeps
+ * toward the camera's own `right` -- `cameraBasis`'s `d(forward)/dyaw == cos(pitch)*right`, positive).
+ * This was `- dx` until the owner reported rotation still inverted after `applyCameraPose`'s render
+ * mirror (`Viewport3D.tsx`) landed: that mirror fixed world `+Y`/`cameraBasis.right` to render on
+ * screen-RIGHT (previously screen-left, the "meshes render reverted" bug); `- dx` was tuned/left
+ * unchanged from before that fix, so the two wrongs cancelled and only stopped feeling right once
+ * the render was corrected -- same stale-calibration failure as `geometry.ts`'s `REVERSE_FAN`. */
 export function dollyAndTurn(
   pose: CameraPose,
   dx: number,
   dy: number,
   speeds: CameraSpeeds = DEFAULT_SPEEDS,
 ): CameraPose {
-  const yaw = wrapYaw(pose.yaw - dx * speeds.yawPerPixel)
+  const yaw = wrapYaw(pose.yaw + dx * speeds.yawPerPixel)
   const y = yaw * DEG2RAD
   const horizForward: Vec3 = [Math.cos(y), Math.sin(y), 0]
   const position = addScaled(pose.position, horizForward, -dy * speeds.dollyPerPixel)
   return { position, pitch: pose.pitch, yaw }
 }
 
-/** RMB-drag: look in place -- pitch/yaw change, position fixed. */
+/** RMB-drag: look in place -- pitch/yaw change, position fixed. Yaw sign matches `dollyAndTurn`'s
+ * (see its doc comment) -- both are "drag right turns view right" controls and must agree. */
 export function look(
   pose: CameraPose,
   dx: number,
   dy: number,
   speeds: CameraSpeeds = DEFAULT_SPEEDS,
 ): CameraPose {
-  const yaw = wrapYaw(pose.yaw - dx * speeds.yawPerPixel)
+  const yaw = wrapYaw(pose.yaw + dx * speeds.yawPerPixel)
   const pitch = clampPitch(pose.pitch - dy * speeds.pitchPerPixel)
   return { position: pose.position, pitch, yaw }
 }

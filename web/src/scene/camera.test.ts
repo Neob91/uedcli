@@ -31,7 +31,7 @@ describe('cameraBasis', () => {
 describe('dollyAndTurn (LMB-drag)', () => {
   it('a horizontal drag yaws by the expected angle', () => {
     const got = dollyAndTurn(IDENTITY, 10, 0, UNIT_SPEEDS)
-    expect(got.yaw).toBeCloseTo(350) // wrap(0 - 10*1)
+    expect(got.yaw).toBeCloseTo(10) // wrap(0 + 10*1) -- drag right turns the view right
     expect(got.pitch).toBe(0)
   })
 
@@ -53,9 +53,21 @@ describe('dollyAndTurn (LMB-drag)', () => {
 describe('look (RMB-drag)', () => {
   it('rotates pitch/yaw and leaves position untouched', () => {
     const got = look(IDENTITY, 20, 10, UNIT_SPEEDS)
-    expect(got.yaw).toBeCloseTo(340) // wrap(0 - 20)
+    expect(got.yaw).toBeCloseTo(20) // wrap(0 + 20) -- drag right turns the view right
     expect(got.pitch).toBeCloseTo(-10) // 0 - 10
     expect(got.position).toEqual(IDENTITY.position)
+  })
+
+  it('a rightward drag turns forward toward the camera\'s own right (never left)', () => {
+    // The bug this fixes: yaw used to DECREASE on a rightward drag, turning the view left --
+    // exposed once applyCameraPose's render mirror made world `+Y`/`cameraBasis.right` correctly
+    // render on screen-right (previously screen-left, the "meshes render reverted" bug).
+    const got = look(IDENTITY, 30, 0, UNIT_SPEEDS)
+    const before = cameraBasis(IDENTITY.pitch, IDENTITY.yaw)
+    const after = cameraBasis(got.pitch, got.yaw)
+    // forward should have swept toward `before.right`, i.e. gained a positive component along it.
+    const dot = after.forward[0] * before.right[0] + after.forward[1] * before.right[1] + after.forward[2] * before.right[2]
+    expect(dot).toBeGreaterThan(0)
   })
 
   it('clamps pitch to +/-89 degrees', () => {
