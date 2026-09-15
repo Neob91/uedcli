@@ -37,12 +37,12 @@
       "slug": "wanchai",
       "name": "WanChai Market",
       "codename": "06_HongKong_WanChai_Market",
-      "highest_n": 58,
+      "highest_n": 200,
       "total_actors": 2288,
       "status": "blocked",
-      "blocker": "N=58 FIXED 2026-09-13: same computation-order bug as Island N=332/UNATCO N=226 (portal graph recomputed after bspoptgeom::merge_near_points, unlike the real editor's one-time pre-merge graph). Fixed by freezing Model::leaf_portals at Pass B. Re-verified byte-exact N=1..58. Now bails at a NEW, unrelated N=59: world Model2's Polys array diverges on a mover/brush, not yet investigated. dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/.",
-      "board": "wanchai-n59-mover-polys-model2-diverges",
-      "updated": "2026-09-13T00:00:00Z"
+      "blocker": "BODY model model2 -- world surf 616 (Brush1164, a thin CSG-subtraction sliver) is dark (no lightmap run) where UED22 gives it an empty run, for Light431's straight-down face. Live gdb capture confirms UED22 accepts it (CopyFromRasterUpdate edi=1). 2026-09-15: the earlier 245-vs-165 rasterize-call-count gap is now sequence-diffed and settled -- 78 calls are a structurally separate block that never touches surf 616, 2 are a harmless degenerate-clip counting artifact; replaying UED22's own raw per-row footprints through native's own (disassembly-verified) span-subtraction algorithm reproduces native's own reject verdict exactly across the whole 165-call matching chain, ruling out a rasterizer/subtraction/traversal-order bug there. Paradox: that still contradicts UED22's own edi=1 capture. Next step is a live capture of the real FSpanBuffer's own content at the start of the matching chain, to check whether its starting state is genuinely fresh (as native assumes) or carries prior state -- not yet attempted. dev/docs/spikes/2026-09-15-wanchai-n201-sequence-diff/spike.md.",
+      "board": "wanchai-n-201-world-model2-body-diverges",
+      "updated": "2026-09-15T00:00:00Z"
     },
     {
       "slug": "island",
