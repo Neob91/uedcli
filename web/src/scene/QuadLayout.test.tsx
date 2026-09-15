@@ -14,16 +14,19 @@ vi.mock('./Viewport3D', () => ({
   Viewport3D: ({
     selectedNames,
     onSelectActor,
+    onDeselect,
     mode,
   }: {
     selectedNames: ReadonlySet<string>
     onSelectActor: (name: string, additive: boolean) => void
+    onDeselect: () => void
     mode: string
   }) => (
     <div>
       <span data-testid="pane-perspective-selected">{[...selectedNames].join(',')}</span>
       <span data-testid="pane-perspective-mode">{mode}</span>
       <button type="button" data-testid="pane-perspective-select" onClick={() => onSelectActor('ActorA', false)} />
+      <button type="button" data-testid="pane-perspective-miss" onClick={onDeselect} />
     </div>
   ),
 }))
@@ -33,17 +36,20 @@ vi.mock('./OrthoViewport', () => ({
     axis,
     selectedNames,
     onSelectActor,
+    onDeselect,
     mode,
   }: {
     axis: string
     selectedNames: ReadonlySet<string>
     onSelectActor: (name: string, additive: boolean) => void
+    onDeselect: () => void
     mode: string
   }) => (
     <div>
       <span data-testid={`pane-${axis}-selected`}>{[...selectedNames].join(',')}</span>
       <span data-testid={`pane-${axis}-mode`}>{mode}</span>
       <button type="button" data-testid={`pane-${axis}-select`} onClick={() => onSelectActor('ActorA', false)} />
+      <button type="button" data-testid={`pane-${axis}-miss`} onClick={onDeselect} />
     </div>
   ),
 }))
@@ -102,6 +108,23 @@ describe('QuadLayout cross-pane selection consistency', () => {
 
     for (const pane of ['perspective', 'top', 'front', 'side']) {
       expect(screen.getByTestId(`pane-${pane}-selected`).textContent).toBe('ActorA')
+    }
+  })
+
+  // Owner ruling 2026-09-15: a tap that hits nothing (any pane) deselects everything, the same
+  // `onDeselect` QuadLayout already wires to SelectionKeys' `Esc` -- verifies QuadLayout forwards it
+  // to both Viewport3D and OrthoViewport, not just SelectionKeys.
+  it("a miss (onDeselect) from ANY pane clears the selection everywhere", () => {
+    render(<Harness />)
+
+    fireEvent.click(screen.getByTestId('pane-top-select'))
+    for (const pane of ['perspective', 'top', 'front', 'side']) {
+      expect(screen.getByTestId(`pane-${pane}-selected`).textContent).toBe('ActorA')
+    }
+
+    fireEvent.click(screen.getByTestId('pane-perspective-miss'))
+    for (const pane of ['perspective', 'top', 'front', 'side']) {
+      expect(screen.getByTestId(`pane-${pane}-selected`).textContent).toBe('')
     }
   })
 })

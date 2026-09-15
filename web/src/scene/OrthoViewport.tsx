@@ -24,7 +24,7 @@ import { RadiiOverlays } from './RadiiOverlays'
 import { useSceneResourcesContext } from './SceneResourcesContext'
 import { SelectionHighlight } from './SelectionHighlight'
 import { SelectionMarkers } from './SelectionMarkers'
-import { canSelectBrushTap, pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapSelection } from './selection'
+import { canSelectBrushTap, pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapAction } from './selection'
 import type { Ray } from './selection'
 import type { ShadingMode } from './shadingMode'
 import { usesUnlitMaterials } from './shadingMode'
@@ -107,6 +107,9 @@ export interface OrthoViewportProps {
   axis: OrthoAxis
   selectedNames: ReadonlySet<string>
   onSelectActor: (name: string, additive: boolean) => void
+  // A tap that hits nothing selectable deselects everything (owner ruling 2026-09-15) -- see
+  // Viewport3D.tsx's identical prop doc.
+  onDeselect: () => void
   // `F`-frame (Part 3, Task 15): a new (higher `seq`) request recenters `pose.center` on the bbox
   // and fits its extent on THIS axis's screen plane.
   frameRequest?: FrameRequest | null
@@ -129,6 +132,7 @@ export function OrthoViewport({
   axis,
   selectedNames,
   onSelectActor,
+  onDeselect,
   frameRequest = null,
   mode = 'wireframe',
   showGrid = true,
@@ -206,14 +210,18 @@ export function OrthoViewport({
         const aabbCandidates = mode === 'wireframe' ? actors.filter((a) => !a.brush) : actors
         hitActor = pickActor(ray, aabbCandidates)
       }
+      // Capture the raw hit-test result BEFORE the gate below, same as Viewport3D.tsx -- see
+      // `resolveTapAction`'s doc comment for why both are needed.
+      const rawHit = hitActor
       // Ortho panes are always wireframe (locked, see shadingMode.ts's canChangeMode), so this is
       // always a no-Shift-needed plain tap -- routed through the same gate as Viewport3D's for
       // symmetry (see `selection.ts`'s `canSelectBrushTap`).
       if (hitActor?.brush && !canSelectBrushTap(mode, shiftKey)) hitActor = null
-      const result = resolveTapSelection(hitActor, additive)
-      if (result) onSelectActor(result.name, result.additive)
+      const action = resolveTapAction(rawHit, hitActor, additive)
+      if (action.kind === 'select') onSelectActor(action.name, action.additive)
+      else if (action.kind === 'deselect') onDeselect()
     },
-    [actors, triangleOwners, onSelectActor, mode],
+    [actors, triangleOwners, onSelectActor, onDeselect, mode],
   )
 
   const dragCallbacks = useMemo<DragGestureCallbacks>(

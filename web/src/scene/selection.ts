@@ -45,17 +45,31 @@ export function resolveSegmentHitActor(
   return actors.find((a) => a.name === name) ?? null
 }
 
+export type TapAction =
+  | { kind: 'select'; name: string; additive: boolean }
+  | { kind: 'deselect' }
+  | { kind: 'none' }
+
 /** The tap-resolution decision Viewport3D/OrthoViewport's `performTapSelect` both make once they've
- * found (or not found) a hit actor (quad-layout Part 3, Task 13): a real hit calls `onSelectActor`
- * with the actor's name and the `additive` flag threaded through from the drag gesture's Ctrl/Cmd
- * state; a MISS is a true no-op (spec §9's deliberate behavior change -- a tap that hits nothing no
- * longer clears the selection, `Esc` is the only deselect path). Pulled out as a pure, tiny function
- * so this exact decision is testable without a WebGL raycast. */
-export function resolveTapSelection(
-  hitActor: SceneActor | null,
+ * run the hit-test pipeline (quad-layout Part 3, Task 13; deselect-on-miss added by owner ruling
+ * 2026-09-15, reversing spec §9's earlier "Esc is the only deselect path"). Two hit-test results feed
+ * it: `rawHit` is whatever the raycast+AABB pipeline found BEFORE `canSelectBrushTap`'s Shift gate;
+ * `gatedHit` is the same value AFTER that gate (null if the gate rejected it). Three outcomes:
+ * - `gatedHit` is real -> `'select'` (the actor's name + the `additive` flag threaded from the drag
+ *   gesture's Ctrl/Cmd state).
+ * - `gatedHit` is null but `rawHit` was real -> `'none'`: the tap landed on something (a brush the
+ *   Shift gate rejected), so it is absorbed rather than wiping the current selection -- a plain click
+ *   used only to disambiguate from camera-fly must not also clear an existing selection.
+ * - `rawHit` is null too -> `'deselect'`: a genuine miss, clicked empty space.
+ * Pulled out as a pure, tiny function so this exact decision is testable without a WebGL raycast. */
+export function resolveTapAction(
+  rawHit: SceneActor | null,
+  gatedHit: SceneActor | null,
   additive: boolean,
-): { name: string; additive: boolean } | null {
-  return hitActor ? { name: hitActor.name, additive } : null
+): TapAction {
+  if (gatedHit) return { kind: 'select', name: gatedHit.name, additive }
+  if (!rawHit) return { kind: 'deselect' }
+  return { kind: 'none' }
 }
 
 export interface Ray {

@@ -7,7 +7,7 @@ import {
   pickActor,
   rayAabbIntersect,
   resolveHitActor,
-  resolveTapSelection,
+  resolveTapAction,
 } from './selection'
 
 function actor(name: string, lo: [number, number, number], hi: [number, number, number]): SceneActor {
@@ -103,23 +103,31 @@ describe('resolveHitActor', () => {
   })
 })
 
-describe('resolveTapSelection', () => {
+describe('resolveTapAction', () => {
   const hit = actor('Hit', [-1, -1, -1], [1, 1, 1])
+  const other = actor('Other', [-1, -1, -1], [1, 1, 1])
 
   // Quad-layout Part 3, Task 13: a plain tap on a hit actor selects it non-additively; a Ctrl-tap
-  // selects it additively; a tap that hits NOTHING is a true no-op (the deliberate behavior change
-  // from Slice 1's click-away-to-deselect -- Esc, not a miss, is now the only deselect path).
-  it('a plain tap on a hit actor resolves to (name, additive=false)', () => {
-    expect(resolveTapSelection(hit, false)).toEqual({ name: 'Hit', additive: false })
+  // selects it additively.
+  it('a plain tap on a hit actor selects it non-additively', () => {
+    expect(resolveTapAction(hit, hit, false)).toEqual({ kind: 'select', name: 'Hit', additive: false })
   })
 
-  it('a Ctrl-tap on a hit actor resolves to (name, additive=true)', () => {
-    expect(resolveTapSelection(hit, true)).toEqual({ name: 'Hit', additive: true })
+  it('a Ctrl-tap on a hit actor selects it additively', () => {
+    expect(resolveTapAction(hit, hit, true)).toEqual({ kind: 'select', name: 'Hit', additive: true })
   })
 
-  it('a tap that hits nothing resolves to null, regardless of additive', () => {
-    expect(resolveTapSelection(null, false)).toBeNull()
-    expect(resolveTapSelection(null, true)).toBeNull()
+  // Owner ruling 2026-09-15, reversing spec §9's earlier "Esc is the only deselect path": a tap that
+  // hits NOTHING at all now deselects everything.
+  it('a tap that hits nothing at all deselects, regardless of additive', () => {
+    expect(resolveTapAction(null, null, false)).toEqual({ kind: 'deselect' })
+    expect(resolveTapAction(null, null, true)).toEqual({ kind: 'deselect' })
+  })
+
+  // A brush hit the Shift gate rejected (canSelectBrushTap) is NOT a miss -- the tap landed on
+  // something, it's just not selectable without Shift, so it must not wipe the existing selection.
+  it('a hit that a gate rejected (rawHit set, gatedHit null) is absorbed, not a deselect', () => {
+    expect(resolveTapAction(other, null, false)).toEqual({ kind: 'none' })
   })
 })
 

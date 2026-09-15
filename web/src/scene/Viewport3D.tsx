@@ -32,7 +32,7 @@ import {
   pickActor,
   resolveHitActor,
   resolveSegmentHitActor,
-  resolveTapSelection,
+  resolveTapAction,
 } from './selection'
 import type { Ray } from './selection'
 import { computeTwoFingerDelta } from './touchGesture'
@@ -195,6 +195,10 @@ export interface Viewport3DProps {
   lightmap: LightmapPayload | null
   selectedNames: ReadonlySet<string>
   onSelectActor: (name: string, additive: boolean) => void
+  // A tap that hits nothing selectable deselects everything (owner ruling 2026-09-15) -- the same
+  // callback QuadLayout already wires to SelectionKeys' `Esc` handler, so a miss and `Esc` land on
+  // one shared deselect path rather than two.
+  onDeselect: () => void
   // `F`-frame (Part 3, Task 15): a new (higher `seq`) request retargets the camera to fit `bbox`,
   // keeping the current viewing angle (pitch/yaw) and backing the position off far enough along it.
   frameRequest?: FrameRequest | null
@@ -222,6 +226,7 @@ export function Viewport3D({
   scene,
   selectedNames,
   onSelectActor,
+  onDeselect,
   frameRequest = null,
   mode = 'lit',
   showRadii = false,
@@ -360,15 +365,20 @@ export function Viewport3D({
         const aabbCandidates = mode === 'wireframe' ? scene.actors.filter((a) => !a.brush) : scene.actors
         hitActor = pickActor(ray, aabbCandidates)
       }
+      // Capture the raw hit-test result BEFORE the Shift gate below -- `resolveTapAction` needs both
+      // (a click that actually landed on a brush, just rejected for lack of Shift, must leave the
+      // current selection alone; only a tap that hit NOTHING at all deselects).
+      const rawHit = hitActor
       // Wireframe mode: plain tap selects a brush directly. Non-wireframe (unlit/flat/lit): plain
       // LMB-drag is camera-fly (dolly+turn), so a brush hit needs Shift held to disambiguate a
       // selection tap from that (`selection.ts`'s `canSelectBrushTap`). A point-actor hit is
       // unaffected either way.
       if (hitActor?.brush && !canSelectBrushTap(mode, shiftKey)) hitActor = null
-      const result = resolveTapSelection(hitActor, additive)
-      if (result) onSelectActor(result.name, result.additive)
+      const action = resolveTapAction(rawHit, hitActor, additive)
+      if (action.kind === 'select') onSelectActor(action.name, action.additive)
+      else if (action.kind === 'deselect') onDeselect()
     },
-    [scene.actors, triangleOwners, onSelectActor, mode],
+    [scene.actors, triangleOwners, onSelectActor, onDeselect, mode],
   )
 
   // Mouse-only pointer-lock/capture/tap-vs-drag plumbing, shared with ortho panes (Part 0, Task 4).

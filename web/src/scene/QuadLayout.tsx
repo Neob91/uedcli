@@ -201,6 +201,7 @@ export function QuadLayout({
                 lightmap={lightmap}
                 selectedNames={selectedNames}
                 onSelectActor={onSelectActor}
+                onDeselect={onDeselect}
                 frameRequest={frameRequest}
                 mode={resolveEffectiveMode(modes[pane], buildSolved)}
                 showRadii={showRadii}
@@ -210,6 +211,7 @@ export function QuadLayout({
                 axis={pane}
                 selectedNames={selectedNames}
                 onSelectActor={onSelectActor}
+                onDeselect={onDeselect}
                 frameRequest={frameRequest}
                 mode={resolveEffectiveMode(modes[pane], buildSolved)}
                 showGrid={showGrid}
