@@ -1,6 +1,6 @@
 // Typed client for uedcli serve's backend (uedcli/serve/app.py). Mirrors the JSON shapes those
 // routes return field-for-field — see uedcli/serve/scene.py (ScenePoly/SceneActor), textures.py
-// (the atlas manifest), and app.py's /ws reload message.
+// (the atlas manifest), and app.py's /ws "changes_available" message.
 
 /** A lit surf's world-space lumel-sampling frame (uedcli/serve/scene.py::LightmapFrame). A lumel's
  * world position is `origin + u_step*u + v_step*v`; the client derives a per-vertex lumel UV from
@@ -67,6 +67,10 @@ export interface SceneActor {
 export interface ScenePayload {
   polys: ScenePoly[]
   actors: SceneActor[]
+  // True once an explicit Rebuild has pinned solved geometry this session (else a cold-open/
+  // no-Rebuild-yet response: `polys` is genuinely empty, not an error -- uedcli/serve/app.py's
+  // `scene` route).
+  geometry_pinned: boolean
 }
 
 export interface AtlasRect {
@@ -94,9 +98,23 @@ export interface LightmapPayload {
   png_base64: string
 }
 
-export interface ReloadMessage {
-  type: 'reload'
+// gui-explicit-rebuild spec §2: the ONLY push this socket ever sends -- a banner/badge signal for
+// an explicit Load, never an instruction to auto-refetch (see reload.ts). Supersedes the old
+// `"reload"` message type this client used to auto-refetch on.
+export interface ChangesAvailableMessage {
+  type: 'changes_available'
   level: string
+}
+
+/** `GET /api/level/{level}/status` (uedcli/serve/app.py `status`): whether a settled trunk change
+ * is waiting on an explicit Load, and whether solved geometry is currently pinned (and if not,
+ * why). `build_status` is `'built'` whenever `geometry_pinned`; `'no_build'` if geometry was never
+ * populated (fresh open, no on-disk pointer either); `'evicted'` if an on-disk pointer exists but
+ * the cache entry it names is gone. */
+export interface StatusPayload {
+  changes_available: boolean
+  geometry_pinned: boolean
+  build_status: 'no_build' | 'evicted' | 'built'
 }
 
 /** The backend's structured error body: `{"error": "<offending-value message>"}` (never a bare
@@ -105,8 +123,8 @@ interface ErrorBody {
   error?: string
 }
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const res = await fetch(url)
+async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await (init ? fetch(url, init) : fetch(url))
   if (!res.ok) {
     let message = res.statusText
     try {
@@ -121,26 +139,56 @@ async function fetchJson<T>(url: string): Promise<T> {
 }
 
 export function fetchScene(level: string): Promise<ScenePayload> {
-  return fetchJson<ScenePayload>(`/api/level/${encodeURIComponent(level)}/scene`)
+  return request<ScenePayload>(`/api/level/${encodeURIComponent(level)}/scene`)
 }
 
 export function fetchAtlas(level: string): Promise<AtlasPayload> {
-  return fetchJson<AtlasPayload>(`/api/level/${encodeURIComponent(level)}/atlas`)
+  return request<AtlasPayload>(`/api/level/${encodeURIComponent(level)}/atlas`)
 }
 
 export function fetchLightmap(level: string): Promise<LightmapPayload> {
-  return fetchJson<LightmapPayload>(`/api/level/${encodeURIComponent(level)}/lightmap`)
+  return request<LightmapPayload>(`/api/level/${encodeURIComponent(level)}/lightmap`)
 }
 
-/** Open the live-reload WebSocket and call `onReload` for every settled trunk-change push
- * (uedcli/serve/watch.py's debounced TrunkWatcher). Returns the socket so the caller can close it
- * on unmount. */
-export function openReloadSocket(onReload: (msg: ReloadMessage) => void): WebSocket {
+export function fetchStatus(level: string): Promise<StatusPayload> {
+  return request<StatusPayload>(`/api/level/${encodeURIComponent(level)}/status`)
+}
+
+/** The explicit Load action (gui-explicit-rebuild spec §2): re-reads the trunk and clears the
+ * server's `changes_available` flag. Does NOT solve geometry -- see `postRebuild`. */
+export function postLoad(level: string): Promise<{ status: string }> {
+  return request(`/api/level/${encodeURIComponent(level)}/load`, { method: 'POST' })
+}
+
+/** The explicit Rebuild action (spec §3): the only thing that ever runs the ~24s CSG+lighting
+ * solve. Resolves once the new geometry is pinned server-side. */
+export function postRebuild(level: string): Promise<{ status: string; geom_hash: string | null; light_hash: string | null }> {
+  return request(`/api/level/${encodeURIComponent(level)}/rebuild`, { method: 'POST' })
+}
+
+export interface LevelState {
+  scene: ScenePayload
+  atlas: AtlasPayload
+  lightmap: LightmapPayload
+}
+
+/** Fetches scene+atlas+lightmap together -- the one shape every full-refresh call site (initial
+ * open, post-Load, post-Rebuild) needs. */
+export async function fetchLevelState(level: string): Promise<LevelState> {
+  const [scene, atlas, lightmap] = await Promise.all([fetchScene(level), fetchAtlas(level), fetchLightmap(level)])
+  return { scene, atlas, lightmap }
+}
+
+/** Opens the live "changes available" WebSocket and calls `onChanged` for every settled trunk
+ * change push (uedcli/serve/watch.py's debounced TrunkWatcher). Returns the socket so the caller
+ * can close it on unmount. This is a banner signal ONLY -- the caller decides what, if anything,
+ * to refetch (gui-explicit-rebuild spec §2: no silent auto-reload). */
+export function openChangesAvailableSocket(onChanged: (msg: ChangesAvailableMessage) => void): WebSocket {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
   const ws = new WebSocket(`${proto}://${window.location.host}/ws`)
   ws.addEventListener('message', (event: MessageEvent<string>) => {
-    const msg = JSON.parse(event.data) as ReloadMessage
-    if (msg.type === 'reload') onReload(msg)
+    const msg = JSON.parse(event.data) as ChangesAvailableMessage
+    if (msg.type === 'changes_available') onChanged(msg)
   })
   return ws
 }

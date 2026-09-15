@@ -43,7 +43,7 @@ body {
 
 .updating-badge {
   position: absolute;
-  top: 8px;
+  top: 44px;
   left: 8px;
   z-index: 1;
   padding: 2px 8px;
@@ -51,6 +51,82 @@ body {
   background: rgba(0, 0, 0, 0.6);
   color: #e5e4e7;
   font-size: 12px;
+}
+
+/* A failed Load/Rebuild -- a dismissable banner, never the full-page `.status-message` treatment,
+   since the still-good scene stays on screen underneath it (review finding). */
+.build-error-banner {
+  position: absolute;
+  top: 44px;
+  left: 8px;
+  right: 8px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: rgba(90, 20, 20, 0.85);
+  color: #f87171;
+  font-size: 12px;
+}
+
+.build-error-banner button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
+.build-toolbar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.6);
+  border-bottom: 1px solid #2e303a;
+}
+
+.build-toolbar button {
+  font: inherit;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid #4b4e5c;
+  background: #2a2c35;
+  color: #e5e4e7;
+  cursor: pointer;
+}
+
+.build-toolbar button:hover:not(:disabled) {
+  background: #363946;
+}
+
+.build-toolbar button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.build-toolbar .build-status {
+  color: #9ca3af;
+  font-size: 12px;
+}
+
+.build-toolbar .changes-badge {
+  color: #16171d;
+  background: #f5b942;
+  border-radius: 4px;
+  padding: 2px 8px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .inspector-pane {

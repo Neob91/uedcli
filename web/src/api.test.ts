@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { fetchAtlas, fetchLightmap, fetchScene } from './api'
+import { fetchAtlas, fetchLightmap, fetchScene, fetchStatus, postLoad, postRebuild } from './api'
 
 describe('fetchScene', () => {
   it('returns the typed payload from /api/level/<level>/scene', async () => {
@@ -32,6 +32,7 @@ describe('fetchScene', () => {
           props: [['CsgOper', 'CSG_Subtract']],
         },
       ],
+      geometry_pinned: true,
     }
     globalThis.fetch = vi.fn(
       async () => new Response(JSON.stringify(payload), { status: 200 }),
@@ -88,5 +89,54 @@ describe('fetchLightmap', () => {
 
     expect(got).toEqual(payload)
     expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/lightmap')
+  })
+})
+
+describe('fetchStatus', () => {
+  it('returns the typed status payload', async () => {
+    const payload = { changes_available: true, geometry_pinned: false, build_status: 'no_build' }
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify(payload), { status: 200 }),
+    ) as unknown as typeof fetch
+
+    const got = await fetchStatus('TestLevel')
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/status')
+  })
+})
+
+describe('postLoad', () => {
+  it('POSTs to the load route', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
+    ) as unknown as typeof fetch
+
+    const got = await postLoad('TestLevel')
+
+    expect(got).toEqual({ status: 'ok' })
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/load', { method: 'POST' })
+  })
+})
+
+describe('postRebuild', () => {
+  it('POSTs to the rebuild route', async () => {
+    const payload = { status: 'ok', geom_hash: null, light_hash: null }
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify(payload), { status: 200 }),
+    ) as unknown as typeof fetch
+
+    const got = await postRebuild('TestLevel')
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/rebuild', { method: 'POST' })
+  })
+
+  it('rejects with the backend structured-error message on a non-2xx response', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ error: 'level not found: \'bogus\'' }), { status: 422 }),
+    ) as unknown as typeof fetch
+
+    await expect(postRebuild('bogus')).rejects.toThrow("level not found: 'bogus'")
   })
 })

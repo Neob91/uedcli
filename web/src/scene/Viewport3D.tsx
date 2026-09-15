@@ -29,22 +29,36 @@ import type { TouchPoint } from './touchGesture'
 
 const INITIAL_POSE: CameraPose = { position: [0, -500, 200], pitch: -10, yaw: 90 }
 
-/** Extracts one `THREE.Texture` per atlas entry, keyed by `tex_index`, by drawing that entry's rect
+/** Extracts two `THREE.Texture`s per atlas entry, keyed by `tex_index`, by drawing that entry's rect
  * out of the atlas image onto its own canvas -- so each texture can tile with RepeatWrapping (a
- * shared atlas can't repeat past a tile boundary; bug A). NearestFilter matches the low-res look;
- * `flipY=false` keeps the atlas's image-row UV convention (V grows downward). Every live-reload
- * swaps `atlas` and rebuilds the map, disposing the previous textures so nothing leaks; `currentRef`
- * tracks what's live for the unmount / lost-race cleanup too. */
-function useTextures(atlas: AtlasPayload): Map<number, THREE.Texture> {
-  const [textures, setTextures] = useState<Map<number, THREE.Texture>>(() => new Map())
-  const currentRef = useRef<Map<number, THREE.Texture>>(new Map())
+ * shared atlas can't repeat past a tile boundary; bug A). NearestFilter matches the low-res look.
+ *
+ * `map` (world-poly base textures) sets `flipY=false` to keep the atlas's image-row UV convention
+ * (V grows downward) -- `geometry.ts`'s `polyUVs` computes V in that SAME convention, so the two
+ * agree. `sprite` (point-actor billboards, `<sprite>`'s built-in plane UVs -- (0,0) at the bottom
+ * corner, standard flipY=true orientation) keeps three.js's DEFAULT `flipY=true`: a `THREE.Sprite`
+ * has no custom UV geometry to compensate for `flipY=false` the way world polys do, so sharing the
+ * `map` texture with a sprite renders it upside-down (bug: "sprites are rendered inverted"). Both
+ * textures share the SAME canvas pixels, drawn once, so this costs one extra `CanvasTexture` wrapper
+ * per atlas entry, not a second draw. Every live-reload swaps `atlas` and rebuilds both maps,
+ * disposing the previous textures so nothing leaks; `currentRef` tracks what's live for the unmount
+ * / lost-race cleanup too. */
+function useTextures(atlas: AtlasPayload): { map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> } {
+  const [textures, setTextures] = useState<{ map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> }>(
+    () => ({ map: new Map(), sprite: new Map() }),
+  )
+  const currentRef = useRef<{ map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> }>({
+    map: new Map(),
+    sprite: new Map(),
+  })
 
   useEffect(() => {
     let disposed = false
     const img = new Image()
     img.onload = () => {
       if (disposed) return
-      const next = new Map<number, THREE.Texture>()
+      const nextMap = new Map<number, THREE.Texture>()
+      const nextSprite = new Map<number, THREE.Texture>()
       for (const [key, rect] of Object.entries(atlas.manifest)) {
         const canvas = document.createElement('canvas')
         canvas.width = rect.w
@@ -52,18 +66,26 @@ function useTextures(atlas: AtlasPayload): Map<number, THREE.Texture> {
         const ctx = canvas.getContext('2d')
         if (!ctx) continue
         ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h)
-        const tex = new THREE.CanvasTexture(canvas)
-        tex.wrapS = THREE.RepeatWrapping
-        tex.wrapT = THREE.RepeatWrapping
-        tex.magFilter = THREE.NearestFilter
-        tex.minFilter = THREE.NearestFilter
-        tex.flipY = false
-        tex.needsUpdate = true
-        next.set(Number(key), tex)
+
+        const mapTex = new THREE.CanvasTexture(canvas)
+        mapTex.wrapS = THREE.RepeatWrapping
+        mapTex.wrapT = THREE.RepeatWrapping
+        mapTex.magFilter = THREE.NearestFilter
+        mapTex.minFilter = THREE.NearestFilter
+        mapTex.flipY = false
+        mapTex.needsUpdate = true
+        nextMap.set(Number(key), mapTex)
+
+        const spriteTex = new THREE.CanvasTexture(canvas)
+        spriteTex.magFilter = THREE.NearestFilter
+        spriteTex.minFilter = THREE.NearestFilter
+        spriteTex.needsUpdate = true // flipY stays the THREE.Texture default (true)
+        nextSprite.set(Number(key), spriteTex)
       }
-      currentRef.current.forEach((t) => t.dispose())
-      currentRef.current = next
-      setTextures(next)
+      currentRef.current.map.forEach((t) => t.dispose())
+      currentRef.current.sprite.forEach((t) => t.dispose())
+      currentRef.current = { map: nextMap, sprite: nextSprite }
+      setTextures(currentRef.current)
     }
     img.src = `data:image/png;base64,${atlas.png_base64}`
     return () => {
@@ -73,8 +95,9 @@ function useTextures(atlas: AtlasPayload): Map<number, THREE.Texture> {
 
   useEffect(() => {
     return () => {
-      currentRef.current.forEach((t) => t.dispose()) // unmount: release whatever's still held
-      currentRef.current = new Map()
+      currentRef.current.map.forEach((t) => t.dispose()) // unmount: release whatever's still held
+      currentRef.current.sprite.forEach((t) => t.dispose())
+      currentRef.current = { map: new Map(), sprite: new Map() }
     }
   }, [])
 
@@ -280,8 +303,20 @@ const MARKER_COLOR_THREE = new THREE.Color(...MARKER_COLOR)
 /** One brush poly ring, drawn as a closed line loop in the brush's own CSG colour. A tiny
  * standalone component (rather than inline JSX) so its `BufferGeometry` is built once per ring via
  * `useMemo`/disposed via `useEffect`, matching how `bufferGeometry`/textures are disposed elsewhere
- * in this file. */
-function BrushRingOutline({ verts, color }: { verts: number[]; color: THREE.Color }) {
+ * in this file. `depthTest=false` (the selection-highlight use) draws always-on-top, matching
+ * `preview.py`'s `--highlight` (bolder, ignores facing/depth); the plain per-actor wireframe below
+ * uses the default `depthTest=true` so brushes properly occlude each other in 3D. */
+function BrushRingOutline({
+  verts,
+  color,
+  linewidth = 2,
+  depthTest = true,
+}: {
+  verts: number[]
+  color: THREE.Color
+  linewidth?: number
+  depthTest?: boolean
+}) {
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
@@ -294,7 +329,7 @@ function BrushRingOutline({ verts, color }: { verts: number[]; color: THREE.Colo
 
   return (
     <lineLoop geometry={geometry}>
-      <lineBasicMaterial color={color} linewidth={2} depthTest={false} />
+      <lineBasicMaterial color={color} linewidth={linewidth} depthTest={depthTest} />
     </lineLoop>
   )
 }
@@ -302,7 +337,9 @@ function BrushRingOutline({ verts, color }: { verts: number[]; color: THREE.Colo
 /** Selection outline: a brush actor's own AUTHORED polys (pre-CSG, world-transformed server-side,
  * `SceneActor.brush`), drawn in its CSG-classified colour -- matching `actor diagram --mode wire
  * --highlight`, NOT the CSG-solved `ScenePayload.polys`. A non-brush actor (no `brush`, out of
- * scope for this task) falls back to the plain AABB box, same as before. */
+ * scope for this task) falls back to the plain AABB box, same as before. Always on top
+ * (`depthTest=false`) and bolder than `AllBrushWireframes`' ordinary weight, matching
+ * `preview.py`'s "a highlighted poly draws in its brush's vivid front hue with a bolder line". */
 function SelectionHighlight({ actor, box }: { actor: SceneActor | null; box: THREE.Box3 | null }) {
   const color = useMemo(() => {
     const rgb = actor?.brush?.color
@@ -315,8 +352,31 @@ function SelectionHighlight({ actor, box }: { actor: SceneActor | null; box: THR
   return (
     <group>
       {actor.brush.polys.map((verts, i) => (
-        <BrushRingOutline key={i} verts={verts} color={color} />
+        <BrushRingOutline key={i} verts={verts} color={color} linewidth={3} depthTest={false} />
       ))}
+    </group>
+  )
+}
+
+/** Every OTHER brush actor's own authored shape, in its CSG-classified colour at ordinary weight --
+ * `actor diagram`'s ISO-mode convention (every brush wireframe-colours by CSG op, not just the
+ * selected one) ported to the 3D viewport. Only drawn when there's no solved geometry to show
+ * instead (`scene.polys` empty -- `uedcli/serve/scene.py`'s `build_wireframe_payload` always
+ * returns an empty `polys` list, so this is exactly the cold-open/no-Rebuild-yet case): once a
+ * Rebuild pins real CSG'd geometry, that textured/lit mesh already renders every brush's
+ * contribution, and drawing the authored shape on top of it would be redundant. The SELECTED actor
+ * is excluded here -- `SelectionHighlight` above already draws it, bolder and always-on-top. */
+function AllBrushWireframes({ actors, selectedName }: { actors: SceneActor[]; selectedName: string | null }) {
+  return (
+    <group>
+      {actors.map((actor) => {
+        if (!actor.brush || actor.name === selectedName) return null
+        const [r, g, b] = actor.brush.color
+        const color = new THREE.Color(r / 255, g / 255, b / 255)
+        return actor.brush.polys.map((verts, i) => (
+          <BrushRingOutline key={`${actor.name}-${i}`} verts={verts} color={color} />
+        ))
+      })}
     </group>
   )
 }
@@ -408,7 +468,7 @@ export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSele
       const key = `${group.texIndex}:${group.masked ? 1 : 0}:${group.twoSided ? 1 : 0}:${group.blend}:${lit ? 1 : 0}`
       let index = matIndex.get(key)
       if (index === undefined) {
-        const map = group.texIndex >= 0 ? (textures.get(group.texIndex) ?? null) : null
+        const map = group.texIndex >= 0 ? (textures.map.get(group.texIndex) ?? null) : null
         const params: THREE.MeshBasicMaterialParameters = {
           vertexColors: true,
           ...resolveMaterialState(group), // cull side + alphaTest + blend, from the resolved attrs
@@ -638,8 +698,10 @@ export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSele
             // rect, cropped by `useTextures` above) at its own world-space footprint, untinted --
             // the actual sprite's colours, not a class-coloured guess. Falls back to the generic
             // grey dot (`markerTexture`/`MARKER_COLOR_THREE`) when there's no sprite, or the atlas
-            // texture for it isn't in `textures` yet (e.g. mid-load).
-            const spriteTex = actor.sprite ? textures.get(actor.sprite.tex_index) : undefined
+            // texture for it isn't in `textures.sprite` yet (e.g. mid-load). Deliberately the
+            // SPRITE map, not the base `textures.map` -- see `useTextures`'s docstring for why
+            // sharing the base (flipY=false) texture here renders the billboard upside-down.
+            const spriteTex = actor.sprite ? textures.sprite.get(actor.sprite.tex_index) : undefined
             if (actor.sprite && spriteTex) {
               return (
                 <sprite
@@ -665,6 +727,7 @@ export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSele
             )
           })}
         </group>
+        {!scene.geometry_pinned && <AllBrushWireframes actors={scene.actors} selectedName={selectedName} />}
         <SelectionHighlight actor={selectedActor} box={selectionBox} />
       </Canvas>
     </div>
