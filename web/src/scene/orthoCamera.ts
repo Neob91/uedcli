@@ -57,13 +57,31 @@ export function orthoPan(pose: OrthoPose, axis: OrthoAxis, dxPx: number, dyPx: n
 // large zoomed-out scale overshoot to a negative/zero span.
 const ZOOM_NOTCH_PX = 120
 
+// Max zoom-OUT: UE1's real world extent is +/-32768 UU (`preview.py`'s own `_GRID_WORLD_CLAMP` --
+// line/geometry coordinates never range past this in any real level). Past the point where that
+// whole 65536 UU span already fits on screen, zooming out further shows nothing but empty space --
+// and, measured live, pushes `worldUnitsPerPixel` into a range where the grid's own line geometry
+// silently stops rendering (WebGL/float32 precision loss at extreme scale, GUI bug report item 2).
+// The ceiling is picked so the full extent still fits even in a small resized pane (128px) -- no
+// pane can ever usefully need to show more world than that.
+const MAX_WORLD_UNITS_PER_PIXEL = (2 * 32768) / 128 // 512 UU/px
+
+// Max zoom-IN floor: sub-UU-per-pixel precision has no practical use (T3D coordinates and UnrealEd's
+// own grid never resolve finer than whole UU), and the same extreme-scale precision loss noted above
+// applies in this direction too -- measured live, the grid vanishes well before this floor is
+// reached, so 0.01 (1 UU spans 100 screen pixels) leaves a wide, confirmed-safe margin.
+const MIN_WORLD_UNITS_PER_PIXEL = 0.01
+
 /** Scroll-wheel zoom: scales `worldUnitsPerPixel` exponentially by the wheel delta (positive
  * `wheelDeltaY`, i.e. scroll down/away, ZOOMS OUT -- matches `camera.ts`'s `zoom`'s sign
  * convention, where a positive delta dollies the camera backward). `center` is unchanged --
  * ortho zoom is a pure scale around the current view center, no dolly needed since there's no
- * camera position to move along an axis. */
+ * camera position to move along an axis. Clamped to `[MIN_WORLD_UNITS_PER_PIXEL,
+ * MAX_WORLD_UNITS_PER_PIXEL]` -- unclamped, a long scroll can zoom out or in without limit (GUI bug
+ * report item 3). */
 export function orthoZoom(pose: OrthoPose, wheelDeltaY: number): OrthoPose {
-  const worldUnitsPerPixel = pose.worldUnitsPerPixel * Math.pow(2, wheelDeltaY / ZOOM_NOTCH_PX)
+  const raw = pose.worldUnitsPerPixel * Math.pow(2, wheelDeltaY / ZOOM_NOTCH_PX)
+  const worldUnitsPerPixel = Math.min(MAX_WORLD_UNITS_PER_PIXEL, Math.max(MIN_WORLD_UNITS_PER_PIXEL, raw))
   return { center: pose.center, worldUnitsPerPixel }
 }
 

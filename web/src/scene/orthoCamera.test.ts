@@ -58,6 +58,24 @@ describe('orthoZoom', () => {
     const pose: OrthoPose = { center: [1, 2, 3], worldUnitsPerPixel: 4 }
     expect(orthoZoom(pose, 60).center).toEqual([1, 2, 3])
   })
+
+  // Regression (GUI bug report item 3): unclamped, a long scroll zoomed out/in without limit --
+  // and past a certain scale, the grid's own line geometry silently stopped rendering (bug 2,
+  // measured live to be a WebGL/float32 precision issue at extreme worldUnitsPerPixel).
+  it('clamps zoom-out at the max (UE1 world-extent-derived) ceiling', () => {
+    const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 400 }
+    expect(orthoZoom(pose, 1_000_000).worldUnitsPerPixel).toBe(512)
+  })
+
+  it('clamps zoom-in at the min floor', () => {
+    const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 0.02 }
+    expect(orthoZoom(pose, -1_000_000).worldUnitsPerPixel).toBe(0.01)
+  })
+
+  it('does not clamp a zoom that stays within range', () => {
+    const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 4 }
+    expect(orthoZoom(pose, 120).worldUnitsPerPixel).toBeCloseTo(8)
+  })
 })
 
 describe('screenToWorld', () => {
