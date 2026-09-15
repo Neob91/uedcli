@@ -59,6 +59,7 @@ export interface SceneActor {
   labels: string[]
   order_value: string
   props: [string, string][] // the raw stored T3D property list, for the inspector's raw-props view
+  categories: string[] // parallel to props: categories[i] is the UnrealEd category of props[i]
   brush: BrushHighlight | null // selection-highlight geometry; null for a non-brush actor
   sprite: ActorSprite | null // resolved DT_Sprite billboard; null -> client draws a generic marker
 }

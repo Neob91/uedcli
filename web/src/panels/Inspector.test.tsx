@@ -2,7 +2,7 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { SceneActor } from '../api'
-import { Inspector } from './Inspector'
+import { groupByCategory, Inspector } from './Inspector'
 
 afterEach(cleanup)
 
@@ -21,6 +21,7 @@ function fixtureActor(overrides: Partial<SceneActor> = {}): SceneActor {
       ['CsgOper', 'CSG_Subtract'],
       ['PolyFlags', '2'],
     ],
+    categories: ['Brush', 'Brush'], // real live-verified mapping for both props (see scene.py's plan)
     brush: null,
     sprite: null,
     ...overrides,
@@ -60,5 +61,74 @@ describe('Inspector', () => {
     expect(screen.getByRole('heading', { name: 'Door' })).toBeTruthy()
     expect(screen.getByText('Engine.Mover')).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Room' })).toBeNull()
+  })
+
+  it('renders one collapsible section per distinct category', () => {
+    render(
+      <Inspector
+        actor={fixtureActor({
+          props: [
+            ['CsgOper', 'CSG_Subtract'],
+            ['Mass', '100'],
+          ],
+          categories: ['Brush', 'Movement'],
+        })}
+      />,
+    )
+    expect(screen.getByText('Brush (1)')).toBeTruthy()
+    expect(screen.getByText('Movement (1)')).toBeTruthy()
+    expect(screen.getByText('CsgOper')).toBeTruthy()
+    expect(screen.getByText('Mass')).toBeTruthy()
+  })
+
+  it('renders a single "Uncategorized" section when every prop falls back', () => {
+    render(
+      <Inspector
+        actor={fixtureActor({
+          props: [
+            ['Brush', "Model'MyLevel.Model_Room'"],
+          ],
+          categories: ['Uncategorized'],
+        })}
+      />,
+    )
+    expect(screen.getByText('Uncategorized (1)')).toBeTruthy()
+    expect(screen.getByText('Brush')).toBeTruthy()
+  })
+})
+
+describe('groupByCategory', () => {
+  it('groups props under their categories, preserving first-occurrence category order', () => {
+    const props: [string, string][] = [
+      ['CsgOper', 'CSG_Subtract'],
+      ['Mass', '100'],
+      ['PolyFlags', '2'],
+    ]
+    const categories = ['Brush', 'Movement', 'Brush']
+    const groups = groupByCategory(props, categories)
+    expect(Array.from(groups.keys())).toEqual(['Brush', 'Movement'])
+    expect(groups.get('Brush')).toEqual([
+      ['CsgOper', 'CSG_Subtract'],
+      ['PolyFlags', '2'],
+    ])
+    expect(groups.get('Movement')).toEqual([['Mass', '100']])
+  })
+
+  it('groups everything under one category when all props share it', () => {
+    const props: [string, string][] = [
+      ['CsgOper', 'CSG_Subtract'],
+      ['PolyFlags', '2'],
+    ]
+    const groups = groupByCategory(props, ['Brush', 'Brush'])
+    expect(Array.from(groups.keys())).toEqual(['Brush'])
+    expect(groups.get('Brush')).toHaveLength(2)
+  })
+
+  it('returns an empty map for empty props', () => {
+    expect(groupByCategory([], [])).toEqual(new Map())
+  })
+
+  it('throws on a props/categories length mismatch', () => {
+    expect(() => groupByCategory([['A', '1']], [])).toThrow()
   })
 })

@@ -116,6 +116,51 @@ def test_build_scene_payload_has_polys_and_actors(tmp_path):
     assert {p.owner for p in payload.polys} == {"Room"}
 
 
+def test_build_scene_payload_categories_stub_index_fallback():
+    """The offline-index fallback path (plan Task 1): `StubClassIndex` has no `.resolver()` at all,
+    so `_class_category_map` returns None and every one of the actor's stored props degrades to
+    `_FALLBACK_CATEGORY` ("Uncategorized") -- never a crash. `build_scene_payload` is pure (Task 3
+    of the shared-cache plan already merged to master), so this hand-builds a minimal
+    `_LoadedTrunk`/`_BuiltGeometry` pair instead of running a real CSG solve -- no geometry is
+    needed to exercise the categorization path. `defaults` is the real UED22 `ClassDefaults`
+    (unrelated to `index`: `_is_hidden_ed` resolves off `defaults`, never `index`), so this isolates
+    the index-only fallback the plan means to test."""
+    from uedcli.serve.scene import _BuiltGeometry, _FALLBACK_CATEGORY, _LoadedTrunk, build_scene_payload
+    from uedcli.tests.conftest import StubClassIndex
+
+    room = cube_room()
+    level = Level(actors={room.name: room}, order=[room.name])
+    trunk_state = _LoadedTrunk(level=level, ranks={room.name: "m"}, folders={room.name: None},
+                               sprite_table=[], actor_sprites={})
+    geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=[], texture_table=[], owners=[])
+
+    payload = build_scene_payload(trunk_state, geometry, StubClassIndex(), DEFAULTS)
+
+    room_actor = next(a for a in payload.actors if a.name == "Room")
+    assert room_actor.props                              # non-empty, else the next assert is vacuous
+    assert len(room_actor.categories) == len(room_actor.props)
+    assert all(c == _FALLBACK_CATEGORY for c in room_actor.categories)
+
+
+def test_build_scene_payload_categories_from_real_schema(tmp_path):
+    """A resolvable class's stored props get their real UnrealEd categories, live-verified against
+    the committed `uned/UED22` corpus. `cube_room()`'s actual stored props are `CsgOper`/`Brush`
+    (`make_brush_actor` only appends `PolyFlags` `if poly_flags:`, default 0 -- `PolyFlags` is never
+    stored). `CsgOper` resolves to `Engine.Brush`'s own bare-`var()` category `"Brush"`; `Brush` is a
+    plain (non-`var()`) property on `Engine.Actor` with no category (`Prop.category is None`), so it
+    falls back to `_FALLBACK_CATEGORY`."""
+    from uedcli.serve.scene import _FALLBACK_CATEGORY, build_scene_payload
+
+    project, level_name = _write_fixture_trunk(tmp_path)
+    index = _ued22_index()
+    trunk_state, geometry = _load_and_build_for(project, level_name, index, DEFAULTS, [])
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+
+    room_actor = next(a for a in payload.actors if a.name == "Room")
+    assert [k for k, _ in room_actor.props] == ["CsgOper", "Brush"]
+    assert room_actor.categories == ["Brush", _FALLBACK_CATEGORY]
+
+
 def test_build_scene_payload_filters_bhiddened_actors_and_keeps_bhidden_ones(tmp_path):
     """Owner ruling 2026-09-14: the GUI hides `bHiddenEd` actors and ignores `bHidden` entirely --
     the opposite of `level photo --native`. Both test actors are bare POINT actors (no brush, no

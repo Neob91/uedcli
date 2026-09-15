@@ -9,7 +9,7 @@ import sys
 from dataclasses import dataclass
 from decimal import Decimal
 
-from .. import uprops
+from .. import typedprops, uprops
 from ..model import Level
 from ..movers import is_mover
 from ..preview import _CSG_PALETTE, classify_brush
@@ -18,6 +18,7 @@ from ..rotation import actor_linear, actor_prepivot, actor_rotation_uu, local_of
 from ..writes import actor_bounds
 
 _ZERO3 = (Decimal(0), Decimal(0), Decimal(0))
+_FALLBACK_CATEGORY = "Uncategorized"    # uedcli's own catch-all bucket -- not a real UnrealEd category
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -96,8 +97,11 @@ class SceneActor:
     """One actor's metadata for the inspector/organization panel — NOT its geometry (a brush
     actor's polys already ride in `ScenePayload.polys`, joined by CSG, not by actor). `props` is
     the actor's raw stored T3D property list (`Actor.props`, `list[(key, raw-text-value)]`) — the
-    read-only inspector's "full raw T3D property set" (spec, "Selection & inspector"). `brush` is
-    the selection-highlight geometry (None for a non-brush actor — a separate task's concern).
+    read-only inspector's "full raw T3D property set" (spec, "Selection & inspector"). `categories`
+    is `props`' parallel UnrealEd category array (`categories[i]` groups `props[i]`; `_actor_categories`)
+    — `_FALLBACK_CATEGORY` ("Uncategorized") for an unresolvable class or an unmatched/schema-`None`
+    prop. `brush` is the selection-highlight geometry (None for a non-brush actor — a separate task's
+    concern).
     `sprite` is None for a brush actor, and for a point actor whose `DT_Sprite` billboard didn't
     resolve — the client then falls back to a generic marker (`markers.ts`)."""
     name: str
@@ -110,6 +114,7 @@ class SceneActor:
     labels: list[str]
     order_value: str
     props: list[tuple[str, str]]
+    categories: list[str]
     brush: BrushHighlight | None
     sprite: ActorSprite | None
 
@@ -232,14 +237,44 @@ def _resolve_hidden_ed(level: Level, defaults) -> dict[str, bool]:
     return hidden_ed
 
 
+def _class_category_map(fqcn: str, index) -> dict[str, str] | None:
+    """`casefold(prop name) -> UnrealEd category` for `fqcn`'s full (own+inherited) schema, or None
+    if the class's schema can't be resolved at all (offline index / missing package) — caller falls
+    back to `_FALLBACK_CATEGORY` for every one of that actor's props rather than failing the payload.
+    `resolve_class_properties` already keeps the most-derived prop on a name collision, matching
+    `class show`'s own convention."""
+    resolver = getattr(index, "resolver", None)
+    if resolver is None:
+        return None
+    try:
+        props = uprops.resolve_class_properties(fqcn, resolver=resolver())
+    except uprops.SchemaError:
+        return None
+    return {p.name.casefold(): (p.category or _FALLBACK_CATEGORY) for p in props}
+
+
+def _actor_categories(props: list[tuple[str, str]],
+                      category_map: dict[str, str] | None) -> list[str]:
+    """`categories[i]` for `props[i]`: `_FALLBACK_CATEGORY` if `category_map` is None (unresolvable
+    class) or the prop's name (index-stripped, `KeyPos(1)` and `KeyPos` share one category) isn't in
+    it."""
+    if category_map is None:
+        return [_FALLBACK_CATEGORY for _ in props]
+    return [category_map.get(typedprops.split_index(key)[0].casefold(), _FALLBACK_CATEGORY)
+            for key, _ in props]
+
+
 def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset: int,
                   index) -> list[SceneActor]:
     """The actor-metadata list (inspector/organization panel + selection highlight + sprite), built
     from `trunk` alone -- shared by both `build_scene_payload` (geometry pinned, `tex_offset =
-    len(geometry.texture_table)`) and `build_wireframe_payload` (no geometry, `tex_offset = 0`)."""
+    len(geometry.texture_table)`) and `build_wireframe_payload` (no geometry, `tex_offset = 0`).
+    `category_maps` memoizes `_class_category_map` per class for this call -- a level can have many
+    actors of one class, so this avoids re-walking the Super chain per actor."""
     level = trunk.level
     ranks = trunk.ranks
     actor_sprites = trunk.actor_sprites
+    category_maps: dict[str, dict[str, str] | None] = {}
     actors = []
     for name in level.order:
         actor = level.actors.get(name)
@@ -251,12 +286,16 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
         if (raw := actor_sprites.get(name)) is not None:
             local_idx, width, height = raw
             sprite = ActorSprite(tex_index=tex_offset + local_idx, width=width, height=height)
+        cls = actor.cls or ""
+        if cls not in category_maps:
+            category_maps[cls] = _class_category_map(cls, index)
         actors.append(SceneActor(
-            name=name, cls=actor.cls or "",
+            name=name, cls=cls,
             bbox_lo=tuple(float(c) for c in lo), bbox_hi=tuple(float(c) for c in hi),
             location=tuple(float(c) for c in loc), rotation=actor_rotation_uu(actor),
             folder=actor.folder, labels=sorted(actor.labels), order_value=ranks.get(name, ""),
-            props=list(actor.props), brush=_brush_highlight(actor, index), sprite=sprite))
+            props=list(actor.props), categories=_actor_categories(actor.props, category_maps[cls]),
+            brush=_brush_highlight(actor, index), sprite=sprite))
     return actors
 
 

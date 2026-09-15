@@ -1,10 +1,35 @@
 // Read-only property inspector (spec, "Selection & inspector"): name/class/transform/folder/
-// labels/order_value, then the full raw T3D property set (collapsible). Draws only what it's
+// labels/order_value, then the full raw T3D property set grouped into UnrealEd-style categories
+// as collapsible sections (SceneActor.categories, parallel to .props). Draws only what it's
 // handed -- no model/diff logic here.
 import type { SceneActor } from '../api'
 
 export interface InspectorProps {
   actor: SceneActor | null
+}
+
+// Groups props[i] under categories[i], preserving first-occurrence category order and
+// within-category prop order (both already stored/T3D order). A length mismatch is a boundary
+// invariant violation (the backend guarantees props.length === categories.length), not a
+// recoverable UI state.
+export function groupByCategory(
+  props: [string, string][],
+  categories: string[],
+): Map<string, [string, string][]> {
+  if (props.length !== categories.length) {
+    throw new Error(`groupByCategory: props.length (${props.length}) !== categories.length (${categories.length})`)
+  }
+  const groups = new Map<string, [string, string][]>()
+  props.forEach((prop, i) => {
+    const category = categories[i]
+    const rows = groups.get(category)
+    if (rows) {
+      rows.push(prop)
+    } else {
+      groups.set(category, [prop])
+    }
+  })
+  return groups
 }
 
 export function Inspector({ actor }: InspectorProps) {
@@ -33,19 +58,21 @@ export function Inspector({ actor }: InspectorProps) {
         <dt>Order</dt>
         <dd>{actor.order_value}</dd>
       </dl>
-      <details>
-        <summary>Raw properties ({actor.props.length})</summary>
-        <table>
-          <tbody>
-            {actor.props.map(([key, value], i) => (
-              <tr key={`${key}-${i}`}>
-                <td>{key}</td>
-                <td>{value}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
+      {Array.from(groupByCategory(actor.props, actor.categories)).map(([category, rows]) => (
+        <details key={category}>
+          <summary>{category} ({rows.length})</summary>
+          <table>
+            <tbody>
+              {rows.map(([key, value], i) => (
+                <tr key={`${key}-${i}`}>
+                  <td>{key}</td>
+                  <td>{value}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      ))}
     </div>
   )
 }

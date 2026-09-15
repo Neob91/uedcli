@@ -15,6 +15,7 @@ function actor(name: string, lo: [number, number, number], hi: [number, number, 
     labels: [],
     order_value: 'm',
     props: [],
+    categories: [],
     brush: null,
     sprite: null,
   }
