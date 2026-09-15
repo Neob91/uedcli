@@ -885,6 +885,56 @@ def _func_prop_type(b: _Build, tr, func_name: str, pname: str) -> tuple[str, int
 _FUNC_KW = r"\b(?:function|event|operator|preoperator|postoperator|delegate)\b"
 
 
+def _mask_lexical_noise(source: str) -> str:
+    """Same-length copy of `source` with every `//`/`/* */` comment and `"..."`/`'...'` literal
+    replaced by spaces (newlines kept as-is, so line counting over the result stays correct) — a
+    regex/whitespace scan over it can't be fooled by comment or string text that happens to look like
+    a declaration, a brace, or a keyword. Mirrors the real lexer's own rules (`lexer.py`
+    `_skip_block_comment` nests `/* */`; `_scan_string`/`_scan_name` stop at the closing quote or an
+    unescaped newline) rather than a narrower ad hoc scan."""
+    n = len(source)
+    out = list(source)
+
+    def blank(a: int, b: int) -> None:
+        for x in range(a, b):
+            if out[x] != "\n":
+                out[x] = " "
+
+    i = 0
+    while i < n:
+        two = source[i:i + 2]
+        if two == "//":
+            end = source.find("\n", i)
+            end = n if end == -1 else end
+            blank(i, end)
+            i = end
+            continue
+        if two == "/*":
+            start, depth, i = i, 1, i + 2
+            while i < n and depth > 0:
+                pair = source[i:i + 2]
+                if pair == "/*":
+                    depth += 1; i += 2
+                elif pair == "*/":
+                    depth -= 1; i += 2
+                else:
+                    i += 1
+            blank(start, i)
+            continue
+        c = source[i]
+        if c == '"' or c == "'":
+            start, i = i, i + 1
+            while i < n and source[i] != c and source[i] != "\n":
+                i += 2 if (c == '"' and source[i] == "\\" and i + 1 < n
+                          and source[i + 1] != "\n") else 1
+            if i < n and source[i] == c:
+                i += 1
+            blank(start, i)
+            continue
+        i += 1
+    return "".join(out)
+
+
 def _function_positions(crlf: str, funcs) -> list[tuple[int, int]]:
     """(Line, TextPos) for each function, in `funcs` order. For a function WITH a body both point at
     its first EXECUTABLE statement — right after the body `{`, skipping whitespace, comments, AND
@@ -892,21 +942,25 @@ def _function_positions(crlf: str, funcs) -> list[tuple[int, int]]:
     its declaration. Line = 1-based source line, TextPos = byte offset into the CRLF ScriptText (RE'd
     2026-09-05 against UCC; verified byte-exact for every UscW/UscFn/FrameBuilder function and UWeb's
     native functions). The declaration is anchored on the `function`/`event`/… keyword (a bare
-    name-`(` substring also matches a CALL to the function, and body-less functions have no `{`)."""
+    name-`(` substring also matches a CALL to the function, and body-less functions have no `{`) --
+    searched against a COMMENT/STRING-MASKED view (`_mask_lexical_noise`) so a duplicate, commented-
+    out declaration earlier in the file (real UT99 `RandomMutators`, two `SplitString`s, the first
+    inside a `/* */` block) can't match ahead of the real one."""
     out: list[tuple[int, int]] = []
+    masked = _mask_lexical_noise(crlf)
     cur = 0
     ws = " \t\r\n"
     for f in funcs:
         namepat = (r"\b" + re.escape(f.name) + r"\b") if (f.name[:1].isalnum() or f.name[:1] == "_") \
             else re.escape(f.name)
-        m = re.compile(_FUNC_KW + r"[^{};]*?" + namepat + r"\s*\(", re.IGNORECASE).search(crlf, cur)
+        m = re.compile(_FUNC_KW + r"[^{};]*?" + namepat + r"\s*\(", re.IGNORECASE).search(masked, cur)
         if m is None:
             raise NotImplementedError(f"could not locate declaration of function {f.name!r} in source "
                                       "for TextPos")
         j = m.end() - 1                                 # the matched param-list open paren
         depth = 0
         while True:                                     # matching close of the parameter list
-            c = crlf[j]
+            c = masked[j]
             if c == "(":
                 depth += 1
             elif c == ")":
@@ -915,25 +969,17 @@ def _function_positions(crlf: str, funcs) -> list[tuple[int, int]]:
                     break
             j += 1
         if not f.has_body:                              # native/declared: TextPos = the ';'
-            k = crlf.index(";", j)
+            k = masked.index(";", j)
             out.append((crlf.count("\n", 0, k) + 1, k))
             cur = k + 1
             continue
-        k = crlf.index("{", j) + 1
+        k = masked.index("{", j) + 1
         while True:                                     # skip to the first executable statement
-            while k < len(crlf) and crlf[k] in ws:
+            while k < len(masked) and masked[k] in ws:  # comments are already blanked to spaces
                 k += 1
-            if crlf[k:k + 2] == "//":                    # line comment
-                nl = crlf.find("\n", k)
-                k = len(crlf) if nl < 0 else nl + 1
-                continue
-            if crlf[k:k + 2] == "/*":                    # block comment
-                end = crlf.find("*/", k)
-                k = len(crlf) if end < 0 else end + 2
-                continue
-            if crlf[k:k + 5].casefold() == "local" and (
-                    k + 5 >= len(crlf) or not (crlf[k + 5].isalnum() or crlf[k + 5] == "_")):
-                k = crlf.index(";", k) + 1
+            if masked[k:k + 5].casefold() == "local" and (
+                    k + 5 >= len(masked) or not (masked[k + 5].isalnum() or masked[k + 5] == "_")):
+                k = masked.index(";", k) + 1
                 continue
             break
         out.append((crlf.count("\n", 0, k) + 1, k))
@@ -1293,6 +1339,13 @@ def _mem_zero(p: _Prop) -> object:
 
 def _scalar_default(pname: str, ptype: int, expr) -> object:
     if expr is None:
+        return _SCALAR_ZERO[ptype]
+    if expr.op == "empty" and ptype in (PT_STR, PT_NAME):
+        # `Field=` with nothing after (parser.py's defaultproperties-value parse): a native/pointer
+        # field decompiles this way, but real UCC also accepts it hand-authored for String/Name as an
+        # explicit empty value (probed: RandomMutators' `var String chosenMutators;` /
+        # `chosenMutators=`) -- compiles clean to the type's zero value. No legal empty literal form
+        # exists for the other scalar types, so they still fall through to the raise below.
         return _SCALAR_ZERO[ptype]
     if ptype == PT_NAME:
         if expr.op == "stringconst":                     # a name default may be written quoted
@@ -2967,18 +3020,23 @@ def _sibling_export_ref(b: _Build, ident: str, members_by_class: dict[str, dict[
 
 def _resolve_class_ident(b: _Build, ident: str, members_by_class: dict[str, dict[str, str]],
                          funcs_by_class: dict[str, dict[str, str]], exp_ref: dict[str, int],
-                         imp_ref: dict[str, int]) -> int | None:
+                         imp_ref: dict[str, int], import_by_name: dict[str, str]) -> int | None:
     """A `class:<Name>` obj ident (a cast/`class<T>()`/`class'X'` target — see `_sibling_export_ref`'s
     docstring for why it's prefixed) resolves BEFORE any local/member/func lookup: a same-package class
     via `_sibling_export_ref`, else an import (pre-registered by `_register_cast_class_imports`, since
     an import discovered this late would miss the already-frozen import table). Returns None for any
-    OTHER ident, so the caller continues its normal local/member/func/import resolution."""
+    OTHER ident, so the caller continues its normal local/member/func/import resolution. The import
+    lookup is CASEFOLD (`import_by_name`, keyed like every other resolver's), matching `_add_import`'s
+    own case-insensitive dedup -- a metaclass cast can spell the target in source casing that differs
+    from the class's canonical import spelling (`class<mutator>(...)` for `Engine.Mutator`, live
+    UT99-probed via `RandomMutators`; the single-class resolvers already casefolded this same lookup,
+    only this multi-class one didn't)."""
     if not ident.startswith("class:"):
         return None
     sib = _sibling_export_ref(b, ident, members_by_class, funcs_by_class, exp_ref)
     if sib is not None:
         return sib
-    return imp_ref[ident[len("class:"):]]
+    return imp_ref[import_by_name[ident[len("class:"):].casefold()]]
 
 
 def _register_cast_class_imports(b: _Build, toks) -> None:
@@ -3028,7 +3086,8 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
         def resolve_inv(kind: str, ident: str) -> int:
             if kind == "name":
                 return name_cf[ident.casefold()]
-            cls_ref = _resolve_class_ident(b, ident, members_by_class, funcs_by_class, exp_ref, imp_ref)
+            cls_ref = _resolve_class_ident(b, ident, members_by_class, funcs_by_class, exp_ref, imp_ref,
+                                          import_by_name)
             if cls_ref is not None:
                 return cls_ref
             cf = ident.casefold()
@@ -3087,7 +3146,8 @@ def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref
         def resolve_inv(kind: str, ident: str) -> int:
             if kind == "name":
                 return name_cf[ident.casefold()]
-            cls_ref = _resolve_class_ident(b, ident, members_by_class, funcs_by_class, exp_ref, imp_ref)
+            cls_ref = _resolve_class_ident(b, ident, members_by_class, funcs_by_class, exp_ref, imp_ref,
+                                          import_by_name)
             if cls_ref is not None:
                 return cls_ref
             cf = ident.casefold()

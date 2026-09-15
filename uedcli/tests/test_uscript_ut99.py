@@ -165,6 +165,126 @@ Fixtures (each isolates a compiler gap fixed for the first UT99 packages):
                      block out instead of truncating there. `perm_gate` byte-exact; the strict gate's
                      only residual is the same pre-existing UT99 own-name-pool gap as the other UT99
                      packages.
+  - `IdcKicker`    - a real community mutator (github.com/joeytwiddle/code,
+                     code/unrealscript/IdcKicker): static-array `config` vars (`String[256]`), `~=`,
+                     `Super.PostBeginPlay()`/`Super.Mutate()`, `FRand()`. Already `perm_gate`
+                     byte-exact with no compiler change; residual is the same pre-existing UT99
+                     own-name-pool gap as the other UT99 packages.
+  - `NerfSniper`   - a real community mutator (github.com/joeytwiddle/code,
+                     code/unrealscript/NerfAmmo), `Botpack`-dependent: a WRITE through a
+                     `class'X'.default.Field` chain (`class'BulletBox'.default.MaxAmmo = MaxAmmo;`,
+                     the lvalue counterpart of the `.default` READ chains `UTServerAdmin` exercised).
+                     Already `perm_gate` byte-exact with no compiler change; residual is the same
+                     pre-existing UT99 own-name-pool gap as the other UT99 packages.
+  - `UscFoldProbe` - controlled: pins the fix for a numeric-literal-operand CONSTANT-FOLD bug found
+                     compiling `MessageAdmin` (below). `lower._binary` used to fold a constant operand
+                     into an operator's param type (e.g. the `44` in `44 + w`, an `int` literal against
+                     a `float` var) UNCONDITIONALLY. Live-probed (six functions, `x`/`i` targets
+                     crossed with a var and a native-call right operand): UCC folds the literal into a
+                     bare `FloatConst` ONLY when the operator's own result needs no FURTHER outer
+                     conversion (assigned straight to a `float`); when the assignment target is `int`
+                     (needing an outer `float->int` conversion on the whole expression), the literal
+                     instead compiles at its OWN natural type (`IntConst`) with an explicit INNER
+                     `int->float` conversion, exactly like the non-literal right operand always gets.
+                     Fixed: `expr()` grew an optional `expected` type (threaded from `_st_assign`/
+                     `_st_return`/`_value` -- the `for`-loop init/update clause's own assignment
+                     lowering, a sibling `_st_assign` originally missed -- the three contexts that
+                     already know a target type up front), read only by `binary`/`paren` nodes
+                     (`lower._should_fold`); `unary`'s preoperator fold stays UNCONDITIONAL (accepts
+                     `expected` for dispatch-signature uniformity but ignores it) -- the live probes
+                     only exercised binary operators, so extending the same gate to unary was an
+                     unverified generalisation, caught in review and reverted. Two more functions
+                     (`TestForInit{Float,Int}Target`, a `for (x = 44 + w; ...)` init clause) pin the
+                     `_value` fix specifically. Function-call-argument position isn't threaded yet (no
+                     call site currently passes `expected` into `_coerce_args`'s callers) -- same
+                     open gap as before this fix for that one context, not chased here. `perm_gate`
+                     byte-exact; the strict gate's only residual is the same pre-existing UT99
+                     own-name-pool gap as the other UT99 packages.
+  - `MessageAdmin` - a real community mutator (github.com/joeytwiddle/code,
+                     code/unrealscript/MessageAdmin) -- the real package that surfaced the
+                     `UscFoldProbe` bug above (`i = 256*FRand();`, where the previous unconditional
+                     fold shifted every later jump target in the function by 1 byte). `perm_gate`
+                     byte-exact; residual is the same pre-existing UT99 own-name-pool gap as the
+                     other UT99 packages.
+  - `NoPistonCamping`, `ForceBehindView` (github.com/joeytwiddle/code, code/unrealscript/
+                     NoPistonCamping and WeirdMuts/ForceBehindView.uc), `TeamSwitcher`,
+                     `RedirectPlayers` -- real community mutators, all already `perm_gate` byte-exact
+                     with no compiler change (the same residual UT99 own-name-pool gap only).
+                     `ForceBehindView`'s package name differs from its containing repo directory
+                     (`WeirdMuts`) -- the compiled package name is always the CLASS name, not the
+                     directory.
+  - `UscRandomMutatorsGaps` - controlled: pins three further gaps found compiling `RandomMutators`
+                     (below). (1) An explicit empty scalar default (`Field=`, nothing after the `=`
+                     before the closing `}`/next line -- `parser.py` already parsed this as
+                     `Expr(op="empty")` for a DECOMPILED native/pointer field's default; real UCC
+                     also accepts it HAND-AUTHORED for `String`/`Name` fields, compiling to the type's
+                     zero value -- `compile._scalar_default` now returns `_SCALAR_ZERO[ptype]` for
+                     `op == "empty"` on those two types (no legal empty literal exists for the
+                     others, left raising). (2) `Obj.Class.Name` -- `.Class` reads as an ordinary
+                     object member (type `"class"`, `ClassProperty`); a further `.Field` off it used
+                     to raise (`lower._ex_member` only handled struct/object bases). `Class` itself
+                     (`UState`/`UStruct`/`UField`/`UObject`) isn't indexed (noexport, no visible
+                     script) so the MEMBER LOOKUP resolves against `Object` (everything reachable
+                     this way, e.g. `Name`, is inherited from it); the two extra Dependency entries
+                     a `.Class`-chained access adds (live-probed in three isolated steps --
+                     `UscCastDepProbe`, `UscClassOnlyDepProbe`, `UscClassNameDepProbe2`/
+                     `UscClassNameDepProbe`, all under `dev/docs/spikes/2026-09-14-randommutators-
+                     class-name-dep/`) are `Core.Class` then the chain's REAL underlying class
+                     (`Mutator`, not `Object`, `Name`'s declaring class) -- only resolvable when the
+                     base is textually `X.Class`, so any OTHER source of a `"class"`-typed base falls
+                     back to `Object`, unverified. A plain cast (`Mutator(x)`/`class<Mutator>(x)`)
+                     was FIRST measured (wrongly) as adding two Dependency entries of its own --
+                     confounded by a combined probe that also exercised `.Class.Name` in the same
+                     function; an isolated probe (`UscCastDepProbe`) showed a cast adds NONE, and
+                     that guess was reverted before landing. (3) `class:<Name>` cast/metaclass-cast
+                     import resolution (`compile._resolve_class_ident`, the multi-class build path
+                     `compile_package_dir` always uses) looked an import up by EXACT ident text,
+                     unlike its own same-package-sibling check one line above (already casefold) and
+                     unlike the single-class path's equivalent resolvers (`_build_function_exports`/
+                     `_build_state_exports`, already casefold) -- a source spelling that differs in
+                     case from the class's canonical import spelling (`mutator(o)` for `Engine.
+                     Mutator`) raised `KeyError`. Fixed: `_resolve_class_ident` takes the same
+                     `import_by_name` casefold map its siblings already build. `perm_gate` byte-exact;
+                     residual is the same pre-existing UT99 own-name-pool gap as the other UT99
+                     packages.
+  - `RandomMutators` (github.com/joeytwiddle/code, code/unrealscript/RandomMutators) -- the real
+                     package `UscRandomMutatorsGaps` was built to isolate, plus a FOURTH gap of its
+                     own: a duplicate, commented-out declaration of `SplitString` sits textually
+                     BEFORE the real one (`/* function int SplitString(...) {...} */` immediately
+                     followed by the real `function int SplitString(...) {...}`) -- `compile.
+                     _function_positions`'s declaration search was a plain regex over raw source text,
+                     blind to comments, so it matched the FAKE declaration first and computed the
+                     real function's Line/TextPos wrong. Fixed: `compile._mask_lexical_noise` builds a
+                     same-length, comment/string-blanked view of the source (mirroring the real
+                     lexer's own rules -- `lexer.py`'s `_skip_block_comment` NESTS `/* */`, unlike the
+                     narrower single-`find("*/")` scan this replaces), and `_function_positions`
+                     searches/scans that instead of the raw text throughout (including the
+                     first-executable-statement skip loop, simplified to a plain whitespace skip now
+                     that comments are already blanked). `perm_gate` byte-exact; residual is the same
+                     pre-existing UT99 own-name-pool gap as the other UT99 packages.
+  - `ArenaFallback` (github.com/joeytwiddle/code, code/unrealscript/ArenaFallback), `Botpack`-
+                     dependent: a bare `return;` as the LAST statement inside a `foreach` block. Real
+                     UCC releases the iterator first (`IteratorPop`) before the `Return` token --
+                     `break` already did this (jumping to a target placed right before the loop's own
+                     trailing `Pop`), but a `return` exits directly, bypassing that flow-through.
+                     Fixed: `lower._Lowerer.foreach_depth` counts active `foreach` nesting;
+                     `_st_return` emits one `IteratorPop` per enclosing level (innermost first)
+                     before the `Return` token. `perm_gate` byte-exact; residual is the same
+                     pre-existing UT99 own-name-pool gap as the other UT99 packages.
+  - `UscBareDefaultProbe` - controlled: pins a bare `default.Field` access (implicit `Self`, no
+                     explicit class/object base -- `return default.Count;`), found compiling `Resize`
+                     (github.com/joeytwiddle/code). A DIFFERENT shape than `X.default.Field`
+                     (`lower._ex_member`'s existing two-level check, keyed on `inner.op == "member"`):
+                     here `inner.op == "default"` directly (the parser's own leaf node for the bare
+                     `default` keyword). Live-probed: a bare `DefaultVariable`(0x02) token, no Context
+                     wrapping at all -- the same shape as any other own-member read
+                     (`lower._ex_name`'s `EX_INSTANCE_VARIABLE` case), just the Default op instead.
+                     `perm_gate` byte-exact; residual is the same pre-existing UT99 own-name-pool gap.
+  - `UscFloatByteProbe` - controlled: pins the `float -> byte` conversion opcode, `0x43` (live-probed:
+                     `b = f;`, a free slot right before the already-known `float -> int` at `0x44`),
+                     found compiling `Resize` (`Other.SoundVolume = Other.SoundVolume / Scale;`, a
+                     `byte` Actor property assigned a float division result). `perm_gate` byte-exact;
+                     residual is the same pre-existing UT99 own-name-pool gap.
 """
 from __future__ import annotations
 
@@ -190,13 +310,19 @@ _PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritF
             ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154), ("UscIpAddrProbe", 5), ("IpServer", 154),
             ("NoGunsMutator", 9), ("ASPMutator", 61), ("UTServerAdmin", 353),
             ("UscNetConnectionProbe", 5), ("SeanMutator", 4), ("ProtectSeanMutator", 13),
-            ("VampireSeanMutator", 13), ("CrouchBlocksDamage", 16)]
+            ("VampireSeanMutator", 13), ("CrouchBlocksDamage", 16), ("IdcKicker", 22),
+            ("NerfSniper", 10), ("UscFoldProbe", 19), ("MessageAdmin", 41),
+            ("NoPistonCamping", 24), ("ForceBehindView", 16), ("TeamSwitcher", 24),
+            ("RedirectPlayers", 14), ("UscRandomMutatorsGaps", 14), ("RandomMutators", 38),
+            ("ArenaFallback", 42), ("UscBareDefaultProbe", 5), ("UscFloatByteProbe", 5)]
 
 # Extra stock EditPackages a fixture's super chain needs loaded (`_edit_packages_upto`'s
 # content-safe base only covers Core/Engine/Editor) — only needed for the DOCKER-gated rebuild.
 _DEPS: dict[str, tuple[str, ...]] = {"UscInheritFinal": ("UWindow",), "UWeb": ("IpDrv",),
                                      "UscIpAddrProbe": ("IpDrv",), "ASPMutator": ("Botpack",),
-                                     "UTServerAdmin": ("UWindow", "IpDrv", "Botpack")}
+                                     "UTServerAdmin": ("UWindow", "IpDrv", "Botpack"),
+                                     "NerfSniper": ("Botpack",), "NoPistonCamping": ("Botpack",),
+                                     "ArenaFallback": ("Botpack",)}
 
 
 def _docker_up() -> bool:

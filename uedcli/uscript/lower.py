@@ -81,6 +81,7 @@ _PRIMITIVE_TYPES = frozenset({"int", "float", "bool", "byte", "string", "name"})
 _BUILTIN_STRUCTS = frozenset({"vector", "rotator", "plane", "coords", "color", "region", "scale",
                               "box", "boundingbox", "quat", "matrix", "pointregion"})
 _WORD_OPS = {"dot": "Dot", "cross": "Cross", "clockwisefrom": "ClockwiseFrom"}
+_EXPECTED_TYPE_AWARE = frozenset({"binary", "unary", "paren"})
 
 # Size in bytes of a value on the VM stack, for a Context's bSize field (verified: Vector=12; the
 # primitives are 4-byte DWORDs / refs). An unknown size raises LowerError rather than guessing.
@@ -512,6 +513,7 @@ def build_scope(func: FuncDecl, *, members: dict[str, str] | None = None,
 _CONV: dict[tuple[str, str], int] = {
     ("byte", "int"): 0x3A, ("byte", "float"): 0x3C,
     ("int", "byte"): 0x3D, ("int", "bool"): 0x3E, ("int", "float"): 0x3F,
+    ("float", "byte"): 0x43,  # live-probed (`UscFloatByteProbe`): `b = f;` (byte <- float)
     ("float", "int"): 0x44,
     ("string", "int"): 0x4A, ("string", "bool"): 0x4B, ("string", "float"): 0x4C,
     ("byte", "string"): 0x52,
@@ -728,6 +730,7 @@ class _Lowerer:
         self.body = _Body()
         self.break_targets: list[int] = []      # loops AND switch push here
         self.continue_targets: list[int] = []   # only loops push here
+        self.foreach_depth = 0                  # active `foreach` nesting -- see `_st_return`
         self.state_labels: list[tuple[str, int]] = []   # (name, label id) in DECLARATION order
 
     # ── statements ────────────────────────────────────────────────────────────
@@ -784,7 +787,7 @@ class _Lowerer:
         lhs, rhs = s.exprs
         ltok, ltype = self.expr(lhs)
         if s.text == "=":
-            rtok, rtype = self.expr(rhs)
+            rtok, rtype = self.expr(rhs, ltype)
             rtok = self._coerce(rtok, rtype, ltype, fold=True)
             op = EX_LET_BOOL if ltype == "bool" else EX_LET
             self.body.tok(Tok(op, (("sub", ltok), ("sub", rtok))))
@@ -796,10 +799,17 @@ class _Lowerer:
         self.body.tok(self._binary(s.text, ltok, ltype, rtok, rtype, compound=True)[0])
 
     def _st_return(self, s) -> None:
+        # A `return` inside an active `foreach` must release it first -- one `IteratorPop` per
+        # enclosing loop, innermost first, same as `break`'s "always release the iterator" rule but
+        # emitted directly (a `return` doesn't flow through the loop's own trailing Pop the way a
+        # break's jump-to-`end` does). Live-probed: ArenaFallback's `CheckForWeapons` (a `return;`
+        # as the last statement inside a single `foreach AllActors(...)` block).
+        for _ in range(self.foreach_depth):
+            self.body.tok(Tok(EX_ITERATOR_POP))
         if not s.exprs:
             self.body.tok(Tok(EX_RETURN, (("sub", Tok(EX_NOTHING)),)))
             return
-        tok, ty = self.expr(s.exprs[0])
+        tok, ty = self.expr(s.exprs[0], self.return_type)
         tok = self._coerce(tok, ty, self.return_type, fold=True)
         self.body.tok(Tok(EX_RETURN, (("sub", tok),)))
 
@@ -886,8 +896,10 @@ class _Lowerer:
         self.body.iterator(call_tok, end)
         self.break_targets.append(end)
         self.continue_targets.append(cont)
+        self.foreach_depth += 1
         for inner in s.body:
             self.stmt(inner)
+        self.foreach_depth -= 1
         self.continue_targets.pop()
         self.break_targets.pop()
         self.body.place(cont)
@@ -933,7 +945,7 @@ class _Lowerer:
         if e.op == "assign":
             ltok, ltype = self.expr(e.children[0])
             if e.text == "=":
-                rtok, rtype = self.expr(e.children[1])
+                rtok, rtype = self.expr(e.children[1], ltype)
                 rtok = self._coerce(rtok, rtype, ltype, fold=True)
                 op = EX_LET_BOOL if ltype == "bool" else EX_LET
                 return Tok(op, (("sub", ltok), ("sub", rtok)))
@@ -941,14 +953,22 @@ class _Lowerer:
             return self._binary(e.text, ltok, ltype, rtok, rtype, compound=True)[0]
         return self.expr(e)[0]
 
-    def expr(self, e: Expr) -> tuple[Tok, str]:
+    def expr(self, e: Expr, expected: str | None = None) -> tuple[Tok, str]:
+        """`expected`, when given, is the type this expression's RESULT is about to be coerced to
+        (an assignment LHS / a `return`'s declared type) -- NOT propagated to sub-expressions in
+        general. Only `binary`/`paren` actually read it (`paren` passes it straight through, being
+        transparent); `unary` still accepts it for dispatch-signature uniformity but ignores it (its
+        own fold rule is unverified for the expected-type-mismatch case, see `_ex_unary`); every
+        other node ignores it too. See `_binary`'s docstring for why it exists."""
         method = getattr(self, f"_ex_{e.op}", None)
         if method is None:
             raise LowerError(f"expression {e.op!r} not supported yet")
+        if e.op in _EXPECTED_TYPE_AWARE:
+            return method(e, expected)
         return method(e)
 
-    def _ex_paren(self, e):
-        return self.expr(e.children[0])
+    def _ex_paren(self, e, expected=None):
+        return self.expr(e.children[0], expected)
 
     def _ex_intconst(self, e):
         return _int_const(int(e.value)), "int"
@@ -1113,6 +1133,16 @@ class _Lowerer:
         one -- the base is already a real object reference of that class, not a class reference)."""
         field = e.text
         inner = e.children[0]
+        if inner.op == "default":
+            # Bare `default.Field` (implicit Self, no explicit class/object base at all -- a
+            # DIFFERENT shape than `X.default.Field` below, where `inner.op == "member"`) reads the
+            # COMPILING class's own default value. Live-probed (`UscBareDefaultProbe`): a bare
+            # DefaultVariable(0x02) token, no Context wrapping -- same shape as any other own-member
+            # access (`_ex_name`'s `EX_INSTANCE_VARIABLE` case), just the Default op instead.
+            sym = self.scope.lookup(field)
+            if sym is None or sym.storage != "member":
+                raise LowerError(f"unresolved default member {field!r}")
+            return self._var(EX_DEFAULT_VARIABLE, _member_ident(field, sym.owner), sym.type), sym.type
         if inner.op == "member" and inner.text.casefold() == "default":
             cls_expr = inner.children[0]
             meta = self._meta_class_of(cls_expr)
@@ -1140,6 +1170,40 @@ class _Lowerer:
                 return self._context(base_tok, base_type, member, ftype), ftype
             raise LowerError("'default' qualifier needs a class or object base")
         base_tok, base_type = self.expr(inner)
+        if base_type == "class":
+            # `Obj.Class` itself reads as an ORDINARY object member (type "class", ClassProperty,
+            # one Dependency entry via the plain `_is_object` branch below) -- a further `.Field` off
+            # it (`mut.Class.Name`) is member access on a real Class-typed value, and records TWO of
+            # its own: live-probed in isolation, `UscClassOnlyDepProbe`'s `return mut.Class;` gets ONE
+            # extra entry (`engine.mutator`, the base's real class) beyond the class's own self-dep,
+            # and `UscClassNameDepProbe2`'s `return mut.Class.Name;` gets THREE more -- the same one
+            # from `.Class`, plus TWO from the outer `.Name`: `core.class` then `engine.mutator`
+            # again (the chain's REAL underlying class, not `Object`, `Name`'s declaring class).
+            # MEMBER LOOKUP resolves against `Object` -- `Class` (UState/UStruct/UField/UObject) isn't
+            # itself indexed (noexport, no visible script), and everything reachable here (`Name`) is
+            # inherited from Object anyway (confirmed: imported as `core.nameproperty
+            # 'core.object.name'`). The real class is only resolvable when the base is textually
+            # `X.Class` (the sole evidenced source of a "class"-typed value here); anything else falls
+            # back to `Object` for the second entry, unverified.
+            real_dep = "object:object"
+            # Only re-derive the type for a BARE-NAME base (`mut.Class.Name` -- the only measured
+            # shape): `self.expr` on anything else would re-lower it a second time (it was already
+            # lowered once above, resolving `inner`), double-recording any Dependency it records --
+            # a bare name never records one, so this is side-effect-free only for that case.
+            if inner.op == "member" and inner.text.casefold() == "class" \
+                    and inner.children[0].op == "name":
+                _, real_base_type = self.expr(inner.children[0])
+                if _is_object(real_base_type):
+                    real_dep = real_base_type
+            ftype = self.scope.member_of("object:object", field)
+            if ftype is None:
+                raise LowerError(f"unresolved member object:object.{field}")
+            owner = self.scope.member_owner_of("object:object", field)
+            member = self._var(EX_INSTANCE_VARIABLE, _member_ident(field, owner), ftype)
+            tok = self._context(base_tok, "object:object", member, ftype, record=False)
+            self._record_dep("object:class")
+            self._record_dep(real_dep)
+            return tok, ftype
         if _is_struct(base_type):
             ftype = self.scope.member_of(base_type, field)
             if ftype is None:
@@ -1211,7 +1275,7 @@ class _Lowerer:
         idx_tok = self._coerce(idx_tok, idx_type, "int")  # index must be int (FloatToInt etc.)
         return Tok(EX_ARRAY_ELEMENT, (("sub", idx_tok), ("sub", base_tok))), base_type
 
-    def _ex_unary(self, e):
+    def _ex_unary(self, e, expected=None):
         operand, ty = self.expr(e.children[0])
         if e.text in ("-", "+"):                         # unary +/- of a numeric literal folds
             cv = _const_num(operand)
@@ -1221,8 +1285,12 @@ class _Lowerer:
         fb = self.cat.unary_operator(sym, ty, pre=True)
         if fb is None:
             raise LowerError(f"no preoperator {e.text!r} for {ty}")
+        ret = fb.return_type or ty
+        # `_should_fold` is live-probed for BINARY operators only (`MessageAdmin`/`UscFoldProbe`);
+        # a unary preoperator always folds its constant operand, the prior (unverified-but-never-
+        # wrong) behavior -- no fixture exercises the expected-type-mismatch shape for unary.
         arg = self._coerce(operand, ty, fb.param_types[0], fold=True)
-        return _native_call(fb, (arg,)), fb.return_type or ty
+        return _native_call(fb, (arg,)), ret
 
     def _ex_postfix(self, e):
         operand, ty = self.expr(e.children[0])
@@ -1232,23 +1300,32 @@ class _Lowerer:
         arg = self._coerce(operand, ty, fb.param_types[0])
         return _native_call(fb, (arg,)), fb.return_type or ty
 
-    def _ex_binary(self, e):
+    def _ex_binary(self, e, expected=None):
         ltok, ltype = self.expr(e.children[0])
         rtok, rtype = self.expr(e.children[1])
-        return self._binary(e.text, ltok, ltype, rtok, rtype)
+        return self._binary(e.text, ltok, ltype, rtok, rtype, expected=expected)
 
-    def _binary(self, op: str, ltok, ltype, rtok, rtype, *, compound: bool = False) -> tuple[Tok, str]:
+    def _binary(self, op: str, ltok, ltype, rtok, rtype, *, compound: bool = False,
+               expected: str | None = None) -> tuple[Tok, str]:
         sym = _WORD_OPS.get(op.lower(), op)
         fb = (self.cat.compound_assign_operator(sym, ltype, rtype) if compound
               else self.cat.binary_operator(sym, ltype, rtype))
         if fb is None:
             raise LowerError(f"no operator {op!r} for ({ltype}, {rtype})")
-        # UCC folds a constant LEFT operand into the param type, but converts the right at runtime.
-        a = self._coerce(ltok, ltype, fb.param_types[0], fold=True)
+        ret = fb.return_type or ltype
+        # UCC folds a constant LEFT operand into the param type -- but ONLY when the operator's own
+        # result is used as-is (no further outer conversion). Live-probed (`44 + w`, UscFoldProbe):
+        # assigned straight to a float var, `44` compiles as a bare FloatConst; assigned to an int
+        # var (needing an outer float->int conversion), `44` instead compiles at ITS OWN natural
+        # type (IntConst) with an explicit inner int->float conversion, same as the non-literal right
+        # operand always gets. `expected` is the type this whole operator's result is about to be
+        # coerced to by the caller (`_st_assign`/`_st_return`); `None` means "unknown" (e.g. a
+        # function-call argument, not yet threaded through) and keeps the prior always-fold behavior.
+        a = self._coerce(ltok, ltype, fb.param_types[0], fold=_should_fold(expected, ret))
         b = self._coerce(rtok, rtype, fb.param_types[1])
         if sym in ("&&", "||"):                          # short-circuit: skip the right operand
             b = Tok(EX_SKIP, (("raw", struct.pack("<H", _mem_size(b) + 1)), ("sub", b)))
-        return _native_call(fb, (a, b)), fb.return_type or ltype
+        return _native_call(fb, (a, b)), ret
 
     def _ex_call(self, e):
         callee = e.children[0]
@@ -1313,6 +1390,10 @@ class _Lowerer:
         if low.startswith("class<") and len(args) == 1:  # metaclass cast `class<Actor>(c)`
             meta = name[len("class<"):-1].strip().rsplit(".", 1)[-1]
             inner, _ = self.expr(args[0])
+            # A plain cast records NO extra Dependency of its own -- live-probed in isolation
+            # (`UscCastDepProbe`'s `return mutator(o);`: only the class's usual self-dependency, none
+            # added for the cast). An earlier version of this fix wrongly added two entries here,
+            # fitted to a confounded probe that also exercised `.Class.Name` in the same function.
             return Tok(EX_METACAST, (("obj", f"class:{meta}"), ("sub", inner))), "class"
         if len(args) == 1 and self.scope.is_class_name(name):   # object cast `Pawn(x)`
             inner, _ = self.expr(args[0])
@@ -1473,6 +1554,14 @@ def _const_num(tok: Tok):
     if op == EX_FLOAT_CONST:
         return struct.unpack("<f", tok.parts[0][1])[0]
     return None
+
+
+def _should_fold(expected: str | None, ret: str) -> bool:
+    """Whether a binary/unary operator's own constant operand should fold into the operator's param
+    type. `expected` is `None` when the caller hasn't threaded a target type through (keep the prior
+    default: fold) -- otherwise fold only if the operator's result needs no further outer conversion
+    (`expected == ret`). See `_binary`'s docstring for the live-probed evidence."""
+    return expected is None or expected == ret
 
 
 def _num_const(value, ttype: str) -> Tok:
