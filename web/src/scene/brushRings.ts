@@ -21,7 +21,11 @@ export type BrushRingMode = 'csg-all' | 'selected-only'
  * selected ones (spec §9's multi-select cross-pane highlight). */
 export function buildBrushRings(actors: SceneActor[], selectedNames: ReadonlySet<string>, mode: BrushRingMode): BrushRing[] {
   const rings: BrushRing[] = []
-  for (const actor of actors) {
+  // Brushes draw in CSG order (owner ruling) -- explicit rather than relying on `actors` already
+  // arriving in that order. It does today (`scene.py`'s `_build_actors` enumerates `level.order`),
+  // but this makes the invariant hold regardless of what the caller passes.
+  const ordered = [...actors].sort((a, b) => a.csg_rank - b.csg_rank)
+  for (const actor of ordered) {
     if (!actor.brush) continue
     const isSelected = selectedNames.has(actor.name)
     if (mode === 'selected-only' && !isSelected) continue

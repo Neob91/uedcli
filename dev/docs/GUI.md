@@ -90,6 +90,11 @@ every one of the three axes here, silently inverting horizontal pan.
 centered on 0 — otherwise the grid slides with the camera instead of staying locked to geometry.
 `gridSpacingUU` snaps to a 1-2-5-10-per-decade sequence targeting ~50px on-screen spacing.
 
+**Grid color**: `GridOverlay.tsx`'s `GRID_COLOR` is `0x808088`. It was `0x3a3d4a` (~58,61,74),
+nearly the same brightness as the ortho background (`#404040`, 64,64,64) and effectively invisible
+— unlike `preview.py`'s grid, this one has no major/minor tiering (below), so a single flat color
+needs real contrast against the background on its own.
+
 **Open, unreconciled with `preview.py`**: `preview.py`'s own grid (`_grid_escalation`,
 `_grid_line_color`, ported from disassembled `UEditorEngine::DrawGridSection`) snaps to
 power-of-two steps and gives every 8th line a distinct "major" color with odd-line fade-before-drop.
@@ -97,6 +102,25 @@ The GUI's grid has none of that tiering and a different step algorithm — `grid
 already flags this as "flagged for owner confirmation, not treated as final." Needs an explicit
 decision (port `preview.py`'s algorithm for real parity, or confirm the GUI's own convention is
 intentional), not a silent implementation choice either way.
+
+## Ortho-pane draw order (grid / brushes / point actors)
+
+Three layering rules for the ortho panes (owner ruling), all enforced via three.js `renderOrder`
+(lower draws first) since every layer here uses `depthTest={false}` — with depth testing off,
+draw order among siblings is otherwise scene-graph/insertion order, not guaranteed:
+
+- **Grid is always bottom-most.** `GridOverlay`'s `<lineSegments>` sets `renderOrder={-10}` (and
+  `depthWrite={false}`, so its own arbitrary plane depth can never block a depth-tested sibling
+  drawn after it) — lower than everything else in the pane.
+- **Point-actor markers are always on top of brushes.** `OrthoViewport.tsx`'s marker `<sprite>`s use
+  `depthTest={false}` and `renderOrder={MARKER_RENDER_ORDER}` (10) — higher than brush outlines'
+  default renderOrder (0), so a marker never gets hidden by a brush wireframe/highlight regardless
+  of actual world depth along the view axis. Scoped to the ortho panes only; the perspective pane's
+  markers are unchanged.
+- **Brushes draw in CSG order.** `brushRings.ts`'s `buildBrushRings` sorts actors by `csg_rank`
+  before building rings, so coincident/overlapping brush outlines resolve to the higher-CSG-rank
+  actor's color — matching `SceneActor.csg_rank` (see the Inspector section above), not whatever
+  order the `actors` array happens to arrive in.
 
 ## Selection & the Inspector
 

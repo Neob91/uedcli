@@ -13,7 +13,12 @@ import { gridLines, gridSpacingUU, orthoGridWindow } from './grid'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
 import { orthoBasis } from './orthoCamera'
 
-const GRID_COLOR = 0x3a3d4a
+// Was 0x3a3d4a (~58,61,74) -- nearly the same brightness as the ortho background (#404040,
+// 64,64,64), so the grid was effectively invisible (owner: "not visible on the background").
+// preview.py's own grid only reads against its identical BG because major lines go brighter
+// (96,96,96) while minor lines fade TOWARD the background by design (tiering the GUI grid has
+// none of, see dev/docs/GUI.md) -- so a single flat color needs real contrast on its own.
+const GRID_COLOR = 0x808088
 
 function worldPointAt(center: Vec3, right: Vec3, up: Vec3, u: number, v: number): Vec3 {
   return [center[0] + right[0] * u + up[0] * v, center[1] + right[1] * u + up[1] * v, center[2] + right[2] * u + up[2] * v]
@@ -45,8 +50,13 @@ export function GridOverlay({ pose, axis }: { pose: OrthoPose; axis: OrthoAxis }
   useEffect(() => () => geometry.dispose(), [geometry])
 
   return (
-    <lineSegments geometry={geometry}>
-      <lineBasicMaterial color={GRID_COLOR} depthTest={false} />
+    // renderOrder pins the grid as the first thing drawn: with depthTest off, three.js's draw order
+    // for depthTest-false siblings (brush outlines' bold ring, point-actor markers) is otherwise
+    // scene-graph/insertion order, not guaranteed -- a low renderOrder makes "grid always at the
+    // bottom" hold regardless of where in the tree it's mounted. depthWrite off too, so the grid's
+    // own (somewhat arbitrary) plane depth can never fail a depth-tested sibling drawn after it.
+    <lineSegments geometry={geometry} renderOrder={-10}>
+      <lineBasicMaterial color={GRID_COLOR} depthTest={false} depthWrite={false} />
     </lineSegments>
   )
 }

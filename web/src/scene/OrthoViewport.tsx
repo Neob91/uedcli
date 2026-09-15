@@ -43,6 +43,11 @@ const INITIAL_WORLD_UNITS_PER_PIXEL = 4
 // typically tens-to-hundreds of UU across, so 24 UU reads clearly without dwarfing nearby geometry.
 const MARKER_SIZE = 24
 const MARKER_COLOR_THREE = new THREE.Color(...MARKER_COLOR)
+// Point actors must always render on top of brush wireframe/highlight (owner ruling, ortho panes
+// only) -- depthTest off so real world depth along the view axis can't hide a marker "behind" a
+// brush, and higher than every other renderOrder in this pane (grid's -10, brush outlines' default
+// 0) so draw order is explicit rather than incidental scene-graph position.
+const MARKER_RENDER_ORDER = 10
 
 export function initialOrthoPose(): OrthoPose {
   return { center: [0, 0, 0], worldUnitsPerPixel: INITIAL_WORLD_UNITS_PER_PIXEL }
@@ -335,8 +340,9 @@ export function OrthoViewport({
                   position={actor.location}
                   scale={[actor.sprite.width, actor.sprite.height, 1]}
                   userData={{ actorName: actor.name }}
+                  renderOrder={MARKER_RENDER_ORDER}
                 >
-                  <spriteMaterial map={spriteTex} depthWrite={false} />
+                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={false} />
                 </sprite>
               )
             }
@@ -347,8 +353,9 @@ export function OrthoViewport({
                 position={actor.location}
                 scale={[MARKER_SIZE, MARKER_SIZE, 1]}
                 userData={{ actorName: actor.name }}
+                renderOrder={MARKER_RENDER_ORDER}
               >
-                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} />
+                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={false} />
               </sprite>
             )
           })}
