@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "NYC_Bar bails at N=153: Light5 wrongly lights 3 world stair-tread surfs UED22 leaves dark, and native never lights the closed door's (DeusExMover9) own face either. Zone crossing, cross-light box-test ordering, the world-space/screen-space clip-formula bug class, per-lumel raytrace divergence, and box occlusion (round 5) are all ruled out by direct measurement/live capture. Round 6 (2026-09-13) live-captured UED22's own OccludeBsp raster-commit verdict for Light5 directly and found the leading theory (a node-visit-order self-occlusion race) does not hold as stated: UED22 accepts real screen area for these surfaces multiple times and still excludes them. Round 7 (2026-09-14) filled a 928-byte disassembly gap round 6 left untranscribed, fully characterized BOTH of round 6's flagged stack slots, and live-captured them directly keyed by iSurf: NEITHER is the exclusion gate (one is irrelevant to non-portal surfaces; the other is a per-face dedup that still creates a commit record for all 3 surfaces). Round 8 (2026-09-15) settled round 7's AddUniqueItem lead BY DIRECT READ (not sequence proximity): Light5's own GetVisibleSurfs call genuinely adds surf 67/95/97 to its OWN returned iSurfs array, confirmed by reading Light5's exact Location off the call's own Frame argument. This DISPROVES the item's prior 'Conclusion' (that GetVisibleSurfs's cube-map render excludes these surfaces) -- GetVisibleSurfs/OccludeBsp are now fully cleared; the exclusion is downstream of both, in the commit loop's consumption of iSurfs or later. Not fixed; no mask; next step below."
+summary = "NYC_Bar bails at N=153: Light5 wrongly lights 3 world stair-tread surfs UED22 leaves dark, and native never lights the closed door's (DeusExMover9) own face either. Zone crossing, cross-light box-test ordering, the world-space/screen-space clip-formula bug class, and box occlusion (round 5) are all ruled out by direct measurement/live capture. Round 6 (2026-09-13) live-captured UED22's own OccludeBsp raster-commit verdict for Light5 directly and found the leading theory (a node-visit-order self-occlusion race) does not hold as stated: UED22 accepts real screen area for these surfaces multiple times and still excludes them. Round 7 (2026-09-14) filled a 928-byte disassembly gap round 6 left untranscribed, fully characterized BOTH of round 6's flagged stack slots, and live-captured them directly keyed by iSurf: NEITHER is the exclusion gate. Round 8 (2026-09-15) settled round 7's AddUniqueItem lead BY DIRECT READ: Light5's own GetVisibleSurfs call genuinely adds surf 67/95/97 to its OWN returned iSurfs array -- GetVisibleSurfs/OccludeBsp are now fully cleared. Round 9 (2026-09-15) statically found and live-CONFIRMED the downstream commit path: a per-surf TArray<AActor*> gather list (Editor.dll 0x100a4ba0-0x100a5010) that Light5 DOES get written into (before=0/after=1, live-verified), which illuminateSurf (0x100a5010+) reads back correctly (count=1) -- AND, critically, round 9 also DIRECTLY REFUTES round 3's foundational 'shadow-ray call site never fires' finding: a fresh live capture on the SAME golden-build recipe shows the raytrace call (0x100a5a04) firing repeatedly for Light5 against tread-region lumels, with genuinely mixed blocked(eax=0)/visible(eax=1) results matching a real partial door shadow. A further, not-yet-identity-confirmed commit step (0x100a5ab5-0x100a5ac2, gated by a per-light 'any lumel visible' flag) was found past the raytrace loop. Not fixed; no mask; next step below."
 +++
 
 # NYC_Bar N=153 — three world `LightMap` records get a light run UED22 leaves empty
@@ -636,3 +636,101 @@ Harness: `dev/docs/spikes/2026-09-15-nycbar-n153-adduniqueitem-origin/harness/di
 (new, static), `adduniqueitem_origin_probe.py` (new, live); logs in the same spike's `logs/`
 (`disasm-wide.log`, `adduniqueitem-origin-n153-v2.log`; an earlier `adduniqueitem-origin-n153.log` is
 the first, mis-offset attempt, kept for the record).
+
+## Ninth round (2026-09-15) -- the WRITE side is traced and confirmed to work; round 3's "raytrace
+## never fires" finding is DIRECTLY REFUTED. Not fixed, no mask; identity confirmation is the next step.
+
+Executed round 8's own recommended next step: statically traced `Editor.dll 0x100a4ba0`-`0x100a5010`'s
+WRITE side (what a surf that passes both known gates gets committed INTO), then live-captured that
+exact write plus the read side and, going further than round 8 asked, the entire per-light raytrace
+loop past it -- since chasing the write led straight into new territory none of rounds 1-8 had reached.
+
+**Static (plain `objdump -d -M intel` against `Editor.dll` extracted from `dx-lum-uned-dbg:latest` --
+no docker/gdb needed for this half; the DLL's own `ImageBase` is `0x10000000` and it does not relocate
+under Wine, so RVA == live VA, same as `gather_disasm_probe.py`'s existing note).**
+
+- The commit call at RVA `0x100a4f10` (`call 0x100123e0`) is a generic `TArray<AActor*>::AddItem`
+  (confirmed by disassembling `0x100123e0` itself: pushes element-size 4/count 1, grows the array via
+  `[0x100ce5ec]`, writes `*arg` into `Data[OldCount]`). Its `ecx` ("this") is computed as
+  `*(GatherCtx+0x1c) + iSurf*12` -- a per-surf `TArray<AActor*>` array living at `GatherCtx+0x1c`, one
+  12-byte TArray slot per surf. Call this `CandidateLights[iSurf]`.
+- `illuminateSurf` (RVA `0x100a5010`, the function immediately following the gather loop) reads the
+  SAME array through the SAME offset off its OWN `this`: `eax = *(this+0x1c); cmp [eax+iSurf*12+0x4],0`
+  (RVA `0x100a557f`) -- `CandidateLights[iSurf].ArrayNum`. If zero, execution jumps straight to the
+  function's own epilogue (`0x100a5b33`), skipping the whole per-light raytrace loop for that surf.
+
+**Live (gdb, `dev/docs/spikes/2026-09-15-nycbar-n153-commit-write-readback/harness/
+commit_write_readback_probe.py`): the write and the read are the SAME object, and the write lands.**
+Three breakpoints -- the commit call, its return, and `illuminateSurf`'s read gate -- on a fresh N=153
+golden build. For Light5 x world surf 67/95/97: `GatherCtx`/`CandidateLights` base is IDENTICAL
+(`0x146c6c8`/`0x113c377c`) at both the write and the read; the write shows `before=0, after=1` for all
+three (the slot really is empty before Light5, and holds exactly one entry after); the read shows
+`count=1` for all three (`illuminateSurf` does NOT take the empty-skip branch). **This closes round 8's
+own open question decisively: the commit is not silently dropped, misdirected, or read from a stale/
+reset copy -- it is the same array, the write succeeds, and the read sees it.** So `illuminateSurf`'s
+per-light raytrace loop genuinely STARTS running for Light5 on all three surfaces.
+
+**Following the loop further (harness: `perlumel_radius_probe.py`, same spike dir) found a SECOND,
+finer-grained radius cull inside the per-lumel loop** (RVA `0x100a5971`, `comiss xmm1,xmm0` --
+`xmm1`=`WorldLightRadius^2` cached once per light, `xmm0`=squared distance from THIS LUMEL's own
+projected world position to the light) -- different from the already-ruled-out SURF-PLANE distance
+cull (round 6/8; that one is coarse, once per surf, and passes for these surfaces at 145-161uu). This
+is per-lumel and genuinely geometric: it is NOT the exclusion mechanism by itself (see below), but it
+was new, unexplored territory this round had to clear to keep tracing.
+
+**THE MAJOR FINDING: round 3's `illuminate_ray_probe.py` conclusion ("shadow-ray call site never
+fires even once" for Light5/surf 67/95/97) is DIRECTLY REFUTED by a fresh live capture on the exact
+same golden-build recipe.** Breaking at RVA `0x100a5a04` (`call [eax+0x58]`, the identical address
+round 3/4 already documented as the shadow-ray call site) and its return (`0x100a5a07`, eax = result),
+filtered to Light5 by Location and to lumels in the tread's X range (<= -3080): the call fires
+REPEATEDLY (229 hits in one run), and its result is genuinely MIXED -- `eax=0` (blocked) for 178
+lumels, `eax=1` (visible/unblocked) for 51, in a pattern that lines up with real partial occlusion by
+the closed door (e.g. at one fixed Y, the four lumels farthest from the doorway return `eax=1` while
+the five nearest the door return `eax=0` -- consistent with the door's own Y-extent not spanning the
+full opening, so some sightlines from Light5 pass the doorway plane outside the door mesh and some
+don't). `eax=1` also fires for lumels sitting ON the closed door's own face (Z near 0-4, X near -3088,
+Y inside the door's Y-range) -- matching round 6's "UED22 lights the door's own face" half of the
+mirror-image finding. **`illuminate_ray_probe.py`'s zero-hit result was almost certainly the same class
+of bug this round's OWN first attempt hit: an `iSurf` identity read that evaluates to garbage (this
+round's naive `(SurfPtr - SurfsBase)/64` at this point in the function produced `1015325`, not a real
+surf index) silently making a `iSurf ∈ {67,95,97}`-conditioned breakpoint never fire, mistaken for "the
+call never fires."** The static "no LineCheck ever called" claims in the fourth/fifth-round static
+re-derivations were built on trusting that same zero-hit result, not independently re-derived.
+
+**A further commit step exists past the per-lumel loop, not yet identity-confirmed.** Static disasm of
+the loop's exit path (RVA `0x100a5aa2`-`0x100a5ac2`): a per-light flag `[ebp-0x6c]`, reset to 0 before
+each light's lumel loop and set to 1 the FIRST time a lumel's raytrace returns nonzero (`0x100a5a0c`:
+`test eax,eax; je <skip>` guards the flag-set), gates a SECOND `TArray::AddItem` call
+(`0x100a5ac2`, same generic `0x100123e0` entry point) into a DIFFERENT array
+(`*(SomeWrapper+0xe4)`, off the SAME base `illuminateSurf`'s prologue also uses for the Vectors/Points
+pools) -- skipped entirely (jump to `0x100a5ae9`) if NO lumel was ever visible for this light. Given
+this round's own capture shows Light5 DOES get at least one visible (`eax=1`) lumel on the sampled
+surface, the flag should be 1 and this commit SHOULD fire -- but whether the sampled lumels (Z ≈
+-28/-12/4, matching the documented tread heights 0/-16/-32 to within one lumel-grid offset) are
+REALLY surf 67/95/97, or an adjacent, non-divergent tread that correctly receives Light5, is NOT
+confirmed: this round's `iSurf` derivation is independently proven broken at this point in the
+function (see above), so surf identity here is geometric inference only, not the register/address
+cross-reference discipline round 6 established as the bar ("surf identity, confirmed by geometry, not
+assumed").
+
+**Not fixed. No mask.** Next step for round 10: identity-confirm which surf the captured lumels
+belong to, then re-run the `[ebp-0x6c]`/`0x100a5ac2` commit-step capture filtered to that confirmed
+surf + Light5. Two ways to get identity right (round 6's own two prior methods): (a) read
+`[ebp-0x24]` (the `&Model.LightMap[iLightMap]` pointer this round already found, static section
+above) and cross-reference its exact address against a companion read of `Model.LightMap[4]`/`[8]`/
+`[12]`'s real addresses (the divergent records' known indices, from `model_dump.py`); or (b) match
+node PLANE + vertex-ring bbox against `model_dump.py`'s decode, the same discipline round 6 used to
+confirm native/REF surf-number identity for these exact three surfaces. If the lumels this round
+sampled turn out to genuinely be surf 67/95/97, the open question becomes why UED22's real saved
+`iLightActors` is `-1` (no light at all) despite a live capture showing the commit-step's own gate
+(`[ebp-0x6c]`) should be 1 -- meaning either this round's flag-semantics read is subtly wrong, or a
+STILL LATER step (after `0x100a5ac2`, not yet traced) discards the commit. If the lumels turn out to
+belong to a different, non-divergent surf, the search moves to finding the REAL surf 67/95/97's own
+per-lumel raytrace pattern directly (same probe, correct filter) -- which this round's tooling can now
+do in one more live run once identity is pinned.
+
+Harness: `dev/docs/spikes/2026-09-15-nycbar-n153-commit-write-readback/harness/
+commit_write_readback_probe.py` (write/read confirmation), `perlumel_radius_probe.py` (radius cull +
+raytrace-call + raytrace-return capture, evolved across several fixes this round -- see its own
+docstring for the `iSurf`-derivation dead end); logs in the same spike's `logs/`
+(`commit-write-readback-n153.log`, `perlumel-radius-n153.log`).
