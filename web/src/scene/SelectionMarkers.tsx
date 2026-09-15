@@ -5,7 +5,8 @@
 // today, so the separate PrePivot-shifted "local origin" dot preview.py also draws (coincides with
 // Location only when PrePivot is zero) is not reproduced -- flagged as a known gap, not silently
 // dropped.
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import type { SceneActor } from '../api'
@@ -13,11 +14,28 @@ import type { SceneActor } from '../api'
 // Matches `preview.py`'s `_PIVOT_RED`.
 const PIVOT_RED = new THREE.Color(255 / 255, 63 / 255, 63 / 255)
 
-// World-unit sizes (this GUI's existing convention for a fixed on-screen marker size, e.g.
-// Viewport3D/OrthoViewport's own `MARKER_SIZE = 24` point-actor dot) -- smaller than that, since a
-// vertex dot marks a precise point on already-drawn geometry rather than standing in for one.
+// World-unit sizes -- used as-is for the vertex dots (they mark a precise point on already-drawn
+// geometry, so a fixed world size is fine there). The pivot marker below is different: bug report
+// "pivot's size should be the same on screen, regardless of zoom" -- it's a gizmo, not a geometry
+// marker, so it needs constant SCREEN size instead (see PivotMarker).
 const VERTEX_DOT_SIZE = 6
-const PIVOT_MARKER_SIZE = 14
+const PIVOT_MARKER_SCREEN_PX = 14
+
+/** World units per screen pixel at `point`, for either camera kind this app uses -- the constant-
+ * screen-size scale factor. Ortho: the frustum height / zoom is already screen-independent of
+ * `point`. Perspective: depends on distance to `point` (foreshortening), the standard vFOV-based
+ * sprite-scale-compensation formula. */
+function worldUnitsPerPixelAt(camera: THREE.Camera, point: THREE.Vector3, viewportHeightPx: number): number {
+  if (camera instanceof THREE.OrthographicCamera) {
+    return (camera.top - camera.bottom) / camera.zoom / viewportHeightPx
+  }
+  if (camera instanceof THREE.PerspectiveCamera) {
+    const distance = camera.position.distanceTo(point)
+    const vFOV = THREE.MathUtils.degToRad(camera.fov)
+    return (2 * Math.tan(vFOV / 2) * distance) / viewportHeightPx
+  }
+  return 1
+}
 
 function brighten(rgb: [number, number, number], factor = 1.2): THREE.Color {
   return new THREE.Color(
@@ -61,6 +79,26 @@ function usePivotTexture(): THREE.Texture | null {
   return texture
 }
 
+/** The pivot gizmo for one selected brush -- constant SCREEN size regardless of zoom/distance (bug
+ * report: "pivot's size should be the same on screen, regardless of zoom"). Rescales its own sprite
+ * every frame from the live camera/viewport state rather than using a fixed world-unit `scale`. */
+function PivotMarker({ position, texture }: { position: [number, number, number]; texture: THREE.Texture | null }) {
+  const spriteRef = useRef<THREE.Sprite>(null)
+  const { camera, size } = useThree()
+  useFrame(() => {
+    const sprite = spriteRef.current
+    if (!sprite) return
+    const worldPos = new THREE.Vector3(...position)
+    const scale = PIVOT_MARKER_SCREEN_PX * worldUnitsPerPixelAt(camera, worldPos, size.height)
+    sprite.scale.set(scale, scale, 1)
+  })
+  return (
+    <sprite ref={spriteRef} position={position}>
+      <spriteMaterial map={texture ?? undefined} color={PIVOT_RED} depthTest={false} transparent />
+    </sprite>
+  )
+}
+
 export interface SelectionMarkersProps {
   actors: SceneActor[]
   selectedNames: ReadonlySet<string>
@@ -93,9 +131,7 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
                 <spriteMaterial color={color} depthTest={false} />
               </sprite>
             ))}
-            <sprite position={actor.location} scale={[PIVOT_MARKER_SIZE, PIVOT_MARKER_SIZE, 1]}>
-              <spriteMaterial map={pivotTexture ?? undefined} color={PIVOT_RED} depthTest={false} transparent />
-            </sprite>
+            <PivotMarker position={actor.location} texture={pivotTexture} />
           </group>
         )
       })}
