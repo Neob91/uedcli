@@ -30,9 +30,9 @@ describe('orthoPan', () => {
   it('a Top-axis pan moves center X/Y by the screen-to-world-scaled delta, never Z', () => {
     const pose: OrthoPose = { center: [0, 0, 100], worldUnitsPerPixel: 2 }
     const panned = orthoPan(pose, 'top', 10, 5)
-    // right=[1,0,0] scaled by -dxPx*wupp=-20; up=[0,-1,0] scaled by dyPx*wupp=10 -> y -= 10
-    expect(panned.center[0]).toBeCloseTo(-20)
-    expect(panned.center[1]).toBeCloseTo(-10)
+    // right=[1,0,0] scaled by dxPx*wupp=20; up=[0,-1,0] scaled by -dyPx*wupp=-10 -> y += 10
+    expect(panned.center[0]).toBeCloseTo(20)
+    expect(panned.center[1]).toBeCloseTo(10)
     expect(panned.center[2]).toBe(100)
     expect(panned.worldUnitsPerPixel).toBe(2)
   })

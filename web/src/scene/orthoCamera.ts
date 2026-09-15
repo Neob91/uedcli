@@ -41,15 +41,16 @@ function addScaled(v: Vec3, dir: Vec3, s: number): Vec3 {
   return [v[0] + dir[0] * s, v[1] + dir[1] * s, v[2] + dir[2] * s]
 }
 
-/** Drag-pan: content follows the cursor (the standard direct-manipulation "grab and drag"
- * convention) -- dragging screen-right moves the visible window LEFT in world space (so content
- * that was already visible appears to slide right with the cursor), and symmetrically for
- * screen-down/`up`. Scaled by `worldUnitsPerPixel` so pan speed is zoom-independent in screen
+/** Drag-pan: the VIEW moves with the drag (owner ruling, 2026-09-15 -- the opposite of mobile-style
+ * "content follows the finger" scrolling). Dragging screen-right moves the visible window RIGHT in
+ * world space, so you see more of what's further right; dragging left reveals what's on the left,
+ * and symmetrically for up/down. A world-fixed point already on screen therefore appears to slide
+ * OPPOSITE the drag. Scaled by `worldUnitsPerPixel` so pan speed is zoom-independent in screen
  * terms. */
 export function orthoPan(pose: OrthoPose, axis: OrthoAxis, dxPx: number, dyPx: number): OrthoPose {
   const { right, up } = orthoBasis(axis)
-  let center = addScaled(pose.center, right, -dxPx * pose.worldUnitsPerPixel)
-  center = addScaled(center, up, dyPx * pose.worldUnitsPerPixel)
+  let center = addScaled(pose.center, right, dxPx * pose.worldUnitsPerPixel)
+  center = addScaled(center, up, -dyPx * pose.worldUnitsPerPixel)
   return { center, worldUnitsPerPixel: pose.worldUnitsPerPixel }
 }
 

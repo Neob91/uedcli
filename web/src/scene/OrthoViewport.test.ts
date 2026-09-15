@@ -85,7 +85,7 @@ function screenPxOf(pose: OrthoPose, axis: OrthoAxis, worldPoint: [number, numbe
 }
 
 describe('orthoPan (rendered)', () => {
-  it('a screen-space drag moves a fixed world point by the SAME screen delta, for every axis', () => {
+  it('a screen-space drag moves a fixed world point by the OPPOSITE screen delta (the view moves WITH the drag), for every axis', () => {
     const viewportPx = { width: 800, height: 600 }
     const worldPoint: [number, number, number] = [3, -4, 5]
     const dxPx = 10
@@ -94,8 +94,8 @@ describe('orthoPan (rendered)', () => {
       const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 2 }
       const before = screenPxOf(pose, axis, worldPoint, viewportPx)
       const after = screenPxOf(orthoPan(pose, axis, dxPx, dyPx), axis, worldPoint, viewportPx)
-      expect(after.x - before.x).toBeCloseTo(dxPx, 5)
-      expect(after.y - before.y).toBeCloseTo(dyPx, 5)
+      expect(after.x - before.x).toBeCloseTo(-dxPx, 5)
+      expect(after.y - before.y).toBeCloseTo(-dyPx, 5)
     }
   })
 })

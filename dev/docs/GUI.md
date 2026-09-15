@@ -99,8 +99,10 @@ PROJECTION matrix's NDC-x term instead (`projectionMatrix.elements[0] *= -1`, wi
 through it). `lookAt` derives screen-right as `cross(up, eye-target)`, which for every camera basis
 here is the exact negation of the intended `right`/`orthoBasis.right` — but negating the
 projection's NDC-x term restores the intended screen-right without touching the already-correct
-look direction, so pan direction comes out right too. Ortho drag-to-pan: content follows the
-cursor (`orthoPan`).
+look direction, so pan direction comes out right too. **Ortho drag-to-pan (owner ruling,
+2026-09-15): the view moves WITH the drag** — dragging left reveals what's on the left, the
+opposite of mobile-style "content follows the finger" scrolling (`orthoPan`). A world-fixed point
+already on screen therefore slides opposite the drag.
 
 ## The world-anchored grid
 
