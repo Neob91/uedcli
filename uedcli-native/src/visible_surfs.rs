@@ -1186,12 +1186,33 @@ fn traverse(
             if reachable && front_ok && !portal_needs_zones {
                 if let Some(rows) = rasterize_node(model, nu, light_loc, face, is_front, poly_flags) {
                     DBG_RASTERIZED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                    let opaque = SUBTRACT_OCCLUSION && occludes(poly_flags);
+                    // TEMP bisection probe (wanchai-n201-raster-footprint, 2026-09-15): skip ONE
+                    // named node's occlusion subtraction, to find which upstream occluder's
+                    // footprint is responsible for a target surf's empty span-test result, without
+                    // any live gdb capture. Not on any hot path (env lookup only); remove once the
+                    // root cause is pinned.
+                    let skip_node = std::env::var("UEDCLI_VISGATE_SKIP_NODE")
+                        .ok().and_then(|v| v.parse::<usize>().ok()) == Some(nu);
+                    let skip_surf = std::env::var("UEDCLI_VISGATE_SKIP_SURF")
+                        .ok().and_then(|v| v.parse::<i32>().ok()) == Some(n.i_surf);
+                    let opaque = SUBTRACT_OCCLUSION && occludes(poly_flags) && !skip_node && !skip_surf;
                     let buf = spans.get_or_empty(near_key);
+                    // TEMP bisection probe: dump PRE rows for ANY node overlapping a named row
+                    // band, regardless of surf -- finds which occluder(s) claim a target's exact
+                    // window (`wanchai-n201-raster-footprint`, 2026-09-15). Remove with the above.
+                    let row_band = std::env::var("UEDCLI_VISGATE_TRACE_ROWS").ok().and_then(|v| {
+                        let (a, b) = v.split_once(',')?;
+                        Some((a.parse::<i32>().ok()?, b.parse::<i32>().ok()?))
+                    });
                     // Per-row dump only for a NAMED surf — the whole-traversal mode (`s == -1`)
                     // would print every row of every rasterized node.
-                    if trace.is_some_and(|(_, s)| s == n.i_surf) {
+                    if trace.is_some_and(|(_, s)| s == n.i_surf)
+                        || row_band.is_some_and(|(y0, y1)| rows.iter().any(|&(y, _, _)| y >= y0 && y < y1))
+                    {
                         for &(y, wx0, wx1) in &rows {
+                            if row_band.is_some_and(|(y0, y1)| y < y0 || y >= y1) {
+                                continue;
+                            }
                             eprintln!(
                                 "VISGATE_TRACE node={nu} PRE row y={y} window=[{wx0},{wx1}) buf_row={:?}",
                                 buf.rows[y as usize]
