@@ -178,16 +178,48 @@ export function useMarkerTexture(): THREE.Texture | null {
  * for the render-decision -> three.js mapping, unit-tested without a WebGL context.
  * - `twoSided` -> DoubleSide, else FrontSide (render.rs's backface cull; PF_TwoSided|PF_Portal exempt).
  * - `masked` -> alphaTest 0.5 against the texture's mask alpha (holes: fences, rotor).
- * - `translucent` -> half-opacity NormalBlending (see-through); `modulated` -> MultiplyBlending.
- *   Approximations of UE1's additive/modulate-2x, not pixel-exact (spec).
+ * - `translucent` -> true ADDITIVE blend (`dest + src`, real UE1 formula, same as `render.rs`'s
+ *   `Blend::Translucent`); `modulated` -> multiply blend with the material's own color doubled, an
+ *   approximation of D3D modulate-2x (`dest * src / 128`) -- see the "sunglasses" fix note below.
  * - `translucent`/`modulated` -> `depthWrite: false`: a see-through surface must not occlude
  *   geometry drawn after it in the depth buffer (`MeshBasicMaterial`'s default `depthWrite: true`
- *   would let a translucent/modulated poly block whatever's behind it, drawn later). */
+ *   would let a translucent/modulated poly block whatever's behind it, drawn later).
+ *
+ * **"Sunglasses" bug fix (2026-09-15):** this used to approximate Translucent as half-opacity
+ * `NormalBlending` and Modulated as plain `MultiplyBlending` -- both explicitly flagged here as
+ * "not pixel-exact," but the gap was worse than shading precision: it flipped an intentionally
+ * INVISIBLE placeholder texture to a visibly darkened shape. Evidence
+ * (`_scratch/probe_npc_mesh.py`, decoding real `DeusExCharacters`/`DeusExItems` content): every
+ * stock NPC's glasses-frames slot defaults to `DeusExItems.GrayMaskTex` (flat 50%-grey) under a
+ * Modulated material, and its glasses-lenses slot defaults to `DeusExItems.BlackMaskTex` (flat
+ * black) under a Translucent one -- the "no glasses" placeholders, meant to blend to nothing under
+ * UE1's real formulas (`dest*128/128=dest`, `dest+0=dest`). `render.rs` (the native photo path)
+ * already implements those real formulas correctly (`raster_tri`'s `Blend::Translucent`/
+ * `Blend::Modulated` tests pin exactly "black src is near-invisible" / "50%-grey src is neutral");
+ * only this web approximation had the bug, which is why an NPC's default "no glasses" state
+ * rendered every character wearing dark glasses shapes instead:
+ *   - the old `NormalBlending`-at-0.5-opacity darkened a black src to `dest*0.5` instead of leaving
+ *     it untouched (`dest+0`);
+ *   - the old plain `MultiplyBlending` darkened a 50%-grey src to `dest*0.5` instead of leaving it
+ *     neutral (`dest*1.0`).
+ * Fix: real `AdditiveBlending` for translucent (exactly `dest+src`, matching render.rs). For
+ * modulated, three.js has no built-in "multiply-by-2" blend factor (WebGL's fixed blend factors max
+ * out at `SrcColorFactor`, i.e. plain `dest*src`), so the 2x is folded into the material's own
+ * COLOR instead of the blend equation -- `MultiplyBlending`'s `src` operand is
+ * `material.color * vertexColor * texel`, and doubling `material.color` reproduces `dest*texel*2`
+ * for any texel <= 0.5 (the fragment shader's own output still clamps to [0,1] before the blend
+ * stage, so a texel > 0.5 clamps to "no further brightening" instead of the real formula's
+ * brightening past white -- a known, narrower approximation than before, and the SAME "not
+ * pixel-exact" tolerance this function already carried, not a new one). This resolves exactly the
+ * reported case (50%-grey placeholder: `0.5*2=1.0` clamped, `dest*1.0=dest`, correctly neutral)
+ * without touching the untextured-group fallback below, which still overwrites `color` with
+ * `UNTEXTURED_GREY` for a (rare, no real corpus example found) modulated group with no texture at
+ * all -- that one narrow combination keeps the old (imperfect) look, flagged rather than chased. */
 export function resolveMaterialState(
   group: Pick<GeometryGroup, 'masked' | 'twoSided' | 'blend'>,
 ): Pick<
   THREE.MeshBasicMaterialParameters,
-  'side' | 'alphaTest' | 'transparent' | 'blending' | 'opacity' | 'premultipliedAlpha' | 'depthWrite'
+  'side' | 'alphaTest' | 'transparent' | 'blending' | 'opacity' | 'premultipliedAlpha' | 'depthWrite' | 'color'
 > {
   const state: ReturnType<typeof resolveMaterialState> = {
     side: group.twoSided ? THREE.DoubleSide : THREE.FrontSide,
@@ -195,12 +227,12 @@ export function resolveMaterialState(
   }
   if (group.blend === 'translucent') {
     state.transparent = true
-    state.blending = THREE.NormalBlending
-    state.opacity = 0.5
+    state.blending = THREE.AdditiveBlending
     state.depthWrite = false
   } else if (group.blend === 'modulated') {
     state.transparent = true
     state.blending = THREE.MultiplyBlending
+    state.color = new THREE.Color(2, 2, 2)
     // three.js requires this for MultiplyBlending, else it warns and blends wrong (WebGLState.js).
     state.premultipliedAlpha = true
     state.depthWrite = false

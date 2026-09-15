@@ -448,7 +448,12 @@ export function Viewport3D({
         {/* Issue 1: a selected brush's surface "lights up" (additive brightness boost), same as the
             2D ortho panes below -- no surface to light up in wireframe mode (no solid mesh above). */}
         {mode !== 'wireframe' && (
-          <SelectionHighlight bufferGeometry={bufferGeometry} triangleOwners={triangleOwners} selectedNames={selectedNames} />
+          <SelectionHighlight
+            bufferGeometry={bufferGeometry}
+            triangleOwners={triangleOwners}
+            selectedNames={selectedNames}
+            materials={activeMaterials}
+          />
         )}
         <group ref={markerGroupRef}>
           {markerActors.map((actor) => {

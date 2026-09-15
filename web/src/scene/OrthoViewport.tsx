@@ -303,7 +303,12 @@ export function OrthoViewport({
         {/* Issue 1: a selected brush's surface "lights up" (additive brightness boost), same as the
             3D perspective pane -- no surface to light up in wireframe mode (no solid mesh above). */}
         {mode !== 'wireframe' && (
-          <SelectionHighlight bufferGeometry={bufferGeometry} triangleOwners={triangleOwners} selectedNames={selectedNames} />
+          <SelectionHighlight
+            bufferGeometry={bufferGeometry}
+            triangleOwners={triangleOwners}
+            selectedNames={selectedNames}
+            materials={activeMaterials}
+          />
         )}
         <group ref={markerGroupRef}>
           {markerActors.map((actor) => {

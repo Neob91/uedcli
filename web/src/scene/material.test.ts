@@ -22,14 +22,38 @@ describe('resolveMaterialState', () => {
     expect(s.blending).toBeUndefined()
   })
 
-  it('maps translucent -> half-opacity NormalBlending, modulated -> MultiplyBlending', () => {
+  it('maps translucent -> true additive blend (dest+src), matching render.rs exactly', () => {
     const t = resolveMaterialState({ masked: false, twoSided: false, blend: 'translucent' })
     expect(t.transparent).toBe(true)
-    expect(t.blending).toBe(THREE.NormalBlending)
-    expect(t.opacity).toBe(0.5)
+    expect(t.blending).toBe(THREE.AdditiveBlending)
+    expect(t.opacity).toBeUndefined() // full opacity -- a half-opacity src would darken a black texel
+  })
+
+  it('maps modulated -> MultiplyBlending with the material color doubled (2x, approximating D3D modulate-2x)', () => {
     const m = resolveMaterialState({ masked: false, twoSided: false, blend: 'modulated' })
     expect(m.transparent).toBe(true)
     expect(m.blending).toBe(THREE.MultiplyBlending)
+    expect(m.color).toEqual(new THREE.Color(2, 2, 2))
+  })
+
+  // "Sunglasses" bug regression (2026-09-15): a stock NPC's "no glasses" placeholder is flat
+  // 50%-grey under a Modulated material and flat black under a Translucent one -- both must blend
+  // to NO visible change, or every NPC renders a dark glasses-shaped patch by default.
+  it('leaves a 50%-grey modulated placeholder neutral once shaded (the "no glasses frames" case)', () => {
+    const m = resolveMaterialState({ masked: false, twoSided: false, blend: 'modulated' })
+    const color = m.color as THREE.Color
+    // MultiplyBlending's src is (material.color * texel), clamped to [0,1] before the blend stage;
+    // a 50%-grey texel (0.5) doubled by this material's color is 1.0 -- multiplying the destination
+    // by 1.0 is a true no-op, matching UE1's real `dest*128/128=dest`.
+    const texel = 0.5
+    expect(Math.min(1, color.r * texel)).toBe(1)
+  })
+
+  it('leaves a black translucent placeholder invisible (the "no glasses lenses" case)', () => {
+    // AdditiveBlending's result is dest + src*opacity; opacity is full (1) and src (black) is 0, so
+    // the destination is exactly unchanged -- matching UE1's real `dest+0=dest`.
+    const t = resolveMaterialState({ masked: false, twoSided: false, blend: 'translucent' })
+    expect(t.opacity ?? 1).toBe(1)
   })
 
   it('sets premultipliedAlpha for modulated (three.js requires it for MultiplyBlending)', () => {
