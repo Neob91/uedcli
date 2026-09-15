@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PaneId } from './paneLayout'
-import { applyModeKey, isModeAvailable, keyForMode, resolveEffectiveMode, usesUnlitMaterials } from './shadingMode'
+import { applyModeKey, canChangeMode, isModeAvailable, keyForMode, resolveEffectiveMode, usesUnlitMaterials } from './shadingMode'
 import type { ShadingMode } from './shadingMode'
 
 describe('isModeAvailable', () => {
@@ -54,25 +54,49 @@ describe('keyForMode', () => {
   })
 })
 
+describe('canChangeMode', () => {
+  it('only perspective can change mode -- ortho panes are always wireframe', () => {
+    expect(canChangeMode('perspective')).toBe(true)
+    expect(canChangeMode('top')).toBe(false)
+    expect(canChangeMode('front')).toBe(false)
+    expect(canChangeMode('side')).toBe(false)
+  })
+})
+
 describe('applyModeKey', () => {
   const ALL_WIRE: Record<PaneId, ShadingMode> = { perspective: 'wireframe', top: 'wireframe', front: 'wireframe', side: 'wireframe' }
 
-  it("pressing '3' while focused==='top' changes only top's mode to 'flat'", () => {
-    const next = applyModeKey(ALL_WIRE, 'top', '3', true)
-    expect(next.top).toBe('flat')
-    expect(next.perspective).toBe('wireframe')
+  it("pressing '3' while focused==='perspective' changes only perspective's mode to 'flat'", () => {
+    const next = applyModeKey(ALL_WIRE, 'perspective', '3', true)
+    expect(next.perspective).toBe('flat')
+    expect(next.top).toBe('wireframe')
     expect(next.front).toBe('wireframe')
     expect(next.side).toBe('wireframe')
   })
 
   it('is a no-op (same object reference) when the requested mode would fall back', () => {
-    const next = applyModeKey(ALL_WIRE, 'top', '4', false) // 'lit' needs buildSolved
+    const next = applyModeKey(ALL_WIRE, 'perspective', '4', false) // 'lit' needs buildSolved
     expect(next).toBe(ALL_WIRE)
   })
 
   it("'1' (wireframe) is always available, even with buildSolved=false", () => {
-    const solved: Record<PaneId, ShadingMode> = { ...ALL_WIRE, top: 'lit' }
-    const next = applyModeKey(solved, 'top', '1', false)
+    const solved: Record<PaneId, ShadingMode> = { ...ALL_WIRE, perspective: 'lit' }
+    const next = applyModeKey(solved, 'perspective', '1', false)
+    expect(next.perspective).toBe('wireframe')
+  })
+
+  // Regression: an ortho pane must NEVER change mode, even to a mode that's otherwise available.
+  it('is a no-op for any ortho pane requesting a non-wireframe mode, even with a solved build', () => {
+    for (const pane of ['top', 'front', 'side'] as const) {
+      for (const key of ['2', '3', '4'] as const) {
+        const next = applyModeKey(ALL_WIRE, pane, key, true)
+        expect(next).toBe(ALL_WIRE)
+      }
+    }
+  })
+
+  it("an ortho pane CAN still process '1' (wireframe) -- it's a no-op change, not a rejected one", () => {
+    const next = applyModeKey(ALL_WIRE, 'top', '1', true)
     expect(next.top).toBe('wireframe')
   })
 })

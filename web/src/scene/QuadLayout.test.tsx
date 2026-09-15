@@ -109,19 +109,21 @@ describe('QuadLayout cross-pane selection consistency', () => {
 // The visible mode selector (ModeSelector) must drive the SAME per-pane mode state the `1`-`4`
 // keyboard shortcuts use, not a second, parallel model -- these pin that it changes only the
 // clicked pane's mode, and respects the same buildSolved gating applyModeKey already enforces.
+// Owner ruling: ortho panes (top/front/side) are ALWAYS wireframe, no mode choice at all -- only
+// perspective gets the selector, and only perspective's mode can ever change.
 describe('QuadLayout visible mode selector', () => {
-  it("clicking a pane's mode button changes only that pane's mode, leaving the others alone", () => {
+  it("clicking perspective's mode button changes only its mode, leaving ortho panes alone", () => {
     render(<Harness buildSolved={true} />)
 
     // Defaults: perspective 'lit', the three ortho panes 'wireframe' (QuadLayout's DEFAULT_MODES).
     expect(screen.getByTestId('pane-top-mode').textContent).toBe('wireframe')
     expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('lit')
 
-    const topPane = screen.getByTestId('quad-pane-top')
-    fireEvent.click(within(topPane).getByTestId('mode-btn-unlit'))
+    const perspectivePane = screen.getByTestId('quad-pane-perspective')
+    fireEvent.click(within(perspectivePane).getByTestId('mode-btn-unlit'))
 
-    expect(screen.getByTestId('pane-top-mode').textContent).toBe('unlit')
-    expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('lit')
+    expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('unlit')
+    expect(screen.getByTestId('pane-top-mode').textContent).toBe('wireframe')
     expect(screen.getByTestId('pane-front-mode').textContent).toBe('wireframe')
     expect(screen.getByTestId('pane-side-mode').textContent).toBe('wireframe')
   })
@@ -129,11 +131,27 @@ describe('QuadLayout visible mode selector', () => {
   it('a mode requiring a solved build is disabled, not silently ignored, when buildSolved is false', () => {
     render(<Harness buildSolved={false} />)
 
-    const topPane = screen.getByTestId('quad-pane-top')
-    const litBtn = within(topPane).getByTestId('mode-btn-lit')
+    // DEFAULT_MODES requests perspective 'lit', but with no solved build the EFFECTIVE mode falls
+    // back to 'wireframe' (resolveEffectiveMode) -- that's what the mocked pane actually receives.
+    expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('wireframe')
+
+    const perspectivePane = screen.getByTestId('quad-pane-perspective')
+    const litBtn = within(perspectivePane).getByTestId('mode-btn-lit')
     expect(litBtn.hasAttribute('disabled')).toBe(true)
 
     fireEvent.click(litBtn)
-    expect(screen.getByTestId('pane-top-mode').textContent).toBe('wireframe') // unchanged
+    expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('wireframe') // unchanged
+  })
+
+  it('ortho panes render no mode selector at all -- there is no choice to make', () => {
+    render(<Harness buildSolved={true} />)
+
+    for (const pane of ['top', 'front', 'side']) {
+      const paneEl = screen.getByTestId(`quad-pane-${pane}`)
+      expect(within(paneEl).queryByRole('group', { name: 'Shading mode' })).toBeNull()
+    }
+    // Perspective still has it.
+    const perspectivePane = screen.getByTestId('quad-pane-perspective')
+    expect(within(perspectivePane).getByRole('group', { name: 'Shading mode' })).toBeTruthy()
   })
 })

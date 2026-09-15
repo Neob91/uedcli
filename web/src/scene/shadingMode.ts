@@ -12,6 +12,12 @@ export function isModeAvailable(mode: ShadingMode, buildSolved: boolean): boolea
   return mode === 'wireframe' || buildSolved
 }
 
+/** Owner ruling: the 2D ortho panes (top/front/side) are ALWAYS wireframe -- no mode choice at
+ * all, not even a default. Only the 3D perspective pane can switch modes. */
+export function canChangeMode(pane: PaneId): boolean {
+  return pane === 'perspective'
+}
+
 /** The mode a pane actually renders in: `requested` when available, else `'wireframe'` (e.g. a pane
  * left on `'lit'` before a level with no solved build loads). */
 export function resolveEffectiveMode(requested: ShadingMode, buildSolved: boolean): ShadingMode {
@@ -46,7 +52,8 @@ export function keyForMode(mode: ShadingMode): '1' | '2' | '3' | '4' {
 /** `1`-`4` sets the FOCUSED pane's requested mode (main spec's keybindings, Task 20) -- a no-op
  * (returns the SAME `current` object, not an equivalent copy, so a caller's `setState` doesn't
  * spuriously re-render) when the requested mode isn't available yet (e.g. `buildSolved=false` and
- * the key requests anything but wireframe). */
+ * the key requests anything but wireframe), or when `focused` is an ortho pane and the request
+ * isn't `'wireframe'` (`canChangeMode` -- ortho panes can't change mode at all). */
 export function applyModeKey(
   current: Record<PaneId, ShadingMode>,
   focused: PaneId,
@@ -55,5 +62,6 @@ export function applyModeKey(
 ): Record<PaneId, ShadingMode> {
   const requested = KEY_TO_MODE[key]
   if (!isModeAvailable(requested, buildSolved)) return current
+  if (!canChangeMode(focused) && requested !== 'wireframe') return current
   return { ...current, [focused]: requested }
 }

@@ -18,7 +18,7 @@ import type { PaneId } from './paneLayout'
 import { toggleMaximize } from './paneLayout'
 import { SceneResourcesProvider } from './SceneResourcesContext'
 import { SelectionKeys } from './SelectionKeys'
-import { applyModeKey, keyForMode, resolveEffectiveMode } from './shadingMode'
+import { applyModeKey, canChangeMode, keyForMode, resolveEffectiveMode } from './shadingMode'
 import type { ShadingMode } from './shadingMode'
 import { Viewport3D } from './Viewport3D'
 
@@ -203,11 +203,15 @@ export function QuadLayout({
                 showGrid={showGrid}
               />
             )}
-            <ModeSelector
-              mode={resolveEffectiveMode(modes[pane], buildSolved)}
-              buildSolved={buildSolved}
-              onSelect={(mode) => setPaneMode(pane, mode)}
-            />
+            {/* Owner ruling: ortho panes are ALWAYS wireframe, no mode choice -- only perspective
+                gets the selector (canChangeMode). */}
+            {canChangeMode(pane) && (
+              <ModeSelector
+                mode={resolveEffectiveMode(modes[pane], buildSolved)}
+                buildSolved={buildSolved}
+                onSelect={(mode) => setPaneMode(pane, mode)}
+              />
+            )}
           </div>
         ))}
         {/* Drag-to-resize splitters (bug report item 3): plain component state, no persistence --

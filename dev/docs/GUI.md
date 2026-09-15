@@ -30,6 +30,12 @@ long-standing UnrealEd role, not merely feature parity.
 need a solved build, else the pane falls back to `'wireframe'` — `resolveEffectiveMode`). Keys
 `1`-`4` set the focused pane's mode.
 
+**Owner ruling: the ortho panes can never change mode — they are always `'wireframe'`.** Only the
+perspective pane can switch (`canChangeMode`, `applyModeKey`'s own check); the visible
+`ModeSelector` control (below) isn't even rendered for an ortho pane, since there's no choice to
+make. This is a real constraint, not just a default — don't reintroduce a path (keyboard or click)
+that lets an ortho pane's mode change.
+
 `'unlit'` reproduces `preview.py --mode fullbright`'s flat `_KEY_LIGHT`-dot-product shade with the
 lightmap dropped (`sceneResources.ts`'s parallel `unlitMaterials` array, same geometry/group
 indexing as `materials`, built once and shared across panes). `'lit'` samples the baked lightmap
