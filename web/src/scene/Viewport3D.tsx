@@ -320,10 +320,11 @@ export function Viewport3D({
         const aabbCandidates = mode === 'wireframe' ? scene.actors.filter((a) => !a.brush) : scene.actors
         hitActor = pickActor(ray, aabbCandidates)
       }
-      // The 3D perspective pane's plain LMB-drag is camera-fly (dolly+turn) -- a brush hit needs
-      // Shift held to disambiguate a selection tap from that, per real UnrealEd (`selection.ts`'s
-      // `canSelectBrushTap`). A point-actor hit is unaffected.
-      if (hitActor?.brush && !canSelectBrushTap(true, shiftKey)) hitActor = null
+      // Wireframe mode: plain tap selects a brush directly. Non-wireframe (unlit/flat/lit): plain
+      // LMB-drag is camera-fly (dolly+turn), so a brush hit needs Shift held to disambiguate a
+      // selection tap from that (`selection.ts`'s `canSelectBrushTap`). A point-actor hit is
+      // unaffected either way.
+      if (hitActor?.brush && !canSelectBrushTap(mode, shiftKey)) hitActor = null
       const result = resolveTapSelection(hitActor, additive)
       if (result) onSelectActor(result.name, result.additive)
     },

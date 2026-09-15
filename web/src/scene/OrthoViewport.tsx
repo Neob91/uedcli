@@ -206,10 +206,10 @@ export function OrthoViewport({
         const aabbCandidates = mode === 'wireframe' ? actors.filter((a) => !a.brush) : actors
         hitActor = pickActor(ray, aabbCandidates)
       }
-      // 2D ortho panes bind LMB-drag to select/marquee, not camera-fly, so a brush hit here needs no
-      // Shift -- always true, but routed through the same gate as Viewport3D's for symmetry (see
-      // `selection.ts`'s `canSelectBrushTap`).
-      if (hitActor?.brush && !canSelectBrushTap(false, shiftKey)) hitActor = null
+      // Ortho panes are always wireframe (locked, see shadingMode.ts's canChangeMode), so this is
+      // always a no-Shift-needed plain tap -- routed through the same gate as Viewport3D's for
+      // symmetry (see `selection.ts`'s `canSelectBrushTap`).
+      if (hitActor?.brush && !canSelectBrushTap(mode, shiftKey)) hitActor = null
       const result = resolveTapSelection(hitActor, additive)
       if (result) onSelectActor(result.name, result.additive)
     },

@@ -120,13 +120,14 @@ intentional), not a silent implementation choice either way.
   pinned by a citable fact in `unrealed/quirks.md`/`rendering.md` (checked); this is the closest
   citable in-codebase convention. Only drawn when the mode also draws the solid mesh (not
   `'wireframe'`, which has no surface).
-- **Brush-selection click modifier is VIEWPORT-gated, not mode-gated** (owner ruling 2026-09-15):
-  in the 3D perspective pane a brush needs **Shift+LMB** in every shading mode, because plain
-  LMB-drag there is camera-fly (dolly+turn); in the 2D ortho panes plain LMB selects a brush in
-  every mode, because LMB-drag there is select/marquee (confirmed by
-  `unrealed/leveldesign/kb/editor-ui.md`'s "2D/3D navigation" entry). Point actors are unaffected —
-  always plain-tap-selectable in both. `selection.ts`'s `canSelectBrushTap(isPerspectivePane,
-  shiftKey)` is the gate; `dragGesture.ts`'s `onTap` threads the release-time `shiftKey` for it.
+- **Brush-selection click modifier is SHADING-MODE-gated, not viewport-gated** (corrected owner
+  ruling 2026-09-15 — an earlier pass had this backwards as 3D-vs-2D): in **wireframe** mode, plain
+  LMB selects a brush directly — true in every ortho pane (always wireframe) and in the perspective
+  pane whenever it's in wireframe mode too. In a **non-wireframe** perspective mode (`unlit`/`flat`/
+  `lit`), a brush needs **Shift+LMB**, because plain LMB-drag there is camera-fly (dolly+turn) and
+  would otherwise be ambiguous with an incidental camera nudge. Point actors are unaffected — always
+  plain-tap-selectable everywhere. `selection.ts`'s `canSelectBrushTap(mode, shiftKey)` is the gate;
+  `dragGesture.ts`'s `onTap` threads the release-time `shiftKey` for it.
 
 **Inspector props/categories** (`web/src/panels/Inspector.tsx`): draws exactly what the backend
 sends, no model logic of its own — `SceneActor.props`/`.categories` (parallel arrays) are the raw

@@ -10,6 +10,7 @@
 // WebGL context).
 import type { SceneActor } from '../api'
 import type { Vec3 } from './camera'
+import type { ShadingMode } from './shadingMode'
 
 /** Resolves a raycast hit on the merged scene geometry to its owning actor: `faceIndex` is
  * `THREE.Intersection.faceIndex` (a triangle index into the non-indexed geometry, so it indexes
@@ -100,18 +101,15 @@ export function pickActor(ray: Ray, actors: SceneActor[]): SceneActor | null {
   return best
 }
 
-/** Real UnrealEd binds a plain LMB-drag in the 3D perspective viewport to camera-fly (dolly+turn),
- * in every shading mode -- so a plain LMB tap that lands on a BRUSH there is ambiguous with an
- * incidental camera nudge, and Shift+LMB is the disambiguator (owner ruling 2026-09-15). The 2D
- * ortho panes bind LMB-drag to select/marquee instead (no camera-fly conflict), so brush selection
- * there takes a plain tap -- same as a point actor everywhere, since a point actor has no surface of
- * its own to collide with camera-fly. This is VIEWPORT-gated (3D perspective vs. 2D ortho), not
- * shading-mode-gated (wireframe vs. solid) -- corrects `board/done/
- * brush-selection-input-should-match-ued22-mode-gated`'s own mode-gated guess. See
- * `dev/docs/unrealed/leveldesign/kb/editor-ui.md` "2D/3D navigation": 2D LMB-drag = select/marquee,
- * 3D LMB-drag = look/move. */
-export function canSelectBrushTap(isPerspectivePane: boolean, shiftKey: boolean): boolean {
-  return !isPerspectivePane || shiftKey
+/** This is SHADING-MODE-gated (wireframe vs. non-wireframe), not viewport-gated -- corrected owner
+ * ruling 2026-09-15 (an earlier pass had this backwards as 3D-vs-2D). In wireframe mode -- the 2D
+ * ortho panes are always wireframe, and the 3D perspective pane can be too -- a plain LMB tap
+ * selects a brush directly, matching how a point actor is always plain-tap-selectable. In a
+ * NON-wireframe shading mode (only possible in the 3D perspective pane: `unlit`/`flat`/`lit`), a
+ * plain LMB-drag is camera-fly (dolly+turn), so a tap landing on a brush is ambiguous with an
+ * incidental camera nudge -- Shift+LMB is the disambiguator there. */
+export function canSelectBrushTap(mode: ShadingMode, shiftKey: boolean): boolean {
+  return mode === 'wireframe' || shiftKey
 }
 
 export const TAP_DRAG_THRESHOLD_PX = 4

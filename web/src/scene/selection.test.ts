@@ -124,17 +124,19 @@ describe('resolveTapSelection', () => {
 })
 
 describe('canSelectBrushTap', () => {
-  // Owner ruling 2026-09-15: 3D-perspective brush selection needs Shift+LMB (plain LMB-drag there is
-  // camera-fly); 2D ortho brush selection needs no modifier (plain LMB-drag there is select/marquee).
-  // Viewport-gated, not shading-mode-gated.
-  it('requires Shift for a brush hit in the 3D perspective pane', () => {
-    expect(canSelectBrushTap(true, false)).toBe(false)
-    expect(canSelectBrushTap(true, true)).toBe(true)
+  // Corrected owner ruling 2026-09-15: shading-mode-gated (wireframe vs. non-wireframe), not
+  // viewport-gated (an earlier pass had this backwards as 3D-vs-2D). Wireframe never needs Shift --
+  // ortho panes are always wireframe, and the 3D perspective pane is too when in that mode.
+  it('never requires Shift in wireframe mode', () => {
+    expect(canSelectBrushTap('wireframe', false)).toBe(true)
+    expect(canSelectBrushTap('wireframe', true)).toBe(true)
   })
 
-  it('never requires Shift for a brush hit in a 2D ortho pane', () => {
-    expect(canSelectBrushTap(false, false)).toBe(true)
-    expect(canSelectBrushTap(false, true)).toBe(true)
+  it('requires Shift for a brush hit in a non-wireframe mode (only possible in 3D perspective)', () => {
+    for (const mode of ['unlit', 'flat', 'lit'] as const) {
+      expect(canSelectBrushTap(mode, false)).toBe(false)
+      expect(canSelectBrushTap(mode, true)).toBe(true)
+    }
   })
 })
 
