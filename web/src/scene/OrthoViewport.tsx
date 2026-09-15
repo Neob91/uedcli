@@ -53,24 +53,67 @@ export function initialOrthoPose(): OrthoPose {
   return { center: [0, 0, 0], worldUnitsPerPixel: INITIAL_WORLD_UNITS_PER_PIXEL }
 }
 
-// Scratch objects for OrthoCameraRig's basis matrix (module-scope: avoid allocating every frame).
-const _xAxis = new THREE.Vector3()
-const _yAxis = new THREE.Vector3()
-const _zAxis = new THREE.Vector3()
-const _basis = new THREE.Matrix4()
-
 /** Applies `pose`/`axis` to the R3F default (orthographic) camera every frame: axis-locked
  * position/orientation (looking along `orthoBasis(axis).forward` through `pose.center`), and a
  * frustum sized from `worldUnitsPerPixel` × the container's own pixel size so the pane's on-screen
  * scale matches `pose` exactly regardless of the pane's CSS size. Publishes the live camera object
  * to `cameraRef` for the outer pointer handlers' raycast.
  *
- * Orientation is built directly from `orthoBasis`'s (right, up, forward) via `Matrix4.makeBasis`,
- * NOT `camera.up` + `lookAt` -- three.js's `lookAt` derives local +X (screen-right) as
- * `cross(up, eye-target)`, which for every one of this module's three axis bases works out to the
- * NEGATION of `orthoBasis`'s own `right` (confirmed live: dragging right visibly panned the wrong
- * way -- bug report item 5). `makeBasis` pins local +X/+Y/+Z to `right`/`up`/`-forward` (a camera
- * looks down its local -Z) exactly, so the rendered screen-right always matches `orthoBasis.right`. */
+ * Orientation is built via `camera.up` + `lookAt` (a PROPER rotation, always valid), THEN mirrors
+ * the projection's NDC-x term -- the same fix `Viewport3D.tsx`'s `applyCameraPose` applies to the
+ * perspective camera, for the identical reason. This file used to build the rotation directly from
+ * `orthoBasis`'s (right, up, forward) via `Matrix4.makeBasis` (local +X/+Y/+Z pinned to
+ * `right`/`up`/`-forward`); that matrix is IMPROPER (determinant -1) for all three axes, a direct
+ * consequence of this world being left-handed (`Viewport3D.tsx`'s own doc comment), and
+ * `quaternion.setFromRotationMatrix` silently mis-decomposes an improper matrix -- confirmed live
+ * (and by a standalone port of three.js's own algorithm) to produce a camera looking along a
+ * COMPLETELY WRONG axis for `front`/`side` (only `top` happened to end up pointing the right way,
+ * merely upside-down), which is why front/side rendered entirely blank while top looked fine. Real
+ * root cause of the Front/Side blank-pane regression -- `Viewport3D.tsx`'s comment already predicted
+ * exactly this failure mode for this exact pattern, but the fix wasn't ported here at the same time.
+ *
+ * `lookAt` derives local +X (screen-right) as `cross(up, eye-target)`, which for every one of this
+ * module's three axis bases works out to the NEGATION of `orthoBasis`'s own `right` (this file's
+ * previous doc comment already noted this, citing bug report item 5 -- dragging right visibly
+ * panned the wrong way when this was tried before the mirror-projection technique existed). Negating
+ * `projectionMatrix`'s NDC-x term restores the intended screen-right without touching the
+ * already-correct look direction/up, so pan direction stays correct too. `projectionMatrixInverse`
+ * is kept in sync for the same reason `Viewport3D.tsx` keeps it in sync: `performTapSelect`'s
+ * `THREE.Raycaster.setFromCamera` unprojects screen points through it.
+ *
+ * Pure THREE.js math -- no WebGL context needed, so it's unit-tested directly
+ * (`OrthoViewport.test.ts`) without mounting a `<Canvas>`, mirroring `Viewport3D.tsx`'s
+ * `applyCameraPose`. */
+export function applyOrthoCameraPose(
+  cam: THREE.OrthographicCamera,
+  pose: OrthoPose,
+  axis: OrthoAxis,
+  viewportPx: { width: number; height: number },
+): void {
+  const { forward, up } = orthoBasis(axis)
+  const x = pose.center[0] - forward[0] * ORTHO_HALF_RANGE
+  const y = pose.center[1] - forward[1] * ORTHO_HALF_RANGE
+  const z = pose.center[2] - forward[2] * ORTHO_HALF_RANGE
+  cam.position.set(x, y, z)
+  cam.up.set(up[0], up[1], up[2])
+  cam.lookAt(x + forward[0], y + forward[1], z + forward[2])
+  cam.updateMatrixWorld(true) // r3f does this before rendering; explicit here so this function is
+  // self-contained for direct (non-r3f) callers, e.g. OrthoViewport.test.ts's Vector3.project(cam),
+  // which reads matrixWorldInverse without updating it itself (Viewport3D.tsx's applyCameraPose has
+  // the identical call for the identical reason).
+  const halfW = (viewportPx.width / 2) * pose.worldUnitsPerPixel
+  const halfH = (viewportPx.height / 2) * pose.worldUnitsPerPixel
+  cam.left = -halfW
+  cam.right = halfW
+  cam.top = halfH
+  cam.bottom = -halfH
+  cam.near = 0.1
+  cam.far = ORTHO_HALF_RANGE * 2
+  cam.updateProjectionMatrix()
+  cam.projectionMatrix.elements[0] *= -1
+  cam.projectionMatrixInverse.elements[0] *= -1
+}
+
 function OrthoCameraRig({
   pose,
   axis,
@@ -84,26 +127,7 @@ function OrthoCameraRig({
   useFrame(() => {
     const cam = camera as THREE.OrthographicCamera
     cameraRef.current = cam
-    const { forward, right, up } = orthoBasis(axis)
-    cam.position.set(
-      pose.center[0] - forward[0] * ORTHO_HALF_RANGE,
-      pose.center[1] - forward[1] * ORTHO_HALF_RANGE,
-      pose.center[2] - forward[2] * ORTHO_HALF_RANGE,
-    )
-    _xAxis.set(right[0], right[1], right[2])
-    _yAxis.set(up[0], up[1], up[2])
-    _zAxis.set(-forward[0], -forward[1], -forward[2])
-    _basis.makeBasis(_xAxis, _yAxis, _zAxis)
-    cam.quaternion.setFromRotationMatrix(_basis)
-    const halfW = (size.width / 2) * pose.worldUnitsPerPixel
-    const halfH = (size.height / 2) * pose.worldUnitsPerPixel
-    cam.left = -halfW
-    cam.right = halfW
-    cam.top = halfH
-    cam.bottom = -halfH
-    cam.near = 0.1
-    cam.far = ORTHO_HALF_RANGE * 2
-    cam.updateProjectionMatrix()
+    applyOrthoCameraPose(cam, pose, axis, size)
   })
   return null
 }
