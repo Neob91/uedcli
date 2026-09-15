@@ -270,6 +270,36 @@ def test_read_level_errors_cleanly_on_a_corrupt_non_blank_body(tmp_path):
         src.load()
 
 
+def test_read_level_skips_a_sidecar_that_is_a_directory_not_a_file(tmp_path):
+    """A sidecar name (`actor.t3d`/`order_value`/`folder`) that's a DIRECTORY instead of a file --
+    a real git-merge-conflict shape in this per-actor-file trunk layout -- degrades the same way an
+    absent sidecar does (skip/None), not an unhandled IsADirectoryError out of every level read."""
+    seed = Level(actors={"Good_1": Actor(name="Good_1", cls="Light")})
+    trunk.write_level(tmp_path, seed, {"Good_1": "m"})
+    weird = tmp_path / "actors" / "Weird_2"
+    weird.mkdir()
+    (weird / "actor.t3d").mkdir()                     # actor.t3d is a DIR, not a file
+    lv, ranks = trunk.read_level(tmp_path)
+    assert set(lv.actors) == {"Good_1"} and "Weird_2" not in ranks
+
+
+def test_read_level_treats_a_directory_order_value_or_folder_as_absent(tmp_path):
+    """Same shape as above, but for the OPTIONAL sidecars (order_value/folder): the actor itself
+    still loads (actor.t3d is a real file), the directory-shaped optional sidecar reads as absent
+    (empty order_value, folder=None) instead of crashing."""
+    seed = Level(actors={"Good_1": Actor(name="Good_1", cls="Light")})
+    trunk.write_level(tmp_path, seed, {"Good_1": "m"})
+    odd = tmp_path / "actors" / "Odd_2"
+    odd.mkdir()
+    (odd / "actor.t3d").write_text("Begin Actor Class=Light Name=Odd_2\nEnd Actor\n")
+    (odd / "order_value").mkdir()                     # order_value is a DIR, not a file
+    (odd / "folder").mkdir()                          # folder is a DIR, not a file
+    lv, ranks = trunk.read_level(tmp_path)
+    assert "Odd_2" in lv.actors
+    assert lv.actors["Odd_2"].folder is None
+    assert ranks.get("Odd_2", "") == ""
+
+
 def test_load_actor_body_rejects_a_body_with_no_actor_block():
     with pytest.raises(ValueError, match="Foo"):
         trunk.load_actor_body("garbage, not a t3d actor block\n", "Foo")
