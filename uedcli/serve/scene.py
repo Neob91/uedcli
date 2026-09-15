@@ -1,7 +1,8 @@
 """Trunk → scene payload for `uedcli serve`. `_LoadedTrunk`/`_BuiltGeometry` (shared-cache spec,
-Task 1) are the two independently-cached slots `app.py`'s `_get_trunk`/`_get_geometry` populate —
-`build_scene_payload` (Task 3) is now pure: it assembles a `ScenePayload` from two already-built
-pieces instead of loading/building anything itself."""
+Task 1) are the two independently-cached slots `app.py`'s `_get_trunk`/`_read_geometry`/
+`_build_and_publish_geometry` populate — `build_scene_payload` (Task 3) is pure: it assembles a
+`ScenePayload` from two already-built pieces instead of loading/building anything itself.
+`build_wireframe_payload` (gui-explicit-rebuild plan, Task 2) is its no-geometry-pinned sibling."""
 from __future__ import annotations
 
 import sys
@@ -212,14 +213,62 @@ def _is_hidden_ed(actor, defaults) -> tuple[bool, str | None]:
     return str(info.defaults.get(("bhiddened", 0), "False")).strip() == "True", None
 
 
+def _resolve_hidden_ed(level: Level, defaults) -> dict[str, bool]:
+    """Each actor's effective `bHiddenEd` (`_is_hidden_ed`), gathered once per `level.order` walk --
+    shared by `build_scene_payload` (which additionally uses it to drop a hidden CSG_Add brush's own
+    surfaces) and `build_wireframe_payload` (which has no surfaces to drop, only actors to filter)."""
+    hidden_ed: dict[str, bool] = {}
+    notes: list[str] = []
+    for name in level.order:
+        actor = level.actors.get(name)
+        if actor is None:
+            continue
+        is_hidden, note = _is_hidden_ed(actor, defaults)
+        hidden_ed[name] = is_hidden
+        if note:
+            notes.append(note)
+    for line in notes:
+        print(line, file=sys.stderr)
+    return hidden_ed
+
+
+def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset: int,
+                  index) -> list[SceneActor]:
+    """The actor-metadata list (inspector/organization panel + selection highlight + sprite), built
+    from `trunk` alone -- shared by both `build_scene_payload` (geometry pinned, `tex_offset =
+    len(geometry.texture_table)`) and `build_wireframe_payload` (no geometry, `tex_offset = 0`)."""
+    level = trunk.level
+    ranks = trunk.ranks
+    actor_sprites = trunk.actor_sprites
+    actors = []
+    for name in level.order:
+        actor = level.actors.get(name)
+        if actor is None or hidden_ed.get(name):
+            continue                                     # editor-hidden: no metadata, no marker
+        lo, hi = actor_bounds(actor)
+        loc = actor.location or _ZERO3
+        sprite = None
+        if (raw := actor_sprites.get(name)) is not None:
+            local_idx, width, height = raw
+            sprite = ActorSprite(tex_index=tex_offset + local_idx, width=width, height=height)
+        actors.append(SceneActor(
+            name=name, cls=actor.cls or "",
+            bbox_lo=tuple(float(c) for c in lo), bbox_hi=tuple(float(c) for c in hi),
+            location=tuple(float(c) for c in loc), rotation=actor_rotation_uu(actor),
+            folder=actor.folder, labels=sorted(actor.labels), order_value=ranks.get(name, ""),
+            props=list(actor.props), brush=_brush_highlight(actor, index), sprite=sprite))
+    return actors
+
+
 def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, defaults
                         ) -> ScenePayload:
     """Assemble a `ScenePayload` from two ALREADY-BUILT pieces — `trunk` (`_LoadedTrunk`: the level,
     its per-actor ranks, and `resolve_actor_sprites`' raw output) and `geometry` (`_BuiltGeometry`:
     `build_scene`'s solved polys/texture table/owners) — instead of loading or building anything
-    itself (shared-cache spec's Design section; `app.py`'s `_get_trunk`/`_get_geometry` own the
-    caching, this function is now pure). `index`/`defaults` are still needed HERE, independent of
-    either cached slot: `_is_hidden_ed(actor, defaults)` and `_brush_highlight(actor, index)` both
+    itself (shared-cache spec's Design section; `app.py`'s `_get_trunk`/`_read_geometry`/
+    `_build_and_publish_geometry` own the caching, this function is now pure). `index`/`defaults`
+    are still needed HERE, independent of either cached slot: `_is_hidden_ed(actor, defaults)` and
+    `_brush_highlight(actor, index)` both
     resolve per-actor state (a `bHiddenEd` class default, a brush's CSG classification) on every
     call — cheap enough (no CSG, no texture decode) that caching them isn't worth it, but real
     parameters this function needs regardless of the plan's illustrative signature (which dropped
@@ -251,28 +300,8 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     materialize`'s own no-fallback-default rule; this fix narrows what `_is_hidden_ed` itself can
     break, it doesn't change that other, pre-existing behavior.)"""
     level = trunk.level
-    ranks = trunk.ranks
+    hidden_ed = _resolve_hidden_ed(level, defaults)
     polys, texture_table, owners = geometry.polys, geometry.texture_table, geometry.owners
-    # Point-actor sprite billboards ride in trunk.sprite_table/actor_sprites (Load-owned, no CSG
-    # involved) -- `/api/level/{level}/atlas` (`app.py`'s `atlas` route) appends that SAME
-    # `resolve_actor_sprites` result onto `geometry.texture_table` in the same order, so
-    # `tex_offset + local_index` names the same atlas rect on both endpoints.
-    actor_sprites = trunk.actor_sprites
-    tex_offset = len(texture_table)
-
-    hidden_ed: dict[str, bool] = {}
-    notes: list[str] = []
-    for name in level.order:
-        actor = level.actors.get(name)
-        if actor is None:
-            continue
-        is_hidden, note = _is_hidden_ed(actor, defaults)
-        hidden_ed[name] = is_hidden
-        if note:
-            notes.append(note)
-    for line in notes:
-        print(line, file=sys.stderr)
-
     # Only a hidden CSG_Add brush's own surfaces are safe to drop -- see this function's docstring.
     hidden_add_owners = {
         name for name, hidden in hidden_ed.items()
@@ -288,21 +317,22 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
         in zip(polys, owners)
         if owner not in hidden_add_owners
     ]
-    actors = []
-    for name in level.order:
-        actor = level.actors.get(name)
-        if actor is None or hidden_ed.get(name):
-            continue                                     # editor-hidden: no metadata, no marker
-        lo, hi = actor_bounds(actor)
-        loc = actor.location or _ZERO3
-        sprite = None
-        if (raw := actor_sprites.get(name)) is not None:
-            local_idx, width, height = raw
-            sprite = ActorSprite(tex_index=tex_offset + local_idx, width=width, height=height)
-        actors.append(SceneActor(
-            name=name, cls=actor.cls or "",
-            bbox_lo=tuple(float(c) for c in lo), bbox_hi=tuple(float(c) for c in hi),
-            location=tuple(float(c) for c in loc), rotation=actor_rotation_uu(actor),
-            folder=actor.folder, labels=sorted(actor.labels), order_value=ranks.get(name, ""),
-            props=list(actor.props), brush=_brush_highlight(actor, index), sprite=sprite))
+    # Point-actor sprite billboards ride in trunk.sprite_table/actor_sprites (Load-owned, no CSG
+    # involved) -- `/api/level/{level}/atlas` (`app.py`'s `atlas` route) appends that SAME
+    # `resolve_actor_sprites` result onto `geometry.texture_table` in the same order, so
+    # `tex_offset + local_index` names the same atlas rect on both endpoints.
+    actors = _build_actors(trunk, hidden_ed, tex_offset=len(texture_table), index=index)
     return ScenePayload(polys=scene_polys, actors=actors)
+
+
+def build_wireframe_payload(trunk: _LoadedTrunk, index, defaults) -> ScenePayload:
+    """The cold-open / no-Rebuild-yet payload (gui-explicit-rebuild spec §4): no solved geometry is
+    pinned, so `polys` is genuinely empty (never an error) and every brush actor's own AUTHORED
+    `SceneActor.brush` shape is all the client can draw -- exactly what lets wireframe mode render
+    with zero dependency on `_BuiltGeometry`. `tex_offset` is 0: `/atlas` builds its atlas from ONLY
+    `trunk.sprite_table` in this case (`app.py`'s `atlas` route skips `geometry.texture_table`
+    entirely when no geometry is pinned), so a sprite's `tex_index` names a rect in THAT atlas, at
+    the sprite's own position with no offset."""
+    hidden_ed = _resolve_hidden_ed(trunk.level, defaults)
+    actors = _build_actors(trunk, hidden_ed, tex_offset=0, index=index)
+    return ScenePayload(polys=[], actors=actors)

@@ -352,7 +352,11 @@ def test_scene_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypatch)
     nothing to bake): `bake_radiance`'s RGB buffer is a plain `list[float]`, already JSON-safe, but
     that is exactly the kind of assumption this test exists to keep honest against the real route
     rather than take on faith. `_scene_inputs` is monkeypatched to an offline (real `ClassIndex`,
-    `ClassDefaults`) trio so the test stays hermetic (no real per-user games config needed)."""
+    `ClassDefaults`) trio so the test stays hermetic (no real per-user games config needed).
+
+    `/scene` no longer auto-solves (gui-explicit-rebuild plan, Task 2) — a Rebuild is simulated
+    directly via `app.state.build_and_publish_geometry` (the same function `POST /rebuild` calls)
+    before hitting the route, since this test's whole point is the SOLVED payload's JSON shape."""
     from fastapi.testclient import TestClient
 
     from uedcli.serve import app as serve_app
@@ -366,9 +370,12 @@ def test_scene_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypatch)
     trunk.write_level(maps_dir, level, {room.name: "m", light.name: "n"})
     project = SimpleNamespace(root=str(root), maps=None)
 
-    monkeypatch.setattr(serve_app, "_scene_inputs", lambda project: ([], _ued22_index(), DEFAULTS))
+    index = _ued22_index()
+    monkeypatch.setattr(serve_app, "_scene_inputs", lambda project: ([], index, DEFAULTS))
     app = serve_app.create_app(project, "TestLevel")
     c = TestClient(app)
+
+    app.state.build_and_publish_geometry([], index, DEFAULTS)
 
     r = c.get("/api/level/TestLevel/scene")
 

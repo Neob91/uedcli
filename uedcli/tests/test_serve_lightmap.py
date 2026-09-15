@@ -75,7 +75,10 @@ def test_polys_sharing_a_lightmap_object_share_one_rect():
 def test_lightmap_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypatch):
     """HTTP round-trip for the real `/api/level/{level}/lightmap` route against a light-bearing
     fixture (a room + a centred `Engine.Light`), symmetric with the scene/atlas route tests. Every
-    poly whose scene payload carries a lightmap frame must have a manifest rect keyed by its index."""
+    poly whose scene payload carries a lightmap frame must have a manifest rect keyed by its index.
+
+    `/lightmap` no longer auto-solves (gui-explicit-rebuild plan, Task 2) — a Rebuild is simulated
+    directly via `app.state.build_and_publish_geometry` before hitting the route."""
     from decimal import Decimal
     from pathlib import Path
     from types import SimpleNamespace
@@ -118,6 +121,8 @@ def test_lightmap_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypat
     monkeypatch.setattr(serve_app, "_scene_inputs", lambda project: ([], index, defaults))
     app = serve_app.create_app(project, "TestLevel")
     c = TestClient(app)
+
+    app.state.build_and_publish_geometry([], index, defaults)
 
     r = c.get("/api/level/TestLevel/lightmap")
     assert r.status_code == 200
