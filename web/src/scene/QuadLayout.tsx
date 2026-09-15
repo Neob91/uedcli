@@ -12,12 +12,13 @@ import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
 import { OrgPanel } from '../panels/OrgPanel'
 import type { FrameRequest } from './frame'
 import { unionBBox } from './frame'
+import { ModeSelector } from './ModeSelector'
 import { OrthoViewport } from './OrthoViewport'
 import type { PaneId } from './paneLayout'
 import { toggleMaximize } from './paneLayout'
 import { SceneResourcesProvider } from './SceneResourcesContext'
 import { SelectionKeys } from './SelectionKeys'
-import { applyModeKey, resolveEffectiveMode } from './shadingMode'
+import { applyModeKey, keyForMode, resolveEffectiveMode } from './shadingMode'
 import type { ShadingMode } from './shadingMode'
 import { Viewport3D } from './Viewport3D'
 
@@ -129,6 +130,15 @@ export function QuadLayout({
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [focusedPane, buildSolved])
 
+  // The visible mode-selector's click handler (Task 20 follow-up): drives applyModeKey with the
+  // clicked pane + mode's own key, the exact same gating/switch logic the `1`-`4` keys already use.
+  const setPaneMode = useCallback(
+    (pane: PaneId, mode: ShadingMode) => {
+      setModes((cur) => applyModeKey(cur, pane, keyForMode(mode), buildSolved))
+    },
+    [buildSolved],
+  )
+
   // OrgPanel's folder-node/find-result selection reuses BOTH mechanisms this plan already built --
   // selectedNames (via onSelectMany, not a second selection model) and frameActors (Task 15,
   // verbatim, not a second framing mechanism) -- spec §5's own requirement.
@@ -193,6 +203,11 @@ export function QuadLayout({
                 showGrid={showGrid}
               />
             )}
+            <ModeSelector
+              mode={resolveEffectiveMode(modes[pane], buildSolved)}
+              buildSolved={buildSolved}
+              onSelect={(mode) => setPaneMode(pane, mode)}
+            />
           </div>
         ))}
         {/* Drag-to-resize splitters (bug report item 3): plain component state, no persistence --

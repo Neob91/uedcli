@@ -25,11 +25,22 @@ export function usesUnlitMaterials(mode: ShadingMode): boolean {
   return mode === 'unlit' || mode === 'flat'
 }
 
-const KEY_TO_MODE: Record<'1' | '2' | '3' | '4', ShadingMode> = {
+export const KEY_TO_MODE: Record<'1' | '2' | '3' | '4', ShadingMode> = {
   '1': 'wireframe',
   '2': 'unlit',
   '3': 'flat',
   '4': 'lit',
+}
+
+const MODE_TO_KEY = Object.fromEntries(
+  Object.entries(KEY_TO_MODE).map(([key, mode]) => [mode, key]),
+) as Record<ShadingMode, '1' | '2' | '3' | '4'>
+
+/** Inverse of `KEY_TO_MODE` -- lets a non-keyboard entry point (the click-to-set mode selector
+ * button group) drive `applyModeKey` with the same key a `1`-`4` press would use, instead of
+ * reimplementing its gating/switch logic. */
+export function keyForMode(mode: ShadingMode): '1' | '2' | '3' | '4' {
+  return MODE_TO_KEY[mode]
 }
 
 /** `1`-`4` sets the FOCUSED pane's requested mode (main spec's keybindings, Task 20) -- a no-op

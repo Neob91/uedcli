@@ -326,6 +326,41 @@ body {
   color: var(--fg-muted);
 }
 
+/* Visible per-pane shading-mode control -- bottom-right of every pane (the one corner none of the
+   existing per-pane/per-quad overlays uses: quad-pane-label is top-left, grid-toggle top-right of
+   the whole quad, ortho-cursor-readout bottom-left of ortho panes only). Mirrors grid-toggle's own
+   look, one button per available mode instead of a single on/off toggle. */
+.mode-selector {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+}
+
+.mode-selector-btn {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.mode-selector-btn[aria-pressed='true'] {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--sem-selection) 20%, var(--surface-2));
+}
+
+.mode-selector-btn:disabled {
+  color: var(--fg-muted);
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
 /* Cursor UU coordinate readout (Task 28) -- bottom-left of each ortho pane. */
 .ortho-cursor-readout {
   position: absolute;

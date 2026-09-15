@@ -4,7 +4,7 @@
 // components at that exact boundary (matching Inspector.test.tsx's established render/query-by-
 // testid RTL pattern) rather than trying to stand up a real WebGL Canvas (confirmed absent from this
 // repo's test setup -- no existing Canvas-in-test pattern to reuse).
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -14,12 +14,15 @@ vi.mock('./Viewport3D', () => ({
   Viewport3D: ({
     selectedNames,
     onSelectActor,
+    mode,
   }: {
     selectedNames: ReadonlySet<string>
     onSelectActor: (name: string, additive: boolean) => void
+    mode: string
   }) => (
     <div>
       <span data-testid="pane-perspective-selected">{[...selectedNames].join(',')}</span>
+      <span data-testid="pane-perspective-mode">{mode}</span>
       <button type="button" data-testid="pane-perspective-select" onClick={() => onSelectActor('ActorA', false)} />
     </div>
   ),
@@ -30,13 +33,16 @@ vi.mock('./OrthoViewport', () => ({
     axis,
     selectedNames,
     onSelectActor,
+    mode,
   }: {
     axis: string
     selectedNames: ReadonlySet<string>
     onSelectActor: (name: string, additive: boolean) => void
+    mode: string
   }) => (
     <div>
       <span data-testid={`pane-${axis}-selected`}>{[...selectedNames].join(',')}</span>
+      <span data-testid={`pane-${axis}-mode`}>{mode}</span>
       <button type="button" data-testid={`pane-${axis}-select`} onClick={() => onSelectActor('ActorA', false)} />
     </div>
   ),
@@ -55,7 +61,7 @@ const ATLAS: AtlasPayload = { width: 1, height: 1, manifest: {}, png_base64: '' 
 /** Owns `selectedNames` the way App.tsx does -- QuadLayout itself is a controlled component, so the
  * "does a selection from one pane reach every other pane" property needs a real owning parent, not
  * QuadLayout holding its own state. */
-function Harness() {
+function Harness({ buildSolved = false }: { buildSolved?: boolean }) {
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set())
   const onSelectActor = (name: string, additive: boolean) => setSelectedNames((s) => toggleSelection(s, name, additive))
   return (
@@ -67,7 +73,7 @@ function Harness() {
       onSelectActor={onSelectActor}
       onSelectMany={(names, additive) => setSelectedNames((s) => (additive ? new Set([...s, ...names]) : new Set(names)))}
       onDeselect={() => setSelectedNames(new Set())}
-      buildSolved={false}
+      buildSolved={buildSolved}
     />
   )
 }
@@ -97,5 +103,37 @@ describe('QuadLayout cross-pane selection consistency', () => {
     for (const pane of ['perspective', 'top', 'front', 'side']) {
       expect(screen.getByTestId(`pane-${pane}-selected`).textContent).toBe('ActorA')
     }
+  })
+})
+
+// The visible mode selector (ModeSelector) must drive the SAME per-pane mode state the `1`-`4`
+// keyboard shortcuts use, not a second, parallel model -- these pin that it changes only the
+// clicked pane's mode, and respects the same buildSolved gating applyModeKey already enforces.
+describe('QuadLayout visible mode selector', () => {
+  it("clicking a pane's mode button changes only that pane's mode, leaving the others alone", () => {
+    render(<Harness buildSolved={true} />)
+
+    // Defaults: perspective 'lit', the three ortho panes 'wireframe' (QuadLayout's DEFAULT_MODES).
+    expect(screen.getByTestId('pane-top-mode').textContent).toBe('wireframe')
+    expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('lit')
+
+    const topPane = screen.getByTestId('quad-pane-top')
+    fireEvent.click(within(topPane).getByTestId('mode-btn-unlit'))
+
+    expect(screen.getByTestId('pane-top-mode').textContent).toBe('unlit')
+    expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('lit')
+    expect(screen.getByTestId('pane-front-mode').textContent).toBe('wireframe')
+    expect(screen.getByTestId('pane-side-mode').textContent).toBe('wireframe')
+  })
+
+  it('a mode requiring a solved build is disabled, not silently ignored, when buildSolved is false', () => {
+    render(<Harness buildSolved={false} />)
+
+    const topPane = screen.getByTestId('quad-pane-top')
+    const litBtn = within(topPane).getByTestId('mode-btn-lit')
+    expect(litBtn.hasAttribute('disabled')).toBe(true)
+
+    fireEvent.click(litBtn)
+    expect(screen.getByTestId('pane-top-mode').textContent).toBe('wireframe') // unchanged
   })
 })

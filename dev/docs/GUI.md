@@ -114,7 +114,6 @@ at the wire boundary, never in the frontend — the Inspector's whole design poi
   drawn after them (`sceneResources.ts`'s `resolveMaterialState`).
 - No collision-cylinder / light-radius / sound-radius overlays at all (`preview.py --show
   collision`/`--show light-range`/`--show sound-range` have no GUI equivalent, in either 2D or 3D).
-- No visible render-mode selector UI — mode switching is keyboard-only (`1`-`4`) today.
 - Grid major/minor tiering (above).
 
 ## Future direction (not yet scoped)

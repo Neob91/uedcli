@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PaneId } from './paneLayout'
-import { applyModeKey, isModeAvailable, resolveEffectiveMode, usesUnlitMaterials } from './shadingMode'
+import { applyModeKey, isModeAvailable, keyForMode, resolveEffectiveMode, usesUnlitMaterials } from './shadingMode'
 import type { ShadingMode } from './shadingMode'
 
 describe('isModeAvailable', () => {
@@ -42,6 +42,15 @@ describe('resolveEffectiveMode', () => {
   it('falls back to wireframe when the requested mode is unavailable', () => {
     expect(resolveEffectiveMode('lit', false)).toBe('wireframe')
     expect(resolveEffectiveMode('flat', false)).toBe('wireframe')
+  })
+})
+
+describe('keyForMode', () => {
+  it('is the exact inverse of KEY_TO_MODE, for every mode', () => {
+    expect(keyForMode('wireframe')).toBe('1')
+    expect(keyForMode('unlit')).toBe('2')
+    expect(keyForMode('flat')).toBe('3')
+    expect(keyForMode('lit')).toBe('4')
   })
 })
 
