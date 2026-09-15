@@ -461,7 +461,17 @@ divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), no
   descent (not the repartition stopgap) MISSES an existing pool point only `6.1e-5` away, well inside
   its `0.002` threshold. Narrowed to a genuine `bspAddPoint`/`FindNearestVertex` HIT-vs-MISS
   divergence needing the same live-editor gdb capture that closed Island N=332/UNATCO N=226/WanChai
-  N=58 — not attempted yet; not closed. `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`.
+  N=58. 2026-09-14: that capture ran — UED22's own `FindNearestVertex` ALSO misses, so native's
+  descent is faithful; not the bug. Narrowed further to a dead-node "ghost" point on native's side.
+  2026-09-15: RE'd `bspOptGeom`'s `Model*`/`UModel` in-memory `TArray` layout and live-captured the
+  real editor's `Points`/`Surfs` arrays directly — **UED22 keeps the wall's original face alive**
+  (a genuinely live, separate `Surfs` entry, not a dead-node ghost pending GC); native's points-GC is
+  innocent. Pinned the exact CSG step (offline, no gdb): native's `FilterWorldThroughBrush` kills the
+  wall face when `Brush482` (`CSG_Add`) is processed, one brush before `Brush483`; UED22's real
+  equivalent must decide the opposite (a graze). Same bug SHAPE as the Island N=332/UNATCO N=226/
+  WanChai N=45/58 near-tie classification ties, in a different, not-yet-live-captured function. Not
+  fixed; not closed. `dev/docs/spikes/2026-09-15-oceanlab-n203-bspoptgeom-points/`,
+  `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`.
 - **Standing stopgaps, all levels**:
   `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/` — repartition dedups points
   with a linear pool scan; the editor descends and appends on a miss (`AddThing(..., !FastRebuild)`

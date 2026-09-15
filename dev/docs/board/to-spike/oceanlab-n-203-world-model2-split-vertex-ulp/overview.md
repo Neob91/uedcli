@@ -175,3 +175,43 @@ needs a DIFFERENT live capture — of the real editor's own `Model->Points`/`Mod
 attempted (`NATIVE-MATERIALIZE.md` prime directive: measure, don't guess a fix for an unconfirmed
 mechanism). Still not resolved; no fix, no mask. OceanLab's ceiling is unchanged (byte-exact N=1..202,
 re-confirmed unchanged this session).
+
+## 2026-09-15 update — the open question is ANSWERED: UED22 keeps the wall face alive; narrowed to one exact CSG classification call
+
+Full writeup: `dev/docs/spikes/2026-09-15-oceanlab-n203-bspoptgeom-points/spike.md`. Located
+`bspOptGeom`'s `Model*` argument and `UModel`'s in-memory `TArray` layout (`Points`/`Nodes`/`Surfs`/
+`Vectors` offsets — reused, not re-derived, from an already-committed but previously uncredited
+oracle, `2026-07-15-native-materialize/harness/editor-tree-oracle/bspopt_pool_oracle.py`, cross-verified
+against `zones.rs`'s own disassembly comment). A live gdb capture at `bspOptGeom` entry
+(Editor.dll `0x10036870`) for OceanLab N=203 dumped the real editor's live `Points` (4189 entries) and
+`Surfs` (1085 entries) arrays directly:
+
+**Answer: UED22 keeps it alive.** Both the wall's pre-existing point (x-bits `0xc3800002`, at Points
+index 947/950) and `Brush483`'s own new point (`0xc3800004`, index 968/970) are present, at DIFFERENT
+indices — not merged, not orphaned. A `Surfs`-array cross-check (needs no node-reachability walk:
+`pBase` offset `+0x08` within `FBspSurf`, scanned across all live surfs) confirms this is not a
+dead-node ghost either — the wall's original surf (index 1053/1055) is a fully live, independent `Surfs`
+entry, structurally identical in kind to `Brush483`'s own brand-new surf (1074/1076). This refutes the
+prior session's "ghost from a dead node, kept alive only pending GC" framing: native's points-GC
+(`bsp_refresh_points_vectors`/`compact_points_to_surf_bases`) is fully innocent — the true divergence
+is one step further upstream.
+
+Pinpointed the exact CSG step offline (no gdb, using the already-committed
+`UEDCLI_BSPCSG_BRUSH_STATE=FULL:lo-hi` per-brush node trace): the wall face is native node 5154
+(plane `x = -256.00006103515625`, exactly the wall plane; surf 1053), created by `Brush480`
+(`CSG_Subtract`, world-CSG index `bi=164`), alive (`nv=3`) through `Brush481` (`bi=165`, `CSG_Subtract`),
+then killed (`nv=0`, its own children spliced away) immediately after `Brush482` (`bi=166`,
+**`CSG_Add`**) runs — one brush before `Brush483` (`bi=167`) itself. Native's `filter_world_through_brush`
+(`bspcsg.rs`, port of Editor.dll `FilterWorldThroughBrush` `0x33250`) decides this ADD volume genuinely
+consumes the wall face (`GDiscarded != 0`); the live capture proves UED22's real equivalent must decide
+the opposite (a graze, keeps the face). Same bug SHAPE as the campaign's other found-and-fixed
+near-tie boundary classifications (Island N=332, WanChai N=45/58, UNATCO N=226 — all a sub-ULP
+`FLinePlaneIntersection`/crossing tie), but in a DIFFERENT function never live-captured before
+(`FilterWorldThroughBrush`'s own consume-vs-graze classify, not a permeating-light beam clip).
+
+**Not fixed.** The next step is a live gdb capture of the real editor's `FilterWorldThroughBrush`
+(or its inner classify) during `Brush482`'s own `bspBrushCSG`, scoped to this exact face's plane bits,
+to read the real `GDiscarded` verdict — same method class as `2026-09-13-crossing-vertex-live-capture/`.
+No mask, no exclusion proposed. `docker cp` on this rootless daemon is separately confirmed BROKEN
+(deterministic overlay `remount-ro .../stubs` error, not transient) — future captures should pull files
+via `docker exec ... cat` instead, as this session's harness now does.
