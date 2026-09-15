@@ -190,16 +190,18 @@ pub fn bsp_merge_coplanars(polys: Vec<FPoly>) -> Vec<FPoly> {
 
 // --- bspRefresh (§7.3) ----------------------------------------------------
 
-/// `bspRefresh` (§7.3): array compaction after a build — drop unreferenced surfs and renumber
-/// the nodes' `iSurf`, then re-pack the vert pool so each node's verts are contiguous in build
-/// order (renumbering `iVertPool`).  Pure array GC + reindex; no geometry decisions.  (Points/
-/// Vectors are left as-is HERE — the Surfs canonical re-ORDER is a dedicated post-build pass in
-/// `bspcsg.rs` (`reorder_surfs_canonical`), and the Points/Vectors pools are kept in the editor's
-/// own incremental order and GC'd at the editor's real `bspRefresh` call sites via
-/// `bsp_refresh_points_vectors[_stale_orphans]` below.  An unreferenced pool entry is otherwise
-/// harmless.)
-pub fn bsp_refresh(model: &mut Model) {
-    // 1. Drop unreferenced surfs; renumber node.i_surf.
+/// Drop every surf no LIVE node's `i_surf` references, renumbering the survivors and remapping
+/// `node.i_surf` — the surf half of `bspRefresh(Model, NoRemapSurfs)`'s reachability compaction
+/// (`Editor.dll 0x36cd0`, disassembled 2026-09-15: the surf-compaction loop at `0x10036d7d`-
+/// `0x10036dcb` keeps a surf iff its `SurfRemap` slot is `!= -1`; `NoRemapSurfs!=0` zeroes that
+/// whole array first at `0x10036d62`-`0x10036d7a`, making every slot read as used — i.e. it
+/// SUPPRESSES this compaction rather than changing what "used" means).  Factored out of
+/// `bsp_refresh` (below, `NoRemapSurfs=0` call site) so `bspoptgeom::bsp_opt_geom` can also call it
+/// directly for the editor's OTHER `bspRefresh(Model, 0)` call, at bspOptGeom's own front (after its
+/// point-merge, before T-junction elimination) — the real compaction the world-level repartition's
+/// `NoRemapSurfs=1` call defers to it. See OceanLab N=203,
+/// `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`.
+pub fn compact_unreferenced_surfs(model: &mut Model) {
     let mut used = vec![false; model.surfs.len()];
     for n in &model.nodes {
         if n.i_surf >= 0 && (n.i_surf as usize) < used.len() {
@@ -220,6 +222,19 @@ pub fn bsp_refresh(model: &mut Model) {
         }
     }
     model.surfs = new_surfs;
+}
+
+/// `bspRefresh` (§7.3): array compaction after a build — drop unreferenced surfs and renumber
+/// the nodes' `iSurf`, then re-pack the vert pool so each node's verts are contiguous in build
+/// order (renumbering `iVertPool`).  Pure array GC + reindex; no geometry decisions.  (Points/
+/// Vectors are left as-is HERE — the Surfs canonical re-ORDER is a dedicated post-build pass in
+/// `bspcsg.rs` (`reorder_surfs_canonical`), and the Points/Vectors pools are kept in the editor's
+/// own incremental order and GC'd at the editor's real `bspRefresh` call sites via
+/// `bsp_refresh_points_vectors[_stale_orphans]` below.  An unreferenced pool entry is otherwise
+/// harmless.)
+pub fn bsp_refresh(model: &mut Model) {
+    // 1. Drop unreferenced surfs; renumber node.i_surf.
+    compact_unreferenced_surfs(model);
 
     // 2. Re-pack the vert pool contiguously in node order.
     let mut new_verts = Vec::with_capacity(model.verts.len());
@@ -783,7 +798,7 @@ pub fn bsp_build_bounds(model: &mut Model) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::Vec3;
+    use crate::model::{BspSurf, Vec3};
 
     fn quad(v: [(f32, f32, f32); 4], actor: i32, ibp: i32) -> FPoly {
         let mut p = FPoly::new(v.iter().map(|&(x, y, z)| Vec3::new(x, y, z)).collect());
@@ -850,5 +865,37 @@ mod tests {
         );
         let out = bsp_merge_coplanars(vec![left, right]);
         assert_eq!(out.len(), 2, "distinct surfaces never fuse");
+    }
+
+    fn surf(actor: i32, bp: i32) -> BspSurf {
+        BspSurf {
+            texture_ref: 0, poly_flags: 0, p_base: 0, v_normal: 0, v_texture_u: 0, v_texture_v: 0,
+            i_actor: actor, i_brush_poly: bp, pan: [0, 0], i_light_map: -1,
+        }
+    }
+
+    /// OceanLab N=203 §10.19a: `compact_unreferenced_surfs` (extracted from `bsp_refresh`, and now
+    /// ALSO called directly from `bspoptgeom::bsp_opt_geom`) must drop only surfs no LIVE node's
+    /// `i_surf` names, and renumber the survivors' node references.
+    #[test]
+    fn compact_unreferenced_surfs_drops_only_the_unreferenced_ones() {
+        let plane = crate::model::Plane { x: 0.0, y: 0.0, z: 1.0, w: 0.0 };
+        let mut m = Model::default();
+        // Surf 0 (actor 1) is referenced by a node; surf 1 (actor 2, e.g. a dead node's leftover
+        // orphan row appended by `bspcsg::carry_forward_dead_surfs`) is referenced by none; surf 2
+        // (actor 3) is referenced by a node too.
+        m.surfs = vec![surf(1, 0), surf(2, 0), surf(3, 0)];
+        m.nodes = vec![BspNode::leaf(plane, 0, 0, 0), BspNode::leaf(plane, 2, 0, 0)];
+        compact_unreferenced_surfs(&mut m);
+        assert_eq!(
+            m.surfs.iter().map(|s| s.i_actor).collect::<Vec<_>>(),
+            vec![1, 3],
+            "only the unreferenced surf (actor 2) is dropped"
+        );
+        assert_eq!(
+            m.nodes.iter().map(|n| n.i_surf).collect::<Vec<_>>(),
+            vec![0, 1],
+            "surviving nodes' i_surf is renumbered to the compacted array"
+        );
     }
 }

@@ -256,3 +256,41 @@ which step drops the wall's SURF entry (not just its point) is not yet pinned. N
 it; (2) only then a live capture bracketing that exact step in UED22's real build. Full detail:
 `dev/docs/spikes/2026-09-15-oceanlab-n203-fwtb-classify/spike.md` §3-4. No fix, no mask, no exclusion
 proposed.
+
+## 2026-09-15 update (3) — the surf's real drop point pinned and FIXED; one narrow residual left, not algorithmic
+
+Step (1) above ran, offline, no live capture needed: the wall's surf IS present in the pre-clear
+`canon_surf_keys` snapshot — confirmed by a temporary node-keyed trace (reverted after use). It is
+dropped by the world-level repartition's clear + rebuild itself: the rebuild's input soup
+(`bsp_build_fpolys`/`make_ed_polys`) only walks LIVE-reachable nodes, so a dead node's face is simply
+never re-created; the very next call, `passes::bsp_refresh`, then can't drop what was never there, but
+also has nothing to preserve it. A fresh disassembly of the real `bspRefresh` (`Editor.dll 0x36cd0`)
+pins why this is a genuine divergence, not a reordering-device artifact: `bspRepartition`'s own call
+passes `NoRemapSurfs=1`, which (traced at the instruction level) zeroes the function's internal
+`SurfRemap` array before its compaction loop — i.e. it suppresses compaction entirely, keeping every
+surf. The real surf GC happens later, inside `bspOptGeom`'s own prologue (`bspRefresh(Model, 0)`,
+literal zero — a REAL compaction), which runs AFTER `bspOptGeom`'s own point-merge
+(`merge_near_points`) — so a dead node's point survives long enough for a later brush's near-coincident
+new point to weld onto it. Native was running the real compaction eagerly, right after repartition,
+well before `merge_near_points` ever got the chance.
+
+**FIXED**: `bspcsg.rs`'s world-level repartition now carries a dead node's surf forward across the
+clear+rebuild (`carry_forward_dead_surfs`, using the same pre-clear snapshot `canon_surf_keys` already
+took); `bspoptgeom::bsp_opt_geom` gained the previously-unported real compaction
+(`passes::compact_unreferenced_surfs`, right after its point-merge). `Model2.points` is now
+byte-identical to a fresh UED22 build (was: one 2-ULP-divergent pair); every one of 2640 live node
+rings is coordinate-identical; live vert count matches exactly. Full detail, disassembly addresses,
+and an independent subagent re-verification: `dev/docs/spikes/2026-09-15-oceanlab-n203-repartition-surf-defer/spike.md`.
+
+**Not fully closed.** `parity_gate.py` still FAILs at N=203 — but the ONLY remaining divergence is one
+extra ORPHAN (dead, unreferenced) `Verts` entry on the UED22 side (35265 vs native's 35264), which
+desyncs the gate's positional token walk and cascades into spurious downstream "differences" that are
+not real. This is a narrow residual in `parity_gate.py`'s existing orphan-vert exclusion (built and
+validated only for same-COUNT, different-content orphan slots, never a genuine count mismatch), not a
+newly-found algorithm bug. Whether native can be made to also produce this one orphan slot faithfully
+(closing the item with no gate change) was not traced this session. Either way this needs the owner's
+call before anything in `parity_gate.py` changes — filed as
+`questions/orphan-vert-count-mismatch-gate-widening.md`. Staying in `to-spike/` until that's answered
+(or the orphan-count mechanism is traced and fixed natively, whichever comes first). N=1..202
+re-verified with `ladder_run.py` alongside this change — see the spike for the exact range covered
+this session.

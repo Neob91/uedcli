@@ -3144,20 +3144,43 @@ fn bsp_brush_csg(model: &mut Model, brush: &build::BrushInput, actor_index: i32,
 /// final layout is bases-first: rings are dropped here and freshly re-appended by the rebuild's own
 /// `bspAddPoint` calls.  At native's matching seam everything except `model.points` is cleared right
 /// after, so only the kept-points set/order matters.
-fn compact_points_to_surf_bases(model: &mut Model) {
+/// Returns the old-index -> new-index point remap (`-1` for a dropped point) so a caller holding
+/// OTHER pre-compaction `p_base` references (§10.19a's `pre_clear_surfs`) can fix them up too.
+fn compact_points_to_surf_bases(model: &mut Model) -> Vec<i32> {
     let mut pt_used = vec![false; model.points.len()];
     for s in &model.surfs {
         if s.p_base >= 0 {
             pt_used[s.p_base as usize] = true;
         }
     }
+    let mut remap = vec![-1i32; model.points.len()];
     let mut kept = Vec::with_capacity(model.points.len());
     for (i, &u) in pt_used.iter().enumerate() {
         if u {
+            remap[i] = kept.len() as i32;
             kept.push(model.points[i]);
         }
     }
     model.points = kept;
+    remap
+}
+
+/// §10.19a: re-append any surf from the pre-repartition-clear snapshot (`pre_clear_surfs`) that the
+/// post-clear rebuild didn't recreate — a dead node's surf, dropped by `bsp_build`'s live-only soup
+/// walk + `passes::bsp_refresh`'s reachability compaction, where the real editor's own
+/// `bspRefresh(Model, NoRemapSurfs=1)` repartition call keeps it untouched (see the call site's own
+/// comment). Appended with no owning node; survives until `bspoptgeom::bsp_opt_geom`'s own
+/// `compact_unreferenced_surfs` call, mirroring the real editor's later, REAL compaction
+/// (`bspRefresh(Model, 0)`, run inside `bspOptGeom` after its point-merge).
+fn carry_forward_dead_surfs(model: &mut Model, pre_clear_surfs: &[BspSurf]) {
+    let present: std::collections::HashSet<(i32, i32)> =
+        model.surfs.iter().map(|s| (s.i_actor, s.i_brush_poly)).collect();
+    for s in pre_clear_surfs {
+        let key = (s.i_actor, s.i_brush_poly);
+        if !present.contains(&key) {
+            model.surfs.push(s.clone());
+        }
+    }
 }
 
 // --- finalize (leaves/zones/bounds), mirroring build.rs::finalize_leaves_and_bbox ------------
@@ -3404,6 +3427,10 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         // build, re-sort the final surfs to it (`reorder_surfs_canonical`).  Key is unique per surf
         // (proven vs the golden).
         canon_surf_keys = model.surfs.iter().map(|s| (s.i_actor, s.i_brush_poly)).collect();
+        // Full pre-clear surf rows (not just keys) — a DEAD node's surf is never removed from
+        // `model.surfs` during Pass 1 CSG (`cleanup_nodes` only unlinks the node; see §10.19a below),
+        // so this snapshot still holds it. Carried forward past the clear+rebuild below.
+        let mut pre_clear_surfs = model.surfs.clone();
 
         // Fresh node/surf/vert arrays: the reconstructed FPolys carry absolute coordinates
         // (bsp_node_to_fpoly copied them out), so a fresh Nodes/Surfs/Verts array lets `bsp_build`'s
@@ -3425,7 +3452,15 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         // `bspAddVector` proposals in the pool, and a later surf's NORMAL can dedup into one of them,
         // so the surviving order is not derivable from the surviving surfs.  Island N=6 is the live
         // case — spike `spikes/2026-09-06-island-n6-vector-pool/`.
-        compact_points_to_surf_bases(&mut model);
+        let pt_remap = compact_points_to_surf_bases(&mut model);
+        // `pre_clear_surfs`'s `p_base` values index the PRE-compaction points array; remap them to
+        // match (every one is guaranteed kept — `compact_points_to_surf_bases` marks USED exactly
+        // the p_base set `model.surfs`, i.e. `pre_clear_surfs`, names).
+        for s in &mut pre_clear_surfs {
+            if s.p_base >= 0 {
+                s.p_base = pt_remap[s.p_base as usize];
+            }
+        }
         model.nodes.clear();
         model.surfs.clear();
         model.verts.clear();
@@ -3433,6 +3468,27 @@ pub fn build_geometry_bspcsg(brushes: &[build::BrushInput]) -> Result<Model, Bui
         // `EmptyModel(0,0)`.
         bsp_build(&mut model, merged)?;
         passes::bsp_refresh(&mut model);
+
+        // §10.19a: carry forward DEAD-NODE surfs `bsp_build_fpolys`'s live-only soup walk (and so
+        // `bsp_build`'s re-seeding above) never recreates.  Fresh disassembly of `bspRefresh`
+        // (`Editor.dll 0x36cd0`, this session) confirms `bspRepartition`'s own call passes
+        // `NoRemapSurfs=1`: that argument makes the function zero its SurfRemap array right before
+        // the compaction loop (`0x10036d62`-`0x10036d7a`), so EVERY surf reads as "used" regardless
+        // of node reachability — i.e. the real editor's repartition compacts NOTHING away here, a
+        // dead node's surf (and via it, its `pBase` point) rides along untouched.  Only `bspOptGeom`'s
+        // OWN internal front `bspRefresh(Model, 0)` (a REAL, non-suppressed compaction, confirmed by
+        // the same disassembly pass) drops it — AFTER `bspOptGeom`'s point-merge
+        // (`merge_near_points`) has already had the chance to weld a later brush's near-coincident new
+        // point onto this surf's older `pBase`.  Native's `passes::bsp_refresh` two lines up performs
+        // that later, real compaction eagerly, before `bsp_opt_geom` ever runs — dropping a dead-node
+        // surf (and orphaning its point, which `bsp_refresh_points_vectors` below then also drops)
+        // before the weld gets a chance.  Re-append the dead surfs `bsp_refresh` just dropped so they
+        // survive, with no owning node, until `bspoptgeom::bsp_opt_geom`'s own new
+        // `compact_unreferenced_surfs` call reproduces the real editor's later compaction.  Their
+        // canonical rank is already in `canon_surf_keys` (captured above, pre-clear) — nothing else to
+        // update.  OceanLab N=203, `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`.
+        carry_forward_dead_surfs(&mut model, &pre_clear_surfs);
+
         // The editor's `bspRefresh` also drops unreferenced Points/Vectors on this call (not just
         // Nodes), bounding the kept CSG-phase pool back down.
         passes::bsp_refresh_points_vectors(&mut model);
@@ -5966,6 +6022,39 @@ mod tests {
                    "nodes keep the dense on-disk surf index");
         assert_eq!(g.polys.iter().map(|p| p.i_link).collect::<Vec<_>>(), vec![0, 2, 3],
                    "soup iLink takes the canon rank, gapping the merged-away surf");
+    }
+
+    /// REGRESSION (OceanLab N=203, §10.19a,
+    /// `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`) —
+    /// `carry_forward_dead_surfs` must re-append a pre-clear surf the post-rebuild `model.surfs`
+    /// no longer holds (a dead node's face, dropped by `bsp_build`'s live-only soup walk), and must
+    /// NOT duplicate one the rebuild already recreated (a live face keeps the exact same
+    /// `(i_actor, i_brush_poly)` key). This is the piece that lets a dead-node's point survive to
+    /// `bspoptgeom::bsp_opt_geom`'s `merge_near_points`, matching the real editor's `bspRefresh(Model,
+    /// NoRemapSurfs=1)` repartition call (see the call site's own comment for the disassembly).
+    #[test]
+    fn carry_forward_dead_surfs_reappends_only_the_missing_key() {
+        let surf = |actor: i32, bp: i32| BspSurf {
+            texture_ref: 0, poly_flags: 0, p_base: 7, v_normal: 0, v_texture_u: 0, v_texture_v: 0,
+            i_actor: actor, i_brush_poly: bp, pan: [0, 0], i_light_map: -1,
+        };
+        // Pre-clear: surf (1,0) is a LIVE face the rebuild will recreate; surf (2,0) is a DEAD
+        // node's face the rebuild drops entirely.
+        let pre_clear = vec![surf(1, 0), surf(2, 0)];
+        let mut model = Model::default();
+        // Post-rebuild: only the live face's surf exists (a fresh row, same key, different
+        // `p_base` — as `bsp_build`'s own `alloc_surf` would produce).
+        model.surfs = vec![BspSurf { p_base: 99, ..surf(1, 0) }];
+
+        carry_forward_dead_surfs(&mut model, &pre_clear);
+
+        assert_eq!(
+            model.surfs.iter().map(|s| (s.i_actor, s.i_brush_poly)).collect::<Vec<_>>(),
+            vec![(1, 0), (2, 0)],
+            "the dead face's key is appended once; the live face's fresh row is untouched, not duplicated"
+        );
+        assert_eq!(model.surfs[0].p_base, 99, "the rebuild's own live surf row is not overwritten");
+        assert_eq!(model.surfs[1].p_base, 7, "the appended dead surf keeps its pre-clear content");
     }
 
     /// REGRESSION (`wanchai-n59-mover-polys-model2-diverges`) — `collect_repartition_frontier`
