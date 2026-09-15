@@ -25,6 +25,7 @@ function pointerEvent(overrides: Record<string, unknown> = {}) {
     altKey: false,
     ctrlKey: false,
     metaKey: false,
+    shiftKey: false,
     clientX: 0,
     clientY: 0,
     ...overrides,
@@ -45,7 +46,7 @@ function setup(overrides: Partial<DragGestureCallbacks> = {}) {
 }
 
 describe('useDragGesture', () => {
-  it('calls onDrag on every move, and onTap(x, y, false) on a release within the tap threshold', () => {
+  it('calls onDrag on every move, and onTap(x, y, false, false) on a release within the tap threshold', () => {
     const { handlers, onDrag, onTap } = setup()
     const down = pointerEvent()
     // @ts-expect-error -- synthetic event shape, sufficient for the handler's own field reads
@@ -57,7 +58,7 @@ describe('useDragGesture', () => {
     const up = pointerEvent({ clientX: 10, clientY: 20 })
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerUp(up)
-    expect(onTap).toHaveBeenCalledWith(10, 20, false)
+    expect(onTap).toHaveBeenCalledWith(10, 20, false, false)
   })
 
   it('threads ctrlKey/metaKey into onTap\'s additive flag', () => {
@@ -66,7 +67,16 @@ describe('useDragGesture', () => {
     handlers.onPointerDown(pointerEvent())
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerUp(pointerEvent({ ctrlKey: true }))
-    expect(onTap).toHaveBeenCalledWith(0, 0, true)
+    expect(onTap).toHaveBeenCalledWith(0, 0, true, false)
+  })
+
+  it('threads shiftKey into onTap\'s 4th argument', () => {
+    const { handlers, onTap } = setup()
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerDown(pointerEvent())
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerUp(pointerEvent({ shiftKey: true }))
+    expect(onTap).toHaveBeenCalledWith(0, 0, false, true)
   })
 
   it('suppresses onTap when the accumulated movement exceeds the tap threshold (a real drag)', () => {

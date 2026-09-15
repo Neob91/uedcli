@@ -100,6 +100,20 @@ export function pickActor(ray: Ray, actors: SceneActor[]): SceneActor | null {
   return best
 }
 
+/** Real UnrealEd binds a plain LMB-drag in the 3D perspective viewport to camera-fly (dolly+turn),
+ * in every shading mode -- so a plain LMB tap that lands on a BRUSH there is ambiguous with an
+ * incidental camera nudge, and Shift+LMB is the disambiguator (owner ruling 2026-09-15). The 2D
+ * ortho panes bind LMB-drag to select/marquee instead (no camera-fly conflict), so brush selection
+ * there takes a plain tap -- same as a point actor everywhere, since a point actor has no surface of
+ * its own to collide with camera-fly. This is VIEWPORT-gated (3D perspective vs. 2D ortho), not
+ * shading-mode-gated (wireframe vs. solid) -- corrects `board/done/
+ * brush-selection-input-should-match-ued22-mode-gated`'s own mode-gated guess. See
+ * `dev/docs/unrealed/leveldesign/kb/editor-ui.md` "2D/3D navigation": 2D LMB-drag = select/marquee,
+ * 3D LMB-drag = look/move. */
+export function canSelectBrushTap(isPerspectivePane: boolean, shiftKey: boolean): boolean {
+  return !isPerspectivePane || shiftKey
+}
+
 export const TAP_DRAG_THRESHOLD_PX = 4
 
 /** Was a pointer-down/up pair a TAP (click-to-select) or a DRAG (camera fly)? A tap is one whose

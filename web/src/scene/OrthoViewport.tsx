@@ -22,8 +22,9 @@ import type { OrthoAxis, OrthoPose } from './orthoCamera'
 import { orthoBasis, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
 import { RadiiOverlays } from './RadiiOverlays'
 import { useSceneResourcesContext } from './SceneResourcesContext'
+import { SelectionHighlight } from './SelectionHighlight'
 import { SelectionMarkers } from './SelectionMarkers'
-import { pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapSelection } from './selection'
+import { canSelectBrushTap, pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapSelection } from './selection'
 import type { Ray } from './selection'
 import type { ShadingMode } from './shadingMode'
 import { usesUnlitMaterials } from './shadingMode'
@@ -161,7 +162,7 @@ export function OrthoViewport({
   // Viewport3D's performTapSelect uses, with the real ortho THREE.Camera (three.js's Raycaster
   // handles an orthographic camera's parallel rays the same way it handles a perspective one's).
   const performTapSelect = useCallback(
-    (clientX: number, clientY: number, additive: boolean) => {
+    (clientX: number, clientY: number, additive: boolean, shiftKey: boolean) => {
       const camera = cameraRef.current
       const rect = containerRef.current?.getBoundingClientRect()
       if (!camera || !rect) return
@@ -205,6 +206,10 @@ export function OrthoViewport({
         const aabbCandidates = mode === 'wireframe' ? actors.filter((a) => !a.brush) : actors
         hitActor = pickActor(ray, aabbCandidates)
       }
+      // 2D ortho panes bind LMB-drag to select/marquee, not camera-fly, so a brush hit here needs no
+      // Shift -- always true, but routed through the same gate as Viewport3D's for symmetry (see
+      // `selection.ts`'s `canSelectBrushTap`).
+      if (hitActor?.brush && !canSelectBrushTap(false, shiftKey)) hitActor = null
       const result = resolveTapSelection(hitActor, additive)
       if (result) onSelectActor(result.name, result.additive)
     },
@@ -223,7 +228,7 @@ export function OrthoViewport({
           return orthoPan(prev, axis, dx, dy)
         })
       },
-      onTap: (clientX, clientY, additive) => performTapSelect(clientX, clientY, additive),
+      onTap: (clientX, clientY, additive, shiftKey) => performTapSelect(clientX, clientY, additive, shiftKey),
       onWheel: (deltaY) => setPose((prev) => orthoZoom(prev, deltaY)),
     }),
     [axis, performTapSelect],
@@ -302,6 +307,11 @@ export function OrthoViewport({
         <OrthoCameraRig pose={pose} axis={axis} cameraRef={cameraRef} />
         {showGrid && <GridOverlay pose={pose} axis={axis} />}
         {mode !== 'wireframe' && <mesh ref={meshRef} geometry={bufferGeometry} material={activeMaterials} />}
+        {/* Issue 1: a selected brush's surface "lights up" (additive brightness boost), same as the
+            3D perspective pane -- no surface to light up in wireframe mode (no solid mesh above). */}
+        {mode !== 'wireframe' && (
+          <SelectionHighlight bufferGeometry={bufferGeometry} triangleOwners={triangleOwners} selectedNames={selectedNames} />
+        )}
         <group ref={markerGroupRef}>
           {markerActors.map((actor) => {
             // A resolved DT_Sprite billboard draws the actor's REAL class icon at its own

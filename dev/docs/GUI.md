@@ -112,6 +112,21 @@ intentional), not a silent implementation choice either way.
   point on already-drawn geometry).
 - **Selection line width**: 2px, matching `preview.py`'s real `weight=2` for a highlighted edge —
   not a rounder "looks about right" value.
+- **Surface highlight**: a selected brush's drawn surface brightens (`SelectionHighlight.tsx`), an
+  additive-white overlay over just that brush's own triangles (`selectedTriangles.ts`'s
+  `selectedTriangleIndices`, filtered from `sceneResources.ts`'s `triangleOwners`) — a brightness
+  boost on the actor's own material/hue, not a new tint color, matching `BrushOutlines`' "same hue,
+  just bolder" selected-ring convention. Real UnrealEd's exact selected-surface render rule isn't
+  pinned by a citable fact in `unrealed/quirks.md`/`rendering.md` (checked); this is the closest
+  citable in-codebase convention. Only drawn when the mode also draws the solid mesh (not
+  `'wireframe'`, which has no surface).
+- **Brush-selection click modifier is VIEWPORT-gated, not mode-gated** (owner ruling 2026-09-15):
+  in the 3D perspective pane a brush needs **Shift+LMB** in every shading mode, because plain
+  LMB-drag there is camera-fly (dolly+turn); in the 2D ortho panes plain LMB selects a brush in
+  every mode, because LMB-drag there is select/marquee (confirmed by
+  `unrealed/leveldesign/kb/editor-ui.md`'s "2D/3D navigation" entry). Point actors are unaffected —
+  always plain-tap-selectable in both. `selection.ts`'s `canSelectBrushTap(isPerspectivePane,
+  shiftKey)` is the gate; `dragGesture.ts`'s `onTap` threads the release-time `shiftKey` for it.
 
 **Inspector props/categories** (`web/src/panels/Inspector.tsx`): draws exactly what the backend
 sends, no model logic of its own — `SceneActor.props`/`.categories` (parallel arrays) are the raw

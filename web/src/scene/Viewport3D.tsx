@@ -21,11 +21,19 @@ import type { FrameRequest } from './frame'
 import { bboxCenter, bboxMaxExtent } from './frame'
 import { MARKER_COLOR } from './markers'
 import { RadiiOverlays } from './RadiiOverlays'
+import { SelectionHighlight } from './SelectionHighlight'
 import { SelectionMarkers } from './SelectionMarkers'
 import type { ShadingMode } from './shadingMode'
 import { usesUnlitMaterials } from './shadingMode'
 import { useSceneResourcesContext } from './SceneResourcesContext'
-import { isTap, pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapSelection } from './selection'
+import {
+  canSelectBrushTap,
+  isTap,
+  pickActor,
+  resolveHitActor,
+  resolveSegmentHitActor,
+  resolveTapSelection,
+} from './selection'
 import type { Ray } from './selection'
 import { computeTwoFingerDelta } from './touchGesture'
 import type { TouchPoint } from './touchGesture'
@@ -257,7 +265,7 @@ export function Viewport3D({
   // hit actor. Split out so onPointerUp's touch branch can call the exact same selection logic as
   // the existing mouse branch, instead of a second copy.
   const performTapSelect = useCallback(
-    (clientX: number, clientY: number, additive: boolean) => {
+    (clientX: number, clientY: number, additive: boolean, shiftKey: boolean) => {
       const camera = cameraRef.current
       const rect = containerRef.current?.getBoundingClientRect()
       if (!camera || !rect) return
@@ -312,6 +320,10 @@ export function Viewport3D({
         const aabbCandidates = mode === 'wireframe' ? scene.actors.filter((a) => !a.brush) : scene.actors
         hitActor = pickActor(ray, aabbCandidates)
       }
+      // The 3D perspective pane's plain LMB-drag is camera-fly (dolly+turn) -- a brush hit needs
+      // Shift held to disambiguate a selection tap from that, per real UnrealEd (`selection.ts`'s
+      // `canSelectBrushTap`). A point-actor hit is unaffected.
+      if (hitActor?.brush && !canSelectBrushTap(true, shiftKey)) hitActor = null
       const result = resolveTapSelection(hitActor, additive)
       if (result) onSelectActor(result.name, result.additive)
     },
@@ -330,7 +342,7 @@ export function Viewport3D({
           return prev
         })
       },
-      onTap: (clientX, clientY, additive) => performTapSelect(clientX, clientY, additive),
+      onTap: (clientX, clientY, additive, shiftKey) => performTapSelect(clientX, clientY, additive, shiftKey),
       onWheel: (deltaY) => setPose((prev) => zoom(prev, deltaY)),
     }),
     [orbitPivot, performTapSelect],
@@ -404,7 +416,7 @@ export function Viewport3D({
         const tap = touchTap.current
         if (tap?.pointerId !== e.pointerId) return // not the tap-candidate finger (or none survived)
         touchTap.current = null
-        if (isTap(0, 0, tap.totalDx, tap.totalDy)) performTapSelect(e.clientX, e.clientY, false) // touch has no Ctrl-equivalent
+        if (isTap(0, 0, tap.totalDx, tap.totalDy)) performTapSelect(e.clientX, e.clientY, false, false) // touch has no Ctrl/Shift-equivalent
         return
       }
       mouseDrag.onPointerUp(e)
@@ -439,6 +451,11 @@ export function Viewport3D({
         <CameraRig pose={pose} cameraRef={cameraRef} />
         <FlyKeys setPose={setPose} />
         {mode !== 'wireframe' && <mesh ref={meshRef} geometry={bufferGeometry} material={activeMaterials} />}
+        {/* Issue 1: a selected brush's surface "lights up" (additive brightness boost), same as the
+            2D ortho panes below -- no surface to light up in wireframe mode (no solid mesh above). */}
+        {mode !== 'wireframe' && (
+          <SelectionHighlight bufferGeometry={bufferGeometry} triangleOwners={triangleOwners} selectedNames={selectedNames} />
+        )}
         <group ref={markerGroupRef}>
           {markerActors.map((actor) => {
             // A resolved DT_Sprite billboard draws the actor's REAL class icon texture (its atlas
