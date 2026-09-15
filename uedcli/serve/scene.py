@@ -129,7 +129,11 @@ class SceneActor:
     `sprite` is None for a brush actor, and for a point actor whose `DT_Sprite` billboard didn't
     resolve — the client then falls back to a generic marker (`markers.ts`).
     `radii` is None for a brush actor and for any actor that clears neither the collision nor the
-    light-reach gate (`_actor_radii`) — the client draws nothing for it either way."""
+    light-reach gate (`_actor_radii`) — the client draws nothing for it either way. `is_mover` is the
+    AUTHORITATIVE `movers.is_mover` answer (always `False` for a non-brush actor) — the client uses it
+    to force wireframe-only rendering on a Mover regardless of the pane's shading mode (`GUI.md`
+    "Movers"), rather than re-deriving mover-ness from `cls` client-side (which has no class-schema
+    access)."""
     name: str
     cls: str
     bbox_lo: tuple[float, float, float]
@@ -145,6 +149,7 @@ class SceneActor:
     brush: BrushHighlight | None
     sprite: ActorSprite | None
     radii: ActorRadii | None
+    is_mover: bool
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -191,14 +196,16 @@ def _lightmap_frame(lightmap: tuple | None) -> LightmapFrame | None:
                          u_size=u_size, v_size=v_size)
 
 
-def _brush_highlight(actor, index) -> BrushHighlight | None:
+def _brush_highlight(actor, *, is_mover_flag: bool) -> BrushHighlight | None:
     """`actor`'s own authored polys, world-transformed, plus its CSG classification/colour — or
-    None for a non-brush actor. `is_mover` is the AUTHORITATIVE `movers.is_mover` answer (not the
-    name-guess `classify_brush` falls back to with `is_mover=None`), matching every OTHER filled
-    render's own disposition (`preview.py`'s `_scene_geometry` docstring)."""
+    None for a non-brush actor. `is_mover_flag` is the caller's already-resolved, AUTHORITATIVE
+    `movers.is_mover` answer (not the name-guess `classify_brush` falls back to with
+    `is_mover=None`), matching every OTHER filled render's own disposition (`preview.py`'s
+    `_scene_geometry` docstring) — computed once per actor by `_build_actors` (also needed for
+    `SceneActor.is_mover`) rather than re-derived here."""
     if actor.brush is None:
         return None
-    csg_class = classify_brush(actor, is_mover=is_mover(actor, index))
+    csg_class = classify_brush(actor, is_mover=is_mover_flag)
     color = _CSG_PALETTE[csg_class][0]
     R = actor_linear(actor)
     prepivot = actor_prepivot(actor)
@@ -420,6 +427,10 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
             category_maps[cls] = _class_category_map(cls, index)
         props, categories = _with_synthetic_location(
             list(actor.props), _actor_categories(actor.props, category_maps[cls]), loc)
+        # Computed once here (not inside `_brush_highlight`) since `SceneActor.is_mover` needs it
+        # too — a non-brush actor is never a Mover (`Engine.Mover` descends from `Engine.Brush`), so
+        # `is_mover` is only invoked, and can only raise `ClassRefError`, for a brush actor.
+        is_mover_flag = is_mover(actor, index) if actor.brush is not None else False
         actors.append(SceneActor(
             name=name, cls=cls,
             bbox_lo=tuple(float(c) for c in lo), bbox_hi=tuple(float(c) for c in hi),
@@ -427,8 +438,8 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
             folder=actor.folder, labels=sorted(actor.labels), order_value=ranks.get(name, ""),
             csg_rank=csg_rank,
             props=props, categories=categories,
-            brush=_brush_highlight(actor, index), sprite=sprite,
-            radii=radii_map.get(name)))
+            brush=_brush_highlight(actor, is_mover_flag=is_mover_flag), sprite=sprite,
+            radii=radii_map.get(name), is_mover=is_mover_flag))
     return actors
 
 
@@ -458,7 +469,8 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     itself (shared-cache spec's Design section; `app.py`'s `_get_trunk`/`_read_geometry`/
     `_build_and_publish_geometry` own the caching, this function is now pure). `index`/`defaults`
     are still needed HERE, independent of either cached slot: `_is_hidden_ed(actor, defaults)` and
-    `_brush_highlight(actor, index)` both
+    `_build_actors`' own `movers.is_mover(actor, index)` call (feeding both `_brush_highlight` and
+    `SceneActor.is_mover`) both
     resolve per-actor state (a `bHiddenEd` class default, a brush's CSG classification) on every
     call. Real parameters this function needs regardless of the plan's illustrative signature (which
     dropped `defaults` entirely — `_is_hidden_ed` cannot run without it; flagged in the build report).

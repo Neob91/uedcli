@@ -3,10 +3,10 @@ import { describe, expect, it } from 'vitest'
 import type { SceneActor } from '../api'
 import { buildBrushRings } from './brushRings'
 
-function brushActor(name: string, color: [number, number, number]): SceneActor {
+function brushActor(name: string, color: [number, number, number], isMover = false): SceneActor {
   return {
     name,
-    cls: 'Engine.Brush',
+    cls: isMover ? 'Engine.Mover' : 'Engine.Brush',
     bbox_lo: [0, 0, 0],
     bbox_hi: [1, 1, 1],
     location: [0, 0, 0],
@@ -20,6 +20,7 @@ function brushActor(name: string, color: [number, number, number]): SceneActor {
     brush: { csg_class: 'add', color, polys: [[0, 0, 0, 1, 0, 0, 1, 1, 0]], local_origin: [0, 0, 0] },
     sprite: null,
     radii: null,
+    is_mover: isMover,
   }
 }
 
@@ -79,5 +80,38 @@ describe('buildBrushRings', () => {
     expect(byName.get('A')?.bold).toBe(true)
     expect(byName.get('B')?.bold).toBe(false)
     expect(byName.get('C')?.bold).toBe(true)
+  })
+})
+
+// GUI.md "Movers": a Mover always renders wireframe-outline-only, in every shading mode -- so
+// 'selected-only' (the mode non-wireframe panes use) can't gate a Mover's ring on selection the way
+// it gates an ordinary brush's.
+describe("buildBrushRings -- Movers always outline, even unselected, in 'selected-only' mode", () => {
+  const mover = brushActor('Door1', [255, 0, 255], true)
+  const brush = brushActor('Wall1', [0, 255, 0], false)
+
+  it("'selected-only' includes an UNSELECTED Mover's ring, thin (not bold)", () => {
+    const rings = buildBrushRings([mover, brush], new Set(), 'selected-only')
+    expect(rings).toHaveLength(1)
+    expect(rings[0].actorName).toBe('Door1')
+    expect(rings[0].bold).toBe(false)
+  })
+
+  it("'selected-only' still omits an unselected ORDINARY brush's ring alongside an unselected Mover", () => {
+    const rings = buildBrushRings([mover, brush], new Set(), 'selected-only')
+    expect(rings.some((r) => r.actorName === 'Wall1')).toBe(false)
+  })
+
+  it("'selected-only' bolds a SELECTED Mover's ring, same as an ordinary selected brush", () => {
+    const rings = buildBrushRings([mover, brush], new Set(['Door1']), 'selected-only')
+    expect(rings).toHaveLength(1)
+    expect(rings[0].actorName).toBe('Door1')
+    expect(rings[0].bold).toBe(true)
+  })
+
+  it("'csg-all' is unaffected by is_mover -- already includes every brush actor", () => {
+    const rings = buildBrushRings([mover, brush], new Set(), 'csg-all')
+    expect(rings).toHaveLength(2)
+    expect(rings.every((r) => r.bold === false)).toBe(true)
   })
 })

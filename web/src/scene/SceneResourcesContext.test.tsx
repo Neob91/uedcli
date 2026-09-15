@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { AtlasPayload, ScenePayload, ScenePoly } from '../api'
+import type { AtlasPayload, SceneActor, ScenePayload, ScenePoly } from '../api'
 import { SceneResourcesProvider, useSceneResourcesContext } from './SceneResourcesContext'
 
 afterEach(cleanup)
@@ -89,5 +89,58 @@ describe('SceneResourcesProvider / useSceneResourcesContext', () => {
     }
     // React logs an error boundary-less throw to the console; the assertion itself is what matters.
     expect(() => render(<Orphan />)).toThrow(/SceneResourcesProvider/)
+  })
+})
+
+// GUI.md "Movers": a Mover's own solved geometry must NOT ride the default `bufferGeometry` a pane
+// draws unconditionally in every non-wireframe mode -- it's split into `moverGeometry`, drawn only
+// when the "Movers: on" toggle is active (Viewport3D).
+function moverActor(name: string): SceneActor {
+  return {
+    name, cls: 'Engine.Mover', bbox_lo: [0, 0, 0], bbox_hi: [1, 1, 1], location: [0, 0, 0],
+    rotation: [0, 0, 0], folder: null, labels: [], order_value: 'm', csg_rank: 1, props: [],
+    categories: [], brush: null, sprite: null, radii: null, is_mover: true,
+  }
+}
+
+function GeometrySplitProbe() {
+  const { bufferGeometry, moverGeometry } = useSceneResourcesContext()
+  return (
+    <div>
+      <span data-testid="default-position-count">{bufferGeometry.getAttribute('position').count}</span>
+      <span data-testid="mover-position-count">{moverGeometry.getAttribute('position').count}</span>
+    </div>
+  )
+}
+
+describe('SceneResourcesProvider -- Mover polys split out of the default geometry', () => {
+  it("a Mover-owned poly's triangles land in moverGeometry, not the default bufferGeometry", () => {
+    const scene: ScenePayload = {
+      polys: [quad({ owner: 'Wall1' }), quad({ owner: 'Door1' })],
+      actors: [
+        { ...moverActor('Wall1'), is_mover: false, cls: 'Engine.Brush' },
+        moverActor('Door1'),
+      ],
+      geometry_pinned: true,
+    }
+    render(
+      <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null}>
+        <GeometrySplitProbe />
+      </SceneResourcesProvider>,
+    )
+    // Each quad fan-triangulates to 2 triangles * 3 verts = 6 position entries.
+    expect(screen.getByTestId('default-position-count').textContent).toBe('6')
+    expect(screen.getByTestId('mover-position-count').textContent).toBe('6')
+  })
+
+  it('an owner-less poly (no source actor) stays in the default geometry, never treated as a Mover\'s', () => {
+    const scene: ScenePayload = { polys: [quad({ owner: null })], actors: [moverActor('Door1')], geometry_pinned: true }
+    render(
+      <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null}>
+        <GeometrySplitProbe />
+      </SceneResourcesProvider>,
+    )
+    expect(screen.getByTestId('default-position-count').textContent).toBe('6')
+    expect(screen.getByTestId('mover-position-count').textContent).toBe('0')
   })
 })

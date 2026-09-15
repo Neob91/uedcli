@@ -26,6 +26,7 @@ function fixtureActor(overrides: Partial<SceneActor> = {}): SceneActor {
     brush: null,
     sprite: null,
     radii: null,
+    is_mover: false,
     ...overrides,
   }
 }

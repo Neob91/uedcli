@@ -23,6 +23,7 @@ function actor(name: string, folder: string | null): SceneActor {
     brush: null,
     sprite: null,
     radii: null,
+    is_mover: false,
   }
 }
 

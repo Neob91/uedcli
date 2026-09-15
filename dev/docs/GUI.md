@@ -54,6 +54,34 @@ indexing as `materials`, built once and shared across panes). `'lit'` samples th
 atlas. **`'flat'` and `'unlit'` are distinct** (`shadingMode.ts`'s `usesUnlitMaterials`): `'flat'`
 no longer falls through to `'lit'`'s branch — fixed and regression-tested (`shadingMode.test.ts`).
 
+## Movers
+
+A Mover actor (`Engine.Mover` or a subclass — `SceneActor.is_mover`, the server's authoritative
+`movers.is_mover` answer) always renders **wireframe-outline-only**, in every shading mode, including
+`'lit'`/`'unlit'`/`'flat'` in the perspective pane — a stronger default than an ordinary brush, which
+follows the pane's own shading mode. Ortho panes are always wireframe anyway, so a Mover there is
+unaffected either way. This is deliberate: an animated Mover's solid geometry (a door, elevator, or
+platform) clutters the view at its BASE pose and isn't what most editing tasks need to see.
+
+`SceneResourcesContext.tsx` builds a Mover's solved polys into a SEPARATE `moverGeometry`/
+`moverMaterials`, split out of the default `bufferGeometry`/`materials` every pane draws
+unconditionally in a non-wireframe mode — so a Mover's solid triangles never ride the default mesh.
+`brushRings.ts`'s `buildBrushRings` always includes a Mover's outline ring in `'selected-only'` mode
+(the mode a non-wireframe pane uses for brush outlines), even when the Mover isn't selected — an
+ordinary unselected brush gets no ring there.
+
+**The `Movers:` toolbar toggle** (`QuadLayout.tsx`, next to `Grid:`/`Radii:`) shows/hides a Mover's
+SOLID geometry, default off:
+
+- **Off** (default): wireframe outline only, as above.
+- **On**: ALSO draws the Mover's solid geometry (textured/lit per the pane's mode), in ADDITION to
+  the wireframe outline — the outline never disappears when solid is shown.
+- Only visible in non-wireframe panes/modes — an ortho pane (always wireframe) shows no change,
+  which is expected, not a bug.
+- The button stays enabled regardless of the focused pane's current mode: a click still flips the
+  stored toggle, which matters the instant that pane switches to a non-wireframe mode. Unlike
+  `ModeSelector`'s `buildSolved` gating, this button is never disabled/greyed based on pane state.
+
 ## Rendering: backgrounds, color management
 
 - **2D ortho panes**: `#404040` (`OrthoViewport.tsx`'s `<Canvas>`), matching `actor diagram`'s own

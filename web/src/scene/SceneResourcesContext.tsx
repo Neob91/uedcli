@@ -20,6 +20,16 @@ export interface SceneResources {
   // no per-mode variant).
   unlitMaterials: THREE.Material[]
   triangleOwners: (string | null)[]
+  // A Mover's own solved geometry, split OUT of the fields above (GUI.md "Movers"): a Mover always
+  // renders wireframe-outline-only by default, in every shading mode, so its solid triangles must
+  // NOT ride the default `bufferGeometry`/`materials` a pane draws unconditionally -- they draw only
+  // when the "Movers: on" toggle additionally requests them (`Viewport3D`'s `showMoverSolid`).
+  // Same per-group shape as the fields above (`bufferGeometry`/`materials`/`unlitMaterials`/
+  // `triangleOwners`), just scoped to Mover-owned polys alone.
+  moverGeometry: THREE.BufferGeometry
+  moverMaterials: THREE.Material[]
+  moverUnlitMaterials: THREE.Material[]
+  moverTriangleOwners: (string | null)[]
   textures: { map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> }
   markerTexture: THREE.Texture | null
   markerActors: SceneActor[]
@@ -47,18 +57,55 @@ export function SceneResourcesProvider({
   const textures = useTextures(atlas)
   const lightmapTexture = useLightmapTexture(lightmap)
   const markerTexture = useMarkerTexture()
-  const { bufferGeometry, materials, unlitMaterials, triangleOwners } = useBuiltGeometry(scene, atlas, lightmap, textures, lightmapTexture)
+
+  // Movers always render wireframe-outline-only by default (GUI.md "Movers"), so their solid polys
+  // are split OUT of the default geometry into their own built resources -- `Viewport3D` draws
+  // `moverGeometry` only when the "Movers: on" toggle is active. `moverNames` comes from the
+  // server's authoritative `SceneActor.is_mover` (never re-derived from `cls` -- the client has no
+  // class-schema access).
+  const moverNames = useMemo(
+    () => new Set(scene.actors.filter((a) => a.is_mover).map((a) => a.name)),
+    [scene.actors],
+  )
+  const nonMoverPolys = useMemo(
+    () => scene.polys.filter((p) => p.owner == null || !moverNames.has(p.owner)),
+    [scene.polys, moverNames],
+  )
+  const moverPolys = useMemo(
+    () => scene.polys.filter((p) => p.owner != null && moverNames.has(p.owner)),
+    [scene.polys, moverNames],
+  )
+  const { bufferGeometry, materials, unlitMaterials, triangleOwners } =
+    useBuiltGeometry(nonMoverPolys, atlas, lightmap, textures, lightmapTexture)
+  const {
+    bufferGeometry: moverGeometry,
+    materials: moverMaterials,
+    unlitMaterials: moverUnlitMaterials,
+    triangleOwners: moverTriangleOwners,
+  } = useBuiltGeometry(moverPolys, atlas, lightmap, textures, lightmapTexture)
 
   // Point actors with no owned rendered poly (lights, triggers, patrol nodes, sounds, an unresolved
-  // DT_Mesh) -- markers.ts's own filter, computed once here rather than per-pane.
+  // DT_Mesh) -- markers.ts's own filter, computed once here rather than per-pane. Unions BOTH
+  // triangle-owner arrays: a Mover's own polys moved to `moverTriangleOwners` above, but it still
+  // owns rendered geometry (just not in the default array), so it must not read as marker-needing.
   const markerActors = useMemo(() => {
-    const ownedNames = new Set(triangleOwners.filter((n): n is string => n != null))
+    const ownedNames = new Set(
+      [...triangleOwners, ...moverTriangleOwners].filter((n): n is string => n != null),
+    )
     return actorsNeedingMarkers(scene.actors, ownedNames)
-  }, [scene, triangleOwners])
+  }, [scene, triangleOwners, moverTriangleOwners])
 
   const value = useMemo<SceneResources>(
-    () => ({ bufferGeometry, materials, unlitMaterials, triangleOwners, textures, markerTexture, markerActors, actors: scene.actors }),
-    [bufferGeometry, materials, unlitMaterials, triangleOwners, textures, markerTexture, markerActors, scene.actors],
+    () => ({
+      bufferGeometry, materials, unlitMaterials, triangleOwners,
+      moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners,
+      textures, markerTexture, markerActors, actors: scene.actors,
+    }),
+    [
+      bufferGeometry, materials, unlitMaterials, triangleOwners,
+      moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners,
+      textures, markerTexture, markerActors, scene.actors,
+    ],
   )
 
   return <SceneResourcesReactContext.Provider value={value}>{children}</SceneResourcesReactContext.Provider>

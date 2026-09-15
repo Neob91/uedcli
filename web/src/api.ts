@@ -78,6 +78,10 @@ export interface SceneActor {
   brush: BrushHighlight | null // selection-highlight geometry; null for a non-brush actor
   sprite: ActorSprite | null // resolved DT_Sprite billboard; null -> client draws a generic marker
   radii: ActorRadii | null // collision/light radii; null for a brush actor or one that clears neither gate
+  // The server's authoritative `movers.is_mover` answer (always false for a non-brush actor) --
+  // always wireframe-only rendering by default, see GUI.md "Movers". Never re-derived from `cls`
+  // client-side: the client has no class-schema access to walk the descends-from-Engine.Mover chain.
+  is_mover: boolean
 }
 
 export interface ScenePayload {

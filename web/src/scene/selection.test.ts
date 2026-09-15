@@ -27,6 +27,7 @@ function actor(name: string, lo: [number, number, number], hi: [number, number, 
     brush: null,
     sprite: null,
     radii: null,
+    is_mover: false,
   }
 }
 

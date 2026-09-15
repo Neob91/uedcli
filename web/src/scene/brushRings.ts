@@ -1,8 +1,11 @@
 // Which brush actors' authored (pre-CSG) poly rings to draw, in which colour/weight -- the pure
 // logic behind `actor diagram`'s "every brush wireframed in its own CSG colour, selected one bolder"
 // convention (quad-layout Part 2, Task 9). `'selected-only'` reproduces TODAY's Perspective-pane
-// behavior (`SelectionHighlight`) unchanged -- a regression pin; `'csg-all'` is the new requirement
-// (spec §2): every brush actor's own rings, in its own colour, with the selected one(s) bold.
+// behavior (`SelectionHighlight`), EXCEPT a Mover's ring is always included regardless of selection
+// (GUI.md "Movers" -- a Mover renders wireframe-outline-only by default in every shading mode, so its
+// outline can't be gated on selection the way an ordinary brush's is); `'csg-all'` is the new
+// requirement (spec §2): every brush actor's own rings, in its own colour, with the selected one(s)
+// bold.
 import type { SceneActor } from '../api'
 
 export interface BrushRing {
@@ -14,11 +17,11 @@ export interface BrushRing {
 
 export type BrushRingMode = 'csg-all' | 'selected-only'
 
-/** One ring per poly of every brush actor `mode` selects: `'selected-only'` -> only SELECTED
- * actors' rings (all bold -- one ring per selected brush actor, matching today's single-selection
- * `SelectionHighlight` output shape exactly when `selectedNames.size === 1`, a regression pin, not a
- * new shape); `'csg-all'` -> every brush actor's rings in its own `brush.color`, bold only on
- * selected ones (spec §9's multi-select cross-pane highlight). */
+/** One ring per poly of every brush actor `mode` selects: `'selected-only'` -> SELECTED actors' rings
+ * (bold) plus every MOVER's ring even when unselected (thin) -- one ring per selected-or-mover brush
+ * actor, matching today's single-selection `SelectionHighlight` output shape when `selectedNames.size
+ * === 1` and no actor is a Mover; `'csg-all'` -> every brush actor's rings in its own `brush.color`,
+ * bold only on selected ones (spec §9's multi-select cross-pane highlight). */
 export function buildBrushRings(actors: SceneActor[], selectedNames: ReadonlySet<string>, mode: BrushRingMode): BrushRing[] {
   const rings: BrushRing[] = []
   // Brushes draw in CSG order (owner ruling) -- explicit rather than relying on `actors` already
@@ -28,7 +31,7 @@ export function buildBrushRings(actors: SceneActor[], selectedNames: ReadonlySet
   for (const actor of ordered) {
     if (!actor.brush) continue
     const isSelected = selectedNames.has(actor.name)
-    if (mode === 'selected-only' && !isSelected) continue
+    if (mode === 'selected-only' && !isSelected && !actor.is_mover) continue
     for (const verts of actor.brush.polys) {
       rings.push({ actorName: actor.name, color: actor.brush.color, verts, bold: isSelected })
     }

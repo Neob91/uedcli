@@ -5,7 +5,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 
-import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
+import type { AtlasPayload, LightmapPayload, ScenePoly } from '../api'
 import type { GeometryGroup } from './geometry'
 import { buildGeometryData } from './geometry'
 
@@ -253,22 +253,27 @@ export interface BuiltGeometry {
   triangleOwners: (string | null)[]
 }
 
-/** Builds the ONE `THREE.BufferGeometry` + per-group materials for a scene payload -- one draw
- * group per (texture, masked?, two_sided?, blend, lit?) tuple, each with its own material set from
- * the server-resolved attrs (cull side, alphaTest, blend). The base map tiles on `uv`; per-vertex
- * `color` carries the KEY_LIGHT flat shade (unlit) or white (lit); a lit group additionally samples
- * the shared lightmap texture on `uv1` (`base*color*lightMap`, the render.rs product). Untextured
- * groups (tex_index < 0) get a flat grey base. Disposes the PREVIOUS geometry/materials whenever a
- * fresh build (e.g. a live-reload) replaces them, and on unmount, so nothing leaks. */
+/** Builds the ONE `THREE.BufferGeometry` + per-group materials for a poly set -- one draw group per
+ * (texture, masked?, two_sided?, blend, lit?) tuple, each with its own material set from the
+ * server-resolved attrs (cull side, alphaTest, blend). The base map tiles on `uv`; per-vertex `color`
+ * carries the KEY_LIGHT flat shade (unlit) or white (lit); a lit group additionally samples the
+ * shared lightmap texture on `uv1` (`base*color*lightMap`, the render.rs product). Untextured groups
+ * (tex_index < 0) get a flat grey base. Disposes the PREVIOUS geometry/materials whenever a fresh
+ * build (e.g. a live-reload) replaces them, and on unmount, so nothing leaks.
+ *
+ * Takes `polys` directly (not a whole `ScenePayload`) so `SceneResourcesContext` can call this TWICE
+ * -- once for the non-Mover polys (the default solid mesh) and once for the Mover-owned polys alone
+ * (the "Movers: on" toggle's additional overlay, GUI.md "Movers") -- sharing the same texture/
+ * lightmap inputs without a second `ScenePayload` to build. */
 export function useBuiltGeometry(
-  scene: ScenePayload,
+  polys: ScenePoly[],
   atlas: AtlasPayload,
   lightmap: LightmapPayload | null,
   textures: { map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> },
   lightmapTexture: THREE.Texture | null,
 ): BuiltGeometry {
   const { bufferGeometry, materials, unlitMaterials, triangleOwners } = useMemo(() => {
-    const built = buildGeometryData(scene.polys, atlas, lightmap)
+    const built = buildGeometryData(polys, atlas, lightmap)
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(built.positions, 3))
     geo.setAttribute('uv', new THREE.BufferAttribute(built.uvs, 2))
@@ -309,7 +314,7 @@ export function useBuiltGeometry(
     }
     geo.computeVertexNormals()
     return { bufferGeometry: geo, materials: mats, unlitMaterials: unlitMats, triangleOwners: built.triangleOwners }
-  }, [scene, atlas, lightmap, textures, lightmapTexture])
+  }, [polys, atlas, lightmap, textures, lightmapTexture])
 
   // Every live-reload replaces `bufferGeometry`/`materials`/`unlitMaterials` with fresh THREE
   // objects; without an explicit dispose the PREVIOUS ones (a full geometry buffer, its materials)

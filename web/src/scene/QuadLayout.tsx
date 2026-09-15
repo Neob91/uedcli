@@ -94,6 +94,11 @@ export function QuadLayout({
   // Collision-cylinder / light-radius overlay toggle -- one switch for all four panes (mirrors
   // showGrid's convention). Default OFF: radii clutter a level fast, unlike the grid.
   const [showRadii, setShowRadii] = useState(false)
+  // Mover solid-geometry toggle (GUI.md "Movers"): a Mover always renders wireframe-outline-only by
+  // default, in every shading mode -- this ADDS its solid geometry on top when true. Default OFF,
+  // mirroring showRadii's convention. Only the perspective pane reads it (ortho panes are always
+  // wireframe, so it has no visible effect there -- expected, not wired to be disabled for it).
+  const [showMoverSolid, setShowMoverSolid] = useState(false)
 
   // Resizable panes (bug report item 3): the column/row split as a fraction (0..1) of the quad's
   // own box, in plain component state per the ask -- no persistence needed. `MIN_FRAC`/`MAX_FRAC`
@@ -174,6 +179,19 @@ export function QuadLayout({
         >
           Radii: {showRadii ? 'on' : 'off'}
         </button>
+        {/* Movers solid-geometry toggle (GUI.md "Movers") -- stays enabled regardless of the focused
+            pane's current shading mode: the click still flips the stored toggle state, which matters
+            the instant that pane switches to a non-wireframe mode, even though it has no immediate
+            visible effect while wireframe (or an ortho pane) is active. Never disabled/greyed on
+            `modes`/`focusedPane`. */}
+        <button
+          type="button"
+          className="mover-solid-toggle"
+          onClick={() => setShowMoverSolid((v) => !v)}
+          aria-pressed={showMoverSolid}
+        >
+          Movers: {showMoverSolid ? 'on' : 'off'}
+        </button>
         <div
           className="quad-layout"
           data-maximized={maximized ?? undefined}
@@ -205,6 +223,7 @@ export function QuadLayout({
                 frameRequest={frameRequest}
                 mode={resolveEffectiveMode(modes[pane], buildSolved)}
                 showRadii={showRadii}
+                showMoverSolid={showMoverSolid}
               />
             ) : (
               <OrthoViewport

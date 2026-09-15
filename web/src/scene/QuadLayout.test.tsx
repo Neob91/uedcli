@@ -16,15 +16,18 @@ vi.mock('./Viewport3D', () => ({
     onSelectActor,
     onDeselect,
     mode,
+    showMoverSolid,
   }: {
     selectedNames: ReadonlySet<string>
     onSelectActor: (name: string, additive: boolean) => void
     onDeselect: () => void
     mode: string
+    showMoverSolid: boolean
   }) => (
     <div>
       <span data-testid="pane-perspective-selected">{[...selectedNames].join(',')}</span>
       <span data-testid="pane-perspective-mode">{mode}</span>
+      <span data-testid="pane-perspective-mover-solid">{String(showMoverSolid)}</span>
       <button type="button" data-testid="pane-perspective-select" onClick={() => onSelectActor('ActorA', false)} />
       <button type="button" data-testid="pane-perspective-miss" onClick={onDeselect} />
     </div>
@@ -176,5 +179,43 @@ describe('QuadLayout visible mode selector', () => {
     // Perspective still has it.
     const perspectivePane = screen.getByTestId('quad-pane-perspective')
     expect(within(perspectivePane).getByRole('group', { name: 'Shading mode' })).toBeTruthy()
+  })
+})
+
+// GUI.md "Movers": the toolbar toggle showing/hiding a Mover's SOLID geometry (wireframe-outline-only
+// is always on, unaffected by this toggle -- see Viewport3D/brushRings). Mirrors the existing Grid/
+// Radii toggle-button convention.
+describe('QuadLayout Movers toggle', () => {
+  it('defaults off and threads showMoverSolid to the perspective pane', () => {
+    render(<Harness />)
+
+    const button = screen.getByText('Movers: off')
+    expect(button.getAttribute('aria-pressed')).toBe('false')
+    expect(screen.getByTestId('pane-perspective-mover-solid').textContent).toBe('false')
+  })
+
+  it('clicking the button flips the toggle and the value threaded to the perspective pane', () => {
+    render(<Harness />)
+
+    fireEvent.click(screen.getByText('Movers: off'))
+
+    const button = screen.getByText('Movers: on')
+    expect(button.getAttribute('aria-pressed')).toBe('true')
+    expect(screen.getByTestId('pane-perspective-mover-solid').textContent).toBe('true')
+  })
+
+  // The click must still change the toggle's stored state even while the focused pane is currently
+  // in wireframe mode -- the button is never disabled/greyed based on the pane's current mode
+  // (unlike ModeSelector's buildSolved gating above, a deliberately different rule for this button).
+  it('stays enabled and toggles even when the perspective pane is in wireframe mode (buildSolved=false)', () => {
+    render(<Harness buildSolved={false} />)
+    expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('wireframe')
+
+    const button = screen.getByText('Movers: off')
+    expect(button.hasAttribute('disabled')).toBe(false)
+
+    fireEvent.click(button)
+    expect(screen.getByText('Movers: on')).toBeTruthy()
+    expect(screen.getByTestId('pane-perspective-mover-solid').textContent).toBe('true')
   })
 })

@@ -35,7 +35,7 @@ describe('useBuiltGeometry', () => {
     const expected = buildGeometryData(scene.polys, EMPTY_ATLAS, null)
 
     const { result, unmount } = renderHook(() =>
-      useBuiltGeometry(scene, EMPTY_ATLAS, null, { map: new Map(), sprite: new Map() }, null),
+      useBuiltGeometry(scene.polys, EMPTY_ATLAS, null, { map: new Map(), sprite: new Map() }, null),
     )
 
     const positionAttr = result.current.bufferGeometry.getAttribute('position')
@@ -60,7 +60,7 @@ describe('useBuiltGeometry', () => {
     const lightmapTexture = new THREE.Texture()
 
     const { result, unmount } = renderHook(() =>
-      useBuiltGeometry(scene, EMPTY_ATLAS, lightmap, { map: new Map(), sprite: new Map() }, lightmapTexture),
+      useBuiltGeometry(scene.polys, EMPTY_ATLAS, lightmap, { map: new Map(), sprite: new Map() }, lightmapTexture),
     )
 
     expect(result.current.materials.length).toBeGreaterThan(0)

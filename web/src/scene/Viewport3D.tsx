@@ -197,6 +197,11 @@ export interface Viewport3DProps {
   // mirroring the existing grid-toggle convention; default off. Scoped to the current selection
   // (owner ruling 2026-09-15) -- on shows only the selected actor(s)' radii, not every actor's.
   showRadii?: boolean
+  // Mover solid-geometry toggle (GUI.md "Movers"): a Mover ALWAYS renders wireframe-outline-only by
+  // default, in every shading mode -- this ADDS its solid (textured/lit per `mode`) geometry on top
+  // of the outline when true; false (default) leaves it outline-only. No effect in 'wireframe' mode
+  // (nothing solid draws there regardless).
+  showMoverSolid?: boolean
 }
 
 // Which single touch contact is the tap-selection candidate: the FIRST finger down, tracked only
@@ -218,6 +223,7 @@ export function Viewport3D({
   frameRequest = null,
   mode = 'lit',
   showRadii = false,
+  showMoverSolid = false,
 }: Viewport3DProps) {
   const [pose, setPose] = useState<CameraPose>(INITIAL_POSE)
 
@@ -260,12 +266,16 @@ export function Viewport3D({
   // Geometry/textures/markers are built ONCE and shared across every pane via
   // SceneResourcesContext (Part 0, Tasks 1-2) -- Viewport3D no longer builds its own (Task 3;
   // camera/pointer handling/click-to-select are UNCHANGED in this task).
-  const { bufferGeometry, materials, unlitMaterials, triangleOwners, textures, markerTexture, markerActors } =
-    useSceneResourcesContext()
+  const {
+    bufferGeometry, materials, unlitMaterials, triangleOwners,
+    moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners,
+    textures, markerTexture, markerActors,
+  } = useSceneResourcesContext()
   // 'unlit'/'lit' otherwise rendered the identical mesh (materials built once, shared across every
   // pane, with no per-mode variant) -- pick the lightmap-free array for 'unlit' so it genuinely
   // differs, matching the main spec's 4-distinct-shading-modes requirement (review finding).
   const activeMaterials = usesUnlitMaterials(mode) ? unlitMaterials : materials
+  const activeMoverMaterials = usesUnlitMaterials(mode) ? moverUnlitMaterials : moverMaterials
 
   // A single "primary" selected actor (the first, by scene.actors order, whose name is in the set)
   // -- ONLY for the camera orbit pivot (Alt-drag), which stays single-target; Task 15's frame/`F`
@@ -445,6 +455,13 @@ export function Viewport3D({
         <CameraRig pose={pose} cameraRef={cameraRef} />
         <FlyKeys setPose={setPose} />
         {mode !== 'wireframe' && <mesh ref={meshRef} geometry={bufferGeometry} material={activeMaterials} />}
+        {/* Movers: wireframe-outline-only by default in every mode (GUI.md "Movers") -- their solid
+            geometry is split OUT of `bufferGeometry` above (SceneResourcesContext) and only drawn
+            here when the "Movers: on" toggle is active, ADDITIONALLY on top of the outline (never
+            replacing it -- `BrushOutlines` below still draws every Mover's ring unconditionally). */}
+        {mode !== 'wireframe' && showMoverSolid && (
+          <mesh geometry={moverGeometry} material={activeMoverMaterials} />
+        )}
         {/* Issue 1: a selected brush's surface "lights up" (additive brightness boost), same as the
             2D ortho panes below -- no surface to light up in wireframe mode (no solid mesh above). */}
         {mode !== 'wireframe' && (
@@ -453,6 +470,14 @@ export function Viewport3D({
             triangleOwners={triangleOwners}
             selectedNames={selectedNames}
             materials={activeMaterials}
+          />
+        )}
+        {mode !== 'wireframe' && showMoverSolid && (
+          <SelectionHighlight
+            bufferGeometry={moverGeometry}
+            triangleOwners={moverTriangleOwners}
+            selectedNames={selectedNames}
+            materials={activeMoverMaterials}
           />
         )}
         <group ref={markerGroupRef}>

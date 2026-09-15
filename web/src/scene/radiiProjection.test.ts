@@ -42,6 +42,7 @@ function actorWithRadii(name: string, radii: SceneActor['radii']): SceneActor {
     brush: null,
     sprite: null,
     radii,
+    is_mover: false,
   }
 }
 
