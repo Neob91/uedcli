@@ -21,7 +21,7 @@ from ..preview_native import build_scene as _build_scene
 from ..preview_native import resolve_actor_sprites
 from .errors import error_to_status
 from .lightmap import build_lightmap_atlas
-from .scene import build_scene_payload
+from .scene import _BuiltGeometry, _LoadedTrunk, build_scene_payload
 from .textures import build_atlas
 from .watch import TrunkWatcher
 
@@ -31,7 +31,14 @@ def _scene_inputs(project):
     call site assembles (`cli/commands/level.py` ~732-745): the composed package search path, the
     schema-aware class/mover resolver, and the class-defaults resolver `build_scene` needs to light
     world BSP surfaces. Recomputed per request (cheap: no CSG solve here) rather than memoized on
-    the app, so a `--project`'s on-disk games config can change without a `serve` restart."""
+    the app, so a `--project`'s on-disk games config can change without a `serve` restart.
+
+    Caveat (shared-cache spec, accepted trade-off): once `_get_geometry()`'s cache is warm, a
+    fresh `defaults`/`search_files` computed here has no effect on what a route actually returns —
+    a warm build is served straight from `_geometry_ref` without ever consulting this call's
+    result. A games-config edit therefore needs an unrelated trunk change (or a `serve` restart) to
+    take effect, not just the next request. Accepted because games-config edits are rare (one-time
+    project setup) next to trunk edits (this tool's whole reason to be cheap and frequent)."""
     user_config = config.load_user_config()
     search_files = config.composed_search_files(project, user_config)
     index = resources.mover_index(None, "uedcli serve", project=project)
@@ -60,8 +67,13 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # returns a clean "level not found" (exit-2-equivalent 422) rather than falling through to
         # build_scene's misleading "no CSG brush actors" (no-half-answer rule). Single-segment guards
         # against a name that isn't a real level dir (traversal is already impossible — Starlette's
-        # {level_name} is [^/]+ and uvicorn pre-decodes %2F).
-        if "/" in level_name or level_name in ("", ".", "..") or not (maps_root / level_name).is_dir():
+        # {level_name} is [^/]+ and uvicorn pre-decodes %2F). `level_name != level`: `create_app`
+        # fixes ONE level for the app's lifetime (no picker), and with the shared trunk/geometry
+        # cache below keyed on nothing but that fixed `level`, a syntactically-valid-but-different
+        # level name would otherwise silently serve THIS level's cached data instead of its own
+        # (shared-cache spec's `_require_level` finding).
+        if ("/" in level_name or level_name in ("", ".", "..") or level_name != level
+                or not (maps_root / level_name).is_dir()):
             raise CommandError(f"level not found: {level_name!r}")
 
     async def _broadcast_reload() -> None:
@@ -77,7 +89,86 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                 dead.add(ws)
         connections.difference_update(dead)
 
-    watcher = TrunkWatcher(maps_root / level, _broadcast_reload)
+    # Shared in-process scene cache (`dev/docs/board/to-build/uedcli-serve-share-one-in-process-
+    # scene-cache/`): two independently-atomic slots so `/scene`, `/atlas`, `/lightmap` do one
+    # trunk-read + one `build_scene`/`resolve_actor_sprites` call each per settled trunk state,
+    # instead of each route redoing all of it independently. `_generation` guards against a slow
+    # build in flight when an invalidation lands publishing a stale result over the fresh `None`
+    # (a real race a plain double-checked-locking sketch has no defense against — see `_get_geometry`
+    # below); bumped by `_on_trunk_settled` in the SAME step it clears both refs.
+    _generation = [0]
+    _trunk_lock = threading.Lock()
+    _trunk_ref: list[_LoadedTrunk | None] = [None]
+    _geometry_ref: list[_BuiltGeometry | None] = [None]
+
+    def _get_trunk(search_files, defaults) -> _LoadedTrunk:
+        # NOTE on parameters: the plan's own illustrative pseudocode named this `_get_trunk(search_files,
+        # index)` and called `resolve_actor_sprites(lvl, index, search_files)` -- but the REAL
+        # `resolve_actor_sprites` signature (`preview_native.py:380`) is `(level, search_files,
+        # class_defaults)`, and `class_defaults` (a `ClassDefaults`, with `.for_class`) is not
+        # interchangeable with `index` (a `ClassIndex`, no `.for_class` -- would raise
+        # `AttributeError` on the very first call). Fixed to the verified real signature; flagged in
+        # the build report rather than silently carried over.
+        while True:
+            cached = _trunk_ref[0]
+            if cached is not None:
+                return cached
+            with _trunk_lock:
+                cached = _trunk_ref[0]
+                if cached is not None:
+                    return cached
+                gen_before = _generation[0]
+                lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level)
+                sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
+                if _generation[0] != gen_before:
+                    continue    # invalidated mid-build: discard, loop back and retry from the top
+                built = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
+                                     sprite_table=sprite_table, actor_sprites=actor_sprites)
+                _trunk_ref[0] = built
+                return built
+
+    def _get_geometry(search_files, index, defaults) -> _BuiltGeometry:
+        # `while True: ... continue` instead of the plan's illustrative recursive `return
+        # _get_geometry()`: `solve_lock`/`_trunk_lock` are plain `threading.Lock`s, not reentrant --
+        # a recursive call's own `with solve_lock:` would deadlock against the still-held outer lock
+        # (the outer `with` doesn't release until the recursive call's entire body, including that
+        # nested acquisition, has already returned). `continue` from inside a `with` block runs
+        # `__exit__` (releasing the lock) before control reaches the top of the loop, so the retry's
+        # re-acquisition never contends with itself. Same shape as `_get_trunk` above.
+        while True:
+            cached = _geometry_ref[0]
+            if cached is not None:
+                return cached
+            with solve_lock:
+                cached = _geometry_ref[0]
+                if cached is not None:
+                    return cached
+                gen_before = _generation[0]
+                trunk_state = _get_trunk(search_files, defaults)
+                polys, texture_table, owners = _build_scene(
+                    trunk_state.level, search_files, index, defaults=defaults, project=project,
+                    level_name=level, visibility="editor")
+                if _generation[0] != gen_before:
+                    continue    # invalidated mid-build (during the trunk fetch OR the build itself)
+                built = _BuiltGeometry(geom_hash=None, light_hash=None,   # OQ1 -- see scene.py
+                                       polys=polys, texture_table=texture_table, owners=owners)
+                _geometry_ref[0] = built
+                return built
+
+    async def _on_trunk_settled() -> None:
+        # Order matters (spec, "Invalidation ordering"): bump the generation and clear BOTH slots
+        # before broadcasting. The bump/clear order between themselves doesn't matter (no lock, no
+        # other code reads `_generation` except a build checking it after its own slow work) -- what
+        # matters is that all three happen before the WS broadcast, and that none of them takes
+        # `solve_lock` (event-loop-freeze hazard, same reasoning as `_broadcast_reload` above). The
+        # bump is what makes a build already in flight when this fires discard itself instead of
+        # publishing stale data (the generation guard in `_get_trunk`/`_get_geometry` above).
+        _generation[0] += 1
+        _trunk_ref[0] = None
+        _geometry_ref[0] = None
+        await _broadcast_reload()
+
+    watcher = TrunkWatcher(maps_root / level, _on_trunk_settled)
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI):
@@ -92,6 +183,9 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
     # mutation safety directly) — not part of the HTTP surface.
     app.state.connections = connections
     app.state.broadcast_reload = _broadcast_reload
+    app.state.get_trunk = _get_trunk
+    app.state.get_geometry = _get_geometry
+    app.state.on_trunk_settled = _on_trunk_settled
 
     @app.exception_handler(Exception)
     async def _domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -114,8 +208,9 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
     def scene(level_name: str) -> dict:
         _require_level(level_name)
         search_files, index, defaults = _scene_inputs(project)
-        with solve_lock:
-            payload = build_scene_payload(project, level_name, index, defaults, search_files)
+        trunk_state = _get_trunk(search_files, defaults)
+        geometry = _get_geometry(search_files, index, defaults)
+        payload = build_scene_payload(trunk_state, geometry, index, defaults)
         return {
             "polys": [asdict(p) for p in payload.polys],
             "actors": [asdict(a) for a in payload.actors],
@@ -123,26 +218,19 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
 
     @app.get("/api/level/{level_name}/atlas")
     def atlas(level_name: str) -> dict:
-        # The SAME cached solve the scene route uses (`build_scene` keyed on project/level_name is
-        # a `preview_cache` hit here) — never a second decode path; only its `texture_table` half
-        # is needed, so the payload's polys are discarded. `solve_lock` makes a concurrent /scene
-        # cold-solve+cache first, so this becomes the cache hit rather than a second cold solve.
+        # `_get_trunk`/`_get_geometry` are the SAME shared cache `/scene` reads -- an unchanged
+        # trunk means this is a cache hit, not a second decode path. Only `geometry.texture_table`
+        # is needed here, plus `trunk_state.sprite_table` (point-actor sprite billboards) -- appended
+        # in the same order `scene.py::build_scene_payload` uses when it wraps `trunk.actor_sprites`
+        # into `SceneActor.sprite`, so a `tex_index` from /scene names the same rect here. Appending
+        # it is what keeps this route's OWN data unchanged by the refactor (today's /atlas already
+        # returns sprite rects via its own `resolve_actor_sprites` call; dropping the append would be
+        # the actual regression, not adding it).
         _require_level(level_name)
         search_files, index, defaults = _scene_inputs(project)
-        lvl, *_ = trunk.read_level_with_bodies(maps_root / level_name)
-        with solve_lock:
-            # `visibility="editor"`, matching `/scene` (`build_scene_payload`) -- otherwise this
-            # atlas's texture indices would be built off a DIFFERENT actor set (bHidden-gated) than
-            # the polys `/scene` hands the client (bHiddenEd-gated), misaligning `tex_index`.
-            _polys, texture_table, _actor_names = _build_scene(lvl, search_files, index,
-                                                               defaults=defaults, project=project,
-                                                               level_name=level_name,
-                                                               visibility="editor")
-            # Point-actor sprite billboards ride in the SAME atlas: `scene.py::build_scene_payload`
-            # appends this identical `resolve_actor_sprites` result onto its own `texture_table` in
-            # the same order, so a `SceneActor.sprite.tex_index` from /scene names the same rect here.
-            sprite_table, _actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
-            texture_table = texture_table + sprite_table
+        trunk_state = _get_trunk(search_files, defaults)
+        geometry = _get_geometry(search_files, index, defaults)
+        texture_table = geometry.texture_table + trunk_state.sprite_table
         png_bytes, manifest, width, height = build_atlas(texture_table)
         return {
             "width": width,
@@ -153,21 +241,13 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
 
     @app.get("/api/level/{level_name}/lightmap")
     def lightmap(level_name: str) -> dict:
-        # Same cached solve as /scene and /atlas (a `preview_cache` hit under `solve_lock`); only
+        # Same shared cache as /scene and /atlas (a warm `_get_geometry()` never re-solves); only
         # its poly list is needed here (the baked lumel grids), the texture table is discarded.
         # `intensity` is the atlas's global multiplier scale — the client's `lightMapIntensity`.
         _require_level(level_name)
         search_files, index, defaults = _scene_inputs(project)
-        lvl, *_ = trunk.read_level_with_bodies(maps_root / level_name)
-        with solve_lock:
-            # `visibility="editor"`, matching `/scene` -- same reasoning as `/atlas` above: this
-            # must be the SAME solve `/scene`'s polys came from, or the lumel grids here won't
-            # correspond poly-for-poly to what the client is drawing.
-            polys, _texture_table, _actor_names = _build_scene(lvl, search_files, index,
-                                                               defaults=defaults, project=project,
-                                                               level_name=level_name,
-                                                               visibility="editor")
-        png_bytes, manifest, width, height, intensity = build_lightmap_atlas(polys)
+        geometry = _get_geometry(search_files, index, defaults)
+        png_bytes, manifest, width, height, intensity = build_lightmap_atlas(geometry.polys)
         return {
             "width": width,
             "height": height,

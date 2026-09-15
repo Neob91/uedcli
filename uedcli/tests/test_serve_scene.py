@@ -12,10 +12,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from uedcli import trunk
+from uedcli import config, trunk
 from uedcli.classdefaults import ClassDefaults
 from uedcli.classindex import ClassIndex
 from uedcli.model import Actor, Level
+from uedcli.preview_native import build_scene, resolve_actor_sprites
 from uedcli.tests.conftest import cube_room
 
 uedcli_native = pytest.importorskip("uedcli_native")
@@ -58,6 +59,27 @@ def _write_fixture_trunk(tmp_path) -> tuple:
     return project, "TestLevel"
 
 
+def _load_and_build_for(project, level_name, index, defaults, search_files):
+    """Task 3: `build_scene_payload` no longer loads or builds anything itself -- it takes an
+    already-built `_LoadedTrunk`/`_BuiltGeometry` pair. This does, by hand, exactly what `app.py`'s
+    `_get_trunk()`/`_get_geometry()` do in production, so these tests still exercise the real
+    `trunk.read_level_with_bodies` / `build_scene` / `resolve_actor_sprites` call chain, just via
+    the pre-built-pieces call site the shared cache uses."""
+    from uedcli.serve.scene import _BuiltGeometry, _LoadedTrunk
+
+    maps_dir = Path(config.project_maps_dir(project))
+    level, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_dir / level_name)
+    polys, texture_table, owners = build_scene(level, search_files, index, defaults=defaults,
+                                               project=project, level_name=level_name,
+                                               visibility="editor")
+    sprite_table, actor_sprites = resolve_actor_sprites(level, search_files, defaults)
+    trunk_state = _LoadedTrunk(level=level, ranks=ranks, folders=folders,
+                               sprite_table=sprite_table, actor_sprites=actor_sprites)
+    geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=polys,
+                              texture_table=texture_table, owners=owners)
+    return trunk_state, geometry
+
+
 def test_build_scene_payload_has_polys_and_actors(tmp_path):
     from uedcli.serve.scene import build_scene_payload
 
@@ -65,7 +87,9 @@ def test_build_scene_payload_has_polys_and_actors(tmp_path):
     # A real index, not `IDX` (`StubClassIndex`): every actor's `bHiddenEd` now resolves its class
     # default when unstated (owner ruling 2026-09-14's GUI filter, `scene.py::_is_hidden_ed`), even
     # a plain brush -- `StubClassIndex` has no `.resolver()`.
-    payload = build_scene_payload(project, level_name, _ued22_index(), DEFAULTS, [])
+    index = _ued22_index()
+    trunk_state, geometry = _load_and_build_for(project, level_name, index, DEFAULTS, [])
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
 
     assert payload.polys
     for poly in payload.polys:
@@ -92,27 +116,6 @@ def test_build_scene_payload_has_polys_and_actors(tmp_path):
     assert {p.owner for p in payload.polys} == {"Room"}
 
 
-def test_build_scene_payload_second_call_is_a_cache_hit(tmp_path, monkeypatch):
-    from uedcli.serve.scene import build_scene_payload
-
-    project, level_name = _write_fixture_trunk(tmp_path)
-
-    calls = []
-    real = uedcli_native.build_geometry_bspcsg
-
-    def spy(*a, **k):
-        calls.append(1)
-        return real(*a, **k)
-
-    monkeypatch.setattr(uedcli_native, "build_geometry_bspcsg", spy)
-
-    index = _ued22_index()   # see test above: `_is_hidden_ed` needs a real resolver for every actor
-    build_scene_payload(project, level_name, index, DEFAULTS, [])
-    assert len(calls) == 1
-    build_scene_payload(project, level_name, index, DEFAULTS, [])
-    assert len(calls) == 1                                    # second call: preview_cache hit, no re-solve
-
-
 def test_build_scene_payload_filters_bhiddened_actors_and_keeps_bhidden_ones(tmp_path):
     """Owner ruling 2026-09-14: the GUI hides `bHiddenEd` actors and ignores `bHidden` entirely --
     the opposite of `level photo --native`. Both test actors are bare POINT actors (no brush, no
@@ -137,7 +140,9 @@ def test_build_scene_payload_filters_bhiddened_actors_and_keeps_bhidden_ones(tmp
                       {room.name: "m", hidden_ed.name: "n", hidden_gameplay_only.name: "o"})
     project = SimpleNamespace(root=str(root), maps=None)
 
-    payload = build_scene_payload(project, "TestLevel", _ued22_index(), DEFAULTS, [])
+    index = _ued22_index()
+    trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
 
     names = {a.name for a in payload.actors}
     assert "HiddenEdLight" not in names             # bHiddenEd: dropped from the GUI entirely
@@ -163,8 +168,10 @@ def test_build_scene_payload_resolves_actor_sprite_from_real_texture(tmp_path):
     trunk.write_level(maps_dir, level, {room.name: "m", light.name: "n"})
     project = SimpleNamespace(root=str(root), maps=None)
 
-    payload = build_scene_payload(project, "TestLevel", _ued22_index(), DEFAULTS,
-                                  [str(FIXTURES / "LUM_InfoPortraits.utx")])
+    index = _ued22_index()
+    search_files = [str(FIXTURES / "LUM_InfoPortraits.utx")]
+    trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, search_files)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
 
     light_actor = next(a for a in payload.actors if a.name == "Light0")
     assert light_actor.sprite is not None
@@ -190,7 +197,9 @@ def test_build_scene_payload_actor_sprite_none_without_dt_sprite(tmp_path):
     trunk.write_level(maps_dir, level, {room.name: "m", plain.name: "n"})
     project = SimpleNamespace(root=str(root), maps=None)
 
-    payload = build_scene_payload(project, "TestLevel", _ued22_index(), DEFAULTS, [])
+    index = _ued22_index()
+    trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
 
     plain_actor = next(a for a in payload.actors if a.name == "Note0")
     assert plain_actor.sprite is None
@@ -241,7 +250,9 @@ def test_build_scene_payload_hides_a_bhiddened_add_brushs_own_surfaces(tmp_path)
     trunk.write_level(maps_dir, level, {room.name: "m", pillar.name: "n"})
     project = SimpleNamespace(root=str(root), maps=None)
 
-    payload = build_scene_payload(project, "TestLevel", _ued22_index(), DEFAULTS, [])
+    index = _ued22_index()
+    trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
 
     assert "Pillar" not in {a.name for a in payload.actors}
     owners = {p.owner for p in payload.polys}
@@ -265,7 +276,9 @@ def test_build_scene_payload_keeps_a_bhiddened_subtracts_own_surfaces(tmp_path):
     trunk.write_level(maps_dir, level, {room.name: "m"})
     project = SimpleNamespace(root=str(root), maps=None)
 
-    payload = build_scene_payload(project, "TestLevel", _ued22_index(), DEFAULTS, [])
+    index = _ued22_index()
+    trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
 
     assert "Room" not in {a.name for a in payload.actors}         # dropped from the actor list...
     assert payload.polys and {p.owner for p in payload.polys} == {"Room"}   # ...but its walls stay
@@ -291,7 +304,9 @@ def test_build_scene_payload_hides_a_bhiddened_movers_own_surfaces(tmp_path):
     trunk.write_level(maps_dir, level, {room.name: "m", door.name: "n"})
     project = SimpleNamespace(root=str(root), maps=None)
 
-    payload = build_scene_payload(project, "TestLevel", _ued22_index(), DEFAULTS, [])
+    index = _ued22_index()
+    trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
 
     assert "Door" not in {a.name for a in payload.actors}
     owners = {p.owner for p in payload.polys}
@@ -320,7 +335,9 @@ def test_build_scene_payload_amortizes_class_resolution_over_repeated_classes(tm
         trunk.write_level(maps_dir, level, ranks)
         project = SimpleNamespace(root=str(root), maps=None)
         fresh_defaults = ClassDefaults(_defaults_resolver)
-        build_scene_payload(project, "TestLevel", _ued22_index(), fresh_defaults, [])
+        index = _ued22_index()
+        trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, fresh_defaults, [])
+        build_scene_payload(trunk_state, geometry, index, fresh_defaults)
         return fresh_defaults.resolutions
 
     # Distinct classes touched (Engine.Brush + Engine.Light) never grows with actor count.

@@ -1,18 +1,18 @@
-"""Trunk → scene payload for `uedcli serve` (plan Task 2). Polygons/lightmaps reuse
-`preview_native.build_scene` (the LIT path — `level photo --native`'s own backend) +
-`preview_cache`; the actor metadata (bbox/pose/folder/labels/`order_value`) is assembled fresh from
-`trunk.read_level_with_bodies`, since neither `preview_cache` tier holds it."""
+"""Trunk → scene payload for `uedcli serve`. `_LoadedTrunk`/`_BuiltGeometry` (shared-cache spec,
+Task 1) are the two independently-cached slots `app.py`'s `_get_trunk`/`_get_geometry` populate —
+`build_scene_payload` (Task 3) is now pure: it assembles a `ScenePayload` from two already-built
+pieces instead of loading/building anything itself."""
 from __future__ import annotations
 
 import sys
 from dataclasses import dataclass
 from decimal import Decimal
-from pathlib import Path
 
-from .. import config, trunk, uprops
+from .. import uprops
+from ..model import Level
 from ..movers import is_mover
 from ..preview import _CSG_PALETTE, classify_brush
-from ..preview_native import build_scene, poly_blend, poly_two_sided, resolve_actor_sprites
+from ..preview_native import poly_blend, poly_two_sided
 from ..rotation import actor_linear, actor_prepivot, actor_rotation_uu, local_offset
 from ..writes import actor_bounds
 
@@ -119,6 +119,34 @@ class ScenePayload:
     actors: list[SceneActor]
 
 
+@dataclass(frozen=True, kw_only=True)
+class _LoadedTrunk:
+    """Load-owned data: trunk/actor content, no solve involved (shared-cache spec's Design
+    section). `sprite_table`/`actor_sprites` are `resolve_actor_sprites`'s own raw return —
+    `actor_sprites` is DELIBERATELY `dict[str, tuple[int, float, float]]`, not `dict[str,
+    ActorSprite]`: wrapping needs `tex_offset = len(geometry.texture_table)`, a GEOMETRY-slot value
+    not known while only the trunk slot is being built. The wrap into `ActorSprite` still happens
+    in `build_scene_payload` below, exactly like before this split, once both slots are available."""
+    level: Level
+    ranks: dict[str, str]
+    folders: dict[str, str | None]
+    sprite_table: list[tuple[int, int, bytes, bytes]]
+    actor_sprites: dict[str, tuple[int, float, float]]
+
+
+@dataclass(frozen=True, kw_only=True)
+class _BuiltGeometry:
+    """Rebuild-owned data: CSG + lighting output (shared-cache spec's Design section). `geom_hash`/
+    `light_hash` are `None` for now — `build_scene` computes them internally but doesn't return
+    them yet (plan's OQ1, deferred: widening its return tuple touches ~30+ call sites elsewhere and
+    no route here reads these fields either way)."""
+    geom_hash: str | None
+    light_hash: str | None
+    polys: list[tuple]
+    texture_table: list[tuple]
+    owners: list[str | None]
+
+
 def _lightmap_frame(lightmap: tuple | None) -> LightmapFrame | None:
     """`build_scene`'s per-poly lightmap tuple `(origin, u_step, v_step, u_size, v_size, rgb)` →
     the frame the client needs (RGB dropped — it goes in the atlas), or None for an unlit poly."""
@@ -184,28 +212,32 @@ def _is_hidden_ed(actor, defaults) -> tuple[bool, str | None]:
     return str(info.defaults.get(("bhiddened", 0), "False")).strip() == "True", None
 
 
-def build_scene_payload(project, level_name: str, index, defaults, search_files) -> ScenePayload:
-    """Load the trunk once (a lock-free read, read-only-safe) and build its scene: the solved,
-    lit-but-undrawn polygons from `build_scene` (a `preview_cache` hit reuses the ~24s CSG solve
-    and/or the fully-lit scene, keyed on `project`/`level_name`), plus every actor's inspector
-    metadata joined fresh from the same load. `index`/`defaults`/`search_files` are the caller's
-    already-assembled `build_scene` inputs (the same trio `level photo --native`'s `render_shots`
-    call site assembles, `cli/commands/level.py` ~732-745) — this function does no resolution of
-    its own, so a test can hand it a `StubClassIndex` and an offline `ClassDefaults` directly.
+def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, defaults
+                        ) -> ScenePayload:
+    """Assemble a `ScenePayload` from two ALREADY-BUILT pieces — `trunk` (`_LoadedTrunk`: the level,
+    its per-actor ranks, and `resolve_actor_sprites`' raw output) and `geometry` (`_BuiltGeometry`:
+    `build_scene`'s solved polys/texture table/owners) — instead of loading or building anything
+    itself (shared-cache spec's Design section; `app.py`'s `_get_trunk`/`_get_geometry` own the
+    caching, this function is now pure). `index`/`defaults` are still needed HERE, independent of
+    either cached slot: `_is_hidden_ed(actor, defaults)` and `_brush_highlight(actor, index)` both
+    resolve per-actor state (a `bHiddenEd` class default, a brush's CSG classification) on every
+    call — cheap enough (no CSG, no texture decode) that caching them isn't worth it, but real
+    parameters this function needs regardless of the plan's illustrative signature (which dropped
+    `defaults` entirely — `_is_hidden_ed` cannot run without it; flagged in the build report).
 
     A `bHiddenEd` actor is dropped from `ScenePayload.actors` entirely (`_is_hidden_ed` above) —
     owner ruling 2026-09-14: the GUI hides editor-hidden actors and ignores `bHidden` (the opposite
     of `level photo --native`). `build_scene` itself already excludes such a mesh actor's triangles
-    (`visibility="editor"` below), so this actor-list drop is what additionally hides its selection
-    highlight and its `markers.ts` fallback marker — one filter for meshes, brushes, and bare point
-    actors alike, rather than three.
+    (`visibility="editor"`, applied when `geometry` was built), so this actor-list drop is what
+    additionally hides its selection highlight and its `markers.ts` fallback marker — one filter for
+    meshes, brushes, and bare point actors alike, rather than three.
 
     A `bHiddenEd` BRUSH additionally drops its own rendered CSG surfaces from `ScenePayload.polys`
-    (owner-attributed via `build_scene`'s `owners` return / `ScenePoly.owner`) — but ONLY when the
-    brush is a `CSG_Add`: its own surfaces are its solid contribution, safe to omit like any other
-    hidden actor's geometry. A `CSG_Subtract` (or other non-Add) brush's own surfaces are the WALLS
-    of the volume it carved, not a separate solid to hide — omitting them would open a real hole in
-    the built geometry (no other brush supplies that face), so they stay rendered regardless of
+    (owner-attributed via `geometry.owners` / `ScenePoly.owner`) — but ONLY when the brush is a
+    `CSG_Add`: its own surfaces are its solid contribution, safe to omit like any other hidden
+    actor's geometry. A `CSG_Subtract` (or other non-Add) brush's own surfaces are the WALLS of the
+    volume it carved, not a separate solid to hide — omitting them would open a real hole in the
+    built geometry (no other brush supplies that face), so they stay rendered regardless of
     `bHiddenEd`. A Mover carries no `CsgOper` prop at all (it never participates in world CSG), so
     `hidden_add_owners`'s `CsgOper` lookup below defaults it to `"CSG_Add"` — correctly: a Mover's own
     surfaces are its own solid contribution (like a CSG_Add brush's), never another actor's wall, so
@@ -213,26 +245,19 @@ def build_scene_payload(project, level_name: str, index, defaults, search_files)
 
     A class-resolution failure IN `_is_hidden_ed` ITSELF degrades to "not hidden" — both the actor
     and its surfaces stay — with one stderr note per affected actor, rather than a raised exception
-    from this one call. (`build_scene`'s own class resolution — `gather_lights` et al., which this
-    function calls BEFORE the loop below — is a separate, unguarded path: a level with an actor whose
-    class can't be resolved at all still fails the whole request there, same as `level materialize`'s
-    own no-fallback-default rule; this fix narrows what `_is_hidden_ed` itself can break, it doesn't
-    change that other, pre-existing behavior.)"""
-    maps_dir = Path(config.project_maps_dir(project))
-    level, ranks, _bodies, _folders = trunk.read_level_with_bodies(maps_dir / level_name)
-    # `visibility="editor"`: the GUI checks `bHiddenEd` and ignores `bHidden` (owner ruling
-    # 2026-09-14) -- the opposite of `level photo --native`'s default.
-    polys, texture_table, owners = build_scene(level, search_files, index, defaults=defaults,
-                                               project=project, level_name=level_name,
-                                               visibility="editor")
-    # Point-actor sprite billboards resolve into their OWN table, appended after `build_scene`'s own
-    # texture_table -- `/api/level/{level}/atlas` (`app.py`'s `atlas` route) appends the SAME
-    # `resolve_actor_sprites` result onto its own (separately fetched, but cache-identical)
-    # `texture_table` in the same order, so `tex_offset + local_index` names the same atlas rect on
-    # both endpoints without this route needing to build or return the atlas itself. `defaults` is
-    # the shared `ClassDefaults` memo (see `_is_hidden_ed`'s docstring) -- threaded through so a
-    # repeated class resolves once, not once per actor.
-    _sprite_table, actor_sprites = resolve_actor_sprites(level, search_files, defaults)
+    from this one call. (`build_scene`'s own class resolution — `gather_lights` et al., run when
+    `geometry` was built, before this function ever sees the result — is a separate, unguarded path:
+    a level with an actor whose class can't be resolved at all fails there, same as `level
+    materialize`'s own no-fallback-default rule; this fix narrows what `_is_hidden_ed` itself can
+    break, it doesn't change that other, pre-existing behavior.)"""
+    level = trunk.level
+    ranks = trunk.ranks
+    polys, texture_table, owners = geometry.polys, geometry.texture_table, geometry.owners
+    # Point-actor sprite billboards ride in trunk.sprite_table/actor_sprites (Load-owned, no CSG
+    # involved) -- `/api/level/{level}/atlas` (`app.py`'s `atlas` route) appends that SAME
+    # `resolve_actor_sprites` result onto `geometry.texture_table` in the same order, so
+    # `tex_offset + local_index` names the same atlas rect on both endpoints.
+    actor_sprites = trunk.actor_sprites
     tex_offset = len(texture_table)
 
     hidden_ed: dict[str, bool] = {}
