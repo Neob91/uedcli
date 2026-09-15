@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload, StatusPayload } from './api'
-import { fetchLevelState, fetchStatus, postLoad, postRebuild } from './api'
+import { fetchLevelState, fetchStatus, postLoad, postRebuild, switchLevel } from './api'
 import { Inspector } from './panels/Inspector'
 import { LevelPicker } from './panels/LevelPicker'
 import { subscribeChangesAvailable } from './reload'
@@ -98,6 +98,13 @@ function App() {
   const onDeselect = useCallback(() => setSelectedNames(clearSelection()), [])
   const [reloading, setReloading] = useState(false)
   const [busy, setBusy] = useState<'load' | 'rebuild' | null>(null)
+  // Level switching (owner ruling): unload the OLD level's state the instant a switch starts, and
+  // block the whole app until the new level's full state has loaded -- a broader blast radius than
+  // Load/Rebuild's `reloading` badge, since the picker/org-panel/selection are all invalid mid-switch,
+  // not just the built geometry. `!scene` in the render gate below (already used for the initial
+  // load) does the actual blocking -- unmounting the whole app is the most thorough "block all UI".
+  const [levelSwitching, setLevelSwitching] = useState(false)
+  const [levelSwitchError, setLevelSwitchError] = useState<string | null>(null)
 
   useEffect(() => {
     fetch('/api/health')
@@ -115,6 +122,10 @@ function App() {
         setLightmap(l)
       })
       .catch((e: unknown) => setError(String(e)))
+      // Covers both the initial load and a level switch's own setLevel() below -- a level switch
+      // stays blocked (levelSwitching stays true) until exactly this fetch settles; a no-op for the
+      // initial load, where levelSwitching is already false.
+      .finally(() => setLevelSwitching(false))
   }, [level])
 
   const refreshStatus = useCallback((lvl: string) => {
@@ -170,6 +181,41 @@ function App() {
   const handleLoad = useCallback(() => runBuildAction('load', postLoad), [runBuildAction])
   const handleRebuild = useCallback(() => runBuildAction('rebuild', postRebuild), [runBuildAction])
 
+  // Level switch (LevelPicker's own PUT /api/level call site -- moved here since a switch
+  // invalidates far more of App's own state than LevelPicker owns).
+  const handleSwitchLevel = useCallback(
+    (name: string) => {
+      if (!level || name === level || levelSwitching) return
+      setLevelSwitching(true)
+      setLevelSwitchError(null)
+      setBuildError(null)
+      // Unload the old level's state FIRST, before the switch request even resolves -- never let
+      // stale scene/atlas/lightmap/selection linger while the new level loads.
+      setScene(null)
+      setAtlas(null)
+      setLightmap(null)
+      setStatus(null)
+      setSelectedNames(clearSelection())
+      switchLevel(name)
+        .then(() => setLevel(name)) // drives the fetch-on-level-change effect above
+        .catch((e: unknown) => {
+          // The switch itself failed server-side -- `level` never changed, so restore its state
+          // instead of leaving the app blocked on nothing.
+          setLevelSwitchError(String(e))
+          setLevelSwitching(false)
+          return fetchLevelState(level)
+            .then(({ scene: s, atlas: a, lightmap: l }) => {
+              setScene(s)
+              setAtlas(a)
+              setLightmap(l)
+            })
+            .then(() => refreshStatus(level))
+        })
+        .catch((e: unknown) => setError(String(e))) // the restore itself failed -- nothing left to show
+    },
+    [level, levelSwitching, refreshStatus],
+  )
+
   // Every selected actor, in scene.actors order -- Inspector's own prop (Task 16: 0/1/2+ selected).
   const selectedActors = useMemo(
     () => scene?.actors.filter((a) => selectedNames.has(a.name)) ?? [],
@@ -181,14 +227,21 @@ function App() {
   const buildSolved = resolveBuildSolved(status)
 
   if (error) return <div className="status-message error">{error}</div>
-  if (!level || !scene || !atlas || !lightmap) return <div className="status-message">Loading…</div>
+  if (!level || !scene || !atlas || !lightmap) {
+    return <div className="status-message">{levelSwitching ? 'Switching level…' : 'Loading…'}</div>
+  }
 
   return (
     <div id="app-root">
       <div className="viewport-pane">
         <div className="toolbar-row">
           <BuildToolbar status={status} busy={busy} onLoad={handleLoad} onRebuild={handleRebuild} />
-          <LevelPicker currentLevel={level} onLevelChanged={setLevel} />
+          <LevelPicker
+            currentLevel={level}
+            disabled={levelSwitching}
+            error={levelSwitchError}
+            onSwitchLevel={handleSwitchLevel}
+          />
           <ThemeToggle preference={themePreference} onChange={setThemePreference} />
         </div>
         {buildError && (

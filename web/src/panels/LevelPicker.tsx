@@ -1,25 +1,26 @@
 // In-GUI level picker (quad-layout Part 7, Task 26, spec §6): a dropdown of every level under the
-// project's maps dir; picking a different one calls PUT /api/level, and on success tells the
-// parent to adopt the new name. `App.tsx`'s existing `useEffect(..., [level])`s (scene/atlas/
-// lightmap fetch, the changes-available WS subscription) already unsubscribe-old/refetch-fresh the
-// moment that `level` state changes -- this component's only job is making `level` SETTABLE.
+// project's maps dir. A level switch invalidates far more of App's own state (scene/atlas/
+// lightmap/status/selection) than this component owns, so the PUT /api/level call and the
+// unload-then-block flow live in App.tsx -- this component stays a dumb dropdown that reports
+// which level was picked, plus the switch-failure message App hands back.
 import { useEffect, useState } from 'react'
 import type { ChangeEvent } from 'react'
 
 import type { LevelsPayload } from '../api'
-import { fetchLevels, switchLevel } from '../api'
+import { fetchLevels } from '../api'
 
 export interface LevelPickerProps {
   currentLevel: string
-  // Called AFTER a successful switch -- the caller sets its own `level` state, which drives every
-  // existing fetch/subscription effect already keyed on it.
-  onLevelChanged: (name: string) => void
+  // True while a switch is in flight -- App unmounts the whole app during this window anyway, but
+  // this keeps the select itself honest if that ever changes.
+  disabled: boolean
+  // The last switch-attempt failure, if any (App owns and clears it).
+  error: string | null
+  onSwitchLevel: (name: string) => void
 }
 
-export function LevelPicker({ currentLevel, onLevelChanged }: LevelPickerProps) {
+export function LevelPicker({ currentLevel, disabled, error, onSwitchLevel }: LevelPickerProps) {
   const [levels, setLevels] = useState<LevelsPayload['levels']>([])
-  const [switching, setSwitching] = useState(false)
-  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     fetchLevels()
@@ -32,12 +33,7 @@ export function LevelPicker({ currentLevel, onLevelChanged }: LevelPickerProps) 
   const handleChange = (e: ChangeEvent<HTMLSelectElement>) => {
     const name = e.target.value
     if (name === currentLevel) return
-    setSwitching(true)
-    setError(null)
-    switchLevel(name)
-      .then(() => onLevelChanged(name))
-      .catch((err: unknown) => setError(String(err)))
-      .finally(() => setSwitching(false))
+    onSwitchLevel(name)
   }
 
   return (
@@ -45,7 +41,7 @@ export function LevelPicker({ currentLevel, onLevelChanged }: LevelPickerProps) 
       <select
         data-testid="level-picker-select"
         value={currentLevel}
-        disabled={switching}
+        disabled={disabled}
         onChange={handleChange}
       >
         {!levels.some((l) => l.name === currentLevel) && <option value={currentLevel}>{currentLevel}</option>}

@@ -11,33 +11,42 @@ vi.mock('../api', () => ({
     ],
     current: 'Beta',
   })),
-  switchLevel: vi.fn(async (name: string) => ({ level: name })),
 }))
 
 afterEach(cleanup)
 
 describe('LevelPicker', () => {
-  it('picking a different level in the dropdown calls switchLevel with the right name', async () => {
-    const { switchLevel } = await import('../api')
-    const onLevelChanged = vi.fn()
-    render(<LevelPicker currentLevel="Beta" onLevelChanged={onLevelChanged} />)
+  it('picking a different level in the dropdown calls onSwitchLevel with the right name', async () => {
+    const onSwitchLevel = vi.fn()
+    render(<LevelPicker currentLevel="Beta" disabled={false} error={null} onSwitchLevel={onSwitchLevel} />)
 
     await waitFor(() => expect(screen.getByText('Alpha')).toBeTruthy())
 
     fireEvent.change(screen.getByTestId('level-picker-select'), { target: { value: 'Alpha' } })
 
-    await waitFor(() => expect(switchLevel).toHaveBeenCalledWith('Alpha'))
-    await waitFor(() => expect(onLevelChanged).toHaveBeenCalledWith('Alpha'))
+    expect(onSwitchLevel).toHaveBeenCalledWith('Alpha')
   })
 
-  it('does not call switchLevel when the selected value is unchanged', async () => {
-    const { switchLevel } = await import('../api')
-    vi.mocked(switchLevel).mockClear()
-    render(<LevelPicker currentLevel="Beta" onLevelChanged={vi.fn()} />)
+  it('does not call onSwitchLevel when the selected value is unchanged', async () => {
+    const onSwitchLevel = vi.fn()
+    render(<LevelPicker currentLevel="Beta" disabled={false} error={null} onSwitchLevel={onSwitchLevel} />)
 
     await waitFor(() => expect(screen.getByText('Alpha')).toBeTruthy())
     fireEvent.change(screen.getByTestId('level-picker-select'), { target: { value: 'Beta' } })
 
-    expect(switchLevel).not.toHaveBeenCalled()
+    expect(onSwitchLevel).not.toHaveBeenCalled()
+  })
+
+  it('disables the select while a switch is in flight', async () => {
+    render(<LevelPicker currentLevel="Beta" disabled={true} error={null} onSwitchLevel={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByTestId('level-picker-select')).toBeTruthy())
+    expect(screen.getByTestId('level-picker-select').hasAttribute('disabled')).toBe(true)
+  })
+
+  it('shows the switch-failure message when App hands one back', async () => {
+    render(<LevelPicker currentLevel="Beta" disabled={false} error="level switch failed: boom" onSwitchLevel={vi.fn()} />)
+
+    await waitFor(() => expect(screen.getByText(/level switch failed/)).toBeTruthy())
   })
 })

@@ -15,6 +15,18 @@ Geometry never builds automatically. `GET /scene`/`/atlas`/`/lightmap` are read-
 and "Rebuild" always. This mirrors real UnrealEd: opening a level doesn't rebuild its BSP, and the
 GUI must not pretend otherwise.
 
+## Level switching — unload old, block, then load new
+
+`LevelPicker.tsx`'s dropdown only reports which level was picked; `App.tsx` owns the switch itself
+(`handleSwitchLevel`): the moment a switch starts it clears `scene`/`atlas`/`lightmap`/`status`/
+selection (so no stale geometry lingers) and sets `levelSwitching`, which makes the app's own
+`!scene` render gate — already used for the initial load — show a `"Switching level…"` message
+instead of the whole app, unmounting toolbar/viewport/org-panel/picker until the new level's full
+state (scene+atlas+lightmap) has loaded. If the `PUT /api/level` call itself fails, the old level's
+state is refetched and restored rather than leaving the app blocked. This is a broader blast radius
+than Load/Rebuild's `reloading` badge (which leaves the UI interactive): a level switch invalidates
+the picker/org-panel/selection too, not just built geometry.
+
 ## Layout: the classic quad
 
 `web/src/scene/QuadLayout.tsx` renders Perspective + Top/Front/Side ortho panes in a 2x2 CSS grid
