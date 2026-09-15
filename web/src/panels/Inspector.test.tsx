@@ -29,13 +29,13 @@ function fixtureActor(overrides: Partial<SceneActor> = {}): SceneActor {
 }
 
 describe('Inspector', () => {
-  it('renders "no selection" when nothing is selected', () => {
-    render(<Inspector actor={null} />)
+  it('renders "no selection" when nothing is selected (regression pin: prop-shape-only change)', () => {
+    render(<Inspector selected={[]} />)
     expect(screen.getByTestId('inspector-empty').textContent).toBe('No selection')
   })
 
-  it("renders a fixture actor's property rows", () => {
-    render(<Inspector actor={fixtureActor()} />)
+  it("renders a fixture actor's property rows for exactly one selected actor (regression pin)", () => {
+    render(<Inspector selected={[fixtureActor()]} />)
     expect(screen.getByRole('heading', { name: 'Room' })).toBeTruthy()
     expect(screen.getByText('Engine.Brush')).toBeTruthy()
     expect(screen.getByText('10.00, 20.00, 30.00')).toBeTruthy() // location
@@ -48,16 +48,16 @@ describe('Inspector', () => {
   })
 
   it('falls back to "(no folder)"/"(no label)" for an unset folder/labels', () => {
-    render(<Inspector actor={fixtureActor({ folder: null, labels: [] })} />)
+    render(<Inspector selected={[fixtureActor({ folder: null, labels: [] })]} />)
     expect(screen.getByText('(no folder)')).toBeTruthy()
     expect(screen.getByText('(no label)')).toBeTruthy()
   })
 
   it('re-renders for a newly selected actor (selection swap)', () => {
-    const { rerender } = render(<Inspector actor={fixtureActor({ name: 'Room' })} />)
+    const { rerender } = render(<Inspector selected={[fixtureActor({ name: 'Room' })]} />)
     expect(screen.getByRole('heading', { name: 'Room' })).toBeTruthy()
 
-    rerender(<Inspector actor={fixtureActor({ name: 'Door', cls: 'Engine.Mover' })} />)
+    rerender(<Inspector selected={[fixtureActor({ name: 'Door', cls: 'Engine.Mover' })]} />)
     expect(screen.getByRole('heading', { name: 'Door' })).toBeTruthy()
     expect(screen.getByText('Engine.Mover')).toBeTruthy()
     expect(screen.queryByRole('heading', { name: 'Room' })).toBeNull()
@@ -66,13 +66,15 @@ describe('Inspector', () => {
   it('renders one collapsible section per distinct category', () => {
     render(
       <Inspector
-        actor={fixtureActor({
-          props: [
-            ['CsgOper', 'CSG_Subtract'],
-            ['Mass', '100'],
-          ],
-          categories: ['Brush', 'Movement'],
-        })}
+        selected={[
+          fixtureActor({
+            props: [
+              ['CsgOper', 'CSG_Subtract'],
+              ['Mass', '100'],
+            ],
+            categories: ['Brush', 'Movement'],
+          }),
+        ]}
       />,
     )
     expect(screen.getByText('Brush (1)')).toBeTruthy()
@@ -84,16 +86,28 @@ describe('Inspector', () => {
   it('renders a single "Uncategorized" section when every prop falls back', () => {
     render(
       <Inspector
-        actor={fixtureActor({
-          props: [
-            ['Brush', "Model'MyLevel.Model_Room'"],
-          ],
-          categories: ['Uncategorized'],
-        })}
+        selected={[
+          fixtureActor({
+            props: [['Brush', "Model'MyLevel.Model_Room'"]],
+            categories: ['Uncategorized'],
+          }),
+        ]}
       />,
     )
     expect(screen.getByText('Uncategorized (1)')).toBeTruthy()
     expect(screen.getByText('Brush')).toBeTruthy()
+  })
+
+  // Part 3, Task 16: 2+ selected -> a lightweight summary, not the full single-actor detail view.
+  it('renders a lightweight "N actors selected" summary for 2+ selected actors', () => {
+    render(<Inspector selected={[fixtureActor({ name: 'A' }), fixtureActor({ name: 'B' }), fixtureActor({ name: 'C' })]} />)
+    expect(screen.getByTestId('inspector-multi')).toBeTruthy()
+    expect(screen.getByText('3 actors selected')).toBeTruthy()
+    expect(screen.getByText('A')).toBeTruthy()
+    expect(screen.getByText('B')).toBeTruthy()
+    expect(screen.getByText('C')).toBeTruthy()
+    // Not the single-actor detail view's own markup.
+    expect(screen.queryByTestId('inspector')).toBeNull()
   })
 })
 

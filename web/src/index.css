@@ -1,5 +1,96 @@
+/* CSS custom-property theme tokens (quad-layout Part 9, Task 29): dark-first (the de facto look
+   from today's live demo work) -- bare :root is the DARK palette, :root[data-theme='light']
+   overrides for an explicit light choice, and prefers-color-scheme covers the system-follow case
+   (Task 30's useTheme sets data-theme; this file only declares what each theme LOOKS like).
+
+   Two token families:
+   - Structural (--bg/--fg/--border/--surface-*/--danger/--warn/--accent/--overlay-*): what today's
+     UI actually uses.
+   - Semantic (--sem-*, the main spec's "added=green, removed=red, prop/moved=amber,
+     poly/retextured=violet, order=teal, folder=blue, label=magenta, other=gray,
+     selection=cyan/white"): Slice 3 (audit/diff) colors, wired now so that slice doesn't need a
+     parallel theme-system change later -- only --sem-selection is consumed today (the selection
+     highlight already predates this token system); the rest are declared, not yet used. */
 :root {
-  color-scheme: light dark;
+  color-scheme: dark;
+
+  --bg: #16171d;
+  --fg: #e5e4e7;
+  --fg-muted: #9ca3af;
+  --border: #2e303a;
+  --border-strong: #4b4e5c;
+
+  --surface-1: #1b1c22;
+  --surface-2: #2a2c35;
+  --surface-2-hover: #363946;
+  --surface-3: #101116;
+
+  --danger: #f87171;
+  --danger-bg: rgba(90, 20, 20, 0.85);
+  --warn: #f5b942;
+  --warn-fg: #16171d;
+  --accent: #a855f7;
+
+  --overlay-bg: rgba(0, 0, 0, 0.6);
+  --overlay-bg-soft: rgba(0, 0, 0, 0.5);
+  --overlay-fg-hover: rgba(255, 255, 255, 0.08);
+
+  /* Slice 3 (audit) semantic colors -- declared now, mostly unused until that slice lands. */
+  --sem-added: #4ade80;
+  --sem-removed: #f87171;
+  --sem-prop: #f5b942;
+  --sem-poly: #a855f7;
+  --sem-order: #2dd4bf;
+  --sem-folder: #60a5fa;
+  --sem-label: #e879f9;
+  --sem-other: #9ca3af;
+  --sem-selection: #22d3ee;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+
+  --bg: #f5f5f7;
+  --fg: #16171d;
+  --fg-muted: #6b7280;
+  --border: #d1d5db;
+  --border-strong: #9ca3af;
+
+  --surface-1: #ffffff;
+  --surface-2: #e5e7eb;
+  --surface-2-hover: #d1d5db;
+  --surface-3: #f3f4f6;
+
+  --danger-bg: rgba(254, 226, 226, 0.9);
+
+  --overlay-bg: rgba(255, 255, 255, 0.85);
+  --overlay-bg-soft: rgba(255, 255, 255, 0.7);
+  --overlay-fg-hover: rgba(0, 0, 0, 0.06);
+}
+
+/* System-follow (Task 30's useTheme leaves `data-theme` unset for the 'system' preference) --
+   applies the SAME light overrides as an explicit choice, only when neither explicit theme is set. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme='dark']):not([data-theme='light']) {
+    color-scheme: light;
+
+    --bg: #f5f5f7;
+    --fg: #16171d;
+    --fg-muted: #6b7280;
+    --border: #d1d5db;
+    --border-strong: #9ca3af;
+
+    --surface-1: #ffffff;
+    --surface-2: #e5e7eb;
+    --surface-2-hover: #d1d5db;
+    --surface-3: #f3f4f6;
+
+    --danger-bg: rgba(254, 226, 226, 0.9);
+
+    --overlay-bg: rgba(255, 255, 255, 0.85);
+    --overlay-bg-soft: rgba(255, 255, 255, 0.7);
+    --overlay-fg-hover: rgba(0, 0, 0, 0.06);
+  }
 }
 
 html,
@@ -14,8 +105,8 @@ body,
 
 body {
   font: 14px/1.4 system-ui, 'Segoe UI', Roboto, sans-serif;
-  background: #16171d;
-  color: #e5e4e7;
+  background: var(--bg);
+  color: var(--fg);
 }
 
 .status-message {
@@ -27,7 +118,7 @@ body {
 }
 
 .status-message.error {
-  color: #f87171;
+  color: var(--danger);
 }
 
 #app-root {
@@ -41,6 +132,185 @@ body {
   min-width: 0;
 }
 
+/* QuadLayout's own top-level row: the quad grid + the org panel sidebar (Part 6, Task 23). */
+.quad-layout-root {
+  position: relative;
+  display: flex;
+  flex-direction: row;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+/* The classic UnrealEd quad (Perspective + Top/Front/Side), quad-layout Part 1 Task 7: a 2x2 CSS
+   grid; double-clicking a pane maximizes it -- the other three get [hidden] (paneLayout.ts's own
+   state), and the remaining visible one spans the whole grid area. */
+.quad-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+  background: #000;
+}
+
+/* Org panel sidebar (Part 6, Task 23): folder tree + label facets + find. */
+.org-panel {
+  flex: 0 0 220px;
+  min-width: 0;
+  height: 100%;
+  overflow-y: auto;
+  padding: 8px;
+  border-left: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--fg);
+  font-size: 12px;
+}
+
+.org-panel input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+  padding: 4px 6px;
+  background: var(--surface-3);
+  color: inherit;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.org-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.org-label-chip {
+  font: inherit;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.org-label-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.org-tree,
+.org-results {
+  list-style: none;
+  margin: 0;
+  padding-left: 0;
+}
+
+.org-tree ul {
+  list-style: none;
+  margin: 0;
+  padding-left: 12px;
+}
+
+.org-tree button,
+.org-results button {
+  font: inherit;
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 2px 4px;
+  background: transparent;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 3px;
+}
+
+.org-tree button:hover,
+.org-results button:hover {
+  background: var(--overlay-fg-hover);
+}
+
+.org-results li.selected button {
+  background: color-mix(in srgb, var(--sem-selection) 20%, transparent);
+}
+
+.quad-pane {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.quad-layout[data-maximized] .quad-pane:not([hidden]) {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+}
+
+.quad-pane-label {
+  position: absolute;
+  top: 4px;
+  left: 6px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--fg-muted);
+  pointer-events: none;
+}
+
+/* The focused pane (Part 4, Task 20: `1`-`4` shading-mode keys target it) -- a small dot next to its
+   label, the cheapest possible "which pane has keyboard focus" affordance. */
+.quad-pane-focus-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sem-selection);
+}
+
+/* Grid visibility toggle (Part 8, Task 28) -- one switch for all three ortho panes, an overlay
+   button in the quad's top-right corner. */
+.grid-toggle {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 3;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.grid-toggle[aria-pressed='false'] {
+  color: var(--fg-muted);
+}
+
+/* Cursor UU coordinate readout (Task 28) -- bottom-left of each ortho pane. */
+.ortho-cursor-readout {
+  position: absolute;
+  bottom: 4px;
+  left: 6px;
+  z-index: 1;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--fg-muted);
+  background: var(--overlay-bg-soft);
+  padding: 1px 5px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
 .updating-badge {
   position: absolute;
   top: 44px;
@@ -48,8 +318,8 @@ body {
   z-index: 1;
   padding: 2px 8px;
   border-radius: 4px;
-  background: rgba(0, 0, 0, 0.6);
-  color: #e5e4e7;
+  background: var(--overlay-bg);
+  color: var(--fg);
   font-size: 12px;
 }
 
@@ -67,8 +337,8 @@ body {
   gap: 8px;
   padding: 6px 10px;
   border-radius: 4px;
-  background: rgba(90, 20, 20, 0.85);
-  color: #f87171;
+  background: var(--danger-bg);
+  color: var(--danger);
   font-size: 12px;
 }
 
@@ -82,7 +352,9 @@ body {
   cursor: pointer;
 }
 
-.build-toolbar {
+/* The Load/Rebuild toolbar + level picker + theme toggle share one overlay row (quad-layout Part 7
+   Task 26, Part 9 Task 30). */
+.toolbar-row {
   position: absolute;
   top: 0;
   left: 0;
@@ -92,22 +364,63 @@ body {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.6);
-  border-bottom: 1px solid #2e303a;
+  background: var(--overlay-bg);
+  border-bottom: 1px solid var(--border);
+}
+
+.build-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.level-picker {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.level-picker select {
+  font: inherit;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.level-picker .level-picker-error {
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.theme-toggle {
+  font: inherit;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.theme-toggle:hover {
+  background: var(--surface-2-hover);
 }
 
 .build-toolbar button {
   font: inherit;
   padding: 3px 10px;
   border-radius: 4px;
-  border: 1px solid #4b4e5c;
-  background: #2a2c35;
-  color: #e5e4e7;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
   cursor: pointer;
 }
 
 .build-toolbar button:hover:not(:disabled) {
-  background: #363946;
+  background: var(--surface-2-hover);
 }
 
 .build-toolbar button:disabled {
@@ -116,13 +429,13 @@ body {
 }
 
 .build-toolbar .build-status {
-  color: #9ca3af;
+  color: var(--fg-muted);
   font-size: 12px;
 }
 
 .build-toolbar .changes-badge {
-  color: #16171d;
-  background: #f5b942;
+  color: var(--warn-fg);
+  background: var(--warn);
   border-radius: 4px;
   padding: 2px 8px;
   font-size: 12px;
@@ -132,7 +445,7 @@ body {
 .inspector-pane {
   flex: 0 0 280px;
   overflow-y: auto;
-  border-left: 1px solid #2e303a;
+  border-left: 1px solid var(--border);
   padding: 8px 12px;
   box-sizing: border-box;
 }
@@ -144,7 +457,7 @@ body {
 
 .inspector dd {
   margin: 0 0 0 0;
-  color: #9ca3af;
+  color: var(--fg-muted);
 }
 
 .inspector table {
@@ -154,7 +467,7 @@ body {
 }
 
 .inspector td {
-  border-top: 1px solid #2e303a;
+  border-top: 1px solid var(--border);
   padding: 2px 4px;
   word-break: break-all;
 }

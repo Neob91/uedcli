@@ -28,6 +28,19 @@ export function resolveHitActor(
   return actors.find((a) => a.name === name) ?? null
 }
 
+/** The tap-resolution decision Viewport3D/OrthoViewport's `performTapSelect` both make once they've
+ * found (or not found) a hit actor (quad-layout Part 3, Task 13): a real hit calls `onSelectActor`
+ * with the actor's name and the `additive` flag threaded through from the drag gesture's Ctrl/Cmd
+ * state; a MISS is a true no-op (spec §9's deliberate behavior change -- a tap that hits nothing no
+ * longer clears the selection, `Esc` is the only deselect path). Pulled out as a pure, tiny function
+ * so this exact decision is testable without a WebGL raycast. */
+export function resolveTapSelection(
+  hitActor: SceneActor | null,
+  additive: boolean,
+): { name: string; additive: boolean } | null {
+  return hitActor ? { name: hitActor.name, additive } : null
+}
+
 export interface Ray {
   origin: Vec3
   direction: Vec3

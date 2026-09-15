@@ -21,6 +21,7 @@ from ..preview_native import build_scene as _build_scene
 from ..preview_native import resolve_actor_sprites
 from . import build_pin
 from .errors import error_to_status
+from .levels import levels_payload
 from .lightmap import build_lightmap_atlas
 from .scene import _BuiltGeometry, _LoadedTrunk, ScenePayload, build_scene_payload, build_wireframe_payload
 from .textures import build_atlas
@@ -53,9 +54,11 @@ def _scene_inputs(project):
 
 
 def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
-    """Build the app for one project/level (fixed for the app's lifetime — Slice 1 has no level
-    picker). `fault_route=True` mounts `/api/_boom` (raises a real domain error, for testing the
-    exception handler) — never set outside tests; the shipped app never mounts it."""
+    """Build the app for one project, initially serving `level` -- no longer fixed for the app's
+    lifetime (quad-layout Part 7): `PUT /api/level` switches which level this SAME running app
+    serves, in-process, via the `_current_level`/`_watcher` holder cells below (no restart, no page-
+    reload trick). `fault_route=True` mounts `/api/_boom` (raises a real domain error, for testing
+    the exception handler) — never set outside tests; the shipped app never mounts it."""
     # Trunk watcher + WebSocket signal (sibling scene-cache spec, Task 4): AI edits hit the trunk
     # instantly; a rapid multi-verb burst coalesces to ONE push (`TrunkWatcher`'s debounce), not one
     # per verb. gui-explicit-rebuild spec §2 supersedes what that push MEANS: a `"changes_available"`
@@ -69,18 +72,26 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
 
     maps_root = Path(config.project_maps_dir(project))
 
+    # The level this app currently serves (quad-layout Part 7, Task 25) — a single-element list
+    # mutated BY INDEX (`_current_level[0] = ...`) in `PUT /api/level`'s closure, the same holder-
+    # cell idiom `_trunk_ref`/`_geometry_ref` below already use (a plain local reassignment inside a
+    # nested function needs `nonlocal`; mutating a list element in place doesn't).
+    _current_level: list[str] = [level]
+
+    def _valid_level_name(name: str) -> bool:
+        # Single-segment guards against a name that isn't a real level dir (traversal is already
+        # impossible — Starlette's {level_name} is [^/]+ and uvicorn pre-decodes %2F).
+        return "/" not in name and name not in ("", ".", "..") and (maps_root / name).is_dir()
+
     def _require_level(level_name: str) -> None:
         # Route param validated like the `serve` verb's own up-front check, so a bad/nonexistent name
         # returns a clean "level not found" (exit-2-equivalent 422) rather than falling through to
-        # build_scene's misleading "no CSG brush actors" (no-half-answer rule). Single-segment guards
-        # against a name that isn't a real level dir (traversal is already impossible — Starlette's
-        # {level_name} is [^/]+ and uvicorn pre-decodes %2F). `level_name != level`: `create_app`
-        # fixes ONE level for the app's lifetime (no picker), and with the shared trunk/geometry
-        # cache below keyed on nothing but that fixed `level`, a syntactically-valid-but-different
-        # level name would otherwise silently serve THIS level's cached data instead of its own
-        # (shared-cache spec's `_require_level` finding).
-        if ("/" in level_name or level_name in ("", ".", "..") or level_name != level
-                or not (maps_root / level_name).is_dir()):
+        # build_scene's misleading "no CSG brush actors" (no-half-answer rule). `level_name !=
+        # _current_level[0]`: every route below except `PUT /api/level` itself operates on ONLY the
+        # currently-served level, and with the shared trunk/geometry cache keyed on nothing but that
+        # one level, a syntactically-valid-but-different level name would otherwise silently serve
+        # THIS level's cached data instead of its own (shared-cache spec's `_require_level` finding).
+        if level_name != _current_level[0] or not _valid_level_name(level_name):
             raise CommandError(f"level not found: {level_name!r}")
 
     async def _broadcast_changes_available() -> None:
@@ -95,7 +106,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         dead = set()
         for ws in list(connections):
             try:
-                await ws.send_json({"type": "changes_available", "level": level})
+                await ws.send_json({"type": "changes_available", "level": _current_level[0]})
             except Exception:
                 dead.add(ws)
         connections.difference_update(dead)
@@ -163,11 +174,11 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # truly concurrent first calls, not a correctness one: same pin either way).
         if _geometry_ref[0] is not None:
             return
-        pin = build_pin.load_pointer(project, level)
+        pin = build_pin.load_pointer(project, _current_level[0])
         if pin is None:
             _build_status[0] = "no_build"
             return
-        resolved = build_pin.resolve_pin(project, level, pin)
+        resolved = build_pin.resolve_pin(project, _current_level[0], pin)
         if resolved is None:
             _build_status[0] = "evicted"   # spec §1's eviction caveat -- degrade, never raise
             return
@@ -194,7 +205,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                 if cached is not None:
                     return cached
                 gen_before = _generation[0]
-                lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level)
+                lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / _current_level[0])
                 sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
                 if _generation[0] != gen_before:
                     continue    # invalidated mid-build: discard, loop back and retry from the top
@@ -234,7 +245,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                 trunk_state = _get_trunk(search_files, defaults)
                 polys, texture_table, owners = _build_scene(
                     trunk_state.level, search_files, index, defaults=defaults, project=project,
-                    level_name=level, visibility="editor")
+                    level_name=_current_level[0], visibility="editor")
                 if _generation[0] != gen_before:
                     continue    # invalidated mid-build: discard, retry against the new state
                 built = _BuiltGeometry(geom_hash=None, light_hash=None,   # OQ1 -- see scene.py
@@ -303,15 +314,20 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         _changes_available[0] = True
         await _broadcast_changes_available()
 
-    watcher = TrunkWatcher(maps_root / level, _on_trunk_settled)
+    # `_watcher` is a holder cell too (quad-layout Part 7, Task 25): a level switch must STOP this
+    # exact watcher instance and START a new one bound to the new level's directory, but `_lifespan`
+    # is defined once, at `create_app` time -- its `finally: watcher.stop()` would otherwise close
+    # over whatever a bare `watcher` local NAMED at that moment, not whatever `PUT /api/level` later
+    # replaces it with.
+    _watcher: list[TrunkWatcher] = [TrunkWatcher(maps_root / _current_level[0], _on_trunk_settled)]
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI):
-        watcher.start()
+        _watcher[0].start()
         try:
             yield
         finally:
-            watcher.stop()
+            _watcher[0].stop()
 
     app = FastAPI(lifespan=_lifespan)
     # Exposed on app.state for tests only (e.g. exercising `_broadcast_changes_available`'s
@@ -326,6 +342,8 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
     app.state.changes_available = _changes_available
     app.state.generation = _generation
     app.state.build_status = _build_status
+    app.state.current_level = _current_level
+    app.state.watcher = _watcher
 
     @app.exception_handler(Exception)
     async def _domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -339,7 +357,61 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
 
     @app.get("/api/health")
     async def health() -> dict:
-        return {"status": "ok", "level": level}
+        return {"status": "ok", "level": _current_level[0]}
+
+    @app.get("/api/levels")
+    def levels() -> dict:
+        # GET /api/levels (quad-layout Part 7, Task 24) -- reuses level_sources.list_levels, the
+        # same enumeration `level list`/`level list --json` already use, not a second one.
+        return levels_payload(maps_root, _current_level[0])
+
+    @app.put("/api/level")
+    async def switch_level(request: Request) -> dict:
+        # The in-process level switch (quad-layout Part 7, Task 25): validates the requested level,
+        # stops the OLD watcher, resets EVERY cache slot this app now carries (`_trunk_ref`,
+        # `_geometry_ref`, `_payload_ref` -- all three cache data scoped to the OLD level; none of it
+        # is valid for the new one), starts a new watcher bound to the new level's directory, and
+        # updates the holder cells. No process restart, no page-reload trick.
+        #
+        # `async def`, the one exception to this file's sync-route convention (every other route is
+        # deliberately sync `def` so Starlette runs the blocking ~24s CSG solve in its threadpool,
+        # never the event loop -- see `/scene`'s own comment). `TrunkWatcher.start()`/`stop()` call
+        # `asyncio.ensure_future(...)`/`task.cancel()`, which need the event loop THIS request runs
+        # on; a threadpool worker thread (what a sync route here would run in) has no running event
+        # loop, so a sync version of this route would raise `RuntimeError: There is no current event
+        # loop in thread ...` the moment it called `new_watcher.start()`.
+        body = await request.json()
+        new_level = body.get("level") if isinstance(body, dict) else None
+        if not isinstance(new_level, str) or not _valid_level_name(new_level):
+            raise CommandError(f"level not found: {new_level!r}")
+
+        _watcher[0].stop()
+
+        # Bump `_generation` before clearing the slots so a slow build/trunk-read for the OLD level
+        # still in flight discards its result on completion (the same generation-guard mechanism
+        # `_on_trunk_settled`/`_build_and_publish_geometry` already use) instead of publishing over
+        # the new level's freshly-emptied slots.
+        _generation[0] += 1
+        _trunk_ref[0] = None
+        _geometry_ref[0] = None
+        _payload_ref[0] = None
+        _changes_available[0] = False
+        _build_status[0] = "no_build"
+
+        _current_level[0] = new_level
+        new_watcher = TrunkWatcher(maps_root / new_level, _on_trunk_settled)
+        new_watcher.start()
+        _watcher[0] = new_watcher
+
+        # No WS broadcast here (a deliberate choice, not an oversight): `"changes_available"` means
+        # exactly one thing today (a settled trunk change waiting on an explicit Load, spec §2) --
+        # broadcasting it for a LEVEL SWITCH would tell every other connected viewer to refresh
+        # `/status` for what they still think is their own level, which just changed under them. A
+        # second viewer's own next request against a level name that no longer matches
+        # `_current_level[0]` gets `_require_level`'s ordinary "level not found", which is honest;
+        # true multi-viewer-aware level switching is out of scope here (this app has always been
+        # one-level-per-process, Slice 1's own docstring).
+        return {"level": new_level}
 
     @app.get("/api/level/{level_name}/status")
     def status(level_name: str) -> dict:
@@ -369,7 +441,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # build, since sprite resolution is Load-owned (spec §"Two independent axes").
         _require_level(level_name)
         search_files, _index, defaults = _scene_inputs(project)
-        lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level)
+        lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / _current_level[0])
         sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
         _trunk_ref[0] = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
                                      sprite_table=sprite_table, actor_sprites=actor_sprites)

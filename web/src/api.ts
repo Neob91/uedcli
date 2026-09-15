@@ -154,6 +154,30 @@ export function fetchStatus(level: string): Promise<StatusPayload> {
   return request<StatusPayload>(`/api/level/${encodeURIComponent(level)}/status`)
 }
 
+/** `GET /api/levels` (quad-layout Part 7, Task 26): every level under the project's maps dir,
+ * flagging which one this app currently serves -- mirrors `level list --json`'s `{name, active}`
+ * shape (`uedcli/serve/levels.py`). */
+export interface LevelsPayload {
+  levels: { name: string; active: boolean }[]
+  current: string
+}
+
+export function fetchLevels(): Promise<LevelsPayload> {
+  return request<LevelsPayload>('/api/levels')
+}
+
+/** `PUT /api/level` (spec §6): switches which level this SAME running app serves, in-process --
+ * no page reload. On success, the caller sets its own `level` state to the new name; the existing
+ * `useEffect(..., [level])`s (scene/atlas/lightmap fetch, the changes-available WS subscription)
+ * already unsubscribe-old/refetch-fresh on that state change (reload.ts needs no changes). */
+export function switchLevel(name: string): Promise<{ level: string }> {
+  return request('/api/level', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ level: name }),
+  })
+}
+
 /** The explicit Load action (gui-explicit-rebuild spec §2): re-reads the trunk and clears the
  * server's `changes_available` flag. Does NOT solve geometry -- see `postRebuild`. */
 export function postLoad(level: string): Promise<{ status: string }> {

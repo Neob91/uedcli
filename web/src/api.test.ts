@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { fetchAtlas, fetchLightmap, fetchScene, fetchStatus, postLoad, postRebuild } from './api'
+import { fetchAtlas, fetchLevels, fetchLightmap, fetchScene, fetchStatus, postLoad, postRebuild, switchLevel } from './api'
 
 describe('fetchScene', () => {
   it('returns the typed payload from /api/level/<level>/scene', async () => {
@@ -138,5 +138,46 @@ describe('postRebuild', () => {
     ) as unknown as typeof fetch
 
     await expect(postRebuild('bogus')).rejects.toThrow("level not found: 'bogus'")
+  })
+})
+
+describe('fetchLevels', () => {
+  it('returns the typed levels payload from /api/levels', async () => {
+    const payload = {
+      levels: [
+        { name: 'Alpha', active: false },
+        { name: 'Beta', active: true },
+      ],
+      current: 'Beta',
+    }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
+
+    const got = await fetchLevels()
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/levels')
+  })
+})
+
+describe('switchLevel', () => {
+  it('PUTs a JSON body {level: name} to /api/level', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ level: 'Beta' }), { status: 200 })) as unknown as typeof fetch
+
+    const got = await switchLevel('Beta')
+
+    expect(got).toEqual({ level: 'Beta' })
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ level: 'Beta' }),
+    })
+  })
+
+  it('rejects with the backend structured-error message on a non-2xx response', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ error: "level not found: 'bogus'" }), { status: 422 }),
+    ) as unknown as typeof fetch
+
+    await expect(switchLevel('bogus')).rejects.toThrow("level not found: 'bogus'")
   })
 })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { SceneActor } from '../api'
-import { isTap, pickActor, rayAabbIntersect, resolveHitActor } from './selection'
+import { isTap, pickActor, rayAabbIntersect, resolveHitActor, resolveTapSelection } from './selection'
 
 function actor(name: string, lo: [number, number, number], hi: [number, number, number]): SceneActor {
   return {
@@ -51,6 +51,21 @@ describe('pickActor', () => {
     const ray = { origin: [-10, 50, 50] as [number, number, number], direction: [1, 0, 0] as [number, number, number] }
     expect(pickActor(ray, [only])).toBeNull()
   })
+
+  // Quad-layout Part 1, Task 6: an ortho pane's rays are all PARALLEL (the same axis-aligned
+  // direction regardless of screen position), unlike a perspective ray fanning out from one camera
+  // point. `pickActor`'s slab test and `resolveHitActor`'s triangle lookup are written against a
+  // generic Ray (origin+direction) with no perspective-specific assumption, so this passes with ZERO
+  // changes to selection.ts -- a confirming regression test, not invented busywork.
+  it('finds the nearest AABB hit for a parallel (orthographic) ray too', () => {
+    const near = actor('Near', [-1, -1, -1], [1, 1, 1])
+    const far = actor('Far', [9, -1, -1], [11, 1, 1])
+    // Two "screen positions" (different Y/Z origins), same parallel +X direction -- the ortho case.
+    const rayThroughNear = { origin: [-10, 0, 0] as [number, number, number], direction: [1, 0, 0] as [number, number, number] }
+    const rayThroughFar = { origin: [-10, -0.5, -0.5] as [number, number, number], direction: [1, 0, 0] as [number, number, number] }
+    expect(pickActor(rayThroughNear, [far, near])?.name).toBe('Near')
+    expect(pickActor(rayThroughFar, [far, near])?.name).toBe('Near') // still hits Near first, not Far
+  })
 })
 
 describe('resolveHitActor', () => {
@@ -76,6 +91,26 @@ describe('resolveHitActor', () => {
 
   it('returns null when the owner name matches no actor in the current payload', () => {
     expect(resolveHitActor(0, ['Ghost'], [room])).toBeNull()
+  })
+})
+
+describe('resolveTapSelection', () => {
+  const hit = actor('Hit', [-1, -1, -1], [1, 1, 1])
+
+  // Quad-layout Part 3, Task 13: a plain tap on a hit actor selects it non-additively; a Ctrl-tap
+  // selects it additively; a tap that hits NOTHING is a true no-op (the deliberate behavior change
+  // from Slice 1's click-away-to-deselect -- Esc, not a miss, is now the only deselect path).
+  it('a plain tap on a hit actor resolves to (name, additive=false)', () => {
+    expect(resolveTapSelection(hit, false)).toEqual({ name: 'Hit', additive: false })
+  })
+
+  it('a Ctrl-tap on a hit actor resolves to (name, additive=true)', () => {
+    expect(resolveTapSelection(hit, true)).toEqual({ name: 'Hit', additive: true })
+  })
+
+  it('a tap that hits nothing resolves to null, regardless of additive', () => {
+    expect(resolveTapSelection(null, false)).toBeNull()
+    expect(resolveTapSelection(null, true)).toBeNull()
   })
 })
 

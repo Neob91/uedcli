@@ -3,11 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
 
-// Viewport3D pulls in react-three-fiber's <Canvas> (WebGL), which jsdom can't provide -- stub it
-// so this file tests App's own state management (the Load/Rebuild error-banner regression below),
-// not the 3D scene itself (covered separately by scene/*.test.ts).
-vi.mock('./scene/Viewport3D', () => ({
-  Viewport3D: () => <div data-testid="viewport-stub" />,
+// QuadLayout (Perspective + 3 ortho panes) pulls in react-three-fiber's <Canvas> (WebGL) four times
+// over, which jsdom can't provide -- stub the whole quad so this file tests App's own state
+// management (the Load/Rebuild error-banner regression below), not the 3D scene itself (covered
+// separately by scene/*.test.ts).
+vi.mock('./scene/QuadLayout', () => ({
+  QuadLayout: () => <div data-testid="viewport-stub" />,
 }))
 
 afterEach(cleanup)

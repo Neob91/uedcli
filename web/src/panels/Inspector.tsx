@@ -5,7 +5,11 @@
 import type { SceneActor } from '../api'
 
 export interface InspectorProps {
-  actor: SceneActor | null
+  // 0 selected -> "No selection" (unchanged); exactly 1 -> the full detail view below (unchanged,
+  // same markup/testids); 2+ -> a lightweight multi-select summary (Part 3, Task 16). Neither
+  // settled main-spec paragraph defines the N-selected view -- this is the simplest thing that
+  // satisfies "highlighted ... + inspector" without guessing at a richer multi-actor rollup.
+  selected: SceneActor[]
 }
 
 // Groups props[i] under categories[i], preserving first-occurrence category order and
@@ -32,8 +36,8 @@ export function groupByCategory(
   return groups
 }
 
-export function Inspector({ actor }: InspectorProps) {
-  if (!actor) {
+export function Inspector({ selected }: InspectorProps) {
+  if (selected.length === 0) {
     return (
       <div className="inspector inspector-empty" data-testid="inspector-empty">
         No selection
@@ -41,6 +45,20 @@ export function Inspector({ actor }: InspectorProps) {
     )
   }
 
+  if (selected.length > 1) {
+    return (
+      <div className="inspector inspector-multi" data-testid="inspector-multi">
+        <h2>{selected.length} actors selected</h2>
+        <ul>
+          {selected.map((a) => (
+            <li key={a.name}>{a.name}</li>
+          ))}
+        </ul>
+      </div>
+    )
+  }
+
+  const actor = selected[0]
   return (
     <div className="inspector" data-testid="inspector">
       <h2>{actor.name}</h2>

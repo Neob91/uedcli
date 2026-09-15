@@ -674,3 +674,42 @@ def test_concurrent_first_scene_requests_never_see_a_torn_trunk_build(tmp_path, 
     assert len(results) == 8
     for body in results:
         assert {a["name"] for a in body["actors"]} == {"Room"}   # every response, self-consistent
+
+
+def test_switch_level_resets_all_three_cache_slots(tmp_path, monkeypatch):
+    """quad-layout Part 7, Task 25 (adapted to current reality): the shared-cache spec's
+    `_trunk_ref`/`_geometry_ref`/`_payload_ref` all cache data scoped to whichever level is
+    currently served -- none of that is valid once `PUT /api/level` switches to a different one.
+    Populate all three for the OLD level, switch, and confirm every slot is empty again (and
+    `/status` reports the fresh "no_build" state, not a stale "built")."""
+    _require_ued22()
+    from uedcli.tests.conftest import cube_room
+    from uedcli.tests.test_serve_scene import DEFAULTS, _ued22_index
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [cube_room()])
+    _write_fixture_trunk(root, "Other", [cube_room()])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    c = TestClient(app)
+
+    # Populate all three slots for "TestLevel".
+    index = _ued22_index()
+    app.state.get_trunk([], DEFAULTS)
+    app.state.build_and_publish_geometry([], index, DEFAULTS)
+    assert c.get("/api/level/TestLevel/scene").status_code == 200
+    assert app.state.read_geometry() is not None
+    gen_before = app.state.generation[0]
+
+    r = c.put("/api/level", json={"level": "Other"})
+    assert r.status_code == 200
+
+    assert app.state.read_geometry() is None                    # _geometry_ref reset
+    assert app.state.generation[0] == gen_before + 1             # bumped, guards any in-flight build
+    status = c.get("/api/level/Other/status").json()
+    assert status == {"changes_available": False, "geometry_pinned": False, "build_status": "no_build"}
+
+    # A fresh trunk-read for "Other" happens lazily on the next real request (the SAME "automatic
+    # initial Load" path a first-ever request takes) -- not a stale "TestLevel" trunk.
+    body = c.get("/api/level/Other/scene").json()
+    assert {a["name"] for a in body["actors"]} == {"Room"}

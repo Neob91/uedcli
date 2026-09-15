@@ -7,25 +7,29 @@
 // model data meets three.js -- Viewport3D draws what `serve` hands it and owns no model/diff/solve
 // logic of its own (spec, "The client").
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type {
-  MouseEvent as ReactMouseEvent,
-  MutableRefObject,
-  PointerEvent as ReactPointerEvent,
-  WheelEvent as ReactWheelEvent,
-} from 'react'
+import type { MutableRefObject, PointerEvent as ReactPointerEvent } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import type { AtlasPayload, LightmapPayload, SceneActor, ScenePayload } from '../api'
+import { BrushOutlines } from './BrushOutlines'
 import type { CameraPose, Vec3 } from './camera'
 import { cameraBasis, dollyAndTurn, flyMove, look, orbit, pan, zoom } from './camera'
-import type { GeometryGroup } from './geometry'
-import { buildGeometryData } from './geometry'
-import { actorsNeedingMarkers, MARKER_COLOR } from './markers'
-import { isTap, pickActor, resolveHitActor } from './selection'
+import type { DragGestureCallbacks } from './dragGesture'
+import { useDragGesture } from './dragGesture'
+import type { FrameRequest } from './frame'
+import { bboxCenter, bboxMaxExtent } from './frame'
+import { MARKER_COLOR } from './markers'
+import type { ShadingMode } from './shadingMode'
+import { useSceneResourcesContext } from './SceneResourcesContext'
+import { isTap, pickActor, resolveHitActor, resolveTapSelection } from './selection'
 import type { Ray } from './selection'
 import { computeTwoFingerDelta } from './touchGesture'
 import type { TouchPoint } from './touchGesture'
+
+// Re-exported so existing call sites (e.g. material.test.ts) keep importing it from here --
+// the implementation moved to sceneResources.ts (quad-layout Part 0, Task 1).
+export { resolveMaterialState } from './sceneResources'
 
 const INITIAL_POSE: CameraPose = { position: [0, -500, 200], pitch: -10, yaw: 90 }
 
@@ -34,8 +38,8 @@ const INITIAL_POSE: CameraPose = { position: [0, -500, 200], pitch: -10, yaw: 90
  * re-encode of the result (`(rr * shade).clamp(0.0, 255.0)`). R3F's `<Canvas>` defaults do NOT
  * match that: with neither `linear` nor `legacy` set, it still applies a linear-to-sRGB ENCODE at
  * output (`gl.outputColorSpace = THREE.SRGBColorSpace`) even though nothing on the way in ever
- * decodes (every texture here defaults to `THREE.NoColorSpace` -- see `useTextures`/
- * `useMarkerTexture`), and `ColorManagement` auto-decodes hex/`THREE.Color` literals
+ * decodes (every texture here defaults to `THREE.NoColorSpace` -- see `sceneResources.ts`'s
+ * `useTextures`/`useMarkerTexture`), and `ColorManagement` auto-decodes hex/`THREE.Color` literals
  * (`UNTEXTURED_GREY`, `SELECTION_BOX_COLOR` -- constructed via `new THREE.Color(hex)`) as sRGB on
  * construction. (`MARKER_COLOR_THREE` below is built via `setRGB(r,g,b)` instead, whose default
  * `colorSpace` is already the working linear space -- its on-screen correction comes entirely
@@ -53,202 +57,9 @@ const INITIAL_POSE: CameraPose = { position: [0, -500, 200], pitch: -10, yaw: 90
  * `configure()` sets it unconditionally on EVERY render of every mounted Canvas. Any sibling
  * `<Canvas>` in the app (e.g. an ortho pane) that doesn't also spread `CANVAS_COLOR_MANAGEMENT`
  * will flip this flag back on its own next render, silently undoing this fix here too -- every
- * `<Canvas>` in this app MUST spread the same `CANVAS_COLOR_MANAGEMENT` constant. */
+ * `<Canvas>` in this app MUST spread the same `CANVAS_COLOR_MANAGEMENT` constant (OrthoViewport.tsx
+ * does, quad-layout Part 8). */
 export const CANVAS_COLOR_MANAGEMENT = { flat: true, linear: true, legacy: true } as const
-
-/** Extracts two `THREE.Texture`s per atlas entry, keyed by `tex_index`, by drawing that entry's rect
- * out of the atlas image onto its own canvas -- so each texture can tile with RepeatWrapping (a
- * shared atlas can't repeat past a tile boundary; bug A). NearestFilter matches the low-res look.
- *
- * `map` (world-poly base textures) sets `flipY=false` to keep the atlas's image-row UV convention
- * (V grows downward) -- `geometry.ts`'s `polyUVs` computes V in that SAME convention, so the two
- * agree. `sprite` (point-actor billboards, `<sprite>`'s built-in plane UVs -- (0,0) at the bottom
- * corner, standard flipY=true orientation) keeps three.js's DEFAULT `flipY=true`: a `THREE.Sprite`
- * has no custom UV geometry to compensate for `flipY=false` the way world polys do, so sharing the
- * `map` texture with a sprite renders it upside-down (bug: "sprites are rendered inverted"). Both
- * textures share the SAME canvas pixels, drawn once, so this costs one extra `CanvasTexture` wrapper
- * per atlas entry, not a second draw. Every live-reload swaps `atlas` and rebuilds both maps,
- * disposing the previous textures so nothing leaks; `currentRef` tracks what's live for the unmount
- * / lost-race cleanup too. */
-function useTextures(atlas: AtlasPayload): { map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> } {
-  const [textures, setTextures] = useState<{ map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> }>(
-    () => ({ map: new Map(), sprite: new Map() }),
-  )
-  const currentRef = useRef<{ map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> }>({
-    map: new Map(),
-    sprite: new Map(),
-  })
-
-  useEffect(() => {
-    let disposed = false
-    const img = new Image()
-    img.onload = () => {
-      if (disposed) return
-      const nextMap = new Map<number, THREE.Texture>()
-      const nextSprite = new Map<number, THREE.Texture>()
-      for (const [key, rect] of Object.entries(atlas.manifest)) {
-        const canvas = document.createElement('canvas')
-        canvas.width = rect.w
-        canvas.height = rect.h
-        const ctx = canvas.getContext('2d')
-        if (!ctx) continue
-        ctx.drawImage(img, rect.x, rect.y, rect.w, rect.h, 0, 0, rect.w, rect.h)
-
-        const mapTex = new THREE.CanvasTexture(canvas)
-        mapTex.wrapS = THREE.RepeatWrapping
-        mapTex.wrapT = THREE.RepeatWrapping
-        mapTex.magFilter = THREE.NearestFilter
-        mapTex.minFilter = THREE.NearestFilter
-        mapTex.flipY = false
-        mapTex.needsUpdate = true
-        nextMap.set(Number(key), mapTex)
-
-        const spriteTex = new THREE.CanvasTexture(canvas)
-        spriteTex.magFilter = THREE.NearestFilter
-        spriteTex.minFilter = THREE.NearestFilter
-        spriteTex.needsUpdate = true // flipY stays the THREE.Texture default (true)
-        nextSprite.set(Number(key), spriteTex)
-      }
-      currentRef.current.map.forEach((t) => t.dispose())
-      currentRef.current.sprite.forEach((t) => t.dispose())
-      currentRef.current = { map: nextMap, sprite: nextSprite }
-      setTextures(currentRef.current)
-    }
-    img.src = `data:image/png;base64,${atlas.png_base64}`
-    return () => {
-      disposed = true
-    }
-  }, [atlas.png_base64, atlas.manifest])
-
-  useEffect(() => {
-    return () => {
-      currentRef.current.map.forEach((t) => t.dispose()) // unmount: release whatever's still held
-      currentRef.current.sprite.forEach((t) => t.dispose())
-      currentRef.current = { map: new Map(), sprite: new Map() }
-    }
-  }, [])
-
-  return textures
-}
-
-/** Decodes the lightmap atlas PNG into one `THREE.Texture` on `uv1` (channel 1, the second UV set
- * the geometry carries for lit polys). NearestFilter + ClampToEdge match render.rs's nearest,
- * edge-clamped lumel sampling (the atlas's 1-lumel gutter absorbs the clamp); `NoColorSpace` keeps
- * the stored multiplier linear (no sRGB decode); `flipY=false` matches the image-row V convention.
- * `null` (no lit polys) when the payload is absent or empty. Disposes on swap/unmount. */
-function useLightmapTexture(lightmap: LightmapPayload | null): THREE.Texture | null {
-  const [texture, setTexture] = useState<THREE.Texture | null>(null)
-  const currentRef = useRef<THREE.Texture | null>(null)
-
-  useEffect(() => {
-    if (!lightmap || Object.keys(lightmap.manifest).length === 0) {
-      currentRef.current?.dispose()
-      currentRef.current = null
-      // Clear a stale texture when a level has (or loses) all its lights -- a genuine external-
-      // system sync, not derivable during render.
-      // oxlint-disable-next-line react/set-state-in-effect
-      setTexture(null)
-      return
-    }
-    let disposed = false
-    const img = new Image()
-    img.onload = () => {
-      if (disposed) return
-      const tex = new THREE.Texture(img)
-      tex.channel = 1
-      tex.wrapS = THREE.ClampToEdgeWrapping
-      tex.wrapT = THREE.ClampToEdgeWrapping
-      tex.magFilter = THREE.NearestFilter
-      tex.minFilter = THREE.NearestFilter
-      tex.colorSpace = THREE.NoColorSpace
-      tex.flipY = false
-      tex.needsUpdate = true
-      currentRef.current?.dispose()
-      currentRef.current = tex
-      setTexture(tex)
-    }
-    img.src = `data:image/png;base64,${lightmap.png_base64}`
-    return () => {
-      disposed = true
-    }
-  }, [lightmap])
-
-  useEffect(() => {
-    return () => {
-      currentRef.current?.dispose()
-      currentRef.current = null
-    }
-  }, [])
-
-  return texture
-}
-
-const UNTEXTURED_GREY = 0x808080
-
-/** A soft white circular dot, drawn once and shared by every marker sprite (tinted per-class via
- * `SpriteMaterial.color`) -- one texture upload instead of one per marker. `THREE.Sprite` always
- * faces the camera on its own (no billboard math needed here), so this is the whole visual: a class-
- * coloured dot icon, matching UnrealEd's point-actor icon convention better than a solid cube. */
-function useMarkerTexture(): THREE.Texture | null {
-  const [texture, setTexture] = useState<THREE.Texture | null>(null)
-  const ref = useRef<THREE.Texture | null>(null)
-
-  useEffect(() => {
-    const size = 64
-    const canvas = document.createElement('canvas')
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return // e.g. a test/jsdom environment with no canvas 2D backend -- no marker texture
-    const r = size / 2
-    const gradient = ctx.createRadialGradient(r, r, 0, r, r, r)
-    gradient.addColorStop(0, 'rgba(255,255,255,1)')
-    gradient.addColorStop(0.7, 'rgba(255,255,255,1)')
-    gradient.addColorStop(1, 'rgba(255,255,255,0)')
-    ctx.fillStyle = gradient
-    ctx.fillRect(0, 0, size, size)
-    const tex = new THREE.CanvasTexture(canvas)
-    tex.needsUpdate = true
-    ref.current = tex
-    setTexture(tex)
-    return () => {
-      tex.dispose()
-      ref.current = null
-    }
-  }, [])
-
-  return texture
-}
-
-/** The cull side + alpha-test + blend material state for a draw group, from its server-resolved
- * `masked`/`twoSided`/`blend` attrs alone (the map/lightMap are wired on separately). Single source
- * for the render-decision -> three.js mapping, unit-tested without a WebGL context.
- * - `twoSided` -> DoubleSide, else FrontSide (render.rs's backface cull; PF_TwoSided|PF_Portal exempt).
- * - `masked` -> alphaTest 0.5 against the texture's mask alpha (holes: fences, rotor).
- * - `translucent` -> half-opacity NormalBlending (see-through); `modulated` -> MultiplyBlending.
- *   Approximations of UE1's additive/modulate-2x, not pixel-exact (spec). */
-export function resolveMaterialState(
-  group: Pick<GeometryGroup, 'masked' | 'twoSided' | 'blend'>,
-): Pick<
-  THREE.MeshBasicMaterialParameters,
-  'side' | 'alphaTest' | 'transparent' | 'blending' | 'opacity' | 'premultipliedAlpha'
-> {
-  const state: ReturnType<typeof resolveMaterialState> = {
-    side: group.twoSided ? THREE.DoubleSide : THREE.FrontSide,
-    alphaTest: group.masked ? 0.5 : 0,
-  }
-  if (group.blend === 'translucent') {
-    state.transparent = true
-    state.blending = THREE.NormalBlending
-    state.opacity = 0.5
-  } else if (group.blend === 'modulated') {
-    state.transparent = true
-    state.blending = THREE.MultiplyBlending
-    // three.js requires this for MultiplyBlending, else it warns and blends wrong (WebGLState.js).
-    state.premultipliedAlpha = true
-  }
-  return state
-}
 
 /** Applies `pose` to the R3F default camera every frame -- Z-up (`camera.up`), aimed via
  * `lookAt` rather than a manual quaternion (keeps roll disambiguation simple and correct for a
@@ -327,101 +138,19 @@ const MARKER_SIZE = 24
 // plain data object, no WebGL context needed).
 const MARKER_COLOR_THREE = new THREE.Color(...MARKER_COLOR)
 
-/** One brush poly ring, drawn as a closed line loop in the brush's own CSG colour. A tiny
- * standalone component (rather than inline JSX) so its `BufferGeometry` is built once per ring via
- * `useMemo`/disposed via `useEffect`, matching how `bufferGeometry`/textures are disposed elsewhere
- * in this file. `depthTest=false` (the selection-highlight use) draws always-on-top, matching
- * `preview.py`'s `--highlight` (bolder, ignores facing/depth); the plain per-actor wireframe below
- * uses the default `depthTest=true` so brushes properly occlude each other in 3D. */
-function BrushRingOutline({
-  verts,
-  color,
-  linewidth = 2,
-  depthTest = true,
-}: {
-  verts: number[]
-  color: THREE.Color
-  linewidth?: number
-  depthTest?: boolean
-}) {
-  const geometry = useMemo(() => {
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
-    return geo
-  }, [verts])
-
-  useEffect(() => {
-    return () => geometry.dispose()
-  }, [geometry])
-
-  return (
-    <lineLoop geometry={geometry}>
-      <lineBasicMaterial color={color} linewidth={linewidth} depthTest={depthTest} />
-    </lineLoop>
-  )
-}
-
-/** Selection outline: a brush actor's own AUTHORED polys (pre-CSG, world-transformed server-side,
- * `SceneActor.brush`), drawn in its CSG-classified colour -- matching `actor diagram --mode wire
- * --highlight`, NOT the CSG-solved `ScenePayload.polys`. A non-brush actor (no `brush`, out of
- * scope for this task) falls back to the plain AABB box, same as before. Always on top
- * (`depthTest=false`) and bolder than `AllBrushWireframes`' ordinary weight, matching
- * `preview.py`'s "a highlighted poly draws in its brush's vivid front hue with a bolder line". */
-function SelectionHighlight({ actor, box }: { actor: SceneActor | null; box: THREE.Box3 | null }) {
-  const color = useMemo(() => {
-    const rgb = actor?.brush?.color
-    return rgb ? new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255) : null
-  }, [actor])
-
-  if (!actor) return null
-  if (!actor.brush || !color) return box ? <box3Helper args={[box, SELECTION_BOX_COLOR]} /> : null
-
-  return (
-    <group>
-      {actor.brush.polys.map((verts, i) => (
-        <BrushRingOutline key={i} verts={verts} color={color} linewidth={3} depthTest={false} />
-      ))}
-    </group>
-  )
-}
-
-/** Every OTHER brush actor's own authored shape, in its CSG-classified colour at ordinary weight --
- * `actor diagram`'s ISO-mode convention (every brush wireframe-colours by CSG op, not just the
- * selected one) ported to the 3D viewport. Only drawn when there's no solved geometry to show
- * instead (`scene.polys` empty -- `uedcli/serve/scene.py`'s `build_wireframe_payload` always
- * returns an empty `polys` list, so this is exactly the cold-open/no-Rebuild-yet case): once a
- * Rebuild pins real CSG'd geometry, that textured/lit mesh already renders every brush's
- * contribution, and drawing the authored shape on top of it would be redundant. The SELECTED actor
- * is excluded here -- `SelectionHighlight` above already draws it, bolder and always-on-top. */
-function AllBrushWireframes({ actors, selectedName }: { actors: SceneActor[]; selectedName: string | null }) {
-  return (
-    <group>
-      {actors.map((actor) => {
-        if (!actor.brush || actor.name === selectedName) return null
-        const [r, g, b] = actor.brush.color
-        const color = new THREE.Color(r / 255, g / 255, b / 255)
-        return actor.brush.polys.map((verts, i) => (
-          <BrushRingOutline key={`${actor.name}-${i}`} verts={verts} color={color} />
-        ))
-      })}
-    </group>
-  )
-}
-
 export interface Viewport3DProps {
   scene: ScenePayload
   atlas: AtlasPayload
   lightmap: LightmapPayload | null
-  selectedName?: string | null
-  onSelectActor?: (name: string | null) => void
-}
-
-interface DragTracker {
-  // Accumulated movement since pointerdown, in screen pixels -- NOT a start/current position pair.
-  // Pointer-lock (below) freezes `clientX`/`clientY` at wherever the cursor was when the lock
-  // engaged, so distance can only be measured by summing each move event's `movementX`/`movementY`.
-  totalDx: number
-  totalDy: number
+  selectedNames: ReadonlySet<string>
+  onSelectActor: (name: string, additive: boolean) => void
+  // `F`-frame (Part 3, Task 15): a new (higher `seq`) request retargets the camera to fit `bbox`,
+  // keeping the current viewing angle (pitch/yaw) and backing the position off far enough along it.
+  frameRequest?: FrameRequest | null
+  // Per-pane shading mode (Part 4, Task 20): 'wireframe' draws ONLY the CSG-colored brush rings (no
+  // solid mesh); 'unlit'/'flat'/'lit' draw the existing solid mesh -- 'flat' renders identically to
+  // 'unlit' for now (the main spec's own "Also open": its exact definition isn't pinned down yet).
+  mode?: ShadingMode
 }
 
 // Which single touch contact is the tap-selection candidate: the FIRST finger down, tracked only
@@ -433,9 +162,41 @@ interface TouchTapTracker {
   totalDy: number
 }
 
-export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSelectActor }: Viewport3DProps) {
+// `atlas`/`lightmap` stay in Viewport3DProps for API stability, but the built geometry/textures
+// they used to drive locally now come from SceneResourcesContext (Task 3) -- unused here directly.
+export function Viewport3D({
+  scene,
+  selectedNames,
+  onSelectActor,
+  frameRequest = null,
+  mode = 'lit',
+}: Viewport3DProps) {
   const [pose, setPose] = useState<CameraPose>(INITIAL_POSE)
-  const drag = useRef<DragTracker | null>(null)
+
+  // `F`-frame (Task 15): retarget the pose to fit the requested bbox, keeping pitch/yaw (the current
+  // viewing angle) and backing the camera off along its own forward vector far enough to fit the
+  // bbox's largest extent -- a design choice (the plan doesn't specify the exact framing math): a
+  // reorientation-free "dolly to fit" reads as less jarring than snapping to a fixed angle.
+  useEffect(() => {
+    if (!frameRequest) return
+    const center = bboxCenter(frameRequest.bbox)
+    const extent = bboxMaxExtent(frameRequest.bbox)
+    setPose((prev) => {
+      const { forward } = cameraBasis(prev.pitch, prev.yaw)
+      const distance = extent * 1.5 + 100 // comfortable margin, never closer than 100 UU
+      return {
+        position: [
+          center[0] - forward[0] * distance,
+          center[1] - forward[1] * distance,
+          center[2] - forward[2] * distance,
+        ],
+        pitch: prev.pitch,
+        yaw: prev.yaw,
+      }
+    })
+    // `frameRequest` is replaced wholesale (never mutated in place) by QuadLayout on every `F`
+    // press, so depending on the object itself re-fires exactly when `seq` changes.
+  }, [frameRequest])
   // Live screen position of every currently-down touch contact, by `pointerId` -- lets multi-touch
   // gestures (unlike `drag`, which assumes exactly one contact) compute each finger's own delta and
   // tell 1-finger from 2-finger gestures apart. Mouse/pen input never touches this map (gated on
@@ -443,108 +204,50 @@ export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSele
   const touchPoints = useRef<Map<number, TouchPoint>>(new Map())
   const touchTap = useRef<TouchTapTracker | null>(null)
   const cameraRef = useRef<THREE.Camera | null>(null)
-  const containerRef = useRef<HTMLDivElement | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
   const markerGroupRef = useRef<THREE.Group | null>(null)
-  const textures = useTextures(atlas)
-  const lightmapTexture = useLightmapTexture(lightmap)
-  const markerTexture = useMarkerTexture()
+  // Geometry/textures/markers are built ONCE and shared across every pane via
+  // SceneResourcesContext (Part 0, Tasks 1-2) -- Viewport3D no longer builds its own (Task 3;
+  // camera/pointer handling/click-to-select are UNCHANGED in this task).
+  const { bufferGeometry, materials, unlitMaterials, triangleOwners, textures, markerTexture, markerActors } =
+    useSceneResourcesContext()
+  // 'unlit'/'lit' otherwise rendered the identical mesh (materials built once, shared across every
+  // pane, with no per-mode variant) -- pick the lightmap-free array for 'unlit' so it genuinely
+  // differs, matching the main spec's 4-distinct-shading-modes requirement (review finding).
+  const activeMaterials = mode === 'unlit' ? unlitMaterials : materials
 
-  const selectedActor = useMemo(
-    () => scene.actors.find((a) => a.name === selectedName) ?? null,
-    [scene.actors, selectedName],
+  // A single "primary" selected actor (the first, by scene.actors order, whose name is in the set)
+  // -- ONLY for the camera orbit pivot (Alt-drag), which stays single-target; Task 15's frame/`F`
+  // key is the real multi-actor camera mechanism, out of this task's scope. Highlight rendering
+  // below (BrushOutlines, the non-brush box fallback) draws one per SELECTED actor, not just this
+  // one (Task 14).
+  const primarySelectedActor = useMemo(
+    () => scene.actors.find((a) => selectedNames.has(a.name)) ?? null,
+    [scene.actors, selectedNames],
   )
 
   const orbitPivot: Vec3 = useMemo(() => {
-    if (!selectedActor) return [0, 0, 0]
+    if (!primarySelectedActor) return [0, 0, 0]
     return [
-      (selectedActor.bbox_lo[0] + selectedActor.bbox_hi[0]) / 2,
-      (selectedActor.bbox_lo[1] + selectedActor.bbox_hi[1]) / 2,
-      (selectedActor.bbox_lo[2] + selectedActor.bbox_hi[2]) / 2,
+      (primarySelectedActor.bbox_lo[0] + primarySelectedActor.bbox_hi[0]) / 2,
+      (primarySelectedActor.bbox_lo[1] + primarySelectedActor.bbox_hi[1]) / 2,
+      (primarySelectedActor.bbox_lo[2] + primarySelectedActor.bbox_hi[2]) / 2,
     ]
-  }, [selectedActor])
+  }, [primarySelectedActor])
 
-  const selectionBox = useMemo(() => {
-    if (!selectedActor) return null
-    return new THREE.Box3(
-      new THREE.Vector3(...selectedActor.bbox_lo),
-      new THREE.Vector3(...selectedActor.bbox_hi),
-    )
-  }, [selectedActor])
-
-  // One draw group per (texture, masked?, two_sided?, blend, lit?) tuple, each with its own
-  // material set from the server-resolved attrs (cull side, alphaTest, blend). The base map tiles
-  // on `uv`; per-vertex `color` carries the KEY_LIGHT flat shade (unlit) or white (lit); a lit
-  // group additionally samples the shared lightmap texture on `uv1` (`base*color*lightMap`, the
-  // render.rs product). Untextured groups (tex_index < 0) get a flat grey base. Built together so
-  // the geometry's group -> material-index mapping stays consistent.
-  const { bufferGeometry, materials, triangleOwners } = useMemo(() => {
-    const built = buildGeometryData(scene.polys, atlas, lightmap)
-    const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.BufferAttribute(built.positions, 3))
-    geo.setAttribute('uv', new THREE.BufferAttribute(built.uvs, 2))
-    geo.setAttribute('uv1', new THREE.BufferAttribute(built.uv1, 2))
-    geo.setAttribute('color', new THREE.BufferAttribute(built.colors, 3))
-    geo.clearGroups()
-    const mats: THREE.Material[] = []
-    const matIndex = new Map<string, number>()
-    const intensity = lightmap?.intensity ?? 1
-    for (const group of built.groups) {
-      if (group.count === 0) continue
-      const lit = group.lit && lightmapTexture !== null
-      const key = `${group.texIndex}:${group.masked ? 1 : 0}:${group.twoSided ? 1 : 0}:${group.blend}:${lit ? 1 : 0}`
-      let index = matIndex.get(key)
-      if (index === undefined) {
-        const map = group.texIndex >= 0 ? (textures.map.get(group.texIndex) ?? null) : null
-        const params: THREE.MeshBasicMaterialParameters = {
-          vertexColors: true,
-          ...resolveMaterialState(group), // cull side + alphaTest + blend, from the resolved attrs
-        }
-        if (map) params.map = map
-        else params.color = UNTEXTURED_GREY
-        if (lit) {
-          params.lightMap = lightmapTexture
-          params.lightMapIntensity = intensity
-        }
-        index = mats.length
-        mats.push(new THREE.MeshBasicMaterial(params))
-        matIndex.set(key, index)
-      }
-      geo.addGroup(group.start, group.count, index)
-    }
-    geo.computeVertexNormals()
-    return { bufferGeometry: geo, materials: mats, triangleOwners: built.triangleOwners }
-  }, [scene, atlas, lightmap, textures, lightmapTexture])
-
-  // Every live-reload replaces `bufferGeometry`/`materials` with fresh THREE objects; without an
-  // explicit dispose the PREVIOUS ones (a full geometry buffer, its materials) leak every cycle.
-  // The cleanup closes over the value from the render it belongs to, so it always disposes the one
-  // being REPLACED, and disposes the final one on unmount too.
-  useEffect(() => {
-    return () => {
-      bufferGeometry.dispose()
-      materials.forEach((m) => m.dispose())
-    }
-  }, [bufferGeometry, materials])
-
-  // Markers for pure point actors (no brush, no owned/rendered poly -- lights, triggers, patrol
-  // nodes, sounds, or a DT_Mesh actor whose mesh never resolved): one billboard `THREE.Sprite` each,
-  // always facing the camera -- the actor's real `DT_Sprite` icon texture (`actor.sprite`) when it
-  // resolved, else the generic grey dot (`MARKER_COLOR`). Each sprite carries its actor's name
-  // directly in `userData` -- unlike the main mesh (one merged BufferGeometry, so a raycast hit
-  // needs `triangleOwners`+`faceIndex` to find its actor), a Sprite IS its own pickable object, so
-  // `hit.object.userData.actorName` resolves it with no indirection.
-  const markerActors = useMemo(() => {
-    const ownedNames = new Set(triangleOwners.filter((n): n is string => n != null))
-    return actorsNeedingMarkers(scene.actors, ownedNames)
-  }, [scene, triangleOwners])
+  // Every SELECTED non-brush actor's AABB box (Task 14: one per selected actor, not just one).
+  const selectedNonBrushBoxes = useMemo(() => {
+    return scene.actors
+      .filter((a) => selectedNames.has(a.name) && !a.brush)
+      .map((a) => ({ name: a.name, box: new THREE.Box3(new THREE.Vector3(...a.bbox_lo), new THREE.Vector3(...a.bbox_hi)) }))
+  }, [scene.actors, selectedNames])
 
   // Shared by both the mouse tap path and the touch tap path: raycasts the click/tap point against
   // the drawn geometry (see the comment below for the primary/fallback strategy) and reports the
   // hit actor. Split out so onPointerUp's touch branch can call the exact same selection logic as
   // the existing mouse branch, instead of a second copy.
   const performTapSelect = useCallback(
-    (clientX: number, clientY: number) => {
+    (clientX: number, clientY: number, additive: boolean) => {
       const camera = cameraRef.current
       const rect = containerRef.current?.getBoundingClientRect()
       if (!camera || !rect) return
@@ -585,29 +288,47 @@ export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSele
         }
         hitActor = pickActor(ray, scene.actors)
       }
-      onSelectActor?.(hitActor ? hitActor.name : null)
+      const result = resolveTapSelection(hitActor, additive)
+      if (result) onSelectActor(result.name, result.additive)
     },
     [scene.actors, triangleOwners, onSelectActor],
   )
 
-  const onPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId)
-    if (e.pointerType === 'touch') {
-      const isFirstContact = touchPoints.current.size === 0
-      touchPoints.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-      // Only the FIRST finger down is a tap candidate; a second finger arriving before the first
-      // lifts means this is a two-finger gesture, never a tap (see onPointerUp).
-      touchTap.current = isFirstContact ? { pointerId: e.pointerId, totalDx: 0, totalDy: 0 } : null
-      return
-    }
-    drag.current = { totalDx: 0, totalDy: 0 }
-    // Pointer lock is requested lazily, on the first real MOVEMENT of a drag (see onPointerMove),
-    // not here on plain pointerdown -- a tap that never moves (a selection click) never locks at
-    // all, so the cursor stays visible and the browser's "has control of your pointer" banner never
-    // fires for a plain click. It only shows for an actual drag, and only once per drag (locked for
-    // that drag's duration, released in onPointerUp). Not applicable to touch at all -- there's no
-    // OS cursor to hide, so touch never reaches this branch.
-  }, [])
+  // Mouse-only pointer-lock/capture/tap-vs-drag plumbing, shared with ortho panes (Part 0, Task 4).
+  const dragCallbacks = useMemo<DragGestureCallbacks>(
+    () => ({
+      onDrag: (dx, dy, buttons, altKey) => {
+        setPose((prev) => {
+          if (altKey && (buttons & 1) !== 0) return orbit(prev, orbitPivot, dx, dy)
+          if ((buttons & 1) !== 0 && (buttons & 2) !== 0) return pan(prev, dx, dy)
+          if ((buttons & 2) !== 0) return look(prev, dx, dy)
+          if ((buttons & 1) !== 0) return dollyAndTurn(prev, dx, dy)
+          return prev
+        })
+      },
+      onTap: (clientX, clientY, additive) => performTapSelect(clientX, clientY, additive),
+      onWheel: (deltaY) => setPose((prev) => zoom(prev, deltaY)),
+    }),
+    [orbitPivot, performTapSelect],
+  )
+  const mouseDrag = useDragGesture(dragCallbacks)
+  const containerRef = mouseDrag.containerRef
+
+  const onPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'touch') {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        const isFirstContact = touchPoints.current.size === 0
+        touchPoints.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+        // Only the FIRST finger down is a tap candidate; a second finger arriving before the first
+        // lifts means this is a two-finger gesture, never a tap (see onPointerUp).
+        touchTap.current = isFirstContact ? { pointerId: e.pointerId, totalDx: 0, totalDy: 0 } : null
+        return
+      }
+      mouseDrag.onPointerDown(e)
+    },
+    [mouseDrag],
+  )
 
   const onPointerMove = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -646,58 +367,29 @@ export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSele
         return
       }
 
-      const d = drag.current
-      if (!d) return
-      const dx = e.movementX
-      const dy = e.movementY
-      if (d.totalDx === 0 && d.totalDy === 0 && (dx !== 0 || dy !== 0) && !document.pointerLockElement) {
-        // First real movement of this drag: lock now (hides the cursor for the rest of the drag,
-        // with no screen-edge clamp on movementX/Y). Browsers can deny a request right after a
-        // recent exit, which just falls back to the ordinary cursor for that one gesture --
-        // movementX/Y still work unlocked too.
-        e.currentTarget.requestPointerLock?.()
-      }
-      d.totalDx += dx
-      d.totalDy += dy
-      if (dx === 0 && dy === 0) return
-      const buttons = e.buttons
-      setPose((prev) => {
-        if (e.altKey && (buttons & 1) !== 0) return orbit(prev, orbitPivot, dx, dy)
-        if ((buttons & 1) !== 0 && (buttons & 2) !== 0) return pan(prev, dx, dy)
-        if ((buttons & 2) !== 0) return look(prev, dx, dy)
-        if ((buttons & 1) !== 0) return dollyAndTurn(prev, dx, dy)
-        return prev
-      })
+      mouseDrag.onPointerMove(e)
     },
-    [orbitPivot],
+    [mouseDrag],
   )
 
   const onPointerUp = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
-      e.currentTarget.releasePointerCapture(e.pointerId)
       if (e.pointerType === 'touch') {
+        e.currentTarget.releasePointerCapture(e.pointerId)
         touchPoints.current.delete(e.pointerId)
         const tap = touchTap.current
         if (tap?.pointerId !== e.pointerId) return // not the tap-candidate finger (or none survived)
         touchTap.current = null
-        if (isTap(0, 0, tap.totalDx, tap.totalDy)) performTapSelect(e.clientX, e.clientY)
+        if (isTap(0, 0, tap.totalDx, tap.totalDy)) performTapSelect(e.clientX, e.clientY, false) // touch has no Ctrl-equivalent
         return
       }
-      document.exitPointerLock?.()
-      const d = drag.current
-      drag.current = null
-      if (!d || e.button !== 0 || e.altKey) return
-      if (!isTap(0, 0, d.totalDx, d.totalDy)) return // a real drag, not a selection tap
-      performTapSelect(e.clientX, e.clientY)
+      mouseDrag.onPointerUp(e)
     },
-    [performTapSelect],
+    [mouseDrag, performTapSelect],
   )
 
-  const onWheel = useCallback((e: ReactWheelEvent<HTMLDivElement>) => {
-    setPose((prev) => zoom(prev, e.deltaY))
-  }, [])
-
-  const onContextMenu = useCallback((e: ReactMouseEvent<HTMLDivElement>) => e.preventDefault(), [])
+  const onWheel = mouseDrag.onWheel
+  const onContextMenu = mouseDrag.onContextMenu
 
   return (
     <div
@@ -718,7 +410,7 @@ export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSele
       <Canvas {...CANVAS_COLOR_MANAGEMENT} camera={{ fov: 75, near: 1, far: 131072 }}>
         <CameraRig pose={pose} cameraRef={cameraRef} />
         <FlyKeys setPose={setPose} />
-        <mesh ref={meshRef} geometry={bufferGeometry} material={materials} />
+        {mode !== 'wireframe' && <mesh ref={meshRef} geometry={bufferGeometry} material={activeMaterials} />}
         <group ref={markerGroupRef}>
           {markerActors.map((actor) => {
             // A resolved DT_Sprite billboard draws the actor's REAL class icon texture (its atlas
@@ -754,8 +446,17 @@ export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSele
             )
           })}
         </group>
-        {!scene.geometry_pinned && <AllBrushWireframes actors={scene.actors} selectedName={selectedName} />}
-        <SelectionHighlight actor={selectedActor} box={selectionBox} />
+        {/* Wireframe mode: every brush wireframes in its own CSG colour, matching `actor diagram`'s
+            ISO-mode convention (Part 2) -- no solid mesh above. Any other mode: the textured/shaded
+            mesh already renders every brush's contribution, so only the selected one's bold ring is
+            still needed on top of it (Part 4, Task 20 -- supersedes the old `geometry_pinned`-based
+            branching, which is now exactly what `mode` itself decides). */}
+        <BrushOutlines actors={scene.actors} selectedNames={selectedNames} mode={mode === 'wireframe' ? 'csg-all' : 'selected-only'} />
+        {/* Every selected NON-brush actor (no CSG ring to draw) falls back to its own plain AABB
+            box -- one per selected actor (Task 14), not just a single one. */}
+        {selectedNonBrushBoxes.map(({ name, box }) => (
+          <box3Helper key={name} args={[box, SELECTION_BOX_COLOR]} />
+        ))}
       </Canvas>
     </div>
   )

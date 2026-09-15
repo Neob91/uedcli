@@ -3,8 +3,25 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AtlasPayload, LightmapPayload, ScenePayload, StatusPayload } from './api'
 import { fetchLevelState, fetchStatus, postLoad, postRebuild } from './api'
 import { Inspector } from './panels/Inspector'
+import { LevelPicker } from './panels/LevelPicker'
 import { subscribeChangesAvailable } from './reload'
-import { Viewport3D } from './scene/Viewport3D'
+import { resolveBuildSolved } from './scene/buildStatus'
+import { QuadLayout } from './scene/QuadLayout'
+import { clearSelection, toggleSelection } from './scene/selectionSet'
+import { useTheme } from './theme/useTheme'
+import type { ThemePreference } from './theme/useTheme'
+
+const THEME_CYCLE: ThemePreference[] = ['dark', 'light', 'system']
+
+/** Cycles dark -> light -> system -> dark on each click (Task 30). */
+function ThemeToggle({ preference, onChange }: { preference: ThemePreference; onChange: (pref: ThemePreference) => void }) {
+  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(preference) + 1) % THEME_CYCLE.length]
+  return (
+    <button type="button" className="theme-toggle" onClick={() => onChange(next)} title={`Switch to ${next}`}>
+      Theme: {preference}
+    </button>
+  )
+}
 
 interface HealthResponse {
   status: string
@@ -52,6 +69,7 @@ function BuildToolbar({
 }
 
 function App() {
+  const { preference: themePreference, setPreference: setThemePreference } = useTheme()
   const [level, setLevel] = useState<string | null>(null)
   const [scene, setScene] = useState<ScenePayload | null>(null)
   const [atlas, setAtlas] = useState<AtlasPayload | null>(null)
@@ -64,7 +82,20 @@ function App() {
   // lightmap state is left exactly as it was before the failed action, same as a settled trunk
   // change never discards it (reload.ts's own "leave the stale scene visible" contract).
   const [buildError, setBuildError] = useState<string | null>(null)
-  const [selectedName, setSelectedName] = useState<string | null>(null)
+  // Multi-actor selection (spec §9): a plain tap replaces it, Ctrl+tap toggles membership
+  // (selectionSet.ts's toggleSelection) -- one lifted set, shared by every QuadLayout pane.
+  const [selectedNames, setSelectedNames] = useState<Set<string>>(() => new Set())
+  const onSelectActor = useCallback((name: string, additive: boolean) => {
+    setSelectedNames((s) => toggleSelection(s, name, additive))
+  }, [])
+  // OrgPanel's own batch-select shape (Task 23): a folder-node click replaces/adds a whole actor
+  // set at once (mirrors a plain tap's replace / Ctrl+tap's additive semantics over a SET, not a
+  // single name) -- a plain union/replace, not a second selection model.
+  const onSelectMany = useCallback((names: ReadonlySet<string>, additive: boolean) => {
+    setSelectedNames((s) => (additive ? new Set([...s, ...names]) : new Set(names)))
+  }, [])
+  // `Esc` (SelectionKeys, Task 15): the only path that clears the selection entirely.
+  const onDeselect = useCallback(() => setSelectedNames(clearSelection()), [])
   const [reloading, setReloading] = useState(false)
   const [busy, setBusy] = useState<'load' | 'rebuild' | null>(null)
 
@@ -139,18 +170,27 @@ function App() {
   const handleLoad = useCallback(() => runBuildAction('load', postLoad), [runBuildAction])
   const handleRebuild = useCallback(() => runBuildAction('rebuild', postRebuild), [runBuildAction])
 
-  const selectedActor = useMemo(
-    () => scene?.actors.find((a) => a.name === selectedName) ?? null,
-    [scene, selectedName],
+  // Every selected actor, in scene.actors order -- Inspector's own prop (Task 16: 0/1/2+ selected).
+  const selectedActors = useMemo(
+    () => scene?.actors.filter((a) => selectedNames.has(a.name)) ?? [],
+    [scene, selectedNames],
   )
 
+  // The real shading-mode gating signal (Task 19) -- derived from the /status polling this toolbar
+  // already does, not a second fetch.
+  const buildSolved = resolveBuildSolved(status)
+
   if (error) return <div className="status-message error">{error}</div>
-  if (!scene || !atlas || !lightmap) return <div className="status-message">Loading…</div>
+  if (!level || !scene || !atlas || !lightmap) return <div className="status-message">Loading…</div>
 
   return (
     <div id="app-root">
       <div className="viewport-pane">
-        <BuildToolbar status={status} busy={busy} onLoad={handleLoad} onRebuild={handleRebuild} />
+        <div className="toolbar-row">
+          <BuildToolbar status={status} busy={busy} onLoad={handleLoad} onRebuild={handleRebuild} />
+          <LevelPicker currentLevel={level} onLevelChanged={setLevel} />
+          <ThemeToggle preference={themePreference} onChange={setThemePreference} />
+        </div>
         {buildError && (
           <div className="build-error-banner">
             {buildError}
@@ -160,10 +200,19 @@ function App() {
           </div>
         )}
         {reloading && <div className="updating-badge">updating…</div>}
-        <Viewport3D scene={scene} atlas={atlas} lightmap={lightmap} selectedName={selectedName} onSelectActor={setSelectedName} />
+        <QuadLayout
+          scene={scene}
+          atlas={atlas}
+          lightmap={lightmap}
+          selectedNames={selectedNames}
+          onSelectActor={onSelectActor}
+          onSelectMany={onSelectMany}
+          onDeselect={onDeselect}
+          buildSolved={buildSolved}
+        />
       </div>
       <div className="inspector-pane">
-        <Inspector actor={selectedActor} />
+        <Inspector selected={selectedActors} />
       </div>
     </div>
   )
