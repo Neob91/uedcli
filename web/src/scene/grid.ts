@@ -27,6 +27,37 @@ export interface ViewBoundsWorld {
   vMax: number
 }
 
+type Vec3 = [number, number, number]
+
+function dot(a: Vec3, b: Vec3): number {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
+}
+
+/** The world-anchored view window for an ortho pane centered on `center` (bug report: "grid is
+ * relative to the viewport, not geometry"). `bounds` must be in ABSOLUTE world u/v -- `gridLines`
+ * places a line at every multiple of `spacingUU` WITHIN `bounds`, so a window centered on 0 makes
+ * lines always straddle the current pan position instead of landing on fixed world coordinates.
+ * `planeOrigin` is `center` with its `right`/`up` components removed (keeping only its component
+ * along the plane's own depth axis) -- the base point `u`/`v` offsets are added to when
+ * reconstructing a line's endpoints, so `center`'s in-plane position isn't double-counted. */
+export function orthoGridWindow(
+  center: Vec3,
+  right: Vec3,
+  up: Vec3,
+  halfWidthUU: number,
+  halfHeightUU: number,
+): { bounds: ViewBoundsWorld; planeOrigin: Vec3 } {
+  const centerU = dot(center, right)
+  const centerV = dot(center, up)
+  const bounds = { uMin: centerU - halfWidthUU, uMax: centerU + halfWidthUU, vMin: centerV - halfHeightUU, vMax: centerV + halfHeightUU }
+  const planeOrigin: Vec3 = [
+    center[0] - right[0] * centerU - up[0] * centerV,
+    center[1] - right[1] * centerU - up[1] * centerV,
+    center[2] - right[2] * centerU - up[2] * centerV,
+  ]
+  return { bounds, planeOrigin }
+}
+
 export interface GridLine {
   axis: 'u' | 'v'
   at: number

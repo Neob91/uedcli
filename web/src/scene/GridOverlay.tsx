@@ -9,7 +9,7 @@ import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import type { Vec3 } from './camera'
-import { gridLines, gridSpacingUU } from './grid'
+import { gridLines, gridSpacingUU, orthoGridWindow } from './grid'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
 import { orthoBasis } from './orthoCamera'
 
@@ -26,15 +26,15 @@ export function GridOverlay({ pose, axis }: { pose: OrthoPose; axis: OrthoAxis }
     const halfW = (size.width / 2) * pose.worldUnitsPerPixel
     const halfH = (size.height / 2) * pose.worldUnitsPerPixel
     const spacing = gridSpacingUU(pose.worldUnitsPerPixel)
-    const bounds = { uMin: -halfW, uMax: halfW, vMin: -halfH, vMax: halfH }
+    const { bounds, planeOrigin } = orthoGridWindow(pose.center, right, up, halfW, halfH)
     const lines = gridLines(spacing, bounds)
 
     const positions: number[] = []
     for (const line of lines) {
       const [p1, p2] =
         line.axis === 'u'
-          ? [worldPointAt(pose.center, right, up, line.at, bounds.vMin), worldPointAt(pose.center, right, up, line.at, bounds.vMax)]
-          : [worldPointAt(pose.center, right, up, bounds.uMin, line.at), worldPointAt(pose.center, right, up, bounds.uMax, line.at)]
+          ? [worldPointAt(planeOrigin, right, up, line.at, bounds.vMin), worldPointAt(planeOrigin, right, up, line.at, bounds.vMax)]
+          : [worldPointAt(planeOrigin, right, up, bounds.uMin, line.at), worldPointAt(planeOrigin, right, up, bounds.uMax, line.at)]
       positions.push(...p1, ...p2)
     }
     const geo = new THREE.BufferGeometry()
