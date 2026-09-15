@@ -11,13 +11,17 @@ const KEY_LIGHT: [number, number, number] = [-0.408, -0.577, 0.707]
 
 /** Global fan winding for backface culling. render.rs culls single-sided faces by normal·camera
  * (`light_in_front`); three.js `FrontSide` culls by screen-space CCW winding, so ONE global order
- * must make the two agree. Verified directly against this app's own camera (`Viewport3D`'s
- * `CameraRig`, a plain `THREE.Camera.lookAt` with world-up fixed to +Z, fed the SAME
- * `forward`/`right`/`up` triad `preview_native.camera_basis` derives for `render.rs`): projecting
- * real scene polys through that exact camera and comparing to `light_in_front`'s decision shows the
- * UNREVERSED fan order (`0, i, i+1`, i.e. no reversal) already agrees -- reversing it (as an earlier,
- * differently-implemented camera needed) instead culls the wrong face on most single-sided walls. */
-const REVERSE_FAN = false
+ * must make the two agree. This was verified `false` (unreversed) against `Viewport3D`'s `CameraRig`
+ * BEFORE `applyCameraPose` gained its projection-matrix mirror (`Viewport3D.tsx`'s own doc comment:
+ * negates `projectionMatrix.elements[0]` to fix meshes rendering left-right reverted). That mirror
+ * flips every triangle's APPARENT screen-space winding uniformly (a horizontal flip always reverses
+ * signed area), which three.js's culling never compensates for on its own (it only auto-flips
+ * winding from an object's OWN `matrixWorld` determinant, never the camera's) -- so the earlier
+ * verification went stale the moment the mirror landed, silently culling the wrong face on every
+ * single-sided wall (confirmed live: CSG subtracts and additive brushes appeared to swap which face
+ * is visible). `OrthoViewport.tsx`'s cameras use the identical mirror technique, so this one flip
+ * covers every pane. */
+const REVERSE_FAN = true
 
 /** One contiguous [start, count] triangle-vertex range (three.js BufferGeometry group semantics:
  * start/count counted in VERTICES, matching a non-indexed geometry), tagged with the texture, mask
