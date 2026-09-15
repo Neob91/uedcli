@@ -1,0 +1,33 @@
+VISGATE_TRACE light=Vec3 { x: -1160.7454, y: -807.8999, z: 220.41791 } view_zone=1 use_zones=true target_surf=616
+VISGATE_TRACE node=24 surf=0 RETIRED zone=1 active_after=0x0
+VISGATE_TRACE node=432 surf=1 RETIRED zone=1 active_after=0x0
+VISGATE_TRACE node=432 surf=1 RETIRED zone=1 active_after=0x0
+VISGATE_TRACE node=473 surf=526 RETIRED zone=1 active_after=0x0
+VISGATE_TRACE node=486 surf=222 RETIRED zone=1 active_after=0x0
+VISGATE_TRACE node=774 surf=616 near_zone=1 reachable=true front_ok=true portal_needs_zones=false invisible=false poly_flags=0x0
+VISGATE_TRACE node=774 PRE row y=455 window=[389,391) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=456 window=[388,391) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=457 window=[387,390) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=458 window=[386,389) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=459 window=[385,387) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=460 window=[384,386) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=461 window=[382,385) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=462 window=[381,384) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=463 window=[380,383) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=464 window=[379,382) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=465 window=[378,381) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=466 window=[377,379) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=467 window=[376,378) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=468 window=[374,377) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=469 window=[373,376) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=470 window=[372,375) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=471 window=[371,374) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=472 window=[370,373) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=473 window=[369,371) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=474 window=[368,370) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=475 window=[366,369) buf_row=[]
+VISGATE_TRACE node=774 PRE row y=476 window=[365,368) buf_row=[]
+VISGATE_TRACE node=774 rasterized rows=22 raster_px=59 accepted_px=0 opaque=true
+VISGATE_TRACE node=35 surf=2 RETIRED zone=1 active_after=0x0
+VISGATE_TRACE result: surf 616 REJECTED
+/workspace/uedcli/.claude/worktrees/agent-ac99b855f629cb10a/_scratch/actor-parity/06_hongkong_wanchai_market/native_N201.dx
