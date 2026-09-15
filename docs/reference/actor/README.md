@@ -11,6 +11,7 @@ Query, mutate, and organize actors. See also [diagram](diagram.md) for rendering
 | [`actor find`](find.md) | query | print matching actor names, one per line, for piping |
 | [`actor show`](show.md) | query | print named actors' full canonical T3D blocks |
 | [`actor bbox`](bbox.md) | query | the world axis-aligned bounding box enclosing a set of actors |
+| [`actor rank`](rank.md) | query | print each actor's 1-based CSG-order position |
 | [`actor prop get`](prop.md) | query | print effective property values |
 | [`actor folder get`](folder.md) | query | print each actor's uedcli-side folder path |
 | [`actor label get`](label.md) | query | print each actor's uedcli-side labels |

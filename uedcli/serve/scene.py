@@ -95,7 +95,10 @@ class ActorSprite:
 @dataclass(frozen=True, kw_only=True)
 class SceneActor:
     """One actor's metadata for the inspector/organization panel — NOT its geometry (a brush
-    actor's polys already ride in `ScenePayload.polys`, joined by CSG, not by actor). `props` is
+    actor's polys already ride in `ScenePayload.polys`, joined by CSG, not by actor). `csg_rank` is
+    the actor's 1-based position in `level.order` (rank 1 = evaluated/carved first) — a
+    human-readable stand-in for `order_value`'s opaque LexoRank string, which stays in the payload
+    too (kept for a future audit-diff, not shown in the Inspector). `props` is
     the actor's raw stored T3D property list (`Actor.props`, `list[(key, raw-text-value)]`) — the
     read-only inspector's "full raw T3D property set" (spec, "Selection & inspector"). `categories`
     is `props`' parallel UnrealEd category array (`categories[i]` groups `props[i]`; `_actor_categories`)
@@ -113,6 +116,7 @@ class SceneActor:
     folder: str | None
     labels: list[str]
     order_value: str
+    csg_rank: int
     props: list[tuple[str, str]]
     categories: list[str]
     brush: BrushHighlight | None
@@ -276,7 +280,7 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
     actor_sprites = trunk.actor_sprites
     category_maps: dict[str, dict[str, str] | None] = {}
     actors = []
-    for name in level.order:
+    for csg_rank, name in enumerate(level.order, start=1):
         actor = level.actors.get(name)
         if actor is None or hidden_ed.get(name):
             continue                                     # editor-hidden: no metadata, no marker
@@ -294,6 +298,7 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
             bbox_lo=tuple(float(c) for c in lo), bbox_hi=tuple(float(c) for c in hi),
             location=tuple(float(c) for c in loc), rotation=actor_rotation_uu(actor),
             folder=actor.folder, labels=sorted(actor.labels), order_value=ranks.get(name, ""),
+            csg_rank=csg_rank,
             props=list(actor.props), categories=_actor_categories(actor.props, category_maps[cls]),
             brush=_brush_highlight(actor, index), sprite=sprite))
     return actors

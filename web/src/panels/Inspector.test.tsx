@@ -17,6 +17,7 @@ function fixtureActor(overrides: Partial<SceneActor> = {}): SceneActor {
     folder: 'geo/rooms',
     labels: ['lighting'],
     order_value: 'm',
+    csg_rank: 3,
     props: [
       ['CsgOper', 'CSG_Subtract'],
       ['PolyFlags', '2'],
@@ -42,7 +43,8 @@ describe('Inspector', () => {
     expect(screen.getByText('0, 16384, 0')).toBeTruthy() // rotation
     expect(screen.getByText('geo/rooms')).toBeTruthy()
     expect(screen.getByText('lighting')).toBeTruthy()
-    expect(screen.getByText('m')).toBeTruthy()
+    expect(screen.getByText('3')).toBeTruthy() // csg_rank, not the raw order_value string
+    expect(screen.queryByText('m')).toBeNull()
     expect(screen.getByText('CsgOper')).toBeTruthy()
     expect(screen.getByText('CSG_Subtract')).toBeTruthy()
   })

@@ -100,6 +100,7 @@ def test_build_scene_payload_has_polys_and_actors(tmp_path):
     room_actor = next(a for a in payload.actors if a.name == "Room")
     assert room_actor.cls == "Engine.Brush" or "Brush" in room_actor.cls
     assert room_actor.bbox_lo != room_actor.bbox_hi           # a real, non-degenerate box
+    assert room_actor.csg_rank == 1                            # the sole actor: rank 1 of 1
     assert room_actor.order_value == "m"
     assert isinstance(room_actor.props, list)                 # the inspector's raw T3D property set
     assert all(len(p) == 2 for p in room_actor.props)
@@ -114,6 +115,40 @@ def test_build_scene_payload_has_polys_and_actors(tmp_path):
     # Bug 1: every poly is joined back to its owning actor (not anonymous) -- the fixture has
     # exactly one brush actor, so every poly's owner is "Room".
     assert {p.owner for p in payload.polys} == {"Room"}
+
+
+def test_build_scene_payload_csg_rank_matches_level_order(tmp_path):
+    """`SceneActor.csg_rank` is the actor's 1-based position in `level.order` -- a human-readable
+    stand-in for the opaque `order_value` LexoRank string (`order_value` itself stays in the
+    payload unchanged, per the spec's "keep it for future audit-diffing" call). Uses a real
+    `_ued22_index()` (not `StubClassIndex`): the second actor here is a non-brush `Engine.Light`,
+    and `build_scene` resolves such an actor's class defaults via `index.resolver()`, which the
+    offline stub doesn't implement (see `_ued22_index()`'s own docstring)."""
+    from uedcli.serve.scene import build_scene_payload
+
+    root = tmp_path / "proj"
+    maps_dir = root / "maps" / "TestLevel"
+    maps_dir.mkdir(parents=True)
+    room = cube_room()
+    light = Actor(name="Light0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)))
+    level = Level(actors={room.name: room, light.name: light})
+    # CSG order (via order_value) is Light0, Room -- REVERSED from the dict/creation order above,
+    # so a bug that used dict/creation order instead of the order_value sort would be caught. The
+    # trunk's actual on-disk order is derived from these order_values (m < n), not from any `order`
+    # set on the Level object above (trunk.write_level ignores it).
+    trunk.write_level(maps_dir, level, {light.name: "m", room.name: "n"})
+    project = SimpleNamespace(root=str(root), maps=None)
+
+    index = _ued22_index()
+    trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+
+    by_name = {a.name: a for a in payload.actors}
+    assert by_name["Light0"].csg_rank == 1
+    assert by_name["Room"].csg_rank == 2
+    # order_value is still present and unchanged, alongside the new csg_rank.
+    assert by_name["Light0"].order_value == "m"
+    assert by_name["Room"].order_value == "n"
 
 
 def test_build_scene_payload_categories_stub_index_fallback():

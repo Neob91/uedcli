@@ -1,4 +1,4 @@
-"""Actor read/query verbs: `find`, `show`, `bbox`. Pure, model-side (no editor).
+"""Actor read/query verbs: `find`, `show`, `bbox`, `rank`. Pure, model-side (no editor).
 
 Each verb resolves the trunk level source (honouring `--tree` / `$UEDCLI_LEVEL`), then reads. The
 source is resolved before the empty-stdin no-op, matching the pre-move dispatch order. This module
@@ -27,6 +27,8 @@ def run(args) -> int:
         return _show(args, src)
     if args.sub == "bbox":
         return _bbox(args, src)
+    if args.sub == "rank":
+        return _rank(args, src)
     raise CommandError(f"unimplemented actor query sub-verb: {args.sub}")
 
 
@@ -286,3 +288,30 @@ def _bbox_of(actors):
     size = tuple(emit.clean(hi[i] - lo[i]) for i in range(3))
     center = tuple(emit.clean((hi[i] + lo[i]) / 2) for i in range(3))
     return lo, hi, size, center
+
+
+def _rank(args, src) -> int:
+    """`actor rank <names…|-> [--json]` — each actor's 1-based position in `level.order` (CSG
+    evaluation order; rank 1 = evaluated/carved first), one line per actor in ARGUMENT order as
+    `Name<TAB>RANK` (matching `label get`/`folder get`'s shape, not `bbox`'s single-aggregate one —
+    rank is one independent scalar per actor, no aggregation). `-` reads a name list from stdin;
+    empty stdin is a clean no-op."""
+    raw = target_names.resolve_target_names(args.names)
+    if not raw:
+        return 0                                      # empty stdin: no-op, exit 0
+    level = src.load()
+    try:
+        resolved = query.resolve_actor_names(level, raw)  # unknown name → clean exit 2 (below)
+    except KeyError as e:
+        print(e.args[0], file=sys.stderr)             # "Actors not found: <names>" — no traceback
+        return 2
+    names = list(dict.fromkeys(resolved))
+    positions = {n: i + 1 for i, n in enumerate(level.order)}
+    if getattr(args, "json", False):
+        import json
+        print(json.dumps({n: positions[n] for n in names}, indent=2))
+    else:
+        for n in names:
+            print(f"{n}\t{positions[n]}")
+    print(f"rank of {len(names)} actor(s) ({len(level.order)} total)", file=sys.stderr)
+    return 0

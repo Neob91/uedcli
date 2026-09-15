@@ -14,6 +14,7 @@ function actor(overrides: Partial<SceneActor> = {}): SceneActor {
     folder: null,
     labels: [],
     order_value: 'm',
+    csg_rank: 1,
     props: [],
     categories: [],
     brush: null,

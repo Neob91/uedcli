@@ -29,6 +29,7 @@ describe('fetchScene', () => {
           folder: null,
           labels: [],
           order_value: 'm',
+          csg_rank: 1,
           props: [['CsgOper', 'CSG_Subtract']],
         },
       ],

@@ -14,6 +14,7 @@ function brushActor(name: string, color: [number, number, number]): SceneActor {
     folder: null,
     labels: [],
     order_value: 'm',
+    csg_rank: 1,
     props: [],
     categories: [],
     brush: { csg_class: 'add', color, polys: [[0, 0, 0, 1, 0, 0, 1, 1, 0]] },

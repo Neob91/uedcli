@@ -37,7 +37,7 @@ def run(args):
     if args.sub == "diagram":
         from . import preview
         return preview.run(args)
-    if args.sub in ("find", "show", "bbox"):
+    if args.sub in ("find", "show", "bbox", "rank"):
         from . import query
         return query.run(args)
     if args.sub == "folder":

@@ -17,6 +17,7 @@ function actor(name: string, folder: string | null): SceneActor {
     folder,
     labels: [],
     order_value: 'm',
+    csg_rank: 1,
     props: [],
     categories: [],
     brush: null,

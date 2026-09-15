@@ -58,6 +58,7 @@ export interface SceneActor {
   folder: string | null
   labels: string[]
   order_value: string
+  csg_rank: number // 1-based position in level.order (CSG evaluation order); order_value's human-readable stand-in
   props: [string, string][] // the raw stored T3D property list, for the inspector's raw-props view
   categories: string[] // parallel to props: categories[i] is the UnrealEd category of props[i]
   brush: BrushHighlight | null // selection-highlight geometry; null for a non-brush actor

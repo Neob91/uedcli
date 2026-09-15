@@ -1,7 +1,8 @@
 // Read-only property inspector (spec, "Selection & inspector"): name/class/transform/folder/
-// labels/order_value, then the full raw T3D property set grouped into UnrealEd-style categories
-// as collapsible sections (SceneActor.categories, parallel to .props). Draws only what it's
-// handed -- no model/diff logic here.
+// labels/csg_rank (the actor's 1-based CSG-order position -- a human-readable stand-in for the
+// opaque order_value LexoRank string, which stays off-screen), then the full raw T3D property set
+// grouped into UnrealEd-style categories as collapsible sections (SceneActor.categories, parallel
+// to .props). Draws only what it's handed -- no model/diff logic here.
 import type { SceneActor } from '../api'
 
 export interface InspectorProps {
@@ -74,7 +75,7 @@ export function Inspector({ selected }: InspectorProps) {
         <dt>Labels</dt>
         <dd>{actor.labels.length > 0 ? actor.labels.join(', ') : '(no label)'}</dd>
         <dt>Order</dt>
-        <dd>{actor.order_value}</dd>
+        <dd>{actor.csg_rank}</dd>
       </dl>
       {Array.from(groupByCategory(actor.props, actor.categories)).map(([category, rows]) => (
         <details key={category}>
