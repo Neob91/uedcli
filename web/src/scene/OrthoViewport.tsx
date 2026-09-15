@@ -21,7 +21,8 @@ import { MARKER_COLOR } from './markers'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
 import { orthoBasis, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
 import { useSceneResourcesContext } from './SceneResourcesContext'
-import { pickActor, resolveHitActor, resolveTapSelection } from './selection'
+import { SelectionMarkers } from './SelectionMarkers'
+import { pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapSelection } from './selection'
 import type { Ray } from './selection'
 import type { ShadingMode } from './shadingMode'
 // `THREE.ColorManagement.enabled` is a process-wide singleton r3f reasserts on every render of
@@ -44,11 +45,24 @@ export function initialOrthoPose(): OrthoPose {
   return { center: [0, 0, 0], worldUnitsPerPixel: INITIAL_WORLD_UNITS_PER_PIXEL }
 }
 
+// Scratch objects for OrthoCameraRig's basis matrix (module-scope: avoid allocating every frame).
+const _xAxis = new THREE.Vector3()
+const _yAxis = new THREE.Vector3()
+const _zAxis = new THREE.Vector3()
+const _basis = new THREE.Matrix4()
+
 /** Applies `pose`/`axis` to the R3F default (orthographic) camera every frame: axis-locked
- * position/up (looking along `orthoBasis(axis).forward` through `pose.center`), and a frustum sized
- * from `worldUnitsPerPixel` × the container's own pixel size so the pane's on-screen scale matches
- * `pose` exactly regardless of the pane's CSS size. Publishes the live camera object to `cameraRef`
- * for the outer pointer handlers' raycast. */
+ * position/orientation (looking along `orthoBasis(axis).forward` through `pose.center`), and a
+ * frustum sized from `worldUnitsPerPixel` × the container's own pixel size so the pane's on-screen
+ * scale matches `pose` exactly regardless of the pane's CSS size. Publishes the live camera object
+ * to `cameraRef` for the outer pointer handlers' raycast.
+ *
+ * Orientation is built directly from `orthoBasis`'s (right, up, forward) via `Matrix4.makeBasis`,
+ * NOT `camera.up` + `lookAt` -- three.js's `lookAt` derives local +X (screen-right) as
+ * `cross(up, eye-target)`, which for every one of this module's three axis bases works out to the
+ * NEGATION of `orthoBasis`'s own `right` (confirmed live: dragging right visibly panned the wrong
+ * way -- bug report item 5). `makeBasis` pins local +X/+Y/+Z to `right`/`up`/`-forward` (a camera
+ * looks down its local -Z) exactly, so the rendered screen-right always matches `orthoBasis.right`. */
 function OrthoCameraRig({
   pose,
   axis,
@@ -62,14 +76,17 @@ function OrthoCameraRig({
   useFrame(() => {
     const cam = camera as THREE.OrthographicCamera
     cameraRef.current = cam
-    const { forward, up } = orthoBasis(axis)
-    cam.up.set(up[0], up[1], up[2])
+    const { forward, right, up } = orthoBasis(axis)
     cam.position.set(
       pose.center[0] - forward[0] * ORTHO_HALF_RANGE,
       pose.center[1] - forward[1] * ORTHO_HALF_RANGE,
       pose.center[2] - forward[2] * ORTHO_HALF_RANGE,
     )
-    cam.lookAt(pose.center[0], pose.center[1], pose.center[2])
+    _xAxis.set(right[0], right[1], right[2])
+    _yAxis.set(up[0], up[1], up[2])
+    _zAxis.set(-forward[0], -forward[1], -forward[2])
+    _basis.makeBasis(_xAxis, _yAxis, _zAxis)
+    cam.quaternion.setFromRotationMatrix(_basis)
     const halfW = (size.width / 2) * pose.worldUnitsPerPixel
     const halfH = (size.height / 2) * pose.worldUnitsPerPixel
     cam.left = -halfW
@@ -128,6 +145,10 @@ export function OrthoViewport({
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
   const markerGroupRef = useRef<THREE.Group | null>(null)
+  // Wireframe-mode click-to-select (bug report item 6): see Viewport3D.tsx's identical comment --
+  // with no solid mesh drawn, a hit must come from the brush outline LINES themselves, never a
+  // bounding-box fallback.
+  const brushGroupRef = useRef<THREE.Group | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   // Shared by the tap path: raycasts the click point against the drawn geometry (main mesh via
@@ -143,11 +164,16 @@ export function OrthoViewport({
       const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1
       const raycaster = new THREE.Raycaster()
       raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
+      // See Viewport3D.tsx's identical comment (bug report item 6): a click in wireframe/ortho views
+      // must only hit near a brush's own outline, never anywhere inside its silhouette.
+      raycaster.params.Line = { threshold: 4 }
+      raycaster.params.Line2 = { threshold: 6 }
 
       let hitActor: SceneActor | null = null
       const candidates: THREE.Object3D[] = [
         ...(meshRef.current ? [meshRef.current] : []),
         ...(markerGroupRef.current?.children ?? []),
+        ...(mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : []),
       ]
       if (candidates.length > 0) {
         const hits = raycaster.intersectObjects(candidates, false)
@@ -155,6 +181,9 @@ export function OrthoViewport({
           const hit = hits[0]
           if (hit.object === meshRef.current) {
             hitActor = resolveHitActor(hit.faceIndex, triangleOwners, actors)
+          } else if (hit.object.userData.segmentOwners) {
+            const segmentOwners = hit.object.userData.segmentOwners as (string | null)[]
+            hitActor = resolveSegmentHitActor(hit.index, segmentOwners, actors)
           } else {
             const name = hit.object.userData.actorName as string | undefined
             hitActor = name ? (actors.find((a) => a.name === name) ?? null) : null
@@ -166,12 +195,15 @@ export function OrthoViewport({
           origin: [raycaster.ray.origin.x, raycaster.ray.origin.y, raycaster.ray.origin.z],
           direction: [raycaster.ray.direction.x, raycaster.ray.direction.y, raycaster.ray.direction.z],
         }
-        hitActor = pickActor(ray, actors)
+        // Never AABB-select a brush in wireframe mode (item 6) -- only its own outline lines, just
+        // raycast above, may hit it there.
+        const aabbCandidates = mode === 'wireframe' ? actors.filter((a) => !a.brush) : actors
+        hitActor = pickActor(ray, aabbCandidates)
       }
       const result = resolveTapSelection(hitActor, additive)
       if (result) onSelectActor(result.name, result.additive)
     },
-    [actors, triangleOwners, onSelectActor],
+    [actors, triangleOwners, onSelectActor, mode],
   )
 
   const dragCallbacks = useMemo<DragGestureCallbacks>(
@@ -258,6 +290,10 @@ export function OrthoViewport({
       onContextMenu={mouseDrag.onContextMenu}
     >
       <Canvas {...CANVAS_COLOR_MANAGEMENT} orthographic>
+        {/* `actor diagram`'s own ortho background convention (`preview.py`'s BG = 64, owner ruling
+            2026-08-30) -- explicit and WebGL-native, not left to `.quad-layout`'s CSS background
+            showing through a transparent canvas (bug report item 1). */}
+        <color attach="background" args={['#404040']} />
         <OrthoCameraRig pose={pose} axis={axis} cameraRef={cameraRef} />
         {showGrid && <GridOverlay pose={pose} axis={axis} />}
         {mode !== 'wireframe' && <mesh ref={meshRef} geometry={bufferGeometry} material={activeMaterials} />}
@@ -297,7 +333,14 @@ export function OrthoViewport({
         {/* Every brush wireframes in its own CSG colour (`actor diagram`'s ISO-mode convention,
             spec §2), selected one(s) bold -- the whole picture in wireframe mode (no solid mesh
             above); just the highlight ring on top of the mesh in any other mode (Part 4, Task 20). */}
-        <BrushOutlines actors={actors} selectedNames={selectedNames} mode={mode === 'wireframe' ? 'csg-all' : 'selected-only'} />
+        <BrushOutlines
+          actors={actors}
+          selectedNames={selectedNames}
+          mode={mode === 'wireframe' ? 'csg-all' : 'selected-only'}
+          groupRef={brushGroupRef}
+        />
+        {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
+        <SelectionMarkers actors={actors} selectedNames={selectedNames} />
         {selectedNonBrushBoxes.map(({ name, box }) => (
           <box3Helper key={name} args={[box, SELECTION_BOX_COLOR]} />
         ))}

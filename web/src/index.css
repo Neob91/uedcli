@@ -146,6 +146,7 @@ body {
    grid; double-clicking a pane maximizes it -- the other three get [hidden] (paneLayout.ts's own
    state), and the remaining visible one spans the whole grid area. */
 .quad-layout {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
   grid-template-rows: 1fr 1fr;
@@ -154,6 +155,35 @@ body {
   min-width: 0;
   height: 100%;
   background: #000;
+}
+
+/* Drag-to-resize splitters between the quad's rows/columns (Part 8-ish, bug report item 3): a thin
+   invisible-until-hover hit target straddling the CSS grid's own 2px gap line. */
+.quad-splitter {
+  position: absolute;
+  z-index: 2;
+  background: transparent;
+}
+
+.quad-splitter:hover,
+.quad-splitter:active {
+  background: var(--sem-selection);
+}
+
+.quad-splitter-col {
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  margin-left: -3px;
+  cursor: col-resize;
+}
+
+.quad-splitter-row {
+  left: 0;
+  right: 0;
+  height: 6px;
+  margin-top: -3px;
+  cursor: row-resize;
 }
 
 /* Org panel sidebar (Part 6, Task 23): folder tree + label facets + find. */

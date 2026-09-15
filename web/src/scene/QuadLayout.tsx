@@ -6,6 +6,7 @@
 // pane identically, so Ctrl+tap/Ctrl+click in ANY pane composes onto the SAME lifted state (spec
 // §9's cross-pane consistency requirement) -- one selection model, not four independent ones.
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
 import { OrgPanel } from '../panels/OrgPanel'
@@ -90,6 +91,35 @@ export function QuadLayout({
   // Grid visibility toggle (Part 8, Task 28) -- one switch for all three ortho panes.
   const [showGrid, setShowGrid] = useState(true)
 
+  // Resizable panes (bug report item 3): the column/row split as a fraction (0..1) of the quad's
+  // own box, in plain component state per the ask -- no persistence needed. `MIN_FRAC`/`MAX_FRAC`
+  // keep every pane at least a usable sliver, never fully collapsed by a runaway drag.
+  const [colFrac, setColFrac] = useState(0.5)
+  const [rowFrac, setRowFrac] = useState(0.5)
+  const quadRef = useRef<HTMLDivElement | null>(null)
+  const resizeDrag = useRef<{ axis: 'col' | 'row'; pointerId: number } | null>(null)
+
+  const onSplitterPointerDown = useCallback((axis: 'col' | 'row') => (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    resizeDrag.current = { axis, pointerId: e.pointerId }
+  }, [])
+  const onSplitterPointerMove = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    const drag = resizeDrag.current
+    const rect = quadRef.current?.getBoundingClientRect()
+    if (!drag || drag.pointerId !== e.pointerId || !rect) return
+    const MIN_FRAC = 0.15
+    const MAX_FRAC = 0.85
+    if (drag.axis === 'col') {
+      setColFrac(Math.min(MAX_FRAC, Math.max(MIN_FRAC, (e.clientX - rect.left) / rect.width)))
+    } else {
+      setRowFrac(Math.min(MAX_FRAC, Math.max(MIN_FRAC, (e.clientY - rect.top) / rect.height)))
+    }
+  }, [])
+  const onSplitterPointerUp = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (resizeDrag.current?.pointerId === e.pointerId) resizeDrag.current = null
+    e.currentTarget.releasePointerCapture(e.pointerId)
+  }, [])
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target) || !MODE_KEYS.has(e.key)) return
@@ -123,7 +153,12 @@ export function QuadLayout({
         >
           Grid: {showGrid ? 'on' : 'off'}
         </button>
-        <div className="quad-layout" data-maximized={maximized ?? undefined}>
+        <div
+          className="quad-layout"
+          data-maximized={maximized ?? undefined}
+          ref={quadRef}
+          style={maximized === null ? { gridTemplateColumns: `${colFrac}fr ${1 - colFrac}fr`, gridTemplateRows: `${rowFrac}fr ${1 - rowFrac}fr` } : undefined}
+        >
         {PANES.map((pane) => (
           <div
             key={pane}
@@ -160,6 +195,26 @@ export function QuadLayout({
             )}
           </div>
         ))}
+        {/* Drag-to-resize splitters (bug report item 3): plain component state, no persistence --
+            hidden while a pane is maximized (nothing left to divide). */}
+        {maximized === null && (
+          <>
+            <div
+              className="quad-splitter quad-splitter-col"
+              style={{ left: `${colFrac * 100}%` }}
+              onPointerDown={onSplitterPointerDown('col')}
+              onPointerMove={onSplitterPointerMove}
+              onPointerUp={onSplitterPointerUp}
+            />
+            <div
+              className="quad-splitter quad-splitter-row"
+              style={{ top: `${rowFrac * 100}%` }}
+              onPointerDown={onSplitterPointerDown('row')}
+              onPointerMove={onSplitterPointerMove}
+              onPointerUp={onSplitterPointerUp}
+            />
+          </>
+        )}
       </div>
       </SceneResourcesProvider>
       <OrgPanel actors={scene.actors} selectedNames={selectedNames} onSelectActor={handleOrgSelect} />

@@ -20,9 +20,10 @@ import { useDragGesture } from './dragGesture'
 import type { FrameRequest } from './frame'
 import { bboxCenter, bboxMaxExtent } from './frame'
 import { MARKER_COLOR } from './markers'
+import { SelectionMarkers } from './SelectionMarkers'
 import type { ShadingMode } from './shadingMode'
 import { useSceneResourcesContext } from './SceneResourcesContext'
-import { isTap, pickActor, resolveHitActor, resolveTapSelection } from './selection'
+import { isTap, pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapSelection } from './selection'
 import type { Ray } from './selection'
 import { computeTwoFingerDelta } from './touchGesture'
 import type { TouchPoint } from './touchGesture'
@@ -206,6 +207,9 @@ export function Viewport3D({
   const cameraRef = useRef<THREE.Camera | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
   const markerGroupRef = useRef<THREE.Group | null>(null)
+  // Wireframe-mode click-to-select (bug report item 6): with no solid mesh drawn, a hit must come
+  // from the brush outline LINES themselves, never a bounding-box fallback -- see performTapSelect.
+  const brushGroupRef = useRef<THREE.Group | null>(null)
   // Geometry/textures/markers are built ONCE and shared across every pane via
   // SceneResourcesContext (Part 0, Tasks 1-2) -- Viewport3D no longer builds its own (Task 3;
   // camera/pointer handling/click-to-select are UNCHANGED in this task).
@@ -255,19 +259,29 @@ export function Viewport3D({
       const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1
       const raycaster = new THREE.Raycaster()
       raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
+      // Wireframe mode draws no solid mesh -- a click must land near a brush's own outline LINE
+      // (bug report item 6: UED22 never lets a click anywhere inside a brush's silhouette select
+      // it in wireframe/ortho views). `Line`/`LineLoop` (ThinRing) measure this threshold in WORLD
+      // units; `Line2` (BoldRing, the selected ring) measures it in screen PIXELS -- both need
+      // setting, or an unset one falls back to a threshold of 0 (line-exact clicks only).
+      raycaster.params.Line = { threshold: 4 }
+      raycaster.params.Line2 = { threshold: 6 }
 
-      // PRIMARY: raycast the real drawn geometry (main scene mesh + point-actor marker sprites)
-      // together, so the nearest hit wins regardless of which one it lands on. The main mesh
-      // resolves via its per-triangle `triangleOwners` (real per-poly ownership, `ScenePoly.owner`);
-      // a marker sprite resolves directly via its own `userData.actorName` (it IS one pickable
-      // object, no per-triangle indirection needed). This is what lets a small brush fully enclosed
-      // in a bigger brush's AABB, or a light/trigger/patrol point with no geometry of its own, be
-      // selected by its OWN rendered shape. FALLBACK: ray-vs-AABB (`pickActor`) for a tap that lands
-      // on neither -- e.g. an out-of-range CSG join.
+      // PRIMARY: raycast the real drawn geometry (main scene mesh + point-actor marker sprites +,
+      // in wireframe mode, the brush outline lines) together, so the nearest hit wins regardless of
+      // which one it lands on. The main mesh resolves via its per-triangle `triangleOwners` (real
+      // per-poly ownership, `ScenePoly.owner`); a marker sprite or outline ring resolves directly via
+      // its own `userData.actorName` (each IS one pickable object, no per-triangle indirection
+      // needed). This is what lets a small brush fully enclosed in a bigger brush's AABB, or a
+      // light/trigger/patrol point with no geometry of its own, be selected by its OWN rendered
+      // shape. FALLBACK: ray-vs-AABB (`pickActor`) for a tap that lands on neither -- e.g. an
+      // out-of-range CSG join -- but NEVER for a brush actor in wireframe mode, where only its own
+      // outline lines (just raycast above) may select it, per item 6.
       let hitActor: SceneActor | null = null
       const candidates: THREE.Object3D[] = [
         ...(meshRef.current ? [meshRef.current] : []),
         ...(markerGroupRef.current?.children ?? []),
+        ...(mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : []),
       ]
       if (candidates.length > 0) {
         const hits = raycaster.intersectObjects(candidates, false)
@@ -275,6 +289,9 @@ export function Viewport3D({
           const hit = hits[0]
           if (hit.object === meshRef.current) {
             hitActor = resolveHitActor(hit.faceIndex, triangleOwners, scene.actors)
+          } else if (hit.object.userData.segmentOwners) {
+            const segmentOwners = hit.object.userData.segmentOwners as (string | null)[]
+            hitActor = resolveSegmentHitActor(hit.index, segmentOwners, scene.actors)
           } else {
             const name = hit.object.userData.actorName as string | undefined
             hitActor = name ? (scene.actors.find((a) => a.name === name) ?? null) : null
@@ -286,12 +303,13 @@ export function Viewport3D({
           origin: [raycaster.ray.origin.x, raycaster.ray.origin.y, raycaster.ray.origin.z],
           direction: [raycaster.ray.direction.x, raycaster.ray.direction.y, raycaster.ray.direction.z],
         }
-        hitActor = pickActor(ray, scene.actors)
+        const aabbCandidates = mode === 'wireframe' ? scene.actors.filter((a) => !a.brush) : scene.actors
+        hitActor = pickActor(ray, aabbCandidates)
       }
       const result = resolveTapSelection(hitActor, additive)
       if (result) onSelectActor(result.name, result.additive)
     },
-    [scene.actors, triangleOwners, onSelectActor],
+    [scene.actors, triangleOwners, onSelectActor, mode],
   )
 
   // Mouse-only pointer-lock/capture/tap-vs-drag plumbing, shared with ortho panes (Part 0, Task 4).
@@ -408,6 +426,10 @@ export function Viewport3D({
           clipped distant geometry to the background ("further objects render black"). near=1 keeps
           z-precision over that range. */}
       <Canvas {...CANVAS_COLOR_MANAGEMENT} camera={{ fov: 75, near: 1, far: 131072 }}>
+        {/* UED22's real perspective viewport background (bug report item 2) -- explicit and
+            WebGL-native rather than relying on `.quad-layout`'s CSS background showing through a
+            transparent canvas (fragile: e.g. broken by an unrelated CSS parse failure). */}
+        <color attach="background" args={['#000000']} />
         <CameraRig pose={pose} cameraRef={cameraRef} />
         <FlyKeys setPose={setPose} />
         {mode !== 'wireframe' && <mesh ref={meshRef} geometry={bufferGeometry} material={activeMaterials} />}
@@ -451,7 +473,14 @@ export function Viewport3D({
             mesh already renders every brush's contribution, so only the selected one's bold ring is
             still needed on top of it (Part 4, Task 20 -- supersedes the old `geometry_pinned`-based
             branching, which is now exactly what `mode` itself decides). */}
-        <BrushOutlines actors={scene.actors} selectedNames={selectedNames} mode={mode === 'wireframe' ? 'csg-all' : 'selected-only'} />
+        <BrushOutlines
+          actors={scene.actors}
+          selectedNames={selectedNames}
+          mode={mode === 'wireframe' ? 'csg-all' : 'selected-only'}
+          groupRef={brushGroupRef}
+        />
+        {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
+        <SelectionMarkers actors={scene.actors} selectedNames={selectedNames} />
         {/* Every selected NON-brush actor (no CSG ring to draw) falls back to its own plain AABB
             box -- one per selected actor (Task 14), not just a single one. */}
         {selectedNonBrushBoxes.map(({ name, box }) => (

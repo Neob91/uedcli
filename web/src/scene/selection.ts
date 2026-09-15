@@ -28,6 +28,22 @@ export function resolveHitActor(
   return actors.find((a) => a.name === name) ?? null
 }
 
+/** Resolves a raycast hit on `BrushOutlines`' merged thin-wireframe `LineSegments` (bug report item
+ * 4/6) to its owning actor: `index` is `THREE.Intersection.index` -- for a `LineSegments` hit,
+ * three.js's own `Line.raycast` sets it to the segment's FIRST vertex index, so `index / 2` is the
+ * segment number, indexing `segmentOwners` directly (`brushRings.ts`'s `mergeThinRings`, one owner
+ * per 2-vertex segment, same per-index-array shape as `resolveHitActor`'s `triangleOwners`). */
+export function resolveSegmentHitActor(
+  index: number | null | undefined,
+  segmentOwners: (string | null)[],
+  actors: SceneActor[],
+): SceneActor | null {
+  if (index == null) return null
+  const name = segmentOwners[Math.floor(index / 2)]
+  if (name == null) return null
+  return actors.find((a) => a.name === name) ?? null
+}
+
 /** The tap-resolution decision Viewport3D/OrthoViewport's `performTapSelect` both make once they've
  * found (or not found) a hit actor (quad-layout Part 3, Task 13): a real hit calls `onSelectActor`
  * with the actor's name and the `additive` flag threaded through from the drag gesture's Ctrl/Cmd

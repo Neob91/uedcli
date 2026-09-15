@@ -19,6 +19,7 @@
 // half is very likely a silent no-op. Flagged in the build report for a real-browser confirmation
 // before merge -- Task 10's own Step A is not considered done, only its Step B fallback.
 import { useEffect, useMemo } from 'react'
+import type { MutableRefObject } from 'react'
 import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 import { Line2 } from 'three/examples/jsm/lines/Line2.js'
@@ -26,10 +27,12 @@ import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
 import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 
 import type { SceneActor } from '../api'
-import type { BrushRingMode } from './brushRings'
-import { buildBrushRings } from './brushRings'
+import type { BrushRing, BrushRingMode } from './brushRings'
+import { buildBrushRings, mergeThinRings } from './brushRings'
 
-const BOLD_LINEWIDTH_PX = 3
+// `preview.py`'s `_line(..., weight=2, ...)` is the actual highlighted-edge width `actor diagram`
+// renders (bug report item 8) -- this was 3, visibly bolder than that reference.
+const BOLD_LINEWIDTH_PX = 2
 
 /** `Line2`/`LineGeometry` draw an open polyline, not an automatically-closed loop (unlike
  * `THREE.LineLoop`) -- append the first vertex again at the end to close the ring. */
@@ -38,20 +41,25 @@ function closedLoopPositions(verts: number[]): number[] {
   return [...verts, verts[0], verts[1], verts[2]]
 }
 
-/** The ordinary-weight ring path: cheap, depth-tested, one draw call per poly -- matches
- * `AllBrushWireframes`' pre-existing look exactly (default depthTest, so brushes properly occlude
- * each other in 3D). */
-function ThinRing({ verts, color }: { verts: number[]; color: THREE.Color }) {
+/** Every ordinary-weight (non-selected) ring, merged into ONE `LineSegments` draw call (bug report
+ * item 4 -- see `mergeThinRings`' docstring for the measured cost this replaces). Per-vertex color
+ * reproduces each ring's own CSG hue; `userData.segmentOwners` lets the outer viewport's raycast
+ * resolve a hit segment back to its owning actor (Viewport3D/OrthoViewport's `performTapSelect`),
+ * the same role `userData.actorName` plays on a single-actor object like `BoldRing`. */
+function MergedThinWireframe({ rings }: { rings: BrushRing[] }) {
+  const merged = useMemo(() => mergeThinRings(rings), [rings])
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
+    geo.setAttribute('position', new THREE.BufferAttribute(merged.positions, 3))
+    geo.setAttribute('color', new THREE.BufferAttribute(merged.colors, 3))
     return geo
-  }, [verts])
+  }, [merged])
   useEffect(() => () => geometry.dispose(), [geometry])
+  if (merged.segmentOwners.length === 0) return null
   return (
-    <lineLoop geometry={geometry}>
-      <lineBasicMaterial color={color} />
-    </lineLoop>
+    <lineSegments geometry={geometry} userData={{ segmentOwners: merged.segmentOwners }}>
+      <lineBasicMaterial vertexColors />
+    </lineSegments>
   )
 }
 
@@ -59,7 +67,7 @@ function ThinRing({ verts, color }: { verts: number[]; color: THREE.Color }) {
  * uniform, which must track the canvas's own pixel size on resize -- the real added-complexity cost
  * this task's Step B warns about. `depthTest={false}` matches the pre-existing selection-highlight
  * look (always-on-top, matching `preview.py --highlight`'s "ignores facing/depth"). */
-function BoldRing({ verts, color }: { verts: number[]; color: THREE.Color }) {
+function BoldRing({ verts, color, actorName }: { verts: number[]; color: THREE.Color; actorName: string }) {
   const { size } = useThree()
   const geometry = useMemo(() => {
     const geo = new LineGeometry()
@@ -80,7 +88,11 @@ function BoldRing({ verts, color }: { verts: number[]; color: THREE.Color }) {
     },
     [geometry, material],
   )
-  const line = useMemo(() => new Line2(geometry, material), [geometry, material])
+  const line = useMemo(() => {
+    const l = new Line2(geometry, material)
+    l.userData = { actorName }
+    return l
+  }, [geometry, material, actorName])
   return <primitive object={line} />
 }
 
@@ -88,22 +100,29 @@ export interface BrushOutlinesProps {
   actors: SceneActor[]
   selectedNames: ReadonlySet<string>
   mode: BrushRingMode
+  // Exposes the rendered ring objects for the outer viewport's click-to-select raycast (bug report
+  // item 6: in wireframe/ortho views, a click must only hit a brush's own outline LINES, never
+  // anywhere inside its silhouette) -- mirrors Viewport3D/OrthoViewport's existing `markerGroupRef`
+  // pattern for marker sprites.
+  groupRef?: MutableRefObject<THREE.Group | null>
 }
 
 /** Renders every ring `buildBrushRings` selects for `mode` -- ordinary weight for every non-selected
  * brush (`'csg-all'`) or nothing (`'selected-only'` when unselected), bold for every SELECTED one
- * (Part 3, Task 14: one ring per selected actor, not just one overall). */
-export function BrushOutlines({ actors, selectedNames, mode }: BrushOutlinesProps) {
+ * (Part 3, Task 14: one ring per selected actor, not just one overall). Non-bold rings share ONE
+ * merged draw call (`MergedThinWireframe`, item 4); bold (selected) rings stay individual `BoldRing`
+ * objects -- there are only ever a handful of those, so merging them buys nothing and would lose
+ * `Line2`'s real pixel-width support. */
+export function BrushOutlines({ actors, selectedNames, mode, groupRef }: BrushOutlinesProps) {
   const rings = useMemo(() => buildBrushRings(actors, selectedNames, mode), [actors, selectedNames, mode])
+  const boldRings = useMemo(() => rings.filter((r) => r.bold), [rings])
+  const thinRings = useMemo(() => rings.filter((r) => !r.bold), [rings])
   return (
-    <group>
-      {rings.map((ring, i) => {
+    <group ref={groupRef}>
+      <MergedThinWireframe rings={thinRings} />
+      {boldRings.map((ring, i) => {
         const color = new THREE.Color(ring.color[0] / 255, ring.color[1] / 255, ring.color[2] / 255)
-        return ring.bold ? (
-          <BoldRing key={`${ring.actorName}-${i}`} verts={ring.verts} color={color} />
-        ) : (
-          <ThinRing key={`${ring.actorName}-${i}`} verts={ring.verts} color={color} />
-        )
+        return <BoldRing key={`${ring.actorName}-${i}`} verts={ring.verts} color={color} actorName={ring.actorName} />
       })}
     </group>
   )
