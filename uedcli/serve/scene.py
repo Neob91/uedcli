@@ -270,9 +270,26 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     are still needed HERE, independent of either cached slot: `_is_hidden_ed(actor, defaults)` and
     `_brush_highlight(actor, index)` both
     resolve per-actor state (a `bHiddenEd` class default, a brush's CSG classification) on every
-    call — cheap enough (no CSG, no texture decode) that caching them isn't worth it, but real
-    parameters this function needs regardless of the plan's illustrative signature (which dropped
-    `defaults` entirely — `_is_hidden_ed` cannot run without it; flagged in the build report).
+    call. Real parameters this function needs regardless of the plan's illustrative signature (which
+    dropped `defaults` entirely — `_is_hidden_ed` cannot run without it; flagged in the build report).
+
+    **This function's own per-actor loop is NOT the bottleneck** (an earlier version of this
+    docstring claimed the per-actor cost was "cheap enough... caching isn't worth it" — that was
+    only checked at toy scale; measured wrong at real-level scale, see below, though for a different
+    reason than "per-actor cost"). `_is_hidden_ed`'s `defaults.for_class(actor.cls)` already
+    amortizes to one real resolution per DISTINCT class within a single call to this function (the
+    `ClassDefaults` memo persists across the loop) — a `test_build_scene_payload_amortizes_class_
+    resolution_over_repeated_classes` regression pins exactly that. The actual live bug (a real
+    WanChai-scale `uedcli serve` request staying ~28s even on a WARM trunk/geometry cache) was one
+    level UP: `app.py`'s `scene()` route built a brand-new `defaults`/`index` via `_scene_inputs()`
+    on EVERY HTTP request, so the memo THIS function relies on was thrown away and rebuilt from
+    scratch (a package load + Super-chain walk + defaults decode per distinct class, ~0.1-0.3s cold
+    each) on every single request, warm cache or not — this function's own amortization only ever
+    helped WITHIN one already-doomed call. Fixed by caching this function's OUTPUT in `app.py`
+    (`_payload_ref`/`_get_payload`, generation-guarded like `_get_trunk`/`_get_geometry`), so a warm
+    request never calls this function at all. Profiled fix (`_scratch/profile_scene.py`, a synthetic
+    2288-actor/19-distinct-class level): ~1.8s on every repeat call before the fix, ~1.8s once then
+    ~0.06s every call after.
 
     A `bHiddenEd` actor is dropped from `ScenePayload.actors` entirely (`_is_hidden_ed` above) —
     owner ruling 2026-09-14: the GUI hides editor-hidden actors and ignores `bHidden` (the opposite

@@ -22,7 +22,7 @@ from ..preview_native import resolve_actor_sprites
 from . import build_pin
 from .errors import error_to_status
 from .lightmap import build_lightmap_atlas
-from .scene import _BuiltGeometry, _LoadedTrunk, build_scene_payload, build_wireframe_payload
+from .scene import _BuiltGeometry, _LoadedTrunk, ScenePayload, build_scene_payload, build_wireframe_payload
 from .textures import build_atlas
 from .watch import TrunkWatcher
 
@@ -35,12 +35,16 @@ def _scene_inputs(project):
     the app, so a `--project`'s on-disk games config can change without a `serve` restart.
 
     Caveat (shared-cache spec, accepted trade-off): once `_geometry_ref` is populated (by a
-    Rebuild), a fresh `defaults`/`search_files` computed here has no effect on what a route
-    actually returns — `_read_geometry()` serves straight from `_geometry_ref` without ever
-    consulting this call's result. A games-config edit therefore needs a Rebuild (or a `serve`
-    restart) to take effect, not just the next request. Accepted because games-config edits are
-    rare (one-time project setup) next to trunk edits (this tool's whole reason to be cheap and
-    frequent)."""
+    Rebuild) or `_payload_ref` is warm, a fresh `defaults`/`search_files`/`index` computed here has
+    no effect on what a route actually returns — `_read_geometry()`/`_get_payload()` serve straight
+    from their cached refs without ever consulting this call's result. A games-config edit
+    therefore needs a Rebuild (or a `serve` restart) to take effect, not just the next request.
+    Accepted because games-config edits are rare (one-time project setup) next to trunk edits (this
+    tool's whole reason to be cheap and frequent). This caveat used to be FALSE for `/scene`
+    specifically — before `_get_payload` existed, `scene()` fed this call's fresh `defaults`/`index`
+    straight into `build_scene_payload`/`build_wireframe_payload` on every request, so a warm
+    geometry cache didn't save that route from redoing every actor's class resolution from scratch
+    each time (see `_get_payload`'s comment)."""
     user_config = config.load_user_config()
     search_files = config.composed_search_files(project, user_config)
     index = resources.mover_index(None, "uedcli serve", project=project)
@@ -97,17 +101,43 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         connections.difference_update(dead)
 
     # Shared in-process scene cache (`dev/docs/board/to-build/uedcli-serve-share-one-in-process-
-    # scene-cache/`): two independently-atomic slots -- `_trunk_ref` (Load-owned) and
-    # `_geometry_ref` (Rebuild-owned, gui-explicit-rebuild spec §0). `_generation` guards against a
-    # slow build in flight when an invalidation lands publishing a stale result over a state that's
-    # since moved on (a real race a plain double-checked-locking sketch has no defense against --
-    # see `_build_and_publish_geometry` below); bumped by `_on_trunk_settled` (the watcher settling),
-    # which no longer clears either ref (Task 3) -- a mere trunk change on disk must not silently
-    # discard an already-pinned Rebuild.
+    # scene-cache/`): three independently-atomic slots -- `_trunk_ref` (Load-owned), `_geometry_ref`
+    # (Rebuild-owned, gui-explicit-rebuild spec §0), and `_payload_ref` (added after a live perf bug,
+    # see below). `_generation` guards against a slow build in flight when an invalidation lands
+    # publishing a stale result over a state that's since moved on (a real race a plain
+    # double-checked-locking sketch has no defense against -- see `_build_and_publish_geometry`
+    # below); bumped by `_on_trunk_settled` (the watcher settling), which no longer clears any of the
+    # three refs (Task 3) -- a mere trunk change on disk must not silently discard an already-pinned
+    # Rebuild or payload; only an explicit Load/Rebuild reassigns a ref outright.
+    #
+    # `_payload_ref`/`_get_payload` cache `build_scene_payload`/`build_wireframe_payload`'s OUTPUT,
+    # keyed on the IDENTITY of the `(trunk_state, geometry)` pair that produced it -- NOT on
+    # `_generation`, since neither `_trunk_ref` nor `_geometry_ref` is cleared by a generation bump
+    # any more (unlike the sibling scene-cache spec's original model, where a `_generation` mismatch
+    # meant "the ref got cleared, rebuild"). A payload is only ever stale once `/load` or `/rebuild`
+    # reassigns one of those refs to a NEW object, which identity comparison catches directly.
+    # Measured on a real WanChai-scale request (2288 actors): `/scene` stayed ~28s even on a WARM
+    # repeat (`/atlas`, which never calls `build_scene_payload`, took ~2.4s on the identical warm
+    # cache). Root cause wasn't `build_scene_payload`'s own per-actor loop -- it already amortizes
+    # `_is_hidden_ed`'s class resolution to one `ClassDefaults.for_class` call per DISTINCT class
+    # within a single call. It was the CALLER: `scene()` built a brand-new `ClassDefaults`/
+    # `ClassIndex` via `_scene_inputs()` on EVERY request, so that per-class memo was thrown away and
+    # rebuilt from scratch (a package load + Super-chain walk + defaults decode per distinct class,
+    # ~0.1-0.3s cold each) on every single `/scene` GET, warm trunk/geometry cache or not. Caching
+    # the payload itself means a warm request never calls `build_scene_payload`/
+    # `build_wireframe_payload` (or touches `defaults`/`index`) at all -- profiled fix: a synthetic
+    # 2288-actor/19-class level went from ~1.8s on every repeat call to ~1.8s once, ~0.06s every call
+    # after (`_scratch/profile_scene.py`).
     _generation = [0]
     _trunk_lock = threading.Lock()
+    _payload_lock = threading.Lock()
     _trunk_ref: list[_LoadedTrunk | None] = [None]
     _geometry_ref: list[_BuiltGeometry | None] = [None]
+    # `_payload_ref` caches `build_scene_payload`/`build_wireframe_payload`'s output as
+    # `(trunk_state, geometry, payload)` -- `_get_payload` below compares the first two by identity
+    # against the CURRENT `_trunk_ref[0]`/`_read_geometry()` to decide if the cached `payload` is
+    # still valid (see the cache-slot comment above).
+    _payload_ref: list[tuple[_LoadedTrunk, _BuiltGeometry | None, ScenePayload] | None] = [None]
     # gui-explicit-rebuild spec §2: flipped by `_on_trunk_settled` when a trunk change lands after
     # the level is already open, cleared by an explicit Load (Task 5) -- the client's "changes
     # available" banner signal, never an auto-refetch trigger.
@@ -213,11 +243,57 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                 _build_status[0] = "built"
                 return built
 
+    def _get_payload(search_files, index, defaults) -> tuple[ScenePayload, bool]:
+        # Caches `build_scene_payload`/`build_wireframe_payload`'s result so a warm request never
+        # re-resolves `_is_hidden_ed`'s class defaults or `_brush_highlight`'s CSG classification,
+        # both of which `defaults`/`index` fresh from THIS request's own `_scene_inputs()` call
+        # would otherwise force from scratch (see the cache-slot comment above). Keyed on the
+        # IDENTITY of `(trunk_state, geometry)` -- not `_generation` -- since neither `_trunk_ref`
+        # nor `_geometry_ref` is cleared by a generation bump in this (gui-explicit-rebuild) model;
+        # they only change via an explicit `/load` or `/rebuild` reassigning the ref outright, which
+        # identity comparison catches directly. No retry-on-invalidation loop is needed the way
+        # `_get_trunk`/`_build_and_publish_geometry` need one: this function does no slow work of
+        # its own that a concurrent Load/Rebuild could invalidate mid-flight in a way that matters —
+        # it captures `trunk_state`/`geometry` up front and builds a payload for exactly that pair,
+        # which stays correct (just possibly superseded) even if the global refs move on before it
+        # finishes; the NEXT caller's identity check catches that and rebuilds for the new pair.
+        # `_payload_lock` is its own lock, not `solve_lock`/`_trunk_lock` — this function calls
+        # `_get_trunk`/`_read_geometry`, and reusing either lock here would deadlock the way a
+        # recursive `_get_trunk`/`_build_and_publish_geometry` call would (see their own comments).
+        #
+        # Returns `(payload, geometry_pinned)` — the `geometry_pinned` flag MUST come from the same
+        # `geometry` read this function used to build/select the cached payload, never a separate
+        # `_read_geometry()` call in the caller: a second, unsynchronized read taken before or after
+        # this call can observe a DIFFERENT geometry state if a `/rebuild` completes while a caller
+        # is blocked on `_payload_lock` behind a slow (~28-37s) build — a real race a review caught,
+        # not a hypothetical one, since that lock-contention window is exactly this function's own
+        # slow path.
+        trunk_state = _get_trunk(search_files, defaults)
+        geometry = _read_geometry()
+        cached = _payload_ref[0]
+        if cached is not None and cached[0] is trunk_state and cached[1] is geometry:
+            return cached[2], geometry is not None
+        with _payload_lock:
+            trunk_state = _get_trunk(search_files, defaults)
+            geometry = _read_geometry()
+            cached = _payload_ref[0]
+            if cached is not None and cached[0] is trunk_state and cached[1] is geometry:
+                return cached[2], geometry is not None
+            if geometry is None:
+                payload = build_wireframe_payload(trunk_state, index, defaults)
+            else:
+                payload = build_scene_payload(trunk_state, geometry, index, defaults)
+            _payload_ref[0] = (trunk_state, geometry, payload)
+            return payload, geometry is not None
+
     async def _on_trunk_settled() -> None:
         # gui-explicit-rebuild spec §0/§2: supersedes the sibling scene-cache spec's own TRIGGER,
         # not its slot shape -- Load owns `_trunk_ref`, Rebuild owns `_geometry_ref`, and a mere
         # trunk change settling on disk touches NEITHER any more (contrast the sibling spec's original
-        # design, which cleared both here so the next request would auto-rebuild). Still bumps
+        # design, which cleared both here so the next request would auto-rebuild). `_payload_ref`
+        # is untouched too, for the same reason -- it goes stale automatically (caught by `_get_payload`'s
+        # own identity check) once an explicit `/load` or `/rebuild` actually reassigns `_trunk_ref`/
+        # `_geometry_ref`, never merely because the trunk changed on disk. Still bumps
         # `_generation[0]` -- repurposed from "guard an automatic rebuild" to "guard a Rebuild's
         # publish against a stale mid-flight solve" (`_build_and_publish_geometry`'s own generation
         # check) -- and flips `_changes_available[0]` for the client to show as a banner, never an
@@ -245,6 +321,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
     app.state.get_trunk = _get_trunk
     app.state.read_geometry = _read_geometry
     app.state.build_and_publish_geometry = _build_and_publish_geometry
+    app.state.get_payload = _get_payload
     app.state.on_trunk_settled = _on_trunk_settled
     app.state.changes_available = _changes_available
     app.state.generation = _generation
@@ -328,19 +405,20 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
     def scene(level_name: str) -> dict:
         _require_level(level_name)
         search_files, index, defaults = _scene_inputs(project)
-        trunk_state = _get_trunk(search_files, defaults)
-        geometry = _read_geometry()
-        if geometry is None:
-            # Cold-open / no Rebuild yet: genuinely no solved geometry, not an error. Every actor's
-            # own AUTHORED brush shape still rides on `SceneActor.brush` -- what lets wireframe mode
-            # render with zero dependency on `_BuiltGeometry` (spec §4).
-            payload = build_wireframe_payload(trunk_state, index, defaults)
-        else:
-            payload = build_scene_payload(trunk_state, geometry, index, defaults)
+        # `_get_payload` internally picks `build_wireframe_payload` (cold-open / no Rebuild yet --
+        # genuinely no solved geometry, not an error; every actor's own AUTHORED brush shape still
+        # rides on `SceneActor.brush`, spec §4) vs `build_scene_payload`, the same way this route's
+        # own inline branch used to, before payload caching existed. `geometry_pinned` comes from
+        # `_get_payload`'s OWN return, not a separate `_read_geometry()` call here — a second,
+        # unsynchronized read could observe a different geometry state than the one that actually
+        # produced `payload` if a `/rebuild` completes while this call was blocked on
+        # `_get_payload`'s lock (review finding: that contention window is exactly this route's
+        # slow path, not a negligible one).
+        payload, geometry_pinned = _get_payload(search_files, index, defaults)
         return {
             "polys": [asdict(p) for p in payload.polys],
             "actors": [asdict(a) for a in payload.actors],
-            "geometry_pinned": geometry is not None,
+            "geometry_pinned": geometry_pinned,
         }
 
     @app.get("/api/level/{level_name}/atlas")

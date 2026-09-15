@@ -1,13 +1,15 @@
 """`uedcli serve`'s FastAPI app skeleton: the health route, the structured-error exception handler
-(no Python exception reaches the user — CLAUDE.md), and the shared in-process trunk/geometry cache
-(`dev/docs/board/to-build/uedcli-serve-share-one-in-process-scene-cache/`) that makes `/scene`/
+(no Python exception reaches the user — CLAUDE.md), and the shared in-process trunk/geometry/payload
+cache (`dev/docs/board/to-build/uedcli-serve-share-one-in-process-scene-cache/`) that makes `/scene`/
 `/atlas` share one trunk-read + `resolve_actor_sprites` call per settled trunk state, with a
 generation guard against a slow build publishing a stale result over a concurrent invalidation.
 
 gui-explicit-rebuild-pinned-build-state-mode (Task 2) removed that sibling spec's auto-building
 `_get_geometry()` entirely: `build_scene` is now called ONLY from `_build_and_publish_geometry`,
 reached ONLY via `POST /rebuild` — `_read_geometry()` is a pure read `/scene`/`/atlas`/`/lightmap`
-use instead, never solving as a side effect of being fetched."""
+use instead, never solving as a side effect of being fetched. The payload slot (`_get_payload`,
+covering `build_scene_payload`/`build_wireframe_payload`'s own per-actor class resolution) was
+added after a live WanChai-scale perf bug — see `scene.py::build_scene_payload`'s docstring."""
 from __future__ import annotations
 
 import asyncio
@@ -517,6 +519,108 @@ def test_scene_and_atlas_share_one_trunk_read_and_sprite_resolve(tmp_path, monke
     assert len(trunk_calls) == 1
     assert len(sprite_calls) == 1
     assert app.state.changes_available[0] is True                # ...but the banner signal fired
+
+
+def test_scene_route_reuses_payload_across_requests_despite_fresh_scene_inputs(tmp_path, monkeypatch):
+    """Regression for the live WanChai perf bug (see `scene.py::build_scene_payload`'s docstring): in
+    production, `_scene_inputs()` builds a BRAND NEW `ClassDefaults`/`ClassIndex` on every call --
+    unlike every other test in this file, which monkeypatches `_scene_inputs` to one FIXED pair
+    (masking exactly this bug, since a fixed `ClassDefaults`'s memo survives between calls on its
+    own). Sharing only `_get_trunk`/`_get_geometry` and not `build_scene_payload`'s own output would
+    still redo every actor's class resolution from scratch on a second `/scene` GET; `_get_payload`
+    must make the second GET a genuine cache hit regardless of `_scene_inputs` handing it fresh
+    `defaults`/`index` each time."""
+    _require_ued22()
+    from uedcli.classdefaults import ClassDefaults
+    from uedcli.serve import app as serve_app
+    from uedcli.tests.conftest import cube_room
+    from uedcli.tests.test_serve_scene import _defaults_resolver, _ued22_index
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [cube_room()])
+    project = SimpleNamespace(root=str(root), maps=None)
+
+    monkeypatch.setattr(serve_app, "_scene_inputs",
+                        lambda p: ([], _ued22_index(), ClassDefaults(_defaults_resolver)))
+
+    resolve_calls = []
+    real_resolve = ClassDefaults._resolve
+
+    def spy(self, fqcn):
+        resolve_calls.append(fqcn)
+        return real_resolve(self, fqcn)
+
+    monkeypatch.setattr(ClassDefaults, "_resolve", spy)
+
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+
+    assert c.get("/api/level/TestLevel/scene").status_code == 200
+    first_count = len(resolve_calls)
+    assert first_count > 0                        # the cold build really did resolve some classes
+
+    assert c.get("/api/level/TestLevel/scene").status_code == 200
+    assert len(resolve_calls) == first_count       # warm repeat: zero NEW class resolutions
+
+
+def test_scene_route_geometry_pinned_flag_matches_the_payload_it_actually_returned(
+        tmp_path, monkeypatch):
+    """Review finding on the payload-cache fix: `scene()` used to read `_read_geometry()` a SECOND
+    time, independently of `_get_payload`'s own internal read, purely to compute `geometry_pinned`.
+    Under `_payload_lock` contention (this function's own slow path, ~28-37s on a real level), a
+    concurrent `POST /rebuild` landing between those two reads could make the route report
+    `geometry_pinned: true` for a response whose `polys` were actually built by
+    `build_wireframe_payload` (empty) BEFORE the rebuild ever happened -- an internally inconsistent
+    response. `_get_payload` now returns `(payload, geometry_pinned)` from the SAME `geometry` value
+    it used to pick/cache the payload, so this can no longer disagree. `build_wireframe_payload` is
+    gated with a `threading.Event` to make the race deterministic."""
+    _require_ued22()
+    from uedcli.serve import app as serve_app
+    from uedcli.tests.conftest import cube_room
+    from uedcli.tests.test_serve_scene import DEFAULTS, _ued22_index
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [cube_room()])
+    project = SimpleNamespace(root=str(root), maps=None)
+
+    monkeypatch.setattr(serve_app, "_scene_inputs", lambda p: ([], _ued22_index(), DEFAULTS))
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+
+    real_build_wireframe = serve_app.build_wireframe_payload
+    build_entered = threading.Event()
+    release_build = threading.Event()
+
+    def gated_build_wireframe(*a, **kw):
+        build_entered.set()
+        release_build.wait(timeout=5)
+        return real_build_wireframe(*a, **kw)
+
+    monkeypatch.setattr(serve_app, "build_wireframe_payload", gated_build_wireframe)
+
+    response: dict = {}
+
+    def call_scene():
+        response["body"] = c.get("/api/level/TestLevel/scene").json()
+
+    t = threading.Thread(target=call_scene)
+    t.start()
+    assert build_entered.wait(timeout=5)   # the wireframe build is now genuinely in flight
+
+    # A concurrent Rebuild completes WHILE the above call is blocked on _payload_lock -- exactly
+    # the window the review flagged.
+    search_files, index, defaults = serve_app._scene_inputs(project)
+    app.state.build_and_publish_geometry(search_files, index, defaults)
+    assert app.state.read_geometry() is not None   # geometry really is pinned now
+
+    release_build.set()
+    t.join(timeout=10)
+
+    body = response["body"]
+    # The in-flight call captured a wireframe payload (empty polys) BEFORE the rebuild landed --
+    # geometry_pinned must say so too, not report the geometry state as of AFTER this call returned.
+    assert body["polys"] == []
+    assert body["geometry_pinned"] is False
 
 
 def test_concurrent_first_scene_requests_never_see_a_torn_trunk_build(tmp_path, monkeypatch):
