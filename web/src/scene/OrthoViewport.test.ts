@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 
 import { applyOrthoCameraPose } from './OrthoViewport'
-import { orthoBasis } from './orthoCamera'
+import { orthoBasis, orthoPan } from './orthoCamera'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
 
 // Regression for the Front/Side blank-pane bug (owner report, live browser + headless repro):
@@ -65,6 +65,37 @@ describe('applyOrthoCameraPose', () => {
       const ndc = projectRelative(POSE, axis, [0, 0, 0])
       expect(Math.abs(ndc.x)).toBeLessThan(1e-6)
       expect(Math.abs(ndc.y)).toBeLessThan(1e-6)
+    }
+  })
+})
+
+// Regression for the owner-reported "ortho drag-pan is inverted" bug report: proves `orthoPan`'s
+// "content follows the cursor" contract (its own doc comment, GUI.md's "Camera & projection") holds
+// through the FULL render pipeline -- camera.lookAt + the NDC-x projection mirror above -- not just
+// `orthoCamera.ts`'s pure math in isolation. A fixed world point's on-screen (canvas-pixel, y-down)
+// position must move by exactly the same (dxPx, dyPx) the drag itself moved, for every axis, since a
+// sign error in either `orthoPan` or the projection mirror they share would show up here even if
+// `orthoCamera.test.ts`'s own `orthoPan` tests (which only check `pose.center`'s arithmetic, not the
+// screen effect) still passed.
+function screenPxOf(pose: OrthoPose, axis: OrthoAxis, worldPoint: [number, number, number], viewportPx: { width: number; height: number }) {
+  const camera = new THREE.OrthographicCamera()
+  applyOrthoCameraPose(camera, pose, axis, viewportPx)
+  const ndc = new THREE.Vector3(...worldPoint).project(camera)
+  return { x: ((ndc.x + 1) / 2) * viewportPx.width, y: ((1 - ndc.y) / 2) * viewportPx.height }
+}
+
+describe('orthoPan (rendered)', () => {
+  it('a screen-space drag moves a fixed world point by the SAME screen delta, for every axis', () => {
+    const viewportPx = { width: 800, height: 600 }
+    const worldPoint: [number, number, number] = [3, -4, 5]
+    const dxPx = 10
+    const dyPx = 6
+    for (const axis of AXES) {
+      const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 2 }
+      const before = screenPxOf(pose, axis, worldPoint, viewportPx)
+      const after = screenPxOf(orthoPan(pose, axis, dxPx, dyPx), axis, worldPoint, viewportPx)
+      expect(after.x - before.x).toBeCloseTo(dxPx, 5)
+      expect(after.y - before.y).toBeCloseTo(dyPx, 5)
     }
   })
 })
