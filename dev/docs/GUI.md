@@ -51,8 +51,8 @@ that lets an ortho pane's mode change.
 `'unlit'` reproduces `preview.py --mode fullbright`'s flat `_KEY_LIGHT`-dot-product shade with the
 lightmap dropped (`sceneResources.ts`'s parallel `unlitMaterials` array, same geometry/group
 indexing as `materials`, built once and shared across panes). `'lit'` samples the baked lightmap
-atlas. **`'flat'` is currently dead code** — it falls through to the same branch as `'lit'` instead
-of `'unlit'`, contradicting its own doc comment; open bug, not yet fixed.
+atlas. **`'flat'` and `'unlit'` are distinct** (`shadingMode.ts`'s `usesUnlitMaterials`): `'flat'`
+no longer falls through to `'lit'`'s branch — fixed and regression-tested (`shadingMode.test.ts`).
 
 ## Rendering: backgrounds, color management
 
@@ -78,10 +78,29 @@ global mutable state fought over on every frame.
 screen-down); **front** looks along +Y ("looking south", +X screen-**left**, +Z screen-up);
 **side** looks along +X ("looking east", +Y screen-right, +Z screen-up).
 
-Ortho drag-to-pan: content follows the cursor (`orthoPan`). Build the camera's rotation via
-`Matrix4.makeBasis(right, up, -forward)`, **not** `camera.up` + `lookAt` — `lookAt` derives
-screen-right as `cross(up, eye-target)`, which is the exact negation of `orthoBasis.right` for
-every one of the three axes here, silently inverting horizontal pan.
+The world is left-handed (X forward, Y right, Z up), but its raw coordinates feed three.js's
+right-handed renderer verbatim (no axis flip anywhere) — so a camera built from a plain, proper
+rotation necessarily renders this world's `right` on the wrong screen side (confirmed live: a
+world-space arrow pointing along `right` rendered on the opposite side from a `level photo
+--native` render of the same pose). Building the rotation directly from `(right, up, -forward)` via
+`Matrix4.makeBasis` — the obvious fix — makes it worse: that matrix is IMPROPER (determinant -1,
+since `cross(right, up) == forward` here, not `-forward`) for both `Viewport3D.tsx`'s perspective
+basis and `OrthoViewport.tsx`'s ortho bases, and an improper matrix breaks both ways of applying
+it — `quaternion.setFromRotationMatrix` silently decomposes it into a camera facing a WRONG
+direction (not merely mirrored), and writing `camera.matrix`/`matrixWorld` directly looks the right
+way but still projects every point through a mirror (a determinant-(-1) transform is a reflection,
+full stop).
+
+The shipped fix (`Viewport3D.tsx`'s `applyCameraPose`, `OrthoViewport.tsx`'s
+`applyOrthoCameraPose`) keeps the view/rotation step ordinary and proper — `camera.up.set(...)` +
+`camera.lookAt(...)`, three.js's own well-tested code, always a valid rotation — then mirrors the
+PROJECTION matrix's NDC-x term instead (`projectionMatrix.elements[0] *= -1`, with
+`projectionMatrixInverse` kept in sync the same way since click-to-select unprojects screen points
+through it). `lookAt` derives screen-right as `cross(up, eye-target)`, which for every camera basis
+here is the exact negation of the intended `right`/`orthoBasis.right` — but negating the
+projection's NDC-x term restores the intended screen-right without touching the already-correct
+look direction, so pan direction comes out right too. Ortho drag-to-pan: content follows the
+cursor (`orthoPan`).
 
 ## The world-anchored grid
 
@@ -177,9 +196,6 @@ at the wire boundary, never in the frontend — the Inspector's whole design poi
 
 ## Known open gaps (not yet built — see `dev/docs/board/`)
 
-- `'flat'` mode dead code (above).
-- Translucent/modulated materials don't set `depthWrite: false` — can incorrectly occlude geometry
-  drawn after them (`sceneResources.ts`'s `resolveMaterialState`).
 - No sound-range overlay (`preview.py --show sound-range` has no GUI equivalent). Collision-cylinder
   and light-radius overlays are built (`RadiiOverlays.tsx`, `radiiProjection.ts`,
   `SceneActor.radii`/`uedcli/serve/scene.py::ActorRadii`) — a global toggle (`QuadLayout`'s

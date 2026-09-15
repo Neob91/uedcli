@@ -11,6 +11,8 @@
 // screen-right, +Z screen-up). Deviates from the plan's own loose paraphrase ("Front: looking down
 // -Y") in favor of the actual calibrated-against-UnrealEd convention this file must match.
 import type { Vec3 } from './camera'
+import type { BBox } from './frame'
+import { bboxCenter } from './frame'
 
 export type OrthoAxis = 'top' | 'front' | 'side'
 
@@ -72,17 +74,54 @@ const MAX_WORLD_UNITS_PER_PIXEL = (2 * 32768) / 128 // 512 UU/px
 // reached, so 0.01 (1 UU spans 100 screen pixels) leaves a wide, confirmed-safe margin.
 const MIN_WORLD_UNITS_PER_PIXEL = 0.01
 
+/** Clamps a `worldUnitsPerPixel` value to the confirmed-safe `[MIN_WORLD_UNITS_PER_PIXEL,
+ * MAX_WORLD_UNITS_PER_PIXEL]` range -- ANY code path that sets `OrthoPose.worldUnitsPerPixel`
+ * directly (not just `orthoZoom`'s scroll-wheel path) must run it through this, or risk the same
+ * WebGL/float32 precision loss that makes the grid (and, at the extreme this was found from, the
+ * whole scene) silently stop rendering. `OrthoViewport.tsx`'s `F`-frame handler (`orthoFrameFit`
+ * below) needs this too: fitting a degenerate (zero-size, point-actor) bbox computes an unclamped
+ * `worldUnitsPerPixel` far below this floor, and the ortho pane goes blank. */
+export function clampWorldUnitsPerPixel(worldUnitsPerPixel: number): number {
+  return Math.min(MAX_WORLD_UNITS_PER_PIXEL, Math.max(MIN_WORLD_UNITS_PER_PIXEL, worldUnitsPerPixel))
+}
+
 /** Scroll-wheel zoom: scales `worldUnitsPerPixel` exponentially by the wheel delta (positive
  * `wheelDeltaY`, i.e. scroll down/away, ZOOMS OUT -- matches `camera.ts`'s `zoom`'s sign
  * convention, where a positive delta dollies the camera backward). `center` is unchanged --
  * ortho zoom is a pure scale around the current view center, no dolly needed since there's no
- * camera position to move along an axis. Clamped to `[MIN_WORLD_UNITS_PER_PIXEL,
- * MAX_WORLD_UNITS_PER_PIXEL]` -- unclamped, a long scroll can zoom out or in without limit (GUI bug
- * report item 3). */
+ * camera position to move along an axis. Clamped via `clampWorldUnitsPerPixel` -- unclamped, a
+ * long scroll can zoom out or in without limit (GUI bug report item 3). */
 export function orthoZoom(pose: OrthoPose, wheelDeltaY: number): OrthoPose {
   const raw = pose.worldUnitsPerPixel * Math.pow(2, wheelDeltaY / ZOOM_NOTCH_PX)
-  const worldUnitsPerPixel = Math.min(MAX_WORLD_UNITS_PER_PIXEL, Math.max(MIN_WORLD_UNITS_PER_PIXEL, raw))
-  return { center: pose.center, worldUnitsPerPixel }
+  return { center: pose.center, worldUnitsPerPixel: clampWorldUnitsPerPixel(raw) }
+}
+
+// Leaves a visible margin around a framed bbox rather than filling the pane edge-to-edge.
+const FRAME_FIT_MARGIN = 0.9
+
+/** `F`-frame fit (quad-layout Part 3, Task 15): recenters on `bbox` and sizes `worldUnitsPerPixel`
+ * so the bbox's extent along THIS axis's (right, up) screen plane fits `viewportPx`, clamped via
+ * `clampWorldUnitsPerPixel` -- a degenerate (zero-size, point-actor) bbox floors its screen extent
+ * at 1 UU, which without the clamp computes a `worldUnitsPerPixel` far below the safe floor and
+ * blanks the whole pane (WebGL/float32 precision loss), not just the marker (GUI bug report,
+ * confirmed live: framing on a point actor from the org panel zoomed ~1000x past the floor). Pure,
+ * so the fit math is directly testable without mounting a `<Canvas>`. */
+export function orthoFrameFit(
+  bbox: BBox,
+  axis: OrthoAxis,
+  viewportPx: { width: number; height: number },
+  margin: number = FRAME_FIT_MARGIN,
+): OrthoPose {
+  const center = bboxCenter(bbox)
+  const { right, up } = orthoBasis(axis)
+  const size: Vec3 = [bbox.hi[0] - bbox.lo[0], bbox.hi[1] - bbox.lo[1], bbox.hi[2] - bbox.lo[2]]
+  const extentAlong = (dir: Vec3) => Math.abs(dir[0] * size[0]) + Math.abs(dir[1] * size[1]) + Math.abs(dir[2] * size[2])
+  const screenW = Math.max(extentAlong(right), 1)
+  const screenH = Math.max(extentAlong(up), 1)
+  const viewW = Math.max(viewportPx.width, 1)
+  const viewH = Math.max(viewportPx.height, 1)
+  const worldUnitsPerPixel = clampWorldUnitsPerPixel(Math.max(screenW / (viewW * margin), screenH / (viewH * margin)))
+  return { center, worldUnitsPerPixel }
 }
 
 // `THREE.Raycaster.params.Line.threshold` (an ordinary `Line`/`LineSegments`' hit-test tolerance,

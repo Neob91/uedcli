@@ -301,13 +301,22 @@ def _actor_radii(actor, defaults) -> tuple["ActorRadii | None", str | None]:
         low = name.casefold()
         return instance[low] if low in instance else class_defaults.get((low, 0))
 
+    def field_or(name: str, default: str) -> str:
+        # `field(name) or default` would coalesce an explicitly-present-but-EMPTY value ("") with
+        # "absent" too, silently substituting the class default for a real, if unusual, empty
+        # instance/default value (review finding) -- `is not None` distinguishes "key present with
+        # empty value" (`instance[low] == ""`/a genuinely empty class default) from "key absent"
+        # (`class_defaults.get` returning `None`), which is the only case `default` should apply to.
+        value = field(name)
+        return value if value is not None else default
+
     collision_radius = collision_height = None
-    if str(field("bCollideActors") or "False").strip() == "True":
+    if str(field_or("bCollideActors", "False")).strip() == "True":
         collision_radius = _to_float(field("CollisionRadius"), 0.0)
         collision_height = _to_float(field("CollisionHeight"), 0.0)
     light_radius = None
     lr = _to_int(field("LightRadius"), 0)
-    if (str(field("LightType") or "LT_None").strip() != "LT_None"
+    if (str(field_or("LightType", "LT_None")).strip() != "LT_None"
             and _to_int(field("LightBrightness"), 0) and lr):
         light_radius = world_light_radius(lr)
     if collision_radius is None and light_radius is None:
@@ -423,6 +432,24 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
     return actors
 
 
+def filtered_geometry_polys(level: Level, geometry: _BuiltGeometry, hidden_ed: dict[str, bool]
+                           ) -> list[tuple[tuple, str | None]]:
+    """`(poly, owner)` pairs from `geometry.polys`/`geometry.owners` that survive a hidden `CSG_Add`
+    brush's own-surface drop -- see `build_scene_payload`'s docstring for why only a `CSG_Add` (never
+    a `CSG_Subtract`/other) brush's own surfaces are safe to omit. The ONE filter both
+    `build_scene_payload` (wraps the surviving polys into `ScenePoly`) and `app.py`'s `/lightmap`
+    route (packs the surviving RAW polys' baked lumel grids -- `ScenePoly.lightmap` has its RGB
+    stripped, so `/lightmap` needs these raw tuples, not the wrapped payload) go through, so the two
+    routes' poly-index positions can never disagree."""
+    hidden_add_owners = {
+        name for name, hidden in hidden_ed.items()
+        if hidden and (a := level.actors.get(name)) is not None and a.brush is not None
+        and dict(a.props).get("CsgOper", "CSG_Add") == "CSG_Add"
+    }
+    return [(poly, owner) for poly, owner in zip(geometry.polys, geometry.owners)
+            if owner not in hidden_add_owners]
+
+
 def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, defaults
                         ) -> ScenePayload:
     """Assemble a `ScenePayload` from two ALREADY-BUILT pieces — `trunk` (`_LoadedTrunk`: the level,
@@ -482,21 +509,14 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     level = trunk.level
     hidden_ed = _resolve_hidden_ed(level, defaults)
     radii_map = _resolve_actor_radii(level, defaults, hidden_ed)
-    polys, texture_table, owners = geometry.polys, geometry.texture_table, geometry.owners
-    # Only a hidden CSG_Add brush's own surfaces are safe to drop -- see this function's docstring.
-    hidden_add_owners = {
-        name for name, hidden in hidden_ed.items()
-        if hidden and (a := level.actors.get(name)) is not None and a.brush is not None
-        and dict(a.props).get("CsgOper", "CSG_Add") == "CSG_Add"
-    }
+    texture_table = geometry.texture_table
+    filtered = filtered_geometry_polys(level, geometry, hidden_ed)
     scene_polys = [
         ScenePoly(verts=verts, base=list(base), tu=list(tu), tv=list(tv), pan=list(pan),
                  tex_index=tex_index, masked=masked, two_sided=poly_two_sided(flags),
                  blend=poly_blend(flags), flags=flags, lightmap=_lightmap_frame(lightmap),
                  owner=owner)
-        for (verts, base, tu, tv, pan, tex_index, masked, flags, lightmap), owner
-        in zip(polys, owners)
-        if owner not in hidden_add_owners
+        for (verts, base, tu, tv, pan, tex_index, masked, flags, lightmap), owner in filtered
     ]
     # Point-actor sprite billboards ride in trunk.sprite_table/actor_sprites (Load-owned, no CSG
     # involved) -- `/api/level/{level}/atlas` (`app.py`'s `atlas` route) appends that SAME

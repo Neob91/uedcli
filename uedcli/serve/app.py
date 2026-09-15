@@ -4,6 +4,7 @@ holds all domain logic — the client draws only what these routes hand it."""
 from __future__ import annotations
 
 import base64
+import logging
 import threading
 from contextlib import asynccontextmanager
 from dataclasses import asdict
@@ -23,9 +24,19 @@ from . import build_pin
 from .errors import error_to_status
 from .levels import levels_payload
 from .lightmap import build_lightmap_atlas
-from .scene import _BuiltGeometry, _LoadedTrunk, ScenePayload, build_scene_payload, build_wireframe_payload
+from .scene import (
+    _BuiltGeometry,
+    _LoadedTrunk,
+    ScenePayload,
+    _resolve_hidden_ed,
+    build_scene_payload,
+    build_wireframe_payload,
+    filtered_geometry_polys,
+)
 from .textures import build_atlas
 from .watch import TrunkWatcher
+
+logger = logging.getLogger(__name__)
 
 
 def _scene_inputs(project):
@@ -161,7 +172,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
     # separately, so the two can't disagree.
     _build_status: list[str] = ["no_build"]
 
-    def _bootstrap_geometry_if_empty() -> None:
+    def _bootstrap_geometry_if_empty(level_name: str) -> None:
         # gui-explicit-rebuild spec §4: "at Load (including the automatic initial one) ... populate
         # the in-memory pin FROM [the on-disk pointer] immediately" -- a `preview_cache` lookup, no
         # `build_scene()` call, so this is safe to run from BOTH `_get_trunk`'s own first-population
@@ -174,11 +185,11 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # truly concurrent first calls, not a correctness one: same pin either way).
         if _geometry_ref[0] is not None:
             return
-        pin = build_pin.load_pointer(project, _current_level[0])
+        pin = build_pin.load_pointer(project, level_name)
         if pin is None:
             _build_status[0] = "no_build"
             return
-        resolved = build_pin.resolve_pin(project, _current_level[0], pin)
+        resolved = build_pin.resolve_pin(project, level_name, pin)
         if resolved is None:
             _build_status[0] = "evicted"   # spec §1's eviction caveat -- degrade, never raise
             return
@@ -188,7 +199,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                                           texture_table=texture_table, owners=owners)
         _build_status[0] = "built"
 
-    def _get_trunk(search_files, defaults) -> _LoadedTrunk:
+    def _get_trunk(level_name: str, search_files, defaults) -> _LoadedTrunk:
         # NOTE on parameters: the plan's own illustrative pseudocode named this `_get_trunk(search_files,
         # index)` and called `resolve_actor_sprites(lvl, index, search_files)` -- but the REAL
         # `resolve_actor_sprites` signature (`preview_native.py:380`) is `(level, search_files,
@@ -196,6 +207,11 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # interchangeable with `index` (a `ClassIndex`, no `.for_class` -- would raise
         # `AttributeError` on the very first call). Fixed to the verified real signature; flagged in
         # the build report rather than silently carried over.
+        #
+        # `level_name` is the caller's own already-`_require_level`-validated name, not re-read from
+        # `_current_level[0]` here (review finding): a concurrent `PUT /api/level` between the
+        # caller's validation and this call could otherwise silently build against a DIFFERENT
+        # level's directory than the one the caller checked.
         while True:
             cached = _trunk_ref[0]
             if cached is not None:
@@ -205,7 +221,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                 if cached is not None:
                     return cached
                 gen_before = _generation[0]
-                lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / _current_level[0])
+                lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level_name)
                 sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
                 if _generation[0] != gen_before:
                     continue    # invalidated mid-build: discard, loop back and retry from the top
@@ -215,7 +231,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                 # The AUTOMATIC INITIAL LOAD (spec §"Two independent axes"): this branch only ever
                 # runs once per process (gated by `_trunk_ref[0] is None` above), exactly the "first
                 # time this level is opened" moment the bootstrap-from-disk-pointer rule targets.
-                _bootstrap_geometry_if_empty()
+                _bootstrap_geometry_if_empty(level_name)
                 return built
 
     def _read_geometry() -> _BuiltGeometry | None:
@@ -226,7 +242,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # reasoning `_trunk_ref`/`_geometry_ref` already relied on before this split.
         return _geometry_ref[0]
 
-    def _build_and_publish_geometry(search_files, index, defaults) -> _BuiltGeometry:
+    def _build_and_publish_geometry(level_name: str, search_files, index, defaults) -> _BuiltGeometry:
         # The ONLY function in this app that ever calls `build_scene()` -- reached ONLY from
         # `POST /rebuild` (gui-explicit-rebuild spec §3). Deliberately has no "already cached? return
         # early" short-circuit (unlike the sibling scene-cache spec's retired `_get_geometry`):
@@ -242,10 +258,10 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         while True:
             with solve_lock:
                 gen_before = _generation[0]
-                trunk_state = _get_trunk(search_files, defaults)
+                trunk_state = _get_trunk(level_name, search_files, defaults)
                 polys, texture_table, owners = _build_scene(
                     trunk_state.level, search_files, index, defaults=defaults, project=project,
-                    level_name=_current_level[0], visibility="editor")
+                    level_name=level_name, visibility="editor")
                 if _generation[0] != gen_before:
                     continue    # invalidated mid-build: discard, retry against the new state
                 built = _BuiltGeometry(geom_hash=None, light_hash=None,   # OQ1 -- see scene.py
@@ -254,7 +270,8 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                 _build_status[0] = "built"
                 return built
 
-    def _get_payload(search_files, index, defaults) -> tuple[ScenePayload, bool]:
+    def _get_payload(level_name: str, search_files, index, defaults
+                     ) -> tuple[ScenePayload, _BuiltGeometry | None, _LoadedTrunk]:
         # Caches `build_scene_payload`/`build_wireframe_payload`'s result so a warm request never
         # re-resolves `_is_hidden_ed`'s class defaults or `_brush_highlight`'s CSG classification,
         # both of which `defaults`/`index` fresh from THIS request's own `_scene_inputs()` call
@@ -272,30 +289,34 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # `_get_trunk`/`_read_geometry`, and reusing either lock here would deadlock the way a
         # recursive `_get_trunk`/`_build_and_publish_geometry` call would (see their own comments).
         #
-        # Returns `(payload, geometry_pinned)` — the `geometry_pinned` flag MUST come from the same
-        # `geometry` read this function used to build/select the cached payload, never a separate
-        # `_read_geometry()` call in the caller: a second, unsynchronized read taken before or after
-        # this call can observe a DIFFERENT geometry state if a `/rebuild` completes while a caller
-        # is blocked on `_payload_lock` behind a slow (~28-37s) build — a real race a review caught,
-        # not a hypothetical one, since that lock-contention window is exactly this function's own
-        # slow path.
-        trunk_state = _get_trunk(search_files, defaults)
+        # Returns `(payload, geometry, trunk_state)` — the identity-matched pair that produced
+        # `payload`, not just the boolean `geometry_pinned` a caller used to derive from its OWN
+        # separate `_read_geometry()`/`_get_trunk()` call (review finding: `/atlas`/`/lightmap` each
+        # called `_read_geometry()` independently instead of going through this identity-matched
+        # read, so a `/rebuild` landing mid-flight could desync what they built from what `/scene`
+        # built from). Every caller (`/scene`, `/atlas`, `/lightmap`) now reads `geometry`/
+        # `trunk_state` from THIS return, never a second unsynchronized read of their own: a second
+        # read taken before or after this call can observe a DIFFERENT geometry state if a `/rebuild`
+        # completes while a caller is blocked on `_payload_lock` behind a slow (~28-37s) build — a
+        # real race a review caught, not a hypothetical one, since that lock-contention window is
+        # exactly this function's own slow path.
+        trunk_state = _get_trunk(level_name, search_files, defaults)
         geometry = _read_geometry()
         cached = _payload_ref[0]
         if cached is not None and cached[0] is trunk_state and cached[1] is geometry:
-            return cached[2], geometry is not None
+            return cached[2], geometry, trunk_state
         with _payload_lock:
-            trunk_state = _get_trunk(search_files, defaults)
+            trunk_state = _get_trunk(level_name, search_files, defaults)
             geometry = _read_geometry()
             cached = _payload_ref[0]
             if cached is not None and cached[0] is trunk_state and cached[1] is geometry:
-                return cached[2], geometry is not None
+                return cached[2], geometry, trunk_state
             if geometry is None:
                 payload = build_wireframe_payload(trunk_state, index, defaults)
             else:
                 payload = build_scene_payload(trunk_state, geometry, index, defaults)
             _payload_ref[0] = (trunk_state, geometry, payload)
-            return payload, geometry is not None
+            return payload, geometry, trunk_state
 
     async def _on_trunk_settled() -> None:
         # gui-explicit-rebuild spec §0/§2: supersedes the sibling scene-cache spec's own TRIGGER,
@@ -352,6 +373,10 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         try:
             status, message = error_to_status(exc)
         except TypeError:
+            # An unclassified exception is exactly the case worth a server-side trace — the client
+            # only ever sees "internal error", so this is the ONE place that can still tell a
+            # developer what actually broke (review finding: this used to log nothing).
+            logger.exception("unclassified_domain_error", extra={"path": request.url.path})
             status, message = 500, "internal error"
         return JSONResponse(status_code=status, content={"error": message})
 
@@ -441,7 +466,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # build, since sprite resolution is Load-owned (spec §"Two independent axes").
         _require_level(level_name)
         search_files, _index, defaults = _scene_inputs(project)
-        lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / _current_level[0])
+        lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level_name)
         sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
         _trunk_ref[0] = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
                                      sprite_table=sprite_table, actor_sprites=actor_sprites)
@@ -450,7 +475,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # (spec §1's last bullet -- an on-disk pointer must never overwrite an in-memory pin a
         # Rebuild already set), otherwise the same "unlock all modes with no Rebuild needed" check
         # the automatic initial Load already runs (spec test #8).
-        _bootstrap_geometry_if_empty()
+        _bootstrap_geometry_if_empty(level_name)
         return {"status": "ok"}
 
     # Sync `def` (NOT async): the blocking ~24s CSG+lighting solve runs in Starlette's threadpool,
@@ -464,7 +489,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # `build_pin`'s on-disk pointer file, which is Save-owned (P2, out of this plan's scope).
         _require_level(level_name)
         search_files, index, defaults = _scene_inputs(project)
-        geometry = _build_and_publish_geometry(search_files, index, defaults)
+        geometry = _build_and_publish_geometry(level_name, search_files, index, defaults)
         return {"status": "ok", "geom_hash": geometry.geom_hash, "light_hash": geometry.light_hash}
 
     # Sync `def` (NOT async): Starlette runs a sync route in its threadpool, so the blocking ~24s
@@ -486,27 +511,29 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # produced `payload` if a `/rebuild` completes while this call was blocked on
         # `_get_payload`'s lock (review finding: that contention window is exactly this route's
         # slow path, not a negligible one).
-        payload, geometry_pinned = _get_payload(search_files, index, defaults)
+        payload, geometry, _trunk_state = _get_payload(level_name, search_files, index, defaults)
         return {
             "polys": [asdict(p) for p in payload.polys],
             "actors": [asdict(a) for a in payload.actors],
-            "geometry_pinned": geometry_pinned,
+            "geometry_pinned": geometry is not None,
         }
 
     @app.get("/api/level/{level_name}/atlas")
     def atlas(level_name: str) -> dict:
-        # `_get_trunk` is the SAME shared cache `/scene` reads -- an unchanged trunk means this is a
-        # cache hit, not a second decode path. With geometry pinned: `geometry.texture_table +
-        # trunk_state.sprite_table`, in the same order `scene.py::build_scene_payload` uses when it
-        # wraps `trunk.actor_sprites` into `SceneActor.sprite`, so a `tex_index` from /scene names
-        # the same rect here. With NO geometry pinned: sprites are Load-owned (unaffected by
-        # whether geometry exists -- a point actor's icon should still show in wireframe mode), so
-        # the atlas is built from ONLY `trunk_state.sprite_table` (`build_wireframe_payload`'s own
-        # sprites carry `tex_index` with no offset, matching this).
+        # Routed through `_get_payload` (review finding, item 4) -- the SAME identity-matched
+        # `(trunk_state, geometry)` pair `/scene` built its payload from, not a second independent
+        # `_get_trunk()`/`_read_geometry()` read: two unsynchronized reads here could observe a
+        # DIFFERENT geometry state than `/scene`'s if a `/rebuild` lands mid-flight between them.
+        # With geometry pinned: `geometry.texture_table + trunk_state.sprite_table`, in the same
+        # order `scene.py::build_scene_payload` uses when it wraps `trunk.actor_sprites` into
+        # `SceneActor.sprite`, so a `tex_index` from /scene names the same rect here. With NO
+        # geometry pinned: sprites are Load-owned (unaffected by whether geometry exists -- a point
+        # actor's icon should still show in wireframe mode), so the atlas is built from ONLY
+        # `trunk_state.sprite_table` (`build_wireframe_payload`'s own sprites carry `tex_index` with
+        # no offset, matching this).
         _require_level(level_name)
-        search_files, _index, defaults = _scene_inputs(project)
-        trunk_state = _get_trunk(search_files, defaults)
-        geometry = _read_geometry()
+        search_files, index, defaults = _scene_inputs(project)
+        _payload, geometry, trunk_state = _get_payload(level_name, search_files, index, defaults)
         texture_table = ((geometry.texture_table if geometry is not None else [])
                          + trunk_state.sprite_table)
         png_bytes, manifest, width, height = build_atlas(texture_table)
@@ -519,15 +546,26 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
 
     @app.get("/api/level/{level_name}/lightmap")
     def lightmap(level_name: str) -> dict:
-        # Same shared cache as /scene and /atlas; only the poly list is needed here (the baked
-        # lumel grids), the texture table is discarded. `intensity` is the atlas's global
-        # multiplier scale — the client's `lightMapIntensity`. No geometry pinned: there are no lit
-        # polys to pack -- `build_lightmap_atlas([])` already returns a valid degenerate response
-        # (1x1 PNG, empty manifest, intensity 1.0 — the same shape a solved-but-unlit level gets),
-        # so no special-casing is needed here.
+        # Routed through `_get_payload` too (review finding, item 4 — same identity-matched pair as
+        # /scene and /atlas). The poly list this route packs must also be the SAME FILTERED set
+        # `/scene` built its payload from (review finding, item 2): `build_scene_payload` drops a
+        # hidden `CSG_Add` brush's own surfaces from `ScenePayload.polys`, which shifts every LATER
+        # poly's array position — the client indexes this route's manifest by that same (filtered)
+        # position, so packing the raw UNFILTERED `geometry.polys` here silently mis-indexed
+        # lightmaps on any level with such a brush. `filtered_geometry_polys` is the ONE filter
+        # function `build_scene_payload` itself uses, so the two routes' filtering can't drift.
+        # `intensity` is the atlas's global multiplier scale — the client's `lightMapIntensity`. No
+        # geometry pinned: there are no lit polys to pack -- `build_lightmap_atlas([])` already
+        # returns a valid degenerate response (1x1 PNG, empty manifest, intensity 1.0 — the same
+        # shape a solved-but-unlit level gets), so no special-casing is needed here.
         _require_level(level_name)
-        geometry = _read_geometry()
-        polys = geometry.polys if geometry is not None else []
+        search_files, index, defaults = _scene_inputs(project)
+        _payload, geometry, trunk_state = _get_payload(level_name, search_files, index, defaults)
+        if geometry is None:
+            polys: list[tuple] = []
+        else:
+            hidden_ed = _resolve_hidden_ed(trunk_state.level, defaults)
+            polys = [poly for poly, _owner in filtered_geometry_polys(trunk_state.level, geometry, hidden_ed)]
         png_bytes, manifest, width, height, intensity = build_lightmap_atlas(polys)
         return {
             "width": width,

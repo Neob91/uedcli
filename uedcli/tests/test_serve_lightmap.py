@@ -122,7 +122,7 @@ def test_lightmap_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypat
     app = serve_app.create_app(project, "TestLevel")
     c = TestClient(app)
 
-    app.state.build_and_publish_geometry([], index, defaults)
+    app.state.build_and_publish_geometry("TestLevel", [], index, defaults)
 
     r = c.get("/api/level/TestLevel/lightmap")
     assert r.status_code == 200

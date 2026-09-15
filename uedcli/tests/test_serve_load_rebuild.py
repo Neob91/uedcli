@@ -156,7 +156,7 @@ def test_load_refreshes_trunk_but_leaves_an_already_populated_geometry_pin_untou
     app = serve_app.create_app(project, "TestLevel")
     c = TestClient(app)
 
-    geometry = app.state.build_and_publish_geometry([], index, defaults)
+    geometry = app.state.build_and_publish_geometry("TestLevel", [], index, defaults)
 
     room2 = cube_room(name="Room2")
     trunk.write_level(root / "maps" / "TestLevel",

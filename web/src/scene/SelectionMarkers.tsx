@@ -11,6 +11,7 @@ import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import type { SceneActor } from '../api'
+import { worldUnitsPerPixelAt } from './markers'
 import { primarySelection } from './selectionSet'
 
 // Matches `preview.py`'s `_PIVOT_RED`.
@@ -22,22 +23,6 @@ const PIVOT_RED = new THREE.Color(255 / 255, 63 / 255, 63 / 255)
 // marker, so it needs constant SCREEN size instead (see PivotMarker).
 const VERTEX_DOT_SIZE = 2
 const PIVOT_MARKER_SCREEN_PX = 14
-
-/** World units per screen pixel at `point`, for either camera kind this app uses -- the constant-
- * screen-size scale factor. Ortho: the frustum height / zoom is already screen-independent of
- * `point`. Perspective: depends on distance to `point` (foreshortening), the standard vFOV-based
- * sprite-scale-compensation formula. */
-function worldUnitsPerPixelAt(camera: THREE.Camera, point: THREE.Vector3, viewportHeightPx: number): number {
-  if (camera instanceof THREE.OrthographicCamera) {
-    return (camera.top - camera.bottom) / camera.zoom / viewportHeightPx
-  }
-  if (camera instanceof THREE.PerspectiveCamera) {
-    const distance = camera.position.distanceTo(point)
-    const vFOV = THREE.MathUtils.degToRad(camera.fov)
-    return (2 * Math.tan(vFOV / 2) * distance) / viewportHeightPx
-  }
-  return 1
-}
 
 function brighten(rgb: [number, number, number], factor = 1.2): THREE.Color {
   return new THREE.Color(

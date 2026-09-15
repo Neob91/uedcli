@@ -9,23 +9,22 @@ import type { MutableRefObject, PointerEvent as ReactPointerEvent } from 'react'
 import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
-import type { SceneActor } from '../api'
 import type { Vec3 } from './camera'
 import { BrushOutlines } from './BrushOutlines'
 import { useDragGesture } from './dragGesture'
 import type { DragGestureCallbacks } from './dragGesture'
 import type { FrameRequest } from './frame'
-import { bboxCenter } from './frame'
 import { GridOverlay } from './GridOverlay'
 import { MARKER_COLOR } from './markers'
+import { PointActorMarker } from './PointActorMarker'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
-import { orthoBasis, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
+import { orthoBasis, orthoFrameFit, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
 import { RadiiOverlays } from './RadiiOverlays'
 import { useSceneResourcesContext } from './SceneResourcesContext'
 import { SelectionHighlight } from './SelectionHighlight'
 import { SelectionMarkers } from './SelectionMarkers'
-import { canSelectBrushTap, pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapAction } from './selection'
-import type { Ray } from './selection'
+import { selectedNonBrushBoxes } from './selectionBoxes'
+import { resolveTapSelect } from './tapSelect'
 import type { ShadingMode } from './shadingMode'
 import { usesUnlitMaterials } from './shadingMode'
 // `THREE.ColorManagement.enabled` is a process-wide singleton r3f reasserts on every render of
@@ -39,9 +38,7 @@ import { CANVAS_COLOR_MANAGEMENT } from './Viewport3D'
 const ORTHO_HALF_RANGE = 65536
 const INITIAL_WORLD_UNITS_PER_PIXEL = 4
 
-// Same fallback dot size/tint as Viewport3D's identical marker rendering -- a room/brush is
-// typically tens-to-hundreds of UU across, so 24 UU reads clearly without dwarfing nearby geometry.
-const MARKER_SIZE = 24
+// Same fallback dot tint as Viewport3D's identical marker rendering.
 const MARKER_COLOR_THREE = new THREE.Color(...MARKER_COLOR)
 // Point actors must always render on top of brush wireframe/highlight (owner ruling, ortho panes
 // only) -- depthTest off so real world depth along the view axis can't hide a marker "behind" a
@@ -154,8 +151,6 @@ export interface OrthoViewportProps {
 }
 
 const SELECTION_BOX_COLOR = 0x00e5ff
-// Leaves a visible margin around the framed bbox rather than filling the pane edge-to-edge.
-const FRAME_FIT_MARGIN = 0.9
 
 export function OrthoViewport({
   axis,
@@ -174,13 +169,9 @@ export function OrthoViewport({
   const { bufferGeometry, materials, unlitMaterials, triangleOwners, textures, markerTexture, markerActors, actors } =
     useSceneResourcesContext()
   const activeMaterials = usesUnlitMaterials(mode) ? unlitMaterials : materials
-  // Every SELECTED non-brush actor's AABB box (Task 14: one per selected actor) -- mirrors
-  // Viewport3D's identical `selectedNonBrushBoxes`.
-  const selectedNonBrushBoxes = useMemo(() => {
-    return actors
-      .filter((a) => selectedNames.has(a.name) && !a.brush)
-      .map((a) => ({ name: a.name, box: new THREE.Box3(new THREE.Vector3(...a.bbox_lo), new THREE.Vector3(...a.bbox_hi)) }))
-  }, [actors, selectedNames])
+  // Every SELECTED non-brush actor's AABB box (Task 14: one per selected actor) -- shared with
+  // Viewport3D.tsx via `selectionBoxes.ts` (item 16).
+  const nonBrushBoxes = useMemo(() => selectedNonBrushBoxes(actors, selectedNames), [actors, selectedNames])
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
   const markerGroupRef = useRef<THREE.Group | null>(null)
@@ -190,70 +181,40 @@ export function OrthoViewport({
   const brushGroupRef = useRef<THREE.Group | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
-  // Shared by the tap path: raycasts the click point against the drawn geometry (main mesh via
-  // triangleOwners, marker sprites via their own userData) -- the exact primary/fallback strategy
-  // Viewport3D's performTapSelect uses, with the real ortho THREE.Camera (three.js's Raycaster
-  // handles an orthographic camera's parallel rays the same way it handles a perspective one's).
+  // Shared by the tap path (item 16: the raycast pipeline itself is shared with Viewport3D.tsx via
+  // `tapSelect.ts`'s `resolveTapSelect`; only the ref wiring and this pane's own zoom-scaled line-hit
+  // threshold live here) -- three.js's Raycaster handles an orthographic camera's parallel rays the
+  // same way it handles a perspective one's.
   const performTapSelect = useCallback(
     (clientX: number, clientY: number, additive: boolean, shiftKey: boolean) => {
       const camera = cameraRef.current
       const rect = containerRef.current?.getBoundingClientRect()
       if (!camera || !rect) return
-      const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1
-      const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1
-      const raycaster = new THREE.Raycaster()
-      raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
-      // See Viewport3D.tsx's identical comment (bug report item 6): a click in wireframe/ortho views
-      // must only hit near a brush's own outline, never anywhere inside its silhouette. `Line`'s
-      // threshold is scaled by zoom (orthoLineHitThresholdUU) so the click buffer stays a constant
-      // screen-space width; `Line2`'s is already screen-space (owner report: 2D brush selection was
-      // near-pixel-exact once zoomed out, since a fixed world-unit threshold shrinks on screen).
-      raycaster.params.Line = { threshold: orthoLineHitThresholdUU(pose.worldUnitsPerPixel) }
-      raycaster.params.Line2 = { threshold: 6 }
-
-      let hitActor: SceneActor | null = null
-      const candidates: THREE.Object3D[] = [
-        ...(meshRef.current ? [meshRef.current] : []),
-        ...(markerGroupRef.current?.children ?? []),
-        ...(mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : []),
-      ]
-      if (candidates.length > 0) {
-        const hits = raycaster.intersectObjects(candidates, false)
-        if (hits.length > 0) {
-          const hit = hits[0]
-          if (hit.object === meshRef.current) {
-            hitActor = resolveHitActor(hit.faceIndex, triangleOwners, actors)
-          } else if (hit.object.userData.segmentOwners) {
-            const segmentOwners = hit.object.userData.segmentOwners as (string | null)[]
-            hitActor = resolveSegmentHitActor(hit.index, segmentOwners, actors)
-          } else {
-            const name = hit.object.userData.actorName as string | undefined
-            hitActor = name ? (actors.find((a) => a.name === name) ?? null) : null
-          }
-        }
-      }
-      if (!hitActor) {
-        const ray: Ray = {
-          origin: [raycaster.ray.origin.x, raycaster.ray.origin.y, raycaster.ray.origin.z],
-          direction: [raycaster.ray.direction.x, raycaster.ray.direction.y, raycaster.ray.direction.z],
-        }
-        // Never AABB-select a brush in wireframe mode (item 6) -- only its own outline lines, just
-        // raycast above, may hit it there.
-        const aabbCandidates = mode === 'wireframe' ? actors.filter((a) => !a.brush) : actors
-        hitActor = pickActor(ray, aabbCandidates)
-      }
-      // Capture the raw hit-test result BEFORE the gate below, same as Viewport3D.tsx -- see
-      // `resolveTapAction`'s doc comment for why both are needed.
-      const rawHit = hitActor
-      // Ortho panes are always wireframe (locked, see shadingMode.ts's canChangeMode), so this is
-      // always a no-Shift-needed plain tap -- routed through the same gate as Viewport3D's for
-      // symmetry (see `selection.ts`'s `canSelectBrushTap`).
-      if (hitActor?.brush && !canSelectBrushTap(mode, shiftKey)) hitActor = null
-      const action = resolveTapAction(rawHit, hitActor, additive)
+      const action = resolveTapSelect({
+        camera,
+        rect,
+        clientX,
+        clientY,
+        additive,
+        shiftKey,
+        mode,
+        // See Viewport3D.tsx's identical comment (bug report item 6): a click in wireframe/ortho
+        // views must only hit near a brush's own outline, never anywhere inside its silhouette.
+        // Scaled by zoom (orthoLineHitThresholdUU) so the click buffer stays a constant screen-space
+        // width (owner report: 2D brush selection was near-pixel-exact once zoomed out, since a
+        // fixed world-unit threshold shrinks on screen) -- Viewport3D's own fixed threshold is the
+        // deliberate delta this pane's zoom range needs and the perspective pane doesn't.
+        lineThreshold: orthoLineHitThresholdUU(pose.worldUnitsPerPixel),
+        meshObject: meshRef.current,
+        markerObjects: markerGroupRef.current?.children ?? [],
+        brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
+        actors,
+        triangleOwners,
+      })
       if (action.kind === 'select') onSelectActor(action.name, action.additive)
       else if (action.kind === 'deselect') onDeselect()
     },
-    [actors, triangleOwners, onSelectActor, onDeselect, mode],
+    [actors, triangleOwners, onSelectActor, onDeselect, mode, pose.worldUnitsPerPixel],
   )
 
   const dragCallbacks = useMemo<DragGestureCallbacks>(
@@ -292,25 +253,15 @@ export function OrthoViewport({
   // plane -- `worldUnitsPerPixel` set from the container's own current pixel size so the fit is
   // accurate regardless of which pane this is or how large it's currently rendered (a maximized
   // pane vs. a quarter-screen one). Falls back to a nominal 800x600 if the container hasn't laid
-  // out yet (a `getBoundingClientRect()` of 0x0 would otherwise divide by zero).
+  // out yet (a `getBoundingClientRect()` of 0x0 would otherwise divide by zero). `orthoFrameFit`
+  // clamps the result (GUI bug report: an unclamped fit on a degenerate/point-actor bbox blanks the
+  // whole pane, not just the marker -- see its own doc comment).
   useEffect(() => {
     if (!frameRequest) return
-    const center = bboxCenter(frameRequest.bbox)
-    const { right, up } = orthoBasis(axis)
-    const size: [number, number, number] = [
-      frameRequest.bbox.hi[0] - frameRequest.bbox.lo[0],
-      frameRequest.bbox.hi[1] - frameRequest.bbox.lo[1],
-      frameRequest.bbox.hi[2] - frameRequest.bbox.lo[2],
-    ]
-    const extentAlong = (dir: [number, number, number]) =>
-      Math.abs(dir[0] * size[0]) + Math.abs(dir[1] * size[1]) + Math.abs(dir[2] * size[2])
-    const screenW = Math.max(extentAlong(right), 1)
-    const screenH = Math.max(extentAlong(up), 1)
     const rect = containerRef.current?.getBoundingClientRect()
     const viewW = rect && rect.width > 0 ? rect.width : 800
     const viewH = rect && rect.height > 0 ? rect.height : 600
-    const worldUnitsPerPixel = Math.max(screenW / (viewW * FRAME_FIT_MARGIN), screenH / (viewH * FRAME_FIT_MARGIN))
-    setPose({ center, worldUnitsPerPixel })
+    setPose(orthoFrameFit(frameRequest.bbox, axis, { width: viewW, height: viewH }))
     // `frameRequest` is replaced wholesale on every `F` press -- see Viewport3D's identical note.
   }, [frameRequest, axis])
 
@@ -362,28 +313,28 @@ export function OrthoViewport({
             const spriteTex = actor.sprite ? textures.sprite.get(actor.sprite.tex_index) : undefined
             if (actor.sprite && spriteTex) {
               return (
-                <sprite
+                <PointActorMarker
                   key={actor.name}
                   position={actor.location}
-                  scale={[actor.sprite.width, actor.sprite.height, 1]}
+                  aspect={actor.sprite.width / actor.sprite.height}
                   userData={{ actorName: actor.name }}
                   renderOrder={MARKER_RENDER_ORDER}
                 >
                   <spriteMaterial map={spriteTex} depthWrite={false} depthTest={false} />
-                </sprite>
+                </PointActorMarker>
               )
             }
             if (!markerTexture) return null
             return (
-              <sprite
+              <PointActorMarker
                 key={actor.name}
                 position={actor.location}
-                scale={[MARKER_SIZE, MARKER_SIZE, 1]}
+                aspect={1}
                 userData={{ actorName: actor.name }}
                 renderOrder={MARKER_RENDER_ORDER}
               >
                 <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={false} />
-              </sprite>
+              </PointActorMarker>
             )
           })}
         </group>
@@ -400,8 +351,8 @@ export function OrthoViewport({
         <SelectionMarkers actors={actors} selectedNames={selectedNames} />
         {/* Collision-cylinder / light-radius overlays, toggled globally (not by selection). */}
         {showRadii && <RadiiOverlays actors={actors} view={axis} />}
-        {selectedNonBrushBoxes.map(({ name, box }) => (
-          <box3Helper key={name} args={[box, SELECTION_BOX_COLOR]} />
+        {nonBrushBoxes.map(({ name, lo, hi }) => (
+          <box3Helper key={name} args={[new THREE.Box3(new THREE.Vector3(...lo), new THREE.Vector3(...hi)), SELECTION_BOX_COLOR]} />
         ))}
       </Canvas>
       {/* Cursor UU coordinate readout (Task 28) -- the selected actor's own location/size is

@@ -13,6 +13,8 @@ it returns exit 0 and reassigns `sys.stdout` as a side effect, so it doesn't red
 and it is not a `serve` concern (no stdout pipe to lose over HTTP)."""
 from __future__ import annotations
 
+import json
+
 from ..classindex import ClassRefError
 from ..config import ConfigError
 from ..driver import DriverError
@@ -31,6 +33,11 @@ def error_to_status(exc: Exception) -> tuple[int, str]:
     (`TimeoutError`/`EditorNotReadyError` before the `OSError` backstop). Raises `TypeError` for
     anything outside this closed set — a genuinely unclassified exception — so the caller (an HTTP
     handler, or `dispatch.py`) decides what that renders as, rather than this function guessing."""
+    if isinstance(exc, json.JSONDecodeError):
+        # Malformed request body (`PUT /api/level`'s `await request.json()`) — a clean 422 naming
+        # the problem, consistent with every other validation failure in that route, rather than
+        # falling through to the `TypeError` backstop (an unlogged 500).
+        return 422, f"invalid JSON body: {exc}"
     if isinstance(exc, CommandError):                 # incl. ProjectError, LevelSelectionError
         return 422, exc.message
     if isinstance(exc, ConfigError):

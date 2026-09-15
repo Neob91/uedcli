@@ -26,13 +26,22 @@ class TrunkWatcher:
     def notify(self) -> None:
         """Register one raw change and (re)start the debounce timer. A burst of calls inside
         `debounce_s` of each other collapses to one `on_change` — each call cancels the previous
-        pending timer, so only the timer started by the LAST call in the burst ever fires."""
+        PENDING timer, so only the timer started by the LAST call in the burst ever fires.
+        `_timer_task` only ever holds the debounce-SLEEP phase (`_wait_then_dispatch`) — once that
+        elapses, the actual `on_change()` call runs as its own, untracked task
+        (`_dispatch`, spawned by `_wait_then_dispatch`), so a `notify()` arriving while `on_change()`
+        is already in flight (e.g. mid `await ws.send_json`) cancels only a fresh pending timer, never
+        the broadcast itself (review finding: this used to `.cancel()` the SAME task that ran
+        `on_change()`, so a rapid notify during an in-flight broadcast silently killed it)."""
         if self._timer_task is not None:
             self._timer_task.cancel()
-        self._timer_task = asyncio.ensure_future(self._fire_after_quiet())
+        self._timer_task = asyncio.ensure_future(self._wait_then_dispatch())
 
-    async def _fire_after_quiet(self) -> None:
+    async def _wait_then_dispatch(self) -> None:
         await asyncio.sleep(self.debounce_s)
+        asyncio.ensure_future(self._dispatch())
+
+    async def _dispatch(self) -> None:
         result = self.on_change()
         if asyncio.iscoroutine(result):
             await result

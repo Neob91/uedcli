@@ -96,7 +96,7 @@ def test_status_route_reflects_a_successful_rebuild(tmp_path, monkeypatch):
     assert before == {"changes_available": False, "geometry_pinned": False,
                       "build_status": "no_build"}
 
-    app.state.build_and_publish_geometry([], _ued22_index(), DEFAULTS)
+    app.state.build_and_publish_geometry("TestLevel", [], _ued22_index(), DEFAULTS)
 
     after = c.get("/api/level/TestLevel/status").json()
     assert after == {"changes_available": False, "geometry_pinned": True, "build_status": "built"}
@@ -183,8 +183,8 @@ def test_get_trunk_second_call_is_a_cache_hit(tmp_path, monkeypatch):
 
     monkeypatch.setattr(trunk_module, "read_level_with_bodies", spy)
 
-    first = app.state.get_trunk([], DEFAULTS)
-    second = app.state.get_trunk([], DEFAULTS)
+    first = app.state.get_trunk("TestLevel", [], DEFAULTS)
+    second = app.state.get_trunk("TestLevel", [], DEFAULTS)
     assert first is second
     assert len(calls) == 1
 
@@ -217,7 +217,7 @@ def test_read_geometry_never_builds_regardless_of_slot_state(tmp_path, monkeypat
     assert not calls                                          # empty slot: no build
 
     index = _ued22_index()
-    app.state.build_and_publish_geometry([], index, DEFAULTS)
+    app.state.build_and_publish_geometry("TestLevel", [], index, DEFAULTS)
     assert len(calls) == 1                                    # the Rebuild itself DID build
 
     calls.clear()
@@ -240,7 +240,7 @@ def test_build_and_publish_geometry_is_the_only_thing_that_calls_build_scene(tmp
     assert app.state.read_geometry() is None
 
     index = _ued22_index()
-    built = app.state.build_and_publish_geometry([], index, DEFAULTS)
+    built = app.state.build_and_publish_geometry("TestLevel", [], index, DEFAULTS)
 
     assert set(built.owners) == {"Room"}
     assert app.state.read_geometry() is built
@@ -341,8 +341,8 @@ def test_on_trunk_settled_leaves_both_slots_untouched_bumps_generation_sets_chan
     project = SimpleNamespace(root=str(root), maps=None)
     app = create_app(project, "TestLevel")
 
-    trunk_state = app.state.get_trunk([], DEFAULTS)
-    geometry = app.state.build_and_publish_geometry([], _ued22_index(), DEFAULTS)
+    trunk_state = app.state.get_trunk("TestLevel", [], DEFAULTS)
+    geometry = app.state.build_and_publish_geometry("TestLevel", [], _ued22_index(), DEFAULTS)
     assert app.state.changes_available[0] is False
 
     class FakeWS:
@@ -361,7 +361,7 @@ def test_on_trunk_settled_leaves_both_slots_untouched_bumps_generation_sets_chan
     assert ws.sent == [{"type": "changes_available", "level": "TestLevel"}]
     assert app.state.changes_available[0] is True
     assert app.state.generation[0] == gen_before + 1
-    assert app.state.get_trunk([], DEFAULTS) is trunk_state    # untouched -- same object, no re-read
+    assert app.state.get_trunk("TestLevel", [], DEFAULTS) is trunk_state    # untouched -- same object, no re-read
     assert app.state.read_geometry() is geometry               # untouched -- same object, no rebuild
 
 
@@ -414,7 +414,7 @@ def test_generation_guard_retries_a_build_invalidated_mid_flight(tmp_path, monke
 
     def call_build_and_publish():
         search_files, index, defaults = serve_app._scene_inputs(project)
-        result["geometry"] = app.state.build_and_publish_geometry(search_files, index, defaults)
+        result["geometry"] = app.state.build_and_publish_geometry("TestLevel", search_files, index, defaults)
 
     t = threading.Thread(target=call_build_and_publish)
     t.start()
@@ -610,7 +610,7 @@ def test_scene_route_geometry_pinned_flag_matches_the_payload_it_actually_return
     # A concurrent Rebuild completes WHILE the above call is blocked on _payload_lock -- exactly
     # the window the review flagged.
     search_files, index, defaults = serve_app._scene_inputs(project)
-    app.state.build_and_publish_geometry(search_files, index, defaults)
+    app.state.build_and_publish_geometry("TestLevel", search_files, index, defaults)
     assert app.state.read_geometry() is not None   # geometry really is pinned now
 
     release_build.set()
@@ -695,8 +695,8 @@ def test_switch_level_resets_all_three_cache_slots(tmp_path, monkeypatch):
 
     # Populate all three slots for "TestLevel".
     index = _ued22_index()
-    app.state.get_trunk([], DEFAULTS)
-    app.state.build_and_publish_geometry([], index, DEFAULTS)
+    app.state.get_trunk("TestLevel", [], DEFAULTS)
+    app.state.build_and_publish_geometry("TestLevel", [], index, DEFAULTS)
     assert c.get("/api/level/TestLevel/scene").status_code == 200
     assert app.state.read_geometry() is not None
     gen_before = app.state.generation[0]
