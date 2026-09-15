@@ -130,6 +130,7 @@ class ClassDefaults:
     def __init__(self, resolver):
         self._resolver = resolver
         self._pkgs: dict = {}
+        self._own_props: dict = {}   # resolve_class_properties's per-class own-props memo (perf)
         self._memo: dict[str, ClassInfo] = {}
         self._structs: dict[tuple, Field] = {}
         self._resolving: set[tuple] = set()   # struct types mid-decode (self-reference guard)
@@ -151,8 +152,12 @@ class ClassDefaults:
         # ONE package map for all three passes. `resolve_class_defaults` has to `load_package` every
         # package on the chain anyway, so seeding the same dict into `resolve_class_properties`
         # (whose `_cache` then takes its pre-seeded live-decode branch instead of the persistent
-        # schema cache) costs nothing and saves a second read of bytes already in memory.
-        props = uprops.resolve_class_properties(fqcn, resolver=self._resolver, _cache=self._pkgs)
+        # schema cache) costs nothing and saves a second read of bytes already in memory. `_own_props`
+        # is ALSO shared across every class this `ClassDefaults` resolves, so a shared ancestor's own
+        # properties are decoded from the native layer once per process, not once per descendant
+        # leaf class (`resolve_class_properties`'s own per-class memo).
+        props = uprops.resolve_class_properties(fqcn, resolver=self._resolver, _cache=self._pkgs,
+                                                _own_cache=self._own_props)
         schema = {p.name.casefold(): p for p in props}
         defaults = uprops.resolve_class_defaults(fqcn, resolver=self._resolver, schema=schema,
                                                  _pkgs=self._pkgs)

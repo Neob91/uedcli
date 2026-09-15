@@ -144,6 +144,42 @@ def test_it_inherits_across_a_package_boundary():
         f"{cls} should inherit from {sup}'s package"
 
 
+@pytest.mark.skipif(not _HAVE_INSTALL, reason="v68 install (Core.u/Engine.u) not present")
+def test_a_shared_ancestor_is_decoded_ONCE_when_its_package_is_PRESEEDED(monkeypatch):
+    """PERF GUARD (the GUI cold-scene bug): `classdefaults.ClassDefaults` pre-seeds
+    `resolve_class_properties`'s `_cache` with live `Package`s (the "seeded" branch below, taken so
+    `resolve_class_defaults` doesn't reload bytes already in memory) — but that branch had no
+    per-class memo of its own, so with the SAME package pre-seeded, a shared ancestor's own
+    properties (e.g. `Engine.Actor`, reached by every Deus Ex actor class) were re-decoded from the
+    native layer once per DESCENDANT leaf class resolved, not once per process."""
+    from collections import Counter
+
+    from uedcli.uprops import uclass
+
+    calls: list[tuple[str, str]] = []
+    real = uclass.own_class_properties
+
+    def spy(pkg, class_name, *, owner_fqcn):
+        calls.append((pkg.name, class_name.casefold()))
+        return real(pkg, class_name, owner_fqcn=owner_fqcn)
+
+    monkeypatch.setattr(uclass, "own_class_properties", spy)
+
+    shared_cache = {
+        "Engine": uprops.load_package(_install_resolver("Engine"), name="Engine"),
+        "Core": uprops.load_package(_install_resolver("Core"), name="Core"),
+    }
+    shared_own_cache: dict = {}     # what classdefaults.ClassDefaults now threads across a level
+    for cls in ("Engine.Light", "Engine.Brush", "Engine.Mover"):
+        uprops.resolve_class_properties(cls, resolver=_install_resolver, _cache=shared_cache,
+                                        _own_cache=shared_own_cache)
+
+    counts = Counter(calls)
+    assert counts[("Engine", "actor")] == 1, counts    # the shared ancestor: decoded once, not 3x
+    assert counts[("Engine", "brush")] == 1, counts    # reached directly AND via Mover's chain
+    assert all(n == 1 for n in counts.values()), counts
+
+
 # --------------------------------------------------------------------------- no-fallback errors
 
 def test_it_errors_when_a_package_cannot_be_resolved():
