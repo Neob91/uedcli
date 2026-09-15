@@ -179,7 +179,10 @@ function useMarkerTexture(): THREE.Texture | null {
  *   Approximations of UE1's additive/modulate-2x, not pixel-exact (spec). */
 export function resolveMaterialState(
   group: Pick<GeometryGroup, 'masked' | 'twoSided' | 'blend'>,
-): Pick<THREE.MeshBasicMaterialParameters, 'side' | 'alphaTest' | 'transparent' | 'blending' | 'opacity'> {
+): Pick<
+  THREE.MeshBasicMaterialParameters,
+  'side' | 'alphaTest' | 'transparent' | 'blending' | 'opacity' | 'premultipliedAlpha'
+> {
   const state: ReturnType<typeof resolveMaterialState> = {
     side: group.twoSided ? THREE.DoubleSide : THREE.FrontSide,
     alphaTest: group.masked ? 0.5 : 0,
@@ -191,6 +194,8 @@ export function resolveMaterialState(
   } else if (group.blend === 'modulated') {
     state.transparent = true
     state.blending = THREE.MultiplyBlending
+    // three.js requires this for MultiplyBlending, else it warns and blends wrong (WebGLState.js).
+    state.premultipliedAlpha = true
   }
   return state
 }

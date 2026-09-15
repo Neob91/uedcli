@@ -31,4 +31,10 @@ describe('resolveMaterialState', () => {
     expect(m.transparent).toBe(true)
     expect(m.blending).toBe(THREE.MultiplyBlending)
   })
+
+  it('sets premultipliedAlpha for modulated (three.js requires it for MultiplyBlending)', () => {
+    expect(resolveMaterialState({ masked: false, twoSided: false, blend: 'modulated' }).premultipliedAlpha).toBe(true)
+    expect(resolveMaterialState({ masked: false, twoSided: false, blend: 'translucent' }).premultipliedAlpha).toBeUndefined()
+    expect(resolveMaterialState({ masked: false, twoSided: false, blend: 'opaque' }).premultipliedAlpha).toBeUndefined()
+  })
 })
