@@ -1,10 +1,13 @@
 // Collision-cylinder + light-radius overlays, in both the 3D perspective pane and the 2D ortho
 // panes -- ports `actor diagram --show collision`/`--show light-range` (uedcli/preview.py,
 // `dev/docs/unrealed/rendering.md` "Point-actor sprites + radii overlays"). That CLI flag is a
-// GLOBAL render toggle (every actor carrying the property, never a per-actor selection filter) --
-// this component mirrors that: it draws for every actor `SceneActor.radii` resolved (server-side,
-// unconditionally -- see uedcli/serve/scene.py::ActorRadii), gated by this app's one "show radii"
-// toggle (QuadLayout, mirroring the existing grid-toggle), never by selection.
+// GLOBAL render toggle (every actor carrying the property); this component's `Radii:` toggle
+// (QuadLayout, mirroring the existing grid-toggle) instead gates a SELECTION filter -- when on, it
+// draws only for the currently-SELECTED actor(s) among those `SceneActor.radii` resolved
+// (server-side, unconditionally for every actor -- see uedcli/serve/scene.py::ActorRadii);
+// nothing selected draws nothing (owner ruling 2026-09-15: scoping the toggle to the selection is
+// the point -- "show everything" would defeat it). `selectedRadiiActors` (radiiProjection.ts) is
+// the shared pure filter.
 //
 // The perspective pane draws a REAL 3D shape: an upright wire cylinder (matching preview.py's
 // `_draw_cylinder` docstring -- "upright, world-axis-aligned regardless of actor rotation") and a
@@ -20,7 +23,7 @@ import type { SceneActor } from '../api'
 import type { OrthoAxis } from './orthoCamera'
 import { orthoBasis } from './orthoCamera'
 import type { OrthoShape } from './radiiProjection'
-import { collisionOrthoShape, sphereOrthoShape } from './radiiProjection'
+import { collisionOrthoShape, selectedRadiiActors, sphereOrthoShape } from './radiiProjection'
 
 // Matches preview.py's COL_COLLISION/COL_LIGHT hues (collision red, light deviated to orange so the
 // two stay distinct -- see preview.py's module comment by those constants). preview.py's rasterizer
@@ -36,6 +39,7 @@ export type RadiiView = 'perspective' | OrthoAxis
 export interface RadiiOverlaysProps {
   actors: SceneActor[]
   view: RadiiView
+  selectedNames: ReadonlySet<string>
 }
 
 function CollisionCylinder3D({
@@ -137,11 +141,8 @@ function OrthoShapeLine({
   )
 }
 
-export function RadiiOverlays({ actors, view }: RadiiOverlaysProps) {
-  const withRadii = useMemo(
-    () => actors.filter((a) => a.radii && (a.radii.collision_radius != null || a.radii.light_radius != null)),
-    [actors],
-  )
+export function RadiiOverlays({ actors, view, selectedNames }: RadiiOverlaysProps) {
+  const withRadii = useMemo(() => selectedRadiiActors(actors, selectedNames), [actors, selectedNames])
   if (withRadii.length === 0) return null
 
   if (view === 'perspective') {

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import { collisionOrthoShape, sphereOrthoShape } from './radiiProjection'
+import type { SceneActor } from '../api'
+import { collisionOrthoShape, selectedRadiiActors, sphereOrthoShape } from './radiiProjection'
 
 describe('collisionOrthoShape', () => {
   it('is a circle of the collision radius when looking down the cylinder axis (top)', () => {
@@ -21,5 +22,52 @@ describe('sphereOrthoShape', () => {
   it('is a circle of the sphere radius, the same in every axis', () => {
     const expected = { kind: 'circle', radius: 225 }
     expect(sphereOrthoShape(225)).toEqual(expected)
+  })
+})
+
+function actorWithRadii(name: string, radii: SceneActor['radii']): SceneActor {
+  return {
+    name,
+    cls: 'Engine.Light',
+    bbox_lo: [0, 0, 0],
+    bbox_hi: [0, 0, 0],
+    location: [0, 0, 0],
+    rotation: [0, 0, 0],
+    folder: null,
+    labels: [],
+    order_value: 'm',
+    csg_rank: 1,
+    props: [],
+    categories: [],
+    brush: null,
+    sprite: null,
+    radii,
+  }
+}
+
+describe('selectedRadiiActors', () => {
+  const a = actorWithRadii('A', { collision_radius: 50, collision_height: 80, light_radius: null })
+  const b = actorWithRadii('B', { collision_radius: null, collision_height: null, light_radius: 200 })
+  const noRadii = actorWithRadii('C', null)
+  const neitherGate = actorWithRadii('D', { collision_radius: null, collision_height: null, light_radius: null })
+
+  it('is empty when nothing is selected, even if every actor has radii', () => {
+    expect(selectedRadiiActors([a, b], new Set())).toEqual([])
+  })
+
+  it('returns only the selected actor(s) that also carry a resolved radius', () => {
+    expect(selectedRadiiActors([a, b, noRadii], new Set(['A', 'C']))).toEqual([a])
+  })
+
+  it('supports a multi-actor selection', () => {
+    expect(selectedRadiiActors([a, b, noRadii], new Set(['A', 'B']))).toEqual([a, b])
+  })
+
+  it('excludes a selected actor with radii resolved but both fields null (clears neither gate)', () => {
+    expect(selectedRadiiActors([neitherGate], new Set(['D']))).toEqual([])
+  })
+
+  it('excludes a selected actor with no radii at all (a brush, or one clearing no gate)', () => {
+    expect(selectedRadiiActors([noRadii], new Set(['C']))).toEqual([])
   })
 })

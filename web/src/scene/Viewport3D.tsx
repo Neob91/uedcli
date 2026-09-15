@@ -194,7 +194,8 @@ export interface Viewport3DProps {
   // 'unlit' for now (the main spec's own "Also open": its exact definition isn't pinned down yet).
   mode?: ShadingMode
   // Collision-cylinder / light-radius overlay toggle -- one switch for every pane (QuadLayout),
-  // mirroring the existing grid-toggle convention; default off (radii clutter a level fast).
+  // mirroring the existing grid-toggle convention; default off. Scoped to the current selection
+  // (owner ruling 2026-09-15) -- on shows only the selected actor(s)' radii, not every actor's.
   showRadii?: boolean
 }
 
@@ -492,8 +493,9 @@ export function Viewport3D({
         />
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={scene.actors} selectedNames={selectedNames} />
-        {/* Collision-cylinder / light-radius overlays, toggled globally (not by selection). */}
-        {showRadii && <RadiiOverlays actors={scene.actors} view="perspective" />}
+        {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current
+            selection (owner ruling 2026-09-15) -- draws nothing when nothing is selected. */}
+        {showRadii && <RadiiOverlays actors={scene.actors} view="perspective" selectedNames={selectedNames} />}
         {/* Every selected NON-brush actor (no CSG ring to draw) falls back to its own plain AABB
             box -- one per selected actor (Task 14), not just a single one. */}
         {nonBrushBoxes.map(({ name, lo, hi }) => (

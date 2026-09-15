@@ -146,7 +146,8 @@ export interface OrthoViewportProps {
   // QuadLayout, not a per-pane preference (classic level editors have one "show grid" switch).
   showGrid?: boolean
   // Collision-cylinder / light-radius overlay toggle -- one switch for every pane (QuadLayout),
-  // mirroring showGrid's convention; default off (radii clutter a level fast).
+  // mirroring showGrid's convention; default off. Scoped to the current selection (owner ruling
+  // 2026-09-15) -- on shows only the selected actor(s)' radii, not every actor's.
   showRadii?: boolean
 }
 
@@ -350,8 +351,9 @@ export function OrthoViewport({
         />
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={actors} selectedNames={selectedNames} />
-        {/* Collision-cylinder / light-radius overlays, toggled globally (not by selection). */}
-        {showRadii && <RadiiOverlays actors={actors} view={axis} />}
+        {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current
+            selection (owner ruling 2026-09-15) -- draws nothing when nothing is selected. */}
+        {showRadii && <RadiiOverlays actors={actors} view={axis} selectedNames={selectedNames} />}
         {nonBrushBoxes.map(({ name, lo, hi }) => (
           <box3Helper key={name} args={[new THREE.Box3(new THREE.Vector3(...lo), new THREE.Vector3(...hi)), SELECTION_BOX_COLOR]} />
         ))}

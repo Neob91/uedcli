@@ -201,7 +201,8 @@ at the wire boundary, never in the frontend — the Inspector's whole design poi
 - No sound-range overlay (`preview.py --show sound-range` has no GUI equivalent). Collision-cylinder
   and light-radius overlays are built (`RadiiOverlays.tsx`, `radiiProjection.ts`,
   `SceneActor.radii`/`uedcli/serve/scene.py::ActorRadii`) — a global toggle (`QuadLayout`'s
-  `Radii:` button, default off), in both 3D and every 2D ortho pane.
+  `Radii:` button, default off) that, when on, draws radii only for the currently-selected actor(s)
+  (nothing selected draws nothing), in both 3D and every 2D ortho pane.
 - Grid major/minor tiering (above).
 
 ## Future direction (not yet scoped)
