@@ -336,6 +336,17 @@ _PACKAGES: dict[str, dict[str, str]] = {
         # `bool(WeaponsStay)`.
         "SBUser.uc": "class SBUser expands Object;\nfunction bool F(string S)\n{\n    return bool(S);\n}\n",
     },
+    "SamePkgInheritedDefault": {
+        # `dev/docs/board/inbox/same-package-inherited-defaultproperties/`: a subclass overriding a
+        # field it INHERITS from a SAME-PACKAGE super (not a cross-package one, already covered by
+        # `test_inherited_default_now_compiles`) used to raise `NotImplementedError: not a member of
+        # super chain` -- `_super_field_order` walked the super chain via `graph._locate`, disk-export
+        # bytes only; a same-package super has no compiled export yet (still mid-compile) --
+        # `_super_field_order` now falls back to the super's AST (`b.in_pkg_decls`) for an in-package
+        # ancestor.
+        "MPBase.uc": "class MPBase expands Object;\nvar int Health;\ndefaultproperties\n{\n    Health=5\n}\n",
+        "MPSub.uc": "class MPSub expands MPBase;\ndefaultproperties\n{\n    Health=9\n}\n",
+    },
     "SelfDep": {
         # A Context whose target is the COMPILING CLASS ITSELF still gets its own deep=0 Dependency
         # entry -- real UCC does NOT dedupe by class at all (an earlier version of `_record_dep`
@@ -559,6 +570,14 @@ def test_self_typed_context_gets_own_dependency():
     real UT99 `ListItem` (a self-referencing linked-list class Contexting through
     `local ListItem T; ... T.Next`/`.Tag` throughout its own methods)."""
     _check("SelfDep")
+
+
+def test_same_package_inherited_default_override():
+    """A subclass overriding a field it inherits from a SAME-PACKAGE super (`MPSub`'s
+    `Health=9`, inherited from `MPBase`) now compiles instead of raising `NotImplementedError: not a
+    member of super chain` -- `_super_field_order` resolves an in-package super's own field order from
+    its AST (`b.in_pkg_decls`), since it has no compiled export yet to decode."""
+    _check("SamePkgInheritedDefault")
 
 
 def test_perm_gate_catches_wrong_body():

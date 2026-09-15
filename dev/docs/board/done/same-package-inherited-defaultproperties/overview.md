@@ -22,3 +22,12 @@ signature fallback `_build_callables`'s member/function resolution already uses)
 further — worked around in the fixture that hit it by dropping the override rather than fixing the
 compiler. `dev/docs/spikes/2026-09-14-utserveradmin-class-ref-gaps/probe_default_meta_class.py`
 originally used this shape before being simplified.
+
+**FIXED.** `_super_field_order` walked the super chain via `graph._locate`, which decodes a COMPILED
+export's Children chain — a same-package super mid-compile has none yet. Fixed with an AST-based
+fallback: `b.in_pkg_decls` (casefold -> `ClassDecl`, populated in `compile_package_dir`) lets
+`_super_field_order` read an in-package super's own properties from its declaration (`members_of`,
+forward order — a var's chain position is always forward, only non-var fields ever reverse) instead
+of a disk export, then continues up its `super_name`. Regression: `pkg_SamePkgInheritedDefault`
+(`test_uscript_package.py`), the exact `MPBase`/`MPSub` repro shape — `perm_gate` byte-exact against
+a fresh live UED22 UCC build.

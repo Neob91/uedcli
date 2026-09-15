@@ -119,6 +119,9 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 | **NoGunsMutator** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/vumaq/ut99-mutators) — hand-authored with no `defaultproperties` block and a trailing blank line, a source shape no prior fixture had; exposed a `_script_text` bug (see below), now fixed; `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as `Fire`/`UWeb`/`IpServer` |
 | **ASPMutator** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/rxut/AdvancedSpawnPoints) — a `Botpack`-dependent mutator; needed the Botpack-load fix (below) plus five further real gaps (cross-package type discovery, `Vect`/`Rot` literals, Vector/Rotator→string, compound-assign operator overload, `for`-loop update-clause dependency double-recording, explicit-zero-default suppression), all now fixed; `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as the other UT99 packages. Review (2026-09-14) caught the compound-assign fix not reaching the `for`-loop update path, the struct-member half of cross-package type discovery, the `for`-loop dependency landing in init/update/cond order instead of init/cond/update, and a docker-gate skip check missing the new Sounds substrate — all fixed; the zero-default suppression was scoped back to only the measured plain-scalar case (an explicit zero-ordinal enum default is left unsuppressed, open question filed) |
 | **UTServerAdmin** | UT99 | 4 | perm only | **real stock UT99 package** (`UTServerAdmin`/`UTImageServer`/`UTServerAdminSpectator`/`ListItem`) — needed nine further real gaps, all now fixed (see below); `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as the other UT99 packages |
+| **ProtectSeanMutator** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/smcl/ut99-dev) — already passed `perm_gate` with no compiler change; residual is the same UT99 own-name-pool gap as the other UT99 packages |
+| **VampireSeanMutator** | UT99 | 1 | perm only | **real corpus package** (same repo) — already passed `perm_gate` with no compiler change; residual is the same UT99 own-name-pool gap as the other UT99 packages |
+| **SeanMutator** | UT99 | 1 | perm only | **real corpus package** (same repo, `HelloMut.uc`) — has NO `defaultproperties` block and NO trailing newline at all (ends `}` with nothing after, a source shape narrower than `NoGunsMutator`'s trailing-blank-line case); real UCC's `ScriptText` still ends with exactly one line terminator, ADDING one where the source has none — `compile._script_text`'s no-newline branch now appends `\n` instead of returning the source unchanged; `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as the other UT99 packages |
 
 Controlled (non-corpus) fixtures `UscHello`/`UscVars`/`UscBB`/`UscFn`/`UscW`/`UscSt` all pass the
 strict gate autonomously.
@@ -160,9 +163,11 @@ finding-by-finding detail (each live-probed, each with a committed regression):
 A tenth, unrelated bug found along the way: `_record_dep` wrongly SKIPPED a Context whose target was
 the compiling class itself (assumed redundant with its own deep=1 self-Dependency) — real UCC does
 not dedupe `Dependencies` by class at all, even for self (confirmed on real `ListItem`, a self-
-referencing linked-list class, and a controlled `SelfDepNode` probe). Two smaller gaps found but NOT
-chased (filed to the board): `ArrayCount` on a plain non-`.default` member access, and a same-package
-inherited `defaultproperties` override crash.
+referencing linked-list class, and a controlled `SelfDepNode` probe). One smaller gap found but NOT
+chased (filed to the board): `ArrayCount` on a plain non-`.default` member access. The other
+(a same-package inherited `defaultproperties` override crash) is FIXED — `_super_field_order` now
+falls back to an in-package super's AST (`b.in_pkg_decls`) when it has no compiled export yet;
+regression `pkg_SamePkgInheritedDefault` (`test_uscript_package.py`).
 
 ## Key RE findings (crux facts, detail in `dev/docs/unrealed/unrealscript/`)
 

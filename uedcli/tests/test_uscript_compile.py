@@ -166,11 +166,14 @@ def test_self_typed_dependency_single_class_compile():
 
 
 def test_script_text_no_defaultproperties():
-    """With no `defaultproperties` block, `_script_text` drops trailing wholly-blank line(s)
-    (measured on `NoGunsMutator`, `test_uscript_ut99.py`) but leaves a source with no trailing
-    newline at all untouched — that shape is unmeasured, not guessed at."""
+    """With no `defaultproperties` block, `_script_text` always ends with exactly ONE line
+    terminator after the last real line: it drops extra trailing wholly-blank line(s) (measured on
+    `NoGunsMutator`, `test_uscript_ut99.py`) and ADDS one when the source has no trailing newline
+    at all (measured on the real UT99 mutator `SeanMutator`'s `HelloMut.uc`, which ends `}` with no
+    newline whatsoever)."""
     body = "class Foo expands Object;\n\nfunction F() {\n}"
     assert _script_text(body + "\n") == body + "\n"                # single trailing newline: no-op
     assert _script_text(body + "\n\n") == body + "\n"               # one trailing blank line: dropped
     assert _script_text(body + "\n\n   \n") == body + "\n"          # blank line w/ trailing spaces
-    assert _script_text(body + "\n\n   ") == body + "\n\n   "       # no final newline: untouched
+    assert _script_text(body) == body + "\n"                        # no trailing newline: one added
+    assert _script_text(body + "\n\n   ") == body + "\n"            # blank line, no final newline

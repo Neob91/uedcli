@@ -306,6 +306,11 @@ class _Build:
     local_enums: set[str] = field(default_factory=set)
     local_structs: set[str] = field(default_factory=set)
     in_pkg_class_names: dict[str, str] = field(default_factory=dict)  # casefold -> declared class name
+    in_pkg_decls: dict[str, ClassDecl] = field(default_factory=dict)  # casefold -> its ClassDecl
+                                                  # (multi-class: every sibling's AST, incl. one not
+                                                  # yet built — backs `_super_field_order`'s in-package
+                                                  # fallback, since an in-progress class has no
+                                                  # compiled export to decode field order from)
     graph_override: object | None = None      # multi-class: a ClassGraph seeing in-package classes
     catalog_override: object | None = None
     extra_deps: list[str] = field(default_factory=list)  # classes Context'd into (deep=0 Dependency
@@ -1085,7 +1090,7 @@ def _emit_inherited_defaults(b: _Build, decl: ClassDecl, entries: list) -> None:
     if not entries:
         return
     graph = _defaults_graph(b, decl.super_name)
-    order = _super_field_order(graph, decl.super_name)
+    order = _super_field_order(b, graph, decl.super_name)
     label_by = {cf: label for cf, label in order}
     pos_by = {cf: i for i, (cf, _label) in enumerate(order)}
     resolved = []
@@ -1147,15 +1152,27 @@ def _own_props_in_order(pkg, idx1: int) -> list[tuple[str, str]]:
     return out
 
 
-def _super_field_order(graph: ClassGraph, super_name: str) -> list[tuple[str, str]]:
+def _super_field_order(b: _Build, graph: ClassGraph, super_name: str) -> list[tuple[str, str]]:
     """Inherited fields in class field-iteration order — the super's own properties first (Children
-    order), then its ancestors', up the chain."""
+    order), then its ancestors', up the chain. A same-package super (`b.in_pkg_decls`) has no compiled
+    export yet to decode field order from — its own properties resolve from its AST instead
+    (`members_of`, forward declaration order; only non-var chain fields ever reverse, so this needs no
+    chain-reversal logic). Disk-backed ancestors keep decoding compiled bytes."""
     out: list[tuple[str, str]] = []
     seen: set[str] = set()
     name: str | None = super_name
     for _ in range(64):
         if name is None:
             break
+        decl = b.in_pkg_decls.get(name.casefold())
+        if decl is not None:
+            for n, label in members_of(decl.members, graph).items():
+                cf = n.casefold()
+                if cf not in seen:
+                    seen.add(cf)
+                    out.append((cf, label))
+            name = decl.super_name
+            continue
         loc = graph._locate(name)
         if loc is None:
             break
@@ -2108,18 +2125,19 @@ def _class_export(b, class_name, super_name, super_crc, crlf_source, class_flags
 def _script_text(source: str) -> str:
     """The text UCC stores in `ScriptText`: the class source up to (not including) the
     `defaultproperties` block, which the compiler consumes separately. With NO `defaultproperties`
-    block, UCC's own capture drops any wholly-blank trailing line(s) the source file ends with,
-    keeping exactly the newline that terminates the last real line (measured on `NoGunsMutator`, a
-    hand-authored community mutator with no `defaultproperties` and a trailing blank line — a
-    community source shape no prior fixture, which always had `defaultproperties`, exercised). A
-    source with no trailing newline at all is a different, unmeasured shape and is left untouched
-    rather than guessed at."""
+    block, UCC's own capture always ends with exactly ONE line terminator after the last real line,
+    regardless of how many (including zero) the source file itself ends with — measured on two
+    community shapes: `NoGunsMutator` (a trailing blank line, collapsed to one) and the real UT99
+    mutator `SeanMutator`'s `HelloMut.uc` (no trailing newline at all, one added)."""
     m = re.search(r"(?im)^[ \t]*defaultproperties\b", source)
     if m:
         return source[:m.start()]
-    if not re.search(r"(\r\n|\r|\n)\Z", source):
-        return source
-    return re.sub(r"(\r\n|\r|\n)(?:[ \t]*(?:\r\n|\r|\n))*\Z", r"\1", source)
+    lines = source.splitlines()
+    while lines and lines[-1].strip() == "":
+        lines.pop()
+    if not lines:
+        return source   # no real content -- pathological, leave untouched rather than guess
+    return "\n".join(lines) + "\n"
 
 
 def _to_crlf(text: str) -> str:
@@ -2296,7 +2314,8 @@ def compile_package_dir(classes: dict[str, str], env: InstallEnv, *,
     graph = _PkgSigGraph(base_paths, pkg_sigs)
 
     b = _Build(class_name="", env=env,
-               in_pkg_class_names={name.casefold(): name for name in decls})
+               in_pkg_class_names={name.casefold(): name for name in decls},
+               in_pkg_decls={name.casefold(): decl for name, (decl, _src) in decls.items()})
     units: list[_ClassUnit] = []
     # Pass 2 (lowering): each class's bytecode body, in turn. `graph` already sees every class's
     # signature (pass 1), so a class may reference a sibling compiled EARLIER OR LATER in `order`.

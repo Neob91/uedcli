@@ -137,6 +137,17 @@ Fixtures (each isolates a compiler gap fixed for the first UT99 packages):
                      `NetConnection(O) != None` (a cast to a class with NO exported script body
                      ANYWHERE on the search path, fully native, no `.uc` source at all) resolves via
                      `env.class_home_from_imports` scanning another package's own IMPORT table.
+  - `SeanMutator`, `ProtectSeanMutator`, `VampireSeanMutator` - three real community mutators
+                     (github.com/smcl/ut99-dev, single-class each). `ProtectSeanMutator`/
+                     `VampireSeanMutator` already passed `perm_gate` with no compiler change.
+                     `SeanMutator`'s `HelloMut.uc` has NO `defaultproperties` block and NO trailing
+                     newline at all (ends `}` with nothing after) -- a source shape narrower than
+                     `NoGunsMutator`'s (a trailing BLANK LINE, at least one newline present). Real
+                     UCC's own `ScriptText` capture still ends with exactly one line terminator: it
+                     ADDS one where the source has none, the same rule (not a special case) that
+                     already collapsed `NoGunsMutator`'s multiple trailing newlines to one --
+                     `compile._script_text`'s no-newline branch now appends one instead of returning
+                     the source unchanged.
 """
 from __future__ import annotations
 
@@ -161,7 +172,8 @@ _FIX = Path(__file__).resolve().parent / "fixtures" / "uscript" / "ut99"
 _PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritFinal", 5),
             ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154), ("UscIpAddrProbe", 5), ("IpServer", 154),
             ("NoGunsMutator", 9), ("ASPMutator", 61), ("UTServerAdmin", 353),
-            ("UscNetConnectionProbe", 5)]
+            ("UscNetConnectionProbe", 5), ("SeanMutator", 4), ("ProtectSeanMutator", 13),
+            ("VampireSeanMutator", 13)]
 
 # Extra stock EditPackages a fixture's super chain needs loaded (`_edit_packages_upto`'s
 # content-safe base only covers Core/Engine/Editor) — only needed for the DOCKER-gated rebuild.
