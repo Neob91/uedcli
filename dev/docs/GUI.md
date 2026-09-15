@@ -92,10 +92,20 @@ intentional), not a silent implementation choice either way.
   lines — never its filled interior/silhouette (matches UED22; a bounding-box fallback there was a
   real, fixed bug).
 - **Vertex + pivot markers** (`SelectionMarkers.tsx`) port `preview.py`'s `_draw_vertex_dot`/
-  `_draw_pivot_marker`: a small square dot per poly vertex in the brush's own brightened CSG wire
-  color, plus a red (`_PIVOT_RED`, `(255,63,63)`) crosshair+square at the actor's true `Location`.
-  Known gap: `SceneActor` carries no `PrePivot`, so the separate PrePivot-shifted origin dot isn't
-  reproduced (coincides with the pivot only when `PrePivot=0`).
+  `_draw_pivot_marker`: a small square dot (`VERTEX_DOT_SIZE = 2` world units — tuned down from an
+  earlier `6`, which read as an oversized blob against the 2px selection outline) per poly vertex in
+  the brush's own brightened CSG wire color, plus a red (`_PIVOT_RED`, `(255,63,63)`) crosshair+square
+  at the actor's true `Location`. A third dot, the same square glyph as the poly vertices, marks the
+  brush's PrePivot-shifted "local origin" (`BrushHighlight.local_origin`, `Location - R·PrePivot`,
+  computed server-side in `scene.py`'s `_brush_highlight` the same way `preview.py` does — coincides
+  with the pivot only when `PrePivot=0`). This dot renders for at most ONE actor even when several
+  brushes are selected: UED22's real GUI has exactly one pivot WIDGET per selection (it drops onto
+  whichever actor a human click lands on, not one per selected actor —
+  `dev/docs/spikes/2026-06-19-multiactor-rotate-groundtruth.md` "Pivot caveat"). `selectionSet.ts`'s
+  `primarySelection` (the last name in the selection Set's insertion order — `toggleSelection` always
+  appends a freshly-selected name last) stands in for "the actor last clicked." The pre-existing red
+  pivot crosshair still renders per selected actor; the same real-UED22 evidence suggests it may have
+  the same one-widget-per-selection mismatch, not yet addressed here.
 - **The pivot marker is a gizmo, not a geometry marker**: it holds a constant on-screen pixel size
   regardless of zoom/distance (`PivotMarker`'s per-frame rescale from live camera/viewport state via
   `worldUnitsPerPixelAt`), unlike the vertex dots, which stay world-scaled (they mark a precise

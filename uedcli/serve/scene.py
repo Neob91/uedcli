@@ -73,10 +73,14 @@ class BrushHighlight:
     the selection outline. Deliberately NOT `ScenePayload.polys` (the CSG-SOLVED result): the point
     is to show the brush's own authored shape, matching `actor diagram --mode wire --highlight`.
     `color` is that classification's vivid front hue (`preview._CSG_PALETTE[csg_class][0]`), so a
-    highlighted brush always draws in its OWN CSG colour, never a fixed selection colour."""
+    highlighted brush always draws in its OWN CSG colour, never a fixed selection colour.
+    `local_origin` is the world position of the brush's LOCAL coordinate origin (`Location -
+    R·PrePivot`, matching `preview.py`'s "local origin" dot) -- coincides with `SceneActor.location`
+    (the true, PrePivot-independent pivot) only when PrePivot is zero."""
     csg_class: str
     color: tuple[int, int, int]
     polys: list[list[float]]   # one entry per poly: flat world verts (x0,y0,z0, x1,y1,z1, ...)
+    local_origin: tuple[float, float, float]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -206,7 +210,9 @@ def _brush_highlight(actor, index) -> BrushHighlight | None:
             off = local_offset(R, prepivot, v)
             verts += [float(loc[0] + off[0]), float(loc[1] + off[1]), float(loc[2] + off[2])]
         polys.append(verts)
-    return BrushHighlight(csg_class=csg_class, color=color, polys=polys)
+    origin_off = local_offset(R, prepivot, _ZERO3)
+    local_origin = tuple(float(loc[i] + origin_off[i]) for i in range(3))
+    return BrushHighlight(csg_class=csg_class, color=color, polys=polys, local_origin=local_origin)
 
 
 def _is_hidden_ed(actor, defaults) -> tuple[bool, str | None]:

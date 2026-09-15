@@ -32,7 +32,10 @@ describe('MARKER_COLOR', () => {
 
 describe('actorsNeedingMarkers', () => {
   it('excludes a brush actor even with no owned polys', () => {
-    const brushActor = actor({ name: 'Wall', brush: { csg_class: 'add', color: [0, 0, 0], polys: [] } })
+    const brushActor = actor({
+      name: 'Wall',
+      brush: { csg_class: 'add', color: [0, 0, 0], polys: [], local_origin: [0, 0, 0] },
+    })
     expect(actorsNeedingMarkers([brushActor], new Set())).toEqual([])
   })
 

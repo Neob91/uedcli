@@ -226,6 +226,40 @@ def test_location_prop_synthesis():
     assert room_actor.categories[0] == "Movement"
 
 
+def test_brush_highlight_local_origin_is_location_minus_prepivot():
+    """`BrushHighlight.local_origin` is the world position of the brush's LOCAL coordinate origin
+    (`Location - R*PrePivot`, `preview.py`'s "local origin" dot -- see `dev/docs/GUI.md` "Selection &
+    the Inspector"). With no Rotation (R=None), `local_offset` skips rotation entirely, so this
+    reduces to plain vector subtraction -- an exactly hand-checkable case that proves `_brush_highlight`
+    wires `actor_prepivot`+`local_offset` the same way it already does for the poly vertices (the
+    rotation math itself is `rotation.py`'s own tested concern, not re-tested here)."""
+    from uedcli.serve.scene import _BuiltGeometry, _LoadedTrunk, build_scene_payload
+    from uedcli.tests.conftest import StubClassIndex, set_prop
+
+    room = cube_room()
+    room.location = (Decimal("100"), Decimal("50"), Decimal("25"))
+    set_prop(room, "PrePivot", "(X=10.000000,Y=20.000000,Z=5.000000)")
+    level = Level(actors={room.name: room}, order=[room.name])
+    trunk_state = _LoadedTrunk(level=level, ranks={room.name: "m"}, folders={room.name: None},
+                               sprite_table=[], actor_sprites={})
+    geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=[], texture_table=[], owners=[])
+
+    payload = build_scene_payload(trunk_state, geometry, StubClassIndex(), DEFAULTS)
+
+    room_actor = next(a for a in payload.actors if a.name == "Room")
+    assert room_actor.brush is not None
+    assert room_actor.brush.local_origin == (90.0, 30.0, 20.0)
+    # PrePivot=0 (the common case) coincides with the true pivot -- SceneActor.location.
+    plain_room = cube_room(name="PlainRoom")
+    plain_room.location = (Decimal("100"), Decimal("50"), Decimal("25"))
+    level2 = Level(actors={plain_room.name: plain_room}, order=[plain_room.name])
+    trunk_state2 = _LoadedTrunk(level=level2, ranks={plain_room.name: "m"}, folders={plain_room.name: None},
+                                sprite_table=[], actor_sprites={})
+    payload2 = build_scene_payload(trunk_state2, geometry, StubClassIndex(), DEFAULTS)
+    plain_actor = next(a for a in payload2.actors if a.name == "PlainRoom")
+    assert plain_actor.brush.local_origin == plain_actor.location
+
+
 def test_build_scene_payload_filters_bhiddened_actors_and_keeps_bhidden_ones(tmp_path):
     """Owner ruling 2026-09-14: the GUI hides `bHiddenEd` actors and ignores `bHidden` entirely --
     the opposite of `level photo --native`. Both test actors are bare POINT actors (no brush, no

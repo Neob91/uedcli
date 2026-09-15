@@ -31,11 +31,14 @@ export interface ScenePoly {
 /** A brush actor's own AUTHORED polygons (pre-CSG, local-space, transformed to world), for the
  * selection highlight -- NOT the CSG-solved `ScenePoly`s. `color` is the brush's CSG-classification
  * hue (uedcli/preview.py's `_CSG_PALETTE`), so a selected brush outlines in its own add/subtract/
- * semisolid/nonsolid/mover colour. */
+ * semisolid/nonsolid/mover colour. `local_origin` is the world position of the brush's LOCAL
+ * coordinate origin (`Location - R*PrePivot`) -- coincides with `SceneActor.location` (the true
+ * pivot) only when PrePivot is zero. */
 export interface BrushHighlight {
   csg_class: string
   color: [number, number, number]
   polys: number[][] // one entry per poly: flat world verts [x0,y0,z0, x1,y1,z1, ...]
+  local_origin: [number, number, number]
 }
 
 /** A point actor's resolved `DT_Sprite` billboard (uedcli/serve/scene.py::ActorSprite) -- the real

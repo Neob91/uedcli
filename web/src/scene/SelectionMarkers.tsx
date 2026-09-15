@@ -1,15 +1,17 @@
 // Vertex + pivot markers for a selected brush (bug report item 7) -- ports `actor diagram
 // --highlight`'s `_draw_vertex_dot`/`_draw_pivot_marker` (uedcli/preview.py, ~lines 597-611) to the
 // GUI: a small square dot at every poly vertex, in the brush's own brightened wire color, plus a
-// distinct marker at the actor's true pivot (`Location`). `SceneActor` carries no `PrePivot` field
-// today, so the separate PrePivot-shifted "local origin" dot preview.py also draws (coincides with
-// Location only when PrePivot is zero) is not reproduced -- flagged as a known gap, not silently
-// dropped.
+// distinct marker at the actor's true pivot (`Location`). A third dot, same square glyph as the poly
+// vertices, marks the brush's PrePivot-shifted "local origin" (`BrushHighlight.local_origin`,
+// `Location - R·PrePivot`, computed server-side the same way `preview.py` does) -- coincides with
+// the pivot only when PrePivot is zero. It renders for at most ONE actor even under a multi-selection
+// (see `selectionSet.ts`'s `primarySelection`).
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import type { SceneActor } from '../api'
+import { primarySelection } from './selectionSet'
 
 // Matches `preview.py`'s `_PIVOT_RED`.
 const PIVOT_RED = new THREE.Color(255 / 255, 63 / 255, 63 / 255)
@@ -18,7 +20,7 @@ const PIVOT_RED = new THREE.Color(255 / 255, 63 / 255, 63 / 255)
 // geometry, so a fixed world size is fine there). The pivot marker below is different: bug report
 // "pivot's size should be the same on screen, regardless of zoom" -- it's a gizmo, not a geometry
 // marker, so it needs constant SCREEN size instead (see PivotMarker).
-const VERTEX_DOT_SIZE = 6
+const VERTEX_DOT_SIZE = 2
 const PIVOT_MARKER_SCREEN_PX = 14
 
 /** World units per screen pixel at `point`, for either camera kind this app uses -- the constant-
@@ -113,6 +115,7 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
     () => actors.filter((a): a is SceneActor & { brush: NonNullable<SceneActor['brush']> } => selectedNames.has(a.name) && a.brush != null),
     [actors, selectedNames],
   )
+  const primaryName = useMemo(() => primarySelection(selectedNames), [selectedNames])
 
   return (
     <group>
@@ -131,6 +134,11 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
                 <spriteMaterial color={color} depthTest={false} />
               </sprite>
             ))}
+            {actor.name === primaryName && (
+              <sprite position={actor.brush.local_origin} scale={[VERTEX_DOT_SIZE, VERTEX_DOT_SIZE, 1]}>
+                <spriteMaterial color={color} depthTest={false} />
+              </sprite>
+            )}
             <PivotMarker position={actor.location} texture={pivotTexture} />
           </group>
         )

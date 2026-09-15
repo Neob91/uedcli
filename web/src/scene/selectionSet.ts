@@ -18,3 +18,12 @@ export function toggleSelection(current: ReadonlySet<string>, name: string, addi
 export function clearSelection(): Set<string> {
   return new Set()
 }
+
+/** The "primary" (most-recently-selected) actor, or undefined for an empty selection --
+ * UED22's real pivot widget drops onto whichever actor a human click lands on (one widget per
+ * SELECTION, never one per actor; `dev/docs/spikes/2026-06-19-multiactor-rotate-groundtruth.md`
+ * "Pivot caveat"). A `Set`'s iteration order is insertion order, and `toggleSelection` always
+ * appends a freshly-added name at the end, so the last element stands in for "last clicked." */
+export function primarySelection(selectedNames: ReadonlySet<string>): string | undefined {
+  return [...selectedNames].at(-1)
+}

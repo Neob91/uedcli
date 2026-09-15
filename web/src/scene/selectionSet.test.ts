@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { clearSelection, toggleSelection } from './selectionSet'
+import { clearSelection, primarySelection, toggleSelection } from './selectionSet'
 
 describe('toggleSelection', () => {
   it('additive=false always replaces with exactly {name}, regardless of the starting set', () => {
@@ -27,5 +27,21 @@ describe('toggleSelection', () => {
 describe('clearSelection', () => {
   it('is always an empty set', () => {
     expect(clearSelection().size).toBe(0)
+  })
+})
+
+describe('primarySelection', () => {
+  it('is undefined for an empty selection', () => {
+    expect(primarySelection(new Set())).toBeUndefined()
+  })
+
+  it('is the sole member of a single-actor selection', () => {
+    expect(primarySelection(new Set(['A']))).toBe('A')
+  })
+
+  it('is the most-recently-added member of a multi-actor selection', () => {
+    const afterA = toggleSelection(new Set(), 'A', false)
+    const afterB = toggleSelection(afterA, 'B', true)
+    expect(primarySelection(afterB)).toBe('B')
   })
 })
