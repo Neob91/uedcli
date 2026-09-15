@@ -285,6 +285,76 @@ Fixtures (each isolates a compiler gap fixed for the first UT99 packages):
                      found compiling `Resize` (`Other.SoundVolume = Other.SoundVolume / Scale;`, a
                      `byte` Actor property assigned a float division result). `perm_gate` byte-exact;
                      residual is the same pre-existing UT99 own-name-pool gap.
+  - `PubliciseScore`, `PainSoundsMutator`, `NoobJuice` (github.com/joeytwiddle/code,
+                     code/unrealscript/{PubliciseScore,PainSounds,NoobJuice}) -- real community
+                     mutators, `Botpack`-dependent (`TeamGamePlus`/`TournamentGameReplicationInfo`/
+                     `DeathMatchPlus`/`Sound` locals). Surfaced three further real gaps, all now fixed:
+                     (1) a CAST-CALL expression (`TeamGamePlus(Level.Game)`) naming a class no declared
+                     var/param/local TYPE anywhere in the source ever mentions wasn't discovered for the
+                     multi-class catalog (`compile._extra_super_packages`'s `add_expr_class_lits` only
+                     handled `class'X'`/`class<X>(...)`, not a plain `ClassName(expr)` cast call) --
+                     extended to any bare-name call whose callee resolves to a real class (`env.
+                     resolve_class` no-ops harmlessly for an ordinary function call); (2) a class
+                     reached only via such a discovery may itself declare a MEMBER whose type lives in
+                     a THIRD, still-undiscovered package (`TournamentGameReplicationInfo(...).
+                     Teams[0].Score` -- `Teams`'s element type `TeamInfo` lives in `UnrealShare`) --
+                     `_extra_super_packages` now runs a fixed-point walk of every newly-discovered
+                     class's own member types against a throwaway whole-search-path `ClassGraph`; a
+                     Context's `bSize` for a member with a declared static ArrayDim (`TeamInfo
+                     Teams[4]`, read here as a WHOLE array before its own `[index]`) is the array's
+                     total footprint (`elem_size * array_dim`), not one element's -- `lower._context`
+                     grew an `array_dim` multiplier, wired at every field-Context call site; (3) a
+                     var/param/local typed to a class with NO exported script body anywhere on the
+                     search path (`Sound`, fully native) raised -- `_resolve_var_type`/
+                     `_func_prop_type`/`_resolve_array_type` now fall back to `env.
+                     import_only_class_package` the same way `_add_import`'s cast-target path already
+                     does. A FOURTH gap, a numeric-literal fold bug one level deeper than
+                     `UscFoldProbe`'s, was found in `PainSoundsMutator`: a literal NESTED inside either
+                     operand of a binary op (not itself a direct operand of the outermost assignment)
+                     never folds, regardless of the assignment's target type -- live-probed two shapes,
+                     `i = 4*FRand() + ...;` (`i` an int; `4`, nested via the LEFT branch, still doesn't
+                     fold even though propagating `expected` down would have said "don't fold" too) and
+                     `pitch = 64 + 128*FRand();` (`pitch` a float; the outer `+`'s OWN direct left
+                     operand `64` DOES fold, matching the already-verified top-level rule, but `128`,
+                     nested one level into the RIGHT operand, does NOT fold even though its own
+                     enclosing multiply's ret type also equals `expected`) -- disproving simple
+                     propagation. Fixed with a `_NESTED` sentinel `_ex_binary` passes to both operands'
+                     recursive lowering (never the real `expected`), which `_should_fold` treats as
+                     "never fold" -- distinct from `None` ("not yet threaded", kept at the prior
+                     always-fold default for call-argument position, still an open gap).
+                     All three `perm_gate` byte-exact; residual is the same pre-existing UT99
+                     own-name-pool gap as the other UT99 packages.
+  - `Ignore` (github.com/joeytwiddle/code, code/unrealscript/ChatMuts) -- a real community mutator
+                     declaring its OWN struct (`struct Victim { var int PIDs[32]; }; var Victim
+                     Players[32];`) and reading a field off a LOCAL of that struct (`v.PIDs[...]`).
+                     Two further real gaps, both the local-vs-cross-package split this compiler already
+                     models for classes/enums, just never extended to structs: (1) `lower.type_label`
+                     only recognised a struct via `graph.is_struct_name` (loaded search-path packages)
+                     or a small builtin set, never one declared in the CLASS BEING COMPILED, so `Victim`
+                     resolved as `object:victim` instead of `struct:victim` -- fixed with a
+                     `struct_names` parameter mirroring the existing `enum_names` one (new
+                     `struct_type_names` helper, threaded through `members_of`/`local_funcs_of`/
+                     `build_scope` and both the single- and multi-class compile paths). (2) even once
+                     recognised as a struct, `Scope.member_of`'s struct branch only checked `graph.
+                     struct_member_type` (same loaded-packages restriction) for the field's own type --
+                     fixed with a new `local_struct_members_of` helper (struct name -> {field: type
+                     label}) threaded into `Scope` as `local_structs`. A local struct's field ACCESS
+                     token (`smem:<Struct>.<Field>`) also used to always import
+                     (`compile._add_struct_member_import` only resolves a struct via the disk-backed
+                     `ClassGraph`) -- this is a same-package EXPORT instead (mirrors the class-literal/
+                     enum-tag same-package fallbacks in `_sibling_export_ref`), fixed with
+                     `_local_struct_member_map` + a `smem:`-identity branch in every `resolve_inv`
+                     (both compile paths, function AND state). Closes `dev/docs/board/inbox/
+                     uscript-local-struct-member-access-untested/`. `perm_gate` byte-exact; residual is
+                     the same pre-existing UT99 own-name-pool gap as the other UT99 packages.
+  - `UscStructReturnProbe` - controlled: found in code review of `Ignore`'s struct-name threading
+                     (above) -- `lower.lower_function` called `type_label(func.return_type)` with no
+                     `graph`/`enum_names`/`struct_names` at all, so a function RETURNING a locally-
+                     declared (or on-disk-package) struct/enum type mislabels its `ReturnValue`.
+                     `build_scope` already threads these for params/locals; `lower_function` now takes
+                     the same `enum_names`/`struct_names` and reads `scope.graph`. `perm_gate`
+                     byte-exact against a fresh UT99 UCC build; residual is the same pre-existing UT99
+                     own-name-pool gap as the other UT99 packages.
 """
 from __future__ import annotations
 
@@ -314,7 +384,9 @@ _PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritF
             ("NerfSniper", 10), ("UscFoldProbe", 19), ("MessageAdmin", 41),
             ("NoPistonCamping", 24), ("ForceBehindView", 16), ("TeamSwitcher", 24),
             ("RedirectPlayers", 14), ("UscRandomMutatorsGaps", 14), ("RandomMutators", 38),
-            ("ArenaFallback", 42), ("UscBareDefaultProbe", 5), ("UscFloatByteProbe", 5)]
+            ("ArenaFallback", 42), ("UscBareDefaultProbe", 5), ("UscFloatByteProbe", 5),
+            ("PubliciseScore", 132), ("PainSoundsMutator", 27), ("NoobJuice", 19), ("Ignore", 143),
+            ("UscStructReturnProbe", 10)]
 
 # Extra stock EditPackages a fixture's super chain needs loaded (`_edit_packages_upto`'s
 # content-safe base only covers Core/Engine/Editor) — only needed for the DOCKER-gated rebuild.
@@ -322,7 +394,8 @@ _DEPS: dict[str, tuple[str, ...]] = {"UscInheritFinal": ("UWindow",), "UWeb": ("
                                      "UscIpAddrProbe": ("IpDrv",), "ASPMutator": ("Botpack",),
                                      "UTServerAdmin": ("UWindow", "IpDrv", "Botpack"),
                                      "NerfSniper": ("Botpack",), "NoPistonCamping": ("Botpack",),
-                                     "ArenaFallback": ("Botpack",)}
+                                     "ArenaFallback": ("Botpack",), "PubliciseScore": ("Botpack",),
+                                     "PainSoundsMutator": ("Botpack",), "NoobJuice": ("Botpack",)}
 
 
 def _docker_up() -> bool:

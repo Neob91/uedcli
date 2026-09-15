@@ -32,14 +32,14 @@ from .env import InstallEnv
 from .lower import (EX_DEFAULT_VARIABLE, EX_DYNAMIC_CAST, EX_FINAL_FUNCTION, EX_INSTANCE_VARIABLE,
                     EX_LABEL_TABLE, EX_METACAST, EX_NOTHING, EX_OBJECT_CONST, EX_RETURN, LowerError,
                     Scope, build_scope, consts_of, enum_type_names, enums_of, local_funcs_of,
-                    lower_function, lower_state_body, members_array_dim_of, members_meta_of,
-                    members_of, _mem_size)
+                    local_struct_members_of, lower_function, lower_state_body, members_array_dim_of,
+                    members_meta_of, members_of, struct_type_names, _mem_size)
 from .model import (ClassBody, CompiledPackage, ConstBody, Dependency, EnumBody, Export, FunctionBody,
                     Import, Name, ObjectBody, PropertyBody, StateBody, StructBody, TextBufferBody,
                     TextureBody, TextureMip)
 from .global_index import default_global_index, engine_name_pool, highlight_name_pool, pool_case
-from .natives import (FUNC_NET, FUNC_NET_RELIABLE, ClassGraph, ClassSig, FuncBody, load_catalog,
-                      load_graph, prop_type_label)
+from .natives import (FUNC_NET, FUNC_NET_RELIABLE, ClassGraph, ClassSig, FuncBody, class_of,
+                      load_catalog, load_graph, prop_type_label)
 from .ordering import ObjInput, order_package
 from .parser import parse
 from . import texture_import
@@ -650,10 +650,12 @@ def _build_callables(b: _Build, decl: ClassDecl, super_name: str, crlf_source: s
     graph = b.graph_override if b.graph_override is not None else load_graph(search_dir)
     catalog = b.catalog_override if b.catalog_override is not None else load_catalog(search_dir)
     enames = enum_type_names(decl.members)
+    snames = struct_type_names(decl.members)
+    lstructs = local_struct_members_of(decl.members, graph)
     members = members_of(decl.members, graph)
     members_meta = members_meta_of(decl.members)
     members_array_dim = members_array_dim_of(decl.members)
-    lfuncs = local_funcs_of(decl.functions, graph, enames)
+    lfuncs = local_funcs_of(decl.functions, graph, enames, snames)
     enums = enums_of(decl.members)
     consts = consts_of(decl.members)
     if decl.functions:
@@ -667,22 +669,24 @@ def _build_callables(b: _Build, decl: ClassDecl, super_name: str, crlf_source: s
         if isinstance(item, StateDecl):
             line, text_pos = state_pos[id(item)]
             _build_one_state(b, decl, item, super_name, graph, catalog, members, members_meta,
-                             members_array_dim, lfuncs, line, text_pos, enums, consts, dep_slices)
+                             members_array_dim, lfuncs, line, text_pos, enums, consts, dep_slices,
+                             lstructs)
         else:
             line, text_pos = func_pos[id(item)]
             _build_one_function(b, decl, item, super_name, graph, catalog, members, members_meta,
-                                members_array_dim, lfuncs, line, text_pos, enames, enums, consts,
-                                dep_slices)
+                                members_array_dim, lfuncs, line, text_pos, enames, snames, enums,
+                                consts, dep_slices, lstructs)
     b.extra_deps = [dep for slice_ in reversed(dep_slices) for dep in slice_]
 
 
 def _build_one_state(b: _Build, decl: ClassDecl, state: StateDecl, super_name: str, graph, catalog,
                      members, members_meta, members_array_dim, lfuncs, line: int, text_pos: int,
-                     enums, consts, dep_slices: list[list[str]]) -> None:
+                     enums, consts, dep_slices: list[list[str]], lstructs=None) -> None:
     skey = b.okey(f"state:{state.name}")
     scope = Scope(locals_={}, own_members=members, own_members_meta=members_meta,
                  own_members_array_dim=members_array_dim, own_funcs={f.name: f for f in lfuncs},
-                 class_name=decl.name, super_name=super_name, graph=graph, enums=enums, consts=consts)
+                 class_name=decl.name, super_name=super_name, graph=graph, enums=enums, consts=consts,
+                 local_structs=lstructs)
     own_deps: list[str] = []
     try:
         toks = lower_state_body(state, scope, catalog, extra_deps=own_deps)
@@ -731,7 +735,8 @@ def _state_positions(crlf: str, states) -> list[tuple[int, int]]:
 
 def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: str, graph, catalog,
                         members, members_meta, members_array_dim, lfuncs, line: int, text_pos: int,
-                        enames, enums, consts, dep_slices: list[list[str]]) -> None:
+                        enames, snames, enums, consts, dep_slices: list[list[str]],
+                        lstructs=None) -> None:
     if func.kind not in ("function", "event"):
         raise NotImplementedError(f"function kind {func.kind!r} not supported yet ({func.name!r})")
     fkey = b.okey(f"fn:{func.name}")
@@ -769,10 +774,12 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
         scope = build_scope(func, members=members, members_meta=members_meta,
                             members_array_dim=members_array_dim, funcs=lfuncs,
                             class_name=decl.name, super_name=super_name, graph=graph,
-                            enums=enums, enum_names=enames, consts=consts)
+                            enums=enums, enum_names=enames, struct_names=snames, consts=consts,
+                            local_structs=lstructs)
         own_deps: list[str] = []
         try:
-            toks = lower_function(func, scope, catalog, extra_deps=own_deps)
+            toks = lower_function(func, scope, catalog, extra_deps=own_deps,
+                                  enum_names=enames, struct_names=snames)
         except LowerError as e:
             raise NotImplementedError(f"cannot lower function {func.name!r}: {e}") from e
         dep_slices.append(own_deps)
@@ -876,7 +883,11 @@ def _func_prop_type(b: _Build, tr, func_name: str, pname: str) -> tuple[str, int
     if base.casefold() in b.in_pkg_class_names:           # a same-package sibling class -> export ref
         real = b.in_pkg_class_names[base.casefold()]
         return "ObjectProperty", 0, (_RefSpec(key=f"{real}::class:{real}", is_export=True),)
-    if b.env.resolve_class(base) is None:
+    # A class with NO exported script body anywhere on the search path (a fully-native class, e.g.
+    # `Sound`/`Music`/UT99's `Engine.NetConnection`) is still a valid var/param/local TYPE — resolved
+    # via `class_home_from_imports`, the same fallback `_add_import` already applies for cast targets
+    # (found compiling the real `PainSoundsMutator`: `local Sound snd;`).
+    if b.env.resolve_class(base) is None and b.env.import_only_class_package(base) is None:
         raise NotImplementedError(f"param/local type {base!r} ({func_name}.{pname}) not supported yet")
     obj_key = _add_import(b, base)
     return "ObjectProperty", 0, (_RefSpec(key=obj_key, is_export=False),)
@@ -1053,9 +1064,10 @@ def _resolve_var_type(b: _Build, m: VarDecl, pname: str
         real = b.in_pkg_class_names[base.casefold()]       # or mutually referenced) -> an export ref,
         return ("ObjectProperty", 0,                        # never an import (it has no home package
                (_RefSpec(key=f"{real}::class:{real}", is_export=True),), PT_OBJECT, None)  # of its own)
-    # otherwise an object type: a class reference resolved via env.
-    info = b.env.resolve_class(base)
-    if info is None:
+    # otherwise an object type: a class reference resolved via env — including a class with NO
+    # exported script body anywhere on the search path (a fully-native class, e.g. `Sound`/`Music`),
+    # the same `class_home_from_imports` fallback `_func_prop_type`/`_add_import` already apply.
+    if b.env.resolve_class(base) is None and b.env.import_only_class_package(base) is None:
         raise NotImplementedError(f"var {pname!r}: unknown type {base!r} (not scalar/local/class)")
     obj_key = _add_import(b, base)
     return ("ObjectProperty", 0, (_RefSpec(key=obj_key, is_export=False),), PT_OBJECT, None)
@@ -1086,9 +1098,9 @@ def _resolve_array_type(b: _Build, m: VarDecl, pname: str
         real = b.in_pkg_class_names[base.casefold()]
         inner_class = "ObjectProperty"
         inner_tail = (_RefSpec(key=f"{real}::class:{real}", is_export=True),)
-    elif b.env.resolve_class(base) is not None:
-        inner_class = "ObjectProperty"
-        inner_tail = (_RefSpec(key=_add_import(b, base), is_export=False),)
+    elif b.env.resolve_class(base) is not None or b.env.import_only_class_package(base) is not None:
+        inner_class = "ObjectProperty"                    # incl. an import-only class, see
+        inner_tail = (_RefSpec(key=_add_import(b, base), is_export=False),)  # `_resolve_var_type`
     else:
         raise NotImplementedError(f"var {pname!r}: array<{base}> element not supported yet")
     b.props[inner_key] = _Prop(key=inner_key, name=pname, prop_class=inner_class,
@@ -1506,18 +1518,39 @@ def _add_struct_member_import(b: _Build, graph: ClassGraph, ident: str, struct_n
                                    outer=skey, object_name=field)
 
 
+def _local_struct_member_map(b: _Build) -> dict[str, str]:
+    """casefold `"<Struct>.<Field>"` -> export key, for every LOCALLY-declared struct's own field
+    properties (`_build_struct`) -- backs a `smem:`-identity `EX_StructMember` token's resolution to a
+    SAME-PACKAGE export instead of an import (mirrors the class-literal/enum-tag same-package
+    fallbacks already in `_sibling_export_ref`/`ClassGraph`). Found compiling the real `Ignore`
+    community mutator: `struct Victim {...}; var Victim Players[32];`, `v.PIDs` where `v` is a local
+    `Victim` -- `_add_struct_member_import`'s `_add_struct_import` only resolves a struct via the
+    disk-backed `ClassGraph` (loaded packages), never a struct declared in the class being compiled
+    right now. See `dev/docs/board/inbox/uscript-local-struct-member-access-untested/`."""
+    out: dict[str, str] = {}
+    for sdef in b.structs.values():
+        for pkey in sdef.member_keys:
+            prop = b.props[pkey]
+            out[f"{sdef.name}.{prop.name}".casefold()] = pkey
+    return out
+
+
 def _register_struct_member_imports(b: _Build, toks, graph: ClassGraph) -> None:
-    """After lowering, create an import for every struct member a `StructMember` token references.
-    `lower.py` tags the token's field identity `smem:<Struct>.<Field>` directly — the owning struct is
-    already known at lowering time (`lower._ex_member` has the base expression's resolved type), so
-    unlike the qualifier-stripped `func:`/`mem:` idents this needs no post-hoc re-derivation from the
-    base sub-expression."""
+    """After lowering, create an import for every struct member a `StructMember` token references —
+    except one whose struct is declared LOCALLY (same-package export instead, resolved at encode time
+    via `_local_struct_member_map`). `lower.py` tags the token's field identity `smem:<Struct>.<Field>`
+    directly — the owning struct is already known at lowering time (`lower._ex_member` has the base
+    expression's resolved type), so unlike the qualifier-stripped `func:`/`mem:` idents this needs no
+    post-hoc re-derivation from the base sub-expression."""
+    local_cf = {s.casefold() for s in b.local_structs}
+
     def walk(t) -> None:
         if t.op == 0x36:
             ident = next((v for k, v in t.parts if k == "obj"), None)
             if ident is not None and ident.startswith("smem:"):
                 struct_name, field = ident[len("smem:"):].rsplit(".", 1)
-                _add_struct_member_import(b, graph, ident, struct_name, field)
+                if struct_name.casefold() not in local_cf:
+                    _add_struct_member_import(b, graph, ident, struct_name, field)
         for kind, val in t.parts:
             if kind == "sub":
                 walk(val)
@@ -2069,6 +2102,7 @@ def _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, i
     func_by_name = {f.name.casefold(): f.key for f in b.funcs.values()}
     import_by_name = {k.casefold(): k for k in b.imports}
     texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
+    local_smember = _local_struct_member_map(b)
 
     def resolver(fn):
         def resolve_inv(kind: str, ident: str) -> int:
@@ -2076,6 +2110,10 @@ def _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, i
                 return name_cf[ident.casefold()]
             if ident.startswith("class:"):                # a cast/class-literal target: see
                 return imp_ref[import_by_name[ident[len("class:"):].casefold()]]  # `_sibling_export_ref`
+            if ident.startswith("smem:"):                 # a LOCAL struct's own field: see
+                key = local_smember.get(ident[len("smem:"):].casefold())  # `_local_struct_member_map`
+                if key is not None:
+                    return exp_ref[key]
             cf = ident.casefold()
             if cf in fn.local_by_name:
                 return exp_ref[fn.local_by_name[cf]]
@@ -2116,12 +2154,17 @@ def _build_state_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, imp_
     func_by_name = {f.name.casefold(): f.key for f in b.funcs.values()}
     import_by_name = {k.casefold(): k for k in b.imports}
     texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
+    local_smember = _local_struct_member_map(b)
 
     def resolve_inv(kind: str, ident: str) -> int:
         if kind == "name":
             return name_cf[ident.casefold()]
         if ident.startswith("class:"):                    # a cast/class-literal target: see
             return imp_ref[import_by_name[ident[len("class:"):].casefold()]]  # `_sibling_export_ref`
+        if ident.startswith("smem:"):                      # a LOCAL struct's own field: see
+            key = local_smember.get(ident[len("smem:"):].casefold())  # `_local_struct_member_map`
+            if key is not None:
+                return exp_ref[key]
         cf = ident.casefold()
         if cf in member_by_name:
             return exp_ref[member_by_name[cf]]
@@ -2346,6 +2389,7 @@ def _prepass_signatures(decls: dict[str, tuple[ClassDecl, str]], disk_graph: Cla
                 member_array_dim.update(sup.member_array_dim)
                 functions.update(sup.functions)
         enames = enum_type_names(decl.members)
+        snames = struct_type_names(decl.members)
         for n, label in members_of(decl.members, disk_graph).items():
             ncf = n.casefold()
             members[ncf] = label
@@ -2356,7 +2400,7 @@ def _prepass_signatures(decls: dict[str, tuple[ClassDecl, str]], disk_graph: Cla
                 dim = _dim_value(m.array_dim)
                 for n in m.names:
                     member_array_dim[n.casefold()] = dim
-        for f in local_funcs_of(decl.functions, disk_graph, enames):
+        for f in local_funcs_of(decl.functions, disk_graph, enames, snames):
             functions[f.name.casefold()] = FuncBody(
                 name=f.name, package="", class_name=decl.name, script_size=0, tokens=(),
                 inative=f.native_index or 0, precedence=0,
@@ -2568,8 +2612,18 @@ def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[s
     discovered class's own `package_imports` (its complete transitive super-chain package set, e.g.
     `UTTeleportEffect`'s is `(Botpack, UnrealShare, Engine, Core)` — its super `PawnTeleportEffect`
     lives in UnrealShare, not Botpack) are added too, not just its own home package — one level of
-    package discovery isn't enough for a transitive super chain crossing a third package."""
+    package discovery isn't enough for a transitive super chain crossing a third package.
+
+    A class reached only through such a discovery may itself declare a MEMBER whose type lives in a
+    further, still-undiscovered package — no declared type or cast anywhere in the compiling source's
+    own text names it (found compiling the real `PubliciseScore` community mutator:
+    `TournamentGameReplicationInfo(Level.Game.GameReplicationInfo).Teams[0].Score` — `Teams`'s element
+    type, `TeamInfo`, lives in `UnrealShare`, a package `PubliciseScore` itself never mentions).
+    `frontier` below drives a fixed-point walk of every newly-discovered class's own member types,
+    against a throwaway `ClassGraph` spanning the WHOLE search path (discovery only — this graph never
+    backs the final catalog/lowering, only decides which extra packages belong in it)."""
     out: list[str] = []
+    frontier: list[str] = []
 
     def add(name: str | None) -> None:
         if name is None or name.casefold() in in_pkg_cf or name.casefold() in _SCALAR_KINDS \
@@ -2581,6 +2635,7 @@ def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[s
         for pkg in info.package_imports:
             if pkg.casefold() not in ("core", "engine") and pkg not in out:
                 out.append(pkg)
+        frontier.append(name)
 
     def add_type(tr) -> None:
         if tr is None:
@@ -2590,18 +2645,25 @@ def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[s
         add(tr.meta_class)
 
     def add_expr_class_lits(e) -> None:
-        """A CLASS LITERAL (`class'X'`) or metaclass cast (`class<X>(...)`) inside a function/state
-        BODY, not just a declared var/param/local/return TYPE — needed because such a literal names
-        its own package without any declaration anywhere naming it (found compiling the real
-        `UTServerAdmin`: `class'UdpServerUplink'.default.DoUplink`, `UdpServerUplink` living in
-        `IpServer`, a package no declared type in `UTServerAdmin` itself ever names)."""
+        """A CLASS LITERAL (`class'X'`), metaclass cast (`class<X>(...)`), or plain CAST CALL
+        (`SomeClass(expr)`) inside a function/state BODY, not just a declared var/param/local/return
+        TYPE — needed because such an expression names its own package without any declaration
+        anywhere naming it (found compiling the real `UTServerAdmin`: `class'UdpServerUplink'.
+        default.DoUplink`, `UdpServerUplink` living in `IpServer`, a package no declared type in
+        `UTServerAdmin` itself ever names; and the real `RocketArenaMutator`:
+        `TeamGamePlus(Level.Game).FriendlyFireScale`, `TeamGamePlus` never appearing as a declared
+        type anywhere in the class). The bare-name-call branch is safe against ordinary function
+        calls (`Rand(100)`) — `add()` no-ops unless the name actually resolves to a real class."""
         if e.op == "objref" and e.text.casefold() == "class" and e.value:
             add(str(e.value).rsplit(".", 1)[-1])
-        elif e.op == "call" and e.children and e.children[0].op == "name" \
-                and e.children[0].text.casefold().startswith("class<"):
-            meta = e.children[0].text[len("class<"):-1].strip()
-            if meta:
-                add(meta.rsplit(".", 1)[-1])
+        elif e.op == "call" and e.children and e.children[0].op == "name":
+            callee = e.children[0].text
+            if callee.casefold().startswith("class<"):
+                meta = callee[len("class<"):-1].strip()
+                if meta:
+                    add(meta.rsplit(".", 1)[-1])
+            else:
+                add(callee)
         for c in e.children:
             add_expr_class_lits(c)
 
@@ -2633,6 +2695,23 @@ def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[s
             add_stmt_class_lits(f.body)
         for s in decl.states:
             add_stmt_class_lits(s.body)
+
+    # Transitive member-type discovery (see docstring) — fixed-point over `frontier`.
+    full_graph = ClassGraph(env._package_paths())
+    examined: set[str] = set()
+    while frontier:
+        name = frontier.pop()
+        cf = name.casefold()
+        if cf in examined:
+            continue
+        examined.add(cf)
+        sig = full_graph.class_sig(name)
+        if sig is None:
+            continue
+        for t in sig.members.values():
+            add(class_of(t))
+        for meta in sig.member_meta.values():
+            add(meta)
     return out
 
 
@@ -3078,6 +3157,7 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
     # `#exec TEXTURE IMPORT` objects are top-level package objects (Outer=0), not class members --
     # a `Texture'Pkg.Name'` literal in ANY class of this package can reach one built by another.
     texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
+    local_smember = _local_struct_member_map(b)
 
     def resolver(fn: _Func):
         own_members = members_by_class.get(fn.class_key, {})
@@ -3090,6 +3170,10 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
                                           import_by_name)
             if cls_ref is not None:
                 return cls_ref
+            if ident.startswith("smem:"):                 # a LOCAL struct's own field: see
+                key = local_smember.get(ident[len("smem:"):].casefold())  # `_local_struct_member_map`
+                if key is not None:
+                    return exp_ref[key]
             cf = ident.casefold()
             if cf in fn.local_by_name:
                 return exp_ref[fn.local_by_name[cf]]
@@ -3138,6 +3222,7 @@ def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref
         funcs_by_class.setdefault(f.class_key, {})[f.name.casefold()] = f.key
     import_by_name = {k.casefold(): k for k in b.imports}
     texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
+    local_smember = _local_struct_member_map(b)
 
     def resolver(st: _State):
         own_members = members_by_class.get(st.class_key, {})
@@ -3150,6 +3235,10 @@ def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref
                                           import_by_name)
             if cls_ref is not None:
                 return cls_ref
+            if ident.startswith("smem:"):                 # a LOCAL struct's own field: see
+                key = local_smember.get(ident[len("smem:"):].casefold())  # `_local_struct_member_map`
+                if key is not None:
+                    return exp_ref[key]
             cf = ident.casefold()
             if cf in own_members:
                 return exp_ref[own_members[cf]]
