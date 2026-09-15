@@ -174,7 +174,11 @@ def test_build_scene_payload_categories_stub_index_fallback():
     room_actor = next(a for a in payload.actors if a.name == "Room")
     assert room_actor.props                              # non-empty, else the next assert is vacuous
     assert len(room_actor.categories) == len(room_actor.props)
-    assert all(c == _FALLBACK_CATEGORY for c in room_actor.categories)
+    # props[0]/categories[0] is the synthesized Location entry (always "Movement", never affected
+    # by the index) -- every REAL stored prop after it degrades to _FALLBACK_CATEGORY.
+    assert room_actor.props[0][0] == "Location"
+    assert room_actor.categories[0] == "Movement"
+    assert all(c == _FALLBACK_CATEGORY for c in room_actor.categories[1:])
 
 
 def test_build_scene_payload_categories_from_real_schema(tmp_path):
@@ -192,8 +196,34 @@ def test_build_scene_payload_categories_from_real_schema(tmp_path):
     payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
 
     room_actor = next(a for a in payload.actors if a.name == "Room")
-    assert [k for k, _ in room_actor.props] == ["CsgOper", "Brush"]
-    assert room_actor.categories == ["Brush", _FALLBACK_CATEGORY]
+    # props[0] is the synthesized Location entry (see test_location_prop_synthesis) -- everything
+    # after it is the real, schema-categorized stored props this test is actually about.
+    assert [k for k, _ in room_actor.props] == ["Location", "CsgOper", "Brush"]
+    assert room_actor.categories == ["Movement", "Brush", _FALLBACK_CATEGORY]
+
+
+def test_location_prop_synthesis():
+    """Location is a bona-fide UnrealEd property, but `model.py`'s T3D parser deliberately keeps it
+    OUT of `Actor.props` (the typed `actor.location` field is the sole source of truth, so the two
+    can't drift when a move/rotate verb mutates it). The inspector should still show it -- synthesized
+    here as `props[0]`/`categories[0]`, in the same `(X=..,Y=..,Z=..)` value syntax `emit.py` writes
+    it in (`fmt_loc`), under UnrealEd's real "Movement" category. A fractional, negative coordinate
+    exercises `fmt_loc`'s actual formatting, not just a round integer."""
+    from uedcli.serve.scene import _BuiltGeometry, _LoadedTrunk, build_scene_payload
+    from uedcli.tests.conftest import StubClassIndex
+
+    room = cube_room()
+    room.location = (Decimal("-1664.5"), Decimal("0"), Decimal("2400.25"))
+    level = Level(actors={room.name: room}, order=[room.name])
+    trunk_state = _LoadedTrunk(level=level, ranks={room.name: "m"}, folders={room.name: None},
+                               sprite_table=[], actor_sprites={})
+    geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=[], texture_table=[], owners=[])
+
+    payload = build_scene_payload(trunk_state, geometry, StubClassIndex(), DEFAULTS)
+
+    room_actor = next(a for a in payload.actors if a.name == "Room")
+    assert room_actor.props[0] == ("Location", "(X=-1664.500000,Y=0.000000,Z=2400.250000)")
+    assert room_actor.categories[0] == "Movement"
 
 
 def test_build_scene_payload_filters_bhiddened_actors_and_keeps_bhidden_ones(tmp_path):

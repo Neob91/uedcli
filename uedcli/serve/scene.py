@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 
 from .. import typedprops, uprops
+from ..emit import fmt_loc
 from ..model import Level
 from ..movers import is_mover
 from ..preview import _CSG_PALETTE, classify_brush
@@ -268,6 +269,19 @@ def _actor_categories(props: list[tuple[str, str]],
             for key, _ in props]
 
 
+def _with_synthetic_location(props: list[tuple[str, str]], categories: list[str],
+                             loc) -> tuple[list[tuple[str, str]], list[str]]:
+    """Prepends a `Location` entry to the inspector's prop/category lists. `model.py`'s T3D parser
+    deliberately keeps `Location` OUT of `Actor.props` — it's the typed `actor.location` field's
+    job alone, so the two can't drift when a move/rotate verb mutates it (see `model.py`'s own
+    comment at the `Location` branch) — but it's still a bona-fide UnrealEd property (real category
+    "Movement") that the inspector should show alongside the rest. Synthesized here, at the wire
+    boundary, in the same `(X=..,Y=..,Z=..)` T3D value syntax `emit.py` writes it in — never as a
+    frontend-side special case (the client draws props verbatim, no model logic of its own)."""
+    value = f"(X={fmt_loc(loc[0])},Y={fmt_loc(loc[1])},Z={fmt_loc(loc[2])})"
+    return [("Location", value), *props], ["Movement", *categories]
+
+
 def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset: int,
                   index) -> list[SceneActor]:
     """The actor-metadata list (inspector/organization panel + selection highlight + sprite), built
@@ -293,13 +307,15 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
         cls = actor.cls or ""
         if cls not in category_maps:
             category_maps[cls] = _class_category_map(cls, index)
+        props, categories = _with_synthetic_location(
+            list(actor.props), _actor_categories(actor.props, category_maps[cls]), loc)
         actors.append(SceneActor(
             name=name, cls=cls,
             bbox_lo=tuple(float(c) for c in lo), bbox_hi=tuple(float(c) for c in hi),
             location=tuple(float(c) for c in loc), rotation=actor_rotation_uu(actor),
             folder=actor.folder, labels=sorted(actor.labels), order_value=ranks.get(name, ""),
             csg_rank=csg_rank,
-            props=list(actor.props), categories=_actor_categories(actor.props, category_maps[cls]),
+            props=props, categories=categories,
             brush=_brush_highlight(actor, index), sprite=sprite))
     return actors
 
