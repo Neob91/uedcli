@@ -18,6 +18,13 @@ export function resolveEffectiveMode(requested: ShadingMode, buildSolved: boolea
   return isModeAvailable(requested, buildSolved) ? requested : 'wireframe'
 }
 
+/** `'unlit'` and `'flat'` both draw the lightmap-free material set (bug fix: this used to check
+ * only `'unlit'`, silently rendering `'flat'` identically to `'lit'` -- contradicting the `mode`
+ * prop's own doc comment in Viewport3D.tsx/OrthoViewport.tsx). Only `'lit'`/`'wireframe'` don't. */
+export function usesUnlitMaterials(mode: ShadingMode): boolean {
+  return mode === 'unlit' || mode === 'flat'
+}
+
 const KEY_TO_MODE: Record<'1' | '2' | '3' | '4', ShadingMode> = {
   '1': 'wireframe',
   '2': 'unlit',

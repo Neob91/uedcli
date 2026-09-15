@@ -25,6 +25,7 @@ import { SelectionMarkers } from './SelectionMarkers'
 import { pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapSelection } from './selection'
 import type { Ray } from './selection'
 import type { ShadingMode } from './shadingMode'
+import { usesUnlitMaterials } from './shadingMode'
 // `THREE.ColorManagement.enabled` is a process-wide singleton r3f reasserts on every render of
 // EVERY mounted Canvas (Viewport3D.tsx's own `CANVAS_COLOR_MANAGEMENT` doc comment) -- this pane's
 // Canvas MUST spread the identical constant, or the two fight over that global flag on every
@@ -133,8 +134,7 @@ export function OrthoViewport({
   const [hoverWorld, setHoverWorld] = useState<Vec3 | null>(null)
   const { bufferGeometry, materials, unlitMaterials, triangleOwners, textures, markerTexture, markerActors, actors } =
     useSceneResourcesContext()
-  // See Viewport3D.tsx's identical comment: 'unlit'/'lit' otherwise render the same mesh.
-  const activeMaterials = mode === 'unlit' ? unlitMaterials : materials
+  const activeMaterials = usesUnlitMaterials(mode) ? unlitMaterials : materials
   // Every SELECTED non-brush actor's AABB box (Task 14: one per selected actor) -- mirrors
   // Viewport3D's identical `selectedNonBrushBoxes`.
   const selectedNonBrushBoxes = useMemo(() => {

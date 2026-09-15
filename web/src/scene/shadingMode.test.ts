@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { PaneId } from './paneLayout'
-import { applyModeKey, isModeAvailable, resolveEffectiveMode } from './shadingMode'
+import { applyModeKey, isModeAvailable, resolveEffectiveMode, usesUnlitMaterials } from './shadingMode'
 import type { ShadingMode } from './shadingMode'
 
 describe('isModeAvailable', () => {
@@ -15,6 +15,21 @@ describe('isModeAvailable', () => {
       expect(isModeAvailable(mode, false)).toBe(false)
       expect(isModeAvailable(mode, true)).toBe(true)
     }
+  })
+})
+
+describe('usesUnlitMaterials', () => {
+  // Regression: 'flat' must pick the same material set as 'unlit' (its own doc comment says "'flat'
+  // renders identically to 'unlit'") -- a bug shipped where only 'unlit' was checked, so 'flat'
+  // silently fell through to the lit/lightmap material set instead.
+  it("'unlit' and 'flat' both use the lightmap-free material set", () => {
+    expect(usesUnlitMaterials('unlit')).toBe(true)
+    expect(usesUnlitMaterials('flat')).toBe(true)
+  })
+
+  it("'lit' and 'wireframe' don't", () => {
+    expect(usesUnlitMaterials('lit')).toBe(false)
+    expect(usesUnlitMaterials('wireframe')).toBe(false)
   })
 })
 

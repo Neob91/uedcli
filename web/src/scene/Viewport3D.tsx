@@ -22,6 +22,7 @@ import { bboxCenter, bboxMaxExtent } from './frame'
 import { MARKER_COLOR } from './markers'
 import { SelectionMarkers } from './SelectionMarkers'
 import type { ShadingMode } from './shadingMode'
+import { usesUnlitMaterials } from './shadingMode'
 import { useSceneResourcesContext } from './SceneResourcesContext'
 import { isTap, pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapSelection } from './selection'
 import type { Ray } from './selection'
@@ -218,7 +219,7 @@ export function Viewport3D({
   // 'unlit'/'lit' otherwise rendered the identical mesh (materials built once, shared across every
   // pane, with no per-mode variant) -- pick the lightmap-free array for 'unlit' so it genuinely
   // differs, matching the main spec's 4-distinct-shading-modes requirement (review finding).
-  const activeMaterials = mode === 'unlit' ? unlitMaterials : materials
+  const activeMaterials = usesUnlitMaterials(mode) ? unlitMaterials : materials
 
   // A single "primary" selected actor (the first, by scene.actors order, whose name is in the set)
   // -- ONLY for the camera orbit pivot (Alt-drag), which stays single-target; Task 15's frame/`F`
