@@ -19,6 +19,7 @@ function brushActor(name: string, color: [number, number, number]): SceneActor {
     categories: [],
     brush: { csg_class: 'add', color, polys: [[0, 0, 0, 1, 0, 0, 1, 1, 0]] },
     sprite: null,
+    radii: null,
   }
 }
 

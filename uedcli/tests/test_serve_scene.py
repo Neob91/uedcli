@@ -315,6 +315,107 @@ def test_build_scene_payload_actor_sprite_none_without_dt_sprite(tmp_path):
     assert plain_actor.sprite is None
 
 
+def test_build_scene_payload_resolves_collision_and_light_radii(tmp_path):
+    """`SceneActor.radii` carries the collision cylinder (`CollisionRadius`/`CollisionHeight`, gated
+    on `bCollideActors`) and light reach (`preview.world_light_radius(LightRadius)`, gated on
+    `LightType`/`LightBrightness`/`LightRadius` all being real) — ported from `actor diagram --show
+    collision`/`--show light-range` (`cli/rendering.py::_resolve_point_render`). Unlike that CLI's
+    opt-in `--show` flag, the GUI wire payload resolves both unconditionally so the client's own
+    radii-overlay toggle decides what to draw."""
+    from uedcli.preview import world_light_radius
+    from uedcli.serve.scene import build_scene_payload
+
+    root = tmp_path / "proj"
+    maps_dir = root / "maps" / "TestLevel"
+    maps_dir.mkdir(parents=True)
+    room = cube_room()
+    lit = Actor(name="Lamp0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)),
+               props=[("LightType", "LT_Steady"), ("LightBrightness", "64"), ("LightRadius", "8")])
+    collider = Actor(name="Blocker0", cls="Engine.Actor",
+                     location=(Decimal(0), Decimal(0), Decimal(0)),
+                     props=[("bCollideActors", "True"), ("CollisionRadius", "50.0"),
+                           ("CollisionHeight", "80.0")])
+    # `Engine.Light`'s own CLASS DEFAULT already clears the light gate (a bare placed Light has a
+    # real default reach, matching the real editor) -- an explicit `LightType=LT_None` override is
+    # what actually clears neither gate, not merely omitting every instance prop.
+    plain = Actor(name="Deco0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)),
+                 props=[("LightType", "LT_None")])
+    level = Level(actors={room.name: room, lit.name: lit, collider.name: collider,
+                         plain.name: plain},
+                 order=[room.name, lit.name, collider.name, plain.name])
+    trunk.write_level(maps_dir, level,
+                      {room.name: "m", lit.name: "n", collider.name: "o", plain.name: "p"})
+    project = SimpleNamespace(root=str(root), maps=None)
+
+    index = _ued22_index()
+    trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    by_name = {a.name: a for a in payload.actors}
+
+    assert by_name["Lamp0"].radii is not None
+    assert by_name["Lamp0"].radii.light_radius == world_light_radius(8)
+    assert by_name["Lamp0"].radii.collision_radius is None       # bCollideActors unset -> False
+
+    assert by_name["Blocker0"].radii is not None
+    assert by_name["Blocker0"].radii.collision_radius == 50.0
+    assert by_name["Blocker0"].radii.collision_height == 80.0
+    assert by_name["Blocker0"].radii.light_radius is None
+
+    assert by_name["Deco0"].radii is None                         # neither gate clears
+    assert by_name["Room"].radii is None                          # a brush actor never carries radii
+
+
+def test_actor_radii_light_radius_zero_is_treated_as_unset():
+    """`LightRadius=0` is a real, explicit value but `_actor_radii` treats it the same as unset —
+    matching `cli/rendering.py::_resolve_point_render`'s own deliberate `and lr` check (not the
+    pinned `world_light_radius(0) == 25` UU): a zero radius on an unconfigured light is noise, not a
+    real 25-UU reach worth drawing."""
+    from uedcli.serve.scene import _actor_radii
+
+    zero_radius = Actor(name="Lamp1", cls="Engine.Light",
+                        props=[("LightType", "LT_Steady"), ("LightBrightness", "64"),
+                              ("LightRadius", "0")])
+    info = SimpleNamespace(defaults={})
+    fake_defaults = SimpleNamespace(for_class=lambda cls: info)
+    radii, note = _actor_radii(zero_radius, fake_defaults)
+    assert radii is None
+    assert note is None
+
+
+def test_actor_radii_degrades_to_none_on_unresolvable_class():
+    """An unresolvable class degrades to `(None, note)` -- fail open, never a raised exception --
+    mirroring `_is_hidden_ed`'s identical convention for the same failure."""
+    from uedcli.serve.scene import _actor_radii
+    from uedcli.uprops import SchemaError
+
+    unresolvable = Actor(name="X", cls="Some.Missing")
+    failing_defaults = SimpleNamespace(
+        for_class=lambda cls: (_ for _ in ()).throw(SchemaError("no .u")))
+    radii, note = _actor_radii(unresolvable, failing_defaults)
+    assert radii is None
+    assert "X" in note and "schema unavailable" in note
+
+
+def test_resolve_actor_radii_skips_a_bhiddened_actor_before_resolving_its_class():
+    """`_resolve_actor_radii` must skip a `bHiddenEd` actor BEFORE calling `_actor_radii` -- it never
+    reaches `ScenePayload.actors` either way (`_build_actors`'s own `hidden_ed` skip), and resolving
+    it anyway would needlessly cost a schema lookup and, on an unresolvable class, print a spurious
+    stderr note for an actor the response never carries. Mirrors `cli/rendering.py::
+    _preview_point_data`'s convention of filtering hidden actors BEFORE `_resolve_point_render`."""
+    from uedcli.model import Level
+    from uedcli.serve.scene import _resolve_actor_radii
+    from uedcli.uprops import SchemaError
+
+    hidden = Actor(name="HiddenLight", cls="Some.Unresolvable", props=[("bHiddenEd", "True")])
+    level = Level(actors={hidden.name: hidden}, order=[hidden.name])
+    failing_defaults = SimpleNamespace(
+        for_class=lambda cls: (_ for _ in ()).throw(SchemaError("no .u")))
+
+    radii_map = _resolve_actor_radii(level, failing_defaults, {hidden.name: True})
+
+    assert radii_map == {}                # never resolved -- and so never raised/warned either
+
+
 def test_is_hidden_ed_checks_instance_then_class_default_memo_and_degrades_on_failure():
     """Finding 1/2/3 unit-level pin for `scene._is_hidden_ed` directly (no full CSG solve needed):
     instance override wins; else it reads the class default off the SHARED `ClassDefaults`-shaped

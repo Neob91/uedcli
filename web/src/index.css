@@ -361,6 +361,27 @@ body {
   cursor: not-allowed;
 }
 
+/* Collision-cylinder / light-radius overlay toggle -- same convention as .grid-toggle, one switch
+   for every pane, placed just to its left so the two buttons don't overlap. */
+.radii-toggle {
+  position: absolute;
+  top: 4px;
+  right: 84px;
+  z-index: 3;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.radii-toggle[aria-pressed='false'] {
+  color: var(--fg-muted);
+}
+
 /* Cursor UU coordinate readout (Task 28) -- bottom-left of each ortho pane. */
 .ortho-cursor-readout {
   position: absolute;

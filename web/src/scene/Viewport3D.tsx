@@ -20,6 +20,7 @@ import { useDragGesture } from './dragGesture'
 import type { FrameRequest } from './frame'
 import { bboxCenter, bboxMaxExtent } from './frame'
 import { MARKER_COLOR } from './markers'
+import { RadiiOverlays } from './RadiiOverlays'
 import { SelectionMarkers } from './SelectionMarkers'
 import type { ShadingMode } from './shadingMode'
 import { usesUnlitMaterials } from './shadingMode'
@@ -153,6 +154,9 @@ export interface Viewport3DProps {
   // solid mesh); 'unlit'/'flat'/'lit' draw the existing solid mesh -- 'flat' renders identically to
   // 'unlit' for now (the main spec's own "Also open": its exact definition isn't pinned down yet).
   mode?: ShadingMode
+  // Collision-cylinder / light-radius overlay toggle -- one switch for every pane (QuadLayout),
+  // mirroring the existing grid-toggle convention; default off (radii clutter a level fast).
+  showRadii?: boolean
 }
 
 // Which single touch contact is the tap-selection candidate: the FIRST finger down, tracked only
@@ -172,6 +176,7 @@ export function Viewport3D({
   onSelectActor,
   frameRequest = null,
   mode = 'lit',
+  showRadii = false,
 }: Viewport3DProps) {
   const [pose, setPose] = useState<CameraPose>(INITIAL_POSE)
 
@@ -482,6 +487,8 @@ export function Viewport3D({
         />
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={scene.actors} selectedNames={selectedNames} />
+        {/* Collision-cylinder / light-radius overlays, toggled globally (not by selection). */}
+        {showRadii && <RadiiOverlays actors={scene.actors} view="perspective" />}
         {/* Every selected NON-brush actor (no CSG ring to draw) falls back to its own plain AABB
             box -- one per selected actor (Task 14), not just a single one. */}
         {selectedNonBrushBoxes.map(({ name, box }) => (

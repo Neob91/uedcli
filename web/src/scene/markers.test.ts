@@ -19,6 +19,7 @@ function actor(overrides: Partial<SceneActor> = {}): SceneActor {
     categories: [],
     brush: null,
     sprite: null,
+    radii: null,
     ...overrides,
   }
 }

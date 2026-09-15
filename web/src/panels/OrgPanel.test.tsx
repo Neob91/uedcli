@@ -22,6 +22,7 @@ function actor(name: string, folder: string | null): SceneActor {
     categories: [],
     brush: null,
     sprite: null,
+    radii: null,
   }
 }
 

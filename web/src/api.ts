@@ -48,6 +48,17 @@ export interface ActorSprite {
   height: number
 }
 
+/** Collision-cylinder / light-reach radii for one non-brush actor (uedcli/serve/scene.py::
+ * ActorRadii) -- ported from `actor diagram --show collision`/`--show light-range`. `collision_height`
+ * is the HALF-height (the cylinder spans `location.z +/- collision_height`). Resolved unconditionally
+ * server-side whenever the actor clears the real-engine gate (`bCollideActors`; `LightType`+
+ * `LightBrightness`+`LightRadius`) -- the client's own radii-overlay toggle decides what to draw. */
+export interface ActorRadii {
+  collision_radius: number | null
+  collision_height: number | null
+  light_radius: number | null // world units, already resolved server-side (preview.world_light_radius)
+}
+
 export interface SceneActor {
   name: string
   cls: string
@@ -63,6 +74,7 @@ export interface SceneActor {
   categories: string[] // parallel to props: categories[i] is the UnrealEd category of props[i]
   brush: BrushHighlight | null // selection-highlight geometry; null for a non-brush actor
   sprite: ActorSprite | null // resolved DT_Sprite billboard; null -> client draws a generic marker
+  radii: ActorRadii | null // collision/light radii; null for a brush actor or one that clears neither gate
 }
 
 export interface ScenePayload {

@@ -20,6 +20,7 @@ import { GridOverlay } from './GridOverlay'
 import { MARKER_COLOR } from './markers'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
 import { orthoBasis, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
+import { RadiiOverlays } from './RadiiOverlays'
 import { useSceneResourcesContext } from './SceneResourcesContext'
 import { SelectionMarkers } from './SelectionMarkers'
 import { pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapSelection } from './selection'
@@ -114,6 +115,9 @@ export interface OrthoViewportProps {
   // Grid visibility (Part 8, Task 28) -- a single toggle for all three ortho panes, owned by
   // QuadLayout, not a per-pane preference (classic level editors have one "show grid" switch).
   showGrid?: boolean
+  // Collision-cylinder / light-radius overlay toggle -- one switch for every pane (QuadLayout),
+  // mirroring showGrid's convention; default off (radii clutter a level fast).
+  showRadii?: boolean
 }
 
 const SELECTION_BOX_COLOR = 0x00e5ff
@@ -127,6 +131,7 @@ export function OrthoViewport({
   frameRequest = null,
   mode = 'wireframe',
   showGrid = true,
+  showRadii = false,
 }: OrthoViewportProps) {
   const [pose, setPose] = useState<OrthoPose>(initialOrthoPose)
   // The cursor's projected world-space (UU) position, for the coordinate readout (Task 28) -- null
@@ -341,6 +346,8 @@ export function OrthoViewport({
         />
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={actors} selectedNames={selectedNames} />
+        {/* Collision-cylinder / light-radius overlays, toggled globally (not by selection). */}
+        {showRadii && <RadiiOverlays actors={actors} view={axis} />}
         {selectedNonBrushBoxes.map(({ name, box }) => (
           <box3Helper key={name} args={[box, SELECTION_BOX_COLOR]} />
         ))}

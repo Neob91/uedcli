@@ -25,6 +25,7 @@ function fixtureActor(overrides: Partial<SceneActor> = {}): SceneActor {
     categories: ['Brush', 'Brush'], // real live-verified mapping for both props (see scene.py's plan)
     brush: null,
     sprite: null,
+    radii: null,
     ...overrides,
   }
 }

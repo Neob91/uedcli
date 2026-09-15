@@ -91,6 +91,9 @@ export function QuadLayout({
   const [modes, setModes] = useState<Record<PaneId, ShadingMode>>(DEFAULT_MODES)
   // Grid visibility toggle (Part 8, Task 28) -- one switch for all three ortho panes.
   const [showGrid, setShowGrid] = useState(true)
+  // Collision-cylinder / light-radius overlay toggle -- one switch for all four panes (mirrors
+  // showGrid's convention). Default OFF: radii clutter a level fast, unlike the grid.
+  const [showRadii, setShowRadii] = useState(false)
 
   // Resizable panes (bug report item 3): the column/row split as a fraction (0..1) of the quad's
   // own box, in plain component state per the ask -- no persistence needed. `MIN_FRAC`/`MAX_FRAC`
@@ -163,6 +166,14 @@ export function QuadLayout({
         >
           Grid: {showGrid ? 'on' : 'off'}
         </button>
+        <button
+          type="button"
+          className="radii-toggle"
+          onClick={() => setShowRadii((v) => !v)}
+          aria-pressed={showRadii}
+        >
+          Radii: {showRadii ? 'on' : 'off'}
+        </button>
         <div
           className="quad-layout"
           data-maximized={maximized ?? undefined}
@@ -192,6 +203,7 @@ export function QuadLayout({
                 onSelectActor={onSelectActor}
                 frameRequest={frameRequest}
                 mode={resolveEffectiveMode(modes[pane], buildSolved)}
+                showRadii={showRadii}
               />
             ) : (
               <OrthoViewport
@@ -201,6 +213,7 @@ export function QuadLayout({
                 frameRequest={frameRequest}
                 mode={resolveEffectiveMode(modes[pane], buildSolved)}
                 showGrid={showGrid}
+                showRadii={showRadii}
               />
             )}
             {/* Owner ruling: ortho panes are ALWAYS wireframe, no mode choice -- only perspective

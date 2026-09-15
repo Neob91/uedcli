@@ -13,7 +13,7 @@ from .. import typedprops, uprops
 from ..emit import fmt_loc
 from ..model import Level
 from ..movers import is_mover
-from ..preview import _CSG_PALETTE, classify_brush
+from ..preview import _CSG_PALETTE, classify_brush, world_light_radius
 from ..preview_native import poly_blend, poly_two_sided
 from ..rotation import actor_linear, actor_prepivot, actor_rotation_uu, local_offset
 from ..writes import actor_bounds
@@ -94,6 +94,22 @@ class ActorSprite:
 
 
 @dataclass(frozen=True, kw_only=True)
+class ActorRadii:
+    """Collision-cylinder / light-reach radii for one non-brush actor — ports `actor diagram --show
+    collision`/`--show light-range`'s resolution (`cli/rendering.py::_resolve_point_render`,
+    `preview.world_light_radius`), reusing that LOGIC (instance-else-class-default field resolution,
+    the same real-engine gates), not its code — the same split `resolve_actor_sprites` already uses
+    for sprites. `collision_height` is the HALF-height (`preview.py`'s `_draw_cylinder`: the cylinder
+    spans `Location.Z ± half_h`). Unlike the CLI's `--show` flag (an opt-in per RENDER), this
+    resolves unconditionally whenever the actor clears the real-engine gate — the GUI's radii
+    overlay is a client-side visibility toggle (`dev/docs/GUI.md`), not a server-side filter, so the
+    wire payload carries whichever of these resolved and the client decides what to draw."""
+    collision_radius: float | None = None
+    collision_height: float | None = None
+    light_radius: float | None = None
+
+
+@dataclass(frozen=True, kw_only=True)
 class SceneActor:
     """One actor's metadata for the inspector/organization panel — NOT its geometry (a brush
     actor's polys already ride in `ScenePayload.polys`, joined by CSG, not by actor). `csg_rank` is
@@ -107,7 +123,9 @@ class SceneActor:
     prop. `brush` is the selection-highlight geometry (None for a non-brush actor — a separate task's
     concern).
     `sprite` is None for a brush actor, and for a point actor whose `DT_Sprite` billboard didn't
-    resolve — the client then falls back to a generic marker (`markers.ts`)."""
+    resolve — the client then falls back to a generic marker (`markers.ts`).
+    `radii` is None for a brush actor and for any actor that clears neither the collision nor the
+    light-reach gate (`_actor_radii`) — the client draws nothing for it either way."""
     name: str
     cls: str
     bbox_lo: tuple[float, float, float]
@@ -122,6 +140,7 @@ class SceneActor:
     categories: list[str]
     brush: BrushHighlight | None
     sprite: ActorSprite | None
+    radii: ActorRadii | None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -242,6 +261,82 @@ def _resolve_hidden_ed(level: Level, defaults) -> dict[str, bool]:
     return hidden_ed
 
 
+def _to_float(text, default: float) -> float:
+    try:
+        return float(str(text).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _to_int(text, default: int) -> int:
+    try:
+        return int(str(text).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def _actor_radii(actor, defaults) -> tuple["ActorRadii | None", str | None]:
+    """One actor's `ActorRadii`, else `(None, note)` for an unresolvable class — same
+    instance-else-class-default convention and the same real-engine gates as
+    `cli/rendering.py::_resolve_point_render`: collision needs `bCollideActors == "True"`; light
+    needs `LightType != "LT_None"` and a nonzero `LightBrightness` AND `LightRadius` (a `LightRadius`
+    of 0 is treated as "unset", not the pinned `world_light_radius(0) == 25` UU — see
+    `_resolve_point_render`'s own comment). Returns `(None, None)` when the actor clears neither
+    gate — no `ActorRadii` for an ordinary decorative actor."""
+    instance = {k.casefold(): v for k, v in actor.props}
+    try:
+        info = defaults.for_class(actor.cls)
+    except uprops.SchemaError as e:
+        return None, (f"actor {actor.name!r}: schema unavailable ({actor.cls}) — cannot resolve "
+                       f"collision/light radii ({e})")
+    class_defaults = info.defaults
+
+    def field(name: str):
+        low = name.casefold()
+        return instance[low] if low in instance else class_defaults.get((low, 0))
+
+    collision_radius = collision_height = None
+    if str(field("bCollideActors") or "False").strip() == "True":
+        collision_radius = _to_float(field("CollisionRadius"), 0.0)
+        collision_height = _to_float(field("CollisionHeight"), 0.0)
+    light_radius = None
+    lr = _to_int(field("LightRadius"), 0)
+    if (str(field("LightType") or "LT_None").strip() != "LT_None"
+            and _to_int(field("LightBrightness"), 0) and lr):
+        light_radius = world_light_radius(lr)
+    if collision_radius is None and light_radius is None:
+        return None, None
+    return ActorRadii(collision_radius=collision_radius, collision_height=collision_height,
+                      light_radius=light_radius), None
+
+
+def _resolve_actor_radii(level: Level, defaults,
+                         hidden_ed: dict[str, bool]) -> dict[str, ActorRadii]:
+    """Every non-brush, non-`bHiddenEd` actor's `ActorRadii` (`_actor_radii`), gathered once per
+    `level.order` walk — mirrors `_resolve_hidden_ed`'s shape; shared by
+    `build_scene_payload`/`build_wireframe_payload`. A brush actor is skipped outright (never
+    reaches `_actor_radii`) — `bCollideActors`/`LightType` are gameplay-actor properties, matching
+    `resolve_actor_sprites`'s identical brush skip. A `hidden_ed` actor is skipped too — it never
+    reaches `ScenePayload.actors` either way (`_build_actors`'s own `hidden_ed.get(name)` skip), and
+    resolving it here would needlessly cost a schema lookup (and, on an unresolvable class, print a
+    stderr note) for an actor the response never carries — matching `cli/rendering.py::
+    _preview_point_data`'s convention of filtering hidden actors BEFORE `_resolve_point_render`."""
+    radii: dict[str, ActorRadii] = {}
+    notes: list[str] = []
+    for name in level.order:
+        actor = level.actors.get(name)
+        if actor is None or actor.brush is not None or hidden_ed.get(name):
+            continue
+        resolved, note = _actor_radii(actor, defaults)
+        if resolved is not None:
+            radii[name] = resolved
+        if note:
+            notes.append(note)
+    for line in notes:
+        print(line, file=sys.stderr)
+    return radii
+
+
 def _class_category_map(fqcn: str, index) -> dict[str, str] | None:
     """`casefold(prop name) -> UnrealEd category` for `fqcn`'s full (own+inherited) schema, or None
     if the class's schema can't be resolved at all (offline index / missing package) — caller falls
@@ -283,12 +378,13 @@ def _with_synthetic_location(props: list[tuple[str, str]], categories: list[str]
 
 
 def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset: int,
-                  index) -> list[SceneActor]:
-    """The actor-metadata list (inspector/organization panel + selection highlight + sprite), built
-    from `trunk` alone -- shared by both `build_scene_payload` (geometry pinned, `tex_offset =
-    len(geometry.texture_table)`) and `build_wireframe_payload` (no geometry, `tex_offset = 0`).
-    `category_maps` memoizes `_class_category_map` per class for this call -- a level can have many
-    actors of one class, so this avoids re-walking the Super chain per actor."""
+                  index, radii_map: dict[str, ActorRadii]) -> list[SceneActor]:
+    """The actor-metadata list (inspector/organization panel + selection highlight + sprite +
+    collision/light radii), built from `trunk` alone -- shared by both `build_scene_payload`
+    (geometry pinned, `tex_offset = len(geometry.texture_table)`) and `build_wireframe_payload` (no
+    geometry, `tex_offset = 0`). `category_maps` memoizes `_class_category_map` per class for this
+    call -- a level can have many actors of one class, so this avoids re-walking the Super chain per
+    actor. `radii_map` is `_resolve_actor_radii`'s own output, gathered once by the caller."""
     level = trunk.level
     ranks = trunk.ranks
     actor_sprites = trunk.actor_sprites
@@ -316,7 +412,8 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
             folder=actor.folder, labels=sorted(actor.labels), order_value=ranks.get(name, ""),
             csg_rank=csg_rank,
             props=props, categories=categories,
-            brush=_brush_highlight(actor, index), sprite=sprite))
+            brush=_brush_highlight(actor, index), sprite=sprite,
+            radii=radii_map.get(name)))
     return actors
 
 
@@ -378,6 +475,7 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     break, it doesn't change that other, pre-existing behavior.)"""
     level = trunk.level
     hidden_ed = _resolve_hidden_ed(level, defaults)
+    radii_map = _resolve_actor_radii(level, defaults, hidden_ed)
     polys, texture_table, owners = geometry.polys, geometry.texture_table, geometry.owners
     # Only a hidden CSG_Add brush's own surfaces are safe to drop -- see this function's docstring.
     hidden_add_owners = {
@@ -398,7 +496,8 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     # involved) -- `/api/level/{level}/atlas` (`app.py`'s `atlas` route) appends that SAME
     # `resolve_actor_sprites` result onto `geometry.texture_table` in the same order, so
     # `tex_offset + local_index` names the same atlas rect on both endpoints.
-    actors = _build_actors(trunk, hidden_ed, tex_offset=len(texture_table), index=index)
+    actors = _build_actors(trunk, hidden_ed, tex_offset=len(texture_table), index=index,
+                           radii_map=radii_map)
     return ScenePayload(polys=scene_polys, actors=actors)
 
 
@@ -411,5 +510,6 @@ def build_wireframe_payload(trunk: _LoadedTrunk, index, defaults) -> ScenePayloa
     entirely when no geometry is pinned), so a sprite's `tex_index` names a rect in THAT atlas, at
     the sprite's own position with no offset."""
     hidden_ed = _resolve_hidden_ed(trunk.level, defaults)
-    actors = _build_actors(trunk, hidden_ed, tex_offset=0, index=index)
+    radii_map = _resolve_actor_radii(trunk.level, defaults, hidden_ed)
+    actors = _build_actors(trunk, hidden_ed, tex_offset=0, index=index, radii_map=radii_map)
     return ScenePayload(polys=[], actors=actors)

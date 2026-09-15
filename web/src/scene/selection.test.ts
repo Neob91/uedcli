@@ -19,6 +19,7 @@ function actor(name: string, lo: [number, number, number], hi: [number, number, 
     categories: [],
     brush: null,
     sprite: null,
+    radii: null,
   }
 }
 
