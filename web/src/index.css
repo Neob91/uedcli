@@ -4,7 +4,7 @@
    (Task 30's useTheme sets data-theme; this file only declares what each theme LOOKS like).
 
    Two token families:
-   - Structural (--bg/--fg/--border/--surface-*/--danger/--warn/--accent/--overlay-*): what today's
+   - Structural (--bg / --fg / --border / --surface-* / --danger / --warn / --accent / --overlay-*): what today's
      UI actually uses.
    - Semantic (--sem-*, the main spec's "added=green, removed=red, prop/moved=amber,
      poly/retextured=violet, order=teal, folder=blue, label=magenta, other=gray,
