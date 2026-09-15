@@ -1,0 +1,47 @@
+Editor.dll live base = 0x10000000  VA = 0x1003348b
+
+[New LWP 132]
+[New LWP 141]
+[New LWP 142]
+[New LWP 143]
+[New LWP 144]
+[New LWP 145]
+[New LWP 146]
+[New LWP 147]
+[New LWP 148]
+[New LWP 149]
+[New LWP 150]
+[New LWP 151]
+[New LWP 152]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 179]
+[New LWP 210]
+[New LWP 211]
+[New LWP 224]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7fbfcfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x1003348b
+ORACLE_ATTACHED
+FWTB hit=16059 gNode=5154 gModel=0e0e4114 plane=(3f800000,80000000,80000000,c3800002) GDiscarded=1 verdict=CONSUME
+FWTB hit=16067 gNode=5156 gModel=0e0e4114 plane=(3f800000,80000000,80000000,c3800002) GDiscarded=1 verdict=CONSUME
+FWTB hit=16068 gNode=5158 gModel=0e0e4114 plane=(3f800000,80000000,80000000,c3800002) GDiscarded=1 verdict=CONSUME
+FWTB hit=16069 gNode=5160 gModel=0e0e4114 plane=(3f800000,80000000,80000000,c3800002) GDiscarded=1 verdict=CONSUME
+FWTB hit=16070 gNode=5163 gModel=0e0e4114 plane=(3f800000,80000000,80000000,c3800002) GDiscarded=1 verdict=CONSUME
+FWTB hit=16071 gNode=5165 gModel=0e0e4114 plane=(3f800000,80000000,80000000,c3800002) GDiscarded=1 verdict=CONSUME
