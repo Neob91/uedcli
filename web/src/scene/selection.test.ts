@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { SceneActor } from '../api'
-import { isTap, pickActor, rayAabbIntersect } from './selection'
+import { isTap, pickActor, rayAabbIntersect, resolveHitActor } from './selection'
 
 function actor(name: string, lo: [number, number, number], hi: [number, number, number]): SceneActor {
   return {
@@ -15,6 +15,8 @@ function actor(name: string, lo: [number, number, number], hi: [number, number, 
     labels: [],
     order_value: 'm',
     props: [],
+    brush: null,
+    sprite: null,
   }
 }
 
@@ -47,6 +49,32 @@ describe('pickActor', () => {
     const only = actor('Only', [-1, -1, -1], [1, 1, 1])
     const ray = { origin: [-10, 50, 50] as [number, number, number], direction: [1, 0, 0] as [number, number, number] }
     expect(pickActor(ray, [only])).toBeNull()
+  })
+})
+
+describe('resolveHitActor', () => {
+  const inner = actor('Inner', [-1, -1, -1], [1, 1, 1])
+  const room = actor('Room', [-100, -100, -100], [100, 100, 100])
+
+  it('resolves a hit face to its owning actor, even one nested in a bigger actor\'s AABB', () => {
+    // The bug this fixes: `Inner`'s tiny AABB sits fully inside `Room`'s huge one, so an
+    // AABB-only test could never tell a click on `Inner`'s own geometry apart from `Room`'s.
+    const owners = ['Room', 'Room', 'Inner', 'Inner']
+    expect(resolveHitActor(2, owners, [room, inner])?.name).toBe('Inner')
+    expect(resolveHitActor(0, owners, [room, inner])?.name).toBe('Room')
+  })
+
+  it('returns null when there is no hit', () => {
+    expect(resolveHitActor(null, ['Room'], [room])).toBeNull()
+    expect(resolveHitActor(undefined, ['Room'], [room])).toBeNull()
+  })
+
+  it('returns null for a hit triangle with no resolved owner', () => {
+    expect(resolveHitActor(0, [null], [room])).toBeNull()
+  })
+
+  it('returns null when the owner name matches no actor in the current payload', () => {
+    expect(resolveHitActor(0, ['Ghost'], [room])).toBeNull()
   })
 })
 

@@ -34,7 +34,7 @@ from pathlib import Path
 from . import config
 from .preview_game import _compose_stem, _prune_prefix
 
-_CACHE_VERSION = 1
+_CACHE_VERSION = 2   # bumped: geometry/scene payloads gained a per-poly actor-owner list
 _GEO_PREFIX = f"scenegeo{_CACHE_VERSION}"
 _LIT_PREFIX = f"scenelit{_CACHE_VERSION}"
 _VERSIONED_PREFIX_RE = re.compile(r"^(scenegeo|scenelit)(\d+)__")
@@ -77,13 +77,14 @@ def _store(path: Path, payload) -> None:
 
 
 def load_geometry(project, level_name: str, geom_hash12: str):
-    """`(model_body, portals, polys_no_light, i_surf_by_poly, texture_table)` for `geom_hash12`, or
-    None. `portals` is `uedcli_native.leaf_portals(built)`'s output (the frozen portal graph, not
-    part of `model_body`'s on-disk format — MUST be restored via `load_model(body,
-    leaf_portals=portals)`, never dropped, or `bake_lighting` silently falls back to a stale
-    recompute). `polys_no_light` entries omit the trailing lightmap field; `i_surf_by_poly[i]` is
-    the world-BSP surf index feeding `polys_no_light[i]`'s eventual lightmap (None for a mover/mesh
-    poly, which never gets one)."""
+    """`(model_body, portals, polys_no_light, i_surf_by_poly, actor_names_by_poly, texture_table)`
+    for `geom_hash12`, or None. `portals` is `uedcli_native.leaf_portals(built)`'s output (the
+    frozen portal graph, not part of `model_body`'s on-disk format — MUST be restored via
+    `load_model(body, leaf_portals=portals)`, never dropped, or `bake_lighting` silently falls back
+    to a stale recompute). `polys_no_light` entries omit the trailing lightmap field;
+    `i_surf_by_poly[i]` is the world-BSP surf index feeding `polys_no_light[i]`'s eventual lightmap
+    (None for a mover/mesh poly, which never gets one); `actor_names_by_poly[i]` is that same poly's
+    owning actor name (None for an out-of-range CSG join)."""
     return _load(_dir(project) / f"{_compose_stem(_GEO_PREFIX, level_name, geom_hash12)}.marshal")
 
 
@@ -96,8 +97,8 @@ def store_geometry(project, level_name: str, geom_hash12: str, payload) -> None:
 
 
 def load_scene(project, level_name: str, geom_hash12: str, light_hash12: str):
-    """The cached fully-lit `(polys, texture_table)` for this exact geometry+light combination
-    (both hashes must match), or None."""
+    """The cached fully-lit `(polys, texture_table, actor_names_by_poly)` for this exact
+    geometry+light combination (both hashes must match), or None."""
     stem = _compose_stem(_LIT_PREFIX, level_name, geom_hash12 + light_hash12)
     return _load(_dir(project) / f"{stem}.marshal")
 

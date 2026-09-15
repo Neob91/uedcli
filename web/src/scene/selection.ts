@@ -1,11 +1,32 @@
-// Click-to-select picking: ray-vs-actor-AABB, nearest hit wins. Pure and framework-free (the
+// Click-to-select picking. The PRIMARY path (`resolveHitActor`) raycasts the actual rendered
+// geometry (the merged bufferGeometry Viewport3D.tsx builds from `scene.polys`) and maps the hit
+// triangle back to its owning actor via `ScenePoly.owner` -- real per-poly ownership, so a small
+// brush fully enclosed in a bigger brush's bounding box is still selectable by its OWN geometry.
+// `pickActor` (ray-vs-actor-AABB) is the FALLBACK for a tap that doesn't land on any drawn
+// triangle -- the only way to select a non-brush point actor (no geometry of its own, out of scope
+// here) today, so it must keep working exactly as before. Pure and framework-free (the
 // screen-to-ray conversion, which needs the real camera projection, lives in Viewport3D.tsx via
 // three.js's Raycaster; only the picking algorithm itself is here, so it's testable without a
-// WebGL context). Slice 1 selects at actor-bbox granularity, not per-poly -- the scene payload's
-// polys carry no owning-actor reference (they're anonymous CSG-solved fragments), so bbox
-// hit-testing against `ScenePayload.actors` is what's available without a backend change.
+// WebGL context).
 import type { SceneActor } from '../api'
 import type { Vec3 } from './camera'
+
+/** Resolves a raycast hit on the merged scene geometry to its owning actor: `faceIndex` is
+ * `THREE.Intersection.faceIndex` (a triangle index into the non-indexed geometry, so it indexes
+ * `triangleOwners` directly -- `geometry.ts`'s `buildGeometryData` emits one owner entry per
+ * triangle in the SAME order). Returns null when there was no hit, the hit triangle has no
+ * resolved owner (an out-of-range CSG join), or the name doesn't match any actor in the current
+ * payload (a live-reload race). */
+export function resolveHitActor(
+  faceIndex: number | null | undefined,
+  triangleOwners: (string | null)[],
+  actors: SceneActor[],
+): SceneActor | null {
+  if (faceIndex == null) return null
+  const name = triangleOwners[faceIndex]
+  if (name == null) return null
+  return actors.find((a) => a.name === name) ?? null
+}
 
 export interface Ray {
   origin: Vec3

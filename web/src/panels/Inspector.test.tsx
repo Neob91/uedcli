@@ -21,6 +21,8 @@ function fixtureActor(overrides: Partial<SceneActor> = {}): SceneActor {
       ['CsgOper', 'CSG_Subtract'],
       ['PolyFlags', '2'],
     ],
+    brush: null,
+    sprite: null,
     ...overrides,
   }
 }

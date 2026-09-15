@@ -4,13 +4,16 @@
 `trunk.read_level_with_bodies`, since neither `preview_cache` tier holds it."""
 from __future__ import annotations
 
+import sys
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
 
-from .. import config, trunk
-from ..preview_native import build_scene
-from ..rotation import actor_rotation_uu
+from .. import config, trunk, uprops
+from ..movers import is_mover
+from ..preview import _CSG_PALETTE, classify_brush
+from ..preview_native import build_scene, poly_blend, poly_two_sided, resolve_actor_sprites
+from ..rotation import actor_linear, actor_prepivot, actor_rotation_uu, local_offset
 from ..writes import actor_bounds
 
 _ZERO3 = (Decimal(0), Decimal(0), Decimal(0))
@@ -35,9 +38,13 @@ class LightmapFrame:
 class ScenePoly:
     """One render-ready polygon, mirroring `build_scene`'s own per-poly tuple field-for-field (see
     its module docstring): world verts (flat x,y,z triples), the base-UV frame, the texture-table
-    index, the alpha-test gate, the raw merged `PolyFlags`, and the lit surf's `LightmapFrame` (the
-    baked lumel RGB itself is stripped here and packed in the lightmap atlas instead — the frame is
-    all the client needs to compute per-vertex lumel UVs)."""
+    index, the alpha-test gate, `two_sided`/`blend` (resolved cull + composite mode, below), the raw
+    merged `PolyFlags`, and the lit surf's `LightmapFrame` (the baked lumel RGB itself is stripped
+    here and packed in the lightmap atlas instead — the frame is all the client needs to compute
+    per-vertex lumel UVs). `owner` is NOT part of `build_scene`'s per-poly tuple — it's
+    `build_scene`'s separate, parallel `actor_names_by_poly` return, joined in here so the client can
+    raycast the real geometry and resolve a hit triangle back to its actor (None for a poly joined to
+    no source actor, an out-of-range CSG join)."""
     verts: list[float]
     base: list[float]
     tu: list[float]
@@ -45,8 +52,42 @@ class ScenePoly:
     pan: list[float]
     tex_index: int
     masked: bool
+    # `two_sided`/`blend` are the render decisions resolved once from the merged `PolyFlags` by
+    # `preview_native.poly_two_sided`/`poly_blend` -- the same flags render.rs culls and composites
+    # on -- so the web sets three.js state from them and derives no flag logic. `flags` still rides
+    # for now (Phase 2 drops it once the web reads only the resolved attrs).
+    two_sided: bool
+    blend: str
     flags: int
     lightmap: LightmapFrame | None
+    owner: str | None
+
+
+@dataclass(frozen=True, kw_only=True)
+class BrushHighlight:
+    """A brush actor's own AUTHORED polygons — pre-CSG, local-space, transformed to world exactly
+    like `preview.py`'s `_scene_geometry` (`Location + L·(v − PrePivot)`, `L = actor_linear`) — for
+    the selection outline. Deliberately NOT `ScenePayload.polys` (the CSG-SOLVED result): the point
+    is to show the brush's own authored shape, matching `actor diagram --mode wire --highlight`.
+    `color` is that classification's vivid front hue (`preview._CSG_PALETTE[csg_class][0]`), so a
+    highlighted brush always draws in its OWN CSG colour, never a fixed selection colour."""
+    csg_class: str
+    color: tuple[int, int, int]
+    polys: list[list[float]]   # one entry per poly: flat world verts (x0,y0,z0, x1,y1,z1, ...)
+
+
+@dataclass(frozen=True, kw_only=True)
+class ActorSprite:
+    """A point actor's resolved `DT_Sprite` billboard — the actual class-defined icon texture (a
+    light's bulb, a trigger's flag, ...) at its natural size scaled by `DrawScale`
+    (`preview_native.resolve_actor_sprites`, reusing `cli/rendering.py::_resolve_point_render`'s
+    resolution logic and `preview.sprite_footprint`'s math for this NEW, 3D-marker call site) — what
+    the client draws instead of the fallback grey dot. `tex_index` indexes the SAME
+    `/api/level/{level}/atlas` table every world/mesh poly already uses; `width`/`height` are the
+    billboard's world-space (UU) footprint."""
+    tex_index: int
+    width: float
+    height: float
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -54,7 +95,10 @@ class SceneActor:
     """One actor's metadata for the inspector/organization panel — NOT its geometry (a brush
     actor's polys already ride in `ScenePayload.polys`, joined by CSG, not by actor). `props` is
     the actor's raw stored T3D property list (`Actor.props`, `list[(key, raw-text-value)]`) — the
-    read-only inspector's "full raw T3D property set" (spec, "Selection & inspector")."""
+    read-only inspector's "full raw T3D property set" (spec, "Selection & inspector"). `brush` is
+    the selection-highlight geometry (None for a non-brush actor — a separate task's concern).
+    `sprite` is None for a brush actor, and for a point actor whose `DT_Sprite` billboard didn't
+    resolve — the client then falls back to a generic marker (`markers.ts`)."""
     name: str
     cls: str
     bbox_lo: tuple[float, float, float]
@@ -65,6 +109,8 @@ class SceneActor:
     labels: list[str]
     order_value: str
     props: list[tuple[str, str]]
+    brush: BrushHighlight | None
+    sprite: ActorSprite | None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -83,6 +129,61 @@ def _lightmap_frame(lightmap: tuple | None) -> LightmapFrame | None:
                          u_size=u_size, v_size=v_size)
 
 
+def _brush_highlight(actor, index) -> BrushHighlight | None:
+    """`actor`'s own authored polys, world-transformed, plus its CSG classification/colour — or
+    None for a non-brush actor. `is_mover` is the AUTHORITATIVE `movers.is_mover` answer (not the
+    name-guess `classify_brush` falls back to with `is_mover=None`), matching every OTHER filled
+    render's own disposition (`preview.py`'s `_scene_geometry` docstring)."""
+    if actor.brush is None:
+        return None
+    csg_class = classify_brush(actor, is_mover=is_mover(actor, index))
+    color = _CSG_PALETTE[csg_class][0]
+    R = actor_linear(actor)
+    prepivot = actor_prepivot(actor)
+    loc = actor.location or _ZERO3
+    polys = []
+    for poly in actor.brush.polys:
+        verts: list[float] = []
+        for v in poly.vertices:
+            off = local_offset(R, prepivot, v)
+            verts += [float(loc[0] + off[0]), float(loc[1] + off[1]), float(loc[2] + off[2])]
+        polys.append(verts)
+    return BrushHighlight(csg_class=csg_class, color=color, polys=polys)
+
+
+def _is_hidden_ed(actor, defaults) -> tuple[bool, str | None]:
+    """`actor`'s effective `bHiddenEd` (instance override else class default), plus a stderr note
+    when the class default couldn't be resolved — same instance-else-class-default convention and
+    degrade-to-visible-on-unresolvable-schema disposition as `cli/rendering.py::_is_hidden_ed` (a
+    different call site, for `actor diagram`), reused here rather than reinvented. `defaults` is the
+    caller's shared `classdefaults.ClassDefaults` memo, NOT a fresh per-actor
+    `uprops.resolve_class_defaults` call — a level has hundreds of actors across a handful of
+    distinct classes, and re-resolving the whole schema chain per actor (a package load + Super-chain
+    walk + defaults decode, ~0.1-0.3s cold) was the O(actors) cost this fix removes.
+
+    Owner ruling 2026-09-14: the GUI hides a `bHiddenEd` actor from `ScenePayload.actors` outright —
+    the actor-list entry, its selection highlight, and its fallback marker (`build_scene_payload`
+    below gates all three off this one result). A `bHiddenEd` BRUSH additionally has its own rendered
+    CSG surfaces dropped, but only when it's a `CSG_Add` — see `build_scene_payload`'s docstring for
+    why a `CSG_Subtract`'s own surfaces can't be dropped the same way.
+
+    This try/except only protects THIS function's own resolution — it does NOT make a whole
+    `/scene` request resilient to an unresolvable actor class. `build_scene_payload` calls
+    `build_scene` (which calls `gather_lights`, unguarded, pre-existing) BEFORE it ever calls this
+    function, and `gather_lights` resolves every actor's class through the same `defaults` memo
+    first — so a level with one actor whose class can't be resolved at all still fails the whole
+    request there, never reaching this fail-open path. See `build_scene_payload`'s docstring."""
+    instance = {k.casefold(): v for k, v in actor.props}
+    if "bhiddened" in instance:
+        return instance["bhiddened"].strip() == "True", None
+    try:
+        info = defaults.for_class(actor.cls)
+    except uprops.SchemaError as e:
+        return False, (f"actor {actor.name!r}: schema unavailable ({actor.cls}) — cannot check its "
+                       f"class-default bHiddenEd, assuming visible ({e})")
+    return str(info.defaults.get(("bhiddened", 0), "False")).strip() == "True", None
+
+
 def build_scene_payload(project, level_name: str, index, defaults, search_files) -> ScenePayload:
     """Load the trunk once (a lock-free read, read-only-safe) and build its scene: the solved,
     lit-but-undrawn polygons from `build_scene` (a `preview_cache` hit reuses the ~24s CSG solve
@@ -90,27 +191,93 @@ def build_scene_payload(project, level_name: str, index, defaults, search_files)
     metadata joined fresh from the same load. `index`/`defaults`/`search_files` are the caller's
     already-assembled `build_scene` inputs (the same trio `level photo --native`'s `render_shots`
     call site assembles, `cli/commands/level.py` ~732-745) — this function does no resolution of
-    its own, so a test can hand it a `StubClassIndex` and an offline `ClassDefaults` directly."""
+    its own, so a test can hand it a `StubClassIndex` and an offline `ClassDefaults` directly.
+
+    A `bHiddenEd` actor is dropped from `ScenePayload.actors` entirely (`_is_hidden_ed` above) —
+    owner ruling 2026-09-14: the GUI hides editor-hidden actors and ignores `bHidden` (the opposite
+    of `level photo --native`). `build_scene` itself already excludes such a mesh actor's triangles
+    (`visibility="editor"` below), so this actor-list drop is what additionally hides its selection
+    highlight and its `markers.ts` fallback marker — one filter for meshes, brushes, and bare point
+    actors alike, rather than three.
+
+    A `bHiddenEd` BRUSH additionally drops its own rendered CSG surfaces from `ScenePayload.polys`
+    (owner-attributed via `build_scene`'s `owners` return / `ScenePoly.owner`) — but ONLY when the
+    brush is a `CSG_Add`: its own surfaces are its solid contribution, safe to omit like any other
+    hidden actor's geometry. A `CSG_Subtract` (or other non-Add) brush's own surfaces are the WALLS
+    of the volume it carved, not a separate solid to hide — omitting them would open a real hole in
+    the built geometry (no other brush supplies that face), so they stay rendered regardless of
+    `bHiddenEd`. A Mover carries no `CsgOper` prop at all (it never participates in world CSG), so
+    `hidden_add_owners`'s `CsgOper` lookup below defaults it to `"CSG_Add"` — correctly: a Mover's own
+    surfaces are its own solid contribution (like a CSG_Add brush's), never another actor's wall, so
+    dropping them when it's hidden is safe the same way.
+
+    A class-resolution failure IN `_is_hidden_ed` ITSELF degrades to "not hidden" — both the actor
+    and its surfaces stay — with one stderr note per affected actor, rather than a raised exception
+    from this one call. (`build_scene`'s own class resolution — `gather_lights` et al., which this
+    function calls BEFORE the loop below — is a separate, unguarded path: a level with an actor whose
+    class can't be resolved at all still fails the whole request there, same as `level materialize`'s
+    own no-fallback-default rule; this fix narrows what `_is_hidden_ed` itself can break, it doesn't
+    change that other, pre-existing behavior.)"""
     maps_dir = Path(config.project_maps_dir(project))
     level, ranks, _bodies, _folders = trunk.read_level_with_bodies(maps_dir / level_name)
-    polys, _texture_table = build_scene(level, search_files, index, defaults=defaults,
-                                        project=project, level_name=level_name)
-    scene_polys = [
-        ScenePoly(verts=verts, base=list(base), tu=list(tu), tv=list(tv), pan=list(pan),
-                 tex_index=tex_index, masked=masked, flags=flags, lightmap=_lightmap_frame(lightmap))
-        for verts, base, tu, tv, pan, tex_index, masked, flags, lightmap in polys
-    ]
-    actors = []
+    # `visibility="editor"`: the GUI checks `bHiddenEd` and ignores `bHidden` (owner ruling
+    # 2026-09-14) -- the opposite of `level photo --native`'s default.
+    polys, texture_table, owners = build_scene(level, search_files, index, defaults=defaults,
+                                               project=project, level_name=level_name,
+                                               visibility="editor")
+    # Point-actor sprite billboards resolve into their OWN table, appended after `build_scene`'s own
+    # texture_table -- `/api/level/{level}/atlas` (`app.py`'s `atlas` route) appends the SAME
+    # `resolve_actor_sprites` result onto its own (separately fetched, but cache-identical)
+    # `texture_table` in the same order, so `tex_offset + local_index` names the same atlas rect on
+    # both endpoints without this route needing to build or return the atlas itself. `defaults` is
+    # the shared `ClassDefaults` memo (see `_is_hidden_ed`'s docstring) -- threaded through so a
+    # repeated class resolves once, not once per actor.
+    _sprite_table, actor_sprites = resolve_actor_sprites(level, search_files, defaults)
+    tex_offset = len(texture_table)
+
+    hidden_ed: dict[str, bool] = {}
+    notes: list[str] = []
     for name in level.order:
         actor = level.actors.get(name)
         if actor is None:
             continue
+        is_hidden, note = _is_hidden_ed(actor, defaults)
+        hidden_ed[name] = is_hidden
+        if note:
+            notes.append(note)
+    for line in notes:
+        print(line, file=sys.stderr)
+
+    # Only a hidden CSG_Add brush's own surfaces are safe to drop -- see this function's docstring.
+    hidden_add_owners = {
+        name for name, hidden in hidden_ed.items()
+        if hidden and (a := level.actors.get(name)) is not None and a.brush is not None
+        and dict(a.props).get("CsgOper", "CSG_Add") == "CSG_Add"
+    }
+    scene_polys = [
+        ScenePoly(verts=verts, base=list(base), tu=list(tu), tv=list(tv), pan=list(pan),
+                 tex_index=tex_index, masked=masked, two_sided=poly_two_sided(flags),
+                 blend=poly_blend(flags), flags=flags, lightmap=_lightmap_frame(lightmap),
+                 owner=owner)
+        for (verts, base, tu, tv, pan, tex_index, masked, flags, lightmap), owner
+        in zip(polys, owners)
+        if owner not in hidden_add_owners
+    ]
+    actors = []
+    for name in level.order:
+        actor = level.actors.get(name)
+        if actor is None or hidden_ed.get(name):
+            continue                                     # editor-hidden: no metadata, no marker
         lo, hi = actor_bounds(actor)
         loc = actor.location or _ZERO3
+        sprite = None
+        if (raw := actor_sprites.get(name)) is not None:
+            local_idx, width, height = raw
+            sprite = ActorSprite(tex_index=tex_offset + local_idx, width=width, height=height)
         actors.append(SceneActor(
             name=name, cls=actor.cls or "",
             bbox_lo=tuple(float(c) for c in lo), bbox_hi=tuple(float(c) for c in hi),
             location=tuple(float(c) for c in loc), rotation=actor_rotation_uu(actor),
             folder=actor.folder, labels=sorted(actor.labels), order_value=ranks.get(name, ""),
-            props=list(actor.props)))
+            props=list(actor.props), brush=_brush_highlight(actor, index), sprite=sprite))
     return ScenePayload(polys=scene_polys, actors=actors)

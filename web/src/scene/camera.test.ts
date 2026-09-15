@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CameraPose, CameraSpeeds } from './camera'
-import { cameraBasis, dollyAndTurn, look, orbit, pan, zoom } from './camera'
+import { cameraBasis, dollyAndTurn, flyMove, look, orbit, pan, zoom } from './camera'
 
 const UNIT_SPEEDS: CameraSpeeds = {
   yawPerPixel: 1,
@@ -117,5 +117,46 @@ describe('orbit (Alt-drag)', () => {
     const pose: CameraPose = { position: [1, 2, 3], pitch: 5, yaw: 6 }
     const got = orbit(pose, [1, 2, 3], 30, 30, UNIT_SPEEDS)
     expect(got).toEqual(pose)
+  })
+})
+
+describe('flyMove (WASD + Q/E)', () => {
+  it('W moves forward along the horizontal projection, never leaking pitch into Z', () => {
+    const pitched: CameraPose = { position: [0, 0, 0], pitch: 45, yaw: 0 }
+    const got = flyMove(pitched, { forward: 1, right: 0, up: 0 }, 10, 1)
+    expect(got.position[0]).toBeCloseTo(10)
+    expect(got.position[1]).toBeCloseTo(0)
+    expect(got.position[2]).toBeCloseTo(0) // no Z leak despite pitch=45
+  })
+
+  it('S moves backward, A/D strafe along the horizontal right', () => {
+    const pose: CameraPose = { position: [0, 0, 0], pitch: 0, yaw: 90 } // forward=+Y, right=-X
+    const back = flyMove(pose, { forward: -1, right: 0, up: 0 }, 10, 1)
+    expect(back.position[1]).toBeCloseTo(-10)
+    // A is input.right=1 (FlyKeys maps KeyA to +1, KeyD to -1)
+    const strafeA = flyMove(pose, { forward: 0, right: 1, up: 0 }, 10, 1)
+    expect(strafeA.position[0]).toBeCloseTo(-10)
+  })
+
+  it('E moves up and Q moves down along world Z regardless of pitch/yaw', () => {
+    const pose: CameraPose = { position: [5, 5, 5], pitch: -30, yaw: 123 }
+    const up = flyMove(pose, { forward: 0, right: 0, up: 1 }, 10, 1)
+    expect(up.position).toEqual([5, 5, 15])
+    const down = flyMove(pose, { forward: 0, right: 0, up: -1 }, 10, 1)
+    expect(down.position).toEqual([5, 5, -5])
+  })
+
+  it('is frame-rate independent (scales with dt) and a no-op with zero input', () => {
+    const pose: CameraPose = { position: [0, 0, 0], pitch: 0, yaw: 0 }
+    const half = flyMove(pose, { forward: 1, right: 0, up: 0 }, 10, 0.5)
+    expect(half.position[0]).toBeCloseTo(5)
+    expect(flyMove(pose, { forward: 0, right: 0, up: 0 }, 10, 1)).toEqual(pose)
+  })
+
+  it('never changes pitch/yaw -- translation only', () => {
+    const pose: CameraPose = { position: [1, 2, 3], pitch: 12, yaw: 34 }
+    const got = flyMove(pose, { forward: 1, right: 1, up: 1 }, 10, 1)
+    expect(got.pitch).toBe(12)
+    expect(got.yaw).toBe(34)
   })
 })

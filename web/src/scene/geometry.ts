@@ -1,5 +1,5 @@
 // Scene payload -> a drawable geometry: flat position/UV/color buffers split into one group per
-// (texture, masked?, lightmap?) triple. Each group draws with its OWN THREE.Texture
+// (texture, masked?, two_sided?, blend, lightmap?) tuple. Each group draws with its OWN THREE.Texture
 // (RepeatWrapping) for the base map. Lit polys additionally carry a second UV set (`uv1`) into the
 // lightmap atlas; unlit polys carry a per-vertex KEY_LIGHT flat shade in `colors`. This mirrors
 // `level photo --native`'s render.rs: a lightmapped world surf is base*lumel; everything else is
@@ -9,13 +9,26 @@ import type { AtlasPayload, LightmapPayload, ScenePoly } from '../api'
 /** The fixed key-light direction render.rs shades unlit faces against (render.rs `KEY_LIGHT`). */
 const KEY_LIGHT: [number, number, number] = [-0.408, -0.577, 0.707]
 
+/** Global fan winding for backface culling. render.rs culls single-sided faces by normal·camera
+ * (`light_in_front`); three.js `FrontSide` culls by screen-space CCW winding, so ONE global order
+ * must make the two agree. Verified directly against this app's own camera (`Viewport3D`'s
+ * `CameraRig`, a plain `THREE.Camera.lookAt` with world-up fixed to +Z, fed the SAME
+ * `forward`/`right`/`up` triad `preview_native.camera_basis` derives for `render.rs`): projecting
+ * real scene polys through that exact camera and comparing to `light_in_front`'s decision shows the
+ * UNREVERSED fan order (`0, i, i+1`, i.e. no reversal) already agrees -- reversing it (as an earlier,
+ * differently-implemented camera needed) instead culls the wrong face on most single-sided walls. */
+const REVERSE_FAN = false
+
 /** One contiguous [start, count] triangle-vertex range (three.js BufferGeometry group semantics:
  * start/count counted in VERTICES, matching a non-indexed geometry), tagged with the texture, mask
- * state, and whether it draws with the lightmap atlas. `texIndex` -1 is untextured (flat grey base,
- * still shaded/lit). Viewport3D maps each group to a material. */
+ * state, cull side (`twoSided`), `blend` mode, and whether it draws with the lightmap atlas.
+ * `texIndex` -1 is untextured (flat grey base, still shaded/lit). Viewport3D maps each group to a
+ * material. */
 export interface GeometryGroup {
   texIndex: number
   masked: boolean
+  twoSided: boolean
+  blend: ScenePoly['blend']
   lit: boolean
   start: number
   count: number
@@ -26,7 +39,11 @@ export interface GeometryData {
   uvs: Float32Array // base-texture UV [u,v, ...], texture-space (1.0 = one tile), aligned with positions
   uv1: Float32Array // lightmap-atlas UV [u,v, ...] (normalized), (0,0) for unlit verts
   colors: Float32Array // per-vertex [r,g,b, ...]: flat KEY_LIGHT shade for unlit, white for lit
-  groups: GeometryGroup[] // one per (texIndex, masked, lit) triple present, in first-seen order
+  groups: GeometryGroup[] // one per (texIndex, masked, twoSided, blend, lit) tuple, in first-seen order
+  // One entry per TRIANGLE (not vertex), same order as `positions` -- `THREE.Raycaster`'s
+  // `faceIndex` on a non-indexed geometry indexes this array directly, so a raycast hit resolves
+  // to its owning actor without a second geometry pass (click-to-select, `selection.ts`).
+  triangleOwners: (string | null)[]
 }
 
 function dot(a: number[], b: number[]): number {
@@ -107,24 +124,28 @@ function appendTriangleFan(
 ): void {
   const n = poly.verts.length / 3
   for (let i = 1; i < n - 1; i++) {
-    for (const idx of [0, i, i + 1]) {
+    for (const idx of REVERSE_FAN ? [0, i + 1, i] : [0, i, i + 1]) {
       out.pos.push(poly.verts[idx * 3], poly.verts[idx * 3 + 1], poly.verts[idx * 3 + 2])
       out.uv.push(uvs[idx][0], uvs[idx][1])
       out.uv1.push(lmUVs ? lmUVs[idx][0] : 0, lmUVs ? lmUVs[idx][1] : 0)
       if (lmUVs) out.color.push(1, 1, 1) // lit: lightmap does the shading, vertex colour is a no-op
       else out.color.push(shade, shade, shade)
     }
+    out.owner.push(poly.owner) // one entry per TRIANGLE, not per vertex
   }
 }
 
 interface Bucket {
   texIndex: number
   masked: boolean
+  twoSided: boolean
+  blend: ScenePoly['blend']
   lit: boolean
   pos: number[]
   uv: number[]
   uv1: number[]
   color: number[]
+  owner: (string | null)[]
 }
 
 export function buildGeometryData(
@@ -140,10 +161,13 @@ export function buildGeometryData(
     const uvs = polyUVs(poly, atlas)
     const lmUVs = lightmapUVs(poly, polyIndex, lightmap)
     const lit = lmUVs !== null
-    const key = `${poly.tex_index}:${poly.masked ? 1 : 0}:${lit ? 1 : 0}`
+    const key = `${poly.tex_index}:${poly.masked ? 1 : 0}:${poly.two_sided ? 1 : 0}:${poly.blend}:${lit ? 1 : 0}`
     let bucket = buckets.get(key)
     if (!bucket) {
-      bucket = { texIndex: poly.tex_index, masked: poly.masked, lit, pos: [], uv: [], uv1: [], color: [] }
+      bucket = {
+        texIndex: poly.tex_index, masked: poly.masked, twoSided: poly.two_sided, blend: poly.blend,
+        lit, pos: [], uv: [], uv1: [], color: [], owner: [],
+      }
       buckets.set(key, bucket)
       order.push(key)
     }
@@ -155,6 +179,7 @@ export function buildGeometryData(
   const uv1: number[] = []
   const colors: number[] = []
   const groups: GeometryGroup[] = []
+  const triangleOwners: (string | null)[] = []
   for (const key of order) {
     const bucket = buckets.get(key) as Bucket
     const start = positions.length / 3
@@ -162,7 +187,11 @@ export function buildGeometryData(
     uvs.push(...bucket.uv)
     uv1.push(...bucket.uv1)
     colors.push(...bucket.color)
-    groups.push({ texIndex: bucket.texIndex, masked: bucket.masked, lit: bucket.lit, start, count: bucket.pos.length / 3 })
+    triangleOwners.push(...bucket.owner)
+    groups.push({
+      texIndex: bucket.texIndex, masked: bucket.masked, twoSided: bucket.twoSided,
+      blend: bucket.blend, lit: bucket.lit, start, count: bucket.pos.length / 3,
+    })
   }
 
   return {
@@ -171,5 +200,6 @@ export function buildGeometryData(
     uv1: new Float32Array(uv1),
     colors: new Float32Array(colors),
     groups,
+    triangleOwners,
   }
 }

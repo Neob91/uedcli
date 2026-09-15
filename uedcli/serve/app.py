@@ -18,6 +18,7 @@ from ..classdefaults import ClassDefaults
 from ..cli import resources
 from ..cli.errors import CommandError
 from ..preview_native import build_scene as _build_scene
+from ..preview_native import resolve_actor_sprites
 from .errors import error_to_status
 from .lightmap import build_lightmap_atlas
 from .scene import build_scene_payload
@@ -130,8 +131,18 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         search_files, index, defaults = _scene_inputs(project)
         lvl, *_ = trunk.read_level_with_bodies(maps_root / level_name)
         with solve_lock:
-            _polys, texture_table = _build_scene(lvl, search_files, index, defaults=defaults,
-                                                 project=project, level_name=level_name)
+            # `visibility="editor"`, matching `/scene` (`build_scene_payload`) -- otherwise this
+            # atlas's texture indices would be built off a DIFFERENT actor set (bHidden-gated) than
+            # the polys `/scene` hands the client (bHiddenEd-gated), misaligning `tex_index`.
+            _polys, texture_table, _actor_names = _build_scene(lvl, search_files, index,
+                                                               defaults=defaults, project=project,
+                                                               level_name=level_name,
+                                                               visibility="editor")
+            # Point-actor sprite billboards ride in the SAME atlas: `scene.py::build_scene_payload`
+            # appends this identical `resolve_actor_sprites` result onto its own `texture_table` in
+            # the same order, so a `SceneActor.sprite.tex_index` from /scene names the same rect here.
+            sprite_table, _actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
+            texture_table = texture_table + sprite_table
         png_bytes, manifest, width, height = build_atlas(texture_table)
         return {
             "width": width,
@@ -149,8 +160,13 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         search_files, index, defaults = _scene_inputs(project)
         lvl, *_ = trunk.read_level_with_bodies(maps_root / level_name)
         with solve_lock:
-            polys, _texture_table = _build_scene(lvl, search_files, index, defaults=defaults,
-                                                 project=project, level_name=level_name)
+            # `visibility="editor"`, matching `/scene` -- same reasoning as `/atlas` above: this
+            # must be the SAME solve `/scene`'s polys came from, or the lumel grids here won't
+            # correspond poly-for-poly to what the client is drawing.
+            polys, _texture_table, _actor_names = _build_scene(lvl, search_files, index,
+                                                               defaults=defaults, project=project,
+                                                               level_name=level_name,
+                                                               visibility="editor")
         png_bytes, manifest, width, height, intensity = build_lightmap_atlas(polys)
         return {
             "width": width,

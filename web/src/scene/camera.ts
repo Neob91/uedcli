@@ -118,6 +118,28 @@ export function zoom(
   return { position, pitch: pose.pitch, yaw: pose.yaw }
 }
 
+/** Keyboard fly movement (WASD horizontal + Q/E vertical) -- translation only, no rotation, and
+ * independent of any mouse button. W/S move along the horizontal forward/back (like
+ * `dollyAndTurn`, projected to XY so pitch never leaks into it); A/D strafe along the horizontal
+ * `right`; Q/E move along world Z. `input` components are each -1/0/1; `speedPerSecond` is world
+ * units/second, `dt` the frame delta in seconds, so movement is frame-rate independent. */
+export function flyMove(
+  pose: CameraPose,
+  input: { forward: number; right: number; up: number },
+  speedPerSecond: number,
+  dt: number,
+): CameraPose {
+  if (input.forward === 0 && input.right === 0 && input.up === 0) return pose
+  const y = pose.yaw * DEG2RAD
+  const horizForward: Vec3 = [Math.cos(y), Math.sin(y), 0]
+  const horizRight: Vec3 = [-Math.sin(y), Math.cos(y), 0]
+  const dist = speedPerSecond * dt
+  let position = addScaled(pose.position, horizForward, input.forward * dist)
+  position = addScaled(position, horizRight, input.right * dist)
+  position = addScaled(position, [0, 0, 1], input.up * dist)
+  return { position, pitch: pose.pitch, yaw: pose.yaw }
+}
+
 /** Alt-drag: orbit the camera around `pivot` (the selection), keeping its distance from the pivot
  * fixed and re-aiming pitch/yaw at the pivot after the rotation. A near-zero-radius pivot (camera
  * already at the pivot) is a no-op -- there is no orbit direction to rotate. */

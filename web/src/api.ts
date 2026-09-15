@@ -21,8 +21,31 @@ export interface ScenePoly {
   pan: number[] // [u,v] pan offset
   tex_index: number // index into the atlas manifest, or -1 (untextured -> flat grey)
   masked: boolean // alpha-test this poly against the atlas's mask channel
-  flags: number // raw merged PolyFlags
+  two_sided: boolean // draw both faces (PF_TwoSided|PF_Portal); else backface-culled (FrontSide)
+  blend: 'opaque' | 'translucent' | 'modulated' // server-resolved compositing mode -> material state
+  flags: number // raw merged PolyFlags (unused by the client; dropped in Phase 2)
   lightmap: LightmapFrame | null // lit-surf sampling frame; null = unlit (flat KEY_LIGHT shade)
+  owner: string | null // owning actor's name (null: an out-of-range CSG join, no source actor)
+}
+
+/** A brush actor's own AUTHORED polygons (pre-CSG, local-space, transformed to world), for the
+ * selection highlight -- NOT the CSG-solved `ScenePoly`s. `color` is the brush's CSG-classification
+ * hue (uedcli/preview.py's `_CSG_PALETTE`), so a selected brush outlines in its own add/subtract/
+ * semisolid/nonsolid/mover colour. */
+export interface BrushHighlight {
+  csg_class: string
+  color: [number, number, number]
+  polys: number[][] // one entry per poly: flat world verts [x0,y0,z0, x1,y1,z1, ...]
+}
+
+/** A point actor's resolved `DT_Sprite` billboard (uedcli/serve/scene.py::ActorSprite) -- the real
+ * class-defined icon texture, at its natural size scaled by `DrawScale`. `tex_index` indexes the
+ * SAME `/atlas` manifest every `ScenePoly.tex_index` does; `width`/`height` are the billboard's
+ * world-space (UU) footprint. */
+export interface ActorSprite {
+  tex_index: number
+  width: number
+  height: number
 }
 
 export interface SceneActor {
@@ -36,6 +59,8 @@ export interface SceneActor {
   labels: string[]
   order_value: string
   props: [string, string][] // the raw stored T3D property list, for the inspector's raw-props view
+  brush: BrushHighlight | null // selection-highlight geometry; null for a non-brush actor
+  sprite: ActorSprite | null // resolved DT_Sprite billboard; null -> client draws a generic marker
 }
 
 export interface ScenePayload {
