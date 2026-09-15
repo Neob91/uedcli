@@ -37,6 +37,12 @@ describe('resolveMaterialState', () => {
     expect(resolveMaterialState({ masked: false, twoSided: false, blend: 'translucent' }).premultipliedAlpha).toBeUndefined()
     expect(resolveMaterialState({ masked: false, twoSided: false, blend: 'opaque' }).premultipliedAlpha).toBeUndefined()
   })
+
+  it('disables depthWrite for translucent/modulated so they never occlude geometry drawn after them', () => {
+    expect(resolveMaterialState({ masked: false, twoSided: false, blend: 'translucent' }).depthWrite).toBe(false)
+    expect(resolveMaterialState({ masked: false, twoSided: false, blend: 'modulated' }).depthWrite).toBe(false)
+    expect(resolveMaterialState({ masked: false, twoSided: false, blend: 'opaque' }).depthWrite).toBeUndefined()
+  })
 })
 
 // render.rs shades by multiplying raw 0-255 texel bytes directly (no sRGB decode/encode anywhere).

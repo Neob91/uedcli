@@ -179,12 +179,15 @@ export function useMarkerTexture(): THREE.Texture | null {
  * - `twoSided` -> DoubleSide, else FrontSide (render.rs's backface cull; PF_TwoSided|PF_Portal exempt).
  * - `masked` -> alphaTest 0.5 against the texture's mask alpha (holes: fences, rotor).
  * - `translucent` -> half-opacity NormalBlending (see-through); `modulated` -> MultiplyBlending.
- *   Approximations of UE1's additive/modulate-2x, not pixel-exact (spec). */
+ *   Approximations of UE1's additive/modulate-2x, not pixel-exact (spec).
+ * - `translucent`/`modulated` -> `depthWrite: false`: a see-through surface must not occlude
+ *   geometry drawn after it in the depth buffer (`MeshBasicMaterial`'s default `depthWrite: true`
+ *   would let a translucent/modulated poly block whatever's behind it, drawn later). */
 export function resolveMaterialState(
   group: Pick<GeometryGroup, 'masked' | 'twoSided' | 'blend'>,
 ): Pick<
   THREE.MeshBasicMaterialParameters,
-  'side' | 'alphaTest' | 'transparent' | 'blending' | 'opacity' | 'premultipliedAlpha'
+  'side' | 'alphaTest' | 'transparent' | 'blending' | 'opacity' | 'premultipliedAlpha' | 'depthWrite'
 > {
   const state: ReturnType<typeof resolveMaterialState> = {
     side: group.twoSided ? THREE.DoubleSide : THREE.FrontSide,
@@ -194,11 +197,13 @@ export function resolveMaterialState(
     state.transparent = true
     state.blending = THREE.NormalBlending
     state.opacity = 0.5
+    state.depthWrite = false
   } else if (group.blend === 'modulated') {
     state.transparent = true
     state.blending = THREE.MultiplyBlending
     // three.js requires this for MultiplyBlending, else it warns and blends wrong (WebGLState.js).
     state.premultipliedAlpha = true
+    state.depthWrite = false
   }
   return state
 }

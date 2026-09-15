@@ -72,24 +72,64 @@ const INITIAL_POSE: CameraPose = { position: [0, -500, 200], pitch: -10, yaw: 90
  * does, quad-layout Part 8). */
 export const CANVAS_COLOR_MANAGEMENT = { flat: true, linear: true, legacy: true } as const
 
-/** Applies `pose` to the R3F default camera every frame -- Z-up (`camera.up`), aimed via
- * `lookAt` rather than a manual quaternion (keeps roll disambiguation simple and correct for a
- * Z-up world with no roll of its own). Also publishes the live camera object to `cameraRef` so
- * the outer (non-R3F) pointer handlers can raycast through it for click-to-select. */
+/** Applies `pose` to a `THREE.PerspectiveCamera` -- Z-up (`camera.up`), aimed via `lookAt` (a
+ * proper, always-valid rotation -- keeps roll disambiguation simple for a Z-up world with no roll
+ * of its own), THEN mirrors the projection horizontally (`projectionMatrix`'s NDC-x scale term
+ * negated). The world is left-handed (X forward, Y right, Z up) but its raw coordinates feed
+ * three.js's right-handed renderer verbatim (`geometry.ts` applies no axis flip), so a plain
+ * (proper-rotation) camera necessarily renders this world's `right` on the wrong screen side --
+ * confirmed live: a world-space arrow pointing toward +Y (`cameraBasis.right`) rendered on the LEFT
+ * of this pane, matching the reported "meshes render reverted (mirror image)" bug, and matching a
+ * fresh `level photo --native` (render.rs, this pane's own calibration target) of the identical
+ * camera pose, which renders the SAME arrow on the RIGHT.
+ *
+ * This mirror has to happen at the PROJECTION step, not the view/rotation step: the "obvious"
+ * alternative -- build the camera's local axes directly from `(right, up, -forward)` via
+ * `Matrix4.makeBasis` (matching `OrthoViewport.tsx`'s `OrthoCameraRig`) -- produces an IMPROPER
+ * matrix (determinant -1: `cross(right, up) == forward`, not `-forward`, a direct consequence of
+ * the world being left-handed), and an improper matrix breaks BOTH obvious ways to apply it: (1)
+ * `camera.quaternion.setFromRotationMatrix` assumes a proper rotation and silently produces a
+ * camera looking in a WRONG direction (confirmed live: intended look direction `[1,0,0]`, actual
+ * `[0,-1,0]`) -- not merely mirrored, pointed somewhere else entirely, so the scene vanishes at most
+ * poses; (2) writing `camera.matrix`/`matrixWorld` directly (bypassing quaternion) DOES look the
+ * right way and DOES carry the intended `right`/`up`/`forward` (confirmed live via
+ * `transformDirection`), yet still projects every point through the mirror (confirmed live via
+ * `Vector3.project`) -- an improper view matrix mirrors the render regardless of how "correct" its
+ * individual axis vectors look, because a determinant-(-1) transform IS a reflection, full stop.
+ * Negating the projection matrix's NDC-x term instead keeps the view/rotation step fully proper
+ * (three.js's own well-tested `lookAt`, no custom matrix plumbing) and applies the one needed
+ * mirror at a single, well-understood, easily-inverted spot.
+ *
+ * `projectionMatrixInverse` is kept in sync (the same element, negated the same way) because
+ * `THREE.Raycaster.setFromCamera` (click-to-select, `performTapSelect` below) unprojects screen
+ * points through it -- left stale, clicks would target the PRE-mirror screen position.
+ *
+ * Pure THREE.js math -- no WebGL context needed, so it's unit-tested directly (`Viewport3D.test.ts`)
+ * without mounting a `<Canvas>`. */
+export function applyCameraPose(camera: THREE.PerspectiveCamera, pose: CameraPose): void {
+  camera.up.set(0, 0, 1)
+  camera.position.set(pose.position[0], pose.position[1], pose.position[2])
+  const { forward } = cameraBasis(pose.pitch, pose.yaw)
+  camera.lookAt(
+    pose.position[0] + forward[0],
+    pose.position[1] + forward[1],
+    pose.position[2] + forward[2],
+  )
+  camera.updateMatrixWorld(true) // r3f does this too before rendering; explicit here so this
+  // function is self-contained for direct (non-r3f) callers, e.g. Viewport3D.test.ts's
+  // Vector3.project(camera), which reads matrixWorldInverse without updating it itself.
+  camera.updateProjectionMatrix()
+  camera.projectionMatrix.elements[0] *= -1
+  camera.projectionMatrixInverse.elements[0] *= -1
+}
+
 function CameraRig({ pose, cameraRef }: { pose: CameraPose; cameraRef: MutableRefObject<THREE.Camera | null> }) {
   const { camera } = useThree()
   useEffect(() => {
     cameraRef.current = camera
   }, [camera, cameraRef])
   useFrame(() => {
-    camera.up.set(0, 0, 1)
-    camera.position.set(pose.position[0], pose.position[1], pose.position[2])
-    const { forward } = cameraBasis(pose.pitch, pose.yaw)
-    camera.lookAt(
-      pose.position[0] + forward[0],
-      pose.position[1] + forward[1],
-      pose.position[2] + forward[2],
-    )
+    applyCameraPose(camera as THREE.PerspectiveCamera, pose)
   })
   return null
 }
