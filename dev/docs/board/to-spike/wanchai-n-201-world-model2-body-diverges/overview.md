@@ -1,7 +1,7 @@
 +++
 priority = "p2"
 kind = "debug"
-summary = "Root-caused to mechanism (not exact byte): GetVisibleSurfs marks world surf 616 (Brush1164, a thin CSG-subtraction sliver) dark where UED22 gives it an empty run. Live gdb capture confirms UED22 accepts it for Light431; native's own trace shows it rasterizes but gets 0 accepted px, fully claimed by earlier occluders on the same face. Not fixed — the exact occluder/precision cause needs a finer capture than this sandbox can currently take."
+summary = "Root-caused to mechanism (not exact byte): GetVisibleSurfs marks world surf 616 (Brush1164, a thin CSG-subtraction sliver) dark where UED22 gives it an empty run. Live gdb capture confirms UED22 accepts it for Light431; native's own trace shows it rasterizes but gets 0 accepted px, fully claimed by earlier occluders on the same face. 2026-09-15: a crash-free live capture (call-site breakpoint, not the routine's own entry) proves the rasterizer itself is byte-exact on the two nodes checked; the new lead is a 245-vs-165 rasterize-CALL-COUNT mismatch for the same light+face, not yet explained. Still not fixed."
 +++
 
 # WanChai N=201 — world Model2 body diverges
@@ -58,13 +58,33 @@ razor-thin gap the real renderer leaves open. Not pinned exactly: that needs sin
 `2026-09-06-raster-clipbspsurf-port/spike.md` already documents as **crashing the debug container
 under gdb** — the same wall hit here, not re-attempted.
 
+## 2026-09-15 update — the gdb-crash wall is DOWN; rasterizer cleared; new lead open
+
+Full writeup: `dev/docs/spikes/2026-09-15-wanchai-n201-raster-footprint/spike.md`.
+
+Found a way around the documented scanline-setup crash: breakpoint `OccludeBsp`'s own CALL SITE to
+the scanline setup (`render.dll 0x10019a6c`/`0x10019a71`), not the routine's shared entry
+(`0x1001b470`) — `OccludeBsp` itself is gather-exclusive (already proven safe for ~10,000 hits by
+`raster_order_probe.py`), so the call site never fires from real-time viewport rendering. Ran a
+whole `LIGHT APPLY` pass clean, no crash (`harness/raster_callsite_probe.py`).
+
+Compared against native's own trace, the real editor's rasterized rows are BYTE-IDENTICAL to
+native's on both surf 616 itself (node 774) and its suspected occluder (surf 2/node 776, an 84-row
+sky quad) — the rasterizer/scanline code is not the bug, at least on these two nodes. The new,
+unexplained lead: the real editor makes **245** `OccludeBsp` rasterize calls for this exact
+light+face; native's own trace makes only **165** — 80 fewer. Native-side bisection
+(`UEDCLI_VISGATE_SKIP_NODE`/`_SKIP_SURF`, temp probes in `visible_surfs.rs`) shows at least two
+independent occluder families (the sky AND ordinary architecture, e.g. node 443) redundantly seal
+this exact sliver in native, so no single node's removal alone flips the verdict.
+
 ## Status: NOT FIXED
 
 A genuine, reproducible `GetVisibleSurfs` occlusion-accumulation divergence on a razor-thin,
 newly-exposed CSG-subtraction sliver surface — not a per-save-random field, so per
-`NATIVE-MATERIALIZE.md`'s prime directive it must be fixed, not masked, however costly. No fix
-applied: the only lead (node 776's footprint, or another of the ~40 occluding nodes on this face)
-needs a finer live capture than this sandbox could take this session (the scanline-setup gdb
-crash). Left in `inbox/` for a follow-on session with a way around that crash, or a different
-narrowing approach (e.g. bisecting occluders by disabling them one at a time in native and re-
-checking `accepted_px`).
+`NATIVE-MATERIALIZE.md`'s prime directive it must be fixed, not masked, however costly. Root-caused
+further (rasterizer cleared; a concrete 245-vs-165 call-count mismatch is on record) but not to an
+exact byte or an applied fix. Left in `to-spike/` for a follow-on session: extend
+`raster_callsite_probe.py` to log every call's `isurf` (not just the two spot-checked) and diff the
+full real-vs-native sequences to find where they first diverge, or determine whether the count
+difference is an `OccludeBsp`-invocation-count artifact (e.g. once per reachable start zone) rather
+than a genuine per-node traversal gap.
