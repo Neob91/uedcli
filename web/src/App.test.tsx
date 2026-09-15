@@ -85,3 +85,27 @@ describe('App: Load/Rebuild failure handling', () => {
     expect(screen.getByTestId('viewport-stub')).toBeTruthy()
   })
 })
+
+describe('App: Reload button visibility', () => {
+  it('hides the Reload button when the trunk has not diverged', async () => {
+    mockFetch()
+
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
+    expect(screen.queryByRole('button', { name: /Reload/ })).toBeNull()
+  })
+
+  it('shows a "Reload" button once the trunk has diverged (changes_available)', async () => {
+    mockFetch((url) => {
+      if (url.endsWith('/status')) {
+        return jsonResponse({ ...STATUS_UNBUILT, changes_available: true })
+      }
+      return undefined
+    })
+
+    render(<App />)
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy())
+  })
+})

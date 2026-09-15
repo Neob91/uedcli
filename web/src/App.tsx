@@ -37,14 +37,16 @@ function BuildToolbar({
 }) {
   return (
     <div className="build-toolbar">
-      <button type="button" onClick={onLoad} disabled={busy !== null}>
-        {busy === 'load' ? 'Loading…' : 'Load'}
-      </button>
+      {status?.changes_available && (
+        <button type="button" onClick={onLoad} disabled={busy !== null}>
+          {busy === 'load' ? 'Reloading…' : 'Reload'}
+        </button>
+      )}
       <button type="button" onClick={onRebuild} disabled={busy !== null}>
         {busy === 'rebuild' ? 'Rebuilding…' : 'Rebuild'}
       </button>
       <span className="build-status">{buildStatusLabel(status)}</span>
-      {status?.changes_available && <span className="changes-badge">trunk changed -- Load to see it</span>}
+      {status?.changes_available && <span className="changes-badge">trunk changed -- Reload to see it</span>}
     </div>
   )
 }
