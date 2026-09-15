@@ -113,17 +113,25 @@ Drive FIVE levels in LOCKSTEP: **UNATCO `03_NYC_UNATCOHQ`**, **WanChai `06_HongK
 N=1 is LevelInfo only (empty world) — native builds it (empty world Model). Iterate at small N;
 a full-level editor rebuild is ~24 min, so grow N, don't jump.
 
-### Re-verifying N=1..NX after a core change
+### Re-verifying after a core change: spot-check, NEVER a full sweep (owner ruling, 2026-09-15)
 
 Any change to native's CSG/BSP/lighting core (not a gate-only change) can, in principle, move an
-already-passing N — re-verify N=1..NX per level with **`ladder_run.py`** (below), not a subagent
-driving `actor_parity.py`/`parity_gate.py` by hand one N at a time.
+already-passing N. **Never re-verify by walking every N=1..NX** — on a level with hundreds of actors
+and no cached refs, that is hours of wall-clock for a check that doesn't need it. Use
+**`spot_check.py`** (same dir): it checks at most 10 evenly-spaced N's across the range (always
+including both endpoints), reusing any cached ref it finds. That is the standing re-verification
+method, not `ladder_run.py`'s exhaustive walk and not a subagent driving `actor_parity.py`/
+`parity_gate.py` by hand one N at a time.
 
-Run the re-verification **in the background and do not let it block forward ladder work**: if the
-fix is expected to hold (it passed its own targeted N8/N19-style validation), start extending the
-ladder past the current NX while the N=1..NX back-verification runs in parallel, rather than gating
-all further work on it finishing first. Only stop forward progress if the back-verification actually
-reports a bail — then treat that bail as a real regression and stop to fix it before going further.
+```
+spot_check.py --dx <shipped.dx> --to NX [--from N] [--count 10]
+```
+
+Run it **in the background and do not let it block forward ladder work**: if the fix is expected to
+hold (it passed its own targeted validation), start extending the ladder past the current NX while
+the spot-check runs in parallel, rather than gating all further work on it finishing first. Only stop
+forward progress if the spot-check actually reports a bail — then treat that bail as a real
+regression and stop to fix it before going further.
 
 ### Pushing NX forward: script until it bails, agent only to diagnose (owner ruling, 2026-09-05)
 
