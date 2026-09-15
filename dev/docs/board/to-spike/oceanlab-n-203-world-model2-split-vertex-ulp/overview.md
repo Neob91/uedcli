@@ -215,3 +215,44 @@ to read the real `GDiscarded` verdict — same method class as `2026-09-13-cross
 No mask, no exclusion proposed. `docker cp` on this rootless daemon is separately confirmed BROKEN
 (deterministic overlay `remount-ro .../stubs` error, not transient) — future captures should pull files
 via `docker exec ... cat` instead, as this session's harness now does.
+
+## 2026-09-15 update (2) — the capture ran: UED22 ALSO decides CONSUME; hypothesis REFUTED
+
+Full writeup: `dev/docs/spikes/2026-09-15-oceanlab-n203-fwtb-classify/spike.md`. Ran the exact capture
+scoped above (breakpoint at `FilterWorldThroughBrush`'s reconciliation, `0x1003348b`, confirmed by a
+fresh `objdump` disassembly of `uned/UED22/Editor.dll` this session; staged the OceanLab N=203 subset
+truncated to N=202 so `Brush482` is unambiguously the last CSG-participating brush).
+
+**Result: UED22's own `GDiscarded` is nonzero (CONSUME) at every reconciliation hit on the wall's
+exact plane** — node 5154 and its whole coplanar-chain successors (5156/5158/5160/5163/5165), all six
+hits. This directly REFUTES the prior session's framing ("UED22's real answer must be a graze") —
+UED22 kills this face during `Brush482` exactly like native does. `FilterWorldThroughBrush` is now
+doubly confirmed faithful (live capture, on top of the existing disassembly-level port) and is not the
+bug.
+
+This also corrects the prior session's `bspOptGeom`-entry Points/Surfs read: the wall's surf
+(1053/1055) being present in UED22's live `Surfs` array does NOT mean it's "a fully live, undamaged
+surf" — its owning node is dead in UED22's tree too (per this capture), so it's a dead-node surf on
+BOTH sides, not a coexisting-live-surf-vs-dead-node-ghost asymmetry. A fresh offline cross-check of
+the FINAL (fully built) `native_N203.dx`/`ref_N203.dx` this session confirms only ONE point/surf
+survives per side at this location, not two — native keeps `Brush483`'s own new point
+(`0xc3800004`), UED22 keeps the wall's ORIGINAL point (`0xc3800002`) — consistent with the two
+coexisting only transiently (at `bspOptGeom` entry, before its own `merge_near_points` runs) and then
+UED22's `merge_near_points` welding them onto the wall's earlier point, while native's own
+`merge_near_points` never gets the chance because the wall's point is already gone from native's pool
+by the time `Brush483` runs.
+
+**Re-scoped, not closed.** The true divergence is upstream of the classify decision: what happens to
+a dead node's surf/point reference AFTERWARD, before `bspOptGeom`'s `merge_near_points` runs. A first
+draft of this update blamed native's repartition-time `Surfs` clear+rebuild — WRONG, caught by review:
+`bspcsg.rs`'s own comment there (`bspcsg.rs:3398-3406`) says the real editor does NOT rebuild Surfs at
+repartition at all (it keeps the incremental-CSG pool, only compacting at `bspRefresh`); native's
+clear+rebuild is a reordering device reconciled back to the editor's true order via
+`canon_surf_keys`/`reorder_surfs_canonical`, not a port of an editor-side rebuild. Only
+`bsp_refresh_points_vectors`'s point-compaction is independently evidenced-faithful so far; exactly
+which step drops the wall's SURF entry (not just its point) is not yet pinned. Next step, in order:
+(1) offline — trace natively whether the wall's surf is still present in the pre-clear
+`canon_surf_keys` snapshot at the `Brush482`→`Brush483` boundary, to find which routine actually drops
+it; (2) only then a live capture bracketing that exact step in UED22's real build. Full detail:
+`dev/docs/spikes/2026-09-15-oceanlab-n203-fwtb-classify/spike.md` §3-4. No fix, no mask, no exclusion
+proposed.
