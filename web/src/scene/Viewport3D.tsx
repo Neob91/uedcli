@@ -14,7 +14,7 @@ import * as THREE from 'three'
 import type { AtlasPayload, LightmapPayload, SceneActor, ScenePayload } from '../api'
 import { BrushOutlines } from './BrushOutlines'
 import type { CameraPose, Vec3 } from './camera'
-import { cameraBasis, dollyAndTurn, flyMove, look, orbit, pan, zoom } from './camera'
+import { cameraBasis, dollyAndTurn, flyInput, flyMove, look, orbit, pan, zoom } from './camera'
 import type { DragGestureCallbacks } from './dragGesture'
 import { useDragGesture } from './dragGesture'
 import type { FrameRequest } from './frame'
@@ -166,13 +166,10 @@ function FlyKeys({ setPose }: { setPose: (fn: (prev: CameraPose) => CameraPose) 
   }, [])
 
   useFrame((_state, delta) => {
-    const k = held.current
-    if (k.size === 0) return
-    const forward = (k.has('KeyW') ? 1 : 0) - (k.has('KeyS') ? 1 : 0)
-    const right = (k.has('KeyA') ? 1 : 0) - (k.has('KeyD') ? 1 : 0)
-    const up = (k.has('KeyE') ? 1 : 0) - (k.has('KeyQ') ? 1 : 0)
-    if (forward === 0 && right === 0 && up === 0) return
-    setPose((prev) => flyMove(prev, { forward, right, up }, FLY_SPEED_UU_PER_SEC, delta))
+    if (held.current.size === 0) return
+    const input = flyInput(held.current)
+    if (input.forward === 0 && input.right === 0 && input.up === 0) return
+    setPose((prev) => flyMove(prev, input, FLY_SPEED_UU_PER_SEC, delta))
   })
 
   return null

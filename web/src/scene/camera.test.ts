@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CameraPose, CameraSpeeds } from './camera'
-import { cameraBasis, dollyAndTurn, flyMove, look, orbit, pan, zoom } from './camera'
+import { cameraBasis, dollyAndTurn, flyInput, flyMove, look, orbit, pan, zoom } from './camera'
 
 const UNIT_SPEEDS: CameraSpeeds = {
   yawPerPixel: 1,
@@ -132,6 +132,27 @@ describe('orbit (Alt-drag)', () => {
   })
 })
 
+describe('flyInput (key codes -> flyMove input)', () => {
+  it('strafes D toward the camera\'s own right and A away from it (was inverted)', () => {
+    // The bug: A used to be `right: +1`, tuned before `applyCameraPose`'s render mirror
+    // (Viewport3D.tsx) made `cameraBasis.right` render on screen-RIGHT -- so A strafed right.
+    const pose: CameraPose = { position: [0, 0, 0], pitch: 0, yaw: 0 } // right = +Y
+    const d = flyMove(pose, flyInput(new Set(['KeyD'])), 10, 1)
+    const a = flyMove(pose, flyInput(new Set(['KeyA'])), 10, 1)
+    expect(d.position[1]).toBeCloseTo(10) // toward +right
+    expect(a.position[1]).toBeCloseTo(-10)
+  })
+
+  it('maps W/S, E/Q, and cancels a held pair to zero', () => {
+    expect(flyInput(new Set(['KeyW']))).toEqual({ forward: 1, right: 0, up: 0 })
+    expect(flyInput(new Set(['KeyS']))).toEqual({ forward: -1, right: 0, up: 0 })
+    expect(flyInput(new Set(['KeyE']))).toEqual({ forward: 0, right: 0, up: 1 })
+    expect(flyInput(new Set(['KeyQ']))).toEqual({ forward: 0, right: 0, up: -1 })
+    expect(flyInput(new Set(['KeyA', 'KeyD', 'KeyW', 'KeyS']))).toEqual({ forward: 0, right: 0, up: 0 })
+    expect(flyInput(new Set())).toEqual({ forward: 0, right: 0, up: 0 })
+  })
+})
+
 describe('flyMove (WASD + Q/E)', () => {
   it('W moves forward along the horizontal projection, never leaking pitch into Z', () => {
     const pitched: CameraPose = { position: [0, 0, 0], pitch: 45, yaw: 0 }
@@ -145,9 +166,10 @@ describe('flyMove (WASD + Q/E)', () => {
     const pose: CameraPose = { position: [0, 0, 0], pitch: 0, yaw: 90 } // forward=+Y, right=-X
     const back = flyMove(pose, { forward: -1, right: 0, up: 0 }, 10, 1)
     expect(back.position[1]).toBeCloseTo(-10)
-    // A is input.right=1 (FlyKeys maps KeyA to +1, KeyD to -1)
-    const strafeA = flyMove(pose, { forward: 0, right: 1, up: 0 }, 10, 1)
-    expect(strafeA.position[0]).toBeCloseTo(-10)
+    // D is input.right=+1 (`flyInput`) and strafes along `cameraBasis.right`, which the render
+    // mirror puts on screen-right.
+    const strafeD = flyMove(pose, { forward: 0, right: 1, up: 0 }, 10, 1)
+    expect(strafeD.position[0]).toBeCloseTo(-10)
   })
 
   it('E moves up and Q moves down along world Z regardless of pitch/yaw', () => {

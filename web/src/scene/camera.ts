@@ -127,11 +127,26 @@ export function zoom(
   return { position, pitch: pose.pitch, yaw: pose.yaw }
 }
 
+/** Maps the set of currently-held `KeyboardEvent.code`s to `flyMove`'s input triple. Each component
+ * is -1/0/1; holding both keys of a pair cancels to 0.
+ *
+ * `D` is `right: +1` and `A` is `right: -1`, because `flyMove` strafes along `cameraBasis.right`,
+ * which `applyCameraPose`'s render mirror (`Viewport3D.tsx`) puts on screen-RIGHT. This was A=+1/
+ * D=-1 (and asserted that way in `camera.test.ts`) from before that mirror landed, when
+ * `cameraBasis.right` still rendered on screen-LEFT -- so A strafed right and D strafed left once
+ * the render was corrected. Same stale-calibration failure as `geometry.ts`'s `REVERSE_FAN` and
+ * `look`/`dollyAndTurn`'s yaw sign. */
+export function flyInput(held: ReadonlySet<string>): { forward: number; right: number; up: number } {
+  const axis = (positive: string, negative: string) => (held.has(positive) ? 1 : 0) - (held.has(negative) ? 1 : 0)
+  return { forward: axis('KeyW', 'KeyS'), right: axis('KeyD', 'KeyA'), up: axis('KeyE', 'KeyQ') }
+}
+
 /** Keyboard fly movement (WASD horizontal + Q/E vertical) -- translation only, no rotation, and
  * independent of any mouse button. W/S move along the horizontal forward/back (like
  * `dollyAndTurn`, projected to XY so pitch never leaks into it); A/D strafe along the horizontal
- * `right`; Q/E move along world Z. `input` components are each -1/0/1; `speedPerSecond` is world
- * units/second, `dt` the frame delta in seconds, so movement is frame-rate independent. */
+ * `right`; Q/E move along world Z. `input` components are each -1/0/1 (`flyInput` maps keys to
+ * them); `speedPerSecond` is world units/second, `dt` the frame delta in seconds, so movement is
+ * frame-rate independent. */
 export function flyMove(
   pose: CameraPose,
   input: { forward: number; right: number; up: number },
