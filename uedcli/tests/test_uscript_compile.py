@@ -177,3 +177,16 @@ def test_script_text_no_defaultproperties():
     assert _script_text(body + "\n\n   \n") == body + "\n"          # blank line w/ trailing spaces
     assert _script_text(body) == body + "\n"                        # no trailing newline: one added
     assert _script_text(body + "\n\n   ") == body + "\n"            # blank line, no final newline
+
+
+def test_script_text_excises_defaultproperties_mid_file():
+    """`defaultproperties` before other declarations (`CrouchBlocksDamage`, `test_uscript_ut99.py`)
+    is EXCISED as a unit, not truncated there -- a brace inside a `//` comment, a `'...'` name
+    literal, or trailing whitespace before the seam's own newline must not perturb where the block's
+    real end is found."""
+    head = "class Foo expands Object;\n"
+    tail = "function F() {}\n"
+    assert _script_text(f"{head}defaultproperties // use {{ for structs\n{{\n Foo=1\n}}\n{tail}") \
+        == head + tail                                              # brace inside a line comment
+    assert _script_text(f"{head}defaultproperties\n{{\n Tag='Room}}A'\n}}\n{tail}") == head + tail
+    assert _script_text(f"{head}defaultproperties\n{{\n}}   \n{tail}") == head + tail   # trailing ws

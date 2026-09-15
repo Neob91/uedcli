@@ -148,6 +148,23 @@ Fixtures (each isolates a compiler gap fixed for the first UT99 packages):
                      already collapsed `NoGunsMutator`'s multiple trailing newlines to one --
                      `compile._script_text`'s no-newline branch now appends one instead of returning
                      the source unchanged.
+  - `CrouchBlocksDamage` - a real community mutator (github.com/joeytwiddle/code,
+                     code/unrealscript/CrouchBlocksDamage) with its `defaultproperties` block placed
+                     BEFORE its functions in source order (every prior fixture had it last, the
+                     conventional position) -- a shape `_script_text` mishandled: it treated
+                     `defaultproperties` as a TRUNCATION point (drop everything from there on), so
+                     the functions declared after it vanished from `ScriptText` and `_function_positions`
+                     couldn't locate them. Real UCC instead EXCISES just the block itself (the
+                     `defaultproperties` keyword through its matching `}`, plus exactly one immediate
+                     trailing line terminator) and keeps whatever comes after, renumbering it as if the
+                     block had never been there -- confirmed byte-exact (`ScriptText` content AND every
+                     later function's `Line`/`TextPos`) against a live UT99 UCC build. Fixed:
+                     `compile._skip_defaultproperties_block` finds the block's true end (skipping `//`/
+                     nesting `/* */` comments and `"..."` strings the way the real lexer does, so a
+                     brace inside one doesn't perturb the depth count), and `_script_text` splices the
+                     block out instead of truncating there. `perm_gate` byte-exact; the strict gate's
+                     only residual is the same pre-existing UT99 own-name-pool gap as the other UT99
+                     packages.
 """
 from __future__ import annotations
 
@@ -173,7 +190,7 @@ _PACKAGES = [("Fire", 108), ("UscEnumDef", 2), ("UscTextPos", 12), ("UscInheritF
             ("UscAutoEmitDefaultsUT99", 7), ("UWeb", 154), ("UscIpAddrProbe", 5), ("IpServer", 154),
             ("NoGunsMutator", 9), ("ASPMutator", 61), ("UTServerAdmin", 353),
             ("UscNetConnectionProbe", 5), ("SeanMutator", 4), ("ProtectSeanMutator", 13),
-            ("VampireSeanMutator", 13)]
+            ("VampireSeanMutator", 13), ("CrouchBlocksDamage", 16)]
 
 # Extra stock EditPackages a fixture's super chain needs loaded (`_edit_packages_upto`'s
 # content-safe base only covers Core/Engine/Editor) — only needed for the DOCKER-gated rebuild.

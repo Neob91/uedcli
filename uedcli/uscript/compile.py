@@ -2122,22 +2122,97 @@ def _class_export(b, class_name, super_name, super_crc, crlf_source, class_flags
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────────────────────────
+def _skip_defaultproperties_block(source: str, start: int) -> int:
+    """Return the index right after the `}` that closes the `defaultproperties {...}` block whose
+    keyword ends at `start`. Mirrors the real lexer's own skipping (`lexer.py` `_skip_line_comment`/
+    `_skip_block_comment`/`_scan_string`/`_scan_name`) over the WHOLE scan -- including locating the
+    opening `{` itself -- so a brace inside a `//`/`/* */` comment, a `"..."` string, or a `'...'`
+    name literal never perturbs the depth count."""
+    n = len(source)
+    i, depth = start, 0
+    while i < n:
+        two = source[i:i + 2]
+        if two == "//":
+            nl = source.find("\n", i)
+            i = n if nl == -1 else nl
+            continue
+        if two == "/*":
+            cdepth, i = 1, i + 2
+            while i < n and cdepth > 0:
+                pair = source[i:i + 2]
+                if pair == "/*":
+                    cdepth += 1; i += 2
+                elif pair == "*/":
+                    cdepth -= 1; i += 2
+                else:
+                    i += 1
+            continue
+        c = source[i]
+        if c == '"':
+            i += 1
+            while i < n and source[i] not in ('"', "\n"):
+                if source[i] == "\\" and i + 1 < n and source[i + 1] != "\n":
+                    i += 2
+                else:
+                    break
+            i += 1
+            continue
+        if c == "'":
+            i += 1
+            while i < n and source[i] not in ("'", "\n"):
+                i += 1
+            i += 1
+            continue
+        if c == "{":
+            depth += 1; i += 1
+            continue
+        if c == "}":
+            depth -= 1; i += 1
+            if depth == 0:
+                return i
+            continue
+        i += 1
+    raise NotImplementedError("unterminated defaultproperties block")
+
+
 def _script_text(source: str) -> str:
-    """The text UCC stores in `ScriptText`: the class source up to (not including) the
-    `defaultproperties` block, which the compiler consumes separately. With NO `defaultproperties`
-    block, UCC's own capture always ends with exactly ONE line terminator after the last real line,
-    regardless of how many (including zero) the source file itself ends with — measured on two
-    community shapes: `NoGunsMutator` (a trailing blank line, collapsed to one) and the real UT99
-    mutator `SeanMutator`'s `HelloMut.uc` (no trailing newline at all, one added)."""
+    """The text UCC stores in `ScriptText`: the class source with the `defaultproperties {...}`
+    block EXCISED (not merely truncated there) — declarations after it (a shape real source puts
+    `defaultproperties` mid-file, before later functions, e.g. the real UT99 mutator
+    `CrouchBlocksDamage`) still compile and their own Line/TextPos are measured against this SAME
+    excised stream, confirmed byte-exact against a live UT99 UCC build: the block (keyword through
+    its matching `}`) plus exactly one immediate trailing line terminator is removed as one unit,
+    everything before and after stays untouched (no line-count "holdover" — text following the
+    block is renumbered as if the block had never been there). With NO `defaultproperties` block,
+    or nothing left after excising the one it has, UCC's own capture always ends with exactly ONE
+    line terminator after the last real line, regardless of how many (including zero) the source
+    file itself ends with — measured on two community shapes: `NoGunsMutator` (a trailing blank
+    line, collapsed to one) and the real UT99 mutator `SeanMutator`'s `HelloMut.uc` (no trailing
+    newline at all, one added)."""
     m = re.search(r"(?im)^[ \t]*defaultproperties\b", source)
     if m:
-        return source[:m.start()]
+        close = _skip_defaultproperties_block(source, m.end())
+        tail = close
+        while tail < len(source) and source[tail] in " \t":
+            tail += 1
+        tail = tail + 2 if source[tail:tail + 2] == "\r\n" \
+            else tail + 1 if source[tail:tail + 1] in ("\n", "\r") else close
+        before, after = source[:m.start()], source[tail:]
+        if after.strip() == "":
+            return before   # defaultproperties was the last real content -- `before` needs no
+                            # further normalisation, it already ends at a real source line's newline
+        source = after     # real declarations follow -- normalise only THIS tail's own trailing
+                            # blank line(s)/EOF the same way the no-block branch below does, then
+                            # reattach `before` untouched (the seam itself is never collapsed)
+    else:
+        before = ""
     lines = source.splitlines()
     while lines and lines[-1].strip() == "":
         lines.pop()
     if not lines:
-        return source   # no real content -- pathological, leave untouched rather than guess
-    return "\n".join(lines) + "\n"
+        return source   # no real content -- pathological, leave untouched rather than guess (only
+                        # reachable via the no-defaultproperties path -- `before` is always "" there)
+    return before + "\n".join(lines) + "\n"
 
 
 def _to_crlf(text: str) -> str:
