@@ -7,9 +7,9 @@
       "highest_n": 152,
       "total_actors": 487,
       "status": "blocked",
-      "blocker": "BODY model model2 -- 3 world LightMap records get an iLightActors run UED22 leaves at -1 (Lights 484 vs 478, LightBits 6003 vs 5891); leaf permeating region is clean. Box occlusion, zone crossing, and the clip-formula bug class are all ruled out (rounds 3-5). Round 6 (2026-09-13) live-captured UED22's own OccludeBsp raster-commit accept/reject verdict for Light5 directly: it accepts real, non-trivial screen area for surf 95/97/67 on several of their node fragments, yet still excludes Light5 from their final run -- falsifying the leading 'node-order self-occlusion race' theory as the sole mechanism. A further gate downstream of raster-commit (zone-crossing/emission code past RVA 0x1001a1e0, not yet register-traced to precision) must also reject these surfaces. Mirror-image: model_deusexmover9's own face still misses Light5, via the separate, already-understood gap (light_apply_movers never runs a mover's own raytrace). Not fixed; no mask; next probe extends past the raster-commit branch into the emission gate.",
+      "blocker": "BODY model model2 -- 3 world LightMap records get an iLightActors run UED22 leaves at -1 (Lights 484 vs 478, LightBits 6003 vs 5891); leaf permeating region is clean. Rounds 3-8 cleared GetVisibleSurfs/OccludeBsp and the gather commit loop's gates entirely (Light5 genuinely gets committed into a per-surf candidate-light TArray). Round 9 (2026-09-15) live-confirmed that write/read pair (before=0/after=1, count=1) and, tracing further, DIRECTLY REFUTED round 3's foundational 'shadow-ray call never fires' finding: a fresh live capture shows illuminateSurf's raytrace call (Editor.dll 0x100a5a04) firing repeatedly for Light5 with genuinely mixed blocked/visible results matching real partial door occlusion. A further per-light commit step past the raytrace loop (0x100a5ab5-0x100a5ac2) was found but not yet identity-confirmed against the real divergent surfaces. Not fixed; no mask; next step is identity-confirming the sampled lumels' surf number, then re-checking that commit step.",
       "board": "nyc-bar-n-153-world-model2-lightmap-runs-ued22",
-      "updated": "2026-09-13T09:00:00Z"
+      "updated": "2026-09-15T00:00:00Z"
     },
     {
       "slug": "unatco",

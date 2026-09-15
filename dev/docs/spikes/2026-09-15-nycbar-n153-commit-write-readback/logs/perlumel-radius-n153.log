@@ -1,0 +1,498 @@
+[New LWP 128]
+[New LWP 143]
+[New LWP 144]
+[New LWP 145]
+[New LWP 146]
+[New LWP 147]
+[New LWP 148]
+[New LWP 149]
+[New LWP 150]
+[New LWP 151]
+[New LWP 152]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 171]
+[New LWP 180]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7ed2cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x100a5a04
+Breakpoint 2 at 0x100a5a07
+ORACLE_ATTACHED
+[New Thread 0x9adfb40 (LWP 365)]
+[New Thread 0xab2fb40 (LWP 366)]
+[New Thread 0xc4bfb40 (LWP 374)]
+RT hit=11691 light=0xd579fd4 lumel=-3120.92407,175.875,-28
+RTRET hit=11691 eax=0
+RT hit=11692 light=0xd579fd4 lumel=-3104.3999,175.875,-28
+RTRET hit=11692 eax=0
+RT hit=11693 light=0xd579fd4 lumel=-3087.87573,175.875,-28
+RTRET hit=11693 eax=0
+RT hit=11694 light=0xd579fd4 lumel=-3137.44824,192.581528,-28
+RTRET hit=11694 eax=0
+RT hit=11695 light=0xd579fd4 lumel=-3120.92407,192.581528,-28
+RTRET hit=11695 eax=0
+RT hit=11696 light=0xd579fd4 lumel=-3104.3999,192.581528,-28
+RTRET hit=11696 eax=0
+RT hit=11697 light=0xd579fd4 lumel=-3087.87573,192.581528,-28
+RTRET hit=11697 eax=0
+RT hit=11698 light=0xd579fd4 lumel=-3153.97241,209.288055,-28
+RTRET hit=11698 eax=0
+RT hit=11699 light=0xd579fd4 lumel=-3137.44824,209.288055,-28
+RTRET hit=11699 eax=0
+RT hit=11700 light=0xd579fd4 lumel=-3120.92407,209.288055,-28
+RTRET hit=11700 eax=0
+RT hit=11701 light=0xd579fd4 lumel=-3104.3999,209.288055,-28
+RTRET hit=11701 eax=0
+RT hit=11702 light=0xd579fd4 lumel=-3087.87573,209.288055,-28
+RTRET hit=11702 eax=0
+RT hit=11703 light=0xd579fd4 lumel=-3170.49658,225.994583,-28
+RTRET hit=11703 eax=0
+RT hit=11704 light=0xd579fd4 lumel=-3153.97241,225.994583,-28
+RTRET hit=11704 eax=0
+RT hit=11705 light=0xd579fd4 lumel=-3137.44824,225.994583,-28
+RTRET hit=11705 eax=0
+RT hit=11706 light=0xd579fd4 lumel=-3120.92407,225.994583,-28
+RTRET hit=11706 eax=0
+RT hit=11707 light=0xd579fd4 lumel=-3104.3999,225.994583,-28
+RTRET hit=11707 eax=0
+RT hit=11708 light=0xd579fd4 lumel=-3087.87573,225.994583,-28
+RTRET hit=11708 eax=0
+RT hit=11709 light=0xd579fd4 lumel=-3187.02075,242.701111,-28
+RTRET hit=11709 eax=0
+RT hit=11710 light=0xd579fd4 lumel=-3170.49658,242.701111,-28
+RTRET hit=11710 eax=0
+RT hit=11711 light=0xd579fd4 lumel=-3153.97241,242.701111,-28
+RTRET hit=11711 eax=0
+RT hit=11712 light=0xd579fd4 lumel=-3137.44824,242.701111,-28
+RTRET hit=11712 eax=0
+RT hit=11713 light=0xd579fd4 lumel=-3120.92407,242.701111,-28
+RTRET hit=11713 eax=0
+RT hit=11714 light=0xd579fd4 lumel=-3104.3999,242.701111,-28
+RTRET hit=11714 eax=0
+RT hit=11715 light=0xd579fd4 lumel=-3087.87573,242.701111,-28
+RTRET hit=11715 eax=0
+RT hit=11716 light=0xd579fd4 lumel=-3187.02075,259.407623,-28
+RTRET hit=11716 eax=0
+RT hit=11717 light=0xd579fd4 lumel=-3170.49658,259.407623,-28
+RTRET hit=11717 eax=0
+RT hit=11718 light=0xd579fd4 lumel=-3153.97241,259.407623,-28
+RTRET hit=11718 eax=0
+RT hit=11719 light=0xd579fd4 lumel=-3137.44824,259.407623,-28
+RTRET hit=11719 eax=0
+RT hit=11720 light=0xd579fd4 lumel=-3120.92407,259.407623,-28
+RTRET hit=11720 eax=0
+RT hit=11721 light=0xd579fd4 lumel=-3104.3999,259.407623,-28
+RTRET hit=11721 eax=0
+RT hit=11722 light=0xd579fd4 lumel=-3087.87573,259.407623,-28
+RTRET hit=11722 eax=0
+RT hit=11723 light=0xd579fd4 lumel=-3203.54492,276.114136,-28
+RTRET hit=11723 eax=0
+RT hit=11724 light=0xd579fd4 lumel=-3187.02075,276.114136,-28
+RTRET hit=11724 eax=0
+RT hit=11725 light=0xd579fd4 lumel=-3170.49658,276.114136,-28
+RTRET hit=11725 eax=0
+RT hit=11726 light=0xd579fd4 lumel=-3153.97241,276.114136,-28
+RTRET hit=11726 eax=0
+RT hit=11727 light=0xd579fd4 lumel=-3137.44824,276.114136,-28
+RTRET hit=11727 eax=0
+RT hit=11728 light=0xd579fd4 lumel=-3120.92407,276.114136,-28
+RTRET hit=11728 eax=0
+RT hit=11729 light=0xd579fd4 lumel=-3104.3999,276.114136,-28
+RTRET hit=11729 eax=0
+RT hit=11730 light=0xd579fd4 lumel=-3087.87573,276.114136,-28
+RTRET hit=11730 eax=0
+RT hit=11731 light=0xd579fd4 lumel=-3203.54492,292.820648,-28
+RTRET hit=11731 eax=0
+RT hit=11732 light=0xd579fd4 lumel=-3187.02075,292.820648,-28
+RTRET hit=11732 eax=0
+RT hit=11733 light=0xd579fd4 lumel=-3170.49658,292.820648,-28
+RTRET hit=11733 eax=0
+RT hit=11734 light=0xd579fd4 lumel=-3153.97241,292.820648,-28
+RTRET hit=11734 eax=0
+RT hit=11735 light=0xd579fd4 lumel=-3137.44824,292.820648,-28
+RTRET hit=11735 eax=0
+RT hit=11736 light=0xd579fd4 lumel=-3120.92407,292.820648,-28
+RTRET hit=11736 eax=0
+RT hit=11737 light=0xd579fd4 lumel=-3104.3999,292.820648,-28
+RTRET hit=11737 eax=0
+RT hit=11738 light=0xd579fd4 lumel=-3087.87573,292.820648,-28
+RTRET hit=11738 eax=0
+RT hit=11739 light=0xd579fd4 lumel=-3203.54492,309.527161,-28
+RTRET hit=11739 eax=0
+RT hit=11740 light=0xd579fd4 lumel=-3187.02075,309.527161,-28
+RTRET hit=11740 eax=0
+RT hit=11741 light=0xd579fd4 lumel=-3170.49658,309.527161,-28
+RTRET hit=11741 eax=0
+RT hit=11742 light=0xd579fd4 lumel=-3153.97241,309.527161,-28
+RTRET hit=11742 eax=0
+RT hit=11743 light=0xd579fd4 lumel=-3137.44824,309.527161,-28
+RTRET hit=11743 eax=0
+RT hit=11744 light=0xd579fd4 lumel=-3120.92407,309.527161,-28
+RTRET hit=11744 eax=0
+RT hit=11745 light=0xd579fd4 lumel=-3104.3999,309.527161,-28
+RTRET hit=11745 eax=0
+RT hit=11746 light=0xd579fd4 lumel=-3087.87573,309.527161,-28
+RTRET hit=11746 eax=0
+RT hit=11747 light=0xd579fd4 lumel=-3220.06909,326.233673,-28
+RTRET hit=11747 eax=1
+RT hit=11748 light=0xd579fd4 lumel=-3203.54492,326.233673,-28
+RTRET hit=11748 eax=0
+RT hit=11749 light=0xd579fd4 lumel=-3187.02075,326.233673,-28
+RTRET hit=11749 eax=0
+RT hit=11750 light=0xd579fd4 lumel=-3170.49658,326.233673,-28
+RTRET hit=11750 eax=0
+RT hit=11751 light=0xd579fd4 lumel=-3153.97241,326.233673,-28
+RTRET hit=11751 eax=0
+RT hit=11752 light=0xd579fd4 lumel=-3137.44824,326.233673,-28
+RTRET hit=11752 eax=0
+RT hit=11753 light=0xd579fd4 lumel=-3120.92407,326.233673,-28
+RTRET hit=11753 eax=0
+RT hit=11754 light=0xd579fd4 lumel=-3104.3999,326.233673,-28
+RTRET hit=11754 eax=0
+RT hit=11755 light=0xd579fd4 lumel=-3087.87573,326.233673,-28
+RTRET hit=11755 eax=0
+RT hit=11756 light=0xd579fd4 lumel=-3220.06909,342.940186,-28
+RTRET hit=11756 eax=1
+RT hit=11757 light=0xd579fd4 lumel=-3203.54492,342.940186,-28
+RTRET hit=11757 eax=1
+RT hit=11758 light=0xd579fd4 lumel=-3187.02075,342.940186,-28
+RTRET hit=11758 eax=1
+RT hit=11759 light=0xd579fd4 lumel=-3170.49658,342.940186,-28
+RTRET hit=11759 eax=1
+RT hit=11760 light=0xd579fd4 lumel=-3153.97241,342.940186,-28
+RTRET hit=11760 eax=0
+RT hit=11761 light=0xd579fd4 lumel=-3137.44824,342.940186,-28
+RTRET hit=11761 eax=0
+RT hit=11762 light=0xd579fd4 lumel=-3120.92407,342.940186,-28
+RTRET hit=11762 eax=0
+RT hit=11763 light=0xd579fd4 lumel=-3104.3999,342.940186,-28
+RTRET hit=11763 eax=0
+RT hit=11764 light=0xd579fd4 lumel=-3087.87573,342.940186,-28
+RTRET hit=11764 eax=0
+RT hit=11765 light=0xd579fd4 lumel=-3220.06909,359.646698,-28
+RTRET hit=11765 eax=1
+RT hit=11766 light=0xd579fd4 lumel=-3203.54492,359.646698,-28
+RTRET hit=11766 eax=1
+RT hit=11767 light=0xd579fd4 lumel=-3187.02075,359.646698,-28
+RTRET hit=11767 eax=1
+RT hit=11768 light=0xd579fd4 lumel=-3170.49658,359.646698,-28
+RTRET hit=11768 eax=1
+RT hit=11769 light=0xd579fd4 lumel=-3153.97241,359.646698,-28
+RTRET hit=11769 eax=0
+RT hit=11770 light=0xd579fd4 lumel=-3137.44824,359.646698,-28
+RTRET hit=11770 eax=0
+RT hit=11771 light=0xd579fd4 lumel=-3120.92407,359.646698,-28
+RTRET hit=11771 eax=0
+RT hit=11772 light=0xd579fd4 lumel=-3104.3999,359.646698,-28
+RTRET hit=11772 eax=0
+RT hit=11773 light=0xd579fd4 lumel=-3087.87573,359.646698,-28
+RTRET hit=11773 eax=0
+RT hit=11774 light=0xd579fd4 lumel=-3220.06909,376.35321,-28
+RTRET hit=11774 eax=1
+RT hit=11775 light=0xd579fd4 lumel=-3203.54492,376.35321,-28
+RTRET hit=11775 eax=1
+RT hit=11776 light=0xd579fd4 lumel=-3187.02075,376.35321,-28
+RTRET hit=11776 eax=1
+RT hit=11777 light=0xd579fd4 lumel=-3170.49658,376.35321,-28
+RTRET hit=11777 eax=1
+RT hit=11778 light=0xd579fd4 lumel=-3153.97241,376.35321,-28
+RTRET hit=11778 eax=0
+RT hit=11779 light=0xd579fd4 lumel=-3137.44824,376.35321,-28
+RTRET hit=11779 eax=0
+RT hit=11780 light=0xd579fd4 lumel=-3120.92407,376.35321,-28
+RTRET hit=11780 eax=0
+RT hit=11781 light=0xd579fd4 lumel=-3104.3999,376.35321,-28
+RTRET hit=11781 eax=0
+RT hit=11782 light=0xd579fd4 lumel=-3087.87573,376.35321,-28
+RTRET hit=11782 eax=0
+RT hit=11783 light=0xd579fd4 lumel=-3220.06909,393.059723,-28
+RTRET hit=11783 eax=1
+RT hit=11784 light=0xd579fd4 lumel=-3203.54492,393.059723,-28
+RTRET hit=11784 eax=1
+RT hit=11785 light=0xd579fd4 lumel=-3187.02075,393.059723,-28
+RTRET hit=11785 eax=1
+RT hit=11786 light=0xd579fd4 lumel=-3170.49658,393.059723,-28
+RTRET hit=11786 eax=1
+RT hit=11787 light=0xd579fd4 lumel=-3153.97241,393.059723,-28
+RTRET hit=11787 eax=0
+RT hit=11788 light=0xd579fd4 lumel=-3137.44824,393.059723,-28
+RTRET hit=11788 eax=0
+RT hit=11789 light=0xd579fd4 lumel=-3120.92407,393.059723,-28
+RTRET hit=11789 eax=0
+RT hit=11790 light=0xd579fd4 lumel=-3104.3999,393.059723,-28
+RTRET hit=11790 eax=0
+RT hit=11791 light=0xd579fd4 lumel=-3087.87573,393.059723,-28
+RTRET hit=11791 eax=0
+RT hit=11792 light=0xd579fd4 lumel=-3220.06909,409.766235,-28
+RTRET hit=11792 eax=1
+RT hit=11793 light=0xd579fd4 lumel=-3203.54492,409.766235,-28
+RTRET hit=11793 eax=1
+RT hit=11794 light=0xd579fd4 lumel=-3187.02075,409.766235,-28
+RTRET hit=11794 eax=1
+RT hit=11795 light=0xd579fd4 lumel=-3170.49658,409.766235,-28
+RTRET hit=11795 eax=1
+RT hit=11796 light=0xd579fd4 lumel=-3153.97241,409.766235,-28
+RTRET hit=11796 eax=0
+RT hit=11797 light=0xd579fd4 lumel=-3137.44824,409.766235,-28
+RTRET hit=11797 eax=0
+RT hit=11798 light=0xd579fd4 lumel=-3120.92407,409.766235,-28
+RTRET hit=11798 eax=0
+RT hit=11799 light=0xd579fd4 lumel=-3104.3999,409.766235,-28
+RTRET hit=11799 eax=0
+RT hit=11800 light=0xd579fd4 lumel=-3087.87573,409.766235,-28
+RTRET hit=11800 eax=0
+RT hit=11801 light=0xd579fd4 lumel=-3220.06909,426.472748,-28
+RTRET hit=11801 eax=1
+RT hit=11802 light=0xd579fd4 lumel=-3203.54492,426.472748,-28
+RTRET hit=11802 eax=1
+RT hit=11803 light=0xd579fd4 lumel=-3187.02075,426.472748,-28
+RTRET hit=11803 eax=1
+RT hit=11804 light=0xd579fd4 lumel=-3170.49658,426.472748,-28
+RTRET hit=11804 eax=1
+RT hit=11805 light=0xd579fd4 lumel=-3153.97241,426.472748,-28
+RTRET hit=11805 eax=0
+RT hit=11806 light=0xd579fd4 lumel=-3137.44824,426.472748,-28
+RTRET hit=11806 eax=0
+RT hit=11807 light=0xd579fd4 lumel=-3120.92407,426.472748,-28
+RTRET hit=11807 eax=0
+RT hit=11808 light=0xd579fd4 lumel=-3104.3999,426.472748,-28
+RTRET hit=11808 eax=0
+RT hit=11809 light=0xd579fd4 lumel=-3087.87573,426.472748,-28
+RTRET hit=11809 eax=0
+RT hit=11810 light=0xd579fd4 lumel=-3220.06909,443.17926,-28
+RTRET hit=11810 eax=0
+RT hit=11811 light=0xd579fd4 lumel=-3203.54492,443.17926,-28
+RTRET hit=11811 eax=0
+RT hit=11812 light=0xd579fd4 lumel=-3187.02075,443.17926,-28
+RTRET hit=11812 eax=0
+RT hit=11813 light=0xd579fd4 lumel=-3170.49658,443.17926,-28
+RTRET hit=11813 eax=0
+RT hit=11814 light=0xd579fd4 lumel=-3153.97241,443.17926,-28
+RTRET hit=11814 eax=0
+RT hit=11815 light=0xd579fd4 lumel=-3137.44824,443.17926,-28
+RTRET hit=11815 eax=0
+RT hit=11816 light=0xd579fd4 lumel=-3120.92407,443.17926,-28
+RTRET hit=11816 eax=0
+RT hit=11817 light=0xd579fd4 lumel=-3104.3999,443.17926,-28
+RTRET hit=11817 eax=0
+RT hit=11818 light=0xd579fd4 lumel=-3087.87573,443.17926,-28
+RTRET hit=11818 eax=0
+RT hit=11819 light=0xd579fd4 lumel=-3203.54492,459.885773,-28
+RTRET hit=11819 eax=0
+RT hit=11820 light=0xd579fd4 lumel=-3187.02075,459.885773,-28
+RTRET hit=11820 eax=0
+RT hit=11821 light=0xd579fd4 lumel=-3170.49658,459.885773,-28
+RTRET hit=11821 eax=0
+RT hit=11822 light=0xd579fd4 lumel=-3153.97241,459.885773,-28
+RTRET hit=11822 eax=0
+RT hit=11823 light=0xd579fd4 lumel=-3137.44824,459.885773,-28
+RTRET hit=11823 eax=0
+RT hit=11824 light=0xd579fd4 lumel=-3120.92407,459.885773,-28
+RTRET hit=11824 eax=0
+RT hit=11825 light=0xd579fd4 lumel=-3104.3999,459.885773,-28
+RTRET hit=11825 eax=0
+RT hit=11826 light=0xd579fd4 lumel=-3087.87573,459.885773,-28
+RTRET hit=11826 eax=0
+RT hit=11827 light=0xd579fd4 lumel=-3203.54492,476.592285,-28
+RTRET hit=11827 eax=0
+RT hit=11828 light=0xd579fd4 lumel=-3187.02075,476.592285,-28
+RTRET hit=11828 eax=0
+RT hit=11829 light=0xd579fd4 lumel=-3170.49658,476.592285,-28
+RTRET hit=11829 eax=0
+RT hit=11830 light=0xd579fd4 lumel=-3153.97241,476.592285,-28
+RTRET hit=11830 eax=0
+RT hit=11831 light=0xd579fd4 lumel=-3137.44824,476.592285,-28
+RTRET hit=11831 eax=0
+RT hit=11832 light=0xd579fd4 lumel=-3120.92407,476.592285,-28
+RTRET hit=11832 eax=0
+RT hit=11833 light=0xd579fd4 lumel=-3104.3999,476.592285,-28
+RTRET hit=11833 eax=0
+RT hit=11834 light=0xd579fd4 lumel=-3087.87573,476.592285,-28
+RTRET hit=11834 eax=0
+RT hit=11835 light=0xd579fd4 lumel=-3203.54492,493.298798,-28
+RTRET hit=11835 eax=0
+RT hit=11836 light=0xd579fd4 lumel=-3187.02075,493.298798,-28
+RTRET hit=11836 eax=0
+RT hit=11837 light=0xd579fd4 lumel=-3170.49658,493.298798,-28
+RTRET hit=11837 eax=0
+RT hit=11838 light=0xd579fd4 lumel=-3153.97241,493.298798,-28
+RTRET hit=11838 eax=0
+RT hit=11839 light=0xd579fd4 lumel=-3137.44824,493.298798,-28
+RTRET hit=11839 eax=0
+RT hit=11840 light=0xd579fd4 lumel=-3120.92407,493.298798,-28
+RTRET hit=11840 eax=0
+RT hit=11841 light=0xd579fd4 lumel=-3104.3999,493.298798,-28
+RTRET hit=11841 eax=0
+RT hit=11842 light=0xd579fd4 lumel=-3087.87573,493.298798,-28
+RTRET hit=11842 eax=0
+RT hit=11843 light=0xd579fd4 lumel=-3187.02075,510.00531,-28
+RTRET hit=11843 eax=0
+RT hit=11844 light=0xd579fd4 lumel=-3170.49658,510.00531,-28
+RTRET hit=11844 eax=0
+RT hit=11845 light=0xd579fd4 lumel=-3153.97241,510.00531,-28
+RTRET hit=11845 eax=0
+RT hit=11846 light=0xd579fd4 lumel=-3137.44824,510.00531,-28
+RTRET hit=11846 eax=0
+RT hit=11847 light=0xd579fd4 lumel=-3120.92407,510.00531,-28
+RTRET hit=11847 eax=0
+RT hit=11848 light=0xd579fd4 lumel=-3104.3999,510.00531,-28
+RTRET hit=11848 eax=0
+RT hit=11849 light=0xd579fd4 lumel=-3087.87573,510.00531,-28
+RTRET hit=11849 eax=0
+RT hit=11850 light=0xd579fd4 lumel=-3187.02075,526.711853,-28
+RTRET hit=11850 eax=0
+RT hit=11851 light=0xd579fd4 lumel=-3170.49658,526.711853,-28
+RTRET hit=11851 eax=0
+RT hit=11852 light=0xd579fd4 lumel=-3153.97241,526.711853,-28
+RTRET hit=11852 eax=0
+RT hit=11853 light=0xd579fd4 lumel=-3137.44824,526.711853,-28
+RTRET hit=11853 eax=0
+RT hit=11854 light=0xd579fd4 lumel=-3120.92407,526.711853,-28
+RTRET hit=11854 eax=0
+RT hit=11855 light=0xd579fd4 lumel=-3104.3999,526.711853,-28
+RTRET hit=11855 eax=0
+RT hit=11856 light=0xd579fd4 lumel=-3087.87573,526.711853,-28
+RTRET hit=11856 eax=0
+RT hit=11857 light=0xd579fd4 lumel=-3170.49658,543.418396,-28
+RTRET hit=11857 eax=0
+RT hit=11858 light=0xd579fd4 lumel=-3153.97241,543.418396,-28
+RTRET hit=11858 eax=0
+RT hit=11859 light=0xd579fd4 lumel=-3137.44824,543.418396,-28
+RTRET hit=11859 eax=0
+RT hit=11860 light=0xd579fd4 lumel=-3120.92407,543.418396,-28
+RTRET hit=11860 eax=0
+RT hit=11861 light=0xd579fd4 lumel=-3104.3999,543.418396,-28
+RTRET hit=11861 eax=0
+RT hit=11862 light=0xd579fd4 lumel=-3087.87573,543.418396,-28
+RTRET hit=11862 eax=0
+RT hit=11863 light=0xd579fd4 lumel=-3153.97241,560.124939,-28
+RTRET hit=11863 eax=0
+RT hit=11864 light=0xd579fd4 lumel=-3137.44824,560.124939,-28
+RTRET hit=11864 eax=0
+RT hit=11865 light=0xd579fd4 lumel=-3120.92407,560.124939,-28
+RTRET hit=11865 eax=0
+RT hit=11866 light=0xd579fd4 lumel=-3104.3999,560.124939,-28
+RTRET hit=11866 eax=0
+RT hit=11867 light=0xd579fd4 lumel=-3087.87573,560.124939,-28
+RTRET hit=11867 eax=0
+RT hit=11913 light=0xd579fd4 lumel=-3088.125,351.875,4
+RTRET hit=11913 eax=0
+RT hit=11915 light=0xd579fd4 lumel=-3088.125,373.291656,4
+RTRET hit=11915 eax=1
+RT hit=11917 light=0xd579fd4 lumel=-3088.125,394.708313,4
+RTRET hit=11917 eax=1
+RT hit=11919 light=0xd579fd4 lumel=-3088.125,416.124969,4
+RTRET hit=11919 eax=0
+RT hit=11921 light=0xd579fd4 lumel=-3092.125,412,128.125
+RTRET hit=11921 eax=0
+RT hit=11923 light=0xd579fd4 lumel=-3092.125,412,109.803574
+RTRET hit=11923 eax=1
+RT hit=11925 light=0xd579fd4 lumel=-3092.125,412,91.4821472
+RTRET hit=11925 eax=1
+RT hit=11927 light=0xd579fd4 lumel=-3092.125,412,73.1607208
+RTRET hit=11927 eax=1
+RT hit=11929 light=0xd579fd4 lumel=-3092.125,412,54.8392944
+RTRET hit=11929 eax=1
+RT hit=11931 light=0xd579fd4 lumel=-3092.125,412,36.517868
+RTRET hit=11931 eax=1
+RT hit=11933 light=0xd579fd4 lumel=-3092.125,412,18.1964397
+RTRET hit=11933 eax=1
+RT hit=11935 light=0xd579fd4 lumel=-3092.125,412,-0.124988556
+RTRET hit=11935 eax=0
+RT hit=11938 light=0xd579fd4 lumel=-3092.125,356,128.125
+RTRET hit=11938 eax=0
+RT hit=11940 light=0xd579fd4 lumel=-3092.125,356,109.803574
+RTRET hit=11940 eax=1
+RT hit=11942 light=0xd579fd4 lumel=-3092.125,356,91.4821472
+RTRET hit=11942 eax=1
+RT hit=11944 light=0xd579fd4 lumel=-3092.125,356,73.1607208
+RTRET hit=11944 eax=1
+RT hit=11946 light=0xd579fd4 lumel=-3092.125,356,54.8392944
+RTRET hit=11946 eax=1
+RT hit=11948 light=0xd579fd4 lumel=-3092.125,356,36.517868
+RTRET hit=11948 eax=1
+RT hit=11950 light=0xd579fd4 lumel=-3092.125,356,18.1964397
+RTRET hit=11950 eax=1
+RT hit=11952 light=0xd579fd4 lumel=-3092.125,356,-0.124988556
+RTRET hit=11952 eax=0
+RT hit=11953 light=0xd579fd4 lumel=-3152.125,319.875,-12
+RTRET hit=11953 eax=0
+RT hit=11954 light=0xd579fd4 lumel=-3119.875,319.875,-12
+RTRET hit=11954 eax=0
+RT hit=11955 light=0xd579fd4 lumel=-3152.125,338.196442,-12
+RTRET hit=11955 eax=0
+RT hit=11956 light=0xd579fd4 lumel=-3119.875,338.196442,-12
+RTRET hit=11956 eax=0
+RT hit=11957 light=0xd579fd4 lumel=-3152.125,356.517883,-12
+RTRET hit=11957 eax=1
+RT hit=11958 light=0xd579fd4 lumel=-3119.875,356.517883,-12
+RTRET hit=11958 eax=0
+RT hit=11959 light=0xd579fd4 lumel=-3152.125,374.839325,-12
+RTRET hit=11959 eax=1
+RT hit=11960 light=0xd579fd4 lumel=-3119.875,374.839325,-12
+RTRET hit=11960 eax=0
+RT hit=11961 light=0xd579fd4 lumel=-3152.125,393.160767,-12
+RTRET hit=11961 eax=1
+RT hit=11962 light=0xd579fd4 lumel=-3119.875,393.160767,-12
+RTRET hit=11962 eax=0
+RT hit=11963 light=0xd579fd4 lumel=-3152.125,411.482208,-12
+RTRET hit=11963 eax=1
+RT hit=11964 light=0xd579fd4 lumel=-3119.875,411.482208,-12
+RTRET hit=11964 eax=0
+RT hit=11965 light=0xd579fd4 lumel=-3152.125,429.80365,-12
+RTRET hit=11965 eax=0
+RT hit=11966 light=0xd579fd4 lumel=-3119.875,429.80365,-12
+RTRET hit=11966 eax=0
+RT hit=11967 light=0xd579fd4 lumel=-3152.125,448.125092,-12
+RTRET hit=11967 eax=0
+RT hit=11968 light=0xd579fd4 lumel=-3119.875,448.125092,-12
+RTRET hit=11968 eax=0
+RT hit=11969 light=0xd579fd4 lumel=-3120.125,319.875,4
+RTRET hit=11969 eax=0
+RT hit=11970 light=0xd579fd4 lumel=-3087.875,319.875,4
+RTRET hit=11970 eax=0
+RT hit=11971 light=0xd579fd4 lumel=-3120.125,338.196442,4
+RTRET hit=11971 eax=0
+RT hit=11972 light=0xd579fd4 lumel=-3087.875,338.196442,4
+RTRET hit=11972 eax=0
+RT hit=11973 light=0xd579fd4 lumel=-3120.125,356.517883,4
+RTRET hit=11973 eax=1
+RT hit=11974 light=0xd579fd4 lumel=-3087.875,356.517883,4
+RTRET hit=11974 eax=1
+RT hit=11975 light=0xd579fd4 lumel=-3120.125,374.839325,4
+RTRET hit=11975 eax=1
+RT hit=11976 light=0xd579fd4 lumel=-3087.875,374.839325,4
+RTRET hit=11976 eax=1
+RT hit=11977 light=0xd579fd4 lumel=-3120.125,393.160767,4
+RTRET hit=11977 eax=1
+RT hit=11978 light=0xd579fd4 lumel=-3087.875,393.160767,4
+RTRET hit=11978 eax=1
+RT hit=11979 light=0xd579fd4 lumel=-3120.125,411.482208,4
+RTRET hit=11979 eax=1
+RT hit=11980 light=0xd579fd4 lumel=-3087.875,411.482208,4
+RTRET hit=11980 eax=1
+RT hit=11981 light=0xd579fd4 lumel=-3120.125,429.80365,4
+RTRET hit=11981 eax=0
+RT hit=11982 light=0xd579fd4 lumel=-3087.875,429.80365,4
+RTRET hit=11982 eax=0
+RT hit=11983 light=0xd579fd4 lumel=-3120.125,448.125092,4
+RTRET hit=11983 eax=0
+RT hit=11984 light=0xd579fd4 lumel=-3087.875,448.125092,4
+RTRET hit=11984 eax=0
