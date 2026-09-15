@@ -35,6 +35,13 @@ state, not persisted). Double-clicking a pane maximizes/restores it. Per-pane sh
 (`DEFAULT_MODES`): Perspective opens `'lit'`, the three ortho panes open `'wireframe'` — their
 long-standing UnrealEd role, not merely feature parity.
 
+**Pane arrangement**: top-left=Top, top-right=Front, bottom-left=Perspective, bottom-right=Side —
+real UnrealEd's classic default. `PANES`' array order in `QuadLayout.tsx` IS the layout: the grid has
+no explicit `grid-area`, so DOM order drives the CSS grid's implicit 2x2 placement. Bottom-left being
+the perspective pane is live-verified (`dev/docs/unrealed/rendering.md`, 🔬); the other three panes'
+exact corners are implemented as the well-known standard arrangement, not independently RE-verified
+against a live UED22 for this specific fact.
+
 ## Shading modes
 
 `web/src/scene/shadingMode.ts` defines four: `'wireframe'` (always available — draws from

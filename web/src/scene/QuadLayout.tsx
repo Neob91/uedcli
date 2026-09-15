@@ -37,7 +37,11 @@ export interface QuadLayoutProps {
   buildSolved: boolean
 }
 
-const PANES: PaneId[] = ['perspective', 'top', 'front', 'side']
+// Real UnrealEd's classic default arrangement (dev/docs/unrealed/rendering.md: bottom-left is the
+// 3D perspective pane, live-verified): top-left=Top, top-right=Front, bottom-left=Perspective,
+// bottom-right=Side. DOM order drives the 2x2 CSS grid's implicit placement (index.css's
+// `.quad-layout` has no explicit grid-area) -- this array's order IS the layout.
+const PANES: PaneId[] = ['top', 'front', 'perspective', 'side']
 
 // Classic UnrealEd's own default per pane (a judgment call -- neither spec pins this down):
 // Perspective opens shaded/lit, the three ortho panes open wireframe (their long-standing role).
