@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 
-import { resolveMaterialState } from './Viewport3D'
+import { CANVAS_COLOR_MANAGEMENT, resolveMaterialState } from './Viewport3D'
 
 // Pins the render-decision -> three.js material mapping (render.rs's cull + blend), the web's whole
 // "how to draw this group" residual now that the attrs are server-resolved.
@@ -36,5 +36,18 @@ describe('resolveMaterialState', () => {
     expect(resolveMaterialState({ masked: false, twoSided: false, blend: 'modulated' }).premultipliedAlpha).toBe(true)
     expect(resolveMaterialState({ masked: false, twoSided: false, blend: 'translucent' }).premultipliedAlpha).toBeUndefined()
     expect(resolveMaterialState({ masked: false, twoSided: false, blend: 'opaque' }).premultipliedAlpha).toBeUndefined()
+  })
+})
+
+// render.rs shades by multiplying raw 0-255 texel bytes directly (no sRGB decode/encode anywhere).
+// R3F's Canvas defaults still ENCODE the output (outputColorSpace = SRGBColorSpace) and
+// auto-DECODE hex/THREE.Color literals, with nothing decoding the textures to match -- a
+// decode-less-but-still-encoded round trip that moves every displayed value away from its exact
+// source byte (brighter for textures, darker for literals like UNTEXTURED_GREY/MARKER_COLOR).
+// `linear` + `legacy` (alongside the existing `flat`, which only disables tone mapping) turn all of
+// that off, so a fullbright sprite (no vertex color, no lightmap) displays its exact source pixel.
+describe('CANVAS_COLOR_MANAGEMENT', () => {
+  it('disables tone mapping, output re-encoding, and literal color auto-decoding', () => {
+    expect(CANVAS_COLOR_MANAGEMENT).toEqual({ flat: true, linear: true, legacy: true })
   })
 })

@@ -29,6 +29,33 @@ import type { TouchPoint } from './touchGesture'
 
 const INITIAL_POSE: CameraPose = { position: [0, -500, 200], pitch: -10, yaw: 90 }
 
+/** `render.rs` (this viewport's parity target, per the file header) shades by multiplying raw
+ * 0-255 texel bytes directly by a flat/lightmap scalar -- no sRGB decode of the texture, no
+ * re-encode of the result (`(rr * shade).clamp(0.0, 255.0)`). R3F's `<Canvas>` defaults do NOT
+ * match that: with neither `linear` nor `legacy` set, it still applies a linear-to-sRGB ENCODE at
+ * output (`gl.outputColorSpace = THREE.SRGBColorSpace`) even though nothing on the way in ever
+ * decodes (every texture here defaults to `THREE.NoColorSpace` -- see `useTextures`/
+ * `useMarkerTexture`), and `ColorManagement` auto-decodes hex/`THREE.Color` literals
+ * (`UNTEXTURED_GREY`, `SELECTION_BOX_COLOR` -- constructed via `new THREE.Color(hex)`) as sRGB on
+ * construction. (`MARKER_COLOR_THREE` below is built via `setRGB(r,g,b)` instead, whose default
+ * `colorSpace` is already the working linear space -- its on-screen correction comes entirely
+ * from the output-encode half, not from `legacy`.) A decode-less-but-still-encoded pipeline does
+ * not merely dim a FEW things -- traced against three's own `LinearToSRGB`/`SRGBToLinear`
+ * (`ColorManagement.js`), it brightens EVERY texel (0.5 renders as ~0.735) and darkens every
+ * auto-decoded hex literal, in both cases moving away from the exact source value. `flat` (no
+ * tone mapping, already present) doesn't touch either effect. `linear` (`outputColorSpace =
+ * LinearSRGBColorSpace`, skips the output encode) + `legacy` (`ColorManagement.enabled = false`,
+ * skips the hex-literal auto-decode) together make the whole pipeline a pure passthrough --
+ * matching render.rs's zero-color-management model, and the invariant that a fullbright sprite
+ * (no vertex color, no lightmap, default-white material) must display its exact source pixel.
+ *
+ * IMPORTANT: `ColorManagement.enabled` is a process-wide singleton, not per-`<Canvas>` -- r3f's
+ * `configure()` sets it unconditionally on EVERY render of every mounted Canvas. Any sibling
+ * `<Canvas>` in the app (e.g. an ortho pane) that doesn't also spread `CANVAS_COLOR_MANAGEMENT`
+ * will flip this flag back on its own next render, silently undoing this fix here too -- every
+ * `<Canvas>` in this app MUST spread the same `CANVAS_COLOR_MANAGEMENT` constant. */
+export const CANVAS_COLOR_MANAGEMENT = { flat: true, linear: true, legacy: true } as const
+
 /** Extracts two `THREE.Texture`s per atlas entry, keyed by `tex_index`, by drawing that entry's rect
  * out of the atlas image onto its own canvas -- so each texture can tile with RepeatWrapping (a
  * shared atlas can't repeat past a tile boundary; bug A). NearestFilter matches the low-res look.
@@ -688,7 +715,7 @@ export function Viewport3D({ scene, atlas, lightmap, selectedName = null, onSele
       {/* far spans a whole UE1 level (world is +/-32768 UU, so ~65k across); R3F's default far=1000
           clipped distant geometry to the background ("further objects render black"). near=1 keeps
           z-precision over that range. */}
-      <Canvas flat camera={{ fov: 75, near: 1, far: 131072 }}>
+      <Canvas {...CANVAS_COLOR_MANAGEMENT} camera={{ fov: 75, near: 1, far: 131072 }}>
         <CameraRig pose={pose} cameraRef={cameraRef} />
         <FlyKeys setPose={setPose} />
         <mesh ref={meshRef} geometry={bufferGeometry} material={materials} />
