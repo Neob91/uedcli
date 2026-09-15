@@ -19,7 +19,7 @@ import { bboxCenter } from './frame'
 import { GridOverlay } from './GridOverlay'
 import { MARKER_COLOR } from './markers'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
-import { orthoBasis, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
+import { orthoBasis, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
 import { RadiiOverlays } from './RadiiOverlays'
 import { useSceneResourcesContext } from './SceneResourcesContext'
 import { SelectionHighlight } from './SelectionHighlight'
@@ -204,8 +204,11 @@ export function OrthoViewport({
       const raycaster = new THREE.Raycaster()
       raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera)
       // See Viewport3D.tsx's identical comment (bug report item 6): a click in wireframe/ortho views
-      // must only hit near a brush's own outline, never anywhere inside its silhouette.
-      raycaster.params.Line = { threshold: 4 }
+      // must only hit near a brush's own outline, never anywhere inside its silhouette. `Line`'s
+      // threshold is scaled by zoom (orthoLineHitThresholdUU) so the click buffer stays a constant
+      // screen-space width; `Line2`'s is already screen-space (owner report: 2D brush selection was
+      // near-pixel-exact once zoomed out, since a fixed world-unit threshold shrinks on screen).
+      raycaster.params.Line = { threshold: orthoLineHitThresholdUU(pose.worldUnitsPerPixel) }
       raycaster.params.Line2 = { threshold: 6 }
 
       let hitActor: SceneActor | null = null

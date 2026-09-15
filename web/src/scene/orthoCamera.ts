@@ -85,6 +85,20 @@ export function orthoZoom(pose: OrthoPose, wheelDeltaY: number): OrthoPose {
   return { center: pose.center, worldUnitsPerPixel }
 }
 
+// `THREE.Raycaster.params.Line.threshold` (an ordinary `Line`/`LineSegments`' hit-test tolerance,
+// unlike `Line2`'s, which is already screen-space) is a WORLD-UNIT distance -- a fixed value means
+// the click tolerance shrinks in screen terms as you zoom out (`worldUnitsPerPixel` grows), to the
+// point of needing near-pixel-exact clicks on a brush outline at typical zoom (owner report: "Hard
+// to select brushes in 2D view"). Scaling by `worldUnitsPerPixel` keeps the tolerance a constant
+// number of ON-SCREEN pixels regardless of zoom.
+const LINE_HIT_SCREEN_PX = 2
+
+/** World-unit `Raycaster.params.Line.threshold` for a `screenPx`-wide click buffer around a thin
+ * (non-`Line2`) brush outline at the pane's current zoom. */
+export function orthoLineHitThresholdUU(worldUnitsPerPixel: number, screenPx: number = LINE_HIT_SCREEN_PX): number {
+  return screenPx * worldUnitsPerPixel
+}
+
 /** Projects a screen point onto the axis's world plane through `pose.center` -- the click-to-select
  * ray origin/direction builder (an ortho ray direction is always `orthoBasis(axis).forward`,
  * screen-position-independent) AND the cursor-coordinate readout (Part 8). At the exact viewport

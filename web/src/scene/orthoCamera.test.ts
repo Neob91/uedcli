@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { OrthoPose } from './orthoCamera'
-import { orthoBasis, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
+import { orthoBasis, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
 
 describe('orthoBasis', () => {
   it('TOP looks down -Z, +X screen-right, +Y screen-down (-Y up)', () => {
@@ -75,6 +75,18 @@ describe('orthoZoom', () => {
   it('does not clamp a zoom that stays within range', () => {
     const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 4 }
     expect(orthoZoom(pose, 120).worldUnitsPerPixel).toBeCloseTo(8)
+  })
+})
+
+describe('orthoLineHitThresholdUU', () => {
+  it('scales with worldUnitsPerPixel so the click buffer stays a constant screen width', () => {
+    expect(orthoLineHitThresholdUU(4)).toBeCloseTo(8) // 2px default * 4 UU/px
+    expect(orthoLineHitThresholdUU(1)).toBeCloseTo(2)
+    expect(orthoLineHitThresholdUU(512)).toBeCloseTo(1024) // zoomed way out -- still ~2 screen px
+  })
+
+  it('honors an explicit screenPx override', () => {
+    expect(orthoLineHitThresholdUU(4, 5)).toBeCloseTo(20)
   })
 })
 
