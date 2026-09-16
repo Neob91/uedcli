@@ -236,9 +236,18 @@ Tests must NOT block the parity work. For this project specifically:
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
-Ceilings (2026-09-13, after the portal-graph-freeze fix below): **UNATCO 242+ (re-verify to full,
-was 225), NYC_Bar 152 (spot-checked, unaffected), OceanLab 202 (spot-checked, unaffected), Island
-352+ (re-verify to full, was 331), WanChai 58 (was 57, now bails on a new unrelated N=59).**
+Ceilings (2026-09-16): **UNATCO 623+ (climbing, no bail found past 242 -- see 2026-09-16 note),
+NYC_Bar 152 (bails at 153, rounds 6-9 clear GetVisibleSurfs/OccludeBsp/the commit loop entirely --
+see below), OceanLab 202 (dead-node-surf fix landed 2026-09-15, geometry now byte-exact at 203, gate
+still fails on an orphan-vert count question awaiting the owner's call), Island 623+ (climbing, no
+bail found past 352), WanChai 200 (N=59 fixed 2026-09-14, bails at 201 -- rasterizer chain fully
+cleared, real divergence unexplained).**
+
+**2026-09-16 — UNATCO and Island pushed far past their old ceilings with no new bail** (a background
+`ladder_run.py`-equivalent sweep, `_scratch/round_robin_ladder.py` in this session's campaign
+worktree, not yet committed as canonical tooling -- see `spot_check.py`'s sibling note). Re-verify
+whichever of the two is picked up next before trusting 623 as solid; the sweep never stopped to
+confirm N=243..622/353..622 individually, it just never bailed.
 
 **2026-09-13 — the Island N=332 / UNATCO N=226 / WanChai N=58 "1-ULP tie" is FIXED, not masked.**
 All three were the SAME bug: `permeating_lights` recomputed the portal graph fresh at light-bake
@@ -320,9 +329,27 @@ divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), no
   bug as Island N=332/UNATCO N=226, see the portal-graph-freeze fix above. Re-verified byte-exact
   N=1..58 (was 57); now bails at a NEW, unrelated N=59 mover-`Polys` divergence,
   `dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/` (not investigated).
+  **N=59 FIXED 2026-09-14** (`dev/docs/board/done/wanchai-n59-mover-polys-model2-diverges/`) —
+  `collect_repartition_frontier` (`bspcsg.rs`, the port of `Editor.dll 0x10049380`) recursed a BSP
+  node's `i_back` child before `i_front`; the real editor checks `iFront` first. Invisible almost
+  always — only matters when two frontier subtrees grow in the same repartition pass, since the last
+  one processed wins `Model.Polys`. WanChai N=59 is the first case in the campaign with two.
+  `dev/docs/spikes/2026-09-14-wanchai-n59-semisolid-repartition-order/`. Re-verified byte-exact
+  **N=1..200**; bails at **N=201** on world `Model2` — native's `GetVisibleSurfs` rejects a thin
+  CSG-subtraction sliver (surf 616) for `Light431` that a live capture confirms UED22 genuinely
+  accepts. Three investigation rounds (2026-09-15) cleared the rasterizer/span-subtraction chain
+  entirely (byte-identical to the real editor's own row output across the whole matching call
+  sequence) and decomposed an 80-call `OccludeBsp` count mismatch (245 real vs 165 native) into a
+  harmless bookkeeping artifact plus a still-unexplained structurally separate block. Not fixed; the
+  paradox (rasterizer proven faithful, yet UED22 still accepts what native rejects) is unresolved.
+  `dev/docs/spikes/2026-09-15-wanchai-n201-surf616-getvisiblesurfs-miss/`,
+  `dev/docs/spikes/2026-09-15-wanchai-n201-raster-footprint/`,
+  `dev/docs/spikes/2026-09-15-wanchai-n201-sequence-diff/`,
+  `dev/docs/board/to-spike/wanchai-n-201-world-model2-body-diverges/`.
 - **UNATCO, N=226**: FIXED 2026-09-13 (`dev/docs/board/done/unatco-n-226-leaf-12-gets-a-permeating-light157/`)
-  — see the portal-graph-freeze fix above. Re-verified byte-exact N=1..242 (was 225); not yet
-  re-verified to its true new ceiling.
+  — see the portal-graph-freeze fix above. Re-verified byte-exact N=1..242 (was 225); a 2026-09-16
+  sweep pushed it clean to **N=623+** with no new bail (not individually spot-checked -- see the
+  Ceilings note above).
   The re-verify sweep past 242 reached **byte-exact N=1..299** before bailing; N=299's bail was NOT a
   parity divergence — a stray leftover editor container (from an earlier interrupted N=277 attempt) was
   starving the host's rootless dockerd, and `packages.ensure_load`'s `dismiss_blocking_dialog` crashed
@@ -422,7 +449,8 @@ divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), no
   post-`bspOptGeom`-remap `model.points`, not the pre-remap snapshot the real editor's one-time
   portal graph actually used), not a numerical one. See the portal-graph-freeze fix above and
   `dev/docs/spikes/2026-09-13-portal-graph-frozen-before-optgeom/`. Re-verified byte-exact
-  N=1..352 (was 331); not yet re-verified to its true new ceiling.
+  N=1..352 (was 331); a 2026-09-16 sweep pushed it clean to **N=623+** with no new bail (not
+  individually spot-checked -- see the Ceilings note above).
 - **OceanLab**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the
