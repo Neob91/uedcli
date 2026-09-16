@@ -476,8 +476,9 @@ def test_mover_world_polys_match_world_vertices():
     set_prop(mover, "PrePivot", "(X=32.000000)")
     lvl = _level(cube_room(), mover)
     got = pn._mover_world_polys(lvl, IDX)
-    assert got and all(a.name == "Door" for _, a, _ in got)
-    flat = {tuple(round(c, 3) for c in v) for verts, _, _ in got for v in verts}
+    assert got and all(a.name == "Door" for _, a, _, _ in got)
+    assert [i for _, _, _, i in got] == list(range(len(got)))    # BRUSH:IDX, poly-ordered
+    flat = {tuple(round(c, 3) for c in v) for verts, _, _, _ in got for v in verts}
     expect = {tuple(round(c, 3) for c in v) for v in world_vertices(mover)}
     assert flat == expect
 
@@ -495,23 +496,31 @@ def test_build_scene_actor_names_by_poly_matches_owning_actor():
     """The 3rd return value threads real PER-POLY ownership end to end -- this is what lets the
     `uedcli serve` client raycast the real geometry and resolve a hit poly to its OWN actor, instead
     of a per-actor AABB test that can never distinguish a small brush fully enclosed in a bigger
-    brush's bounding box."""
+    brush's bounding box. Each entry is `(actor name, i_brush_poly)` -- `i_brush_poly` is that poly's
+    own `BRUSH:IDX` index (`uedcli/surface.py`), letting a solved surface's fragments be grouped back
+    to the ONE authored polygon they came from."""
     room = make_brush_actor("Room", cube(1024.0, 1024.0, 1024.0), csg="subtract")
     inner = make_brush_actor("Inner", cube(64.0, 64.0, 64.0), csg="add")   # buried in Room's own AABB
     polys, _table, owners = pn.build_scene(_level(room, inner), [], IDX, defaults=DEFAULTS)
     assert len(polys) == len(owners)
-    assert set(owners) == {"Room", "Inner"}
     assert None not in owners
+    names = {name for name, _i_brush_poly in owners}
+    assert names == {"Room", "Inner"}
+    # A cube brush has 6 authored polys, so every real i_brush_poly must land in [0, 6) -- it must
+    # come from the OWNING actor's own poly list, not some other index space (e.g. the solved
+    # surface's array position, which would range well past 6 once BSP fragmentation multiplies it).
+    assert all(0 <= i < 6 for _name, i in owners)
 
 
 def test_build_scene_actor_names_include_mesh_actors():
     """A DT_Mesh actor's triangles are owned too (appended outside `add_poly`, a separate code
-    path) -- must not be silently left unowned."""
+    path) -- must not be silently left unowned. A mesh actor has no `.brush.polys` to index into, so
+    its `i_brush_poly` is None -- unlike a CSG/mover poly's real BRUSH:IDX index."""
     index = _ued22_index()
     crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
     _polys, _table, owners = pn.build_scene(_level(cube_room(), crate), _mesh_sf(index), index,
                                             defaults=DEFAULTS)
-    assert "Crate" in owners
+    assert ("Crate", None) in owners
 
 
 def test_mover_polyflags_high_bit_does_not_overflow_render_frame():

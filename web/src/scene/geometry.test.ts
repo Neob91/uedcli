@@ -17,6 +17,7 @@ function quad(overrides: Partial<ScenePoly> = {}): ScenePoly {
     flags: 0,
     lightmap: null,
     owner: null,
+    i_brush_poly: null,
     ...overrides,
   }
 }
@@ -48,25 +49,28 @@ describe('buildGeometryData', () => {
     expect(got.triangleOwners).toEqual([null, null])
   })
 
-  it('tags each triangle with its SOURCE poly index (the identity of local index by default)', () => {
+  it('tags each triangle with its poly\'s i_brush_poly (BRUSH:IDX, not an array position)', () => {
     const got = buildGeometryData(
-      [quad({ owner: 'Room' }), quad({ tex_index: 0, owner: 'Inner' })],
+      [quad({ owner: 'Room', i_brush_poly: 4 }), quad({ tex_index: 0, owner: 'Inner', i_brush_poly: 2 })],
       { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' },
     )
-    // 2 groups (different tex_index), 2 triangles each -- poly 0 (Room) then poly 1 (Inner).
-    expect(got.trianglePolyIndex).toEqual([0, 0, 1, 1])
+    // 2 groups (different tex_index), 2 triangles each -- poly 0 (Room:4) then poly 1 (Inner:2).
+    expect(got.trianglePolyIndex).toEqual([4, 4, 2, 2])
   })
 
-  it('remaps to the caller-supplied ORIGINAL (unfiltered) index when sourceIndices is given', () => {
-    // Simulates SceneResourcesContext.tsx's non-Mover/Mover split: `polys` here is a FILTERED
-    // subset (local indices 0,1) whose true index in the original scene.polys array is 3 and 7.
+  it('lets several disjoint ScenePolys share one i_brush_poly -- CSG-split-fragment grouping', () => {
+    // Two fragments of the SAME authored polygon (e.g. a wall split by a niche brush) carry the
+    // same owner + i_brush_poly even though they're separate ScenePoly entries.
     const got = buildGeometryData(
-      [quad({ owner: 'A' }), quad({ tex_index: 0, owner: 'B' })],
-      { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' },
-      null,
-      [3, 7],
+      [quad({ owner: 'Wall', i_brush_poly: 1 }), quad({ owner: 'Wall', i_brush_poly: 1 })],
+      EMPTY_ATLAS,
     )
-    expect(got.trianglePolyIndex).toEqual([3, 3, 7, 7])
+    expect(got.trianglePolyIndex).toEqual([1, 1, 1, 1])
+  })
+
+  it('tags a poly with no i_brush_poly (a mesh actor, no brush.polys) as null', () => {
+    const got = buildGeometryData([quad({ owner: 'Crate', i_brush_poly: null })], EMPTY_ATLAS)
+    expect(got.trianglePolyIndex).toEqual([null, null])
   })
 
   it('groups by (texture, masked) pair -- one group per distinct texture', () => {

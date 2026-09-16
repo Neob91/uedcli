@@ -26,6 +26,14 @@ export interface ScenePoly {
   flags: number // raw merged PolyFlags (unused by the client; dropped in Phase 2)
   lightmap: LightmapFrame | null // lit-surf sampling frame; null = unlit (flat KEY_LIGHT shade)
   owner: string | null // owning actor's name (null: an out-of-range CSG join, no source actor)
+  // This poly's own index into `owner`'s AUTHORED `brush.polys` -- `BRUSH:IDX` addressing
+  // (uedcli/surface.py), the same identity `brush poly find`/`--highlight` already use. Several
+  // ScenePolys (several CSG-solved fragments) can share one i_brush_poly when a face gets split --
+  // that's the surface-selection identity (selectionSet.ts's surfaceKey), NOT this poly's own array
+  // position, so a click anywhere on the authored face selects/highlights every fragment of it.
+  // null when `owner` has no single source poly (a mesh actor, no `.brush.polys` at all) or when
+  // `owner` itself is null.
+  i_brush_poly: number | null
 }
 
 /** A brush actor's own AUTHORED polygons (pre-CSG, local-space, transformed to world), for the

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 
-import type { AtlasPayload, LightmapPayload, ScenePayload, StatusPayload } from './api'
+import type { AtlasPayload, LightmapPayload, ScenePayload, ScenePoly, StatusPayload } from './api'
 import { fetchLevelState, fetchStatus, postLoad, postRebuild, switchLevel } from './api'
 import { Inspector } from './panels/Inspector'
 import type { SurfaceSelection } from './panels/Inspector'
@@ -242,21 +242,34 @@ function App() {
     [scene, selectedNames],
   )
 
-  // Every selected SURFACE, resolved to its actor name + poly index + the poly's own data --
-  // Inspector's second selection-kind prop (GUI.md "Selection & the Inspector"). A key that no
-  // longer resolves (a stale selection surviving a Rebuild/reload that replaced `scene.polys`) is
-  // silently dropped rather than shown broken -- the same "a rename/delete invalidates a stale
-  // selectedNames entry" tolerance `selectedActors` above already has via its `.filter`.
+  // `surfaceKey(owner, i_brush_poly) -> one representative ScenePoly` -- CSG can split one authored
+  // polygon into several solved fragments sharing the SAME `i_brush_poly` (that's the whole point of
+  // this identity: a click anywhere on the authored face selects/highlights all of them), and any one
+  // fragment's texture/UV/blend data is representative of the whole authored poly (they all derive
+  // from the same source `Polygon`) -- so `set` (keep the LAST, i.e. any) rather than a multi-map.
+  const polyByKey = useMemo(() => {
+    const m = new Map<string, ScenePoly>()
+    if (!scene) return m
+    for (const poly of scene.polys) {
+      if (poly.owner != null && poly.i_brush_poly != null) m.set(surfaceKey(poly.owner, poly.i_brush_poly), poly)
+    }
+    return m
+  }, [scene])
+
+  // Every selected SURFACE, resolved to its actor name + poly index + a representative poly's own
+  // data -- Inspector's second selection-kind prop (GUI.md "Selection & the Inspector"). A key that
+  // no longer resolves (a stale selection surviving a Rebuild/reload whose authored geometry actually
+  // changed) is silently dropped rather than shown broken -- the same "a rename/delete invalidates a
+  // stale selectedNames entry" tolerance `selectedActors` above already has via its `.filter`.
   const selectedSurfaceInfos = useMemo(() => {
-    if (!scene) return []
     const infos: SurfaceSelection[] = []
     for (const key of selectedSurfaces) {
       const parsed = parseSurfaceKey(key)
-      const poly = parsed ? scene.polys[parsed.polyIndex] : undefined
+      const poly = parsed ? polyByKey.get(key) : undefined
       if (parsed && poly) infos.push({ actorName: parsed.actor, polyIndex: parsed.polyIndex, poly })
     }
     return infos
-  }, [scene, selectedSurfaces])
+  }, [polyByKey, selectedSurfaces])
 
   // The real shading-mode gating signal (Task 19) -- derived from the /status polling this toolbar
   // already does, not a second fetch.

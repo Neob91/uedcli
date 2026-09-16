@@ -20,11 +20,14 @@ export function clearSelection(): Set<string> {
 }
 
 /** Encodes a surface (single-polygon) selection identity into the stable string key the
- * `selectedSurfaces` Set (App.tsx) and `toggleSelection` above use -- `polyIndex` is the poly's
- * index into `ScenePayload.polys` (`geometry.ts`'s `trianglePolyIndex`), which only changes across a
- * Rebuild/reload (a fresh scene payload replaces every `ScenePoly`, naturally invalidating any stale
- * selection along with it, the same way a renamed/deleted actor already invalidates `selectedNames`).
- * Splits on the LAST `#` (`parseSurfaceKey`) so an actor name containing `#` still round-trips. */
+ * `selectedSurfaces` Set (App.tsx) and `toggleSelection` above use -- `polyIndex` is
+ * `ScenePoly.i_brush_poly`, the poly's own index into its owning actor's AUTHORED `brush.polys`
+ * (`BRUSH:IDX` addressing, `uedcli/surface.py`), not a position in the solved/CSG-fragmented
+ * `ScenePayload.polys` array (`geometry.ts`'s `trianglePolyIndex`). Unlike an array-position key,
+ * this one SURVIVES a Rebuild/reload that re-solves the same authored geometry unchanged -- a real
+ * UX win over the old per-fragment identity, worth noting since it inverts this comment's own
+ * earlier claim that a stale selection is naturally invalidated by every rebuild. Splits on the LAST
+ * `#` (`parseSurfaceKey`) so an actor name containing `#` still round-trips. */
 export function surfaceKey(actor: string, polyIndex: number): string {
   return `${actor}#${polyIndex}`
 }

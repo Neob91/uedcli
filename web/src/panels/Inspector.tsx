@@ -4,13 +4,18 @@
 // grouped into UnrealEd-style categories as collapsible sections (SceneActor.categories, parallel
 // to .props). Draws only what it's handed -- no model/diff logic here.
 import type { ScenePoly, SceneActor } from '../api'
+import { surfaceKey } from '../scene/selectionSet'
 import { groupByCategory } from './groupByCategory'
 
 /** One selected SURFACE (single polygon) -- GUI.md "Selection & the Inspector": a distinct
  * selection kind from a whole-actor selection (`SceneActor`), owner-answered as "highlight + inspect
- * only," no editing action. `poly` is the raw `ScenePoly` the backend already sends for rendering --
- * the Inspector draws its own fields directly, same "no model logic of its own" convention this
- * component already follows for `SceneActor.props`. */
+ * only," no editing action. `poly` is a representative `ScenePoly` the backend sent for rendering --
+ * possibly one of SEVERAL solved fragments sharing this `polyIndex` (CSG can split one authored
+ * polygon), any of which carries the same texture/UV/blend data, so any one stands in for the whole
+ * authored poly. `polyIndex` is `ScenePoly.i_brush_poly` (`BRUSH:IDX` addressing, `uedcli/surface.py`)
+ * -- displayed as `actorName:polyIndex`, the literal CLI-paste form. The Inspector draws `poly`'s
+ * fields directly, same "no model logic of its own" convention this component already follows for
+ * `SceneActor.props`. */
 export interface SurfaceSelection {
   actorName: string
   polyIndex: number
@@ -36,7 +41,7 @@ export interface InspectorProps {
 function SurfaceDetail({ actorName, polyIndex, poly }: SurfaceSelection) {
   return (
     <div className="inspector inspector-surface" data-testid="inspector-surface">
-      <h2>{actorName} -- surface {polyIndex}</h2>
+      <h2>{actorName}:{polyIndex}</h2>
       <dl>
         <dt>Texture</dt>
         <dd>{poly.tex_index >= 0 ? `#${poly.tex_index}` : '(untextured)'}</dd>
@@ -66,7 +71,7 @@ export function Inspector({ selected, selectedSurfaces = [] }: InspectorProps) {
         <h2>{selectedSurfaces.length} surfaces selected</h2>
         <ul>
           {selectedSurfaces.map(({ actorName, polyIndex }) => (
-            <li key={`${actorName}#${polyIndex}`}>{actorName} -- surface {polyIndex}</li>
+            <li key={surfaceKey(actorName, polyIndex)}>{actorName}:{polyIndex}</li>
           ))}
         </ul>
       </div>

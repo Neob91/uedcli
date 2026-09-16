@@ -34,7 +34,7 @@ from pathlib import Path
 from . import config
 from .preview_game import _compose_stem, _prune_prefix
 
-_CACHE_VERSION = 2   # bumped: geometry/scene payloads gained a per-poly actor-owner list
+_CACHE_VERSION = 3   # bumped: the per-poly actor-owner list's elements widened to (name, i_brush_poly)
 _GEO_PREFIX = f"scenegeo{_CACHE_VERSION}"
 _LIT_PREFIX = f"scenelit{_CACHE_VERSION}"
 _VERSIONED_PREFIX_RE = re.compile(r"^(scenegeo|scenelit)(\d+)__")

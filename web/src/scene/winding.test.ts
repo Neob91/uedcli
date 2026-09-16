@@ -28,6 +28,7 @@ function poly(verts: number[]): ScenePoly {
   return {
     verts, base: [0, 0, 0], tu: [1, 0, 0], tv: [0, 1, 0], pan: [0, 0], tex_index: -1,
     masked: false, two_sided: false, blend: 'opaque', flags: 0, lightmap: null, owner: null,
+    i_brush_poly: null,
   }
 }
 

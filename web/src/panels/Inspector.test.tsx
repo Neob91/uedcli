@@ -20,6 +20,7 @@ function fixturePoly(overrides: Partial<ScenePoly> = {}): ScenePoly {
     flags: 0,
     lightmap: null,
     owner: 'Room',
+    i_brush_poly: 4,
     ...overrides,
   }
 }
@@ -140,7 +141,7 @@ describe('Inspector', () => {
     const surface: SurfaceSelection = { actorName: 'Room', polyIndex: 4, poly: fixturePoly() }
     render(<Inspector selected={[]} selectedSurfaces={[surface]} />)
     expect(screen.getByTestId('inspector-surface')).toBeTruthy()
-    expect(screen.getByRole('heading', { name: 'Room -- surface 4' })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Room:4' })).toBeTruthy()
     expect(screen.getByText('#12')).toBeTruthy() // tex_index
     expect(screen.getByText('4, 8')).toBeTruthy() // pan
     expect(screen.queryByTestId('inspector-empty')).toBeNull()

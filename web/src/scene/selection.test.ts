@@ -132,8 +132,8 @@ describe('resolveHitSurface', () => {
     expect(resolveHitSurface(0, [null], [0], [room])).toBeNull()
   })
 
-  it('returns null when the poly index is unresolved (owner resolved but index missing)', () => {
-    expect(resolveHitSurface(0, ['Room'], [null], [room])).toBeNull()
+  it('still resolves the actor when the poly index is unresolved (a mesh-actor hit, no brush.polys to index into)', () => {
+    expect(resolveHitSurface(0, ['Room'], [null], [room])).toEqual({ actor: room, polyIndex: null })
   })
 })
 

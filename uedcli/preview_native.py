@@ -195,15 +195,20 @@ def _mover_actor_world_polys(actor) -> list[tuple[list, object, object]]:
     return out
 
 
-def _mover_world_polys(level, index) -> list[tuple[list, object, object]]:
+def _mover_world_polys(level, index) -> list[tuple[list, object, object, int]]:
     """Movers render directly (no BSP surfs): each brush poly world-transformed at the BASE
-    pose. A draft preview without doors would be actively misleading (spec §5)."""
+    pose. A draft preview without doors would be actively misleading (spec §5). The 4th element
+    is the poly's own index into `actor.brush.polys` -- `BRUSH:IDX` addressing (`uedcli/surface.py`),
+    the same index space `_node_polys` reports as `i_brush_poly` for CSG-solved surfaces. Enumerated
+    here (not inside `_mover_actor_world_polys`, whose other two callers -- `solve_world_surfaces`,
+    `preview_wire.py` -- have no use for it) since its per-actor output is already poly-ordered."""
     out = []
     for name in level.order:
         actor = level.actors.get(name)
         if actor is None or actor.brush is None or not movers.is_mover(actor, index):
             continue
-        out += _mover_actor_world_polys(actor)
+        out += [(world, a, poly, i)
+               for i, (world, a, poly) in enumerate(_mover_actor_world_polys(actor))]
     return out
 
 
@@ -612,12 +617,17 @@ def build_scene(level, search_files, index, *, defaults, project=None,
     item `mesh-mover-per-vertex-lighting-in-level-photo`).
 
     The third return value, `actor_names_by_poly`, is a list parallel to the render polys giving
-    each poly's owning actor name (None for a poly joined to no source actor — an out-of-range CSG
-    join, §4.4). It rides ALONGSIDE the render-poly tuple rather than inside it: `render_frame`
-    (the Rust FFI boundary, `render_shots` below) takes the render polys verbatim and has no use for
-    actor identity, so extending its tuple shape would be a pure liability there. `uedcli serve`'s
-    `scene.py::build_scene_payload` is the one consumer that needs it (real per-poly ownership for
-    click-to-select, replacing per-actor AABB testing).
+    each poly's owning `(actor name, i_brush_poly)` — `i_brush_poly` is the poly's own index into
+    the owning actor's `brush.polys` (`BRUSH:IDX` addressing, `uedcli/surface.py`), None when the
+    owner has no single source poly (a mesh actor, no `.brush.polys` at all); the whole pair is None
+    for a poly joined to no source actor — an out-of-range CSG join, §4.4). It rides ALONGSIDE the
+    render-poly tuple rather than inside it: `render_frame` (the Rust FFI boundary, `render_shots`
+    below) takes the render polys verbatim and has no use for actor identity, so extending its tuple
+    shape would be a pure liability there. `uedcli serve`'s `scene.py::build_scene_payload` is the
+    one consumer that needs it (real per-poly ownership for click-to-select, replacing per-actor AABB
+    testing) — `i_brush_poly` lets it group a solved BSP surface's own fragments back to the ONE
+    authored polygon they came from, so a click anywhere on it selects the whole authored face
+    instead of one fragment (owner bug report, "brush poly selection is off").
 
     `project`/`level_name` are the `preview_cache` identity (owner ruling 2026-09-13, board `native-
     photo-scene-cache`): given both, an unchanged level reuses its fully-lit scene outright, and a
@@ -726,9 +736,13 @@ def build_scene(level, search_files, index, *, defaults, project=None,
         textures = _TextureTable(TextureResolver(search_files, class_index=index))
         polys_no_light: list[tuple] = []
         i_surf_by_poly: list[int | None] = []
-        actor_names_by_poly: list[str | None] = []
+        # `(actor.name, i_brush_poly)` -- `i_brush_poly` is the poly's own index into the owning
+        # actor's `brush.polys` (`BRUSH:IDX` addressing, `uedcli/surface.py`), None for an owned poly
+        # with no single source poly (a mesh actor, which has no `.brush.polys` at all). `None`
+        # (the whole pair) for a poly with no owning actor -- an out-of-range CSG join (§4.4).
+        actor_names_by_poly: list[tuple[str, int | None] | None] = []
 
-        def add_poly(world_verts, actor, poly, surf_flags=None, i_surf=None):
+        def add_poly(world_verts, actor, poly, surf_flags=None, i_surf=None, i_brush_poly=None):
             # `surf_flags` (a CSG-solved surf's OWN `poly_flags`, always real even when the join
             # below is out of range) takes priority; a mover has no surf, so it falls back to
             # deriving the merged flags itself from its authored poly + actor PolyFlags. `poly` can
@@ -768,14 +782,14 @@ def build_scene(level, search_files, index, *, defaults, project=None,
             polys_no_light.append((verts_flat, list(base_w), list(tu), list(tv), list(pan),
                                    tex_index, masked, flags))
             i_surf_by_poly.append(i_surf)
-            actor_names_by_poly.append(actor.name if actor is not None else None)
+            actor_names_by_poly.append((actor.name, i_brush_poly) if actor is not None else None)
 
         for world_verts, i_actor, i_brush_poly, poly_flags, i_surf in _node_polys(model):
             if 0 <= i_actor < len(join):
                 name, source_polys = join[i_actor]
                 if 0 <= i_brush_poly < len(source_polys):
                     add_poly(world_verts, level.actors[name], source_polys[i_brush_poly],
-                             surf_flags=poly_flags, i_surf=i_surf)
+                             surf_flags=poly_flags, i_surf=i_surf, i_brush_poly=i_brush_poly)
                 else:
                     add_poly(world_verts, None, None, surf_flags=poly_flags,
                              i_surf=i_surf)                   # out-of-range poly (§4.4)
@@ -783,8 +797,8 @@ def build_scene(level, search_files, index, *, defaults, project=None,
                 add_poly(world_verts, None, None, surf_flags=poly_flags,
                          i_surf=i_surf)                       # out-of-range owner (§4.4)
 
-        for world_verts, actor, poly in _mover_world_polys(level, index):
-            add_poly(world_verts, actor, poly)
+        for world_verts, actor, poly, i_brush_poly in _mover_world_polys(level, index):
+            add_poly(world_verts, actor, poly, i_brush_poly=i_brush_poly)
 
         from .transform import DegenerateTransformError, flip_winding, reject_degenerate
         from . import meshrender, meshworld, typedprops
@@ -873,7 +887,7 @@ def build_scene(level, search_files, index, *, defaults, project=None,
                                        list(pan), tex_index, masked, poly_flags))
                 i_surf_by_poly.append(None)   # mesh actors: no lightmap (out of scope, board
                                               # `mesh-mover-per-vertex-lighting-in-level-photo`)
-                actor_names_by_poly.append(actor.name)
+                actor_names_by_poly.append((actor.name, None))  # no `.brush.polys` to index into
 
         texture_table = textures.table
         if cache:

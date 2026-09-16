@@ -42,41 +42,23 @@ export function SceneResourcesProvider({
     () => new Set(scene.actors.filter((a) => a.is_mover).map((a) => a.name)),
     [scene.actors],
   )
-  // Each subset carries its own polys' index into the ORIGINAL `scene.polys` array alongside the
-  // filtered poly itself -- `useBuiltGeometry`'s `sourceIndices` needs this to build a surface
-  // (single-polygon) selection identity that survives the non-Mover/Mover split (geometry.ts's
-  // `trianglePolyIndex` doc comment: a plain local index would collide across the two subsets).
-  const { polys: nonMoverPolys, indices: nonMoverIndices } = useMemo(() => {
-    const polys: typeof scene.polys = []
-    const indices: number[] = []
-    scene.polys.forEach((p, i) => {
-      if (p.owner == null || !moverNames.has(p.owner)) {
-        polys.push(p)
-        indices.push(i)
-      }
-    })
-    return { polys, indices }
-  }, [scene.polys, moverNames])
-  const { polys: moverPolys, indices: moverIndices } = useMemo(() => {
-    const polys: typeof scene.polys = []
-    const indices: number[] = []
-    scene.polys.forEach((p, i) => {
-      if (p.owner != null && moverNames.has(p.owner)) {
-        polys.push(p)
-        indices.push(i)
-      }
-    })
-    return { polys, indices }
-  }, [scene.polys, moverNames])
+  const nonMoverPolys = useMemo(
+    () => scene.polys.filter((p) => p.owner == null || !moverNames.has(p.owner)),
+    [scene.polys, moverNames],
+  )
+  const moverPolys = useMemo(
+    () => scene.polys.filter((p) => p.owner != null && moverNames.has(p.owner)),
+    [scene.polys, moverNames],
+  )
   const { bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex } =
-    useBuiltGeometry(nonMoverPolys, atlas, lightmap, textures, lightmapTexture, nonMoverIndices)
+    useBuiltGeometry(nonMoverPolys, atlas, lightmap, textures, lightmapTexture)
   const {
     bufferGeometry: moverGeometry,
     materials: moverMaterials,
     unlitMaterials: moverUnlitMaterials,
     triangleOwners: moverTriangleOwners,
     trianglePolyIndex: moverTrianglePolyIndex,
-  } = useBuiltGeometry(moverPolys, atlas, lightmap, textures, lightmapTexture, moverIndices)
+  } = useBuiltGeometry(moverPolys, atlas, lightmap, textures, lightmapTexture)
 
   // Mesh actors (GUI.md "Shading modes"): every non-brush actor (`SceneActor.brush === null`) --
   // covers a resolved DT_Mesh actor, and harmlessly a point actor that owns no polys at all. Their
