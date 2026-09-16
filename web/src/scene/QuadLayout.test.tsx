@@ -60,7 +60,7 @@ vi.mock('./OrthoViewport', () => ({
 // Imported AFTER the mocks above so QuadLayout picks up the mocked panes (vi.mock is hoisted, but
 // the import itself must still come after for readability of the file's own top-to-bottom order).
 import { QuadLayout } from './QuadLayout'
-import { toggleSelection } from './selectionSet'
+import { surfaceKey, toggleSelection } from './selectionSet'
 
 afterEach(cleanup)
 
@@ -78,7 +78,7 @@ function Harness({ buildSolved = false }: { buildSolved?: boolean }) {
     setSelectedSurfaces(new Set())
   }
   const onSelectSurface = (actor: string, polyIndex: number, additive: boolean) => {
-    setSelectedSurfaces((s) => toggleSelection(s, `${actor}#${polyIndex}`, additive))
+    setSelectedSurfaces((s) => toggleSelection(s, surfaceKey(actor, polyIndex), additive))
     setSelectedNames(new Set())
   }
   return (

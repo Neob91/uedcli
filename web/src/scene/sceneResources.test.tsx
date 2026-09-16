@@ -20,6 +20,7 @@ function quad(overrides: Partial<ScenePoly> = {}): ScenePoly {
     flags: 0,
     lightmap: null,
     owner: null,
+    i_brush_poly: null,
     ...overrides,
   }
 }

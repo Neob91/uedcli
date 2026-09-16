@@ -44,10 +44,11 @@ class ScenePoly:
     index, the alpha-test gate, `two_sided`/`blend` (resolved cull + composite mode, below), the raw
     merged `PolyFlags`, and the lit surf's `LightmapFrame` (the baked lumel RGB itself is stripped
     here and packed in the lightmap atlas instead — the frame is all the client needs to compute
-    per-vertex lumel UVs). `owner` is NOT part of `build_scene`'s per-poly tuple — it's
-    `build_scene`'s separate, parallel `actor_names_by_poly` return, joined in here so the client can
-    raycast the real geometry and resolve a hit triangle back to its actor (None for a poly joined to
-    no source actor, an out-of-range CSG join)."""
+    per-vertex lumel UVs). `owner`/`i_brush_poly` are NOT part of `build_scene`'s per-poly tuple —
+    they're `build_scene`'s separate, parallel `actor_names_by_poly` return (each entry
+    `(name, i_brush_poly) | None`), joined in here so the client can raycast the real geometry and
+    resolve a hit triangle back to its actor AND its authored source polygon (None/None for a poly
+    joined to no source actor, an out-of-range CSG join)."""
     verts: list[float]
     base: list[float]
     tu: list[float]
@@ -64,6 +65,14 @@ class ScenePoly:
     flags: int
     lightmap: LightmapFrame | None
     owner: str | None
+    # This poly's own index into `owner`'s `brush.polys` -- `BRUSH:IDX` addressing, the same scheme
+    # `uedcli/surface.py`'s `parse_poly_selector` already uses for CLI poly selectors. Several
+    # `ScenePoly`s (several solved BSP fragments) can share one `i_brush_poly` when CSG splits one
+    # authored polygon -- the client groups by `(owner, i_brush_poly)`, not by array position, so a
+    # click anywhere on the authored face selects/highlights every fragment of it, not just one.
+    # None when `owner` has no single source poly (a mesh actor, which has no `.brush.polys`), or
+    # when `owner` itself is None (an out-of-range CSG join).
+    i_brush_poly: int | None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -183,7 +192,7 @@ class _BuiltGeometry:
     light_hash: str | None
     polys: list[tuple]
     texture_table: list[tuple]
-    owners: list[str | None]
+    owners: list[tuple[str, int | None] | None]
 
 
 def _lightmap_frame(lightmap: tuple | None) -> LightmapFrame | None:
@@ -444,21 +453,22 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
 
 
 def filtered_geometry_polys(level: Level, geometry: _BuiltGeometry, hidden_ed: dict[str, bool]
-                           ) -> list[tuple[tuple, str | None]]:
+                           ) -> list[tuple[tuple, tuple[str, int | None] | None]]:
     """`(poly, owner)` pairs from `geometry.polys`/`geometry.owners` that survive a hidden `CSG_Add`
     brush's own-surface drop -- see `build_scene_payload`'s docstring for why only a `CSG_Add` (never
     a `CSG_Subtract`/other) brush's own surfaces are safe to omit. The ONE filter both
     `build_scene_payload` (wraps the surviving polys into `ScenePoly`) and `app.py`'s `/lightmap`
     route (packs the surviving RAW polys' baked lumel grids -- `ScenePoly.lightmap` has its RGB
     stripped, so `/lightmap` needs these raw tuples, not the wrapped payload) go through, so the two
-    routes' poly-index positions can never disagree."""
+    routes' poly-index positions can never disagree. `owner` is `(name, i_brush_poly) | None` --
+    the membership test below reads just the name half."""
     hidden_add_owners = {
         name for name, hidden in hidden_ed.items()
         if hidden and (a := level.actors.get(name)) is not None and a.brush is not None
         and dict(a.props).get("CsgOper", "CSG_Add") == "CSG_Add"
     }
     return [(poly, owner) for poly, owner in zip(geometry.polys, geometry.owners)
-            if owner not in hidden_add_owners]
+            if (owner[0] if owner is not None else None) not in hidden_add_owners]
 
 
 def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, defaults
@@ -527,7 +537,8 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
         ScenePoly(verts=verts, base=list(base), tu=list(tu), tv=list(tv), pan=list(pan),
                  tex_index=tex_index, masked=masked, two_sided=poly_two_sided(flags),
                  blend=poly_blend(flags), flags=flags, lightmap=_lightmap_frame(lightmap),
-                 owner=owner)
+                 owner=owner[0] if owner is not None else None,
+                 i_brush_poly=owner[1] if owner is not None else None)
         for (verts, base, tu, tv, pan, tex_index, masked, flags, lightmap), owner in filtered
     ]
     # Point-actor sprite billboards ride in trunk.sprite_table/actor_sprites (Load-owned, no CSG

@@ -242,7 +242,7 @@ def test_build_and_publish_geometry_is_the_only_thing_that_calls_build_scene(tmp
     index = _ued22_index()
     built = app.state.build_and_publish_geometry("TestLevel", [], index, DEFAULTS)
 
-    assert set(built.owners) == {"Room"}
+    assert {name for name, _i_brush_poly in built.owners} == {"Room"}
     assert app.state.read_geometry() is built
 
 
@@ -426,7 +426,7 @@ def test_generation_guard_retries_a_build_invalidated_mid_flight(tmp_path, monke
     t.join(timeout=10)
 
     assert len(build_calls) == 2                    # discarded the first result and retried once
-    assert set(result["geometry"].owners) == {"Room"}
+    assert {name for name, _i_brush_poly in result["geometry"].owners} == {"Room"}
     assert app.state.read_geometry() is result["geometry"]
 
 

@@ -197,7 +197,10 @@ draw order among siblings is otherwise scene-graph/insertion order, not guarante
 Two DISTINCT selection kinds exist, mutually exclusive at any moment (picking one clears the
 other): a **whole-actor selection** (`selectedNames`, a `Set` of actor names — the original kind)
 and a **surface (texture) selection** (`selectedSurfaces`, a `Set` of `selectionSet.ts`'s
-`surfaceKey(actor, polyIndex)` strings — one specific polygon on a brush). Selecting a texture is
+`surfaceKey(actor, polyIndex)` strings, `polyIndex` = `ScenePoly.i_brush_poly` — one specific
+AUTHORED polygon on a brush, `BRUSH:IDX` addressing (`uedcli/surface.py`), not a position in the
+CSG-solved/possibly-fragmented `ScenePoly` array: a click anywhere on a split authored face selects
+the whole face, all its solved fragments together). Selecting a texture is
 **highlight + inspect only** — there is no editing action for it yet (this GUI is P1, read-only, no
 write path).
 
@@ -273,11 +276,12 @@ write path).
   one clicked surface (next bullet), per the owner's ruling that a plain click must NOT brighten
   every poly of the selected brush.
 - **Texture (single-surface) highlight** (`SurfaceSelectionHighlight`, same file): the same
-  additive-white overlay technique, restricted to the ONE selected polygon's own triangles
+  additive-white overlay technique, restricted to the ONE selected AUTHORED polygon's own triangles
   (`selectedTriangles.ts`'s `selectedSurfaceTriangleGroups`, keyed on `(owner, polyIndex)` via
-  `trianglePolyIndex` — `geometry.ts`'s per-triangle source-poly index, threaded alongside the
-  existing per-triangle `triangleOwners`). Distinct selection kind, own highlight, never the whole
-  brush's triangles.
+  `trianglePolyIndex` — `geometry.ts`'s per-triangle `ScenePoly.i_brush_poly`, threaded alongside the
+  existing per-triangle `triangleOwners`; several disjoint triangle groups can share one key when CSG
+  split the authored polygon, and all of them light up together). Distinct selection kind, own
+  highlight, never the whole brush's triangles.
 - **Brush-outline hit-test tolerance** (`orthoCamera.ts`'s `orthoLineHitThresholdUU`,
   `Viewport3D.tsx`'s `WIREFRAME_LINE_HIT_WORLD_UNITS`): widened from a 2px / 4-world-unit default to
   6px / 8 world units (owner report, live testing: selecting a brush by its outline needed

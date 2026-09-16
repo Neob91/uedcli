@@ -29,20 +29,24 @@ export function resolveHitActor(
   return actors.find((a) => a.name === name) ?? null
 }
 
-/** A raycast hit resolved to its owning actor AND the specific polygon (`ScenePayload.polys` index)
- * that was hit -- the surface (texture) selection identity (GUI.md "Selection & the Inspector": a
- * plain click in non-wireframe mode selects the one clicked surface's texture, distinct from
- * selecting the whole brush actor). */
+/** A raycast hit resolved to its owning actor and, when the hit poly has one, its `i_brush_poly`
+ * (`ScenePoly.i_brush_poly`, `geometry.ts`'s `trianglePolyIndex`) -- the surface (texture) selection
+ * identity (GUI.md "Selection & the Inspector": a plain click in non-wireframe mode selects the one
+ * clicked surface's texture, distinct from selecting the whole brush actor). `polyIndex` is null for
+ * an actor with no single source poly for the hit triangle (a mesh actor, which has no
+ * `.brush.polys`) -- the actor still resolves; there's just no ONE polygon to surface-select. */
 export interface SurfaceHit {
   actor: SceneActor
-  polyIndex: number
+  polyIndex: number | null
 }
 
 /** Resolves a raycast hit on the merged scene geometry to its owning actor AND poly, mirroring
  * `resolveHitActor` but also carrying `trianglePolyIndex[faceIndex]` -- `geometry.ts`'s
  * `buildGeometryData` emits one entry per triangle in the same order for both arrays. Returns null
- * under the same conditions `resolveHitActor` does (no hit, no resolved owner/poly, or a stale
- * name/index from a live-reload race), plus when the poly index itself is unresolved. */
+ * only when `resolveHitActor` itself does (no hit, no resolved owner, or a stale name from a
+ * live-reload race) -- an unresolved POLY (a mesh-actor hit) still returns the resolved actor, with
+ * `polyIndex: null`, so a click on a mesh actor's own triangles keeps identifying it instead of
+ * falling through to the AABB fallback (or missing/deselecting) the way a lost actor would. */
 export function resolveHitSurface(
   faceIndex: number | null | undefined,
   triangleOwners: (string | null)[],
@@ -51,9 +55,7 @@ export function resolveHitSurface(
 ): SurfaceHit | null {
   const actor = resolveHitActor(faceIndex, triangleOwners, actors)
   if (!actor || faceIndex == null) return null
-  const polyIndex = trianglePolyIndex[faceIndex]
-  if (polyIndex == null) return null
-  return { actor, polyIndex }
+  return { actor, polyIndex: trianglePolyIndex[faceIndex] ?? null }
 }
 
 /** Resolves a raycast hit on `BrushOutlines`' merged thin-wireframe `LineSegments` (bug report item

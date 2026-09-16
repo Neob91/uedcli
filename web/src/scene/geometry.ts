@@ -50,13 +50,17 @@ export interface GeometryData {
   // `faceIndex` on a non-indexed geometry indexes this array directly, so a raycast hit resolves
   // to its owning actor without a second geometry pass (click-to-select, `selection.ts`).
   triangleOwners: (string | null)[]
-  // Same per-triangle indexing as `triangleOwners`, but the SOURCE poly's index into the original
-  // (unfiltered) `ScenePayload.polys` array -- not the local index into whatever subset `polys`
-  // here happens to be (SceneResourcesContext builds this twice, for non-Mover and Mover polys
-  // separately, so a local index would collide across the two). Callers that build from a subset
-  // pass `sourceIndices` (below); a caller building from the full array can omit it. This is the
-  // surface (single-polygon) click-to-select identity -- distinct from `triangleOwners`, which
-  // resolves to the whole owning ACTOR (`selection.ts`'s `resolveHitSurface`).
+  // Same per-triangle indexing as `triangleOwners`, but the triangle's source poly's OWN
+  // `ScenePoly.i_brush_poly` -- its index into the owning actor's authored `brush.polys`
+  // (`BRUSH:IDX` addressing, `uedcli/surface.py`), null for an owner with no single source poly (a
+  // mesh actor). Several triangles across MULTIPLE disjoint `ScenePoly`s can share one value here --
+  // CSG can split one authored polygon into several solved BSP surfaces, and they all carry the same
+  // `i_brush_poly` -- so this is split-invariant, unlike an array-position identity: it survives a
+  // non-Mover/Mover split (SceneResourcesContext builds this twice) with no extra bookkeeping. This
+  // is the surface (single-polygon) click-to-select identity -- distinct from `triangleOwners`,
+  // which resolves to the whole owning ACTOR (`selection.ts`'s `resolveHitSurface`); together,
+  // `(triangleOwners[i], trianglePolyIndex[i])` is a triangle's full surface-selection key
+  // (`selectionSet.ts`'s `surfaceKey`).
   trianglePolyIndex: (number | null)[]
 }
 
@@ -131,7 +135,6 @@ function flatShade(poly: ScenePoly): number {
 /** Fan-triangulate a convex n-gon ring (BSP node polys are convex) into the flat output arrays. */
 function appendTriangleFan(
   poly: ScenePoly,
-  sourceIndex: number,
   uvs: [number, number][],
   lmUVs: [number, number][] | null,
   shade: number,
@@ -147,7 +150,7 @@ function appendTriangleFan(
       else out.color.push(shade, shade, shade)
     }
     out.owner.push(poly.owner) // one entry per TRIANGLE, not per vertex
-    out.polyIndex.push(sourceIndex)
+    out.polyIndex.push(poly.i_brush_poly)
   }
 }
 
@@ -162,17 +165,13 @@ interface Bucket {
   uv1: number[]
   color: number[]
   owner: (string | null)[]
-  polyIndex: number[]
+  polyIndex: (number | null)[]
 }
 
 export function buildGeometryData(
   polys: ScenePoly[],
   atlas: AtlasPayload,
   lightmap: LightmapPayload | null = null,
-  // Maps `polys`' own local index to its index in the original `ScenePayload.polys` array -- see
-  // `GeometryData.trianglePolyIndex`'s doc comment. Defaults to the identity (`polys` IS the
-  // canonical index space), matching every existing caller that doesn't pre-filter its input.
-  sourceIndices?: number[],
 ): GeometryData {
   const buckets = new Map<string, Bucket>()
   const order: string[] = []
@@ -192,8 +191,7 @@ export function buildGeometryData(
       buckets.set(key, bucket)
       order.push(key)
     }
-    const sourceIndex = sourceIndices ? sourceIndices[polyIndex] : polyIndex
-    appendTriangleFan(poly, sourceIndex, uvs, lmUVs, lit ? 1 : flatShade(poly), bucket)
+    appendTriangleFan(poly, uvs, lmUVs, lit ? 1 : flatShade(poly), bucket)
   })
 
   const positions: number[] = []
