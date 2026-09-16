@@ -1,46 +1,23 @@
-// CSG-colored brush wireframe rings (quad-layout Part 2, Task 10): the shared rendering piece both
-// Perspective and ortho panes draw from buildBrushRings' pure logic (Task 9). Non-bold rings use the
-// cheap LineLoop/LineBasicMaterial path (a 1px-only line is fine -- they don't need to stand out).
-//
-// Bold (selected) rings use Line2/LineMaterial (`three/examples/jsm/lines`, already inside the
-// pinned `three` package -- a deeper import path, NOT a new npm dependency) instead of
-// `LineBasicMaterial`'s own `linewidth`. Per the spec's own review finding: WebGL, via ANGLE/OpenGL
-// Core Profile on virtually every desktop browser, ignores `LineBasicMaterial.linewidth` above 1px
-// (matching three.js's own documented limitation almost verbatim) -- a straightforward
-// `linewidth={3}` port would very likely render the "bolder" selected ring at the exact same 1px
-// weight as every other ring, silently failing the "matches `actor diagram`" requirement's bolder-
-// line half.
-//
-// Step A (a real-browser visual comparison confirming the selected ring is VISIBLY thicker) could
-// NOT be run in this build environment -- no Chromium-family browser was available in this sandbox
-// (confirmed: no chromium/chromium-browser/google-chrome binary, no committed headless-browser
-// harness in this worktree). Given the underlying fact is well-established platform behavior, not a
-// coin flip, Step B's fix is applied PREEMPTIVELY here rather than shipping a change whose "bolder"
-// half is very likely a silent no-op. Flagged in the build report for a real-browser confirmation
-// before merge -- Task 10's own Step A is not considered done, only its Step B fallback.
+// CSG-colored brush wireframe rings (quad-layout Part 2): the shared rendering piece both the
+// perspective and ortho panes draw from buildBrushRings' pure logic. Every ring is a 1px
+// LineBasicMaterial/LineLoop; the SELECTED brush's ring is the same 1px line but in the brush's
+// BRIGHTENED CSG hue, drawn depthTest-off + high-renderOrder so it shows over the solid mesh and
+// through walls (see BoldRing). WebGL ignores LineBasicMaterial.linewidth > 1px, so a wider
+// "bold" line is not attempted here -- the Line2/LineMaterial pixel-width path that used to try it
+// rendered nothing at all (silent no-op, confirmed live 2026-09-16); selection reads via the
+// brighter colour + the vertex/pivot markers instead.
 import { useEffect, useMemo } from 'react'
 import type { MutableRefObject } from 'react'
-import { useThree } from '@react-three/fiber'
 import * as THREE from 'three'
-import { Line2 } from 'three/examples/jsm/lines/Line2.js'
-import { LineGeometry } from 'three/examples/jsm/lines/LineGeometry.js'
-import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 
 import type { SceneActor } from '../api'
 import type { BrushRing, BrushRingMode } from './brushRings'
 import { buildBrushRings, mergeThinRings } from './brushRings'
 import { brightenWireColor } from './selectionColor'
 
-// `preview.py`'s `_line(..., weight=2, ...)` is the actual highlighted-edge width `actor diagram`
-// renders (bug report item 8) -- this was 3, visibly bolder than that reference.
-const BOLD_LINEWIDTH_PX = 2
-
-/** `Line2`/`LineGeometry` draw an open polyline, not an automatically-closed loop (unlike
- * `THREE.LineLoop`) -- append the first vertex again at the end to close the ring. */
-function closedLoopPositions(verts: number[]): number[] {
-  if (verts.length < 3) return verts
-  return [...verts, verts[0], verts[1], verts[2]]
-}
+// The selected brush's ring draws above everything (markers are at 10) so it shows in solid shading
+// modes and through walls -- see BoldRing.
+const SELECTED_RING_RENDER_ORDER = 20
 
 /** Every ordinary-weight (non-selected) ring, merged into ONE `LineSegments` draw call (bug report
  * item 4 -- see `mergeThinRings`' docstring for the measured cost this replaces). Per-vertex color
@@ -64,37 +41,26 @@ function MergedThinWireframe({ rings }: { rings: BrushRing[] }) {
   )
 }
 
-/** The bold (selected) ring path: real pixel-width via `Line2`/`LineMaterial`'s `resolution`
- * uniform, which must track the canvas's own pixel size on resize -- the real added-complexity cost
- * this task's Step B warns about. `depthTest={false}` matches the pre-existing selection-highlight
- * look (always-on-top, matching `preview.py --highlight`'s "ignores facing/depth"). */
+/** The selected brush's ring. Drawn with the same reliable `LineBasicMaterial`/`LineLoop` path the
+ * thin rings use -- the `Line2`/`LineMaterial` pixel-width path that used to live here rendered
+ * NOTHING (a long-suspected silent no-op, confirmed live 2026-09-16: forcing its colour to pure
+ * white left the selected ring unchanged, because only the thin merged ring was ever drawing). It's
+ * drawn in the brush's BRIGHTENED CSG hue (`brightenWireColor`), with `depthTest={false}` and a high
+ * `renderOrder` so it draws OVER the solid mesh and through walls -- a selected brush must always
+ * show its outline, brighter, in every pane and shading mode (owner ruling). `<lineLoop>` auto-closes
+ * the ring. `userData.actorName` lets the viewport raycast resolve a hit back to this actor. */
 function BoldRing({ verts, color, actorName }: { verts: number[]; color: THREE.Color; actorName: string }) {
-  const { size } = useThree()
   const geometry = useMemo(() => {
-    const geo = new LineGeometry()
-    geo.setPositions(closedLoopPositions(verts))
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3))
     return geo
   }, [verts])
-  const material = useMemo(
-    () => new LineMaterial({ color: color.getHex(), linewidth: BOLD_LINEWIDTH_PX, depthTest: false, transparent: false }),
-    [color],
+  useEffect(() => () => geometry.dispose(), [geometry])
+  return (
+    <lineLoop geometry={geometry} userData={{ actorName }} renderOrder={SELECTED_RING_RENDER_ORDER}>
+      <lineBasicMaterial color={color} depthTest={false} transparent={false} />
+    </lineLoop>
   )
-  useEffect(() => {
-    material.resolution.set(size.width, size.height)
-  }, [material, size.width, size.height])
-  useEffect(
-    () => () => {
-      geometry.dispose()
-      material.dispose()
-    },
-    [geometry, material],
-  )
-  const line = useMemo(() => {
-    const l = new Line2(geometry, material)
-    l.userData = { actorName }
-    return l
-  }, [geometry, material, actorName])
-  return <primitive object={line} />
 }
 
 export interface BrushOutlinesProps {

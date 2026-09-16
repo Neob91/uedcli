@@ -24,6 +24,10 @@ const PIVOT_RED = new THREE.Color(255 / 255, 63 / 255, 63 / 255)
 // marker, so it needs constant SCREEN size instead (see PivotMarker).
 const VERTEX_DOT_SIZE = 2
 const PIVOT_MARKER_SCREEN_PX = 14
+// The pivot renders above markers (10) and the selected ring (20) -- always on top, every pane.
+const PIVOT_RENDER_ORDER = 40
+// Vertex/local-origin dots also render above geometry (markers 10, selected ring 20), below the pivot.
+const VERTEX_DOT_RENDER_ORDER = 30
 
 /** A white "+" crosshair over a filled square, drawn once and tinted red via `SpriteMaterial.color`
  * -- mirrors `sceneResources.ts`'s `useMarkerTexture` pattern. Matches `_draw_pivot_marker`: a 4px
@@ -73,7 +77,9 @@ function PivotMarker({ position, texture }: { position: [number, number, number]
     sprite.scale.set(scale, scale, 1)
   })
   return (
-    <sprite ref={spriteRef} position={position}>
+    // renderOrder above everything (markers 10, selected ring 20): the pivot of a selected brush must
+    // always be visible on top, in every pane and through walls (owner ruling). depthTest=false too.
+    <sprite ref={spriteRef} position={position} renderOrder={PIVOT_RENDER_ORDER}>
       <spriteMaterial map={texture ?? undefined} color={PIVOT_RED} depthTest={false} transparent />
     </sprite>
   )
@@ -108,12 +114,12 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
         return (
           <group key={actor.name}>
             {verts.map((v, i) => (
-              <sprite key={i} position={v} scale={[VERTEX_DOT_SIZE, VERTEX_DOT_SIZE, 1]}>
+              <sprite key={i} position={v} scale={[VERTEX_DOT_SIZE, VERTEX_DOT_SIZE, 1]} renderOrder={VERTEX_DOT_RENDER_ORDER}>
                 <spriteMaterial color={color} depthTest={false} />
               </sprite>
             ))}
             {actor.name === primaryName && (
-              <sprite position={actor.brush.local_origin} scale={[VERTEX_DOT_SIZE, VERTEX_DOT_SIZE, 1]}>
+              <sprite position={actor.brush.local_origin} scale={[VERTEX_DOT_SIZE, VERTEX_DOT_SIZE, 1]} renderOrder={VERTEX_DOT_RENDER_ORDER}>
                 <spriteMaterial color={color} depthTest={false} />
               </sprite>
             )}
