@@ -9,7 +9,7 @@ export type OrthoShape = { kind: 'circle'; radius: number } | { kind: 'rect'; ha
 
 /** Actors the `Radii:` toggle draws for -- the SELECTED subset with a resolved radius, not the
  * whole scene (owner ruling 2026-09-15: scope radii to the current selection). Nothing selected ->
- * nothing drawn, matching `selectionBoxes.ts`'s `selectedNonBrushBoxes` pure-filter pattern. */
+ * nothing drawn, a plain pure-filter pattern. */
 export function selectedRadiiActors(actors: SceneActor[], selectedNames: ReadonlySet<string>): SceneActor[] {
   return actors.filter((a) => selectedNames.has(a.name) && a.radii && (a.radii.collision_radius != null || a.radii.light_radius != null))
 }

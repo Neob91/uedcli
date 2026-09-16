@@ -25,14 +25,22 @@ import { orthoBasis } from './orthoCamera'
 import type { OrthoShape } from './radiiProjection'
 import { collisionOrthoShape, selectedRadiiActors, sphereOrthoShape } from './radiiProjection'
 
-// Matches preview.py's COL_COLLISION/COL_LIGHT hues (collision red, light deviated to orange so the
-// two stay distinct -- see preview.py's module comment by those constants). preview.py's rasterizer
-// has no alpha blend buffer so it paints these overlays SOLID; three.js does, so a modest opacity
-// reads as "faint" the same way its comment intends.
-const COLLISION_COLOR = new THREE.Color(235 / 255, 150 / 255, 150 / 255)
-const LIGHT_COLOR = new THREE.Color(245 / 255, 175 / 255, 80 / 255)
+// UED22 draws the collision-radius circle AND the light-radius circle with the SAME color constant
+// (`C_ActorArrow`, `UnEdCam.cpp:1547,1564`, GUI-PARITY.md "Radii overlay colors") -- preview.py's
+// separate COL_COLLISION/COL_LIGHT (light deviated to orange) was its own 2D-diagram readability
+// hack, not a real UED22 distinction, and was wrongly carried into this live 3D GUI. Both now share
+// one constant. `C_ActorArrow`'s exact RGB wasn't recovered (binary disassembly located the code but
+// not this specific data reference); this keeps the existing red-family value pending that. preview.py's
+// rasterizer has no alpha blend buffer so it paints these overlays SOLID; three.js does, so a modest
+// opacity reads as "faint" the same way its comment intends.
+const RADII_COLOR = new THREE.Color(235 / 255, 150 / 255, 150 / 255)
 const OVERLAY_OPACITY = 0.55
 const CIRCLE_SEGMENTS = 32
+// UT patch release notes (GUI-PARITY.md "Radii overlay colors"): "rendering the collision cylinder
+// as an 8-sided wire cylinder" in the 3D window. preview.py's own `_ISO_CYL_SEGMENTS = 9` is a
+// DIFFERENT, deliberately-odd count for its own flat 2D raster (avoids two edges sharing a screen
+// column) -- doesn't apply to a real WebGL mesh, so this uses the literal patch-note value instead.
+const CYLINDER_SEGMENTS = 8
 
 export type RadiiView = 'perspective' | OrthoAxis
 
@@ -53,14 +61,11 @@ function CollisionCylinder3D({
 }) {
   // three's CylinderGeometry runs along local +Y; a +90deg rotation about X maps +Y onto world +Z
   // (this app's up axis throughout -- Viewport3D's CameraRig does `camera.up.set(0,0,1)`), keeping
-  // the cylinder upright regardless of the actor's own rotation, matching preview.py's rule. The
-  // ODD-facet-count constraint preview.py's `_ISO_CYL_SEGMENTS` documents is specific to its 2D ISO
-  // RASTER projection (an even count makes two edges land on the same screen column); it doesn't
-  // apply to a real 3D perspective render, so a smoother segment count reads better as a cylinder.
+  // the cylinder upright regardless of the actor's own rotation, matching preview.py's rule.
   return (
     <mesh position={position} rotation={[Math.PI / 2, 0, 0]}>
-      <cylinderGeometry args={[radius, radius, halfHeight * 2, 16, 1, true]} />
-      <meshBasicMaterial color={COLLISION_COLOR} wireframe transparent opacity={OVERLAY_OPACITY} depthTest={false} />
+      <cylinderGeometry args={[radius, radius, halfHeight * 2, CYLINDER_SEGMENTS, 1, true]} />
+      <meshBasicMaterial color={RADII_COLOR} wireframe transparent opacity={OVERLAY_OPACITY} depthTest={false} />
     </mesh>
   )
 }
@@ -69,7 +74,7 @@ function LightSphere3D({ position, radius }: { position: [number, number, number
   return (
     <mesh position={position}>
       <sphereGeometry args={[radius, 16, 12]} />
-      <meshBasicMaterial color={LIGHT_COLOR} wireframe transparent opacity={OVERLAY_OPACITY} depthTest={false} />
+      <meshBasicMaterial color={RADII_COLOR} wireframe transparent opacity={OVERLAY_OPACITY} depthTest={false} />
     </mesh>
   )
 }
@@ -176,11 +181,11 @@ export function RadiiOverlays({ actors, view, selectedNames }: RadiiOverlaysProp
                 center={actor.location}
                 right={right}
                 up={up}
-                color={COLLISION_COLOR}
+                color={RADII_COLOR}
               />
             )}
             {radii.light_radius != null && (
-              <OrthoShapeLine shape={sphereOrthoShape(radii.light_radius)} center={actor.location} right={right} up={up} color={LIGHT_COLOR} />
+              <OrthoShapeLine shape={sphereOrthoShape(radii.light_radius)} center={actor.location} right={right} up={up} color={RADII_COLOR} />
             )}
           </group>
         )

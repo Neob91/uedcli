@@ -69,3 +69,30 @@ export function selectedSurfaceTriangleGroups(
   }
   return out
 }
+
+/** The WHOLE-ACTOR selection triangle groups (GUI-PARITY.md "Selection highlight rendering"): every
+ * triangle owned by a selected non-brush actor (a mesh actor -- a brush is never selected this way,
+ * `BrushOutlines` recolors its ring instead), regardless of poly index. Same masked/alphaTest-aware
+ * per-draw-group shape as `selectedSurfaceTriangleGroups` above (reused by the same
+ * `SelectionHighlightGroup` renderer) -- only the membership test differs: by owning actor name, not
+ * by a specific (owner, polyIndex) pair. */
+export function selectedActorTriangleGroups(
+  triangleOwners: (string | null)[],
+  selectedActorNames: ReadonlySet<string>,
+  groups: readonly TriangleGroupRange[],
+): SelectedTriangleGroup[] {
+  if (selectedActorNames.size === 0) return []
+  const out: SelectedTriangleGroup[] = []
+  for (const group of groups) {
+    const indices: number[] = []
+    for (let tri = group.start / 3; tri < (group.start + group.count) / 3; tri++) {
+      const owner = triangleOwners[tri]
+      if (owner != null && selectedActorNames.has(owner)) {
+        const base = tri * 3
+        indices.push(base, base + 1, base + 2)
+      }
+    }
+    if (indices.length > 0) out.push({ materialIndex: group.materialIndex ?? 0, indices })
+  }
+  return out
+}

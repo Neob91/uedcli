@@ -20,12 +20,12 @@ import { useDragGesture } from './dragGesture'
 import type { FrameRequest } from './frame'
 import { bboxCenter, bboxMaxExtent } from './frame'
 import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR } from './markers'
-import { MeshWireframe } from './MeshWireframe'
+import { MeshWireframe, SelectedMeshWireframe } from './MeshWireframe'
 import { PointActorMarker } from './PointActorMarker'
 import { RadiiOverlays } from './RadiiOverlays'
-import { SurfaceSelectionHighlight } from './SelectionHighlight'
+import { ActorSelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
+import { SELECTED_SPRITE_TINT } from './selectionColor'
 import { SelectionMarkers } from './SelectionMarkers'
-import { selectedNonBrushBoxes } from './selectionBoxes'
 import type { ShadingMode } from './shadingMode'
 import { usesUnlitMaterials } from './shadingMode'
 import { useSceneResourcesContext } from './useSceneResourcesContext'
@@ -88,8 +88,6 @@ function FlyKeys({ setPose }: { setPose: (fn: (prev: CameraPose) => CameraPose) 
 
   return null
 }
-
-const SELECTION_BOX_COLOR = 0x00e5ff
 
 // `THREE.Color` reads 0..1 components -- built once from `markers.MARKER_COLOR` (module-scope: a
 // plain data object, no WebGL context needed).
@@ -196,7 +194,7 @@ export function Viewport3D({
   // camera/pointer handling/click-to-select are UNCHANGED in this task).
   const {
     bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
-    moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners,
+    moverGeometry, moverMaterials, moverUnlitMaterials,
     meshWireframeGeometry, meshPickGeometry, meshTriangleOwners, meshTrianglePolyIndex,
     textures, markerTexture, markerActors,
   } = useSceneResourcesContext()
@@ -209,7 +207,7 @@ export function Viewport3D({
   // A single "primary" selected actor (the first, by scene.actors order, whose name is in the set)
   // -- ONLY for the camera orbit pivot (Alt-drag), which stays single-target; Task 15's frame/`F`
   // key is the real multi-actor camera mechanism, out of this task's scope. Highlight rendering
-  // below (BrushOutlines, the non-brush box fallback) draws one per SELECTED actor, not just this
+  // below (BrushOutlines, ActorSelectionHighlight) draws one per SELECTED actor, not just this
   // one (Task 14).
   const primarySelectedActor = useMemo(
     () => scene.actors.find((a) => selectedNames.has(a.name)) ?? null,
@@ -225,8 +223,14 @@ export function Viewport3D({
     ]
   }, [primarySelectedActor])
 
-  // Every SELECTED non-brush actor's AABB box (Task 14: one per selected actor, not just one).
-  const nonBrushBoxes = useMemo(() => selectedNonBrushBoxes(scene.actors, selectedNames), [scene.actors, selectedNames])
+  // Selected non-brush (sprite/mesh) actor names -- drives the UED22-matched color-tint highlight
+  // below (GUI-PARITY.md "Selection highlight rendering"), which replaced the plain cyan AABB box
+  // this codebase used before that RE finding: UED22 has no generic selection bounding box by
+  // default, only this color tint.
+  const selectedNonBrushNames = useMemo(
+    () => new Set(scene.actors.filter((a) => !a.brush && selectedNames.has(a.name)).map((a) => a.name)),
+    [scene.actors, selectedNames],
+  )
 
   // Shared by both the mouse tap path and the touch tap path (item 16: the raycast pipeline itself
   // is shared with OrthoViewport.tsx via `tapSelect.ts`'s `resolveTapSelect`; only the ref wiring
@@ -416,6 +420,16 @@ export function Viewport3D({
             materials={activeMaterials}
           />
         )}
+        {/* A selected mesh actor (never a brush) lights up in UED22's own measured color, not this
+            codebase's white surface-pick overlay -- GUI-PARITY.md "Selection highlight rendering". */}
+        {mode !== 'wireframe' && (
+          <ActorSelectionHighlight
+            bufferGeometry={bufferGeometry}
+            triangleOwners={triangleOwners}
+            selectedActorNames={selectedNonBrushNames}
+            materials={activeMaterials}
+          />
+        )}
         <group ref={markerGroupRef}>
           {markerActors.map((actor) => {
             // A resolved DT_Sprite billboard draws the actor's REAL class icon texture (its atlas
@@ -430,6 +444,7 @@ export function Viewport3D({
             // in the solid shading modes (a torch icon behind a wall is hidden, UED22 parity), but in
             // wireframe mode -- where there's no solid mesh to occlude it -- it always shows.
             const spriteTex = actor.sprite ? textures.sprite.get(actor.sprite.tex_index) : undefined
+            const isSelected = selectedNames.has(actor.name)
             if (actor.sprite && spriteTex) {
               return (
                 <PointActorMarker
@@ -439,14 +454,24 @@ export function Viewport3D({
                   height={actor.sprite.height}
                   userData={{ actorName: actor.name }}
                 >
-                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={mode !== 'wireframe'} />
+                  <spriteMaterial
+                    map={spriteTex}
+                    color={isSelected ? SELECTED_SPRITE_TINT : undefined}
+                    depthWrite={false}
+                    depthTest={mode !== 'wireframe'}
+                  />
                 </PointActorMarker>
               )
             }
             if (!markerTexture) return null
             return (
               <PointActorMarker key={actor.name} position={actor.location} width={DEFAULT_MARKER_FOOTPRINT_UU} height={DEFAULT_MARKER_FOOTPRINT_UU} userData={{ actorName: actor.name }}>
-                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={mode !== 'wireframe'} />
+                <spriteMaterial
+                  map={markerTexture}
+                  color={isSelected ? MARKER_COLOR_THREE.clone().multiply(SELECTED_SPRITE_TINT) : MARKER_COLOR_THREE}
+                  depthWrite={false}
+                  depthTest={mode !== 'wireframe'}
+                />
               </PointActorMarker>
             )
           })}
@@ -466,6 +491,13 @@ export function Viewport3D({
             here instead, matching a brush's wireframe convention in this mode (GUI.md "Shading
             modes"). Solid mesh rendering in every other mode is unaffected (unchanged, above). */}
         {mode === 'wireframe' && <MeshWireframe geometry={meshWireframeGeometry} />}
+        {mode === 'wireframe' && (
+          <SelectedMeshWireframe
+            positions={meshPickGeometry.attributes.position.array as Float32Array}
+            triangleOwners={meshTriangleOwners}
+            selectedActorNames={selectedNonBrushNames}
+          />
+        )}
         {/* Invisible raycast target for mesh actors -- material.visible=false draws nothing but keeps
             the object raycastable, so a DT_Mesh actor is click-selectable even in wireframe mode (its
             solid mesh isn't drawn then). See tapSelect.ts / SceneResourcesContext. */}
@@ -477,11 +509,6 @@ export function Viewport3D({
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current
             selection (owner ruling 2026-09-15) -- draws nothing when nothing is selected. */}
         {showRadii && <RadiiOverlays actors={scene.actors} view="perspective" selectedNames={selectedNames} />}
-        {/* Every selected NON-brush actor (no CSG ring to draw) falls back to its own plain AABB
-            box -- one per selected actor (Task 14), not just a single one. */}
-        {nonBrushBoxes.map(({ name, lo, hi }) => (
-          <box3Helper key={name} args={[new THREE.Box3(new THREE.Vector3(...lo), new THREE.Vector3(...hi)), SELECTION_BOX_COLOR]} />
-        ))}
         </group>
       </Canvas>
     </div>

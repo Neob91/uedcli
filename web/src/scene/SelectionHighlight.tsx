@@ -37,6 +37,11 @@ import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 
 import {
+  SELECTED_MESH_SOLID_OVERLAY_COLOR,
+  SELECTED_MESH_SOLID_OVERLAY_OPACITY,
+} from './selectionColor'
+import {
+  selectedActorTriangleGroups,
   selectedSurfaceTriangleGroups,
   type SelectedTriangleGroup,
   type TriangleGroupRange,
@@ -81,14 +86,56 @@ export function SurfaceSelectionHighlight({
   return <HighlightGroups groups={groups} bufferGeometry={bufferGeometry} materials={materials} />
 }
 
+/** The WHOLE-ACTOR (mesh actor) selection highlight (GUI-PARITY.md "Selection highlight
+ * rendering"): every triangle owned by a selected non-brush actor lights up, in UED22's own
+ * measured color -- normal (non-additive) alpha blending a pure green source at 0.6 opacity, which
+ * is algebraically the `floor*0.4 + (0,0.6,0)` ambient-rescale UED22's `DrawMesh` actually applies
+ * (see `selectionColor.ts`'s doc comment for the derivation). Never reached for a brush -- brush
+ * whole-actor selection recolors its outline ring (`BrushOutlines`) instead, matching UED22's own
+ * `bSelected` wireframe-brighten convention there, not this mesh-specific technique. */
+export interface ActorSelectionHighlightProps {
+  bufferGeometry: THREE.BufferGeometry
+  triangleOwners: (string | null)[]
+  selectedActorNames: ReadonlySet<string>
+  materials: readonly THREE.Material[]
+}
+
+export function ActorSelectionHighlight({
+  bufferGeometry,
+  triangleOwners,
+  selectedActorNames,
+  materials,
+}: ActorSelectionHighlightProps) {
+  const groups = useMemo(
+    () => selectedActorTriangleGroups(triangleOwners, selectedActorNames, bufferGeometry.groups as TriangleGroupRange[]),
+    [triangleOwners, selectedActorNames, bufferGeometry],
+  )
+  return (
+    <HighlightGroups
+      groups={groups}
+      bufferGeometry={bufferGeometry}
+      materials={materials}
+      color={SELECTED_MESH_SOLID_OVERLAY_COLOR}
+      opacity={SELECTED_MESH_SOLID_OVERLAY_OPACITY}
+      blending={THREE.NormalBlending}
+    />
+  )
+}
+
 function HighlightGroups({
   groups,
   bufferGeometry,
   materials,
+  color = HIGHLIGHT_COLOR,
+  opacity = HIGHLIGHT_OPACITY,
+  blending = THREE.AdditiveBlending,
 }: {
   groups: SelectedTriangleGroup[]
   bufferGeometry: THREE.BufferGeometry
   materials: readonly THREE.Material[]
+  color?: THREE.ColorRepresentation
+  opacity?: number
+  blending?: THREE.Blending
 }) {
   if (groups.length === 0) return null
   return (
@@ -105,6 +152,9 @@ function HighlightGroups({
           bufferGeometry={bufferGeometry}
           indices={indices}
           baseMaterial={materials[materialIndex]}
+          color={color}
+          opacity={opacity}
+          blending={blending}
         />
       ))}
     </>
@@ -115,9 +165,12 @@ interface SelectionHighlightGroupProps {
   bufferGeometry: THREE.BufferGeometry
   indices: number[]
   baseMaterial: THREE.Material | undefined
+  color: THREE.ColorRepresentation
+  opacity: number
+  blending: THREE.Blending
 }
 
-function SelectionHighlightGroup({ bufferGeometry, indices, baseMaterial }: SelectionHighlightGroupProps) {
+function SelectionHighlightGroup({ bufferGeometry, indices, baseMaterial, color, opacity, blending }: SelectionHighlightGroupProps) {
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', bufferGeometry.attributes.position)
@@ -140,10 +193,10 @@ function SelectionHighlightGroup({ bufferGeometry, indices, baseMaterial }: Sele
   const material = useMemo(
     () =>
       new THREE.MeshBasicMaterial({
-        color: HIGHLIGHT_COLOR,
+        color,
         transparent: true,
-        opacity: HIGHLIGHT_OPACITY,
-        blending: THREE.AdditiveBlending,
+        opacity,
+        blending,
         depthWrite: false, // a pure visual overlay -- never occludes anything behind it
         polygonOffset: true, // avoid z-fighting against the base mesh's own coplanar triangles
         polygonOffsetFactor: -1,
@@ -152,7 +205,7 @@ function SelectionHighlightGroup({ bufferGeometry, indices, baseMaterial }: Sele
         map,
         alphaTest,
       }),
-    [side, map, alphaTest],
+    [color, opacity, blending, side, map, alphaTest],
   )
   useEffect(() => () => material.dispose(), [material])
   return <mesh geometry={geometry} material={material} />

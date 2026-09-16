@@ -165,8 +165,9 @@ Two rules bind every session:
 ## Read-on-demand docs — the router
 
 `direction/README.md` (the topic index), the root `NATIVE-MATERIALIZE.md` (the native-materialize
-→ UED22 byte-parity campaign), and the root `USCRIPT-COMPILER.md` (the UnrealScript compiler →
-UCC.exe byte-parity campaign) are auto-loaded. Every other doc below is not in your context;
+→ UED22 byte-parity campaign), the root `USCRIPT-COMPILER.md` (the UnrealScript compiler →
+UCC.exe byte-parity campaign), and the root `GUI-PARITY.md` (the GUI click-detection/selection-
+rendering → UED22 fidelity campaign) are auto-loaded. Every other doc below is not in your context;
 read the relevant one before the action it names. These one-liners are a router, not a substitute: do
 not answer a question about UnrealEd behavior, the T3D format, uedcli internals, or a process rule
 from this summary or from training memory — the editor is undocumented and crash-prone, and these
@@ -181,6 +182,7 @@ as a bug; one that has not read this file will flag deliberate conventions as de
 - @dev/docs/direction/README.md — *(auto-loaded)* the index of what we want. Read the topic doc itself before any design question, spec, or plan — the index is a router, not the content.
 - @NATIVE-MATERIALIZE.md — *(auto-loaded)* the native-materialize → UED22 full-byte-parity campaign: the goal, the UED22 reference recipe (MAP IMPORT + sacrificial dummy builder), the exact parity bar and its opus-confirmed exclusions, the lockstep-ladder method, and the ONE canonical parity script (`parity_gate.py`). Read and obey it before ANY native-materialize or parity work — do not re-derive it.
 - @USCRIPT-COMPILER.md — *(auto-loaded)* the UnrealScript compiler → UCC.exe byte-parity campaign: the goal, the three reference substrates (UED22/UT99/DXORIG) and why each exists, the parity bar, current status + byte-exact package table, the crux RE findings (ordering algorithm, CRC, flags, conversation `#exec`), and the open gaps. Read and obey it before ANY uscript-compiler work — do not re-derive it. Detailed RE facts live in `dev/docs/unrealed/unrealscript/` (the sole home for that knowledge).
+- @GUI-PARITY.md — *(auto-loaded)* the GUI click-detection/selection-rendering → UED22 fidelity campaign: why it's a root doc (escapes the `dev/docs/` per-edit approval gate), the two RE tools (live screenshot probe vs. disassembly) and when to use each, the per-topic parity bar, and the status table of open fidelity questions. Read and obey it before ANY GUI/UED22-fidelity RE work — do not re-derive it.
 - `dev/docs/architecture.md` — read before any uedcli code change or design question: the layer/module map, the model-side write pattern, invariants D1–D8, the session-store shape.
 - `dev/docs/unrealed/commands.md` — read before driving the editor console: the exec-verb reference (what to type).
 - `dev/docs/unrealed/t3d.md` — read before authoring/parsing T3D or editing surfaces/geometry: block nesting, property forms, winding, authored-vs-computed taxonomy.

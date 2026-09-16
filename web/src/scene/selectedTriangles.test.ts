@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { selectedSurfaceTriangleGroups } from './selectedTriangles'
+import { selectedActorTriangleGroups, selectedSurfaceTriangleGroups } from './selectedTriangles'
 import { surfaceKey } from './selectionSet'
 
 // GUI.md "Selection & the Inspector": a texture (surface) selection highlights only the ONE
@@ -45,5 +45,47 @@ describe('selectedSurfaceTriangleGroups', () => {
     expect(selectedSurfaceTriangleGroups(owners, polyIndex, new Set([surfaceKey('A', 1)]), groups)).toEqual([
       { materialIndex: 0, indices: [0, 1, 2] },
     ])
+  })
+})
+
+// GUI-PARITY.md "Selection highlight rendering": a selected mesh ACTOR lights up ALL its triangles
+// (unlike a surface pick, which is keyed to one poly index) -- so membership here is by owner alone.
+describe('selectedActorTriangleGroups', () => {
+  it('returns every triangle owned by a selected actor, regardless of poly index', () => {
+    const owners = ['A', 'A', 'A']
+    const groups = [{ start: 0, count: 9, materialIndex: 0 }]
+    expect(selectedActorTriangleGroups(owners, new Set(['A']), groups)).toEqual([
+      { materialIndex: 0, indices: [0, 1, 2, 3, 4, 5, 6, 7, 8] },
+    ])
+  })
+
+  it('excludes triangles owned by a different actor', () => {
+    const owners = ['A', 'B', 'A']
+    const groups = [{ start: 0, count: 9, materialIndex: 0 }]
+    expect(selectedActorTriangleGroups(owners, new Set(['A']), groups)).toEqual([
+      { materialIndex: 0, indices: [0, 1, 2, 6, 7, 8] },
+    ])
+  })
+
+  it('includes triangles from every selected actor, across groups', () => {
+    const owners = ['A', 'B']
+    const groups = [
+      { start: 0, count: 3, materialIndex: 0 },
+      { start: 3, count: 3, materialIndex: 1 },
+    ]
+    expect(selectedActorTriangleGroups(owners, new Set(['A', 'B']), groups)).toEqual([
+      { materialIndex: 0, indices: [0, 1, 2] },
+      { materialIndex: 1, indices: [3, 4, 5] },
+    ])
+  })
+
+  it('skips a triangle with no resolved owner', () => {
+    const groups = [{ start: 0, count: 3, materialIndex: 0 }]
+    expect(selectedActorTriangleGroups([null], new Set(['A']), groups)).toEqual([])
+  })
+
+  it('returns empty when nothing is selected', () => {
+    const groups = [{ start: 0, count: 3, materialIndex: 0 }]
+    expect(selectedActorTriangleGroups(['A'], new Set(), groups)).toEqual([])
   })
 })

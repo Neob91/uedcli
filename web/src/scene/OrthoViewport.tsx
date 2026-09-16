@@ -17,15 +17,15 @@ import type { FrameRequest } from './frame'
 import { DEFAULT_GRID_SIZE } from './grid'
 import { GridOverlay } from './GridOverlay'
 import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR } from './markers'
-import { MeshWireframe } from './MeshWireframe'
+import { MeshWireframe, SelectedMeshWireframe } from './MeshWireframe'
 import { PointActorMarker } from './PointActorMarker'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
 import { initialOrthoPose, orthoDragZoom, orthoFrameFit, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
 import { RadiiOverlays } from './RadiiOverlays'
 import { useSceneResourcesContext } from './useSceneResourcesContext'
-import { SurfaceSelectionHighlight } from './SelectionHighlight'
+import { ActorSelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
+import { SELECTED_SPRITE_TINT } from './selectionColor'
 import { SelectionMarkers } from './SelectionMarkers'
-import { selectedNonBrushBoxes } from './selectionBoxes'
 import { resolveTapSelect } from './tapSelect'
 import type { ShadingMode } from './shadingMode'
 import { usesUnlitMaterials } from './shadingMode'
@@ -96,8 +96,6 @@ export interface OrthoViewportProps {
   showRadii?: boolean
 }
 
-const SELECTION_BOX_COLOR = 0x00e5ff
-
 export function OrthoViewport({
   axis,
   selectedNames,
@@ -121,9 +119,13 @@ export function OrthoViewport({
     textures, markerTexture, markerActors, actors,
   } = useSceneResourcesContext()
   const activeMaterials = usesUnlitMaterials(mode) ? unlitMaterials : materials
-  // Every SELECTED non-brush actor's AABB box (Task 14: one per selected actor) -- shared with
-  // Viewport3D.tsx via `selectionBoxes.ts` (item 16).
-  const nonBrushBoxes = useMemo(() => selectedNonBrushBoxes(actors, selectedNames), [actors, selectedNames])
+  // Selected non-brush (sprite/mesh) actor names -- drives the UED22-matched color-tint highlight
+  // below (GUI-PARITY.md "Selection highlight rendering"), shared with Viewport3D.tsx's identical
+  // computation (item 16 dedup candidate, not pulled out yet -- small enough to duplicate for now).
+  const selectedNonBrushNames = useMemo(
+    () => new Set(actors.filter((a) => !a.brush && selectedNames.has(a.name)).map((a) => a.name)),
+    [actors, selectedNames],
+  )
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
   const meshPickRef = useRef<THREE.Mesh | null>(null)
@@ -273,6 +275,16 @@ export function OrthoViewport({
             materials={activeMaterials}
           />
         )}
+        {/* A selected mesh actor lights up in UED22's own measured color -- see Viewport3D.tsx's
+            identical block (GUI-PARITY.md "Selection highlight rendering"). */}
+        {mode !== 'wireframe' && (
+          <ActorSelectionHighlight
+            bufferGeometry={bufferGeometry}
+            triangleOwners={triangleOwners}
+            selectedActorNames={selectedNonBrushNames}
+            materials={activeMaterials}
+          />
+        )}
         <group ref={markerGroupRef}>
           {markerActors.map((actor) => {
             // A resolved DT_Sprite billboard draws the actor's REAL class icon at its own
@@ -281,6 +293,7 @@ export function OrthoViewport({
             // the fallback's scale/tint below) missing here entirely: an un-scaled default THREE.
             // Sprite is 1x1 UU, effectively invisible in a world scaled in hundreds/thousands of UU.
             const spriteTex = actor.sprite ? textures.sprite.get(actor.sprite.tex_index) : undefined
+            const isSelected = selectedNames.has(actor.name)
             if (actor.sprite && spriteTex) {
               return (
                 <PointActorMarker
@@ -291,7 +304,12 @@ export function OrthoViewport({
                   userData={{ actorName: actor.name }}
                   renderOrder={MARKER_RENDER_ORDER}
                 >
-                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={mode !== 'wireframe'} />
+                  <spriteMaterial
+                    map={spriteTex}
+                    color={isSelected ? SELECTED_SPRITE_TINT : undefined}
+                    depthWrite={false}
+                    depthTest={mode !== 'wireframe'}
+                  />
                 </PointActorMarker>
               )
             }
@@ -305,7 +323,12 @@ export function OrthoViewport({
                 userData={{ actorName: actor.name }}
                 renderOrder={MARKER_RENDER_ORDER}
               >
-                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={mode !== 'wireframe'} />
+                <spriteMaterial
+                  map={markerTexture}
+                  color={isSelected ? MARKER_COLOR_THREE.clone().multiply(SELECTED_SPRITE_TINT) : MARKER_COLOR_THREE}
+                  depthWrite={false}
+                  depthTest={mode !== 'wireframe'}
+                />
               </PointActorMarker>
             )
           })}
@@ -323,6 +346,13 @@ export function OrthoViewport({
             here, matching a brush's wireframe convention (GUI.md "Shading modes"), instead of the
             solid mesh above (never drawn in this pane). */}
         {mode === 'wireframe' && <MeshWireframe geometry={meshWireframeGeometry} />}
+        {mode === 'wireframe' && (
+          <SelectedMeshWireframe
+            positions={meshPickGeometry.attributes.position.array as Float32Array}
+            triangleOwners={meshTriangleOwners}
+            selectedActorNames={selectedNonBrushNames}
+          />
+        )}
         {/* Invisible raycast target so a DT_Mesh actor is click-selectable in this pane (no solid mesh
             drawn here). See tapSelect.ts / SceneResourcesContext. */}
         <mesh ref={meshPickRef} geometry={meshPickGeometry}>
@@ -333,9 +363,6 @@ export function OrthoViewport({
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current
             selection (owner ruling 2026-09-15) -- draws nothing when nothing is selected. */}
         {showRadii && <RadiiOverlays actors={actors} view={axis} selectedNames={selectedNames} />}
-        {nonBrushBoxes.map(({ name, lo, hi }) => (
-          <box3Helper key={name} args={[new THREE.Box3(new THREE.Vector3(...lo), new THREE.Vector3(...hi)), SELECTION_BOX_COLOR]} />
-        ))}
         </group>
       </Canvas>
       {/* Cursor UU coordinate readout (Task 28) -- the selected actor's own location/size is

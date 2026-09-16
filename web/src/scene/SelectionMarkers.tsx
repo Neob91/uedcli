@@ -91,8 +91,9 @@ export interface SelectionMarkersProps {
 }
 
 /** Renders vertex + pivot markers for every SELECTED brush actor (one full set per actor, matching
- * `preview.py`'s per-`--highlight`ed-actor loop). Non-brush actors already get their own AABB-box
- * highlight elsewhere (`selectedNonBrushBoxes` in Viewport3D/OrthoViewport) -- out of scope here. */
+ * `preview.py`'s per-`--highlight`ed-actor loop). Non-brush actors already get their own color-tint
+ * highlight elsewhere (`ActorSelectionHighlight`/sprite tint in Viewport3D/OrthoViewport) -- out of
+ * scope here. */
 export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProps) {
   const pivotTexture = usePivotTexture()
   const selectedBrushes = useMemo(
