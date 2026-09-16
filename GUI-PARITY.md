@@ -93,6 +93,12 @@ needed). Three distinct techniques, not one shared overlay:
   selected. Not a flat tint over the finished pixel — a bias on the ambient floor specifically.
   **✅ Binary-confirmed 2026-09-16**: `render.dll`'s real exported `DrawMesh` (RVA `0xff00`) contains
   the exact scale-then-add pattern (`movss xmm6,[0.4]` then `addss xmm4,[0.6]`) on these constants.
+  **Implementation note (2026-09-16, later)**: the confirmed formula was applied to the whole
+  finished pixel (this pipeline has no ambient/lit split to target directly) via alpha blending —
+  live-tested and rejected (crushed texture detail, broke NPC masked materials); the mesh solid
+  highlight now uses the SAME multiplicative technique as the point-actor sprite above instead, an
+  owner-directed style choice that departs from the literal `DrawMesh` formula (see
+  `selectionColor.ts`'s doc comment).
 - **Mesh actor, wireframe render** (`Source/Render/Src/UnMeshRn.cpp:346`, same function's `bWire`
   branch): flat line color — selected `(.2,.8,.1)` ≈ RGB(51,204,26); unselected `(.6,.4,.1)` ≈
   RGB(153,102,26) (an olive/brown, not white). Directly answers part of the still-open "Mesh-actor

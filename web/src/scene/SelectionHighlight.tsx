@@ -36,10 +36,7 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 
-import {
-  SELECTED_MESH_SOLID_OVERLAY_COLOR,
-  SELECTED_MESH_SOLID_OVERLAY_OPACITY,
-} from './selectionColor'
+import { SELECTED_SPRITE_TINT } from './selectionColor'
 import {
   selectedActorTriangleGroups,
   selectedSurfaceTriangleGroups,
@@ -87,12 +84,12 @@ export function SurfaceSelectionHighlight({
 }
 
 /** The WHOLE-ACTOR (mesh actor) selection highlight (GUI-PARITY.md "Selection highlight
- * rendering"): every triangle owned by a selected non-brush actor lights up, in UED22's own
- * measured color -- normal (non-additive) alpha blending a pure green source at 0.6 opacity, which
- * is algebraically the `floor*0.4 + (0,0.6,0)` ambient-rescale UED22's `DrawMesh` actually applies
- * (see `selectionColor.ts`'s doc comment for the derivation). Never reached for a brush -- brush
- * whole-actor selection recolors its outline ring (`BrushOutlines`) instead, matching UED22's own
- * `bSelected` wireframe-brighten convention there, not this mesh-specific technique. */
+ * rendering"): every triangle owned by a selected non-brush actor lights up, using the SAME
+ * multiplicative tint as a selected point-actor sprite (`SELECTED_SPRITE_TINT`,
+ * `selectionColor.ts`) -- an opaque redraw, not a translucent wash, so the base texture/shading
+ * stays fully visible underneath the tint (see `selectionColor.ts`'s doc comment for why this
+ * replaced the earlier UED22-formula alpha-blend approximation). Never reached for a brush -- brush
+ * whole-actor selection recolors its outline ring (`BrushOutlines`) instead. */
 export interface ActorSelectionHighlightProps {
   bufferGeometry: THREE.BufferGeometry
   triangleOwners: (string | null)[]
@@ -110,16 +107,7 @@ export function ActorSelectionHighlight({
     () => selectedActorTriangleGroups(triangleOwners, selectedActorNames, bufferGeometry.groups as TriangleGroupRange[]),
     [triangleOwners, selectedActorNames, bufferGeometry],
   )
-  return (
-    <HighlightGroups
-      groups={groups}
-      bufferGeometry={bufferGeometry}
-      materials={materials}
-      color={SELECTED_MESH_SOLID_OVERLAY_COLOR}
-      opacity={SELECTED_MESH_SOLID_OVERLAY_OPACITY}
-      blending={THREE.NormalBlending}
-    />
-  )
+  return <HighlightGroups groups={groups} bufferGeometry={bufferGeometry} materials={materials} color={SELECTED_SPRITE_TINT} opaque />
 }
 
 function HighlightGroups({
@@ -129,6 +117,7 @@ function HighlightGroups({
   color = HIGHLIGHT_COLOR,
   opacity = HIGHLIGHT_OPACITY,
   blending = THREE.AdditiveBlending,
+  opaque = false,
 }: {
   groups: SelectedTriangleGroup[]
   bufferGeometry: THREE.BufferGeometry
@@ -136,6 +125,12 @@ function HighlightGroups({
   color?: THREE.ColorRepresentation
   opacity?: number
   blending?: THREE.Blending
+  // The actor-tint variant: a fully opaque redraw (never translucent), and it ALWAYS samples the
+  // base material's own map/alphaTest (even for an "unmasked" group) so the multiply preserves the
+  // real texture/shading instead of painting a flat silhouette -- the surface-pick (additive-white)
+  // variant keeps its existing masked-only map usage, since a flat brightness boost never needed the
+  // texture for an unmasked group.
+  opaque?: boolean
 }) {
   if (groups.length === 0) return null
   return (
@@ -155,6 +150,7 @@ function HighlightGroups({
           color={color}
           opacity={opacity}
           blending={blending}
+          opaque={opaque}
         />
       ))}
     </>
@@ -168,9 +164,10 @@ interface SelectionHighlightGroupProps {
   color: THREE.ColorRepresentation
   opacity: number
   blending: THREE.Blending
+  opaque: boolean
 }
 
-function SelectionHighlightGroup({ bufferGeometry, indices, baseMaterial, color, opacity, blending }: SelectionHighlightGroupProps) {
+function SelectionHighlightGroup({ bufferGeometry, indices, baseMaterial, color, opacity, blending, opaque }: SelectionHighlightGroupProps) {
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', bufferGeometry.attributes.position)
@@ -185,27 +182,44 @@ function SelectionHighlightGroup({ bufferGeometry, indices, baseMaterial, color,
   const base = baseMaterial instanceof THREE.MeshBasicMaterial ? baseMaterial : null
   const masked = (base?.alphaTest ?? 0) > 0
   const side = base?.side ?? THREE.FrontSide
-  // Masked group only: clip the overlay to the SAME real cutout the base material already draws
-  // (see the module doc comment's cosmetic-tradeoff note -- `map` here also tints the overlay by
-  // the base texture, not a flat color, which is why this is skipped entirely for an unmasked group).
-  const map = masked ? (base?.map ?? null) : null
-  const alphaTest = masked ? (base?.alphaTest ?? 0) : 0
+  // `opaque` (the actor-tint variant) always mirrors the base material's own map/alphaTest, masked
+  // or not, so the multiply reads the real texture. The additive-white (surface-pick) variant only
+  // needs this for a masked group (see the module doc comment's cosmetic-tradeoff note) -- a flat
+  // brightness boost over an unmasked group never needed the texture.
+  const map = opaque || masked ? (base?.map ?? null) : null
+  const alphaTest = opaque || masked ? (base?.alphaTest ?? 0) : 0
   const material = useMemo(
     () =>
-      new THREE.MeshBasicMaterial({
-        color,
-        transparent: true,
-        opacity,
-        blending,
-        depthWrite: false, // a pure visual overlay -- never occludes anything behind it
-        polygonOffset: true, // avoid z-fighting against the base mesh's own coplanar triangles
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -1,
-        side,
-        map,
-        alphaTest,
-      }),
-    [color, opacity, blending, side, map, alphaTest],
+      new THREE.MeshBasicMaterial(
+        opaque
+          ? {
+              color,
+              // Opaque redraw -- no alpha math, so no order-dependence against other transparent
+              // draws (unlike the translucent overlay this replaced). depthWrite:true lets it
+              // participate in the depth buffer normally, same as any other opaque object this frame.
+              depthWrite: true,
+              polygonOffset: true, // avoid z-fighting against the base mesh's own coplanar triangles
+              polygonOffsetFactor: -1,
+              polygonOffsetUnits: -1,
+              side,
+              map,
+              alphaTest,
+            }
+          : {
+              color,
+              transparent: true,
+              opacity,
+              blending,
+              depthWrite: false, // a pure visual overlay -- never occludes anything behind it
+              polygonOffset: true, // avoid z-fighting against the base mesh's own coplanar triangles
+              polygonOffsetFactor: -1,
+              polygonOffsetUnits: -1,
+              side,
+              map,
+              alphaTest,
+            },
+      ),
+    [opaque, color, opacity, blending, side, map, alphaTest],
   )
   useEffect(() => () => material.dispose(), [material])
   return <mesh geometry={geometry} material={material} />

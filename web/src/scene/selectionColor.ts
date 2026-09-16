@@ -15,22 +15,28 @@ export function brightenWireColor(rgb: [number, number, number], lift = SELECTIO
 }
 
 // UED22's own selected-actor colors for sprites/meshes (GUI-PARITY.md "Selection highlight
-// rendering" -- NOT this codebase's own invention). The sprite tint and mesh ambient-bias formulas
-// are ✅ binary-confirmed (disassembly of this project's own `render.dll`, not just the third-party
-// UE1 v200 source tree that first surfaced them); the wireframe edge colors are data-confirmed in
-// the same binary but not instruction-linked (still essentially certain -- see GUI-PARITY.md).
-// Three distinct techniques, one constant each:
+// rendering" -- NOT this codebase's own invention, except where noted). The sprite tint and mesh
+// ambient-bias formulas are ✅ binary-confirmed (disassembly of this project's own `render.dll`, not
+// just the third-party UE1 v200 source tree that first surfaced them); the wireframe edge colors are
+// data-confirmed in the same binary but not instruction-linked (still essentially certain -- see
+// GUI-PARITY.md).
 //
 // - Point-actor sprite (`DrawActorSprite`): a MULTIPLICATIVE tint on the icon texture,
 //   `Color = bSelected ? (.5,.9,.5) : (1,1,1)` -- halves R/B, keeps G near-full. Apply as
 //   `SELECTED_SPRITE_TINT` multiplied onto whatever color the sprite would otherwise use.
-// - Mesh actor, solid shading (`DrawMesh`): the ambient/unlit floor is rescaled,
-//   `floor*0.4 + (0,0.6,0)` when selected. This codebase's `MeshBasicMaterial`-only pipeline has no
-//   equivalent ambient/lit split to target directly, so the formula is applied to the whole
-//   finished pixel instead -- the closest available term, not UED22's exact decomposition. Reaches
-//   the identical result via normal (non-additive) alpha blending a PURE green (0,1,0) source at
-//   0.6 opacity over the base pixel: `src*a + dst*(1-a)` with a=0.6, src=(0,1,0) reduces exactly to
-//   `dst*0.4 + (0,0.6,0)` -- ordinary alpha blending, not a custom WebGL blend factor.
+// - Mesh actor, solid shading: UED22's real `DrawMesh` rescales the ambient/unlit floor,
+//   `floor*0.4 + (0,0.6,0)` -- a bias on the pre-lighting term, not a flat tint on the finished
+//   pixel. This codebase's `MeshBasicMaterial`-only pipeline has no equivalent ambient/lit split to
+//   target, so an EARLIER version of this file applied that formula (via alpha blending) to the
+//   whole finished pixel instead -- live-tested 2026-09-16 and rejected: it read as a flat, washed-
+//   out solid green that crushed all texture/shading detail (owner: "much lighter green" than real
+//   UED22), and broke NPC glasses/hair masked materials. Replaced by a DELIBERATE STYLE CHOICE, not
+//   a UED22 formula: the SAME multiplicative technique as the point-actor sprite above
+//   (`SELECTED_SPRITE_TINT`, opaque, always sampling the base texture) -- preserves texture/shading
+//   detail, reuses one proven mechanism instead of two, and reads closer to the owner's own memory
+//   of the real editor than the literal-formula approximation did. The literal `DrawMesh` formula
+//   stays documented in `GUI-PARITY.md` as what real UED22 does; this implementation now knowingly
+//   departs from it.
 // - Mesh actor, wireframe (`DrawMesh`, the `bWire` branch): flat edge-line color, selected
 //   (.2,.8,.1), unselected (.6,.4,.1) -- an olive/brown, not white.
 export const SELECTED_SPRITE_TINT = new THREE.Color(0.5, 0.9, 0.5)
@@ -40,7 +46,5 @@ export const SELECTED_SPRITE_TINT = new THREE.Color(0.5, 0.9, 0.5)
 // forever (bug: point actors stayed green after deselection). Plain white is the identity
 // multiplier over the sprite's own map/color, matching UED22's own `(1,1,1)` unselected constant.
 export const UNSELECTED_SPRITE_TINT = new THREE.Color(1, 1, 1)
-export const SELECTED_MESH_SOLID_OVERLAY_COLOR = 0x00ff00
-export const SELECTED_MESH_SOLID_OVERLAY_OPACITY = 0.6
 export const SELECTED_MESH_WIRE_COLOR = new THREE.Color(0.2, 0.8, 0.1)
 export const UNSELECTED_MESH_WIRE_COLOR = new THREE.Color(0.6, 0.4, 0.1)
