@@ -69,10 +69,21 @@ function usePivotTexture(): THREE.Texture | null {
 function PivotMarker({ position, texture }: { position: [number, number, number]; texture: THREE.Texture | null }) {
   const spriteRef = useRef<THREE.Sprite>(null)
   const { camera, size } = useThree()
+  const worldPos = useMemo(() => new THREE.Vector3(), [])
   useFrame(() => {
     const sprite = spriteRef.current
     if (!sprite) return
-    const worldPos = new THREE.Vector3(...position)
+    // `position` is LOCAL to this sprite's parent chain, which includes the world-handedness
+    // mirror group (`<group scale={[1,-1,1]}>` in Viewport3D/OrthoViewport) -- but `camera` sits
+    // OUTSIDE that group, already in real world space (its own pose is reflected separately by
+    // `applyCameraPose`). Building the distance from the raw local `position` mixed camera
+    // world-space against marker local-space, silently wrong by the group's Y-flip -- the huge (or
+    // occasionally tiny) pivot bug in the perspective pane specifically (invisible in ortho, since
+    // ortho's branch of `worldUnitsPerPixelAt` never uses `point`/distance at all). Read the
+    // sprite's own resolved WORLD position instead -- three.js has already applied every parent
+    // transform (including the mirror) to it, correct regardless of which group structure this
+    // sits inside.
+    sprite.getWorldPosition(worldPos)
     const scale = PIVOT_MARKER_SCREEN_PX * worldUnitsPerPixelAt(camera, worldPos, size.height)
     sprite.scale.set(scale, scale, 1)
   })
