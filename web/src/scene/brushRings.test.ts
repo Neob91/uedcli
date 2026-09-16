@@ -81,6 +81,21 @@ describe('buildBrushRings', () => {
     expect(byName.get('B')?.bold).toBe(false)
     expect(byName.get('C')?.bold).toBe(true)
   })
+
+  // Perf regression pin (click-to-highlight latency bug): BrushOutlines.tsx memoizes 'csg-all''s ring
+  // SET on `[actors]` alone (an always-empty selection), never on `selectedNames`, so selecting a
+  // brush in an ortho pane doesn't force `mergeThinRings` to rebuild the whole level's merged
+  // wireframe buffer. That's only safe because a ring's own content (verts/color/actorName) never
+  // depends on `selectedNames` in 'csg-all' mode -- only its `bold` flag does. If this ever stops
+  // being true, the memoization in BrushOutlines.tsx silently goes stale.
+  it("'csg-all' ring content (verts/color/actorName, in order) is identical regardless of selectedNames -- only `bold` differs", () => {
+    const withNoSelection = buildBrushRings([a, b, c], new Set(), 'csg-all')
+    const withSelection = buildBrushRings([a, b, c], new Set(['A', 'C']), 'csg-all')
+    expect(withNoSelection.map((r) => ({ actorName: r.actorName, color: r.color, verts: r.verts }))).toEqual(
+      withSelection.map((r) => ({ actorName: r.actorName, color: r.color, verts: r.verts })),
+    )
+    expect(withNoSelection.every((r) => r.bold === false)).toBe(true)
+  })
 })
 
 // GUI.md "Movers": a Mover always renders wireframe-outline-only, in every shading mode -- so

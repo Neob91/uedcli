@@ -107,16 +107,37 @@ export interface BrushOutlinesProps {
   groupRef?: MutableRefObject<THREE.Group | null>
 }
 
+// `'csg-all'` mode's ring SET (every brush actor's own rings) never actually depends on
+// `selectedNames` -- only which of those same rings ALSO gets a bold overlay does. A fixed empty
+// selection here lets `csgAllRings` below memoize on `[actors]` alone, so selecting a brush in an
+// ortho pane (always `'csg-all'` -- GUI.md "the ortho panes can never change mode") never forces
+// `MergedThinWireframe` to rebuild the WHOLE level's merged wireframe buffer. It used to: measured
+// bug, >1s click-to-highlight latency, since that rebuild's cost scales with the total scene poly
+// count, not the one actor whose selection changed, and it re-ran in all three ortho panes at once.
+const EMPTY_SELECTION: ReadonlySet<string> = new Set()
+
 /** Renders every ring `buildBrushRings` selects for `mode` -- ordinary weight for every non-selected
  * brush (`'csg-all'`) or nothing (`'selected-only'` when unselected), bold for every SELECTED one
  * (Part 3, Task 14: one ring per selected actor, not just one overall). Non-bold rings share ONE
  * merged draw call (`MergedThinWireframe`, item 4); bold (selected) rings stay individual `BoldRing`
  * objects -- there are only ever a handful of those, so merging them buys nothing and would lose
- * `Line2`'s real pixel-width support. */
+ * `Line2`'s real pixel-width support.
+ *
+ * A selected actor's ring is drawn in BOTH the thin merged buffer and as a bold overlay, rather than
+ * excluded from the former: `BoldRing` draws on top with `depthTest={false}`, fully covering the
+ * same-position, same-color thin line beneath it -- visually identical to exclusion, but it lets the
+ * (expensive, whole-level) `'csg-all'` thin buffer skip rebuilding on a selection change. A ring's
+ * own content (verts/color/actorName) doesn't depend on mode, only its inclusion/`bold` flag does --
+ * so `'selected-only'`'s own ring list (already small, and already keyed on `selectedNames`) doubles
+ * as the bold-overlay source for BOTH modes. */
 export function BrushOutlines({ actors, selectedNames, mode, groupRef }: BrushOutlinesProps) {
-  const rings = useMemo(() => buildBrushRings(actors, selectedNames, mode), [actors, selectedNames, mode])
-  const boldRings = useMemo(() => rings.filter((r) => r.bold), [rings])
-  const thinRings = useMemo(() => rings.filter((r) => !r.bold), [rings])
+  const csgAllRings = useMemo(() => buildBrushRings(actors, EMPTY_SELECTION, 'csg-all'), [actors])
+  const selectedOnlyRings = useMemo(() => buildBrushRings(actors, selectedNames, 'selected-only'), [actors, selectedNames])
+  const boldRings = useMemo(() => selectedOnlyRings.filter((r) => r.bold), [selectedOnlyRings])
+  const thinRings = useMemo(
+    () => (mode === 'csg-all' ? csgAllRings : selectedOnlyRings.filter((r) => !r.bold)),
+    [mode, csgAllRings, selectedOnlyRings],
+  )
   return (
     <group ref={groupRef}>
       <MergedThinWireframe rings={thinRings} />
