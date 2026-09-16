@@ -70,7 +70,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Radii perspective cylinder | Does/should the collision cylinder render in the perspective pane? | ✅ closed, implemented | 🔬 wiki + UT patch notes (`dev/docs/spikes/2026-07-21-...`) + owner confirmation — see Findings below |
 | Radii cylinder/sphere shape | Wireframe rendering had a triangulation-diagonal artifact ("triangular faces") | ✅ closed, implemented | not an RE question — a `wireframe:true`-on-triangulated-geometry rendering bug, fixed with explicit line segments |
 | `C_ActorArrow` exact RGB | The radii overlay's real color value | ✅ closed, implemented | 📖 source (`Default.ini`, v200 shipped default) — see Findings below |
-| Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed (mechanism) / ⬜ open (fix) | 📖 source-only, see Findings below |
+| Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed, implemented | 📖 source-only, GUI-only scope (owner ruling) — see Findings below |
 | UED22 line widths | What line/wire thickness does UED22 use for wireframe/selection rendering? | ✅ closed — no bug | ✅ source-confirmed: no width parameter exists in the render-interface API UED22 draws through; this codebase's default line width is already correct |
 
 Legend: ⬜ open (not started) · 🔶 investigating · ✅ closed (bar met, live-verified).
@@ -209,7 +209,7 @@ triangles by. Fixed with explicit line segments (top/bottom ring + struts for th
 orthogonal circles for the sphere), computed directly in world space rather than via a local-space
 `<mesh position=.../>` transform (avoids the same class of bug the pivot-marker fix hit).
 
-### Brush wireframe selection color (mechanism closed 2026-09-16, fix still open)
+### Brush wireframe selection color (closed and implemented 2026-09-16)
 
 Owner report: "brush colors seem off, at least on highlight." Investigated via `fgsfdsfgs/UE1`
 source, `Source/Editor/Src/UnEdRend.cpp`, `UEditorEngine::DrawLevelBrush`:
@@ -245,6 +245,20 @@ v200, not yet binary/live-confirmed against this project's actual `Editor.dll` �
 isn't an exported symbol, so confirming it needs real call-graph work, not attempted yet).
 `C_BrushWire`/`C_AddWire`/etc.'s own exact RGB values (the `UEditorEngine` member fields `WireColor`
 is chosen from) also aren't pinned down yet — same open question as `C_ActorArrow` above.
+
+**Update: found and implemented (2026-09-16).** The same `Default.ini` pull that resolved
+`C_ActorArrow` also gave the real `C_AddWire`/`C_SubtractWire`/`C_SemiSolidWire`/`C_NonSolidWire`/
+`C_Mover` values (see "Radii overlay colors" Findings above for the full block). Owner ruling:
+scope this to the web GUI only, not `preview.py`'s shared `_CSG_PALETTE` (which also drives `actor
+diagram`/`level photo`/eval screenshots). Implemented in `selectionColor.ts`'s `CSG_WIRE_COLOR`/
+`resolveWireColor`/`scaleColor`: unselected brush wire dims to 0.5x (`brushRings.ts`'s
+`mergeThinRings`), selected shows the plain undimmed WireColor (`BrushOutlines.tsx`'s `BoldRing`),
+vertex-handle dots use `WireColor*1.2` always (`SelectionMarkers.tsx`) -- the three separate real
+formulas, no longer conflated into one invented brighten-on-select function. Live-verified: the
+unselected default noticeably dims across a whole level's wireframe. Intersect/Deintersect brushes
+still fall back to the server's own (tuned, non-faithful) color -- this codebase doesn't yet
+distinguish them from Add server-side, a separate already-tracked gap
+(`gui-csg-brush-coloring-never-distinguishes`), not expanded into here.
 
 ## Testing
 
