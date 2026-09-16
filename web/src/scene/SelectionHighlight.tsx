@@ -1,13 +1,11 @@
-// Issue 1 fix (2026-09-15): the "lights up" surface highlight for every selected brush. Renders an
-// overlay mesh restricted to just the selected triangles (`selectedTriangleGroups`), sharing the
-// base geometry's `position`/`uv` attributes directly (an indexed subset -- no vertex data
-// duplicated, one small index buffer per draw group), drawn with additive-white blending: a pure
-// brightness boost on top of the actor's own material/texture/CSG hue, per `selectedTriangles.ts`'s
-// doc comment (matches `BrushOutlines`' "same hue, just bolder" convention rather than painting an
-// alien highlight color). Shared by both Viewport3D and OrthoViewport, mirroring BrushOutlines/
-// SelectionMarkers' own cross-pane sharing. Only meaningful when the base mesh itself is drawn (not
-// in 'wireframe' mode, which has no surface to light up) -- callers gate on `mode !== 'wireframe'`,
-// same as the base mesh.
+// The "lights up" highlight for a selected SURFACE (single texture/polygon) -- `SurfaceSelectionHighlight`
+// below. Renders an overlay mesh restricted to just the selected triangles, sharing the base
+// geometry's `position`/`uv` attributes directly (an indexed subset -- no vertex data duplicated, one
+// small index buffer per draw group), drawn with additive-white blending: a pure brightness boost on
+// top of the actor's own material/texture. Shared by both Viewport3D and OrthoViewport. Only meaningful
+// when the base mesh itself is drawn (not in 'wireframe' mode) -- callers gate on `mode !== 'wireframe'`.
+// (A WHOLE-brush selection no longer uses any face overlay -- it recolors the brush's outline ring,
+// `BrushOutlines`; the old `selectedNames`-driven overlay was removed, owner ruling.)
 //
 // Split by draw GROUP (2026-09-15, mesh-actor "oversized head" fix): a flat, mapless white overlay
 // over every selected triangle silently ignored each triangle's own MASKED cutout
@@ -40,7 +38,6 @@ import * as THREE from 'three'
 
 import {
   selectedSurfaceTriangleGroups,
-  selectedTriangleGroups,
   type SelectedTriangleGroup,
   type TriangleGroupRange,
 } from './selectedTriangles'
@@ -50,31 +47,12 @@ import {
 const HIGHLIGHT_COLOR = 0xffffff
 const HIGHLIGHT_OPACITY = 0.25
 
-export interface SelectionHighlightProps {
-  bufferGeometry: THREE.BufferGeometry
-  triangleOwners: (string | null)[]
-  selectedNames: ReadonlySet<string>
-  /** The SAME per-group material array driving the base `<mesh>` (`activeMaterials` at the call
-   * site) -- read for each group's own `map`/`alphaTest`/`side` so a masked group's overlay stays
-   * clipped to its real cutout shape instead of lighting up the whole untested triangle (see the
-   * module doc comment above). */
-  materials: readonly THREE.Material[]
-}
-
-export function SelectionHighlight({ bufferGeometry, triangleOwners, selectedNames, materials }: SelectionHighlightProps) {
-  const groups = useMemo(
-    () => selectedTriangleGroups(triangleOwners, selectedNames, bufferGeometry.groups as TriangleGroupRange[]),
-    [triangleOwners, selectedNames, bufferGeometry],
-  )
-  return <HighlightGroups groups={groups} bufferGeometry={bufferGeometry} materials={materials} />
-}
-
-/** The surface (single-polygon) counterpart of `SelectionHighlight` above (GUI.md "Selection & the
- * Inspector"): a texture selection is a DISTINCT selection kind from a whole-brush selection, and
- * highlights only the ONE clicked polygon's triangles -- never the whole brush's, even when the
- * brush itself is also drawn. Same additive-white overlay technique (see the module doc comment
- * above), just driven from `selectedSurfaces` (`selectionSet.ts`'s `surfaceKey` strings) instead of
- * `selectedNames`. */
+/** The surface (single-polygon) selection highlight (GUI.md "Selection & the Inspector"): a texture
+ * selection highlights only the ONE clicked polygon's triangles. (A WHOLE-brush selection no longer
+ * lights up faces at all -- it recolors the brush's outline ring instead, `BrushOutlines`; the old
+ * whole-brush additive-white overlay was removed, owner ruling.) Additive-white overlay technique
+ * (see the module doc comment above), driven from `selectedSurfaces` (`selectionSet.ts`'s
+ * `surfaceKey` strings). */
 export interface SurfaceSelectionHighlightProps {
   bufferGeometry: THREE.BufferGeometry
   triangleOwners: (string | null)[]
