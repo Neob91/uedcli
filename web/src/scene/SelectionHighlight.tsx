@@ -132,10 +132,21 @@ function HighlightGroups({
   // texture for an unmasked group.
   opaque?: boolean
 }) {
-  if (groups.length === 0) return null
+  // `opaque` groups whose BASE material is itself translucent/modulated (`sceneResources.ts`'s
+  // `resolveMaterialState`: NPC glasses-lens/-frame slots, additive/multiply blend, `transparent:
+  // true`) must draw NOTHING here. These slots default to deliberately near-invisible placeholder
+  // textures (`BlackMaskTex` under real additive blend, `GrayMaskTex` under real 2x-multiply -- both
+  // blend to "no visible change," the "sunglasses" bug this file's sibling doc comment already
+  // covers) -- our opaque tint has no equivalent blend-mode reproduction, so sampling that same
+  // placeholder texture and drawing it OPAQUE turns "invisible" into "a solid tinted shape" (bug:
+  // "something in place of eyeglasses"). Filtered out HERE (before a `SelectionHighlightGroup`
+  // mounts at all), not as an early return inside it -- that component's hooks (two `useMemo`s) must
+  // run unconditionally every render, so skipping mid-component would violate the Rules of Hooks.
+  const visibleGroups = opaque ? groups.filter(({ materialIndex }) => !(materials[materialIndex] as THREE.MeshBasicMaterial | undefined)?.transparent) : groups
+  if (visibleGroups.length === 0) return null
   return (
     <>
-      {groups.map(({ materialIndex, indices }) => (
+      {visibleGroups.map(({ materialIndex, indices }) => (
         // Keyed by materialIndex + this group's own first triangle index, not materialIndex alone
         // -- two DIFFERENT `bufferGeometry.groups` entries can share one materialIndex
         // (`sceneResources.ts` collapses a lit/unlit pair onto one material when no lightmap is
