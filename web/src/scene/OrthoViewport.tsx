@@ -37,10 +37,13 @@ import { applyOrthoCameraPose, CANVAS_COLOR_MANAGEMENT } from './viewportRender'
 
 // Same fallback dot tint as Viewport3D's identical marker rendering.
 const MARKER_COLOR_THREE = new THREE.Color(...MARKER_COLOR)
-// Point actors must always render on top of brush wireframe/highlight (owner ruling, ortho panes
-// only) -- depthTest off so real world depth along the view axis can't hide a marker "behind" a
-// brush, and higher than every other renderOrder in this pane (grid's -10, brush outlines' default
-// 0) so draw order is explicit rather than incidental scene-graph position.
+// Point actors must always render on top of brush wireframe/highlight (owner ruling; Viewport3D.tsx
+// sets the identical depthTest={false} on its own marker materials for the same reason -- a wall-
+// mounted actor's Location often coincides with the wall surface, so depth-testing lost that marker
+// to the wall's own geometry). This pane ALSO needs an explicit renderOrder, higher than everything
+// else drawn here (grid's -10, brush outlines' default 0), so draw order is explicit rather than
+// incidental scene-graph position; Viewport3D.tsx leaves its own marker renderOrder unset since its
+// scene-graph insertion order already draws markers last.
 const MARKER_RENDER_ORDER = 10
 
 function OrthoCameraRig({

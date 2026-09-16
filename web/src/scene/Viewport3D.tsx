@@ -432,6 +432,14 @@ export function Viewport3D({
             // texture for it isn't in `textures.sprite` yet (e.g. mid-load). Deliberately the
             // SPRITE map, not the base `textures.map` -- see `useTextures`'s docstring for why
             // sharing the base (flipY=false) texture here renders the billboard upside-down.
+            //
+            // `depthTest={false}` (owner ruling, 2026-09-16: point-actor icons must show in BOTH
+            // perspective and ortho panes -- OrthoViewport.tsx already had this, this pane didn't).
+            // Without it, a marker sitting at/near a wall-mounted actor's Location (a torch, wall
+            // sconce, security camera -- Location often coincides with the mount surface) loses the
+            // depth test against that wall's own geometry at grazing viewing angles and never draws
+            // at all -- confirmed live: a hallway with visible wall-torch icons in every ortho pane
+            // showed NONE of them in the perspective pane at the identical camera pose.
             const spriteTex = actor.sprite ? textures.sprite.get(actor.sprite.tex_index) : undefined
             if (actor.sprite && spriteTex) {
               return (
@@ -441,14 +449,14 @@ export function Viewport3D({
                   aspect={actor.sprite.width / actor.sprite.height}
                   userData={{ actorName: actor.name }}
                 >
-                  <spriteMaterial map={spriteTex} depthWrite={false} />
+                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={false} />
                 </PointActorMarker>
               )
             }
             if (!markerTexture) return null
             return (
               <PointActorMarker key={actor.name} position={actor.location} aspect={1} userData={{ actorName: actor.name }}>
-                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} />
+                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={false} />
               </PointActorMarker>
             )
           })}

@@ -21,9 +21,11 @@ export interface PointActorMarkerProps {
   // higher renderOrder than everything else in the pane; the perspective pane leaves this unset
   // (its own scene-graph/insertion order is fine there).
   renderOrder?: number
-  // The `<spriteMaterial>` -- each caller keeps its own material props (map/color/depthTest/
-  // depthWrite), which differ between the perspective and ortho panes (item 16: only the per-frame
-  // rescale plumbing is shared, not the material).
+  // The `<spriteMaterial>` -- each caller keeps its own material props (map/color), which differ
+  // between the perspective and ortho panes (item 16: only the per-frame rescale plumbing is shared,
+  // not the material). Both panes set `depthWrite={false}` and `depthTest={false}` identically
+  // (owner ruling: a point-actor icon must always be visible, in every pane -- see
+  // Viewport3D.tsx's/OrthoViewport.tsx's own marker-rendering comments for why).
   children: ReactNode
 }
 
