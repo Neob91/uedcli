@@ -54,6 +54,28 @@ def test_prepivot_is_unrotated_unlike_the_brush_convention():
     assert abs(world[1]) < 1e-6
 
 
+def test_prepivot_falls_back_to_class_default_for_hanging_meshes():
+    # Regression for the reported bug: a "hanging" decoration class (e.g. DeusEx.HKHangingPig/
+    # HangingChicken) defines a non-zero default PrePivot.Z that NO placed instance ever states
+    # explicitly (UnrealEd's T3D export omits a property equal to its class default) -- the mesh's
+    # own local origin sits at the model's center, not the ceiling-mount point Location marks.
+    # Without `class_defaults`, that PrePivot silently reads as zero and the mesh renders exactly
+    # PrePivot.Z units too low; passing the resolved class defaults restores it.
+    actor = _FakeActor(location=(0, 0, 0), props=[])   # no instance PrePivot override
+    mesh = _FakeMesh()
+    class_defaults = {("prepivot", 0): "(Z=47.000000)"}
+
+    without = meshworld.mesh_vertex_to_world((0, 0, 0), mesh=mesh, actor=actor)
+    assert without == (0.0, 0.0, 0.0)                   # pre-existing (wrong) behavior, unchanged
+
+    with_fallback = meshworld.mesh_vertex_to_world((0, 0, 0), mesh=mesh, actor=actor,
+                                                    class_defaults=class_defaults)
+    assert abs(with_fallback[2] - 47.0) < 1e-6
+
+    translation = meshworld.mesh_actor_translation(actor, class_defaults=class_defaults)
+    assert abs(translation[2] - 47.0) < 1e-6
+
+
 def test_draw_scale_multiplies_mesh_scale():
     actor = _FakeActor(location=(0, 0, 0), props=[("DrawScale", "2.0")])
     mesh = _FakeMesh(scale=(1.0, 1.0, 1.0))

@@ -32,9 +32,11 @@ def mesh_scale(mesh) -> tuple[float, float, float]:
     return mesh.scale if any(mesh.scale) else (1.0, 1.0, 1.0)
 
 
-def mesh_vertex_to_world(v, *, mesh, actor) -> tuple[float, float, float]:
+def mesh_vertex_to_world(v, *, mesh, actor, class_defaults=None) -> tuple[float, float, float]:
     """One mesh-local vertex `v` (raw `FMeshVert`, mesh-local units) -> world space, per the
-    formula above."""
+    formula above. `class_defaults` (`uprops.resolve_class_defaults`'s `(name, index) -> text` map)
+    lets `actor_prepivot` fall back to the actor's CLASS default `PrePivot` when the instance is
+    silent -- see `rotation.actor_prepivot`; omitted, only an instance-stated `PrePivot` applies."""
     origin = mesh.origin
     scale = mesh_scale(mesh)
     draw_scale = actor_draw_scale(actor)
@@ -54,7 +56,8 @@ def mesh_vertex_to_world(v, *, mesh, actor) -> tuple[float, float, float]:
         w = matvec(R, w)
 
     loc = tuple(float(c) for c in (actor.location or (0, 0, 0)))
-    pp = actor_prepivot(actor)                    # Decimal triple; ADDED UNROTATED (see module doc)
+    pp = actor_prepivot(actor, class_defaults=class_defaults)   # Decimal triple; ADDED UNROTATED
+                                                                  # (see module doc)
     return (loc[0] + float(pp[0]) + w[0],
             loc[1] + float(pp[1]) + w[1],
             loc[2] + float(pp[2]) + w[2])
@@ -87,12 +90,14 @@ def mesh_actor_linear(mesh, actor):
     return L
 
 
-def mesh_actor_translation(actor) -> tuple[float, float, float]:
+def mesh_actor_translation(actor, class_defaults=None) -> tuple[float, float, float]:
     """Location + PrePivot as one combined UNROTATED world-space offset (see module doc) -- the
     translation half of the placement formula, paired with `mesh_actor_linear`'s linear half.
-    Compute once per actor, same reasoning as `mesh_actor_linear`."""
+    Compute once per actor, same reasoning as `mesh_actor_linear`. `class_defaults` -- see
+    `mesh_vertex_to_world`'s docstring -- lets a class-default (never instance-stated) `PrePivot`
+    still apply."""
     loc = tuple(float(c) for c in (actor.location or (0, 0, 0)))
-    pp = actor_prepivot(actor)
+    pp = actor_prepivot(actor, class_defaults=class_defaults)
     return (loc[0] + float(pp[0]), loc[1] + float(pp[1]), loc[2] + float(pp[2]))
 
 

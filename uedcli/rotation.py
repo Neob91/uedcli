@@ -447,17 +447,34 @@ def rotate_local(R, v):
 _ZERO3 = (Decimal(0), Decimal(0), Decimal(0))
 
 
-def actor_prepivot(actor) -> tuple[Decimal, Decimal, Decimal]:
+def _parse_prepivot_text(v: str) -> tuple[Decimal, Decimal, Decimal]:
+    import re
+    g = {m.group(1).lower(): Decimal(m.group(2))
+         for m in re.finditer(r"(X|Y|Z)=(-?[0-9.]+)", v)}
+    return (g.get("x", Decimal(0)), g.get("y", Decimal(0)), g.get("z", Decimal(0)))
+
+
+def actor_prepivot(actor, *, class_defaults: dict[tuple[str, int], str] | None = None
+                   ) -> tuple[Decimal, Decimal, Decimal]:
     """The actor's PrePivot (X,Y,Z) as Decimal, (0,0,0) if absent. PrePivot shifts the local origin:
     a world vertex is `Location + R·(v − PrePivot)`, NOT `Location + R·v`. uedcli never WRITES
     PrePivot (invariant D8) but must honour it when MEASURING imported brushes (bounds/preview/world
-    verts). Omitted components default to 0 (UnrealEd omits zero fields on export)."""
-    import re
+    verts). Omitted components default to 0 (UnrealEd omits zero fields on export) UNLESS the
+    actor's CLASS itself defaults PrePivot to something else -- UnrealEd's T3D export only writes a
+    property that differs from the class default, so a class like `DeusEx.HKHangingPig`/
+    `HangingChicken` (a hanging mesh whose own local origin sits at the model's center, not its
+    ceiling-mount point) ships a non-zero default `PrePivot.Z` every placed instance relies on and
+    none states explicitly. Pass `class_defaults` (`uprops.resolve_class_defaults`'s
+    `(casefold(name), index) -> text` map, or a `classdefaults.ClassInfo.defaults`) to fall back to
+    `("prepivot", 0)` when the instance is silent; omitted (the default), this resolves the instance
+    value only, unchanged from before."""
     for k, v in actor.props:
         if k == "PrePivot":
-            g = {m.group(1).lower(): Decimal(m.group(2))
-                 for m in re.finditer(r"(X|Y|Z)=(-?[0-9.]+)", v)}
-            return (g.get("x", Decimal(0)), g.get("y", Decimal(0)), g.get("z", Decimal(0)))
+            return _parse_prepivot_text(v)
+    if class_defaults is not None:
+        v = class_defaults.get(("prepivot", 0))
+        if v is not None:
+            return _parse_prepivot_text(v)
     return _ZERO3
 
 

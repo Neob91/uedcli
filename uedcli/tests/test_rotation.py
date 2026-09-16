@@ -180,6 +180,24 @@ def test_actor_prepivot_parses_and_defaults():
     assert actor_prepivot(SimpleNamespace(props=[])) == (Decimal(0), Decimal(0), Decimal(0))
 
 
+def test_actor_prepivot_falls_back_to_class_default_when_instance_is_silent():
+    # UnrealEd's T3D export omits a property equal to its class default -- a "hanging" decoration
+    # class (e.g. DeusEx.HKHangingPig/HangingChicken) ships a non-zero default PrePivot.Z (its mesh's
+    # own local origin sits at the model's center, not its ceiling-mount point) that every placed
+    # instance relies on and states nowhere. Without `class_defaults`, this still resolves to zero
+    # (unchanged pre-existing behavior) -- the whole point of it being an opt-in kwarg.
+    a = SimpleNamespace(props=[])
+    class_defaults = {("prepivot", 0): "(Z=47.000000)"}
+    assert actor_prepivot(a, class_defaults=class_defaults) == (Decimal(0), Decimal(0), Decimal("47.000000"))
+    assert actor_prepivot(a) == (Decimal(0), Decimal(0), Decimal(0))
+
+
+def test_actor_prepivot_instance_value_wins_over_class_default():
+    a = SimpleNamespace(props=[("PrePivot", "(Z=5.000000)")])
+    class_defaults = {("prepivot", 0): "(Z=47.000000)"}
+    assert actor_prepivot(a, class_defaults=class_defaults) == (Decimal(0), Decimal(0), Decimal("5.000000"))
+
+
 def test_local_offset_subtracts_prepivot_before_rotating():
     v = (Decimal(32), Decimal(8), Decimal(-4))
     z = (Decimal(0), Decimal(0), Decimal(0))

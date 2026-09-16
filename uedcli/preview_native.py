@@ -207,17 +207,21 @@ def _mover_world_polys(level, index) -> list[tuple[list, object, object]]:
     return out
 
 
-def _mesh_actor_polys(actor, index, search_files, *,
-                      hidden_prop: str = "bhidden") -> tuple[list, dict, object, tuple[str, str] | None]:
+def _mesh_actor_polys(actor, index, search_files, *, hidden_prop: str = "bhidden"
+                      ) -> tuple[list, dict, object, tuple[str, str] | None, dict]:
     """One DT_Mesh actor's frame-0 triangles (mesh-local, NOT yet world-transformed -- the caller
     does that after computing the actor's winding/degenerate check once) plus its resolved skins,
-    its decoded mesh and the mesh ASSET ref: `(triangles, skins, mesh, ref)` where `triangles` is
-    `frame_triangles(mesh)`'s own 8-tuple list, `skins` is
-    `{material_index: (w, h, rgb, b_masked)}`, `mesh`
-    is the decoded `umesh.Mesh` the caller needs for `apply_mesh_linear`/`mesh_actor_linear`, and
-    `ref` is `meshfacts.parse_mesh_ref`'s `(package_stem, mesh_name)` -- returned rather than
-    recomputed by the caller, and half of the skin cache key (`_TextureTable.index_for_decoded`).
-    Returns `([], {}, None, None)` for a non-DT_Mesh actor, one hidden per `hidden_prop`, or one
+    its decoded mesh, the mesh ASSET ref, and its resolved class defaults:
+    `(triangles, skins, mesh, ref, class_defaults)` where `triangles` is `frame_triangles(mesh)`'s
+    own 8-tuple list, `skins` is `{material_index: (w, h, rgb, b_masked)}`, `mesh` is the decoded
+    `umesh.Mesh` the caller needs for `apply_mesh_linear`/`mesh_actor_linear`, `ref` is
+    `meshfacts.parse_mesh_ref`'s `(package_stem, mesh_name)` -- returned rather than recomputed by
+    the caller, and half of the skin cache key (`_TextureTable.index_for_decoded`) -- and
+    `class_defaults` is this call's own `resolve_class_defaults` result, returned so the caller can
+    feed it to `meshworld.mesh_actor_translation`/`mesh_vertex_to_world` (a class-default `PrePivot`
+    -- e.g. `DeusEx.HKHangingPig`/`HangingChicken` -- must still apply even though no instance ever
+    states it; board `hanging-mesh-actors-render-low-prepivot-class`).
+    Returns `([], {}, None, None, {})` for a non-DT_Mesh actor, one hidden per `hidden_prop`, or one
     with no resolvable Mesh (not an error -- matches `class preview`'s own "not every actor has a
     mesh" disposition, `classes.py::_run_preview`). Converts `meshfacts.MeshFactError`/
     `meshrender.PreviewError` to `NativePreviewError` at this boundary -- matching how
@@ -253,11 +257,11 @@ def _mesh_actor_polys(actor, index, search_files, *,
         return instance[name] if name in instance else defaults.get((name, 0))
 
     if (field("drawtype") or "").strip() != "DT_Mesh":
-        return [], {}, None, None
+        return [], {}, None, None, {}
     if str(field(hidden_prop) or "False").strip() == "True":
         # Whichever ONE flag the caller asked for (see docstring) — a hidden actor contributes
         # nothing (same disposition as a non-DT_Mesh one, not an error).
-        return [], {}, None, None
+        return [], {}, None, None, {}
     mesh_prop = instance.get("mesh") or defaults.get(("mesh", 0))   # empty override → class default
     ref = meshfacts.parse_mesh_ref(mesh_prop)
     if ref is None:
@@ -275,7 +279,7 @@ def _mesh_actor_polys(actor, index, search_files, *,
         raise NativePreviewError(str(e)) from e
     except meshrender.PreviewError as e:
         raise NativePreviewError(str(e)) from e
-    return meshrender.frame_triangles(mesh), skins, mesh, ref
+    return meshrender.frame_triangles(mesh), skins, mesh, ref, defaults
 
 
 # --------------------------------------------------------------------- textures
@@ -789,8 +793,8 @@ def build_scene(level, search_files, index, *, defaults, project=None,
         for actor in level.actors.values():
             if actor.brush is not None:
                 continue                                     # brushes/movers handled above
-            tris, skins, mesh, mesh_ref = _mesh_actor_polys(actor, index, search_files,
-                                                            hidden_prop=hidden_prop)
+            tris, skins, mesh, mesh_ref, mesh_class_defaults = _mesh_actor_polys(
+                actor, index, search_files, hidden_prop=hidden_prop)
             if not tris:
                 continue
             # A mesh actor whose Location sits in SOLID space (a leaf carved out of nothing) is not
@@ -812,7 +816,7 @@ def build_scene(level, search_files, index, *, defaults, project=None,
             # `mesh_vertex_to_world` would re-parse `Rotation` and rebuild both rotation matrices
             # for every vertex of every triangle (pinned equivalent in `test_meshworld.py`).
             L = meshworld.mesh_actor_linear(mesh, actor)
-            translation = meshworld.mesh_actor_translation(actor)
+            translation = meshworld.mesh_actor_translation(actor, class_defaults=mesh_class_defaults)
             try:
                 reject_degenerate(L, actor.name)
             except DegenerateTransformError as e:

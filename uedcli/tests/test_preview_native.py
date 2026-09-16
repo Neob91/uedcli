@@ -660,7 +660,7 @@ def test_mesh_actor_keeps_translucent_and_modulated_materials_for_blend_composit
     index = _ued22_index()
     actor = Actor(name="Manderley", cls="DeusEx.JosephManderley",
                  location=(Decimal(0), Decimal(0), Decimal(0)))
-    tris, _skins, _mesh, _mesh_ref = pn._mesh_actor_polys(actor, index, _mesh_sf(index))
+    tris, _skins, _mesh, _mesh_ref, _defaults = pn._mesh_actor_polys(actor, index, _mesh_sf(index))
     assert tris                                            # sanity: the mesh has triangles at all
     blend_flag = meshrender.PF_TRANSLUCENT | meshrender.PF_MODULATED
     translucent_tris = [t for t in tris if t[7] & blend_flag]
