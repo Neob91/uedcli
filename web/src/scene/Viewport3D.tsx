@@ -449,14 +449,18 @@ export function Viewport3D({
                   aspect={actor.sprite.width / actor.sprite.height}
                   userData={{ actorName: actor.name }}
                 >
-                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={false} />
+                  {/* side=DoubleSide: the pane's projection mirror (viewportRender.ts negates
+                      projectionMatrix.elements[0]) flips screen-space winding; the world mesh re-winds
+                      via geometry.ts REVERSE_FAN, but a Sprite's built-in quad can't be re-wound, so a
+                      FrontSide (default) marker is 100% backface-culled in every pane -- opt out. */}
+                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={false} side={THREE.DoubleSide} />
                 </PointActorMarker>
               )
             }
             if (!markerTexture) return null
             return (
               <PointActorMarker key={actor.name} position={actor.location} aspect={1} userData={{ actorName: actor.name }}>
-                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={false} />
+                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={false} side={THREE.DoubleSide} />
               </PointActorMarker>
             )
           })}

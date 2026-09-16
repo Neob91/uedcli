@@ -291,7 +291,10 @@ export function OrthoViewport({
                   userData={{ actorName: actor.name }}
                   renderOrder={MARKER_RENDER_ORDER}
                 >
-                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={false} />
+                  {/* side=DoubleSide: the pane's projection mirror flips screen-space winding, and a
+                      Sprite's built-in quad can't re-wind like the world mesh's REVERSE_FAN fans, so a
+                      FrontSide marker is fully backface-culled -- opt out (see Viewport3D's note). */}
+                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={false} side={THREE.DoubleSide} />
                 </PointActorMarker>
               )
             }
@@ -304,7 +307,7 @@ export function OrthoViewport({
                 userData={{ actorName: actor.name }}
                 renderOrder={MARKER_RENDER_ORDER}
               >
-                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={false} />
+                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={false} side={THREE.DoubleSide} />
               </PointActorMarker>
             )
           })}

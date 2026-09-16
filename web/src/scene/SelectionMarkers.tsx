@@ -81,7 +81,7 @@ function PivotMarker({ position, texture }: { position: [number, number, number]
   })
   return (
     <sprite ref={spriteRef} position={position}>
-      <spriteMaterial map={texture ?? undefined} color={PIVOT_RED} depthTest={false} transparent />
+      <spriteMaterial map={texture ?? undefined} color={PIVOT_RED} depthTest={false} transparent side={THREE.DoubleSide} />
     </sprite>
   )
 }
@@ -116,12 +116,12 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
           <group key={actor.name}>
             {verts.map((v, i) => (
               <sprite key={i} position={v} scale={[VERTEX_DOT_SIZE, VERTEX_DOT_SIZE, 1]}>
-                <spriteMaterial color={color} depthTest={false} />
+                <spriteMaterial color={color} depthTest={false} side={THREE.DoubleSide} />
               </sprite>
             ))}
             {actor.name === primaryName && (
               <sprite position={actor.brush.local_origin} scale={[VERTEX_DOT_SIZE, VERTEX_DOT_SIZE, 1]}>
-                <spriteMaterial color={color} depthTest={false} />
+                <spriteMaterial color={color} depthTest={false} side={THREE.DoubleSide} />
               </sprite>
             )}
             <PivotMarker position={actor.location} texture={pivotTexture} />
