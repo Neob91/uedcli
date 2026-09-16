@@ -68,6 +68,10 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Mesh-actor wireframe rendering | Should a static mesh actor render as wireframe in wireframe/2D modes? | ⬜ open | `dev/docs/board/inbox/static-mesh-actors-should-render-as-wireframe/` |
 | Radii overlay colors | Collision cylinder vs. light-radius sphere: same color or distinct? | ✅ closed, implemented | ✅ source (structural fact), 🔬 live (red, no hex) — see Findings below |
 | Radii perspective cylinder | Does/should the collision cylinder render in the perspective pane? | ✅ closed, implemented | 🔬 wiki + UT patch notes (`dev/docs/spikes/2026-07-21-...`) + owner confirmation — see Findings below |
+| Radii cylinder/sphere shape | Wireframe rendering had a triangulation-diagonal artifact ("triangular faces") | ✅ closed, implemented | not an RE question — a `wireframe:true`-on-triangulated-geometry rendering bug, fixed with explicit line segments |
+| `C_ActorArrow` exact RGB | The radii overlay's real color value (currently a red-family placeholder) | 🔶 investigating | see "Radii overlay colors" Findings above — binary disassembly located the code, not this specific data reference |
+| Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed (mechanism) / ⬜ open (fix) | 📖 source-only, see Findings below |
+| UED22 line widths | What line/wire thickness does UED22 use for wireframe/selection rendering? | 🔶 investigating | not yet resolved |
 
 Legend: ⬜ open (not started) · 🔶 investigating · ✅ closed (bar met, live-verified).
 
@@ -178,6 +182,51 @@ number to copy; the literal patch-note value (8) is. A 16-sided cylinder reads a
 8-sided one is visibly faceted/octagonal — plausibly exactly the "shape looks off" complaint.
 Binary disassembly against the real `Editor.dll`/`render.dll` is still running (would give ✅ tier on
 existence + segment count + the `C_ActorArrow` RGB); not blocking this fix.
+
+**Radii cylinder/sphere shape (closed 2026-09-16, not an RE question):** the perspective-pane wire
+cylinder/sphere showed visible triangulation-diagonal seams ("triangular faces," owner report) —
+`MeshBasicMaterial`'s `wireframe: true` draws every triangle edge of the underlying
+`CylinderGeometry`/`SphereGeometry`, including the diagonal each side-quad is split into two
+triangles by. Fixed with explicit line segments (top/bottom ring + struts for the cylinder, three
+orthogonal circles for the sphere), computed directly in world space rather than via a local-space
+`<mesh position=.../>` transform (avoids the same class of bug the pivot-marker fix hit).
+
+### Brush wireframe selection color (mechanism closed 2026-09-16, fix still open)
+
+Owner report: "brush colors seem off, at least on highlight." Investigated via `fgsfdsfgs/UE1`
+source, `Source/Editor/Src/UnEdRend.cpp`, `UEditorEngine::DrawLevelBrush`:
+```cpp
+DrawColor   = WireColor * (bDrawSelected ? 1.0 : 0.5);
+VertexColor = WireColor * 1.2;
+PivColor    = WireColor;
+```
+**The premise this codebase built on is backwards.** UED22 does NOT brighten a selected brush's
+wireframe — it DIMS an unselected one to 50%; selected shows the brush's base `WireColor` unmodified
+(1.0x). `WireColor` itself is chosen per brush kind first (builder brush / mover / `bColored`
+override / `CsgOper`+`PolyFlags` for a normal content brush — Add/Subtract/Intersect/Deintersect/
+Semisolid/Nonsolid each their own constant), and only THAT value is what the 1.0/0.5 selected/
+unselected multiplier applies to.
+
+Two separate elements, two separate (and different) multipliers — conflating them is the root of
+both existing implementations' errors:
+- `uedcli/preview.py`'s `_brighten` (`WireColor * 1.2`) — its own doc comment already correctly
+  attributes this to the VERTEX-HANDLE color (`VertexColor` above), not the brush wire itself. That
+  part of preview.py is fine as documented.
+- This codebase's `web/src/scene/selectionColor.ts` `brightenWireColor` (lift 45% toward white) is
+  applied to BOTH the brush's outline ring (`BrushOutlines.tsx`) AND its vertex-handle dots
+  (`SelectionMarkers.tsx`) — one formula for two things real UED22 treats differently, and the
+  formula itself matches neither `DrawColor` nor `VertexColor`. Its own doc comment already flagged
+  it as an unverified invention; now confirmed wrong, not just unverified.
+
+**Fix not yet implemented — a real decision needed first, not a mechanical swap.** This codebase's
+own CSG palette (`uedcli/preview.py`'s `_CSG_PALETTE`, e.g. add=blue `(70,110,255)`) was ALREADY
+explicitly tuned ("front lifted for the dark bg" per its own comment) rather than a literal copy of
+raw UED22 `WireColor` values — so it's not established which UED22 state (selected/unselected, or
+neither precisely) our existing palette was calibrated to represent. Confidence: 📖 source-only (UE1
+v200, not yet binary/live-confirmed against this project's actual `Editor.dll` — `DrawLevelBrush`
+isn't an exported symbol, so confirming it needs real call-graph work, not attempted yet).
+`C_BrushWire`/`C_AddWire`/etc.'s own exact RGB values (the `UEditorEngine` member fields `WireColor`
+is chosen from) also aren't pinned down yet — same open question as `C_ActorArrow` above.
 
 ## Testing
 
