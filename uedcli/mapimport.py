@@ -694,22 +694,24 @@ def drop_editor_scratch(level: model.Level) -> list[str]:
     in alongside the fresh one the editor creates for itself — two brushes competing for the name
     `Brush0`.
 
-    **This must run BEFORE class names are qualified.** Both tests key on the SHORT class name
-    (`Brush`, `Camera`), which is what the decode emits; `ClassIndex.qualify_and_validate` rewrites
-    those to `Engine.Brush`/`Engine.Camera` on ingest, after which neither test can ever match
-    again. The builder-brush test is `normalize.is_builder_brush`, reused rather than reimplemented
-    so import and the acceptance compare agree on what a builder brush is (it keys on the reserved
-    unnumbered inner model name `Brush` plus the absence of an explicit `CsgOper`, NOT on the actor
-    name — a fresh editor does not number it `Brush0`).
+    **This must run BEFORE class names are qualified.** The `Camera` test keys on the SHORT class
+    name, which is what the decode emits; `ClassIndex.qualify_and_validate` rewrites it to
+    `Engine.Camera` on ingest, after which it can never match again. The builder-brush test is
+    `normalize.is_builder_brush_position`: UnrealEd itself identifies the builder brush purely by
+    ARRAY POSITION — `ULevel::Brush()` is literally `Actors(1)`, no content inspection at all
+    (`dev/docs/spikes/2026-09-15-builder-brush-is-actors1-not-a-content-heuristic/spike.md`) — so
+    it checks `level.order[1]` (still the freshly-decoded, unstripped order at this point), not
+    any class/model-name/CsgOper heuristic.
 
     Owner ruling, 2026-07-27: drop the builder brush, and drop `Camera` actors too. This narrows
     the spec's "all actors imported verbatim" to "all CONTENT actors"; the rationale is
     `dev/docs/rationale/mapimport.md`.
     """
-    from .normalize import is_builder_brush
+    from .normalize import is_builder_brush_position
 
     dropped = [name for name, a in level.actors.items()
-               if is_builder_brush(a) or _bare_class(a) in EDITOR_SCRATCH_CLASSES]
+               if is_builder_brush_position(level.order, name)
+               or _bare_class(a) in EDITOR_SCRATCH_CLASSES]
     if not dropped:
         return []
     gone = set(dropped)

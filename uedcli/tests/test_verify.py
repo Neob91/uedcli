@@ -5,7 +5,15 @@ from uedcli.normalize import normalize_level, level_order
 from uedcli.tests.conftest import StubDefaults
 
 
-_T3D = ("Begin Map\nBegin Actor Class=Engine.Light Name=L1\n    Name=\"L1\"\nEnd Actor\nEnd Map")
+# LevelInfo@0 + a filler actor@1 so `L1` (and any actor appended after it in these fixtures) never
+# lands at order[1] -- the real builder-brush slot, per `normalize.is_builder_brush_position` --
+# and gets mistaken for it purely by position.
+_T3D = ("Begin Map\n"
+        "Begin Actor Class=Engine.LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
+        "Begin Actor Class=Engine.Brush Name=Brush0\n"
+        "    Begin Brush Name=Brush\n       Begin PolyList\n       End PolyList\n    End Brush\n"
+        "    Brush=Model'MyLevel.Brush'\n    Name=\"Brush0\"\nEnd Actor\n"
+        "Begin Actor Class=Engine.Light Name=L1\n    Name=\"L1\"\nEnd Actor\nEnd Map")
 _DEFAULTS = StubDefaults()          # no class has a non-zero default in these fixtures
 
 

@@ -11,7 +11,6 @@ from uedcli.native import actor_write as AW
 from uedcli.native.actor_write import Prop
 from uedcli.native.pkg_write import parse_package
 from uedcli.native.unbuilt import _calc_normal, assemble_unbuilt
-from uedcli.normalize import level_order, normalize_level
 
 _POLY = ("         Begin Polygon\n"
          "            Origin   +0.0,+0.0,+0.0\n"
@@ -44,8 +43,11 @@ def _tiny_level(n_points: int = 3, n_brushes: int = 2) -> model.Level:
            + "".join(_brush(f"B{i}") for i in range(n_brushes))
            + "End Map\n")
     lv = model.parse_t3d(t3d)
-    lv.order = level_order(lv)
-    normalize_level(lv)
+    # TRUNK content fed straight to the native assembler (no real builder brush) -- mirrors
+    # production (`apply._assembly_level`), which sets `.order` from the trunk's own materialized
+    # order with no `level_order`/`normalize_level` pass; that pass's builder-brush check
+    # (`is_builder_brush_position`, order[1]) is only valid on a fresh, unstripped decode.
+    lv.order = list(lv.actors)
     return lv
 
 

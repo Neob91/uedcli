@@ -63,7 +63,14 @@ def test_export_dx_t3d_turns_a_wedged_ucc_into_a_named_driver_error():
             store_export.export_dx_t3d("ct", "/work/snap.dx")
 
 
-_DX_T3D = ("Begin Map\nBegin Actor Class=Brush Name=B\n"
+# LevelInfo@0 + a builder brush@1 -- the real Actors[0]/[1] shape a genuine UCC batchexport always
+# carries (`normalize.is_builder_brush_position`), so `B`/`L` land safely past order[1].
+_DX_T3D = ("Begin Map\n"
+           "Begin Actor Class=Engine.LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
+           "Begin Actor Class=Engine.Brush Name=Brush0\n"
+           "    Begin Brush Name=Brush\n       Begin PolyList\n       End PolyList\n    End Brush\n"
+           "    Brush=Model'MyLevel.Brush'\n    Name=\"Brush0\"\nEnd Actor\n"
+           "Begin Actor Class=Brush Name=B\n"
            "    Brush=Model'ondisk.Model1'\n    Name=\"B\"\nEnd Actor\n"
            "Begin Actor Class=Light Name=L\n    Name=\"L\"\nEnd Actor\nEnd Map")
 
@@ -71,6 +78,6 @@ _DX_T3D = ("Begin Map\nBegin Actor Class=Brush Name=B\n"
 def test_export_dx_level_parses_captures_order_and_canonicalizes(monkeypatch):
     monkeypatch.setattr(store_export, "export_dx_t3d", lambda container, dx_path: _DX_T3D)
     level = store_export.export_dx_level("ct", "/repo/Maps/x.dx")
-    assert level.order == ["B", "L"]                 # full order captured pre-normalize
-    assert set(level.actors) == {"B", "L"}
+    assert level.order == ["LevelInfo0", "B", "L"]   # full order captured pre-normalize
+    assert set(level.actors) == {"LevelInfo0", "B", "L"}
     assert "MyLevel.Model1" in canonical_actor_t3d(level.actors["B"])   # M2 applied downstream

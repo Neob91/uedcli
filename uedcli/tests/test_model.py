@@ -104,7 +104,7 @@ def test_level_order_field_survives_normalize_resort():
     lv = parse_t3d(_TWO_BRUSHES)
     lv.order = level_order(lv)            # capture BEFORE normalize re-sorts actors
     normalize_level(lv)                   # re-sorts level.actors by Name
-    assert lv.order == ["B_first", "Lamp", "B_second"]   # order preserved on the Level
+    assert lv.order == ["LevelInfo0", "B_first", "Lamp", "B_second"]  # order preserved on the Level
 
 
 def test_it_parses_indexed_array_props_verbatim():

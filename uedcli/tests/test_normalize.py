@@ -23,17 +23,19 @@ def test_strips_computed_props():
 
 
 def test_excludes_builder_brush():
-    # The builder brush exports with its reserved inner model `Begin Brush Name=Brush` and no
-    # CsgOper (Task 4a spike); that's what is_builder_brush keys on, not the actor Name.
+    # The builder brush is identified by ARRAY POSITION -- order[1], immediately after LevelInfo
+    # at order[0] (is_builder_brush_position; dev/docs/spikes/
+    # 2026-09-15-builder-brush-is-actors1-not-a-content-heuristic/spike.md). Content plays no part.
     lvl = _level(
+        "Begin Actor Class=LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
         "Begin Actor Class=Brush Name=Brush0\n"
         "    Begin Brush Name=Brush\n       Begin PolyList\n       End PolyList\n    End Brush\n"
         "    Brush=Model'MyLevel.Brush'\n    Name=\"Brush0\"\nEnd Actor\n"
         "Begin Actor Class=Light Name=L1\n    Name=\"L1\"\nEnd Actor"
     )
     normalize_level(lvl)
-    assert "Brush0" not in lvl.actors      # the red builder brush is transient
-    assert "L1" in lvl.actors
+    assert "Brush0" not in lvl.actors      # sat at order[1] -- the builder brush, transient
+    assert "L1" in lvl.actors and "LevelInfo0" in lvl.actors
 
 
 def test_canonical_actor_t3d_is_stable():
@@ -122,27 +124,42 @@ def test_retain_nonedit_scoping_end_to_end_via_compare_view():
 
 
 def test_stable_actor_ordering():
+    # LevelInfo@0 + a builder brush@1 (dropped by position) so the two lights being tested for
+    # sort order sit safely past order[1].
     lvl = _level(
+        "Begin Actor Class=LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
+        "Begin Actor Class=Brush Name=Brush0\n"
+        "    Begin Brush Name=Brush\n       Begin PolyList\n       End PolyList\n    End Brush\n"
+        "    Brush=Model'MyLevel.Brush'\n    Name=\"Brush0\"\nEnd Actor\n"
         "Begin Actor Class=Light Name=ZLight\n    Name=\"ZLight\"\nEnd Actor\n"
         "Begin Actor Class=Light Name=ALight\n    Name=\"ALight\"\nEnd Actor"
     )
     normalize_level(lvl)
-    assert list(lvl.actors.keys()) == ["ALight", "ZLight"]
+    assert list(lvl.actors.keys()) == ["ALight", "LevelInfo0", "ZLight"]
 
 
 from uedcli.normalize import canonical_level_hash, level_order, normalize_level
 from uedcli.model import parse_t3d
 
 
-_L = ("Begin Map\n"
+# `_LEVELINFO_AND_BUILDER`: the real Actors[0]/[1] shape (LevelInfo, then the builder brush) every
+# fixture below prepends so order[1] is a KNOWN quantity (dropped), and any actor of interest lands
+# safely at order[2]+, never accidentally mistaken for the builder brush by position.
+_LEVELINFO_AND_BUILDER = (
+    "Begin Actor Class=LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
+    "Begin Actor Class=Brush Name=Brush0\n"
+    "    Begin Brush Name=Brush\n       Begin PolyList\n       End PolyList\n    End Brush\n"
+    "    Brush=Model'MyLevel.Brush'\n    Name=\"Brush0\"\nEnd Actor\n")
+
+_L = ("Begin Map\n" + _LEVELINFO_AND_BUILDER +
       "Begin Actor Class=Light Name=L1\n    Name=\"L1\"\nEnd Actor\n"
       "Begin Actor Class=Light Name=L2\n    Name=\"L2\"\nEnd Actor\nEnd Map")
-_L_SWAPPED = ("Begin Map\n"
+_L_SWAPPED = ("Begin Map\n" + _LEVELINFO_AND_BUILDER +
               "Begin Actor Class=Light Name=L2\n    Name=\"L2\"\nEnd Actor\n"
               "Begin Actor Class=Light Name=L1\n    Name=\"L1\"\nEnd Actor\nEnd Map")
 
 _TWO_BRUSHES = (
-    "Begin Map\n"
+    "Begin Map\n" + _LEVELINFO_AND_BUILDER +
     "Begin Actor Class=Brush Name=B_first\n"
     "    Begin Brush Name=Model0\n       Begin PolyList\n       End PolyList\n    End Brush\n"
     "    Brush=Model'MyLevel.Model0'\n    Name=\"B_first\"\nEnd Actor\n"
@@ -174,7 +191,7 @@ def test_canonical_level_hash_differs_on_authored_change():
 
 
 def test_level_order_lists_all_actors_in_export_order():
-    assert level_order(parse_t3d(_TWO_BRUSHES)) == ["B_first", "Lamp", "B_second"]
+    assert level_order(parse_t3d(_TWO_BRUSHES)) == ["LevelInfo0", "B_first", "Lamp", "B_second"]
 
 
 def _levelinfo_named(name):
@@ -324,6 +341,7 @@ def test_canonical_level_hash_still_distinguishes_a_real_actor_rename():
 
 _WITH_BUILDER_BRUSH = (
     "Begin Map\n"
+    "Begin Actor Class=LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
     "Begin Actor Class=Brush Name=Brush0\n"
     "    Begin Brush Name=Brush\n       Begin PolyList\n       End PolyList\n    End Brush\n"
     "    Brush=Model'MyLevel.Brush'\n    Name=\"Brush0\"\nEnd Actor\n"
@@ -352,14 +370,51 @@ def test_is_builder_brush_false_for_brush0_with_explicit_csgoper():
 
 
 def test_level_order_excludes_the_builder_brush():
-    assert level_order(parse_t3d(_WITH_BUILDER_BRUSH)) == ["L1"]
+    assert level_order(parse_t3d(_WITH_BUILDER_BRUSH)) == ["LevelInfo0", "L1"]
 
 
-def test_level_order_and_normalize_keep_a_content_brush_named_brush0():
-    lv = parse_t3d(_CONTENT_BRUSH0)
-    assert level_order(lv) == ["Brush0", "L1"]
+_STRAY_BUILDER_BRUSH_MODEL_NAMED = (
+    "Begin Map\n"
+    "Begin Actor Class=LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
+    "Begin Actor Class=Brush Name=Brush74\n"
+    "    Begin Brush Name=Model\n       Begin PolyList\n       End PolyList\n    End Brush\n"
+    "    Brush=Model'MyLevel.Model'\n    Name=\"Brush74\"\nEnd Actor\n"
+    "Begin Actor Class=Light Name=L1\n    Name=\"L1\"\nEnd Actor\nEnd Map")
+
+
+def test_level_order_excludes_a_stray_builder_brush_whose_inner_model_is_named_model():
+    # Real regression (dev/docs/spikes/2026-09-15-builder-brush-is-actors1-not-a-content-heuristic/
+    # spike.md): a real stray builder brush's inner model is plainly named `Model`, not the old
+    # reserved `Brush` -- the OLD content heuristic MISSED this on real UNATCO content (Brush74).
+    # Position alone still catches it: it sits at order[1], regardless of its inner model name.
+    lv = parse_t3d(_STRAY_BUILDER_BRUSH_MODEL_NAMED)
+    from uedcli.normalize import is_builder_brush
+    assert is_builder_brush(lv.actors["Brush74"]) is False   # the OLD content rule misses it
+    assert level_order(lv) == ["LevelInfo0", "L1"]           # the POSITIONAL rule still drops it
+
+
+_CONTENT_BRUSH_AFTER_BUILDER = (
+    "Begin Map\n"
+    "Begin Actor Class=LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
+    "Begin Actor Class=Brush Name=Brush0\n"
+    "    Begin Brush Name=Brush\n       Begin PolyList\n       End PolyList\n    End Brush\n"
+    "    Brush=Model'MyLevel.Brush'\n    Name=\"Brush0\"\nEnd Actor\n"
+    "Begin Actor Class=Brush Name=Brush1\n"
+    "    CsgOper=CSG_Add\n"
+    "    Begin Brush Name=Model5\n       Begin PolyList\n       End PolyList\n    End Brush\n"
+    "    Brush=Model'MyLevel.Model5'\n    Name=\"Brush1\"\nEnd Actor\n"
+    "Begin Actor Class=Light Name=L1\n    Name=\"L1\"\nEnd Actor\nEnd Map")
+
+
+def test_level_order_and_normalize_keep_an_ordinary_content_brush_not_at_position_1():
+    # An ordinary CsgOper-bearing content brush that is NOT the actor at order[1] (Brush0, the real
+    # builder brush, is) survives -- position, not content, decides; it is never mistaken for the
+    # builder brush no matter how brush-like it looks.
+    lv = parse_t3d(_CONTENT_BRUSH_AFTER_BUILDER)
+    assert level_order(lv) == ["LevelInfo0", "Brush1", "L1"]
     normalize_level(lv)
-    assert "Brush0" in lv.actors and "L1" in lv.actors
+    assert "Brush0" not in lv.actors
+    assert "Brush1" in lv.actors and "L1" in lv.actors
 
 
 def test_level_order_set_equals_normalized_content_set():
@@ -371,6 +426,7 @@ def test_level_order_set_equals_normalized_content_set():
 
 _BUILDER_BRUSH1 = (
     "Begin Map\n"
+    "Begin Actor Class=LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
     "Begin Actor Class=Brush Name=Brush1\n"
     "    Begin Brush Name=Brush\n       Begin PolyList\n       End PolyList\n    End Brush\n"
     "    Brush=Model'MyLevel.Brush'\n    Name=\"Brush1\"\nEnd Actor\n"
@@ -386,7 +442,7 @@ def test_is_builder_brush_true_for_brush1_fresh_editor_name():
 
 
 def test_level_order_excludes_a_brush1_builder_brush():
-    assert level_order(parse_t3d(_BUILDER_BRUSH1)) == ["L1"]
+    assert level_order(parse_t3d(_BUILDER_BRUSH1)) == ["LevelInfo0", "L1"]
 
 
 def test_is_builder_brush_false_for_a_content_model_named_brush_actor():
