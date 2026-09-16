@@ -271,6 +271,9 @@ function App() {
     <div id="app-root">
       <div className="viewport-pane">
         <div className="toolbar-row">
+          {/* Pinned to the toolbar's own opposite corner from the quad's Grid/Radii/Movers cluster
+              (bug fix: it used to sit at the row's right end, crowding that cluster below it). */}
+          <ThemeToggle preference={themePreference} onChange={setThemePreference} />
           <BuildToolbar status={status} busy={busy} onLoad={handleLoad} onRebuild={handleRebuild} />
           <LevelPicker
             currentLevel={level}
@@ -278,29 +281,34 @@ function App() {
             error={levelSwitchError}
             onSwitchLevel={handleSwitchLevel}
           />
-          <ThemeToggle preference={themePreference} onChange={setThemePreference} />
         </div>
-        {buildError && (
-          <div className="build-error-banner">
-            {buildError}
-            <button type="button" onClick={() => setBuildError(null)}>
-              Dismiss
-            </button>
-          </div>
-        )}
-        {reloading && <div className="updating-badge">updating…</div>}
-        <QuadLayout
-          scene={scene}
-          atlas={atlas}
-          lightmap={lightmap}
-          selectedNames={selectedNames}
-          onSelectActor={onSelectActor}
-          selectedSurfaces={selectedSurfaces}
-          onSelectSurface={onSelectSurface}
-          onSelectMany={onSelectMany}
-          onDeselect={onDeselect}
-          buildSolved={buildSolved}
-        />
+        {/* Fills exactly the space left below the toolbar row (a flex column: toolbar + this),
+            instead of the quad being sized against the full viewport height and drawing underneath
+            the toolbar. Banners below are positioned relative to THIS box, so they sit just below
+            the toolbar regardless of the toolbar's own rendered height. */}
+        <div className="viewport-content">
+          {buildError && (
+            <div className="build-error-banner">
+              {buildError}
+              <button type="button" onClick={() => setBuildError(null)}>
+                Dismiss
+              </button>
+            </div>
+          )}
+          {reloading && <div className="updating-badge">updating…</div>}
+          <QuadLayout
+            scene={scene}
+            atlas={atlas}
+            lightmap={lightmap}
+            selectedNames={selectedNames}
+            onSelectActor={onSelectActor}
+            selectedSurfaces={selectedSurfaces}
+            onSelectSurface={onSelectSurface}
+            onSelectMany={onSelectMany}
+            onDeselect={onDeselect}
+            buildSolved={buildSolved}
+          />
+        </div>
       </div>
       <div className="inspector-pane">
         <Inspector selected={selectedActors} selectedSurfaces={selectedSurfaceInfos} />

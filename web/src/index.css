@@ -126,10 +126,23 @@ body {
   flex-direction: row;
 }
 
+/* A flex COLUMN: the toolbar row (its natural height) stacked above `.viewport-content` (everything
+   else, filling the remainder) -- bug fix: the toolbar used to be `position: absolute` over the quad
+   layout below it, which sized the quad against the full pane height with nothing reserved for the
+   toolbar's own (growing, as more buttons are added) rendered height. */
 .viewport-pane {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.viewport-content {
   position: relative;
   flex: 1 1 auto;
   min-width: 0;
+  min-height: 0;
 }
 
 /* QuadLayout's own top-level row: the quad grid + the org panel sidebar (Part 6, Task 23). */
@@ -385,9 +398,7 @@ body {
 /* Base grid-size dropdown (dev/docs/GUI.md "The world-anchored grid") -- placed further left than
    .radii-toggle so the three buttons don't overlap: .radii-toggle sits at right:84px and is itself
    roughly 80-90px wide ("Radii: off" at this font/padding), putting its own left edge around
-   x=164-174px from the pane's right edge; right:172px leaves a small gap past that.
-   (.mover-solid-toggle has no positioning at all yet -- a separate, already-tracked layout bug, not
-   part of this overlap budget.) */
+   x=164-174px from the pane's right edge; right:172px leaves a small gap past that. */
 .grid-size-select {
   position: absolute;
   top: 4px;
@@ -401,6 +412,30 @@ body {
   background: var(--surface-2);
   color: var(--fg);
   cursor: pointer;
+}
+
+/* Movers solid-geometry toggle (GUI.md "Movers") -- same convention as .grid-toggle/.radii-toggle,
+   placed further left than .grid-size-select so the four buttons don't overlap: the select sits at
+   right:172px and is itself well under 128px wide even at its widest option ("Grid Size: 512"),
+   putting its own left edge comfortably past x=300px from the pane's right edge; right:300px leaves
+   a clear gap past that. (Previously had no positioning at all -- fell into normal document flow.) */
+.mover-solid-toggle {
+  position: absolute;
+  top: 4px;
+  right: 300px;
+  z-index: 3;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.mover-solid-toggle[aria-pressed='false'] {
+  color: var(--fg-muted);
 }
 
 /* Cursor UU coordinate readout (Task 28) -- bottom-left of each ortho pane. */
@@ -418,9 +453,12 @@ body {
   pointer-events: none;
 }
 
+/* `top`/`left` are relative to `.viewport-content`, which already starts right below the toolbar
+   row -- no toolbar-height offset needed here (bug fix: this used to hardcode `top: 44px`, a guess
+   at the toolbar's rendered height that broke every time a button was added to it). */
 .updating-badge {
   position: absolute;
-  top: 44px;
+  top: 8px;
   left: 8px;
   z-index: 1;
   padding: 2px 8px;
@@ -434,7 +472,7 @@ body {
    since the still-good scene stays on screen underneath it (review finding). */
 .build-error-banner {
   position: absolute;
-  top: 44px;
+  top: 8px;
   left: 8px;
   right: 8px;
   z-index: 1;
@@ -459,14 +497,14 @@ body {
   cursor: pointer;
 }
 
-/* The Load/Rebuild toolbar + level picker + theme toggle share one overlay row (quad-layout Part 7
-   Task 26, Part 9 Task 30). */
+/* The Load/Rebuild toolbar + level picker + theme toggle share one row (quad-layout Part 7 Task 26,
+   Part 9 Task 30) -- an ordinary flex-column sibling of `.viewport-content` (`.viewport-pane`'s own
+   `flex-direction: column`), NOT an absolute overlay: it takes its natural height and
+   `.viewport-content` fills exactly what's left below it (bug fix -- this used to be
+   `position: absolute` over the quad layout, drawing on top of its top-left/top-right panes instead
+   of pushing them down). `flex: 0 0 auto` keeps it from stretching/shrinking in the column. */
 .toolbar-row {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  z-index: 2;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -502,9 +540,12 @@ body {
   font-size: 12px;
 }
 
+/* Smaller than the other toolbar-row controls on purpose (bug fix: it used to render at the same
+   size as BuildToolbar's buttons, crowding the row) -- matches .grid-toggle's compact sizing. */
 .theme-toggle {
   font: inherit;
-  padding: 3px 10px;
+  font-size: 11px;
+  padding: 2px 8px;
   border-radius: 4px;
   border: 1px solid var(--border-strong);
   background: var(--surface-2);
