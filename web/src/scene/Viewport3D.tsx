@@ -23,7 +23,7 @@ import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR } from './markers'
 import { MeshWireframe } from './MeshWireframe'
 import { PointActorMarker } from './PointActorMarker'
 import { RadiiOverlays } from './RadiiOverlays'
-import { SelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
+import { SurfaceSelectionHighlight } from './SelectionHighlight'
 import { SelectionMarkers } from './SelectionMarkers'
 import { selectedNonBrushBoxes } from './selectionBoxes'
 import type { ShadingMode } from './shadingMode'
@@ -186,6 +186,7 @@ export function Viewport3D({
   const touchTap = useRef<TouchTapTracker | null>(null)
   const cameraRef = useRef<THREE.Camera | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
+  const meshPickRef = useRef<THREE.Mesh | null>(null)
   const markerGroupRef = useRef<THREE.Group | null>(null)
   // Wireframe-mode click-to-select (bug report item 6): with no solid mesh drawn, a hit must come
   // from the brush outline LINES themselves, never a bounding-box fallback -- see performTapSelect.
@@ -196,7 +197,7 @@ export function Viewport3D({
   const {
     bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
     moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners,
-    meshWireframeGeometry,
+    meshWireframeGeometry, meshPickGeometry, meshTriangleOwners, meshTrianglePolyIndex,
     textures, markerTexture, markerActors,
   } = useSceneResourcesContext()
   // 'unlit'/'lit' otherwise rendered the identical mesh (materials built once, shared across every
@@ -251,6 +252,9 @@ export function Viewport3D({
         // geometry at a roughly stable screen size.
         lineThreshold: WIREFRAME_LINE_HIT_WORLD_UNITS,
         meshObject: meshRef.current,
+        meshPickObject: meshPickRef.current,
+        meshTriangleOwners,
+        meshTrianglePolyIndex,
         markerObjects: markerGroupRef.current?.children ?? [],
         brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
         actors: scene.actors,
@@ -261,7 +265,7 @@ export function Viewport3D({
       else if (action.kind === 'select-surface') onSelectSurface(action.actor, action.polyIndex, action.additive)
       else if (action.kind === 'deselect') onDeselect()
     },
-    [scene.actors, triangleOwners, trianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode],
+    [scene.actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode],
   )
 
   // Mouse-only pointer-lock/capture/tap-vs-drag plumbing, shared with ortho panes (Part 0, Task 4).
@@ -398,20 +402,11 @@ export function Viewport3D({
         {mode !== 'wireframe' && showMoverSolid && (
           <mesh geometry={moverGeometry} material={activeMoverMaterials} />
         )}
-        {/* Issue 1: a selected brush's surface "lights up" (additive brightness boost), same as the
-            2D ortho panes below -- no surface to light up in wireframe mode (no solid mesh above). */}
-        {mode !== 'wireframe' && (
-          <SelectionHighlight
-            bufferGeometry={bufferGeometry}
-            triangleOwners={triangleOwners}
-            selectedNames={selectedNames}
-            materials={activeMaterials}
-          />
-        )}
-        {/* Texture (single-surface) selection highlight -- a DISTINCT selection kind from the
-            whole-brush highlight above (GUI.md "Selection & the Inspector"); only ever one of the
-            two sets is non-empty at a time (App.tsx clears the other kind on every selection
-            change), so this and `SelectionHighlight` never light up the same brush at once. */}
+        {/* A selected WHOLE BRUSH is shown as a selected ACTOR (its bold, brightened outline ring +
+            SelectionMarkers' vertex/pivot markers, both drawn below in every mode), NOT by lighting
+            up its faces -- matching `actor diagram`/UED22 (owner ruling). The old additive-white
+            per-face overlay for `selectedNames` is removed (it read as "all faces selected" and had
+            no UED22 basis). Only a genuine SINGLE-face `selectedSurfaces` pick still lights one poly: */}
         {mode !== 'wireframe' && (
           <SurfaceSelectionHighlight
             bufferGeometry={bufferGeometry}
@@ -419,14 +414,6 @@ export function Viewport3D({
             trianglePolyIndex={trianglePolyIndex}
             selectedSurfaces={selectedSurfaces}
             materials={activeMaterials}
-          />
-        )}
-        {mode !== 'wireframe' && showMoverSolid && (
-          <SelectionHighlight
-            bufferGeometry={moverGeometry}
-            triangleOwners={moverTriangleOwners}
-            selectedNames={selectedNames}
-            materials={activeMoverMaterials}
           />
         )}
         <group ref={markerGroupRef}>
@@ -479,6 +466,12 @@ export function Viewport3D({
             here instead, matching a brush's wireframe convention in this mode (GUI.md "Shading
             modes"). Solid mesh rendering in every other mode is unaffected (unchanged, above). */}
         {mode === 'wireframe' && <MeshWireframe geometry={meshWireframeGeometry} />}
+        {/* Invisible raycast target for mesh actors -- material.visible=false draws nothing but keeps
+            the object raycastable, so a DT_Mesh actor is click-selectable even in wireframe mode (its
+            solid mesh isn't drawn then). See tapSelect.ts / SceneResourcesContext. */}
+        <mesh ref={meshPickRef} geometry={meshPickGeometry}>
+          <meshBasicMaterial visible={false} />
+        </mesh>
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={scene.actors} selectedNames={selectedNames} />
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current

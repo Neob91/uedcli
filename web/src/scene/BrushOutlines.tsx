@@ -29,6 +29,7 @@ import { LineMaterial } from 'three/examples/jsm/lines/LineMaterial.js'
 import type { SceneActor } from '../api'
 import type { BrushRing, BrushRingMode } from './brushRings'
 import { buildBrushRings, mergeThinRings } from './brushRings'
+import { brightenWireColor } from './selectionColor'
 
 // `preview.py`'s `_line(..., weight=2, ...)` is the actual highlighted-edge width `actor diagram`
 // renders (bug report item 8) -- this was 3, visibly bolder than that reference.
@@ -142,7 +143,9 @@ export function BrushOutlines({ actors, selectedNames, mode, groupRef }: BrushOu
     <group ref={groupRef}>
       <MergedThinWireframe rings={thinRings} />
       {boldRings.map((ring, i) => {
-        const color = new THREE.Color(ring.color[0] / 255, ring.color[1] / 255, ring.color[2] / 255)
+        // A selected brush's ring is drawn in its own CSG hue, BRIGHTENED (UED22's WireColor*1.2) --
+        // so selection is a visible colour change, not just a thicker line (owner ruling).
+        const color = brightenWireColor(ring.color)
         return <BoldRing key={`${ring.actorName}-${i}`} verts={ring.verts} color={color} actorName={ring.actorName} />
       })}
     </group>

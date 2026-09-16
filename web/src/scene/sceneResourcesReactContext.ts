@@ -44,6 +44,14 @@ export interface SceneResources {
   // the solid mesh when its own mode is wireframe (every ortho pane; the perspective pane in
   // `'wireframe'` mode).
   meshWireframeGeometry: THREE.BufferGeometry
+  // An invisible, raycastable copy of the mesh-actor triangles (same polys as `meshWireframeGeometry`)
+  // plus their per-triangle owner arrays, so a DT_Mesh actor is click-selectable in the ortho panes
+  // (where no solid mesh is drawn and its wireframe carries no owner data). `resolveTapSelect` raycasts
+  // this and resolves a hit to its owning actor via `meshTriangleOwners` (whole-actor select, since a
+  // mesh actor has no brush -- see `selection.ts`'s `resolveTapAction`).
+  meshPickGeometry: THREE.BufferGeometry
+  meshTriangleOwners: (string | null)[]
+  meshTrianglePolyIndex: (number | null)[]
   textures: { map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> }
   markerTexture: THREE.Texture | null
   markerActors: SceneActor[]

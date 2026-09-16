@@ -13,6 +13,7 @@ import * as THREE from 'three'
 import type { SceneActor } from '../api'
 import { worldUnitsPerPixelAt } from './markers'
 import { primarySelection } from './selectionSet'
+import { brightenWireColor } from './selectionColor'
 
 // Matches `preview.py`'s `_PIVOT_RED`.
 const PIVOT_RED = new THREE.Color(255 / 255, 63 / 255, 63 / 255)
@@ -23,14 +24,6 @@ const PIVOT_RED = new THREE.Color(255 / 255, 63 / 255, 63 / 255)
 // marker, so it needs constant SCREEN size instead (see PivotMarker).
 const VERTEX_DOT_SIZE = 2
 const PIVOT_MARKER_SCREEN_PX = 14
-
-function brighten(rgb: [number, number, number], factor = 1.2): THREE.Color {
-  return new THREE.Color(
-    Math.min(1, (rgb[0] / 255) * factor),
-    Math.min(1, (rgb[1] / 255) * factor),
-    Math.min(1, (rgb[2] / 255) * factor),
-  )
-}
 
 /** A white "+" crosshair over a filled square, drawn once and tinted red via `SpriteMaterial.color`
  * -- mirrors `sceneResources.ts`'s `useMarkerTexture` pattern. Matches `_draw_pivot_marker`: a 4px
@@ -105,7 +98,7 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
   return (
     <group>
       {selectedBrushes.map((actor) => {
-        const color = brighten(actor.brush.color)
+        const color = brightenWireColor(actor.brush.color)
         const verts: [number, number, number][] = []
         for (const poly of actor.brush.polys) {
           for (let i = 0; i + 2 < poly.length; i += 3) {

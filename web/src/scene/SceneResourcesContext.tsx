@@ -91,17 +91,32 @@ export function SceneResourcesProvider({
     () => scene.polys.filter((p) => p.owner != null && meshActorNames.has(p.owner)),
     [scene.polys, meshActorNames],
   )
+  const meshGeoData = useMemo(() => buildGeometryData(meshPolys, atlas), [meshPolys, atlas])
   const meshWireframeGeometry = useMemo(() => {
-    const { positions } = buildGeometryData(meshPolys, atlas)
     const trianglesGeo = new THREE.BufferGeometry()
-    trianglesGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    trianglesGeo.setAttribute('position', new THREE.BufferAttribute(meshGeoData.positions, 3))
     const wire = new THREE.WireframeGeometry(trianglesGeo)
     trianglesGeo.dispose() // only fed WireframeGeometry's own edge extraction, not kept
     return wire
-  }, [meshPolys, atlas])
+  }, [meshGeoData])
   useEffect(() => {
     return () => meshWireframeGeometry.dispose()
   }, [meshWireframeGeometry])
+  // Invisible, raycastable pick mesh for mesh actors: a DT_Mesh actor's solid triangles are the only
+  // thing that identifies it (it has no brush ring and no marker sprite -- its polys stay in the main
+  // geometry), but in the ortho panes no solid mesh is drawn and its WireframeGeometry carries no
+  // owner data, so it was unselectable there (only the unreliable AABB fallback reached it). This is
+  // the same triangles as `meshWireframeGeometry`, kept as a real (material-invisible) mesh so the
+  // raycast resolves a hit to its owning actor via `meshTriangleOwners` -- mirrors BrushOutlines'
+  // dedicated owner-carrying pick geometry. Drawn nowhere visible; only ever raycast.
+  const meshPickGeometry = useMemo(() => {
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(meshGeoData.positions, 3))
+    return g
+  }, [meshGeoData])
+  useEffect(() => {
+    return () => meshPickGeometry.dispose()
+  }, [meshPickGeometry])
 
   // Point actors with no owned rendered poly (lights, triggers, patrol nodes, sounds, an unresolved
   // DT_Mesh) -- markers.ts's own filter, computed once here rather than per-pane. Unions BOTH
@@ -118,13 +133,14 @@ export function SceneResourcesProvider({
     () => ({
       bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
       moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners, moverTrianglePolyIndex,
-      meshWireframeGeometry,
+      meshWireframeGeometry, meshPickGeometry,
+      meshTriangleOwners: meshGeoData.triangleOwners, meshTrianglePolyIndex: meshGeoData.trianglePolyIndex,
       textures, markerTexture, markerActors, actors: scene.actors,
     }),
     [
       bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
       moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners, moverTrianglePolyIndex,
-      meshWireframeGeometry,
+      meshWireframeGeometry, meshPickGeometry, meshGeoData,
       textures, markerTexture, markerActors, scene.actors,
     ],
   )

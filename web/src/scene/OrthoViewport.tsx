@@ -23,7 +23,7 @@ import type { OrthoAxis, OrthoPose } from './orthoCamera'
 import { initialOrthoPose, orthoDragZoom, orthoFrameFit, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
 import { RadiiOverlays } from './RadiiOverlays'
 import { useSceneResourcesContext } from './useSceneResourcesContext'
-import { SelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
+import { SurfaceSelectionHighlight } from './SelectionHighlight'
 import { SelectionMarkers } from './SelectionMarkers'
 import { selectedNonBrushBoxes } from './selectionBoxes'
 import { resolveTapSelect } from './tapSelect'
@@ -117,7 +117,7 @@ export function OrthoViewport({
   const [hoverWorld, setHoverWorld] = useState<Vec3 | null>(null)
   const {
     bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
-    meshWireframeGeometry,
+    meshWireframeGeometry, meshPickGeometry, meshTriangleOwners, meshTrianglePolyIndex,
     textures, markerTexture, markerActors, actors,
   } = useSceneResourcesContext()
   const activeMaterials = usesUnlitMaterials(mode) ? unlitMaterials : materials
@@ -126,6 +126,7 @@ export function OrthoViewport({
   const nonBrushBoxes = useMemo(() => selectedNonBrushBoxes(actors, selectedNames), [actors, selectedNames])
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
+  const meshPickRef = useRef<THREE.Mesh | null>(null)
   const markerGroupRef = useRef<THREE.Group | null>(null)
   // Wireframe-mode click-to-select (bug report item 6): see Viewport3D.tsx's identical comment --
   // with no solid mesh drawn, a hit must come from the brush outline LINES themselves, never a
@@ -158,6 +159,9 @@ export function OrthoViewport({
         // deliberate delta this pane's zoom range needs and the perspective pane doesn't.
         lineThreshold: orthoLineHitThresholdUU(pose.worldUnitsPerPixel),
         meshObject: meshRef.current,
+        meshPickObject: meshPickRef.current,
+        meshTriangleOwners,
+        meshTrianglePolyIndex,
         markerObjects: markerGroupRef.current?.children ?? [],
         brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
         actors,
@@ -168,7 +172,7 @@ export function OrthoViewport({
       else if (action.kind === 'select-surface') onSelectSurface(action.actor, action.polyIndex, action.additive)
       else if (action.kind === 'deselect') onDeselect()
     },
-    [actors, triangleOwners, trianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode, pose.worldUnitsPerPixel],
+    [actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode, pose.worldUnitsPerPixel],
   )
 
   const dragCallbacks = useMemo<DragGestureCallbacks>(
@@ -256,16 +260,8 @@ export function OrthoViewport({
         <group scale={[1, -1, 1]}>
         {showGrid && <GridOverlay pose={pose} axis={axis} baseGridSize={baseGridSize} />}
         {mode !== 'wireframe' && <mesh ref={meshRef} geometry={bufferGeometry} material={activeMaterials} />}
-        {/* Issue 1: a selected brush's surface "lights up" (additive brightness boost), same as the
-            3D perspective pane -- no surface to light up in wireframe mode (no solid mesh above). */}
-        {mode !== 'wireframe' && (
-          <SelectionHighlight
-            bufferGeometry={bufferGeometry}
-            triangleOwners={triangleOwners}
-            selectedNames={selectedNames}
-            materials={activeMaterials}
-          />
-        )}
+        {/* A selected whole brush is shown as a selected ACTOR (bold brightened outline + markers),
+            not by lighting up its faces -- see Viewport3D's note. Only a single-face pick lights one poly: */}
         {/* Texture (single-surface) selection highlight -- see Viewport3D.tsx's identical block
             (never actually visible here in practice: ortho panes are always wireframe). */}
         {mode !== 'wireframe' && (
@@ -327,6 +323,11 @@ export function OrthoViewport({
             here, matching a brush's wireframe convention (GUI.md "Shading modes"), instead of the
             solid mesh above (never drawn in this pane). */}
         {mode === 'wireframe' && <MeshWireframe geometry={meshWireframeGeometry} />}
+        {/* Invisible raycast target so a DT_Mesh actor is click-selectable in this pane (no solid mesh
+            drawn here). See tapSelect.ts / SceneResourcesContext. */}
+        <mesh ref={meshPickRef} geometry={meshPickGeometry}>
+          <meshBasicMaterial visible={false} />
+        </mesh>
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={actors} selectedNames={selectedNames} />
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current
