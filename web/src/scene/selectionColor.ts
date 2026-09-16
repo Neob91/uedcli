@@ -34,6 +34,12 @@ export function brightenWireColor(rgb: [number, number, number], lift = SELECTIO
 // - Mesh actor, wireframe (`DrawMesh`, the `bWire` branch): flat edge-line color, selected
 //   (.2,.8,.1), unselected (.6,.4,.1) -- an olive/brown, not white.
 export const SELECTED_SPRITE_TINT = new THREE.Color(0.5, 0.9, 0.5)
+// The explicit UNSELECTED value for the same prop -- react-three-fiber treats an `undefined` prop
+// as "leave whatever's already applied alone," not "reset to default," so a spriteMaterial's
+// `color` must be given a real value in BOTH branches or a deselected sprite keeps its last tint
+// forever (bug: point actors stayed green after deselection). Plain white is the identity
+// multiplier over the sprite's own map/color, matching UED22's own `(1,1,1)` unselected constant.
+export const UNSELECTED_SPRITE_TINT = new THREE.Color(1, 1, 1)
 export const SELECTED_MESH_SOLID_OVERLAY_COLOR = 0x00ff00
 export const SELECTED_MESH_SOLID_OVERLAY_OPACITY = 0.6
 export const SELECTED_MESH_WIRE_COLOR = new THREE.Color(0.2, 0.8, 0.1)

@@ -24,7 +24,7 @@ import { MeshWireframe, SelectedMeshWireframe } from './MeshWireframe'
 import { PointActorMarker } from './PointActorMarker'
 import { RadiiOverlays } from './RadiiOverlays'
 import { ActorSelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
-import { SELECTED_SPRITE_TINT } from './selectionColor'
+import { SELECTED_SPRITE_TINT, UNSELECTED_SPRITE_TINT } from './selectionColor'
 import { SelectionMarkers } from './SelectionMarkers'
 import type { ShadingMode } from './shadingMode'
 import { usesUnlitMaterials } from './shadingMode'
@@ -456,7 +456,7 @@ export function Viewport3D({
                 >
                   <spriteMaterial
                     map={spriteTex}
-                    color={isSelected ? SELECTED_SPRITE_TINT : undefined}
+                    color={isSelected ? SELECTED_SPRITE_TINT : UNSELECTED_SPRITE_TINT}
                     depthWrite={false}
                     depthTest={mode !== 'wireframe'}
                   />

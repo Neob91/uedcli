@@ -24,7 +24,7 @@ import { initialOrthoPose, orthoDragZoom, orthoFrameFit, orthoLineHitThresholdUU
 import { RadiiOverlays } from './RadiiOverlays'
 import { useSceneResourcesContext } from './useSceneResourcesContext'
 import { ActorSelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
-import { SELECTED_SPRITE_TINT } from './selectionColor'
+import { SELECTED_SPRITE_TINT, UNSELECTED_SPRITE_TINT } from './selectionColor'
 import { SelectionMarkers } from './SelectionMarkers'
 import { resolveTapSelect } from './tapSelect'
 import type { ShadingMode } from './shadingMode'
@@ -306,7 +306,7 @@ export function OrthoViewport({
                 >
                   <spriteMaterial
                     map={spriteTex}
-                    color={isSelected ? SELECTED_SPRITE_TINT : undefined}
+                    color={isSelected ? SELECTED_SPRITE_TINT : UNSELECTED_SPRITE_TINT}
                     depthWrite={false}
                     depthTest={mode !== 'wireframe'}
                   />
