@@ -19,9 +19,11 @@ const KEY_LIGHT: [number, number, number] = [-0.408, -0.577, 0.707]
  * winding from an object's OWN `matrixWorld` determinant, never the camera's) -- so the earlier
  * verification went stale the moment the mirror landed, silently culling the wrong face on every
  * single-sided wall (confirmed live: CSG subtracts and additive brushes appeared to swap which face
- * is visible). `OrthoViewport.tsx`'s cameras use the identical mirror technique, so this one flip
- * covers every pane. */
-const REVERSE_FAN = true
+ * is visible). Superseded: the handedness fix moved from the projection matrix to a reflected
+ * `<group scale={[1,-1,1]}>` around all world content (viewportRender.ts). three.js DOES auto-flip
+ * `frontFace` from that group's negative `matrixWorld` determinant, so the natural winding is correct
+ * again and this returns to `false` -- render.rs's own order, no per-camera reversal. */
+const REVERSE_FAN = false
 
 /** One contiguous [start, count] triangle-vertex range (three.js BufferGeometry group semantics:
  * start/count counted in VERTICES, matching a non-indexed geometry), tagged with the texture, mask

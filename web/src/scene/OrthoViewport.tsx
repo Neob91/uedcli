@@ -16,7 +16,7 @@ import type { DragGestureCallbacks } from './dragGesture'
 import type { FrameRequest } from './frame'
 import { DEFAULT_GRID_SIZE } from './grid'
 import { GridOverlay } from './GridOverlay'
-import { MARKER_COLOR } from './markers'
+import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR } from './markers'
 import { MeshWireframe } from './MeshWireframe'
 import { PointActorMarker } from './PointActorMarker'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
@@ -251,6 +251,9 @@ export function OrthoViewport({
             showing through a transparent canvas (bug report item 1). */}
         <color attach="background" args={['#404040']} />
         <OrthoCameraRig pose={pose} axis={axis} cameraRef={cameraRef} />
+        {/* All world content reflected by R = diag(1,-1,1) -- the left-handed-world handedness fix
+            (applyOrthoCameraPose reflects the camera pose by the same R). See Viewport3D's note. */}
+        <group scale={[1, -1, 1]}>
         {showGrid && <GridOverlay pose={pose} axis={axis} baseGridSize={baseGridSize} />}
         {mode !== 'wireframe' && <mesh ref={meshRef} geometry={bufferGeometry} material={activeMaterials} />}
         {/* Issue 1: a selected brush's surface "lights up" (additive brightness boost), same as the
@@ -287,14 +290,12 @@ export function OrthoViewport({
                 <PointActorMarker
                   key={actor.name}
                   position={actor.location}
-                  aspect={actor.sprite.width / actor.sprite.height}
+                  width={actor.sprite.width}
+                  height={actor.sprite.height}
                   userData={{ actorName: actor.name }}
                   renderOrder={MARKER_RENDER_ORDER}
                 >
-                  {/* side=DoubleSide: the pane's projection mirror flips screen-space winding, and a
-                      Sprite's built-in quad can't re-wind like the world mesh's REVERSE_FAN fans, so a
-                      FrontSide marker is fully backface-culled -- opt out (see Viewport3D's note). */}
-                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={false} side={THREE.DoubleSide} />
+                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={mode !== 'wireframe'} />
                 </PointActorMarker>
               )
             }
@@ -303,11 +304,12 @@ export function OrthoViewport({
               <PointActorMarker
                 key={actor.name}
                 position={actor.location}
-                aspect={1}
+                width={DEFAULT_MARKER_FOOTPRINT_UU}
+                height={DEFAULT_MARKER_FOOTPRINT_UU}
                 userData={{ actorName: actor.name }}
                 renderOrder={MARKER_RENDER_ORDER}
               >
-                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={false} side={THREE.DoubleSide} />
+                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={mode !== 'wireframe'} />
               </PointActorMarker>
             )
           })}
@@ -333,6 +335,7 @@ export function OrthoViewport({
         {nonBrushBoxes.map(({ name, lo, hi }) => (
           <box3Helper key={name} args={[new THREE.Box3(new THREE.Vector3(...lo), new THREE.Vector3(...hi)), SELECTION_BOX_COLOR]} />
         ))}
+        </group>
       </Canvas>
       {/* Cursor UU coordinate readout (Task 28) -- the selected actor's own location/size is
           already shown by the side Inspector (spec §7's other clause), not duplicated here. */}

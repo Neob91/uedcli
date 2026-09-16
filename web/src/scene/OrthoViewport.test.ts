@@ -21,7 +21,9 @@ import type { OrthoAxis, OrthoPose } from './orthoCamera'
 function projectRelative(pose: OrthoPose, axis: OrthoAxis, offset: [number, number, number]): THREE.Vector3 {
   const camera = new THREE.OrthographicCamera()
   applyOrthoCameraPose(camera, pose, axis, { width: 100, height: 100 })
-  const point = new THREE.Vector3(pose.center[0] + offset[0], pose.center[1] + offset[1], pose.center[2] + offset[2])
+  // Content is drawn inside a reflected `<group scale={[1,-1,1]}>` and the camera pose is reflected by
+  // the same R = diag(1,-1,1), so a game-coord point appears at the projection of R*point (negate Y).
+  const point = new THREE.Vector3(pose.center[0] + offset[0], -(pose.center[1] + offset[1]), pose.center[2] + offset[2])
   return point.project(camera)
 }
 
@@ -35,8 +37,9 @@ describe('applyOrthoCameraPose', () => {
       applyOrthoCameraPose(camera, POSE, axis, { width: 100, height: 100 })
       const { forward } = orthoBasis(axis)
       const lookDir = new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld)
+      // Camera posed in reflected space: looks along R*forward = (fx, -fy, fz).
       expect(lookDir.x).toBeCloseTo(forward[0], 5)
-      expect(lookDir.y).toBeCloseTo(forward[1], 5)
+      expect(lookDir.y).toBeCloseTo(-forward[1], 5)
       expect(lookDir.z).toBeCloseTo(forward[2], 5)
     }
   })
@@ -80,7 +83,8 @@ describe('applyOrthoCameraPose', () => {
 function screenPxOf(pose: OrthoPose, axis: OrthoAxis, worldPoint: [number, number, number], viewportPx: { width: number; height: number }) {
   const camera = new THREE.OrthographicCamera()
   applyOrthoCameraPose(camera, pose, axis, viewportPx)
-  const ndc = new THREE.Vector3(...worldPoint).project(camera)
+  // Reflect the world point by R = diag(1,-1,1) (the content group's reflection) before projecting.
+  const ndc = new THREE.Vector3(worldPoint[0], -worldPoint[1], worldPoint[2]).project(camera)
   return { x: ((ndc.x + 1) / 2) * viewportPx.width, y: ((1 - ndc.y) / 2) * viewportPx.height }
 }
 

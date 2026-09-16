@@ -19,7 +19,7 @@ import type { DragGestureCallbacks } from './dragGesture'
 import { useDragGesture } from './dragGesture'
 import type { FrameRequest } from './frame'
 import { bboxCenter, bboxMaxExtent } from './frame'
-import { MARKER_COLOR } from './markers'
+import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR } from './markers'
 import { MeshWireframe } from './MeshWireframe'
 import { PointActorMarker } from './PointActorMarker'
 import { RadiiOverlays } from './RadiiOverlays'
@@ -384,6 +384,12 @@ export function Viewport3D({
         <color attach="background" args={['#000000']} />
         <CameraRig pose={pose} cameraRef={cameraRef} />
         <FlyKeys setPose={setPose} />
+        {/* All world content is reflected by R = diag(1,-1,1): the world is left-handed, and this is
+            the handedness fix (viewportRender.ts's applyCameraPose reflects the camera pose by the
+            same R). three.js compensates for the group's negative determinant -- winding (frontFace)
+            and sprites both come out correct with no per-consumer patch. The camera rig/background
+            stay OUTSIDE the group. */}
+        <group scale={[1, -1, 1]}>
         {mode !== 'wireframe' && <mesh ref={meshRef} geometry={bufferGeometry} material={activeMaterials} />}
         {/* Movers: wireframe-outline-only by default in every mode (GUI.md "Movers") -- their solid
             geometry is split OUT of `bufferGeometry` above (SceneResourcesContext) and only drawn
@@ -433,34 +439,27 @@ export function Viewport3D({
             // SPRITE map, not the base `textures.map` -- see `useTextures`'s docstring for why
             // sharing the base (flipY=false) texture here renders the billboard upside-down.
             //
-            // `depthTest={false}` (owner ruling, 2026-09-16: point-actor icons must show in BOTH
-            // perspective and ortho panes -- OrthoViewport.tsx already had this, this pane didn't).
-            // Without it, a marker sitting at/near a wall-mounted actor's Location (a torch, wall
-            // sconce, security camera -- Location often coincides with the mount surface) loses the
-            // depth test against that wall's own geometry at grazing viewing angles and never draws
-            // at all -- confirmed live: a hallway with visible wall-torch icons in every ortho pane
-            // showed NONE of them in the perspective pane at the identical camera pose.
+            // `depthTest={mode !== 'wireframe'}` (owner ruling): a marker is OCCLUDED behind geometry
+            // in the solid shading modes (a torch icon behind a wall is hidden, UED22 parity), but in
+            // wireframe mode -- where there's no solid mesh to occlude it -- it always shows.
             const spriteTex = actor.sprite ? textures.sprite.get(actor.sprite.tex_index) : undefined
             if (actor.sprite && spriteTex) {
               return (
                 <PointActorMarker
                   key={actor.name}
                   position={actor.location}
-                  aspect={actor.sprite.width / actor.sprite.height}
+                  width={actor.sprite.width}
+                  height={actor.sprite.height}
                   userData={{ actorName: actor.name }}
                 >
-                  {/* side=DoubleSide: the pane's projection mirror (viewportRender.ts negates
-                      projectionMatrix.elements[0]) flips screen-space winding; the world mesh re-winds
-                      via geometry.ts REVERSE_FAN, but a Sprite's built-in quad can't be re-wound, so a
-                      FrontSide (default) marker is 100% backface-culled in every pane -- opt out. */}
-                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={false} side={THREE.DoubleSide} />
+                  <spriteMaterial map={spriteTex} depthWrite={false} depthTest={mode !== 'wireframe'} />
                 </PointActorMarker>
               )
             }
             if (!markerTexture) return null
             return (
-              <PointActorMarker key={actor.name} position={actor.location} aspect={1} userData={{ actorName: actor.name }}>
-                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={false} side={THREE.DoubleSide} />
+              <PointActorMarker key={actor.name} position={actor.location} width={DEFAULT_MARKER_FOOTPRINT_UU} height={DEFAULT_MARKER_FOOTPRINT_UU} userData={{ actorName: actor.name }}>
+                <spriteMaterial map={markerTexture} color={MARKER_COLOR_THREE} depthWrite={false} depthTest={mode !== 'wireframe'} />
               </PointActorMarker>
             )
           })}
@@ -490,6 +489,7 @@ export function Viewport3D({
         {nonBrushBoxes.map(({ name, lo, hi }) => (
           <box3Helper key={name} args={[new THREE.Box3(new THREE.Vector3(...lo), new THREE.Vector3(...hi)), SELECTION_BOX_COLOR]} />
         ))}
+        </group>
       </Canvas>
     </div>
   )

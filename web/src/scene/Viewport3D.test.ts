@@ -13,16 +13,15 @@ describe('WIREFRAME_LINE_HIT_WORLD_UNITS', () => {
   })
 })
 
-// Pins the mirror fix (owner bug report: "meshes render reverted (mirror image)") against real
-// three.js math -- no WebGL context needed, `Vector3.project` is pure matrix arithmetic. The world
-// is left-handed (X forward, Y right, Z up) fed verbatim into three.js's right-handed renderer, so
-// a correct camera must render a point offset toward `cameraBasis.right` on the RIGHT of the screen
-// (positive NDC.x) and a point offset toward `up` toward the TOP (positive NDC.y) -- verified
-// against a fresh `level photo --native` (render.rs) of the same poses during this fix.
-// `depthAlongForward` keeps the projected point safely in front of the camera (real screen content
-// always has forward depth; an offset purely perpendicular to `forward` sits exactly at the camera,
-// an degenerate zero-depth case `Vector3.project` can't handle) -- only `right`/`up` decide which
-// half of the screen it lands in.
+// Pins the left-handed-world orientation fix (owner bug report: "meshes render reverted (mirror
+// image)") against real three.js math -- no WebGL context needed, `Vector3.project` is pure matrix
+// arithmetic. The world is left-handed (X forward, Y right, Z up); all content is drawn inside a
+// reflected `<group scale={[1,-1,1]}>` (R = diag(1,-1,1)) and `applyCameraPose` reflects the camera
+// pose by the same R. A correct camera must render a point offset toward `cameraBasis.right` on the
+// RIGHT of the screen (positive NDC.x) and toward `up` at the TOP (positive NDC.y) -- verified
+// against a fresh `level photo --native` (render.rs) of the same poses. Because the content is
+// reflected, the on-screen position of a game-coord point is the projection of R*point, so the test
+// reflects the point by R (negate Y) before projecting.
 function projectRelative(pose: CameraPose, sideOffset: [number, number, number]): THREE.Vector3 {
   const camera = new THREE.PerspectiveCamera(75, 1, 1, 131072)
   applyCameraPose(camera, pose)
@@ -30,7 +29,7 @@ function projectRelative(pose: CameraPose, sideOffset: [number, number, number])
   const depthAlongForward = 500
   const point = new THREE.Vector3(
     pose.position[0] + forward[0] * depthAlongForward + sideOffset[0],
-    pose.position[1] + forward[1] * depthAlongForward + sideOffset[1],
+    -(pose.position[1] + forward[1] * depthAlongForward + sideOffset[1]), // R = diag(1,-1,1): the group reflects Y
     pose.position[2] + forward[2] * depthAlongForward + sideOffset[2],
   )
   return point.project(camera)
@@ -62,14 +61,15 @@ describe('applyCameraPose', () => {
     }
   })
 
-  it('looks along cameraBasis.forward (never flips the view direction itself)', () => {
+  it('looks along R*cameraBasis.forward (the pose is reflected into the content group space)', () => {
     const pose: CameraPose = { position: [-300, 50, 700], pitch: -75, yaw: 0 }
     const camera = new THREE.PerspectiveCamera(75, 1, 1, 131072)
     applyCameraPose(camera, pose)
     const { forward } = cameraBasis(pose.pitch, pose.yaw)
     const lookDir = new THREE.Vector3(0, 0, -1).transformDirection(camera.matrixWorld)
+    // Camera posed in reflected space: it looks along R*forward = (fx, -fy, fz).
     expect(lookDir.x).toBeCloseTo(forward[0], 5)
-    expect(lookDir.y).toBeCloseTo(forward[1], 5)
+    expect(lookDir.y).toBeCloseTo(-forward[1], 5)
     expect(lookDir.z).toBeCloseTo(forward[2], 5)
   })
 })

@@ -76,9 +76,14 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
     }
   }
   if (!hit) {
+    // The camera is posed in REFLECTED space (viewportRender.ts reflects the pose by R = diag(1,-1,1),
+    // the left-handed-world fix), so `raycaster.ray` is in reflected space. The raycast candidates
+    // above resolve through their own `matrixWorld` (which carries the same reflection), so they need
+    // no adjustment -- but `pickActor`'s AABBs come straight from `SceneActor.bbox_*` in GAME
+    // coordinates, so map the ray back by R (its own inverse: negate Y of origin + direction).
     const ray: Ray = {
-      origin: [raycaster.ray.origin.x, raycaster.ray.origin.y, raycaster.ray.origin.z],
-      direction: [raycaster.ray.direction.x, raycaster.ray.direction.y, raycaster.ray.direction.z],
+      origin: [raycaster.ray.origin.x, -raycaster.ray.origin.y, raycaster.ray.origin.z],
+      direction: [raycaster.ray.direction.x, -raycaster.ray.direction.y, raycaster.ray.direction.z],
     }
     const aabbCandidates = mode === 'wireframe' ? actors.filter((a) => !a.brush) : actors
     const actor = pickActor(ray, aabbCandidates)

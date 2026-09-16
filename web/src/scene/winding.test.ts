@@ -54,13 +54,17 @@ function visiblePerRenderRs(verts: number[], camera: [number, number, number]): 
   return (camera[0] - verts[0]) * n[0] + (camera[1] - verts[1]) * n[1] + (camera[2] - verts[2]) * n[2] >= -1
 }
 
-/** three.js `FrontSide`'s own verdict for one emitted triangle: NDC signed area > 0. */
+/** three.js `FrontSide`'s verdict for one emitted triangle, as actually drawn: all content lives in
+ * a reflected `<group scale={[1,-1,1]}>`, so each vertex is reflected by R (negate Y) before
+ * projecting, and the group's negative `matrixWorld` determinant makes three.js flip `frontFace` --
+ * so a triangle is kept (front) when its NDC signed area is NEGATIVE (the reflected counterpart of
+ * the pre-reflection `> 0` rule). With `REVERSE_FAN` now `false`, this must agree with render.rs. */
 function frontFacingInThree(positions: Float32Array, triangle: number, camera: THREE.Camera): boolean {
   const p = [0, 1, 2].map((k) => {
     const i = (triangle * 3 + k) * 3
-    return new THREE.Vector3(positions[i], positions[i + 1], positions[i + 2]).project(camera)
+    return new THREE.Vector3(positions[i], -positions[i + 1], positions[i + 2]).project(camera)
   })
-  return (p[1].x - p[0].x) * (p[2].y - p[0].y) - (p[1].y - p[0].y) * (p[2].x - p[0].x) > 0
+  return (p[1].x - p[0].x) * (p[2].y - p[0].y) - (p[1].y - p[0].y) * (p[2].x - p[0].x) < 0
 }
 
 // An axis-aligned quad, 400 UU across, centred `depth` UU straight ahead of the camera, spanned by

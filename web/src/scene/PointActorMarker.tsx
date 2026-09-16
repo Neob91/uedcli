@@ -1,46 +1,31 @@
-// Constant-screen-size point-actor marker sprite (bug report: point actors, at ordinary
-// level-viewing distances, shrink to sub-pixel size and read as "not rendering") -- shared by
-// Viewport3D.tsx (perspective) and OrthoViewport.tsx (the three ortho panes), which used a FIXED
-// world-unit `scale` before this. Ports `SelectionMarkers.tsx`'s `PivotMarker` technique: rescale
-// the sprite every frame from the live camera/viewport state via `worldUnitsPerPixelAt`, instead of
-// a fixed world-unit `scale` prop.
-import { useRef } from 'react'
+// World-space point-actor marker sprite -- a DT_Sprite billboard drawn at its real WORLD footprint
+// (DrawScale x texel size, UED22 parity), so it foreshortens with distance (perspective) and shrinks
+// when you zoom out (ortho) like ordinary geometry, instead of holding a constant screen size (owner:
+// markers must not grow relative to the world as you zoom out). Shared by Viewport3D.tsx (perspective)
+// and OrthoViewport.tsx (ortho). three.js Sprites billboard toward the camera in-shader, so no
+// per-frame CPU rescale is needed -- a static world `scale` suffices, and it stays a correct, upright,
+// un-mirrored w x h billboard inside the reflected `<group scale={[1,-1,1]}>` (the sprite shader reads
+// the sign-free lengths of the model-matrix columns for its size).
 import type { ReactNode } from 'react'
-import { useFrame, useThree } from '@react-three/fiber'
-import * as THREE from 'three'
-
-import { markerSpriteScale, worldUnitsPerPixelAt } from './markers'
 
 export interface PointActorMarkerProps {
   position: [number, number, number]
-  // Real class icon's `width / height` world-space footprint (preserves the icon's own aspect
-  // ratio); pass 1 for the square fallback dot.
-  aspect: number
+  // The billboard's world-space (UU) footprint: `ActorSprite.width`/`height` for a resolved class
+  // icon, or `DEFAULT_MARKER_FOOTPRINT_UU` square for the fallback grey dot.
+  width: number
+  height: number
   userData?: Record<string, unknown>
-  // Ortho panes draw markers on top of brush wireframe/highlight (owner ruling, ortho only) via a
-  // higher renderOrder than everything else in the pane; the perspective pane leaves this unset
-  // (its own scene-graph/insertion order is fine there).
+  // Ortho panes draw markers on top of brush wireframe/highlight via a higher renderOrder; the
+  // perspective pane leaves this unset (its scene-graph insertion order draws markers last already).
   renderOrder?: number
-  // The `<spriteMaterial>` -- each caller keeps its own material props (map/color), which differ
-  // between the perspective and ortho panes (item 16: only the per-frame rescale plumbing is shared,
-  // not the material). Both panes set `depthWrite={false}` and `depthTest={false}` identically
-  // (owner ruling: a point-actor icon must always be visible, in every pane -- see
-  // Viewport3D.tsx's/OrthoViewport.tsx's own marker-rendering comments for why).
+  // The `<spriteMaterial>` -- each caller sets its own map/color/depthTest (which differ by pane and
+  // shading mode: depthTest is off in wireframe, on otherwise).
   children: ReactNode
 }
 
-export function PointActorMarker({ position, aspect, userData, renderOrder, children }: PointActorMarkerProps) {
-  const spriteRef = useRef<THREE.Sprite>(null)
-  const { camera, size } = useThree()
-  useFrame(() => {
-    const sprite = spriteRef.current
-    if (!sprite) return
-    const worldPos = new THREE.Vector3(...position)
-    const [width, height] = markerSpriteScale(worldUnitsPerPixelAt(camera, worldPos, size.height), aspect)
-    sprite.scale.set(width, height, 1)
-  })
+export function PointActorMarker({ position, width, height, userData, renderOrder, children }: PointActorMarkerProps) {
   return (
-    <sprite ref={spriteRef} position={position} userData={userData} renderOrder={renderOrder}>
+    <sprite position={position} scale={[width, height, 1]} userData={userData} renderOrder={renderOrder}>
       {children}
     </sprite>
   )

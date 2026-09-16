@@ -36,20 +36,13 @@ export function worldUnitsPerPixelAt(camera: THREE.Camera, point: THREE.Vector3,
  * this codebase's convention for a `THREE.Color` triple (e.g. the class palette this replaces). */
 export const MARKER_COLOR: [number, number, number] = [185 / 255, 185 / 255, 185 / 255]
 
-// Target on-screen size (px) for a point-actor marker (real class icon or fallback dot) -- always
-// this size regardless of zoom/distance, matching `SelectionMarkers.tsx`'s `PIVOT_MARKER_SCREEN_PX`
-// convention for the same reason: a level-editor icon (light, trigger, sound) must stay identifiable
-// at any practical viewing distance, the way real UnrealEd's point-actor icons do.
-export const MARKER_SCREEN_PX = 24
-
-/** The `[width, height]` world-unit sprite scale that holds a point-actor marker `MARKER_SCREEN_PX`
- * tall on screen at `worldUnitsPerPixel`, preserving `aspect` (a real class icon's `width / height`
- * footprint; pass `1` for the square fallback dot) -- pure, testable math `PointActorMarker`'s
- * per-frame rescale wraps. */
-export function markerSpriteScale(worldUnitsPerPixel: number, aspect: number): [number, number] {
-  const heightUU = MARKER_SCREEN_PX * worldUnitsPerPixel
-  return [heightUU * aspect, heightUU]
-}
+// Fallback marker world-space footprint (UU), used only when an actor has no resolved DT_Sprite (the
+// grey dot). A resolved icon uses its own real `ActorSprite.width/height` (DrawScale x texel size)
+// instead. 32 UU square mirrors UnrealEd's generic S_Actor icon (32x32 texels at DrawScale 1). Unlike
+// the pivot GIZMO (`SelectionMarkers.tsx`, deliberately constant screen size), a point-actor marker
+// is a real DT_Sprite billboard with a fixed WORLD footprint, so it foreshortens with distance/zoom
+// like ordinary geometry -- UED22 parity.
+export const DEFAULT_MARKER_FOOTPRINT_UU = 32
 
 /** Actors needing a fallback marker: no brush (not a CSG actor -- brush picking/highlight is a
  * separate, already-working path) and no owned rendered poly (`ownedNames`, the distinct non-null

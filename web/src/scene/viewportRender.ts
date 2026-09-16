@@ -86,20 +86,25 @@ export const WIREFRAME_LINE_HIT_WORLD_UNITS = 8
  * Pure THREE.js math -- no WebGL context needed, so it's unit-tested directly (`Viewport3D.test.ts`)
  * without mounting a `<Canvas>`. */
 export function applyCameraPose(camera: THREE.PerspectiveCamera, pose: CameraPose): void {
+  // The world is left-handed (X forward, Y right, Z up); all drawn content lives inside a reflected
+  // `<group scale={[1,-1,1]}>` (R = diag(1,-1,1)) so three.js compensates winding + sprites natively.
+  // The camera pose is reflected by the SAME R (position, look target, and up), which -- because
+  // `lookAt` rebuilds `right` via a proper cross product -- reproduces EXACTLY the old
+  // projection-NDC-x-mirror image for every pose (verified: P·V'·R == P·M·V), with no projection
+  // hack and no control re-tuning. `up` = R·(0,0,1) = (0,0,1) is unchanged.
   camera.up.set(0, 0, 1)
-  camera.position.set(pose.position[0], pose.position[1], pose.position[2])
+  camera.position.set(pose.position[0], -pose.position[1], pose.position[2])
   const { forward } = cameraBasis(pose.pitch, pose.yaw)
   camera.lookAt(
     pose.position[0] + forward[0],
-    pose.position[1] + forward[1],
+    -(pose.position[1] + forward[1]),
     pose.position[2] + forward[2],
   )
   camera.updateMatrixWorld(true) // r3f does this too before rendering; explicit here so this
   // function is self-contained for direct (non-r3f) callers, e.g. Viewport3D.test.ts's
-  // Vector3.project(camera), which reads matrixWorldInverse without updating it itself.
+  // Vector3.project(camera) (which must reflect the world point by R first -- the camera is posed in
+  // reflected space).
   camera.updateProjectionMatrix()
-  camera.projectionMatrix.elements[0] *= -1
-  camera.projectionMatrixInverse.elements[0] *= -1
 }
 
 /** Applies `pose`/`axis` to an ortho pane's `THREE.OrthographicCamera` every frame: axis-locked
@@ -129,9 +134,11 @@ export function applyOrthoCameraPose(
   const x = pose.center[0] - forward[0] * ORTHO_HALF_RANGE
   const y = pose.center[1] - forward[1] * ORTHO_HALF_RANGE
   const z = pose.center[2] - forward[2] * ORTHO_HALF_RANGE
-  cam.position.set(x, y, z)
-  cam.up.set(up[0], up[1], up[2])
-  cam.lookAt(x + forward[0], y + forward[1], z + forward[2])
+  // Reflect the pose by R = diag(1,-1,1), the same reflection the world-content group applies (see
+  // `applyCameraPose`): negate the Y of position, look target, and up. No projection-matrix hack.
+  cam.position.set(x, -y, z)
+  cam.up.set(up[0], -up[1], up[2])
+  cam.lookAt(x + forward[0], -(y + forward[1]), z + forward[2])
   cam.updateMatrixWorld(true) // r3f does this before rendering; explicit here so this function is
   // self-contained for direct (non-r3f) callers, e.g. OrthoViewport.test.ts's Vector3.project(cam),
   // which reads matrixWorldInverse without updating it itself (applyCameraPose has the identical
@@ -145,6 +152,4 @@ export function applyOrthoCameraPose(
   cam.near = 0.1
   cam.far = ORTHO_HALF_RANGE * 2
   cam.updateProjectionMatrix()
-  cam.projectionMatrix.elements[0] *= -1
-  cam.projectionMatrixInverse.elements[0] *= -1
 }

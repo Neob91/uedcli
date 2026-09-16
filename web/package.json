@@ -17,6 +17,7 @@
     "three": "^0.186.0"
   },
   "devDependencies": {
+    "@react-three/test-renderer": "^9.1.1",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^24.13.3",
     "@types/react": "^19.2.18",
