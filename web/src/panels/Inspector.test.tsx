@@ -2,7 +2,8 @@ import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { ScenePoly, SceneActor } from '../api'
-import { groupByCategory, Inspector } from './Inspector'
+import { Inspector } from './Inspector'
+import { groupByCategory } from './groupByCategory'
 import type { SurfaceSelection } from './Inspector'
 
 function fixturePoly(overrides: Partial<ScenePoly> = {}): ScenePoly {

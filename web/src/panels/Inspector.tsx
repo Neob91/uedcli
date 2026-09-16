@@ -4,6 +4,7 @@
 // grouped into UnrealEd-style categories as collapsible sections (SceneActor.categories, parallel
 // to .props). Draws only what it's handed -- no model/diff logic here.
 import type { ScenePoly, SceneActor } from '../api'
+import { groupByCategory } from './groupByCategory'
 
 /** One selected SURFACE (single polygon) -- GUI.md "Selection & the Inspector": a distinct
  * selection kind from a whole-actor selection (`SceneActor`), owner-answered as "highlight + inspect
@@ -27,30 +28,6 @@ export interface InspectorProps {
   // two props is ever non-empty; `selected` takes rendering priority if both somehow are. Defaults
   // to empty so every existing actor-only call site (tests included) is unaffected.
   selectedSurfaces?: SurfaceSelection[]
-}
-
-// Groups props[i] under categories[i], preserving first-occurrence category order and
-// within-category prop order (both already stored/T3D order). A length mismatch is a boundary
-// invariant violation (the backend guarantees props.length === categories.length), not a
-// recoverable UI state.
-export function groupByCategory(
-  props: [string, string][],
-  categories: string[],
-): Map<string, [string, string][]> {
-  if (props.length !== categories.length) {
-    throw new Error(`groupByCategory: props.length (${props.length}) !== categories.length (${categories.length})`)
-  }
-  const groups = new Map<string, [string, string][]>()
-  props.forEach((prop, i) => {
-    const category = categories[i]
-    const rows = groups.get(category)
-    if (rows) {
-      rows.push(prop)
-    } else {
-      groups.set(category, [prop])
-    }
-  })
-  return groups
 }
 
 /** One surface's raw `ScenePoly` fields, in the same "draw what the backend sends" spirit as the

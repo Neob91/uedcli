@@ -3,7 +3,7 @@ import * as THREE from 'three'
 
 import { cameraBasis } from './camera'
 import type { CameraPose } from './camera'
-import { applyCameraPose, WIREFRAME_LINE_HIT_WORLD_UNITS } from './Viewport3D'
+import { applyCameraPose, WIREFRAME_LINE_HIT_WORLD_UNITS } from './viewportRender'
 
 // Widened hit-test tolerance (owner report, live testing: brush-outline selection in wireframe mode
 // needed near-pixel-exact clicks) -- pins the value so a future edit can't silently narrow it back.

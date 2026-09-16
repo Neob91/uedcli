@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 
-import { applyOrthoCameraPose } from './OrthoViewport'
+import { applyOrthoCameraPose } from './viewportRender'
 import { orthoBasis, orthoPan } from './orthoCamera'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
 

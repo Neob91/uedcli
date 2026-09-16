@@ -20,7 +20,7 @@ import type { AtlasPayload, ScenePoly } from '../api'
 import { cameraBasis } from './camera'
 import type { CameraPose } from './camera'
 import { buildGeometryData } from './geometry'
-import { applyCameraPose } from './Viewport3D'
+import { applyCameraPose } from './viewportRender'
 
 const EMPTY_ATLAS: AtlasPayload = { width: 1, height: 1, manifest: {}, png_base64: '' }
 

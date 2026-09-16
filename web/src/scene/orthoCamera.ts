@@ -37,6 +37,12 @@ export function orthoBasis(axis: OrthoAxis): OrthoBasis {
   return ORTHO_BASIS[axis]
 }
 
+const INITIAL_WORLD_UNITS_PER_PIXEL = 4
+
+export function initialOrthoPose(): OrthoPose {
+  return { center: [0, 0, 0], worldUnitsPerPixel: INITIAL_WORLD_UNITS_PER_PIXEL }
+}
+
 function addScaled(v: Vec3, dir: Vec3, s: number): Vec3 {
   return [v[0] + dir[0] * s, v[1] + dir[1] * s, v[2] + dir[2] * s]
 }

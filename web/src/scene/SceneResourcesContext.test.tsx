@@ -3,7 +3,8 @@ import { useState } from 'react'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import type { AtlasPayload, BrushHighlight, SceneActor, ScenePayload, ScenePoly } from '../api'
-import { SceneResourcesProvider, useSceneResourcesContext } from './SceneResourcesContext'
+import { SceneResourcesProvider } from './SceneResourcesContext'
+import { useSceneResourcesContext } from './useSceneResourcesContext'
 
 afterEach(cleanup)
 
