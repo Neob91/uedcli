@@ -50,6 +50,38 @@ export interface RadiiOverlaysProps {
   selectedNames: ReadonlySet<string>
 }
 
+// Explicit line-segment positions for an upright wire cylinder (top ring, bottom ring, N vertical
+// struts), built directly in WORLD-space X/Y (radius) + Z (height, this app's up axis) -- never a
+// local-space `<mesh position=.../>` transform. Two reasons: (1) `MeshBasicMaterial`'s `wireframe:
+// true` on a real `CylinderGeometry` draws EVERY triangle edge, including the diagonal seam each
+// side quad is split into two triangles by -- visibly "triangular faces" (owner report), not a
+// clean cage. Explicit top/bottom rings + struts, matching preview.py's `_draw_cylinder` ISO-view
+// technique (`_line` calls, no filled geometry at all), has no triangulation to leak through. (2) A
+// local-space transform bit us once already (`SelectionMarkers.tsx`'s pivot-marker bug: local
+// marker position vs. world-space camera position, wrong specifically in the perspective pane's
+// world-handedness mirror group) -- computing everything in world space up front, the same way
+// `orthoShapeRing` below already does, sidesteps that whole class of bug by construction.
+function cylinderLinePositions(center: [number, number, number], radius: number, halfHeight: number): number[] {
+  const n = CYLINDER_SEGMENTS
+  const top: THREE.Vector3[] = []
+  const bot: THREE.Vector3[] = []
+  for (let i = 0; i < n; i++) {
+    const theta = (i / n) * Math.PI * 2
+    const x = center[0] + radius * Math.cos(theta)
+    const y = center[1] + radius * Math.sin(theta)
+    top.push(new THREE.Vector3(x, y, center[2] + halfHeight))
+    bot.push(new THREE.Vector3(x, y, center[2] - halfHeight))
+  }
+  const positions: number[] = []
+  for (let i = 0; i < n; i++) {
+    const j = (i + 1) % n
+    positions.push(...top[i].toArray(), ...top[j].toArray()) // top ring
+    positions.push(...bot[i].toArray(), ...bot[j].toArray()) // bottom ring
+    positions.push(...top[i].toArray(), ...bot[i].toArray()) // vertical strut
+  }
+  return positions
+}
+
 function CollisionCylinder3D({
   position,
   radius,
@@ -59,23 +91,47 @@ function CollisionCylinder3D({
   radius: number
   halfHeight: number
 }) {
-  // three's CylinderGeometry runs along local +Y; a +90deg rotation about X maps +Y onto world +Z
-  // (this app's up axis throughout -- Viewport3D's CameraRig does `camera.up.set(0,0,1)`), keeping
-  // the cylinder upright regardless of the actor's own rotation, matching preview.py's rule.
+  const geometry = useMemo(() => {
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(cylinderLinePositions(position, radius, halfHeight), 3))
+    return geo
+  }, [position, radius, halfHeight])
+  useEffect(() => () => geometry.dispose(), [geometry])
   return (
-    <mesh position={position} rotation={[Math.PI / 2, 0, 0]}>
-      <cylinderGeometry args={[radius, radius, halfHeight * 2, CYLINDER_SEGMENTS, 1, true]} />
-      <meshBasicMaterial color={RADII_COLOR} wireframe transparent opacity={OVERLAY_OPACITY} depthTest={false} />
-    </mesh>
+    <lineSegments geometry={geometry}>
+      <lineBasicMaterial color={RADII_COLOR} transparent opacity={OVERLAY_OPACITY} depthTest={false} />
+    </lineSegments>
   )
 }
 
+// A classic "wire sphere" gizmo -- three orthogonal circles (XY/XZ/YZ planes through `center`), not
+// a triangulated `SphereGeometry` in wireframe mode (same triangulation-diagonal problem as the
+// cylinder above). preview.py's own `_draw_sphere` docstring already establishes the underlying
+// fact this relies on -- a sphere's silhouette is a circle from every angle -- so three perpendicular
+// silhouette-radius circles read as an unambiguous sphere outline without ever triangulating.
 function LightSphere3D({ position, radius }: { position: [number, number, number]; radius: number }) {
+  const geometry = useMemo(() => {
+    const [cx, cy, cz] = position
+    const positions: number[] = []
+    const addRing = (at: (theta: number) => THREE.Vector3) => {
+      for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
+        const a = (i / CIRCLE_SEGMENTS) * Math.PI * 2
+        const b = ((i + 1) / CIRCLE_SEGMENTS) * Math.PI * 2
+        positions.push(...at(a).toArray(), ...at(b).toArray())
+      }
+    }
+    addRing((t) => new THREE.Vector3(cx + radius * Math.cos(t), cy + radius * Math.sin(t), cz)) // XY
+    addRing((t) => new THREE.Vector3(cx + radius * Math.cos(t), cy, cz + radius * Math.sin(t))) // XZ
+    addRing((t) => new THREE.Vector3(cx, cy + radius * Math.cos(t), cz + radius * Math.sin(t))) // YZ
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    return geo
+  }, [position, radius])
+  useEffect(() => () => geometry.dispose(), [geometry])
   return (
-    <mesh position={position}>
-      <sphereGeometry args={[radius, 16, 12]} />
-      <meshBasicMaterial color={RADII_COLOR} wireframe transparent opacity={OVERLAY_OPACITY} depthTest={false} />
-    </mesh>
+    <lineSegments geometry={geometry}>
+      <lineBasicMaterial color={RADII_COLOR} transparent opacity={OVERLAY_OPACITY} depthTest={false} />
+    </lineSegments>
   )
 }
 
