@@ -20,6 +20,7 @@ import { useDragGesture } from './dragGesture'
 import type { FrameRequest } from './frame'
 import { bboxCenter, bboxMaxExtent } from './frame'
 import { MARKER_COLOR } from './markers'
+import { MeshWireframe } from './MeshWireframe'
 import { PointActorMarker } from './PointActorMarker'
 import { RadiiOverlays } from './RadiiOverlays'
 import { SelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
@@ -286,6 +287,7 @@ export function Viewport3D({
   const {
     bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
     moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners,
+    meshWireframeGeometry,
     textures, markerTexture, markerActors,
   } = useSceneResourcesContext()
   // 'unlit'/'lit' otherwise rendered the identical mesh (materials built once, shared across every
@@ -553,6 +555,10 @@ export function Viewport3D({
           mode={mode === 'wireframe' ? 'csg-all' : 'selected-only'}
           groupRef={brushGroupRef}
         />
+        {/* A mesh actor (never a brush -- no CSG ring above) renders its own triangle-edge wireframe
+            here instead, matching a brush's wireframe convention in this mode (GUI.md "Shading
+            modes"). Solid mesh rendering in every other mode is unaffected (unchanged, above). */}
+        {mode === 'wireframe' && <MeshWireframe geometry={meshWireframeGeometry} />}
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={scene.actors} selectedNames={selectedNames} />
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current

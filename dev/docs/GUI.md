@@ -61,6 +61,13 @@ indexing as `materials`, built once and shared across panes). `'lit'` samples th
 atlas. **`'flat'` and `'unlit'` are distinct** (`shadingMode.ts`'s `usesUnlitMaterials`): `'flat'`
 no longer falls through to `'lit'`'s branch — fixed and regression-tested (`shadingMode.test.ts`).
 
+**Mesh actors wireframe too, alongside their unchanged solid draw**: every ortho pane (always
+wireframe) and the perspective pane in `'wireframe'` mode now draw a mesh actor's real triangle-edge
+wireframe (`SceneResourcesContext`'s `meshWireframeGeometry`, `MeshWireframe.tsx`) — previously they
+were invisible in those modes (nothing drew them at all). Solid/textured/lit rendering in
+`'unlit'`/`'flat'`/`'lit'` is unchanged. Wireframe color is plain white (no CSG classification
+exists for a mesh, unlike a brush's colored outline) — a placeholder, not an RE-verified convention.
+
 ## Movers
 
 A Mover actor (`Engine.Mover` or a subclass — `SceneActor.is_mover`, the server's authoritative

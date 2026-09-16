@@ -17,6 +17,7 @@ import type { FrameRequest } from './frame'
 import { DEFAULT_GRID_SIZE } from './grid'
 import { GridOverlay } from './GridOverlay'
 import { MARKER_COLOR } from './markers'
+import { MeshWireframe } from './MeshWireframe'
 import { PointActorMarker } from './PointActorMarker'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
 import { orthoBasis, orthoDragZoom, orthoFrameFit, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
@@ -183,6 +184,7 @@ export function OrthoViewport({
   const [hoverWorld, setHoverWorld] = useState<Vec3 | null>(null)
   const {
     bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
+    meshWireframeGeometry,
     textures, markerTexture, markerActors, actors,
   } = useSceneResourcesContext()
   const activeMaterials = usesUnlitMaterials(mode) ? unlitMaterials : materials
@@ -383,6 +385,10 @@ export function OrthoViewport({
           mode={mode === 'wireframe' ? 'csg-all' : 'selected-only'}
           groupRef={brushGroupRef}
         />
+        {/* Ortho panes are always wireframe -- a mesh actor draws its own triangle-edge wireframe
+            here, matching a brush's wireframe convention (GUI.md "Shading modes"), instead of the
+            solid mesh above (never drawn in this pane). */}
+        {mode === 'wireframe' && <MeshWireframe geometry={meshWireframeGeometry} />}
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={actors} selectedNames={selectedNames} />
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current

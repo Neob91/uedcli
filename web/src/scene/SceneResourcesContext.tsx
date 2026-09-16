@@ -3,11 +3,12 @@
 // the same BufferGeometry to the GPU. `SceneResourcesProvider` calls sceneResources.ts's hooks
 // exactly once per (scene, atlas, lightmap) triple; every pane reads the result via
 // `useSceneResourcesContext()`.
-import { createContext, useContext, useMemo } from 'react'
+import { createContext, useContext, useEffect, useMemo } from 'react'
 import type { ReactNode } from 'react'
 import * as THREE from 'three'
 
 import type { AtlasPayload, LightmapPayload, SceneActor, ScenePayload } from '../api'
+import { buildGeometryData } from './geometry'
 import { actorsNeedingMarkers } from './markers'
 import { useBuiltGeometry, useLightmapTexture, useMarkerTexture, useTextures } from './sceneResources'
 
@@ -34,6 +35,18 @@ export interface SceneResources {
   moverUnlitMaterials: THREE.Material[]
   moverTriangleOwners: (string | null)[]
   moverTrianglePolyIndex: (number | null)[]
+  // A mesh actor (any non-brush actor whose resolved geometry owns real triangles -- a DT_Mesh
+  // actor, in practice) draws WIREFRAME in wireframe mode, matching a brush's own wireframe
+  // convention there (GUI.md "Shading modes"; real UnrealEd renders a mesh as wireframe, never solid
+  // or hidden, whenever the view is in wireframe mode). Unlike the Mover split above, this does NOT
+  // pull mesh polys OUT of `bufferGeometry`/`materials` -- a mesh actor's SOLID rendering in
+  // 'unlit'/'flat'/'lit' is unchanged, still riding the default array. This is purely the wireframe
+  // OVERLAY: the real triangle-edge wireframe of those same polys (`THREE.WireframeGeometry` over
+  // the built triangle positions -- the same triangle extraction `buildGeometryData` already does
+  // for solid rendering, not a bounding-box/silhouette approximation), which a pane draws INSTEAD of
+  // the solid mesh when its own mode is wireframe (every ortho pane; the perspective pane in
+  // `'wireframe'` mode).
+  meshWireframeGeometry: THREE.BufferGeometry
   textures: { map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> }
   markerTexture: THREE.Texture | null
   markerActors: SceneActor[]
@@ -107,6 +120,31 @@ export function SceneResourcesProvider({
     trianglePolyIndex: moverTrianglePolyIndex,
   } = useBuiltGeometry(moverPolys, atlas, lightmap, textures, lightmapTexture, moverIndices)
 
+  // Mesh actors (GUI.md "Shading modes"): every non-brush actor (`SceneActor.brush === null`) --
+  // covers a resolved DT_Mesh actor, and harmlessly a point actor that owns no polys at all. Their
+  // solid polys stay in `bufferGeometry`/`materials` above (solid rendering is unchanged); this only
+  // builds the WIREFRAME overlay, from the SAME triangle positions `buildGeometryData` already
+  // extracts for solid rendering (no UVs/lightmap/materials needed for a plain line overlay).
+  const meshActorNames = useMemo(
+    () => new Set(scene.actors.filter((a) => !a.brush).map((a) => a.name)),
+    [scene.actors],
+  )
+  const meshPolys = useMemo(
+    () => scene.polys.filter((p) => p.owner != null && meshActorNames.has(p.owner)),
+    [scene.polys, meshActorNames],
+  )
+  const meshWireframeGeometry = useMemo(() => {
+    const { positions } = buildGeometryData(meshPolys, atlas)
+    const trianglesGeo = new THREE.BufferGeometry()
+    trianglesGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    const wire = new THREE.WireframeGeometry(trianglesGeo)
+    trianglesGeo.dispose() // only fed WireframeGeometry's own edge extraction, not kept
+    return wire
+  }, [meshPolys, atlas])
+  useEffect(() => {
+    return () => meshWireframeGeometry.dispose()
+  }, [meshWireframeGeometry])
+
   // Point actors with no owned rendered poly (lights, triggers, patrol nodes, sounds, an unresolved
   // DT_Mesh) -- markers.ts's own filter, computed once here rather than per-pane. Unions BOTH
   // triangle-owner arrays: a Mover's own polys moved to `moverTriangleOwners` above, but it still
@@ -122,11 +160,13 @@ export function SceneResourcesProvider({
     () => ({
       bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
       moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners, moverTrianglePolyIndex,
+      meshWireframeGeometry,
       textures, markerTexture, markerActors, actors: scene.actors,
     }),
     [
       bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
       moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners, moverTrianglePolyIndex,
+      meshWireframeGeometry,
       textures, markerTexture, markerActors, scene.actors,
     ],
   )
