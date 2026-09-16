@@ -69,9 +69,9 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Radii overlay colors | Collision cylinder vs. light-radius sphere: same color or distinct? | ✅ closed, implemented | ✅ source (structural fact), 🔬 live (red, no hex) — see Findings below |
 | Radii perspective cylinder | Does/should the collision cylinder render in the perspective pane? | ✅ closed, implemented | 🔬 wiki + UT patch notes (`dev/docs/spikes/2026-07-21-...`) + owner confirmation — see Findings below |
 | Radii cylinder/sphere shape | Wireframe rendering had a triangulation-diagonal artifact ("triangular faces") | ✅ closed, implemented | not an RE question — a `wireframe:true`-on-triangulated-geometry rendering bug, fixed with explicit line segments |
-| `C_ActorArrow` exact RGB | The radii overlay's real color value (currently a red-family placeholder) | 🔶 investigating | see "Radii overlay colors" Findings above — binary disassembly located the code, not this specific data reference |
+| `C_ActorArrow` exact RGB | The radii overlay's real color value | ✅ closed, implemented | 📖 source (`Default.ini`, v200 shipped default) — see Findings below |
 | Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed (mechanism) / ⬜ open (fix) | 📖 source-only, see Findings below |
-| UED22 line widths | What line/wire thickness does UED22 use for wireframe/selection rendering? | 🔶 investigating | not yet resolved |
+| UED22 line widths | What line/wire thickness does UED22 use for wireframe/selection rendering? | ✅ closed — no bug | ✅ source-confirmed: no width parameter exists in the render-interface API UED22 draws through; this codebase's default line width is already correct |
 
 Legend: ⬜ open (not started) · 🔶 investigating · ✅ closed (bar met, live-verified).
 
@@ -139,12 +139,30 @@ constants (`C_Mover`, `C_GroundHighlight`) — so UED22 does distinguish some ra
 collision-vs-light. Our GUI doesn't currently draw mover/sound radii at all, so that distinction is
 out of scope for now.
 
-`C_ActorArrow`'s exact RGB wasn't found — its declaration isn't in any of the header/source files
-checked (`EditorPrivate.h`, `Editor.h`, `UnEditor.cpp`; likely a class-member field declared
-somewhere not yet located). `dev/docs/unrealed/rendering.md` already has a 🔬 live-probed fact that
-the collision cylinder renders "red" when selected (no exact hex) — combined with the source fact
-above, light-radius should render in that SAME red, not orange. Confidence: ✅ source (same-color
-structural fact) + 🔬 live (red, family only, not exact hex).
+**`C_ActorArrow`'s exact RGB found (2026-09-16): `(163, 0, 0)`, a dark red** —
+`Engine/Config/Default.ini` (`fgsfdsfgs/UE1`, line 563), `C_ActorArrow=(R=163,G=0,B=0,A=0)`. Not a
+class-header default (`Editor.h`'s `C_ActorArrow` member has no in-code initializer, confirmed no
+init in `UnEditor.cpp` either) — it's the shipped v200 engine's `.ini` default, loaded at first run.
+Matches `dev/docs/unrealed/rendering.md`'s existing 🔬 live-probed "red" fact for the collision
+cylinder. Confidence: 📖 source (v200 shipped `.ini` default) — not yet confirmed against this
+project's actual DeusEx-customized `Editor.dll`/its own installed `.ini` (same v200-vs-DeusEx-build
+gap flagged throughout this doc). Implemented in `RadiiOverlays.tsx`'s `RADII_COLOR`.
+
+**The same `Default.ini` pull also surfaced the full adjacent `C_*` wireframe color block** —
+directly relevant to the brush-wire-color question below:
+```
+C_BrushWire=(255,63,63)      C_Pivot=(0,255,0)         C_Select=(0,0,127)
+C_AddWire=(127,127,255)      C_SubtractWire=(255,192,63)   C_GreyWire=(163,163,163)
+C_ActorWire=(127,63,0)       C_ActorHiWire=(255,127,0)     C_SemiSolidWire=(127,255,0)
+C_NonSolidWire=(63,192,32)   C_ActorArrow=(163,0,0)        C_Mover=(255,0,255)
+```
+Not yet folded into a fix — `C_ActorHiWire` ("Actor Highlighted Wire") is a separate constant from
+`C_BrushWire`, not chased against `DrawLevelBrush`'s own `WireColor` selection logic (does a SELECTED
+brush's `DrawColor` ever read from `C_ActorHiWire` instead of the brush-kind color, in some code path
+not yet found?). And `C_SemiSolidWire=(127,255,0)` (bright green) contradicts `preview.py`'s own
+existing comment, which cites "UED's rose (223,149,157)" for semisolid as the value it deliberately
+diverged from — a real discrepancy between this fresh v200 pull and that earlier research, unresolved
+(different UE1 build? different source? not determined here).
 
 **Bigger finding, same read (`UnEdCam.cpp:1538-1573`): the whole radii block is gated
 `Viewport->IsOrtho() && ...` at its OUTER `if`.** Collision/light/mover/sound radii are NEVER drawn

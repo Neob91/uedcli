@@ -29,11 +29,13 @@ import { collisionOrthoShape, selectedRadiiActors, sphereOrthoShape } from './ra
 // (`C_ActorArrow`, `UnEdCam.cpp:1547,1564`, GUI-PARITY.md "Radii overlay colors") -- preview.py's
 // separate COL_COLLISION/COL_LIGHT (light deviated to orange) was its own 2D-diagram readability
 // hack, not a real UED22 distinction, and was wrongly carried into this live 3D GUI. Both now share
-// one constant. `C_ActorArrow`'s exact RGB wasn't recovered (binary disassembly located the code but
-// not this specific data reference); this keeps the existing red-family value pending that. preview.py's
-// rasterizer has no alpha blend buffer so it paints these overlays SOLID; three.js does, so a modest
-// opacity reads as "faint" the same way its comment intends.
-const RADII_COLOR = new THREE.Color(235 / 255, 150 / 255, 150 / 255)
+// one constant, at `C_ActorArrow`'s real value: `Engine/Config/Default.ini`,
+// `C_ActorArrow=(R=163,G=0,B=0,A=0)` -- a dark red (📖 source, UE1 v200 shipped default; not yet
+// confirmed against this project's actual DeusEx-customized `Editor.dll`/its own `.ini`, same gap
+// flagged elsewhere in GUI-PARITY.md). preview.py's rasterizer has no alpha blend buffer so it paints
+// these overlays SOLID; three.js does, so a modest opacity reads as "faint" the same way its comment
+// intends.
+const RADII_COLOR = new THREE.Color(163 / 255, 0, 0)
 const OVERLAY_OPACITY = 0.55
 const CIRCLE_SEGMENTS = 32
 // UT patch release notes (GUI-PARITY.md "Radii overlay colors"): "rendering the collision cylinder
