@@ -113,17 +113,25 @@ Drive FIVE levels in LOCKSTEP: **UNATCO `03_NYC_UNATCOHQ`**, **WanChai `06_HongK
 N=1 is LevelInfo only (empty world) — native builds it (empty world Model). Iterate at small N;
 a full-level editor rebuild is ~24 min, so grow N, don't jump.
 
-### Re-verifying N=1..NX after a core change
+### Re-verifying after a core change: spot-check, NEVER a full sweep (owner ruling, 2026-09-15)
 
 Any change to native's CSG/BSP/lighting core (not a gate-only change) can, in principle, move an
-already-passing N — re-verify N=1..NX per level with **`ladder_run.py`** (below), not a subagent
-driving `actor_parity.py`/`parity_gate.py` by hand one N at a time.
+already-passing N. **Never re-verify by walking every N=1..NX** — on a level with hundreds of actors
+and no cached refs, that is hours of wall-clock for a check that doesn't need it. Use
+**`spot_check.py`** (same dir): it checks at most 10 evenly-spaced N's across the range (always
+including both endpoints), reusing any cached ref it finds. That is the standing re-verification
+method, not `ladder_run.py`'s exhaustive walk and not a subagent driving `actor_parity.py`/
+`parity_gate.py` by hand one N at a time.
 
-Run the re-verification **in the background and do not let it block forward ladder work**: if the
-fix is expected to hold (it passed its own targeted N8/N19-style validation), start extending the
-ladder past the current NX while the N=1..NX back-verification runs in parallel, rather than gating
-all further work on it finishing first. Only stop forward progress if the back-verification actually
-reports a bail — then treat that bail as a real regression and stop to fix it before going further.
+```
+spot_check.py --dx <shipped.dx> --to NX [--from N] [--count 10]
+```
+
+Run it **in the background and do not let it block forward ladder work**: if the fix is expected to
+hold (it passed its own targeted validation), start extending the ladder past the current NX while
+the spot-check runs in parallel, rather than gating all further work on it finishing first. Only stop
+forward progress if the spot-check actually reports a bail — then treat that bail as a real
+regression and stop to fix it before going further.
 
 ### Pushing NX forward: script until it bails, agent only to diagnose (owner ruling, 2026-09-05)
 
@@ -228,9 +236,18 @@ Tests must NOT block the parity work. For this project specifically:
 
 Each is scoped/root-caused, none masked. Pick one up by reading its board item first.
 
-Ceilings (2026-09-13, after the portal-graph-freeze fix below): **UNATCO 242+ (re-verify to full,
-was 225), NYC_Bar 152 (spot-checked, unaffected), OceanLab 202 (spot-checked, unaffected), Island
-352+ (re-verify to full, was 331), WanChai 58 (was 57, now bails on a new unrelated N=59).**
+Ceilings (2026-09-16): **UNATCO 623+ (climbing, no bail found past 242 -- see 2026-09-16 note),
+NYC_Bar 152 (bails at 153, rounds 6-9 clear GetVisibleSurfs/OccludeBsp/the commit loop entirely --
+see below), OceanLab 202 (dead-node-surf fix landed 2026-09-15, geometry now byte-exact at 203, gate
+still fails on an orphan-vert count question awaiting the owner's call), Island 623+ (climbing, no
+bail found past 352), WanChai 200 (N=59 fixed 2026-09-14, bails at 201 -- rasterizer chain fully
+cleared, real divergence unexplained).**
+
+**2026-09-16 — UNATCO and Island pushed far past their old ceilings with no new bail** (a background
+`ladder_run.py`-equivalent sweep, `_scratch/round_robin_ladder.py` in this session's campaign
+worktree, not yet committed as canonical tooling -- see `spot_check.py`'s sibling note). Re-verify
+whichever of the two is picked up next before trusting 623 as solid; the sweep never stopped to
+confirm N=243..622/353..622 individually, it just never bailed.
 
 **2026-09-13 — the Island N=332 / UNATCO N=226 / WanChai N=58 "1-ULP tie" is FIXED, not masked.**
 All three were the SAME bug: `permeating_lights` recomputed the portal graph fresh at light-bake
@@ -312,9 +329,27 @@ divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), no
   bug as Island N=332/UNATCO N=226, see the portal-graph-freeze fix above. Re-verified byte-exact
   N=1..58 (was 57); now bails at a NEW, unrelated N=59 mover-`Polys` divergence,
   `dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/` (not investigated).
+  **N=59 FIXED 2026-09-14** (`dev/docs/board/done/wanchai-n59-mover-polys-model2-diverges/`) —
+  `collect_repartition_frontier` (`bspcsg.rs`, the port of `Editor.dll 0x10049380`) recursed a BSP
+  node's `i_back` child before `i_front`; the real editor checks `iFront` first. Invisible almost
+  always — only matters when two frontier subtrees grow in the same repartition pass, since the last
+  one processed wins `Model.Polys`. WanChai N=59 is the first case in the campaign with two.
+  `dev/docs/spikes/2026-09-14-wanchai-n59-semisolid-repartition-order/`. Re-verified byte-exact
+  **N=1..200**; bails at **N=201** on world `Model2` — native's `GetVisibleSurfs` rejects a thin
+  CSG-subtraction sliver (surf 616) for `Light431` that a live capture confirms UED22 genuinely
+  accepts. Three investigation rounds (2026-09-15) cleared the rasterizer/span-subtraction chain
+  entirely (byte-identical to the real editor's own row output across the whole matching call
+  sequence) and decomposed an 80-call `OccludeBsp` count mismatch (245 real vs 165 native) into a
+  harmless bookkeeping artifact plus a still-unexplained structurally separate block. Not fixed; the
+  paradox (rasterizer proven faithful, yet UED22 still accepts what native rejects) is unresolved.
+  `dev/docs/spikes/2026-09-15-wanchai-n201-surf616-getvisiblesurfs-miss/`,
+  `dev/docs/spikes/2026-09-15-wanchai-n201-raster-footprint/`,
+  `dev/docs/spikes/2026-09-15-wanchai-n201-sequence-diff/`,
+  `dev/docs/board/to-spike/wanchai-n-201-world-model2-body-diverges/`.
 - **UNATCO, N=226**: FIXED 2026-09-13 (`dev/docs/board/done/unatco-n-226-leaf-12-gets-a-permeating-light157/`)
-  — see the portal-graph-freeze fix above. Re-verified byte-exact N=1..242 (was 225); not yet
-  re-verified to its true new ceiling.
+  — see the portal-graph-freeze fix above. Re-verified byte-exact N=1..242 (was 225); a 2026-09-16
+  sweep pushed it clean to **N=623+** with no new bail (not individually spot-checked -- see the
+  Ceilings note above).
   The re-verify sweep past 242 reached **byte-exact N=1..299** before bailing; N=299's bail was NOT a
   parity divergence — a stray leftover editor container (from an earlier interrupted N=277 attempt) was
   starving the host's rootless dockerd, and `packages.ensure_load`'s `dismiss_blocking_dialog` crashed
@@ -358,11 +393,20 @@ divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), no
   lights the treads straight through the closed door AND (the mirror-image half, `model
   model_deusexmover9` also fails N=153) fails to light the door's own face with the same light. This
   is the `visible_surfs.rs` "moving-brush filter (step 3)" gap the port flagged as "assumed to never
-  fire" — confirmed here to fire. The real fix unifies the world and mover light bakes into one scene
-  (per `unbuilt.light_apply_movers`'s own docstring, UED22's `FMovingBrushTracker` mirrors each mover
-  poly into a transient world surf for the bake) — a structural change, scoped as follow-up, not a
-  local patch —
-  `dev/docs/board/inbox/nyc-bar-n-153-world-model2-lightmap-runs-ued22/`.
+  fire" — confirmed here to fire. This "unify world+mover bakes" theory is now SUPERSEDED — nine
+  further live-capture rounds (2026-09-13 through 2026-09-16) systematically cleared it along with
+  zone/portal reachability, box occlusion, cross-light ordering, the clip-formula bug class, and
+  per-lumel raytracing, one at a time, each confirmed by direct register reads rather than inference.
+  Current state (round 9): `GetVisibleSurfs` genuinely includes surf 67/95/97 in Light5's own result
+  (a live read of `Frame`'s Origin at `AddUniqueItem`'s call site proves it, disproving this item's
+  own earlier "excluded by GetVisibleSurfs" framing); the downstream commit loop's write/readback
+  into each surf's `CandidateLights` array also happens correctly and `illuminateSurf`'s raytrace DOES
+  fire (disproving an even earlier round's "raytrace never fires" claim too). The real exclusion
+  mechanism is still unidentified, now narrowed to a per-light "any lumel visible" commit gate at
+  `Editor.dll 0x100a5ab5`-`0x100a5ac2`, flagged but not confirmed. Not fixed; no mask.
+  `dev/docs/board/inbox/nyc-bar-n-153-world-model2-lightmap-runs-ued22/`,
+  `dev/docs/spikes/2026-09-15-nycbar-n153-adduniqueitem-origin/`,
+  `dev/docs/spikes/2026-09-15-nycbar-n153-commit-write-readback/`.
 - **Island**: N=6, N=10 and N=93 are all FIXED. N=6 was the Vectors pool — native keeps
   the incremental pool across the repartition instead of rebuilding it from the surviving surfs
   (`dev/docs/spikes/2026-09-06-island-n6-vector-pool/`,
@@ -414,7 +458,8 @@ divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), no
   post-`bspOptGeom`-remap `model.points`, not the pre-remap snapshot the real editor's one-time
   portal graph actually used), not a numerical one. See the portal-graph-freeze fix above and
   `dev/docs/spikes/2026-09-13-portal-graph-frozen-before-optgeom/`. Re-verified byte-exact
-  N=1..352 (was 331); not yet re-verified to its true new ceiling.
+  N=1..352 (was 331); a 2026-09-16 sweep pushed it clean to **N=623+** with no new bail (not
+  individually spot-checked -- see the Ceilings note above).
 - **OceanLab**: N=46 is FIXED
   (`dev/docs/board/done/oceanlab-n46-world-model2-bounds-leafhulls-and/`,
   `dev/docs/spikes/2026-09-06-passd-kill-split-original/`) — Pass D's zone SPLIT must KILL the
@@ -472,6 +517,22 @@ divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), no
   WanChai N=45/58 near-tie classification ties, in a different, not-yet-live-captured function. Not
   fixed; not closed. `dev/docs/spikes/2026-09-15-oceanlab-n203-bspoptgeom-points/`,
   `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`.
+  **That `FilterWorldThroughBrush`-classify hypothesis is REFUTED (2026-09-15)** — a live capture
+  shows UED22's own `GDiscarded` is CONSUME at every hit on the wall's plane during `Brush482`'s CSG,
+  same verdict native already computes. **The real bug, FOUND AND FIXED (2026-09-15/16):** UED22's
+  `bspRepartition` calls `bspRefresh(Model, NoRemapSurfs=1)`, suppressing surf compaction — a dead
+  node's surf/point survives untouched until `bspOptGeom`'s own `bspRefresh(Model, 0)`, which runs
+  AFTER its point-merge. Native compacted eagerly right after repartition, before the merge could
+  weld a later brush's near-coincident point onto the dead surf's older point. Fixed by carrying a
+  dead node's surf forward across repartition's clear+rebuild, and porting the previously-unwired
+  compaction inside `bsp_opt_geom`. `Model2.points` is now byte-identical at N=203 (was 2-ULP off);
+  all 2640 live BSP node rings match. `parity_gate.py` still FAILS — one extra orphan (unreferenced)
+  `Verts` entry on the UED22 side desyncs the gate's positional walk, a gate-mechanism gap the
+  campaign's existing orphan-vert exclusion was never built to tolerate (count mismatch, not just
+  content). Owner asked (2026-09-15) to confirm the mechanism producing that extra slot before
+  deciding whether to widen the exclusion or chase a byte-exact count — not yet done.
+  `dev/docs/spikes/2026-09-15-oceanlab-n203-repartition-surf-defer/`,
+  `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/questions/orphan-vert-count-mismatch-gate-widening.md`.
 - **Standing stopgaps, all levels**:
   `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/` — repartition dedups points
   with a linear pool scan; the editor descends and appends on a miss (`AddThing(..., !FastRebuild)`

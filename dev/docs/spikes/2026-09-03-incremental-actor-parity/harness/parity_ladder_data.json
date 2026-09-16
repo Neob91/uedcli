@@ -15,12 +15,12 @@
       "slug": "unatco",
       "name": "UNATCO HQ",
       "codename": "03_NYC_UNATCOHQ",
-      "highest_n": 242,
+      "highest_n": 623,
       "total_actors": 1437,
       "status": "advancing",
-      "blocker": "N=226 FIXED 2026-09-13: same computation-order bug as Island N=332 (permeating_lights recomputed the portal graph after bspoptgeom::merge_near_points had already remapped a surf.pBase, unlike the real editor's one-time pre-merge portal graph). Fixed by freezing Model::leaf_portals at Pass B. Re-verified byte-exact N=1..242; not yet re-verified to its true new ceiling. dev/docs/spikes/2026-09-13-portal-graph-frozen-before-optgeom/spike.md.",
+      "blocker": "N=226 FIXED 2026-09-13 (portal-graph freeze). A 2026-09-16 background sweep (round-robin, one level at a time) pushed clean to N=623+ with no new bail -- not yet individually spot-checked N=243..622, it just never failed. Resume by advancing further or spot-checking.",
       "board": "unatco-n-226-leaf-12-gets-a-permeating-light157",
-      "updated": "2026-09-13T00:00:00Z"
+      "updated": "2026-09-16T00:00:00Z"
     },
     {
       "slug": "oceanlab",
@@ -29,9 +29,9 @@
       "highest_n": 202,
       "total_actors": 2745,
       "status": "blocked",
-      "blocker": "BODY model model2 -- world Model2.points holds a 2-ULP-off value pair (0xc3800004 native vs 0xc3800002 UED22), Brush483 poly 2's own transformed Origin via bsp_add_point(base). 2026-09-15: RE'd bspOptGeom's Model*/UModel layout and live-captured UED22's own Points/Surfs at bspOptGeom entry -- both the wall's original point and Brush483's new point coexist there, each with its own Surfs entry, pinning the exact CSG step to native's FilterWorldThroughBrush killing the wall face when Brush482 (CSG_Add) runs. A follow-up live capture of FilterWorldThroughBrush's own reconciliation (same session, later) then REFUTED the working hypothesis that UED22 must decide GRAZE there -- UED22's GDiscarded is CONSUME too, exactly like native; the wall's surf is a dead-node surf on both sides, not a live one. Re-scoped: the true gap is what happens to a dead node's surf/point reference AFTER it dies, before bspOptGeom's merge_near_points runs -- not yet pinned to an exact routine (an early guess blaming native's repartition-time Surfs rebuild was itself wrong per review; the real editor does not rebuild Surfs at repartition at all). Next: offline-trace which native step actually drops the wall's surf entry, then a live capture bracketing that exact step. dev/docs/spikes/2026-09-15-oceanlab-n203-fwtb-classify/spike.md. No exclusion proposed.",
+      "blocker": "The FilterWorldThroughBrush-classify hypothesis is REFUTED (2026-09-15) -- UED22's own GDiscarded is CONSUME too, same as native. THE REAL BUG IS FOUND AND FIXED (2026-09-15/16): UED22's bspRepartition calls bspRefresh(Model, NoRemapSurfs=1), suppressing surf compaction -- a dead node's surf/point survives untouched until bspOptGeom's own bspRefresh(Model, 0), which runs AFTER its point-merge. Native compacted eagerly right after repartition, before the merge could weld a later brush's near-coincident point onto the dead surf's older point. Fixed: carry a dead node's surf forward across repartition, port the previously-unwired compaction inside bsp_opt_geom. Model2.points is now byte-identical at N=203; all 2640 live BSP node rings match. parity_gate.py STILL FAILS -- one extra orphan (unreferenced) Verts entry on the UED22 side desyncs the gate's positional walk, a gate-mechanism gap the existing orphan-vert exclusion was never built to tolerate (count mismatch, not just content). Owner asked to confirm the mechanism before deciding whether to widen the exclusion or chase a byte-exact count -- not yet done.",
       "board": "oceanlab-n-203-world-model2-split-vertex-ulp",
-      "updated": "2026-09-15T00:00:00Z"
+      "updated": "2026-09-16T00:00:00Z"
     },
     {
       "slug": "wanchai",
@@ -40,7 +40,7 @@
       "highest_n": 200,
       "total_actors": 2288,
       "status": "blocked",
-      "blocker": "BODY model model2 -- world surf 616 (Brush1164, a thin CSG-subtraction sliver) is dark (no lightmap run) where UED22 gives it an empty run, for Light431's straight-down face. Live gdb capture confirms UED22 accepts it (CopyFromRasterUpdate edi=1). 2026-09-15: the earlier 245-vs-165 rasterize-call-count gap is now sequence-diffed and settled -- 78 calls are a structurally separate block that never touches surf 616, 2 are a harmless degenerate-clip counting artifact; replaying UED22's own raw per-row footprints through native's own (disassembly-verified) span-subtraction algorithm reproduces native's own reject verdict exactly across the whole 165-call matching chain, ruling out a rasterizer/subtraction/traversal-order bug there. Paradox: that still contradicts UED22's own edi=1 capture. Next step is a live capture of the real FSpanBuffer's own content at the start of the matching chain, to check whether its starting state is genuinely fresh (as native assumes) or carries prior state -- not yet attempted. dev/docs/spikes/2026-09-15-wanchai-n201-sequence-diff/spike.md.",
+      "blocker": "N=59 FIXED 2026-09-14 (collect_repartition_frontier recursed iBack before iFront in bspcsg.rs; real editor checks iFront first). Byte-exact N=1..200; bails at N=201 -- native's GetVisibleSurfs rejects a thin CSG-subtraction sliver (surf 616) for Light431 that a live capture confirms UED22 genuinely accepts. Three 2026-09-15 rounds cleared the rasterizer/span-subtraction chain entirely (byte-identical to UED22's own row output across the whole matching sequence) and decomposed the earlier 245-vs-165 OccludeBsp call-count gap into a harmless artifact plus an unexplained structurally-separate block. Paradox unresolved: rasterizer proven faithful, yet UED22 still accepts what native rejects. Next: live-capture the real FSpanBuffer's starting state.",
       "board": "wanchai-n-201-world-model2-body-diverges",
       "updated": "2026-09-15T00:00:00Z"
     },
@@ -48,12 +48,12 @@
       "slug": "island",
       "name": "UNATCO Island",
       "codename": "01_NYC_UNATCOIsland",
-      "highest_n": 352,
+      "highest_n": 623,
       "total_actors": 3653,
       "status": "advancing",
-      "blocker": "N=332 FIXED 2026-09-13: the sub-ULP crossing tie the 2026-09-13 hex-precision capture had narrowed to a Pass-B portal-quad-corner input mismatch (dev/docs/spikes/2026-09-13-crossing-vertex-live-capture/) turned out to be a computation-ORDER bug, not numerical: permeating_lights recomputed the portal graph fresh at bake time, reading model.points AFTER bspoptgeom::merge_near_points had already remapped a surf.pBase, unlike the real editor's one-time portal graph (computed before its own point-merge, never refreshed). Fixed by freezing Model::leaf_portals at Pass B. Re-verified byte-exact N=1..352; not yet re-verified to its true new ceiling. dev/docs/spikes/2026-09-13-portal-graph-frozen-before-optgeom/spike.md.",
+      "blocker": "N=332 FIXED 2026-09-13 (portal-graph freeze). A 2026-09-16 background sweep pushed clean to N=623+ with no new bail -- not yet individually spot-checked N=353..622, it just never failed. Resume by advancing further or spot-checking.",
       "board": "island-n-332-leaf-273-permeating-light-vertex-tie",
-      "updated": "2026-09-13T00:00:00Z"
+      "updated": "2026-09-16T00:00:00Z"
     }
   ]
 }
