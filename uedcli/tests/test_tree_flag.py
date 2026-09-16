@@ -282,6 +282,7 @@ def _parses(argv):
     ["mover", "key", "list", "M", "--tree", "prefab/d"],
     # Read verbs that would otherwise be stuck on the ambient level.
     ["actor", "show", "X", "--tree", "stash/s"],
+    ["actor", "rank", "X", "--tree", "stash/s"],
     ["level", "status", "--tree", "level/other"],
     ["level", "doctor", "--tree", "prefab/d"],
     ["event", "graph", "--tree", "stash/s"],

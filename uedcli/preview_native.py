@@ -25,13 +25,16 @@ Movers are out of world CSG, so they render directly as world-transformed
 verb uses)."""
 from __future__ import annotations
 
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from . import movers, preview_cache
 from .classindex import CORE_OBJECT, ClassRefError
 from .normalize import is_builder_brush
+from .preview import sprite_footprint
 from .preview_shots import ResolvedShot, Shot, resolve_pose, shot_filename
 from .rotation import (actor_linear, actor_prepivot, deg_to_uu, euler_to_matrix_uu, matvec)
 from .texframe import poly_flags_int, world_uv_frame
@@ -40,9 +43,32 @@ from .utexture import TextureError, TextureResolver, resolve_or_procedural_red
 
 PF_INVISIBLE = 0x1
 PF_MASKED = 0x2                                       # alpha-test: palette-index-0 texels cut out
-# PF_TRANSLUCENT/PF_MODULATED canonically live in meshrender (imported below); the Rust rasterizer
-# (`render.rs`) composites both blend modes for every poly this module sends it -- world/mover
-# surfaces (`add_poly`) and mesh-actor triangles alike -- via each poly's own `poly_flags`.
+PF_TRANSLUCENT = 0x4                                  # additive blend (render.rs `blend_mode`)
+PF_MODULATED = 0x40                                   # modulate-2x blend
+PF_TWO_SIDED = 0x100                                  # no backface cull
+PF_PORTAL = 0x04000000                                # visible portal sheet; also no backface cull
+# The Rust rasterizer (`render.rs`) composites both blend modes for every poly this module sends it
+# -- world/mover surfaces (`add_poly`) and mesh-actor triangles alike -- via each poly's own
+# `poly_flags`. The web preview reads the same decisions off `poly_two_sided`/`poly_blend` below.
+
+
+def poly_two_sided(flags: int) -> bool:
+    """Does this poly draw both faces (no backface cull)? True iff `PF_TwoSided` or `PF_Portal` is
+    set -- render.rs's own `light_in_front` cull exemption (`URender::OccludeBsp`)."""
+    return bool(flags & (PF_TWO_SIDED | PF_PORTAL))
+
+
+def poly_blend(flags: int) -> str:
+    """The poly's compositing mode from its merged `PolyFlags`: `"translucent"` (additive),
+    `"modulated"` (modulate-2x), or `"opaque"`. Translucent wins over Modulated, matching
+    render.rs's `blend_mode` precedence. Masking is orthogonal (its own resolved field). Mirror /
+    FakeBackdrop are whole re-render passes the web can't do yet, so those draw opaque here (spec)."""
+    if flags & PF_TRANSLUCENT:
+        return "translucent"
+    if flags & PF_MODULATED:
+        return "modulated"
+    return "opaque"
+
 
 # The game's first-person default horizontal FOV: Engine.PlayerPawn defaultproperties
 # `DesiredFOV=75.000000` / `DefaultFOV=75.000000` (DX install `Engine/Classes/PlayerPawn.uc:4940`,
@@ -181,22 +207,34 @@ def _mover_world_polys(level, index) -> list[tuple[list, object, object]]:
     return out
 
 
-def _mesh_actor_polys(actor, index, search_files) -> tuple[list, dict, object, tuple[str, str] | None]:
+def _mesh_actor_polys(actor, index, search_files, *, hidden_prop: str = "bhidden"
+                      ) -> tuple[list, dict, object, tuple[str, str] | None, dict]:
     """One DT_Mesh actor's frame-0 triangles (mesh-local, NOT yet world-transformed -- the caller
     does that after computing the actor's winding/degenerate check once) plus its resolved skins,
-    its decoded mesh and the mesh ASSET ref: `(triangles, skins, mesh, ref)` where `triangles` is
-    `frame_triangles(mesh)`'s own 8-tuple list, `skins` is
-    `{material_index: (w, h, rgb, b_masked)}`, `mesh`
-    is the decoded `umesh.Mesh` the caller needs for `apply_mesh_linear`/`mesh_actor_linear`, and
-    `ref` is `meshfacts.parse_mesh_ref`'s `(package_stem, mesh_name)` -- returned rather than
-    recomputed by the caller, and half of the skin cache key (`_TextureTable.index_for_decoded`).
-    Returns `([], {}, None, None)` for a non-DT_Mesh actor, a `bHidden` one, or one
+    its decoded mesh, the mesh ASSET ref, and its resolved class defaults:
+    `(triangles, skins, mesh, ref, class_defaults)` where `triangles` is `frame_triangles(mesh)`'s
+    own 8-tuple list, `skins` is `{material_index: (w, h, rgb, b_masked)}`, `mesh` is the decoded
+    `umesh.Mesh` the caller needs for `apply_mesh_linear`/`mesh_actor_linear`, `ref` is
+    `meshfacts.parse_mesh_ref`'s `(package_stem, mesh_name)` -- returned rather than recomputed by
+    the caller, and half of the skin cache key (`_TextureTable.index_for_decoded`) -- and
+    `class_defaults` is this call's own `resolve_class_defaults` result, returned so the caller can
+    feed it to `meshworld.mesh_actor_translation`/`mesh_vertex_to_world` (a class-default `PrePivot`
+    -- e.g. `DeusEx.HKHangingPig`/`HangingChicken` -- must still apply even though no instance ever
+    states it; board `hanging-mesh-actors-render-low-prepivot-class`).
+    Returns `([], {}, None, None, {})` for a non-DT_Mesh actor, one hidden per `hidden_prop`, or one
     with no resolvable Mesh (not an error -- matches `class preview`'s own "not every actor has a
     mesh" disposition, `classes.py::_run_preview`). Converts `meshfacts.MeshFactError`/
     `meshrender.PreviewError` to `NativePreviewError` at this boundary -- matching how
     `classes.py::_run_preview` converts the SAME two exceptions to `CommandError` locally, and how
     `level.py`'s `--native` call site only ever catches `NativePreviewError` (no dispatch.py change
-    needed, unlike an earlier draft of this plan)."""
+    needed, unlike an earlier draft of this plan).
+
+    `hidden_prop` is the casefolded property `build_scene`'s caller wants checked -- `"bhidden"`
+    (GAMEPLAY visibility, `render_shots`'/`level photo`'s default: it shows what the player sees) or
+    `"bhiddened"` (EDITOR visibility, `uedcli serve`'s GUI: owner ruling 2026-09-14 — the GUI hides
+    `bHiddenEd` actors and ignores `bHidden`). Either way the resolution itself (instance override
+    else class default) is the SAME convention `cli/rendering.py::_is_hidden_ed` uses for `bHiddenEd`
+    on point actors, just reused here via `field()` below rather than duplicated."""
     from collections import ChainMap
 
     from . import meshfacts, meshrender, typedprops
@@ -219,13 +257,11 @@ def _mesh_actor_polys(actor, index, search_files) -> tuple[list, dict, object, t
         return instance[name] if name in instance else defaults.get((name, 0))
 
     if (field("drawtype") or "").strip() != "DT_Mesh":
-        return [], {}, None, None
-    if str(field("bhidden") or "False").strip() == "True":
-        # `bHidden` is GAMEPLAY visibility, and `level photo` shows what the player sees — a hidden
-        # actor contributes nothing (same disposition as a non-DT_Mesh one, not an error). The
-        # EDITOR flag `bHiddenEd` is deliberately NOT read here: that one belongs to
-        # `actor diagram`, which applies it in `cli/rendering.py::_is_hidden_ed`.
-        return [], {}, None, None
+        return [], {}, None, None, {}
+    if str(field(hidden_prop) or "False").strip() == "True":
+        # Whichever ONE flag the caller asked for (see docstring) — a hidden actor contributes
+        # nothing (same disposition as a non-DT_Mesh one, not an error).
+        return [], {}, None, None, {}
     mesh_prop = instance.get("mesh") or defaults.get(("mesh", 0))   # empty override → class default
     ref = meshfacts.parse_mesh_ref(mesh_prop)
     if ref is None:
@@ -243,7 +279,7 @@ def _mesh_actor_polys(actor, index, search_files) -> tuple[list, dict, object, t
         raise NativePreviewError(str(e)) from e
     except meshrender.PreviewError as e:
         raise NativePreviewError(str(e)) from e
-    return meshrender.frame_triangles(mesh), skins, mesh, ref
+    return meshrender.frame_triangles(mesh), skins, mesh, ref, defaults
 
 
 # --------------------------------------------------------------------- textures
@@ -323,6 +359,85 @@ class _TextureTable:
         self.bmasked.append(bool(b_masked))
         self._by_decoded[cache_key] = idx
         return idx
+
+
+def _bare_sprite_texture_ref(text: str | None) -> str | None:
+    """`Texture'Package.Group.Name'` -> the bare ref a `TextureResolver` expects; a plain
+    `Package.Name` passes through; `None`/`"None"`/empty -> None. Same normalization as
+    `cli/rendering.py::_strip_object_ref` for a DIFFERENT call site (`resolve_actor_sprites` below) —
+    duplicated rather than imported, since that module is a command-layer owner this one must not
+    import from."""
+    if not text:
+        return None
+    m = re.search(r"'([^']*)'", text)
+    ref = m.group(1) if m else text.strip()
+    return ref or None if ref and ref != "None" else None
+
+
+def _sprite_draw_scale(text) -> float:
+    try:
+        return float(str(text).strip())
+    except (TypeError, ValueError):
+        return 1.0
+
+
+def resolve_actor_sprites(level, search_files, class_defaults
+                          ) -> tuple[list[tuple[int, int, bytes, bytes]], dict[str, tuple[int, float, float]]]:
+    """Point actors' `DT_Sprite` billboard textures for `uedcli serve`'s 3D marker — the SAME
+    instance-else-class-default field resolution and `preview.sprite_footprint` math as
+    `cli/rendering.py::_resolve_point_render` (a NEW call site: a 3D GUI marker, not the 2D
+    actor-diagram schematic), reusing its LOGIC, not its code (that function stays CLI-diagnostic,
+    with stderr notes this call site has no use for). `class_defaults` is the caller's shared
+    `classdefaults.ClassDefaults` memo (the same instance `build_scene` takes) — resolving a fresh
+    schema chain per ACTOR instead of once per distinct CLASS was an O(actors) cost on every request,
+    even a full CSG-cache hit.
+
+    Returns `(extra_table, actor_sprites)`: `extra_table` is a fresh `(w, h, rgb, mask)` list — same
+    shape as `_TextureTable.table`'s own rows — for the caller to append onto `build_scene`'s
+    `texture_table` so a resolved sprite lands in the SAME atlas (`/api/level/{level}/atlas`) as
+    every world/mesh texture; `actor_sprites` maps a non-brush actor's name to `(local_tex_index,
+    width_uu, height_uu)`, where `local_tex_index` indexes `extra_table` — the caller adds
+    `len(texture_table)` to get the real, atlas-wide index. An actor is absent from `actor_sprites`
+    whenever `_resolve_point_render` would have degraded to a plain marker: `DrawType` isn't
+    `DT_Sprite`, no `Texture`, no search path configured, decode failure, or a zero footprint
+    (`DrawScale` 0 / zero-size texture)."""
+    resolver = TextureResolver(search_files) if search_files else None
+    table: list[tuple[int, int, bytes, bytes]] = []
+    by_ref: dict[str, int] = {}
+    actor_sprites: dict[str, tuple[int, float, float]] = {}
+    if resolver is None:
+        return table, actor_sprites
+    for actor in level.actors.values():
+        if actor.brush is not None:
+            continue
+        instance = {k.casefold(): v for k, v in actor.props}
+        defaults = class_defaults.for_class(actor.cls).defaults
+
+        def field(name: str, *, _instance=instance, _defaults=defaults):
+            low = name.casefold()
+            return _instance[low] if low in _instance else _defaults.get((low, 0))
+
+        if (field("DrawType") or "DT_Sprite").strip() != "DT_Sprite":
+            continue
+        bare = _bare_sprite_texture_ref(field("Texture"))
+        if bare is None:
+            continue
+        key = bare.casefold()
+        if key in by_ref:
+            idx = by_ref[key]
+        else:
+            got = resolver.resolve(bare)
+            if isinstance(got, TextureError):
+                continue
+            idx = len(table)
+            table.append((got.width, got.height, got.rgb, got.mask))
+            by_ref[key] = idx
+        w, h, _rgb, _mask = table[idx]
+        fw, fh = sprite_footprint(_sprite_draw_scale(field("DrawScale")), w, h)
+        if fw <= 0 or fh <= 0:
+            continue
+        actor_sprites[actor.name] = (idx, fw, fh)
+    return table, actor_sprites
 
 
 # --------------------------------------------------------------------- camera
@@ -482,24 +597,53 @@ def _scene_hashes(level, light_names: set[str]) -> tuple[str, str]:
 # --------------------------------------------------------------------- orchestration
 
 def build_scene(level, search_files, index, *, defaults, project=None,
-                level_name=None) -> tuple[list, list]:
-    """Trunk → (render polys, texture table): CSG build + node-poly extraction + source-poly
-    join + Python UV frames + mover extra_polys + native texture decode + world-surf lighting
-    (board `bake-lighting-into-level-photo-native`). Raises NativePreviewError on every named
-    RENDER failure path (spec §7). `index` is a `classindex.ClassIndex`: movers are excluded from
-    world CSG and rendered separately, and mover-ness is decided schema-aware by `movers.is_mover`
-    against the game's class hierarchy — an unresolvable class therefore raises
+                level_name=None, visibility: Literal["gameplay", "editor"] = "gameplay"
+                ) -> tuple[list, list, list]:
+    """Trunk → (render polys, texture table, per-poly owner names): CSG build + node-poly
+    extraction + source-poly join + Python UV frames + mover extra_polys + native texture decode +
+    world-surf lighting (board `bake-lighting-into-level-photo-native`). Raises NativePreviewError
+    on every named RENDER failure path (spec §7). `index` is a `classindex.ClassIndex`: movers are
+    excluded from world CSG and rendered separately, and mover-ness is decided schema-aware by
+    `movers.is_mover` against the game's class hierarchy — an unresolvable class therefore raises
     `classindex.ClassRefError` (naming the class) straight through this function, rather than a
     NativePreviewError; dispatch's top-level guard turns it into the same clean exit 2. `defaults`
     is a `classdefaults.ClassDefaults`, needed to read light properties (their class defaults) —
     world BSP surfaces are lit; mesh/mover actors are not (a separate, un-RE'd mechanism, board
     item `mesh-mover-per-vertex-lighting-in-level-photo`).
 
+    The third return value, `actor_names_by_poly`, is a list parallel to the render polys giving
+    each poly's owning actor name (None for a poly joined to no source actor — an out-of-range CSG
+    join, §4.4). It rides ALONGSIDE the render-poly tuple rather than inside it: `render_frame`
+    (the Rust FFI boundary, `render_shots` below) takes the render polys verbatim and has no use for
+    actor identity, so extending its tuple shape would be a pure liability there. `uedcli serve`'s
+    `scene.py::build_scene_payload` is the one consumer that needs it (real per-poly ownership for
+    click-to-select, replacing per-actor AABB testing).
+
     `project`/`level_name` are the `preview_cache` identity (owner ruling 2026-09-13, board `native-
     photo-scene-cache`): given both, an unchanged level reuses its fully-lit scene outright, and a
     level whose only change is to its light actors reuses the CSG solve + texture decode and reruns
     only the (cheap) lighting bake. Neither given (every direct test call in this codebase) → always
-    a fresh, uncached build — no CLI path calls this without a project."""
+    a fresh, uncached build — no CLI path calls this without a project.
+
+    `visibility` picks which mesh-actor hidden flag `_mesh_actor_polys` checks (owner ruling
+    2026-09-14): `"gameplay"` (the default — `render_shots`/`level photo --native`'s UNCHANGED
+    behavior) reads `bHidden`, matching what the player sees; `"editor"` (`uedcli serve`'s GUI) reads
+    `bHiddenEd` instead and ignores `bHidden` entirely. It changes ONLY the mesh-actor loop below —
+    THIS function has no hidden-actor exclusion of its own for brush/CSG geometry (investigated, not
+    invented here). That exclusion lives in `uedcli/serve/scene.py::build_scene_payload`, POST-solve,
+    via this function's `owners` return: it drops a hidden `CSG_Add` brush's own rendered surfaces
+    (safe — they're that brush's own solid contribution) but keeps a hidden `CSG_Subtract`'s (its own
+    surfaces are the walls of the volume it carved; dropping them would open a hole nothing else
+    fills — see that module's docstring), and it filters brush/mesh actor METADATA out of its own
+    actor list the same way. A Mover buckets with `CSG_Add` there too (it carries no `CsgOper` prop
+    at all, so that module's default-missing-to-CSG_Add lookup applies) — correctly, since a Mover's
+    own surfaces are its own solid contribution, never a wall some other actor's geometry depends on.
+    Bare point actors carry no geometry for `build_scene` to exclude in the first place. Folded into
+    `geom_hash` below (not just passed to
+    `_mesh_actor_polys`): the SAME actor content builds a DIFFERENT `polys_no_light` depending on
+    this mode, so the on-disk geometry/scene cache must key on it too, or `level photo --native` and
+    `uedcli serve` would silently hand each other's cached, wrongly-filtered scene back for the same
+    level."""
     try:
         from uedcli.native_ext import import_native
         uedcli_native = import_native()
@@ -522,6 +666,10 @@ def build_scene(level, search_files, index, *, defaults, project=None,
     geom_hash = light_hash = None
     if cache:
         geom_hash, light_hash = _scene_hashes(level, {n for n, *_ in lights})
+        # `visibility` changes `polys_no_light`/`actor_names_by_poly` for THE SAME actor content
+        # (see docstring) — tag it onto geom_hash so `render_shots` and `build_scene_payload` never
+        # share a cache entry built under the other's rule.
+        geom_hash += "e" if visibility == "editor" else "g"
         cached_scene = preview_cache.load_scene(project, level_name, geom_hash, light_hash)
         if cached_scene is not None:
             return cached_scene
@@ -530,7 +678,7 @@ def build_scene(level, search_files, index, *, defaults, project=None,
 
     built = None
     if geo is not None:
-        model_body, portals, polys_no_light, i_surf_by_poly, texture_table = geo
+        model_body, portals, polys_no_light, i_surf_by_poly, actor_names_by_poly, texture_table = geo
         try:
             # `leaf_portals` is the frozen portal graph `assign_leaves_and_zones` computed during
             # THIS geometry's original build — `serialize_model`'s on-disk format doesn't carry it,
@@ -578,6 +726,7 @@ def build_scene(level, search_files, index, *, defaults, project=None,
         textures = _TextureTable(TextureResolver(search_files, class_index=index))
         polys_no_light: list[tuple] = []
         i_surf_by_poly: list[int | None] = []
+        actor_names_by_poly: list[str | None] = []
 
         def add_poly(world_verts, actor, poly, surf_flags=None, i_surf=None):
             # `surf_flags` (a CSG-solved surf's OWN `poly_flags`, always real even when the join
@@ -619,6 +768,7 @@ def build_scene(level, search_files, index, *, defaults, project=None,
             polys_no_light.append((verts_flat, list(base_w), list(tu), list(tv), list(pan),
                                    tex_index, masked, flags))
             i_surf_by_poly.append(i_surf)
+            actor_names_by_poly.append(actor.name if actor is not None else None)
 
         for world_verts, i_actor, i_brush_poly, poly_flags, i_surf in _node_polys(model):
             if 0 <= i_actor < len(join):
@@ -639,10 +789,12 @@ def build_scene(level, search_files, index, *, defaults, project=None,
         from .transform import DegenerateTransformError, flip_winding, reject_degenerate
         from . import meshrender, meshworld, typedprops
 
+        hidden_prop = "bhiddened" if visibility == "editor" else "bhidden"
         for actor in level.actors.values():
             if actor.brush is not None:
                 continue                                     # brushes/movers handled above
-            tris, skins, mesh, mesh_ref = _mesh_actor_polys(actor, index, search_files)
+            tris, skins, mesh, mesh_ref, mesh_class_defaults = _mesh_actor_polys(
+                actor, index, search_files, hidden_prop=hidden_prop)
             if not tris:
                 continue
             # A mesh actor whose Location sits in SOLID space (a leaf carved out of nothing) is not
@@ -664,7 +816,7 @@ def build_scene(level, search_files, index, *, defaults, project=None,
             # `mesh_vertex_to_world` would re-parse `Rotation` and rebuild both rotation matrices
             # for every vertex of every triangle (pinned equivalent in `test_meshworld.py`).
             L = meshworld.mesh_actor_linear(mesh, actor)
-            translation = meshworld.mesh_actor_translation(actor)
+            translation = meshworld.mesh_actor_translation(actor, class_defaults=mesh_class_defaults)
             try:
                 reject_degenerate(L, actor.name)
             except DegenerateTransformError as e:
@@ -721,12 +873,13 @@ def build_scene(level, search_files, index, *, defaults, project=None,
                                        list(pan), tex_index, masked, poly_flags))
                 i_surf_by_poly.append(None)   # mesh actors: no lightmap (out of scope, board
                                               # `mesh-mover-per-vertex-lighting-in-level-photo`)
+                actor_names_by_poly.append(actor.name)
 
         texture_table = textures.table
         if cache:
             preview_cache.store_geometry(project, level_name, geom_hash,
                                          (model_body, portals, polys_no_light, i_surf_by_poly,
-                                          texture_table))
+                                          actor_names_by_poly, texture_table))
 
     try:
         uedcli_native.bake_lighting(built, lights_ffi)
@@ -744,9 +897,9 @@ def build_scene(level, search_files, index, *, defaults, project=None,
 
     if cache:
         preview_cache.store_scene(project, level_name, geom_hash, light_hash,
-                                  (polys, texture_table))
+                                  (polys, texture_table, actor_names_by_poly))
 
-    return polys, texture_table
+    return polys, texture_table, actor_names_by_poly
 
 
 @dataclass(frozen=True)
@@ -846,8 +999,11 @@ def render_shots(*, level, shots: list[Shot], out_dir: Path, index, defaults,
         except ValueError as e:
             raise NativePreviewError(str(e)) from None
 
-    polys, textures = build_scene(level, search_files or [], index, defaults=defaults,
-                                  project=project, level_name=level_name)
+    polys, textures, _actor_names = build_scene(level, search_files or [], index, defaults=defaults,
+                                                project=project, level_name=level_name,
+                                                visibility="gameplay")   # unchanged: bHidden, not
+                                                                          # bHiddenEd (owner ruling
+                                                                          # 2026-09-14)
     sky_actor = find_sky_actor(level, index)              # None -> every PF_FakeBackdrop face
                                                             # falls back to its own texture
 

@@ -51,4 +51,12 @@ confirmation before merging — never a silent overwrite in either direction. Ex
 (whole-actor-replace after confirm vs. a per-property merge) are still open — worth pinning down
 before P2 is built, not needed to unblock P1.
 
+**Load-time conflict handling (symmetric with Save):** ruled 2026-09-14 — an explicit **Load** (the
+GUI pulling in an external trunk change — see `dev/docs/board/to-spec/
+gui-explicit-rebuild-pinned-build-state-mode/spec.md`, which also rules that Load never fires
+automatically, even in P1) gets the SAME warn/name-the-actors/require-confirm treatment as Save,
+just in the other direction: if a staged-but-unsaved local edit touches an actor the incoming Load
+would also change, Load does not silently overwrite the local staged edit. Same open exact-merge-
+mechanics question as Save (whole-actor-replace vs. per-property).
+
 Decisions 2 and 3 stay open.

@@ -347,6 +347,22 @@ def register(sub) -> None:
         help="emit the box as JSON ({min,max,size,center}, each {x,y,z}) instead of the text lines")
     _tree_flag(bbox)
 
+    rank = asub.add_parser(
+        "rank",
+        help="print each actor's 1-based CSG evaluation-order position in level.order (rank 1 = "
+             "evaluated/carved first) — a human-readable stand-in for the opaque order_value LexoRank "
+             "string. One line per actor in argument order as Name<TAB>RANK")
+    rank.add_argument(
+        "names", nargs="+",
+        help="actor Names to rank (case-insensitive), or the single token - to read a "
+             "newline-separated name list from stdin (e.g. actor find … | actor rank -); - is the "
+             "sole source, not mixable with names. Empty stdin is a clean no-op (exit 0)")
+    rank.add_argument(
+        "--json", action="store_true",
+        help="emit a JSON object mapping each canonical actor Name to its integer rank, instead of "
+             "the Name<TAB>RANK lines")
+    _tree_flag(rank)
+
     mv = asub.add_parser(
         "move",
         help="move actor(s) by a world delta (--by, any count) or one actor to an absolute "

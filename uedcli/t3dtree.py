@@ -259,33 +259,52 @@ def read_actor_tree(
     leftover, and admitting it would make every later read of the tree die parsing an empty body.
     Each actor's `folder` is loaded into `actor.folder` (absent/empty file → None). Note: only
     sub-DIRECTORIES of `actors/` are iterated, so a legacy flat `actors/<name>.t3d` FILE is ignored
-    (stash_register/stashlib treat such a stale tree as absent)."""
+    (stash_register/stashlib treat such a stale tree as absent).
+
+    Performance: this scans by `os.scandir`, not `Path.iterdir()`/`Path.is_file()`/`Path.is_dir()`.
+    The old per-actor code did 4 separate `is_file()` existence checks (body/folder/labels/
+    order_value) plus an `is_dir()` per entry in the outer scan — each a real `stat()` syscall —
+    before reading a single byte. On a real level (WanChai, 2288 actors) that was ~11000 stat()
+    calls and, measured on this host's storage, the dominant cost of a cold `read_actor_tree`
+    (~4s of ~10s; `dev/docs/board/inbox/scene-cold-load-must-return-within-5s`). `os.scandir`
+    lists a directory's children (names + type) in one syscall, so existence is a set-membership
+    check instead of a stat per candidate sidecar name."""
     adir = _actors_dir(tree_dir)
     level = Level()
     ranks: dict[str, str] = {}
     bodies: dict[str, str] = {}
     folders: dict[str, str | None] = {}
-    if adir.is_dir():
-        for d in sorted(p for p in adir.iterdir() if p.is_dir()):
-            body = d / "actor.t3d"
-            if not body.is_file():
-                continue
-            text = body.read_text()
-            if not text.strip():                      # torn/crashed leftover — never a valid actor
-                continue
-            name = d.name
-            actor = load_actor_body(text, name)
-            fp = d / "folder"
-            folder = fp.read_text().strip() if fp.is_file() else ""
-            actor.folder = folder or None             # absent/empty → ungrouped
-            lp = d / "labels"
-            actor.labels = (frozenset(ln.strip() for ln in lp.read_text().splitlines() if ln.strip())
-                            if lp.is_file() else frozenset())  # absent/empty → no labels
-            level.actors[name] = actor
-            bodies[name] = text
-            folders[name] = actor.folder
-            rv = d / "order_value"
-            ranks[name] = rv.read_text().strip() if rv.is_file() else ""
+    try:
+        entries = sorted(os.scandir(adir), key=lambda e: e.name)
+    except (FileNotFoundError, NotADirectoryError):
+        entries = []
+    for entry in entries:
+        if not entry.is_dir():
+            continue
+        d = Path(entry.path)
+        try:
+            # Name -> "is this a regular FILE" (not just "does this name exist"): a sidecar path
+            # that's a directory instead (a real git-merge-conflict shape in this per-actor-file
+            # trunk layout, `dev/docs/architecture.md`) must degrade the same way an absent sidecar
+            # does, not crash `.read_text()` with IsADirectoryError (review finding).
+            children = {c.name: c.is_file() for c in os.scandir(entry.path)}
+        except (FileNotFoundError, NotADirectoryError):
+            continue                                  # dir vanished mid-scan (concurrent writer)
+        if not children.get("actor.t3d"):
+            continue
+        text = (d / "actor.t3d").read_text()
+        if not text.strip():                          # torn/crashed leftover — never a valid actor
+            continue
+        name = entry.name
+        actor = load_actor_body(text, name)
+        folder = (d / "folder").read_text().strip() if children.get("folder") else ""
+        actor.folder = folder or None                 # absent/empty → ungrouped
+        actor.labels = (frozenset(ln.strip() for ln in (d / "labels").read_text().splitlines() if ln.strip())
+                        if children.get("labels") else frozenset())  # absent/empty → no labels
+        level.actors[name] = actor
+        bodies[name] = text
+        folders[name] = actor.folder
+        ranks[name] = (d / "order_value").read_text().strip() if children.get("order_value") else ""
     level.order = sorted(level.actors, key=lambda n: (ranks.get(n, ""), n))
     return level, ranks, bodies, folders
 

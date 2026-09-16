@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CameraPose, CameraSpeeds } from './camera'
-import { cameraBasis, dollyAndTurn, look, orbit, pan, zoom } from './camera'
+import { cameraBasis, dollyAndTurn, flyInput, flyMove, look, orbit, pan, zoom } from './camera'
 
 const UNIT_SPEEDS: CameraSpeeds = {
   yawPerPixel: 1,
@@ -31,7 +31,7 @@ describe('cameraBasis', () => {
 describe('dollyAndTurn (LMB-drag)', () => {
   it('a horizontal drag yaws by the expected angle', () => {
     const got = dollyAndTurn(IDENTITY, 10, 0, UNIT_SPEEDS)
-    expect(got.yaw).toBeCloseTo(350) // wrap(0 - 10*1)
+    expect(got.yaw).toBeCloseTo(10) // wrap(0 + 10*1) -- drag right turns the view right
     expect(got.pitch).toBe(0)
   })
 
@@ -53,9 +53,21 @@ describe('dollyAndTurn (LMB-drag)', () => {
 describe('look (RMB-drag)', () => {
   it('rotates pitch/yaw and leaves position untouched', () => {
     const got = look(IDENTITY, 20, 10, UNIT_SPEEDS)
-    expect(got.yaw).toBeCloseTo(340) // wrap(0 - 20)
+    expect(got.yaw).toBeCloseTo(20) // wrap(0 + 20) -- drag right turns the view right
     expect(got.pitch).toBeCloseTo(-10) // 0 - 10
     expect(got.position).toEqual(IDENTITY.position)
+  })
+
+  it('a rightward drag turns forward toward the camera\'s own right (never left)', () => {
+    // The bug this fixes: yaw used to DECREASE on a rightward drag, turning the view left --
+    // exposed once applyCameraPose's render mirror made world `+Y`/`cameraBasis.right` correctly
+    // render on screen-right (previously screen-left, the "meshes render reverted" bug).
+    const got = look(IDENTITY, 30, 0, UNIT_SPEEDS)
+    const before = cameraBasis(IDENTITY.pitch, IDENTITY.yaw)
+    const after = cameraBasis(got.pitch, got.yaw)
+    // forward should have swept toward `before.right`, i.e. gained a positive component along it.
+    const dot = after.forward[0] * before.right[0] + after.forward[1] * before.right[1] + after.forward[2] * before.right[2]
+    expect(dot).toBeGreaterThan(0)
   })
 
   it('clamps pitch to +/-89 degrees', () => {
@@ -117,5 +129,68 @@ describe('orbit (Alt-drag)', () => {
     const pose: CameraPose = { position: [1, 2, 3], pitch: 5, yaw: 6 }
     const got = orbit(pose, [1, 2, 3], 30, 30, UNIT_SPEEDS)
     expect(got).toEqual(pose)
+  })
+})
+
+describe('flyInput (key codes -> flyMove input)', () => {
+  it('strafes D toward the camera\'s own right and A away from it (was inverted)', () => {
+    // The bug: A used to be `right: +1`, tuned before `applyCameraPose`'s render mirror
+    // (Viewport3D.tsx) made `cameraBasis.right` render on screen-RIGHT -- so A strafed right.
+    const pose: CameraPose = { position: [0, 0, 0], pitch: 0, yaw: 0 } // right = +Y
+    const d = flyMove(pose, flyInput(new Set(['KeyD'])), 10, 1)
+    const a = flyMove(pose, flyInput(new Set(['KeyA'])), 10, 1)
+    expect(d.position[1]).toBeCloseTo(10) // toward +right
+    expect(a.position[1]).toBeCloseTo(-10)
+  })
+
+  it('maps W/S, E/Q, and cancels a held pair to zero', () => {
+    expect(flyInput(new Set(['KeyW']))).toEqual({ forward: 1, right: 0, up: 0 })
+    expect(flyInput(new Set(['KeyS']))).toEqual({ forward: -1, right: 0, up: 0 })
+    expect(flyInput(new Set(['KeyE']))).toEqual({ forward: 0, right: 0, up: 1 })
+    expect(flyInput(new Set(['KeyQ']))).toEqual({ forward: 0, right: 0, up: -1 })
+    expect(flyInput(new Set(['KeyA', 'KeyD', 'KeyW', 'KeyS']))).toEqual({ forward: 0, right: 0, up: 0 })
+    expect(flyInput(new Set())).toEqual({ forward: 0, right: 0, up: 0 })
+  })
+})
+
+describe('flyMove (WASD + Q/E)', () => {
+  it('W moves forward along the horizontal projection, never leaking pitch into Z', () => {
+    const pitched: CameraPose = { position: [0, 0, 0], pitch: 45, yaw: 0 }
+    const got = flyMove(pitched, { forward: 1, right: 0, up: 0 }, 10, 1)
+    expect(got.position[0]).toBeCloseTo(10)
+    expect(got.position[1]).toBeCloseTo(0)
+    expect(got.position[2]).toBeCloseTo(0) // no Z leak despite pitch=45
+  })
+
+  it('S moves backward, A/D strafe along the horizontal right', () => {
+    const pose: CameraPose = { position: [0, 0, 0], pitch: 0, yaw: 90 } // forward=+Y, right=-X
+    const back = flyMove(pose, { forward: -1, right: 0, up: 0 }, 10, 1)
+    expect(back.position[1]).toBeCloseTo(-10)
+    // D is input.right=+1 (`flyInput`) and strafes along `cameraBasis.right`, which the render
+    // mirror puts on screen-right.
+    const strafeD = flyMove(pose, { forward: 0, right: 1, up: 0 }, 10, 1)
+    expect(strafeD.position[0]).toBeCloseTo(-10)
+  })
+
+  it('E moves up and Q moves down along world Z regardless of pitch/yaw', () => {
+    const pose: CameraPose = { position: [5, 5, 5], pitch: -30, yaw: 123 }
+    const up = flyMove(pose, { forward: 0, right: 0, up: 1 }, 10, 1)
+    expect(up.position).toEqual([5, 5, 15])
+    const down = flyMove(pose, { forward: 0, right: 0, up: -1 }, 10, 1)
+    expect(down.position).toEqual([5, 5, -5])
+  })
+
+  it('is frame-rate independent (scales with dt) and a no-op with zero input', () => {
+    const pose: CameraPose = { position: [0, 0, 0], pitch: 0, yaw: 0 }
+    const half = flyMove(pose, { forward: 1, right: 0, up: 0 }, 10, 0.5)
+    expect(half.position[0]).toBeCloseTo(5)
+    expect(flyMove(pose, { forward: 0, right: 0, up: 0 }, 10, 1)).toEqual(pose)
+  })
+
+  it('never changes pitch/yaw -- translation only', () => {
+    const pose: CameraPose = { position: [1, 2, 3], pitch: 12, yaw: 34 }
+    const got = flyMove(pose, { forward: 1, right: 1, up: 1 }, 10, 1)
+    expect(got.pitch).toBe(12)
+    expect(got.yaw).toBe(34)
   })
 })

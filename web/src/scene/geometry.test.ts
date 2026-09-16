@@ -12,8 +12,11 @@ function quad(overrides: Partial<ScenePoly> = {}): ScenePoly {
     pan: [0, 0],
     tex_index: -1,
     masked: false,
+    two_sided: false,
+    blend: 'opaque',
     flags: 0,
     lightmap: null,
+    owner: null,
     ...overrides,
   }
 }
@@ -27,7 +30,43 @@ describe('buildGeometryData', () => {
     expect(got.uvs.length).toBe(6 * 2)
     expect(got.uv1.length).toBe(6 * 2)
     expect(got.colors.length).toBe(6 * 3)
-    expect(got.groups).toEqual([{ texIndex: -1, masked: false, lit: false, start: 0, count: 6 }])
+    expect(got.groups).toEqual([{ texIndex: -1, masked: false, twoSided: false, blend: 'opaque', lit: false, start: 0, count: 6 }])
+    expect(got.triangleOwners.length).toBe(2) // one entry per triangle, not per vertex
+  })
+
+  it('tags each triangle with its poly owner, in the same order as positions', () => {
+    const got = buildGeometryData(
+      [quad({ owner: 'Room' }), quad({ tex_index: 0, owner: 'Inner' })],
+      { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' },
+    )
+    // 2 groups (different tex_index), 2 triangles each -> 4 total, owner aligned per-triangle.
+    expect(got.triangleOwners).toEqual(['Room', 'Room', 'Inner', 'Inner'])
+  })
+
+  it('tags a poly with no resolved owner as null, not a crash', () => {
+    const got = buildGeometryData([quad({ owner: null })], EMPTY_ATLAS)
+    expect(got.triangleOwners).toEqual([null, null])
+  })
+
+  it('tags each triangle with its SOURCE poly index (the identity of local index by default)', () => {
+    const got = buildGeometryData(
+      [quad({ owner: 'Room' }), quad({ tex_index: 0, owner: 'Inner' })],
+      { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' },
+    )
+    // 2 groups (different tex_index), 2 triangles each -- poly 0 (Room) then poly 1 (Inner).
+    expect(got.trianglePolyIndex).toEqual([0, 0, 1, 1])
+  })
+
+  it('remaps to the caller-supplied ORIGINAL (unfiltered) index when sourceIndices is given', () => {
+    // Simulates SceneResourcesContext.tsx's non-Mover/Mover split: `polys` here is a FILTERED
+    // subset (local indices 0,1) whose true index in the original scene.polys array is 3 and 7.
+    const got = buildGeometryData(
+      [quad({ owner: 'A' }), quad({ tex_index: 0, owner: 'B' })],
+      { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' },
+      null,
+      [3, 7],
+    )
+    expect(got.trianglePolyIndex).toEqual([3, 3, 7, 7])
   })
 
   it('groups by (texture, masked) pair -- one group per distinct texture', () => {
@@ -36,9 +75,9 @@ describe('buildGeometryData', () => {
       { width: 16, height: 16, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 }, '1': { x: 8, y: 0, w: 8, h: 8 } }, png_base64: '' },
     )
     expect(got.groups).toEqual([
-      { texIndex: 0, masked: false, lit: false, start: 0, count: 6 },
-      { texIndex: 1, masked: false, lit: false, start: 6, count: 6 },
-      { texIndex: 0, masked: true, lit: false, start: 12, count: 6 },
+      { texIndex: 0, masked: false, twoSided: false, blend: 'opaque', lit: false, start: 0, count: 6 },
+      { texIndex: 1, masked: false, twoSided: false, blend: 'opaque', lit: false, start: 6, count: 6 },
+      { texIndex: 0, masked: true, twoSided: false, blend: 'opaque', lit: false, start: 12, count: 6 },
     ])
     expect(got.positions.length).toBe(18 * 3)
   })
@@ -47,8 +86,8 @@ describe('buildGeometryData', () => {
     const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' }
     const got = buildGeometryData([quad({ tex_index: 0 }), quad({ tex_index: 0, masked: true })], atlas)
     expect(got.groups).toEqual([
-      { texIndex: 0, masked: false, lit: false, start: 0, count: 6 },
-      { texIndex: 0, masked: true, lit: false, start: 6, count: 6 },
+      { texIndex: 0, masked: false, twoSided: false, blend: 'opaque', lit: false, start: 0, count: 6 },
+      { texIndex: 0, masked: true, twoSided: false, blend: 'opaque', lit: false, start: 6, count: 6 },
     ])
   })
 
@@ -91,7 +130,7 @@ describe('buildGeometryData', () => {
   it('emits a lit group with white vertex colours and atlas uv1 for a poly with a lightmap+rect', () => {
     const lit = quad({ lightmap: { origin: [0, 0, 0], u_step: [1, 0, 0], v_step: [0, 1, 0], u_size: 2, v_size: 2 } })
     const got = buildGeometryData([lit], EMPTY_ATLAS, LIT_ATLAS)
-    expect(got.groups).toEqual([{ texIndex: -1, masked: false, lit: true, start: 0, count: 6 }])
+    expect(got.groups).toEqual([{ texIndex: -1, masked: false, twoSided: false, blend: 'opaque', lit: true, start: 0, count: 6 }])
     // Lit verts carry white colour (the lightmap does the shading, not the flat shade).
     for (let i = 0; i < got.colors.length; i++) expect(got.colors[i]).toBe(1)
     // Vertex v0 at world (0,0,0): lu=lv=0 -> atlas texel centre (rect.x+0.5)/16 = 1.5/16.
@@ -115,8 +154,8 @@ describe('buildGeometryData', () => {
       LIT_ATLAS,
     )
     expect(got.groups).toEqual([
-      { texIndex: 0, masked: false, lit: true, start: 0, count: 6 },
-      { texIndex: 0, masked: false, lit: false, start: 6, count: 6 },
+      { texIndex: 0, masked: false, twoSided: false, blend: 'opaque', lit: true, start: 0, count: 6 },
+      { texIndex: 0, masked: false, twoSided: false, blend: 'opaque', lit: false, start: 6, count: 6 },
     ])
   })
 })

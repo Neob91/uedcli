@@ -67,7 +67,8 @@
         "texture",
         "substrate",
         "cache",
-        "uscript"
+        "uscript",
+        "serve"
       ],
       "subparser_help": {
         "actor": "actor query/mutate verbs",
@@ -85,7 +86,8 @@
         "texture": "discover, view and classify the substrate's textures (offline; decodes the game's own .utx/.u packages — no editor, no level needed)",
         "substrate": "substrate build utilities (package stubbing)",
         "cache": "manage the per-user derivable caches under ~/.uedcli/cache",
-        "uscript": "compile UnrealScript source into a .u code package (offline; a native compiler that matches UCC's byte output — no editor, no docker)"
+        "uscript": "compile UnrealScript source into a .u code package (offline; a native compiler that matches UCC's byte output — no editor, no docker)",
+        "serve": "serve a read-only browser GUI over a level's T3D trunk — navigate, inspect, and (later slices) audit AI changes. Binds localhost only, no auth; blocks until Ctrl-C"
       }
     }
   ],
@@ -138,6 +140,7 @@
             "order",
             "delete",
             "bbox",
+            "rank",
             "move",
             "prop",
             "rotate",
@@ -154,6 +157,7 @@
             "order": "reorder EXISTING actors' CSG precedence by minting new order_values (no geometry change). CSG order is the (order_value, name) sort; --first makes an actor carve/add BEFORE everything else. Multiple actors move as a block preserving their relative order",
             "delete": "delete one or more actors from $UEDCLI_LEVEL",
             "bbox": "print the world axis-aligned bounding box (min/max/size/center) enclosing the given actors — ONE box over the whole set (a single actor prints its own box; the multi-actor case IS the union, so there is no --union flag: `actor find --folder castle.* | actor bbox -` gives the union). Honours each actor's rotation/scale/location; a point actor contributes a zero-size box at its Location",
+            "rank": "print each actor's 1-based CSG evaluation-order position in level.order (rank 1 = evaluated/carved first) — a human-readable stand-in for the opaque order_value LexoRank string. One line per actor in argument order as Name<TAB>RANK",
             "move": "move actor(s) by a world delta (--by, any count) or one actor to an absolute point (--to)",
             "prop": "read, set, or clear an actor's properties model-side, validated against the actor's class schema (no editor). Sub-verbs: set / unset / get",
             "rotate": "rotate a group of actors around a pivot (PITCH,YAW,ROLL in unreal rotation units, 16384 = 90°)",
@@ -1847,6 +1851,79 @@
                 0,
                 1
               ]
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--tree"
+              ],
+              "dest": "tree",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "KIND/NAME",
+              "converter": null,
+              "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "rank": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli actor rank",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "names",
+              "nargs": "+",
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "actor Names to rank (case-insensitive), or the single token - to read a newline-separated name list from stdin (e.g. actor find … | actor rank -); - is the sole source, not mixable with names. Empty stdin is a clean no-op (exit 0)",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreTrueAction",
+              "option_strings": [
+                "--json"
+              ],
+              "dest": "json",
+              "nargs": 0,
+              "const": true,
+              "default": false,
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "emit a JSON object mapping each canonical actor Name to its integer rank, instead of the Name<TAB>RANK lines",
+              "mutex_group": null
             },
             {
               "class": "_StoreAction",
@@ -15108,6 +15185,79 @@
           "subparsers": {}
         }
       }
+    },
+    "serve": {
+      "class": "_CoordArgumentParser",
+      "prog": "uedcli serve",
+      "mutex_groups": [],
+      "actions": [
+        {
+          "class": "_HelpAction",
+          "option_strings": [
+            "-h",
+            "--help"
+          ],
+          "dest": "help",
+          "nargs": 0,
+          "const": null,
+          "default": {
+            "__suppress__": true
+          },
+          "required": false,
+          "choices": null,
+          "metavar": null,
+          "converter": null,
+          "help": "show this help message and exit",
+          "mutex_group": null
+        },
+        {
+          "class": "_StoreAction",
+          "option_strings": [],
+          "dest": "level",
+          "nargs": null,
+          "const": null,
+          "default": null,
+          "required": true,
+          "choices": null,
+          "metavar": null,
+          "converter": null,
+          "help": "the level to serve (a trunk under the project's maps dir)",
+          "mutex_group": null
+        },
+        {
+          "class": "_StoreAction",
+          "option_strings": [
+            "--host"
+          ],
+          "dest": "host",
+          "nargs": null,
+          "const": null,
+          "default": "127.0.0.1",
+          "required": false,
+          "choices": null,
+          "metavar": null,
+          "converter": null,
+          "help": "bind address (default 127.0.0.1 — localhost only; this is a local single-user tool, not a network service)",
+          "mutex_group": null
+        },
+        {
+          "class": "_StoreAction",
+          "option_strings": [
+            "--port"
+          ],
+          "dest": "port",
+          "nargs": null,
+          "const": null,
+          "default": 8765,
+          "required": false,
+          "choices": null,
+          "metavar": null,
+          "converter": "int",
+          "help": "bind port (default 8765)",
+          "mutex_group": null
+        }
+      ],
+      "subparsers": {}
     }
   }
 }

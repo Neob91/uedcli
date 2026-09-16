@@ -174,6 +174,36 @@ def test_the_compare_resolves_each_DISTINCT_class_exactly_once(defaults):
     assert defaults.resolutions == 3                 # three DISTINCT classes, 30 actor views
 
 
+def test_a_shared_ancestor_is_decoded_ONCE_across_DISTINCT_leaf_classes(defaults, monkeypatch):
+    """PERF GUARD (the GUI cold-scene bug): `Engine.Light`, `Engine.Brush`, and
+    `DeusEx.DeusExMover` (via `Engine.Mover` -> `Engine.Brush`) all inherit from `Engine.Actor`.
+    `resolve_class_properties` seeds `ClassDefaults._pkgs` with live `Package`s (needed by the
+    defaults decode too), which used to skip the persistent schema cache with NO per-class own-
+    props memo of its own — so a shared ancestor's own properties were re-decoded from the native
+    layer once per DESCENDANT leaf class resolved, not once per process. Each class name here must
+    be decoded exactly once, however many leaf classes reach it."""
+    from collections import Counter
+
+    from uedcli.uprops import uclass
+
+    calls: list[tuple[str, str]] = []
+    real = uclass.own_class_properties
+
+    def spy(pkg, class_name, *, owner_fqcn):
+        calls.append((pkg.name, class_name.casefold()))
+        return real(pkg, class_name, owner_fqcn=owner_fqcn)
+
+    monkeypatch.setattr(uclass, "own_class_properties", spy)
+
+    for cls in ("Engine.Light", "Engine.Brush", "DeusEx.DeusExMover"):
+        defaults.for_class(cls)
+
+    counts = Counter(calls)
+    assert counts[("Engine", "actor")] == 1, counts     # the shared ancestor: decoded once, not 3x
+    assert counts[("Engine", "brush")] == 1, counts      # reached directly AND via DeusExMover's chain
+    assert all(n == 1 for n in counts.values()), counts
+
+
 def test_an_unresolvable_class_raises_naming_the_actor_and_never_assumes_zero(defaults):
     """No fabricated defaults: a class whose package is not on the schema search path fails the
     compare loudly (the caller turns it into a clean exit 2), rather than being compared against an

@@ -24,7 +24,6 @@ from uedcli import mapimport, model
 from uedcli.classdefaults import ClassDefaults
 from uedcli.classindex import ClassIndex
 from uedcli.native.unbuilt import assemble_unbuilt, substrate_schema
-from uedcli.normalize import level_order, normalize_level
 from uedcli.verify import decode_dx_level_offline, verify_dx_matches
 
 _UED22 = Path(__file__).resolve().parents[2] / "uned" / "UED22"
@@ -105,9 +104,9 @@ def _synthesize_t3d() -> str:
 
 
 def _synthesize_level() -> model.Level:
+    # TRUNK content, same reasoning as the `level.order = list(level.actors)` sites below.
     lv = model.parse_t3d(_synthesize_t3d())
-    lv.order = level_order(lv)
-    normalize_level(lv)
+    lv.order = list(lv.actors)
     return lv
 
 
@@ -224,8 +223,13 @@ def test_brushless_level_builds_empty_world_and_valid_package(tmp_path):
            "Begin Actor Class=Engine.LevelInfo Name=LevelInfo0\n    Name=\"LevelInfo0\"\nEnd Actor\n"
            "End Map\n")
     level = model.parse_t3d(t3d)
-    level.order = level_order(level)
-    normalize_level(level)
+    # TRUNK content (no real builder brush -- `level import`'s `drop_editor_scratch` already
+    # guarantees that), fed straight to the native assembler, mirroring production
+    # (`apply._assembly_level` sets `.order` from the trunk's own materialized order with no
+    # `level_order`/`normalize_level` pass). Routing through `level_order` here would wrongly treat
+    # this level's own first real content actor (order[1]) as the builder brush, per
+    # `normalize.is_builder_brush_position` -- a check only valid on a fresh, unstripped decode.
+    level.order = list(level.actors)
 
     built, csg_brushes = build_world_model(level, index=_index())
     assert csg_brushes == []
@@ -299,7 +303,7 @@ def test_gather_lights_needs_bstatic_or_bnodelete_and_reads_effective_values():
 
     def gathered(t3d_body: str):
         lv = model.parse_t3d("Begin Map\n" + t3d_body + "End Map\n")
-        lv.order = level_order(lv)
+        lv.order = list(lv.actors)                        # trunk content, single actor
         return gather_lights(lv, defaults=ClassDefaults(_resolver))
 
     # A bare Engine.Light: no LightType, no bStatic, no LightRadius stated -> all defaults, and it
@@ -371,8 +375,13 @@ def test_native_lit_room_ships_light_export_refs(tmp_path):
     from uedcli.native.materialize import build_world_model, gather_lights, resolve_zone_actors
 
     level = model.parse_t3d(_room_t3d())
-    level.order = level_order(level)
-    normalize_level(level)
+    # TRUNK content (no real builder brush -- `level import`'s `drop_editor_scratch` already
+    # guarantees that), fed straight to the native assembler, mirroring production
+    # (`apply._assembly_level` sets `.order` from the trunk's own materialized order with no
+    # `level_order`/`normalize_level` pass). Routing through `level_order` here would wrongly treat
+    # this level's own first real content actor (order[1]) as the builder brush, per
+    # `normalize.is_builder_brush_position` -- a check only valid on a fresh, unstripped decode.
+    level.order = list(level.actors)
     lights = gather_lights(level, defaults=ClassDefaults(_resolver))
     assert [n for n, *_rest in lights] == ["Lamp"], "the Light was not gathered"
     assert lights[0][2] == 40, "the stated LightRadius did not reach the bake"
@@ -421,8 +430,13 @@ def test_assemble_rewrites_the_levels_own_package_refs_to_mylevel(tmp_path):
              "    Name=\"PathNode1\"\nEnd Actor\n"
            + "End Map\n")
     level = model.parse_t3d(t3d)
-    level.order = level_order(level)
-    normalize_level(level)
+    # TRUNK content (no real builder brush -- `level import`'s `drop_editor_scratch` already
+    # guarantees that), fed straight to the native assembler, mirroring production
+    # (`apply._assembly_level` sets `.order` from the trunk's own materialized order with no
+    # `level_order`/`normalize_level` pass). Routing through `level_order` here would wrongly treat
+    # this level's own first real content actor (order[1]) as the builder brush, per
+    # `normalize.is_builder_brush_position` -- a check only valid on a fresh, unstripped decode.
+    level.order = list(level.actors)
 
     dx, warnings = _write_and_decode(level, tmp_path)
     assert warnings == []                    # a dropped ref would warn "which this level does not contain"
@@ -557,8 +571,13 @@ def test_base_stamp_rule_collideworld_and_ancestry(tmp_path):
                     extra="    Base=LevelInfo'MyLevel.LevelInfo0'\n")
            + "End Map\n")
     level = model.parse_t3d(t3d)
-    level.order = level_order(level)
-    normalize_level(level)
+    # TRUNK content (no real builder brush -- `level import`'s `drop_editor_scratch` already
+    # guarantees that), fed straight to the native assembler, mirroring production
+    # (`apply._assembly_level` sets `.order` from the trunk's own materialized order with no
+    # `level_order`/`normalize_level` pass). Routing through `level_order` here would wrongly treat
+    # this level's own first real content actor (order[1]) as the builder brush, per
+    # `normalize.is_builder_brush_position` -- a check only valid on a fresh, unstripped decode.
+    level.order = list(level.actors)
     pkg_dirs = [str(_UED22)]
     dx_bytes, _warnings = assemble_unbuilt(level, schema=substrate_schema(*pkg_dirs),
                                            pkg_dirs=pkg_dirs)
@@ -580,8 +599,13 @@ def test_brush_bdynamiclight_is_dropped(tmp_path):
                     extra="    bDynamicLight=True\n")
            + "End Map\n")
     level = model.parse_t3d(t3d)
-    level.order = level_order(level)
-    normalize_level(level)
+    # TRUNK content (no real builder brush -- `level import`'s `drop_editor_scratch` already
+    # guarantees that), fed straight to the native assembler, mirroring production
+    # (`apply._assembly_level` sets `.order` from the trunk's own materialized order with no
+    # `level_order`/`normalize_level` pass). Routing through `level_order` here would wrongly treat
+    # this level's own first real content actor (order[1]) as the builder brush, per
+    # `normalize.is_builder_brush_position` -- a check only valid on a fresh, unstripped decode.
+    level.order = list(level.actors)
     dx, warnings = _write_and_decode(level, tmp_path)
     got = decode_dx_level_offline(str(dx), index=_index(),
                                   schema=mapimport.ImportSchema(resolver=_resolver))
@@ -691,8 +715,14 @@ def test_zone_actor_binding_follows_actor_order_not_the_name_keyed_dict():
         f'    Name="{n}"\nEnd Actor\n'
         for n, x in (("ZoneInfo5", 16), ("ZoneInfo17", -16)))
     level = model.parse_t3d(_room_t3d().replace("End Map\n", zone_infos + "End Map\n"))
-    level.order = level_order(level)
-    normalize_level(level)
+    # TRUNK content (no real builder brush), so `.order` is set straight from the parse -- same
+    # reasoning as the `level.order = list(level.actors)` sites elsewhere in this file. The dict
+    # itself is then sorted by Name (same as `normalize_level` used to do as its OWN, separate,
+    # unrelated job) so this test's premise holds: `level.actors`' OWN key order is name-sorted
+    # (`ZoneInfo17` before `ZoneInfo5`), deliberately DIFFERENT from the real trunk order, to prove
+    # `resolve_zone_actors` reads `.order` and not the dict.
+    level.order = list(level.actors)
+    level.actors = {n: level.actors[n] for n in sorted(level.actors)}
     # The dict is name-keyed, so it hands out ZoneInfo17 first; the trunk order does not.
     assert list(level.actors).index("ZoneInfo17") < list(level.actors).index("ZoneInfo5")
     assert level.order.index("ZoneInfo5") < level.order.index("ZoneInfo17")
@@ -720,8 +750,13 @@ def test_zone_actor_is_decided_by_ancestry_not_by_the_class_name_suffix():
                  "Begin Actor Class=Engine.LevelInfo Name=LevelInfo0\n"
                  "    Location=(X=0.000000,Y=0.000000,Z=0.000000)\n")
         .replace("End Map\n", water + "End Map\n"))
-    level.order = level_order(level)
-    normalize_level(level)
+    # TRUNK content (no real builder brush -- `level import`'s `drop_editor_scratch` already
+    # guarantees that), fed straight to the native assembler, mirroring production
+    # (`apply._assembly_level` sets `.order` from the trunk's own materialized order with no
+    # `level_order`/`normalize_level` pass). Routing through `level_order` here would wrongly treat
+    # this level's own first real content actor (order[1]) as the builder brush, per
+    # `normalize.is_builder_brush_position` -- a check only valid on a fresh, unstripped decode.
+    level.order = list(level.actors)
     assert level.order.index("LevelInfo0") < level.order.index("WaterZone1")
 
     built, _csg = build_world_model(level, index=_index())

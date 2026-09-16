@@ -206,7 +206,8 @@ def abstract_from_source(src: str | None) -> bool | None:
     return _ABSTRACT_KW.search(m.group(1)) is not None
 
 
-def resolve_class_properties(fqcn: str, *, resolver, _seen=None, _cache=None) -> list[Prop]:
+def resolve_class_properties(fqcn: str, *, resolver, _seen=None, _cache=None,
+                             _own_cache=None) -> list[Prop]:
     """ALL properties of a class — own + every ancestor's — walking the Super chain across packages.
 
     `fqcn` is `Package.Class`. `resolver(package_name) -> path | None` maps a package name to its
@@ -218,44 +219,64 @@ def resolve_class_properties(fqcn: str, *, resolver, _seen=None, _cache=None) ->
 
     seen = _seen if _seen is not None else set()
     cache = _cache if _cache is not None else {}
+    # `fqcn.casefold() -> (own_props, direct_super_fqcn)` — memoizes the OWN-props decode for the
+    # "seeded live Package" branch below, which (unlike the persistent schema-cache branch) had no
+    # per-class cache of its own: a caller sharing one `_cache` across a whole level's classes (e.g.
+    # `classdefaults.ClassDefaults`, which pre-seeds `_cache` with live Packages so the defaults
+    # decode doesn't reload bytes already in memory) re-decoded a shared ancestor's own properties
+    # from the native layer once per DESCENDANT leaf class instead of once per process. Keyed by
+    # exact class (not by leaf), so it's correct regardless of which leaf's walk reaches it first:
+    # own-props are rebound to THIS class's own FQCN (`owner_fqcn=fqcn`), never the leaf's.
+    own_cache = _own_cache if _own_cache is not None else {}
     if "." not in fqcn:
         raise SchemaError(f"class must be fully qualified (Package.Class): {fqcn!r}")
     if fqcn.casefold() in seen:
         return []                                   # cycle guard (shouldn't happen in a class graph)
     seen.add(fqcn.casefold())
     pkg_name, class_name = fqcn.split(".", 1)
-    # Three sources for a package's own-prop schema + super link, giving IDENTICAL results:
-    #  - a full `Package` a caller pre-seeded into `_cache` (e.g. `class show` seeds the packages its
-    #    ClassIndex already loaded, so the super chain and prop set read the SAME bytes) → live decode;
-    #  - else, cache ON: the persistent per-package SCHEMA CACHE (spec 2026-07-18-package-schema-cache
-    #    §4.6) — a warm hit skips `load_package` entirely; the cached own-props are rebound to this
-    #    `fqcn`'s owner, matching `own_class_properties(pkg, class_name, owner_fqcn=fqcn)` byte-for-byte;
-    #  - else, cache OFF (debug/CI/paranoid): the OLD live per-package decode, memoized in `_cache`, so
-    #    we decode only the CHAIN's classes (not the whole package — the bundle decode is amortized only
-    #    when the cache persists it) and raise on a corrupt super, exactly as before this cache existed.
-    # All three raise `SchemaError` on an unknown class / corrupt super (no fallback, §6).
-    seeded = cache.get(pkg_name)
-    if isinstance(seeded, Package):
-        props = list(own_class_properties(seeded, class_name, owner_fqcn=fqcn))
-        sup = _super_fqcn(seeded, class_name)
+    own_key = fqcn.casefold()
+    cached = own_cache.get(own_key)
+    if cached is not None:
+        own_props, sup = cached
     else:
-        path = resolver(pkg_name)
-        if path is None:
-            # Neutral wording on purpose: this walk serves BOTH ingest validation and `class show`,
-            # and each caller prefixes its own context — "cannot validate …" here read as nonsense
-            # under `class show`, which validates nothing.
-            raise SchemaError(f"package {pkg_name!r} (needed for {fqcn}) not found on the schema "
-                              "search path — the real game .u must be present")
-        if schema_cache._enabled():
-            schema = schema_cache.load_package_schema(path, name=pkg_name, need_props=True)
-            props = list(schema.own_props_for(class_name, owner_fqcn=fqcn))
-            sup = schema.super_ref_for(class_name)
+        # Three sources for a package's own-prop schema + super link, giving IDENTICAL results:
+        #  - a full `Package` a caller pre-seeded into `_cache` (e.g. `class show` seeds the packages
+        #    its ClassIndex already loaded, so the super chain and prop set read the SAME bytes) →
+        #    live decode;
+        #  - else, cache ON: the persistent per-package SCHEMA CACHE (spec
+        #    2026-07-18-package-schema-cache §4.6) — a warm hit skips `load_package` entirely; the
+        #    cached own-props are rebound to this `fqcn`'s owner, matching
+        #    `own_class_properties(pkg, class_name, owner_fqcn=fqcn)` byte-for-byte;
+        #  - else, cache OFF (debug/CI/paranoid): the OLD live per-package decode, so we decode only
+        #    the CHAIN's classes (not the whole package — the bundle decode is amortized only when
+        #    the cache persists it) and raise on a corrupt super, exactly as before this cache
+        #    existed.
+        # All three raise `SchemaError` on an unknown class / corrupt super (no fallback, §6).
+        seeded = cache.get(pkg_name)
+        if isinstance(seeded, Package):
+            own_props = own_class_properties(seeded, class_name, owner_fqcn=fqcn)
+            sup = _super_fqcn(seeded, class_name)
         else:
-            pkg = cache[pkg_name] = load_package(path, name=pkg_name)
-            props = list(own_class_properties(pkg, class_name, owner_fqcn=fqcn))
-            sup = _super_fqcn(pkg, class_name)
+            path = resolver(pkg_name)
+            if path is None:
+                # Neutral wording on purpose: this walk serves BOTH ingest validation and
+                # `class show`, and each caller prefixes its own context — "cannot validate …" here
+                # read as nonsense under `class show`, which validates nothing.
+                raise SchemaError(f"package {pkg_name!r} (needed for {fqcn}) not found on the "
+                                  "schema search path — the real game .u must be present")
+            if schema_cache._enabled():
+                schema = schema_cache.load_package_schema(path, name=pkg_name, need_props=True)
+                own_props = schema.own_props_for(class_name, owner_fqcn=fqcn)
+                sup = schema.super_ref_for(class_name)
+            else:
+                pkg = cache[pkg_name] = load_package(path, name=pkg_name)
+                own_props = own_class_properties(pkg, class_name, owner_fqcn=fqcn)
+                sup = _super_fqcn(pkg, class_name)
+        own_cache[own_key] = (own_props, sup)
+    props = list(own_props)
     if sup is not None:
-        inherited = resolve_class_properties(sup, resolver=resolver, _seen=seen, _cache=cache)
+        inherited = resolve_class_properties(sup, resolver=resolver, _seen=seen, _cache=cache,
+                                             _own_cache=own_cache)
         have = {p.name.casefold() for p in props}
         props.extend(p for p in inherited if p.name.casefold() not in have)
     return props

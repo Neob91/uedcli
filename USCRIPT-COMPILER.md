@@ -118,9 +118,73 @@ Other `#exec` asset types (`TEXTURE`/`MESH`/`AUDIO`/`FONT` IMPORT — image/mesh
 | **IpServer** | UT99 | 2 | perm only | **real corpus package** — with the struct-member identity fix below (a param and the struct field it accesses sharing a name, e.g. `IpAddr Addr`'s own `.Addr`), the last of a chain of gaps this package surfaced (assert, byte→string, static-through-instance call, import-identity collision) is closed; compiles end to end, `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as `Fire`/`UWeb` |
 | **NoGunsMutator** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/vumaq/ut99-mutators) — hand-authored with no `defaultproperties` block and a trailing blank line, a source shape no prior fixture had; exposed a `_script_text` bug (see below), now fixed; `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as `Fire`/`UWeb`/`IpServer` |
 | **ASPMutator** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/rxut/AdvancedSpawnPoints) — a `Botpack`-dependent mutator; needed the Botpack-load fix (below) plus five further real gaps (cross-package type discovery, `Vect`/`Rot` literals, Vector/Rotator→string, compound-assign operator overload, `for`-loop update-clause dependency double-recording, explicit-zero-default suppression), all now fixed; `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as the other UT99 packages. Review (2026-09-14) caught the compound-assign fix not reaching the `for`-loop update path, the struct-member half of cross-package type discovery, the `for`-loop dependency landing in init/update/cond order instead of init/cond/update, and a docker-gate skip check missing the new Sounds substrate — all fixed; the zero-default suppression was scoped back to only the measured plain-scalar case (an explicit zero-ordinal enum default is left unsuppressed, open question filed) |
+| **UTServerAdmin** | UT99 | 4 | perm only | **real stock UT99 package** (`UTServerAdmin`/`UTImageServer`/`UTServerAdminSpectator`/`ListItem`) — needed nine further real gaps, all now fixed (see below); `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as the other UT99 packages |
+| **ProtectSeanMutator** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/smcl/ut99-dev) — already passed `perm_gate` with no compiler change; residual is the same UT99 own-name-pool gap as the other UT99 packages |
+| **VampireSeanMutator** | UT99 | 1 | perm only | **real corpus package** (same repo) — already passed `perm_gate` with no compiler change; residual is the same UT99 own-name-pool gap as the other UT99 packages |
+| **SeanMutator** | UT99 | 1 | perm only | **real corpus package** (same repo, `HelloMut.uc`) — has NO `defaultproperties` block and NO trailing newline at all (ends `}` with nothing after, a source shape narrower than `NoGunsMutator`'s trailing-blank-line case); real UCC's `ScriptText` still ends with exactly one line terminator, ADDING one where the source has none — `compile._script_text`'s no-newline branch now appends `\n` instead of returning the source unchanged; `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as the other UT99 packages |
+| **CrouchBlocksDamage** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/joeytwiddle/code) — its `defaultproperties` block sits BEFORE its functions in source order (every prior fixture had it last); `_script_text` used to TRUNCATE the source at the block, silently dropping every later function — real UCC EXCISES just the block (keyword through matching `}`, plus one trailing line terminator) and keeps what follows, renumbering `Line`/`TextPos` as if the block had never been there (confirmed byte-exact against a live UT99 UCC build); fixed with `compile._skip_defaultproperties_block` (a lexer-faithful brace/comment/string scanner) + a rewritten `_script_text`; `perm_gate` byte-exact; residual is the same UT99 own-name-pool gap as the other UT99 packages |
+| **IdcKicker** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/joeytwiddle/code) — static-array `config` vars, `~=`, `Super` calls, `FRand()`; already `perm_gate` byte-exact with no compiler change; residual is the same UT99 own-name-pool gap |
+| **NerfSniper** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/joeytwiddle/code, `NerfAmmo`), `Botpack`-dependent — a WRITE through a `class'X'.default.Field` chain, the lvalue counterpart of `UTServerAdmin`'s `.default` reads; already `perm_gate` byte-exact with no compiler change |
+| **MessageAdmin** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/joeytwiddle/code) — surfaced an over-broad literal-operand constant-fold bug (`i = 256*FRand();` shifted every later jump target by 1 byte); `lower._binary` folded a constant operand into an operator's param type UNCONDITIONALLY — live-probed (`UscFoldProbe`), UCC only folds when the operator's own result needs no further outer conversion; `expr()` now threads an optional expected type from `_st_assign`/`_st_return`/`_value` (the `for`-loop init/update sibling, missed in the first pass, caught in review). `_ex_unary`'s preoperator fold was ALSO gated on `expected` in the first pass but with no live-probe evidence for unary — reverted to unconditional fold (caught in review); function-argument position isn't threaded yet, same open gap for that one context. `perm_gate` byte-exact |
+| **NoPistonCamping**, **ForceBehindView**, **TeamSwitcher**, **RedirectPlayers** | UT99 | 1 each | perm only | **real corpus packages** (community mutators, github.com/joeytwiddle/code) — all already `perm_gate` byte-exact with no compiler change; `ForceBehindView`'s package name differs from its containing repo directory (`WeirdMuts`) |
+| **RandomMutators** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/joeytwiddle/code) — four real gaps, all fixed: an explicit empty scalar default (`Field=`, String/Name only); `Obj.Class.Name` member access (`.Class` resolves against `Object`, the two extra Dependency entries a `.Class`-chained access adds are `Core.Class` then the chain's real underlying class — isolated via three live probes, `UscCastDepProbe`/`UscClassOnlyDepProbe`/`UscClassNameDepProbe2`; review caught the real-class lookup re-lowering its own base expression a second time, double-recording a Dependency for anything but a bare-name base — now guarded to only the measured bare-name shape); case-insensitive `class:<Name>` cast/metaclass-cast import resolution in the multi-class build path (`compile._resolve_class_ident`, matching its own same-package-sibling check and the single-class path's equivalent resolvers); a comment/string-masked function-position search (`compile._mask_lexical_noise`) so a commented-out duplicate declaration before the real one can't be matched by mistake. `perm_gate` byte-exact; controlled fixture `UscRandomMutatorsGaps` isolates the first three |
+| **ArenaFallback** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/joeytwiddle/code), `Botpack`-dependent — a bare `return;` as the last statement inside a `foreach` needs an `IteratorPop` first (`break` already got this via its jump-to-`end` flow-through; `return` exits directly and bypassed it); fixed (`lower._Lowerer.foreach_depth`); `perm_gate` byte-exact |
+| **PubliciseScore**, **PainSoundsMutator**, **NoobJuice** | UT99 | 1 each | perm only | **real corpus packages** (community mutators, github.com/joeytwiddle/code), `Botpack`-dependent (`TeamGamePlus`/`TournamentGameReplicationInfo`/`DeathMatchPlus`/`Sound` locals) — three real gaps, all fixed: a cast-CALL expression (`TeamGamePlus(Level.Game)`) naming a class no declared var/param/local type anywhere mentions wasn't discovered for the multi-class catalog (`compile._extra_super_packages`'s `add_expr_class_lits` only handled `class'X'`/`class<X>(...)`, extended to any bare-name call whose callee resolves to a real class); a class reached only via such a discovery may itself declare a member whose type lives in a THIRD undiscovered package (`Teams[0].Score`, `Teams`'s element type `TeamInfo` living in `UnrealShare`) — `_extra_super_packages` now runs a fixed-point walk of every newly-discovered class's own member types, and a Context's `bSize` for a member with a declared static ArrayDim is the array's total footprint, not one element's (`lower._context` grew an `array_dim` multiplier); a var/param/local typed to a class with NO exported script body anywhere (`Sound`, fully native) now falls back to `env.import_only_class_package`, mirroring `_add_import`'s existing cast-target path. A fourth gap, one level deeper than `UscFoldProbe`'s, found in `PainSoundsMutator`: a numeric literal NESTED inside either operand of a binary op never folds, regardless of the assignment's target type — live-probed two shapes (`4*FRand()` nested via the left branch; `128*FRand()` nested via the right branch of `64 + 128*FRand()`, where the outer `+`'s own direct left operand `64` DOES fold but the nested `128` does not even though its enclosing multiply's ret type also matches `expected`), disproving simple `expected` propagation. Fixed with a `_NESTED` sentinel `_ex_binary` passes to both operands' recursive lowering. **Review found this landed with a real regression**: the first version propagated `_NESTED` to children UNCONDITIONALLY, even when `_ex_binary`'s OWN `expected` was `None` (an untracked context — a function-call argument, e.g. `Vertex3f(i*dx/2, ...)`) — this silently stopped folding in exactly the still-open call-argument-position gap the mechanism was never meant to touch, and broke the previously-byte-exact `ExtendedBuilders` (`BuildTerrain.ExtWave`'s wave-math, a UED22 package landed rounds earlier). Caught only by re-running the FULL suite after the review pass, not by the new fixtures alone — round 7's own "285 passed" claim was for a state that, empirically, did NOT include this regression when re-tested from a clean checkout. Fixed: nested-propagation only fires when `expected is not None` (`nested = _NESTED if expected is not None else None`); when `expected` is itself `None`, children also get `None`, preserving the pre-existing always-fold behavior for the untracked context. Re-verified: `ExtendedBuilders` passes again, `PainSoundsMutator` still passes, full offline suite green. `perm_gate` byte-exact |
+| **Ignore** | UT99 | 1 | perm only | **real corpus package** (community mutator, github.com/joeytwiddle/code, `code/unrealscript/ChatMuts`) — declares its own struct (`struct Victim { var int PIDs[32]; }; var Victim Players[32];`) and reads a field off a local of that struct (`v.PIDs[...]`). Two gaps, both the local-vs-cross-package split this compiler already models for classes/enums, never extended to structs: `lower.type_label` only recognised a struct via the disk-backed `ClassGraph`, never one declared in the class being compiled — fixed with a `struct_names` parameter mirroring `enum_names` (new `struct_type_names` helper); and `Scope.member_of`'s struct branch had the same restriction for the FIELD's own type — fixed with `local_struct_members_of` threaded into `Scope` as `local_structs`. A local struct's field-access token also always imported (`compile._add_struct_member_import`, disk-backed only) — fixed with `_local_struct_member_map` + a `smem:`-identity same-package-export branch in every `resolve_inv` (mirrors the class-literal/enum-tag fallbacks in `_sibling_export_ref`). Closes `dev/docs/board/inbox/uscript-local-struct-member-access-untested/`. `perm_gate` byte-exact |
 
 Controlled (non-corpus) fixtures `UscHello`/`UscVars`/`UscBB`/`UscFn`/`UscW`/`UscSt` all pass the
-strict gate autonomously.
+strict gate autonomously. `UscBareDefaultProbe`/`UscFloatByteProbe` (both UT99, found compiling
+`Resize` — not itself landed, see Open items) pin a bare `default.Field` access (implicit `Self`,
+lowers to a bare `DefaultVariable` token) and the `float -> byte` conversion opcode (`0x43`, a free
+slot before the already-known `float -> int` at `0x44`). `UscStructReturnProbe` (UT99, found in
+review of `Ignore`'s struct-name threading) pins a sibling gap the same fix missed: `lower.lower_function`
+called `type_label(func.return_type)` with no `graph`/`enum_names`/`struct_names` at all, so a function
+RETURNING a locally-declared (or on-disk-package) struct/enum type mislabelled its `ReturnValue` as
+`object:x`. Fixed by threading the same `enum_names`/`struct_names` `build_scope` already uses for
+params/locals into `lower_function` too. `perm_gate` byte-exact against a fresh UT99 UCC build.
+
+**`UTServerAdmin` (2026-09-14):** the `class<T>`-typed-variable `.default` gap
+(`dev/docs/board/done/class-t-typed-variable-s-default-field-needs/`) was tractable after all. Full
+finding-by-finding detail (each live-probed, each with a committed regression):
+`dev/docs/spikes/2026-09-14-utserveradmin-class-ref-gaps/spike.md`. Summary:
+
+1. `class<T>.default.Field` (a `class<T>` local/param/member/metaclass cast, or a nested `class<T>`-
+   typed FIELD reached through another `.default`) — `type_label` collapses every `class<T>` to the
+   bare string "class", losing `T`; `lower._meta_class_of` recovers it via a side-effect-free AST
+   walk, backed by a new parallel `member_meta`/`member_array_dim` channel (`natives.ClassSig`)
+   alongside the existing type-label one. An OBJECT-INSTANCE `.default` uses the ordinary
+   Context(0x19), not ClassContext(0x12), and records only one Dependency entry, not two.
+2. `ArrayCount(...)` on a `.default` chain — a pure compile-time constant (the field's ArrayDim),
+   yet every Dependency entry evaluating the discarded argument normally would have is still
+   recorded (`lower._array_count_dim`/`_record_default_chain_deps`).
+3. `ClassRef.Static.Method(...)` — the SAME ClassContext(0x12) wrapper `.default` uses, wrapping a
+   VirtualFunction call instead of a DefaultVariable (`lower._call_method`).
+4. A class with NO exported script body anywhere on the search path but reachable as an IMPORT
+   elsewhere (`Engine.NetConnection`, fully native, no `.uc` source at all) is still a valid cast
+   target — `env.class_home_from_imports` scans another package's own IMPORT table, a purely static
+   decode, no live capture needed.
+5. `"..." $/@ SomeClassRef` — the operator-overload search never let `class` widen into `string`,
+   even though `_coerce`'s `ObjectToString` codegen already handled it.
+6. `bool(SomeString)` = conversion opcode `0x4B`, a free slot between `string->int`(`0x4A`)/
+   `string->float`(`0x4C`).
+7. Two SOURCE occurrences of the same inherited field/function/struct member differing only in
+   CASE used to register as two separate (ambiguous) import rows — `compile._existing_import_key`
+   dedupes case-insensitively at all three import-registration sites.
+8. A bare expression-statement whose call returns a STRING (result discarded) wraps in
+   `EatString`(0x0E) — only the string case is verified.
+9. An overriding function inherits `FUNC_Net`(+`FUNC_NetReliable`)/`RepOffset` from the function it
+   overrides (replication is a property of the function itself); a bare `config;` modifier (no
+   explicit name) inherits the super's `ClassConfigName` rather than resetting to `System`
+   (`Engine.MessagingSpectator` is `config(User)`).
+
+A tenth, unrelated bug found along the way: `_record_dep` wrongly SKIPPED a Context whose target was
+the compiling class itself (assumed redundant with its own deep=1 self-Dependency) — real UCC does
+not dedupe `Dependencies` by class at all, even for self (confirmed on real `ListItem`, a self-
+referencing linked-list class, and a controlled `SelfDepNode` probe). One smaller gap found but NOT
+chased (filed to the board): `ArrayCount` on a plain non-`.default` member access. The other
+(a same-package inherited `defaultproperties` override crash) is FIXED — `_super_field_order` now
+falls back to an in-package super's AST (`b.in_pkg_decls`) when it has no compiled export yet;
+regression `pkg_SamePkgInheritedDefault` (`test_uscript_package.py`).
 
 ## Key RE findings (crux facts, detail in `dev/docs/unrealed/unrealscript/`)
 
@@ -671,6 +735,17 @@ mkdir -p _scratch/pt && TMPDIR=$PWD/_scratch/pt .venv/bin/python -m pytest \
 Docker-gated tests (fresh-UCC rebuilds) need the relevant substrate fetched first and are skip-gated
 without it. Never write scratch probe scripts via a `PYTHONPATH=` env prefix or heredoc-to-python on
 this host — write a file with `sys.path.insert(0, cwd)` at the top and run it plainly.
+
+**A fix to a shared mechanism (`lower.py`/`compile.py` code every package's lowering goes through,
+not just a new fixture) MUST be checked against the full offline suite above, not just the package(s)
+that motivated it, before it's trusted.** Learned the hard way (2026-09-14): the `PainSoundsMutator`
+nested-literal-fold fix landed with a real regression against the ALREADY-byte-exact `ExtendedBuilders`
+(a different, earlier-landed UED22 package) — invisible if you only re-check the new/motivating
+fixture, since `ExtendedBuilders` shares no fixture file with `PainSoundsMutator` at all. The bug was a
+`_NESTED` sentinel propagating into an untracked context (a function-call argument) it was never meant
+to touch. A clean `git checkout <merge-base> -- <changed files>` bisect against the two candidate
+packages (does the OLD code pass X? does the NEW code pass Y? does REVERTING one specific hunk fix X
+while keeping Y?) is the fastest way to isolate which hunk broke what when this happens again.
 
 ## Where the detail lives
 

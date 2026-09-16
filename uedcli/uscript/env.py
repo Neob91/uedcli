@@ -27,6 +27,32 @@ class ClassInfo:
     class_flags: int          # its ClassFlags (a subset propagates to subclasses)
     package_imports: tuple[str, ...]  # its PackageImports (own pkg + transitive deps + Core)
     probe_mask: int           # its default-state EProbe bits (subclasses OR in their own overrides)
+    config_name: str          # its ClassConfigName — a subclass's bare `config` (no name) inherits it
+
+
+def class_home_from_imports(pkg: Package, class_name: str) -> str | None:
+    """The home package of `class_name`, found among `pkg`'s own IMPORT table (not its exports) — a
+    `Core.Class`-typed import row named `class_name`, resolved to a package name via
+    `Package.import_package_of`'s existing outer-chain walk. Fallback for a class that has NO
+    exported script body anywhere on the search path: some engine classes are fully native with no
+    `.uc` source at all, so no `.u` ever serializes a UClass export for them, yet they are still real,
+    resolvable class references — live-probed (`dev/docs/spikes/2026-09-14-utserveradmin-class-ref-
+    gaps/probe_netconnection_import_only.py`): UT99's
+    `Engine.NetConnection` compiles fine as a cast target (`NetConnection(x) != None`) with only
+    Core+Engine `EditPackages` loaded, even though no fetched UT99 `.u` exports it; the fresh golden's
+    own import table names its home package `Engine`, matching this scan of `Engine.u`'s own imports
+    exactly (`Engine.u` itself imports `NetConnection` from itself — for some OTHER class's property
+    type — even though it never exports it)."""
+    cf = class_name.casefold()
+    for i, imp in enumerate(pkg.imports):
+        cls_pkg_idx, cls_name_idx, _outer, obj_name_idx = imp
+        if pkg.names[obj_name_idx].casefold() != cf:
+            continue
+        if 0 <= cls_name_idx < len(pkg.names) and pkg.names[cls_name_idx] == "Class":
+            home = pkg.import_package_of(i)
+            if home:
+                return home
+    return None
 
 
 def _class_export_index(pkg: Package, class_name: str) -> int | None:
@@ -105,6 +131,32 @@ def _package_imports(pkg: Package, class_index1: int) -> tuple[str, ...]:
     return tuple(out)
 
 
+def _config_name(pkg: Package, class_index1: int) -> str:
+    """The ClassConfigName in a UClass body (after PackageImports, ClassWithin) — 'System' if this
+    class never set an explicit one anywhere in its chain. Live-probed: UT99 `Engine.Spectator`/
+    `Engine.MessagingSpectator` are both `'User'` (real UT99 stores spectator/messaging prefs in
+    `User.ini`), `Engine.PlayerPawn` is `'System'` — see `compile._class_header`'s bare-`config`
+    inheritance rule, `dev/docs/spikes/2026-09-14-utserveradmin-class-ref-gaps/
+    probe_config_name_inheritance.py`."""
+    e = pkg.exports[class_index1 - 1]
+    buf, pos = pkg.buf, e["soff"]
+    for _ in range(5):                       # Super, Next, ScriptText, Children, FriendlyName
+        _, pos = _rci(buf, pos)
+    pos += 8
+    ssz = struct.unpack_from("<I", buf, pos)[0]; pos += 4
+    pos = _skip_script(pkg, pos, ssz)
+    pos += 8 + 8 + 2 + 4 + 4 + 16            # UState fields + ClassFlags + ClassGuid
+    depcnt, pos = _rci(buf, pos)
+    for _ in range(depcnt):
+        _, pos = _rci(buf, pos); pos += 8
+    picnt, pos = _rci(buf, pos)
+    for _ in range(picnt):
+        _, pos = _rci(buf, pos)
+    _within, pos = _rci(buf, pos)
+    cfgname, _pos = _rci(buf, pos)
+    return pkg.names[cfgname] if 0 < cfgname < len(pkg.names) else "System"
+
+
 _SUBSTRATES = ("ued22", "ut99")
 
 
@@ -137,6 +189,35 @@ class InstallEnv:
                 if e["cls"] == 0:
                     index.setdefault(pkg.names[e["nm"]].casefold(), stem)
         return index
+
+    @cached_property
+    def _import_only_class_to_package(self) -> dict[str, str]:
+        """Fallback for a class with NO export anywhere on the search path but reachable as an
+        IMPORT somewhere (`class_home_from_imports`) — only consulted when `_class_to_package`
+        (export-based, authoritative) doesn't know the name. Never used for anything needing the
+        class's own body (self CRC, members, flags) — only `import_only_class_package`, backing a
+        cast-target import's home package."""
+        exported = self._class_to_package               # authoritative; never overridden here
+        index: dict[str, str] = {}
+        for path in self._package_paths():
+            try:
+                pkg = load_package(path)
+            except Exception:
+                continue
+            for imp in pkg.imports:
+                nm_cf = pkg.names[imp[3]].casefold()
+                if nm_cf in exported or nm_cf in index:
+                    continue
+                home = class_home_from_imports(pkg, pkg.names[imp[3]])
+                if home:
+                    index[nm_cf] = home
+        return index
+
+    def import_only_class_package(self, class_name: str) -> str | None:
+        """The home package of a class known ONLY via import (never exported anywhere on the search
+        path) — see `_import_only_class_to_package`. Used by `compile._add_import`'s cast-target
+        fallback, never for member/function resolution (no body exists to read)."""
+        return self._import_only_class_to_package.get(class_name.casefold())
 
     def _package_paths(self) -> list[str]:
         seen, out = set(), []
@@ -173,4 +254,4 @@ class InstallEnv:
         return ClassInfo(name=pkg.names[pkg.exports[ci - 1]["nm"]], package=pool_case(stem),
                          self_crc=_self_crc(pkg, ci), class_flags=_class_flags(pkg, ci),
                          package_imports=_package_imports(pkg, ci),
-                         probe_mask=_probe_mask(pkg, ci))
+                         probe_mask=_probe_mask(pkg, ci), config_name=_config_name(pkg, ci))

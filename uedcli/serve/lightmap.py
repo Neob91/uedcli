@@ -16,30 +16,7 @@ from __future__ import annotations
 
 import io
 
-_MAX_ATLAS_WIDTH = 2048
-
-
-def _pack_rects(sizes: list[tuple[int, int]]) -> tuple[int, int, list[tuple[int, int]]]:
-    """Shelf-pack `sizes` (w, h) left to right, wrapping at `_MAX_ATLAS_WIDTH` (or the widest single
-    entry). Returns `(atlas_w, atlas_h, positions)`. Same shelf packer as `textures.py`, kept
-    separate so the two atlases can size independently."""
-    if not sizes:
-        return 0, 0, []
-    max_w = max(w for w, _h in sizes)
-    target_w = max(max_w, min(_MAX_ATLAS_WIDTH, sum(w for w, _h in sizes)))
-    x = y = shelf_h = 0
-    atlas_w = 0
-    positions = []
-    for w, h in sizes:
-        if x and x + w > target_w:
-            y += shelf_h
-            x = 0
-            shelf_h = 0
-        positions.append((x, y))
-        atlas_w = max(atlas_w, x + w)
-        shelf_h = max(shelf_h, h)
-        x += w
-    return atlas_w, y + shelf_h, positions
+from .atlas_pack import pack_rects
 
 
 def _pad_edges(interior, w: int, h: int):
@@ -93,7 +70,7 @@ def build_lightmap_atlas(polys: list[tuple]) -> tuple[bytes, dict, int, int, flo
         poly_to_patch[i] = patch_index
 
     padded_sizes = [(max(w, 1) + 2, max(h, 1) + 2) for w, h, _rgb in patches]
-    atlas_w, atlas_h, positions = _pack_rects(padded_sizes)
+    atlas_w, atlas_h, positions = pack_rects(padded_sizes)
     atlas_w, atlas_h = max(atlas_w, 1), max(atlas_h, 1)
     img = Image.new("RGB", (atlas_w, atlas_h), (0, 0, 0))
 

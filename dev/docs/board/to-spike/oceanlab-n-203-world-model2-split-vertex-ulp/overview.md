@@ -143,3 +143,154 @@ tree divergence from some prior actor/N), or does it HIT onto the nearby point (
 genuinely differs here, same shape as N8 but reversed)? Settling this needs the live capture above,
 run when the shared host's disk is not mid-swing. Exact recipe, breakpoint address, and query bits are
 unchanged from the prior update and ready to run as-is. No fix, no mask, no exclusion proposed.
+
+## 2026-09-14 update — live capture ran: UED22 ALSO misses; narrowed to a dead-node ghost point
+
+Disk was calm this session (`df -h /` steady at 12-16G free throughout); the debug image build
+(`dx-lum-uned-dbg`, gdb added on top of the already-present `ued-x86-runtime` base) cost under a
+minute. Ran the exact recipe the prior update left ready. Full writeup + committed harness:
+`dev/docs/spikes/2026-09-14-oceanlab-n203-addpoint-capture/`.
+
+**The open question is answered: UED22's own `FindNearestVertex` MISSES too** (`dist=-1.0`, the same
+sentinel the N=8 probe used), both times, for both of Brush483's two divergent points. Native's FNV
+descent is faithful at this call — it is not the bug. A follow-up static trace (reverted after use,
+not committed — see the spike for why) walked native's own `model.points` at each points-GC
+checkpoint and found the exact downstream mechanism: the pre-existing wall-crossing point
+(`0xc3800002`) survives the add only as a "ghost" reference from a surf whose owning NODE is already
+DEAD (spliced out of the live tree by `bsp_cleanup`'s FWTB-DEAD splice) by the time Brush483's own
+add runs. `compact_points_to_surf_bases` keeps the point alive anyway (its rule doesn't check node
+liveness), but that ghost surf itself is discarded one line later, and repartition's soup-rebuild
+(`make_ed_polys`) only walks LIVE reachable nodes — so nothing ever re-derives a surf at that exact
+coordinate again. `bsp_refresh_points_vectors` correctly drops the now-truly-orphaned point right
+after, and by the time `bsp_opt_geom`'s `merge_near_points` runs, there is nothing left to weld
+Brush483's new point onto.
+
+Every individual step in this chain is already a faithful, independently live-verified piece of the
+port — none of them is locally wrong. The remaining question is upstream of all of it: is this
+wall-face node ALSO dead at the equivalent point in UED22's real incremental tree, or does UED22 keep
+it (or an equivalent live node at the same spot) alive through to its own `bspOptGeom`? Settling that
+needs a DIFFERENT live capture — of the real editor's own `Model->Points`/`Model->Nodes` state at the
+`bspBuild`/`bspRefresh` checkpoints, which needs locating `bspOptGeom`'s own `Model*` argument and
+`TArray` layout, not yet done. A materially new, larger RE task, out of scope for this pass — not
+attempted (`NATIVE-MATERIALIZE.md` prime directive: measure, don't guess a fix for an unconfirmed
+mechanism). Still not resolved; no fix, no mask. OceanLab's ceiling is unchanged (byte-exact N=1..202,
+re-confirmed unchanged this session).
+
+## 2026-09-15 update — the open question is ANSWERED: UED22 keeps the wall face alive; narrowed to one exact CSG classification call
+
+Full writeup: `dev/docs/spikes/2026-09-15-oceanlab-n203-bspoptgeom-points/spike.md`. Located
+`bspOptGeom`'s `Model*` argument and `UModel`'s in-memory `TArray` layout (`Points`/`Nodes`/`Surfs`/
+`Vectors` offsets — reused, not re-derived, from an already-committed but previously uncredited
+oracle, `2026-07-15-native-materialize/harness/editor-tree-oracle/bspopt_pool_oracle.py`, cross-verified
+against `zones.rs`'s own disassembly comment). A live gdb capture at `bspOptGeom` entry
+(Editor.dll `0x10036870`) for OceanLab N=203 dumped the real editor's live `Points` (4189 entries) and
+`Surfs` (1085 entries) arrays directly:
+
+**Answer: UED22 keeps it alive.** Both the wall's pre-existing point (x-bits `0xc3800002`, at Points
+index 947/950) and `Brush483`'s own new point (`0xc3800004`, index 968/970) are present, at DIFFERENT
+indices — not merged, not orphaned. A `Surfs`-array cross-check (needs no node-reachability walk:
+`pBase` offset `+0x08` within `FBspSurf`, scanned across all live surfs) confirms this is not a
+dead-node ghost either — the wall's original surf (index 1053/1055) is a fully live, independent `Surfs`
+entry, structurally identical in kind to `Brush483`'s own brand-new surf (1074/1076). This refutes the
+prior session's "ghost from a dead node, kept alive only pending GC" framing: native's points-GC
+(`bsp_refresh_points_vectors`/`compact_points_to_surf_bases`) is fully innocent — the true divergence
+is one step further upstream.
+
+Pinpointed the exact CSG step offline (no gdb, using the already-committed
+`UEDCLI_BSPCSG_BRUSH_STATE=FULL:lo-hi` per-brush node trace): the wall face is native node 5154
+(plane `x = -256.00006103515625`, exactly the wall plane; surf 1053), created by `Brush480`
+(`CSG_Subtract`, world-CSG index `bi=164`), alive (`nv=3`) through `Brush481` (`bi=165`, `CSG_Subtract`),
+then killed (`nv=0`, its own children spliced away) immediately after `Brush482` (`bi=166`,
+**`CSG_Add`**) runs — one brush before `Brush483` (`bi=167`) itself. Native's `filter_world_through_brush`
+(`bspcsg.rs`, port of Editor.dll `FilterWorldThroughBrush` `0x33250`) decides this ADD volume genuinely
+consumes the wall face (`GDiscarded != 0`); the live capture proves UED22's real equivalent must decide
+the opposite (a graze, keeps the face). Same bug SHAPE as the campaign's other found-and-fixed
+near-tie boundary classifications (Island N=332, WanChai N=45/58, UNATCO N=226 — all a sub-ULP
+`FLinePlaneIntersection`/crossing tie), but in a DIFFERENT function never live-captured before
+(`FilterWorldThroughBrush`'s own consume-vs-graze classify, not a permeating-light beam clip).
+
+**Not fixed.** The next step is a live gdb capture of the real editor's `FilterWorldThroughBrush`
+(or its inner classify) during `Brush482`'s own `bspBrushCSG`, scoped to this exact face's plane bits,
+to read the real `GDiscarded` verdict — same method class as `2026-09-13-crossing-vertex-live-capture/`.
+No mask, no exclusion proposed. `docker cp` on this rootless daemon is separately confirmed BROKEN
+(deterministic overlay `remount-ro .../stubs` error, not transient) — future captures should pull files
+via `docker exec ... cat` instead, as this session's harness now does.
+
+## 2026-09-15 update (2) — the capture ran: UED22 ALSO decides CONSUME; hypothesis REFUTED
+
+Full writeup: `dev/docs/spikes/2026-09-15-oceanlab-n203-fwtb-classify/spike.md`. Ran the exact capture
+scoped above (breakpoint at `FilterWorldThroughBrush`'s reconciliation, `0x1003348b`, confirmed by a
+fresh `objdump` disassembly of `uned/UED22/Editor.dll` this session; staged the OceanLab N=203 subset
+truncated to N=202 so `Brush482` is unambiguously the last CSG-participating brush).
+
+**Result: UED22's own `GDiscarded` is nonzero (CONSUME) at every reconciliation hit on the wall's
+exact plane** — node 5154 and its whole coplanar-chain successors (5156/5158/5160/5163/5165), all six
+hits. This directly REFUTES the prior session's framing ("UED22's real answer must be a graze") —
+UED22 kills this face during `Brush482` exactly like native does. `FilterWorldThroughBrush` is now
+doubly confirmed faithful (live capture, on top of the existing disassembly-level port) and is not the
+bug.
+
+This also corrects the prior session's `bspOptGeom`-entry Points/Surfs read: the wall's surf
+(1053/1055) being present in UED22's live `Surfs` array does NOT mean it's "a fully live, undamaged
+surf" — its owning node is dead in UED22's tree too (per this capture), so it's a dead-node surf on
+BOTH sides, not a coexisting-live-surf-vs-dead-node-ghost asymmetry. A fresh offline cross-check of
+the FINAL (fully built) `native_N203.dx`/`ref_N203.dx` this session confirms only ONE point/surf
+survives per side at this location, not two — native keeps `Brush483`'s own new point
+(`0xc3800004`), UED22 keeps the wall's ORIGINAL point (`0xc3800002`) — consistent with the two
+coexisting only transiently (at `bspOptGeom` entry, before its own `merge_near_points` runs) and then
+UED22's `merge_near_points` welding them onto the wall's earlier point, while native's own
+`merge_near_points` never gets the chance because the wall's point is already gone from native's pool
+by the time `Brush483` runs.
+
+**Re-scoped, not closed.** The true divergence is upstream of the classify decision: what happens to
+a dead node's surf/point reference AFTERWARD, before `bspOptGeom`'s `merge_near_points` runs. A first
+draft of this update blamed native's repartition-time `Surfs` clear+rebuild — WRONG, caught by review:
+`bspcsg.rs`'s own comment there (`bspcsg.rs:3398-3406`) says the real editor does NOT rebuild Surfs at
+repartition at all (it keeps the incremental-CSG pool, only compacting at `bspRefresh`); native's
+clear+rebuild is a reordering device reconciled back to the editor's true order via
+`canon_surf_keys`/`reorder_surfs_canonical`, not a port of an editor-side rebuild. Only
+`bsp_refresh_points_vectors`'s point-compaction is independently evidenced-faithful so far; exactly
+which step drops the wall's SURF entry (not just its point) is not yet pinned. Next step, in order:
+(1) offline — trace natively whether the wall's surf is still present in the pre-clear
+`canon_surf_keys` snapshot at the `Brush482`→`Brush483` boundary, to find which routine actually drops
+it; (2) only then a live capture bracketing that exact step in UED22's real build. Full detail:
+`dev/docs/spikes/2026-09-15-oceanlab-n203-fwtb-classify/spike.md` §3-4. No fix, no mask, no exclusion
+proposed.
+
+## 2026-09-15 update (3) — the surf's real drop point pinned and FIXED; one narrow residual left, not algorithmic
+
+Step (1) above ran, offline, no live capture needed: the wall's surf IS present in the pre-clear
+`canon_surf_keys` snapshot — confirmed by a temporary node-keyed trace (reverted after use). It is
+dropped by the world-level repartition's clear + rebuild itself: the rebuild's input soup
+(`bsp_build_fpolys`/`make_ed_polys`) only walks LIVE-reachable nodes, so a dead node's face is simply
+never re-created; the very next call, `passes::bsp_refresh`, then can't drop what was never there, but
+also has nothing to preserve it. A fresh disassembly of the real `bspRefresh` (`Editor.dll 0x36cd0`)
+pins why this is a genuine divergence, not a reordering-device artifact: `bspRepartition`'s own call
+passes `NoRemapSurfs=1`, which (traced at the instruction level) zeroes the function's internal
+`SurfRemap` array before its compaction loop — i.e. it suppresses compaction entirely, keeping every
+surf. The real surf GC happens later, inside `bspOptGeom`'s own prologue (`bspRefresh(Model, 0)`,
+literal zero — a REAL compaction), which runs AFTER `bspOptGeom`'s own point-merge
+(`merge_near_points`) — so a dead node's point survives long enough for a later brush's near-coincident
+new point to weld onto it. Native was running the real compaction eagerly, right after repartition,
+well before `merge_near_points` ever got the chance.
+
+**FIXED**: `bspcsg.rs`'s world-level repartition now carries a dead node's surf forward across the
+clear+rebuild (`carry_forward_dead_surfs`, using the same pre-clear snapshot `canon_surf_keys` already
+took); `bspoptgeom::bsp_opt_geom` gained the previously-unported real compaction
+(`passes::compact_unreferenced_surfs`, right after its point-merge). `Model2.points` is now
+byte-identical to a fresh UED22 build (was: one 2-ULP-divergent pair); every one of 2640 live node
+rings is coordinate-identical; live vert count matches exactly. Full detail, disassembly addresses,
+and an independent subagent re-verification: `dev/docs/spikes/2026-09-15-oceanlab-n203-repartition-surf-defer/spike.md`.
+
+**Not fully closed.** `parity_gate.py` still FAILs at N=203 — but the ONLY remaining divergence is one
+extra ORPHAN (dead, unreferenced) `Verts` entry on the UED22 side (35265 vs native's 35264), which
+desyncs the gate's positional token walk and cascades into spurious downstream "differences" that are
+not real. This is a narrow residual in `parity_gate.py`'s existing orphan-vert exclusion (built and
+validated only for same-COUNT, different-content orphan slots, never a genuine count mismatch), not a
+newly-found algorithm bug. Whether native can be made to also produce this one orphan slot faithfully
+(closing the item with no gate change) was not traced this session. Either way this needs the owner's
+call before anything in `parity_gate.py` changes — filed as
+`questions/orphan-vert-count-mismatch-gate-widening.md`. Staying in `to-spike/` until that's answered
+(or the orphan-count mechanism is traced and fixed natively, whichever comes first). N=1..202
+re-verified with `ladder_run.py` alongside this change — see the spike for the exact range covered
+this session.

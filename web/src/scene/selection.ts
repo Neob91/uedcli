@@ -1,11 +1,129 @@
-// Click-to-select picking: ray-vs-actor-AABB, nearest hit wins. Pure and framework-free (the
+// Click-to-select picking. The PRIMARY path (`resolveHitActor`) raycasts the actual rendered
+// geometry (the merged bufferGeometry Viewport3D.tsx builds from `scene.polys`) and maps the hit
+// triangle back to its owning actor via `ScenePoly.owner` -- real per-poly ownership, so a small
+// brush fully enclosed in a bigger brush's bounding box is still selectable by its OWN geometry.
+// `pickActor` (ray-vs-actor-AABB) is the FALLBACK for a tap that doesn't land on any drawn
+// triangle -- the only way to select a non-brush point actor (no geometry of its own, out of scope
+// here) today, so it must keep working exactly as before. Pure and framework-free (the
 // screen-to-ray conversion, which needs the real camera projection, lives in Viewport3D.tsx via
 // three.js's Raycaster; only the picking algorithm itself is here, so it's testable without a
-// WebGL context). Slice 1 selects at actor-bbox granularity, not per-poly -- the scene payload's
-// polys carry no owning-actor reference (they're anonymous CSG-solved fragments), so bbox
-// hit-testing against `ScenePayload.actors` is what's available without a backend change.
+// WebGL context).
 import type { SceneActor } from '../api'
 import type { Vec3 } from './camera'
+import type { ShadingMode } from './shadingMode'
+
+/** Resolves a raycast hit on the merged scene geometry to its owning actor: `faceIndex` is
+ * `THREE.Intersection.faceIndex` (a triangle index into the non-indexed geometry, so it indexes
+ * `triangleOwners` directly -- `geometry.ts`'s `buildGeometryData` emits one owner entry per
+ * triangle in the SAME order). Returns null when there was no hit, the hit triangle has no
+ * resolved owner (an out-of-range CSG join), or the name doesn't match any actor in the current
+ * payload (a live-reload race). */
+export function resolveHitActor(
+  faceIndex: number | null | undefined,
+  triangleOwners: (string | null)[],
+  actors: SceneActor[],
+): SceneActor | null {
+  if (faceIndex == null) return null
+  const name = triangleOwners[faceIndex]
+  if (name == null) return null
+  return actors.find((a) => a.name === name) ?? null
+}
+
+/** A raycast hit resolved to its owning actor AND the specific polygon (`ScenePayload.polys` index)
+ * that was hit -- the surface (texture) selection identity (GUI.md "Selection & the Inspector": a
+ * plain click in non-wireframe mode selects the one clicked surface's texture, distinct from
+ * selecting the whole brush actor). */
+export interface SurfaceHit {
+  actor: SceneActor
+  polyIndex: number
+}
+
+/** Resolves a raycast hit on the merged scene geometry to its owning actor AND poly, mirroring
+ * `resolveHitActor` but also carrying `trianglePolyIndex[faceIndex]` -- `geometry.ts`'s
+ * `buildGeometryData` emits one entry per triangle in the same order for both arrays. Returns null
+ * under the same conditions `resolveHitActor` does (no hit, no resolved owner/poly, or a stale
+ * name/index from a live-reload race), plus when the poly index itself is unresolved. */
+export function resolveHitSurface(
+  faceIndex: number | null | undefined,
+  triangleOwners: (string | null)[],
+  trianglePolyIndex: (number | null)[],
+  actors: SceneActor[],
+): SurfaceHit | null {
+  const actor = resolveHitActor(faceIndex, triangleOwners, actors)
+  if (!actor || faceIndex == null) return null
+  const polyIndex = trianglePolyIndex[faceIndex]
+  if (polyIndex == null) return null
+  return { actor, polyIndex }
+}
+
+/** Resolves a raycast hit on `BrushOutlines`' merged thin-wireframe `LineSegments` (bug report item
+ * 4/6) to its owning actor: `index` is `THREE.Intersection.index` -- for a `LineSegments` hit,
+ * three.js's own `Line.raycast` sets it to the segment's FIRST vertex index, so `index / 2` is the
+ * segment number, indexing `segmentOwners` directly (`brushRings.ts`'s `mergeThinRings`, one owner
+ * per 2-vertex segment, same per-index-array shape as `resolveHitActor`'s `triangleOwners`). */
+export function resolveSegmentHitActor(
+  index: number | null | undefined,
+  segmentOwners: (string | null)[],
+  actors: SceneActor[],
+): SceneActor | null {
+  if (index == null) return null
+  const name = segmentOwners[Math.floor(index / 2)]
+  if (name == null) return null
+  return actors.find((a) => a.name === name) ?? null
+}
+
+export type TapAction =
+  | { kind: 'select-actor'; name: string; additive: boolean }
+  | { kind: 'select-surface'; actor: string; polyIndex: number; additive: boolean }
+  | { kind: 'deselect' }
+  | { kind: 'none' }
+
+/** What the raycast+AABB hit-test pipeline (`tapSelect.ts`'s `resolveTapSelect`) found, before the
+ * click-target (surface vs. whole actor) and modifier-key rules below are applied. `polyIndex` is
+ * non-null ONLY for a genuine hit on the drawn solid mesh (`selection.ts`'s `resolveHitSurface`) --
+ * a marker/wireframe-line hit or an AABB-fallback hit (missed all real geometry) carries `null`,
+ * since neither identifies one specific polygon. */
+export interface RawTapHit {
+  actor: SceneActor
+  polyIndex: number | null
+}
+
+/** The tap-resolution decision Viewport3D/OrthoViewport's `performTapSelect` both make once they've
+ * run the hit-test pipeline (GUI.md "Selection & the Inspector"). `rawHit` is null for a genuine
+ * miss (clicked empty space) -- ALWAYS `'deselect'`, in any pane/mode (owner ruling 2026-09-15,
+ * reversing spec §9's earlier "Esc is the only deselect path"). Otherwise:
+ * - A POINT actor (`!actor.brush`) is always plain-tap-selectable, everywhere, unaffected by Shift
+ *   or shading mode -- `'select-actor'` with the passed-through (Ctrl/Cmd-driven) `additive`.
+ * - A genuine SURFACE hit (`polyIndex` set) in a NON-wireframe mode is the one case Shift forks the
+ *   SAME click target between texture-select (unmodified) and actor-select (shifted): unmodified ->
+ *   `'select-surface'` (additive = Ctrl, "multi-selects textures"); Shift held -> `'select-actor'`,
+ *   ALWAYS additive (repeated Shift+LMB accumulates multiple brush selections, no Ctrl needed).
+ * - Anything else -- a wireframe outline-LINE hit, or a non-wireframe hit that missed all real
+ *   geometry (AABB fallback, no specific surface to fall back to a texture-select on) -- is a
+ *   whole-brush pick, gated the same way brush selection has always been (`canSelectBrushTap`):
+ *   wireframe needs no modifier (Ctrl still multi-selects); a non-wireframe fallback hit still needs
+ *   Shift, and a hit that Shift didn't clear is ABSORBED (`'none'`), not treated as a miss -- the tap
+ *   landed on something, so it must not wipe an existing selection.
+ * Pulled out as a pure, tiny function so this exact decision is testable without a WebGL raycast. */
+export function resolveTapAction(
+  rawHit: RawTapHit | null,
+  mode: ShadingMode,
+  shiftKey: boolean,
+  additive: boolean,
+): TapAction {
+  if (!rawHit) return { kind: 'deselect' }
+  const { actor, polyIndex } = rawHit
+
+  if (!actor.brush) return { kind: 'select-actor', name: actor.name, additive }
+
+  if (polyIndex != null && mode !== 'wireframe') {
+    if (shiftKey) return { kind: 'select-actor', name: actor.name, additive: true }
+    return { kind: 'select-surface', actor: actor.name, polyIndex, additive }
+  }
+
+  if (!canSelectBrushTap(mode, shiftKey)) return { kind: 'none' }
+  return { kind: 'select-actor', name: actor.name, additive: mode === 'wireframe' ? additive : true }
+}
 
 export interface Ray {
   origin: Vec3
@@ -48,6 +166,17 @@ export function pickActor(ray: Ray, actors: SceneActor[]): SceneActor | null {
     }
   }
   return best
+}
+
+/** This is SHADING-MODE-gated (wireframe vs. non-wireframe), not viewport-gated -- corrected owner
+ * ruling 2026-09-15 (an earlier pass had this backwards as 3D-vs-2D). In wireframe mode -- the 2D
+ * ortho panes are always wireframe, and the 3D perspective pane can be too -- a plain LMB tap
+ * selects a brush directly, matching how a point actor is always plain-tap-selectable. In a
+ * NON-wireframe shading mode (only possible in the 3D perspective pane: `unlit`/`flat`/`lit`), a
+ * plain LMB-drag is camera-fly (dolly+turn), so a tap landing on a brush is ambiguous with an
+ * incidental camera nudge -- Shift+LMB is the disambiguator there. */
+export function canSelectBrushTap(mode: ShadingMode, shiftKey: boolean): boolean {
+  return mode === 'wireframe' || shiftKey
 }
 
 export const TAP_DRAG_THRESHOLD_PX = 4

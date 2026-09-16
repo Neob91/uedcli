@@ -65,3 +65,29 @@ def test_stop_cancels_a_pending_timer():
         assert calls == []
 
     asyncio.run(_run())
+
+
+def test_notify_during_an_in_flight_broadcast_does_not_cancel_it():
+    """Regression: `notify()` (and `stop()`) used to `.cancel()` the SAME task running
+    `on_change()`, so a rapid `notify()`/`stop()` arriving while a slow `on_change()` (e.g. mid
+    `await ws.send_json`) was still in flight silently killed the broadcast, not just a pending
+    timer. A second `notify()` after the first's debounce has already elapsed starts its OWN new
+    timer (a separate settled window, same as `test_two_separated_bursts_fire_twice`) — cancelling
+    that new timer (here, via `stop()`) must not reach back and kill the FIRST dispatch's already
+    in-flight broadcast."""
+    async def _run():
+        calls = []
+
+        async def _slow_on_change():
+            await asyncio.sleep(0.05)   # simulates a slow in-flight broadcast
+            calls.append(1)
+
+        watcher = TrunkWatcher("/nonexistent", _slow_on_change, debounce_s=0.01)
+        watcher.notify()
+        await asyncio.sleep(0.02)       # the debounce elapses; on_change() is now "in flight"
+        watcher.notify()                # starts a second timer; must not touch the in-flight call
+        watcher.stop()                  # cancels that second (still-pending) timer only
+        await asyncio.sleep(0.08)
+        assert calls == [1]             # the FIRST dispatch's in-flight broadcast still completed
+
+    asyncio.run(_run())

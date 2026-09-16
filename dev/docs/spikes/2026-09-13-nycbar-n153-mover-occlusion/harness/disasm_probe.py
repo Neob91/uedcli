@@ -51,6 +51,15 @@ RANGES = [
     # rasterizer entry, which is known to crash the container, `2026-09-06-raster-clipbspsurf-port`).
     ("raster_commit", 0x10019a40, 0x400),
     ("portal_emit_retire", 0x1001a1e0, 0x700),
+    # 2026-09-14 round 7: the two prior ranges are contiguous (0x10019a40+0x400 == 0x1001a1e0) but the
+    # earlier 90x-run session's own probe used two separate `disassemble start,start+len` calls, which
+    # each stop at their own boundary -- gdb's output for `raster_commit` ends mid-function at
+    # 0x10019e40 (a `movzbl` whose 3 bytes exactly fill the requested length) with NO overlap into
+    # `portal_emit_retire`'s start. The result is an untranscribed 928-byte GAP (0x10019e40-0x1001a1e0)
+    # in the committed log -- exactly where `-0x8ec(%ebp)`/`-0x918(%ebp)` most likely get their REAL
+    # flag values before being tested at 0x1001a2be/0x1001a30d/0x1001a436. One combined range spanning
+    # both plus the gap, so nothing is missed this time.
+    ("raster_commit_to_portal_emit", 0x10019a40, 0xea0),
 ]
 
 

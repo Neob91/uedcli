@@ -393,11 +393,20 @@ divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), no
   lights the treads straight through the closed door AND (the mirror-image half, `model
   model_deusexmover9` also fails N=153) fails to light the door's own face with the same light. This
   is the `visible_surfs.rs` "moving-brush filter (step 3)" gap the port flagged as "assumed to never
-  fire" — confirmed here to fire. The real fix unifies the world and mover light bakes into one scene
-  (per `unbuilt.light_apply_movers`'s own docstring, UED22's `FMovingBrushTracker` mirrors each mover
-  poly into a transient world surf for the bake) — a structural change, scoped as follow-up, not a
-  local patch —
-  `dev/docs/board/inbox/nyc-bar-n-153-world-model2-lightmap-runs-ued22/`.
+  fire" — confirmed here to fire. This "unify world+mover bakes" theory is now SUPERSEDED — nine
+  further live-capture rounds (2026-09-13 through 2026-09-16) systematically cleared it along with
+  zone/portal reachability, box occlusion, cross-light ordering, the clip-formula bug class, and
+  per-lumel raytracing, one at a time, each confirmed by direct register reads rather than inference.
+  Current state (round 9): `GetVisibleSurfs` genuinely includes surf 67/95/97 in Light5's own result
+  (a live read of `Frame`'s Origin at `AddUniqueItem`'s call site proves it, disproving this item's
+  own earlier "excluded by GetVisibleSurfs" framing); the downstream commit loop's write/readback
+  into each surf's `CandidateLights` array also happens correctly and `illuminateSurf`'s raytrace DOES
+  fire (disproving an even earlier round's "raytrace never fires" claim too). The real exclusion
+  mechanism is still unidentified, now narrowed to a per-light "any lumel visible" commit gate at
+  `Editor.dll 0x100a5ab5`-`0x100a5ac2`, flagged but not confirmed. Not fixed; no mask.
+  `dev/docs/board/inbox/nyc-bar-n-153-world-model2-lightmap-runs-ued22/`,
+  `dev/docs/spikes/2026-09-15-nycbar-n153-adduniqueitem-origin/`,
+  `dev/docs/spikes/2026-09-15-nycbar-n153-commit-write-readback/`.
 - **Island**: N=6, N=10 and N=93 are all FIXED. N=6 was the Vectors pool — native keeps
   the incremental pool across the repartition instead of rebuilding it from the surviving surfs
   (`dev/docs/spikes/2026-09-06-island-n6-vector-pool/`,
@@ -497,7 +506,33 @@ divergence (`dev/docs/board/inbox/wanchai-n59-mover-polys-model2-diverges/`), no
   descent (not the repartition stopgap) MISSES an existing pool point only `6.1e-5` away, well inside
   its `0.002` threshold. Narrowed to a genuine `bspAddPoint`/`FindNearestVertex` HIT-vs-MISS
   divergence needing the same live-editor gdb capture that closed Island N=332/UNATCO N=226/WanChai
-  N=58 — not attempted yet; not closed. `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`.
+  N=58. 2026-09-14: that capture ran — UED22's own `FindNearestVertex` ALSO misses, so native's
+  descent is faithful; not the bug. Narrowed further to a dead-node "ghost" point on native's side.
+  2026-09-15: RE'd `bspOptGeom`'s `Model*`/`UModel` in-memory `TArray` layout and live-captured the
+  real editor's `Points`/`Surfs` arrays directly — **UED22 keeps the wall's original face alive**
+  (a genuinely live, separate `Surfs` entry, not a dead-node ghost pending GC); native's points-GC is
+  innocent. Pinned the exact CSG step (offline, no gdb): native's `FilterWorldThroughBrush` kills the
+  wall face when `Brush482` (`CSG_Add`) is processed, one brush before `Brush483`; UED22's real
+  equivalent must decide the opposite (a graze). Same bug SHAPE as the Island N=332/UNATCO N=226/
+  WanChai N=45/58 near-tie classification ties, in a different, not-yet-live-captured function. Not
+  fixed; not closed. `dev/docs/spikes/2026-09-15-oceanlab-n203-bspoptgeom-points/`,
+  `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/`.
+  **That `FilterWorldThroughBrush`-classify hypothesis is REFUTED (2026-09-15)** — a live capture
+  shows UED22's own `GDiscarded` is CONSUME at every hit on the wall's plane during `Brush482`'s CSG,
+  same verdict native already computes. **The real bug, FOUND AND FIXED (2026-09-15/16):** UED22's
+  `bspRepartition` calls `bspRefresh(Model, NoRemapSurfs=1)`, suppressing surf compaction — a dead
+  node's surf/point survives untouched until `bspOptGeom`'s own `bspRefresh(Model, 0)`, which runs
+  AFTER its point-merge. Native compacted eagerly right after repartition, before the merge could
+  weld a later brush's near-coincident point onto the dead surf's older point. Fixed by carrying a
+  dead node's surf forward across repartition's clear+rebuild, and porting the previously-unwired
+  compaction inside `bsp_opt_geom`. `Model2.points` is now byte-identical at N=203 (was 2-ULP off);
+  all 2640 live BSP node rings match. `parity_gate.py` still FAILS — one extra orphan (unreferenced)
+  `Verts` entry on the UED22 side desyncs the gate's positional walk, a gate-mechanism gap the
+  campaign's existing orphan-vert exclusion was never built to tolerate (count mismatch, not just
+  content). Owner asked (2026-09-15) to confirm the mechanism producing that extra slot before
+  deciding whether to widen the exclusion or chase a byte-exact count — not yet done.
+  `dev/docs/spikes/2026-09-15-oceanlab-n203-repartition-surf-defer/`,
+  `dev/docs/board/to-spike/oceanlab-n-203-world-model2-split-vertex-ulp/questions/orphan-vert-count-mismatch-gate-widening.md`.
 - **Standing stopgaps, all levels**:
   `dev/docs/board/inbox/repartition-point-dedup-still-uses-a-linear/` — repartition dedups points
   with a linear pool scan; the editor descends and appends on a miss (`AddThing(..., !FastRebuild)`

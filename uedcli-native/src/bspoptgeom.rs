@@ -101,6 +101,17 @@ fn build_table(model: &Model) -> Vec<Vec<(i32, i32)>> {
 /// the module doc + `dev/docs/spikes/.../82-bspbrushcsg-port-decode.md` for the pipeline.
 pub fn bsp_opt_geom(model: &mut Model) {
     merge_near_points(model);
+    // `bspOptGeom`'s own front `bspRefresh(Model, 0)` (`Editor.dll` prologue, `42-bspoptgeom-
+    // decode.md` §1), RIGHT AFTER the point-merge — a REAL, non-suppressed reachability compaction
+    // (disassembled 2026-09-15: arg `0` does NOT hit the `NoRemapSurfs!=0` early-out at `bspRefresh`
+    // `0x10036d62`-`0x10036d7a`). This is the real editor's ONLY surf GC after the world-level
+    // repartition's own `bspRefresh` call (which passes `NoRemapSurfs=1` and so drops nothing, see
+    // `bspcsg.rs` §10.19a) — so a dead node's surf survives untouched from repartition all the way to
+    // here, letting the point-merge just above weld a later brush's near-coincident new point onto
+    // its older `pBase` before this call finally discards the now-truly-unreferenced surf. Surfs
+    // first (matches the real function's own internal order, surf compaction before the points GC
+    // below), then Points GC (unchanged from before this fix).
+    crate::passes::compact_unreferenced_surfs(model);
     // The editor's LAST Points GC of the whole build sits HERE — inside `bspOptGeom`, right after
     // the ShrinkModel-style near-merge and BEFORE the T-junction weld (`Editor.dll 0x100368f4`,
     // live-confirmed to land exactly on the final golden Points count on UNATCO+Wanchai — board

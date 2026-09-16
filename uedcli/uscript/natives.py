@@ -24,6 +24,7 @@ from ..uprops.base import PROPERTY_TYPES
 from ..uprops.ufield import (_decode_property, _field_next, enum_values, find_struct_export,
                              struct_members)
 from .bytecode import Tok, decode_script
+from .env import class_home_from_imports
 
 # EFunctionFlags (UE1)
 FUNC_FINAL = 0x0001
@@ -31,6 +32,7 @@ FUNC_ITERATOR = 0x0004
 FUNC_LATENT = 0x0008
 FUNC_PRE_OPERATOR = 0x0010
 FUNC_NET = 0x0040
+FUNC_NET_RELIABLE = 0x0080
 FUNC_NATIVE = 0x0400
 FUNC_EVENT = 0x0800
 FUNC_OPERATOR = 0x1000
@@ -65,6 +67,16 @@ def prop_type_label(prop) -> str:
     if k == "ArrayProperty":
         return "array"
     return "object:Object"
+
+
+def prop_meta_class(prop) -> str | None:
+    """A `ClassProperty`'s own meta-class name (the `T` in `class<T>`) — `type_ref`/`type_name` are
+    already decoded generically for every `_KINDS_WITH_TYPE_REF` kind (`ufield.py`), and for
+    `ClassProperty` that type tail IS the `MetaClass` ref, so the name is already there; only
+    `prop_type_label` (unchanged — every existing "class"-typed equality check stays as is) discards
+    it. None for anything else. Backs `.default` field access on a `class<T>`-typed field/local/param
+    — see `lower._meta_class_of`."""
+    return prop.type_name if (prop.kind == "ClassProperty" and prop.type_name) else None
 
 
 def is_object(t: str) -> bool:
@@ -102,6 +114,7 @@ class FuncBody:
     flags: int
     param_types: tuple[str, ...]    # operand/param type labels (return value excluded)
     return_type: str | None
+    rep_offset: int | None = None   # present iff `flags & FUNC_NET` — see `compile._build_one_function`
 
     @property
     def is_operator(self) -> bool:
@@ -174,12 +187,13 @@ def read_function(pkg: Package, export_index1: int) -> FuncBody:
     tokens, p = decode_script(buf, p, ssize, name_resolver(pkg))
     inative, precedence = struct.unpack_from("<HB", buf, p); p += 3
     flags = struct.unpack_from("<I", buf, p)[0]; p += 4
+    rep_offset = struct.unpack_from("<H", buf, p)[0] if flags & FUNC_NET else None
     ptypes, rtype = _params(pkg, children)
     return FuncBody(
         name=pkg.names[friendly], package=pkg.name,
         class_name=pkg.name_of_ref(e["outer"]) or "", script_size=ssize,
         tokens=tuple(tokens), inative=inative, precedence=precedence, flags=flags,
-        param_types=ptypes, return_type=rtype)
+        param_types=ptypes, return_type=rtype, rep_offset=rep_offset)
 
 
 def iter_functions(pkg: Package):
@@ -267,9 +281,9 @@ def _match_cost(params: tuple[str, ...], args: tuple[str, ...]) -> int | None:
             continue
         if is_object(want) and (is_object(got) or got == "class"):
             continue                                    # any object/class ref matches an object parm
-        if is_object(got) and want == "string":
-            total += 4                                  # object -> string (ToString) coercion
-            continue
+        if (is_object(got) or got == "class") and want == "string":
+            total += 4                                  # object/class -> string (ToString) coercion
+            continue                                    # probed live: `"..." $ O.Class`
         if got in ("struct:vector", "struct:rotator") and want == "string":
             total += 4                                  # Vector/Rotator -> string (ToString) coercion
             continue                                    # probed live: `"..." @ V`/`"..." @ R`
@@ -334,6 +348,12 @@ class ClassSig:
     member_owner: dict[str, str]             # casefolded field name -> declaring class's real name
     functions: dict[str, FuncBody]          # casefolded function name -> its FuncBody
     enums: dict[str, int] = field(default_factory=dict)  # casefolded OWN enum tag -> ordinal
+    # casefolded field name -> its `class<T>` meta-class name, for `class<T>`-typed members only
+    # (absent for every other field) — backs `.default` field access, see `lower._meta_class_of`.
+    member_meta: dict[str, str] = field(default_factory=dict)
+    # casefolded field name -> its declared ArrayDim (1 for a scalar) — backs `ArrayCount(...)`,
+    # see `lower._array_count_dim`.
+    member_array_dim: dict[str, int] = field(default_factory=dict)
 
 
 def _class_children(pkg: Package, idx1: int) -> int:
@@ -363,6 +383,7 @@ class ClassGraph:
         self._consts: dict[str, str] | None = None                   # const name cf -> value text
         self._cache: dict[str, ClassSig | None] = {}
         self._struct_cache: dict[str, dict[str, str] | None] = {}
+        self._import_only_class_home: dict[str, str] | None = None  # class cf -> home package name
 
     def _build_index(self) -> None:
         self._index = {}
@@ -370,6 +391,7 @@ class ClassGraph:
         self._enum_vals = {}
         self._enum_types = set()
         self._consts = {}
+        self._import_only_class_home = {}
         for path in self._paths:
             stem = os.path.splitext(os.path.basename(path))[0]
             try:
@@ -398,6 +420,29 @@ class ClassGraph:
                         self._consts.setdefault(nm.casefold(), _read_const_value(pkg, i + 1))
                     except Exception:
                         pass
+            for imp in pkg.imports:
+                nm_cf = pkg.names[imp[3]].casefold()
+                if nm_cf in self._index or nm_cf in self._import_only_class_home:
+                    continue
+                home = class_home_from_imports(pkg, pkg.names[imp[3]])
+                if home:
+                    self._import_only_class_home[nm_cf] = home
+
+    def is_known_class(self, name: str) -> bool:
+        """True if `name` resolves either via a real export (`class_sig`) or, absent that, an
+        IMPORT-ONLY reference — a fully-native class with no exported script body anywhere on the
+        search path (see `env.class_home_from_imports`). Used for cast-target validity, never for
+        member/function resolution (an import-only class has no body to read)."""
+        if self.class_sig(name) is not None:
+            return True
+        if self._import_only_class_home is None:
+            self._build_index()
+        return name.casefold() in self._import_only_class_home
+
+    def import_only_class_home(self, name: str) -> str | None:
+        if self._import_only_class_home is None:
+            self._build_index()
+        return self._import_only_class_home.get(name.casefold())
 
     def const_value(self, name: str) -> str | None:
         if self._consts is None:
@@ -500,12 +545,16 @@ class ClassGraph:
         super_name = pkg.name_of_ref(e["sup"]) if e["sup"] != 0 else None
         members: dict[str, str] = {}
         member_owner: dict[str, str] = {}
+        member_meta: dict[str, str] = {}
+        member_array_dim: dict[str, int] = {}
         functions: dict[str, FuncBody] = {}
         if super_name:
             sup = self.class_sig(super_name)
             if sup is not None:
                 members.update(sup.members)
                 member_owner.update(sup.member_owner)
+                member_meta.update(sup.member_meta)
+                member_array_dim.update(sup.member_array_dim)
                 functions.update(sup.functions)
         own_name = pkg.names[e["nm"]]
         enums: dict[str, int] = {}
@@ -520,6 +569,12 @@ class ClassGraph:
                 nm_cf = pkg.names[ee["nm"]].casefold()
                 members[nm_cf] = prop_type_label(prop)
                 member_owner[nm_cf] = own_name
+                member_array_dim[nm_cf] = prop.array_dim
+                meta = prop_meta_class(prop)
+                if meta:
+                    member_meta[nm_cf] = meta
+                else:
+                    member_meta.pop(nm_cf, None)
             elif kind == "Function":
                 fb = read_function(pkg, cur)
                 functions[fb.name.casefold()] = fb
@@ -528,13 +583,27 @@ class ClassGraph:
                     enums[tag.casefold()] = ordinal
             cur = _field_next(pkg, cur)
         sig = ClassSig(name=own_name, package=pkg.name, super_name=super_name,
-                       members=members, member_owner=member_owner, functions=functions, enums=enums)
+                       members=members, member_owner=member_owner, functions=functions, enums=enums,
+                       member_meta=member_meta, member_array_dim=member_array_dim)
         self._cache[key] = sig
         return sig
 
     def member_type(self, class_name: str, field: str) -> str | None:
         sig = self.class_sig(class_name)
         return sig.members.get(field.casefold()) if sig else None
+
+    def member_meta_class(self, class_name: str, field: str) -> str | None:
+        """The `class<T>` meta-class of `field` on `class_name` (own or inherited) — None if `field`
+        isn't `class<T>`-typed or unresolved. Backs `.default` field access on such a field/local/
+        param — see `lower._meta_class_of`."""
+        sig = self.class_sig(class_name)
+        return sig.member_meta.get(field.casefold()) if sig else None
+
+    def member_array_dim(self, class_name: str, field: str) -> int | None:
+        """`field`'s declared ArrayDim on `class_name` (own or inherited) — None if unresolved.
+        Backs `ArrayCount(...)`, see `lower._array_count_dim`."""
+        sig = self.class_sig(class_name)
+        return sig.member_array_dim.get(field.casefold()) if sig else None
 
     def member_owner(self, class_name: str, field: str) -> str | None:
         """The real name of the class that DECLARES `field` (own or inherited via `class_name`'s super

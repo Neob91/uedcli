@@ -19,7 +19,7 @@ from __future__ import annotations
 import struct
 from dataclasses import dataclass
 
-from .ast import ConstDecl, EnumDecl, Expr, FuncDecl, StateDecl, TypeRef, VarDecl
+from .ast import ConstDecl, EnumDecl, Expr, FuncDecl, StateDecl, StructDecl, TypeRef, VarDecl
 from .bytecode import Tok
 from .natives import Catalog, FuncBody
 
@@ -38,6 +38,7 @@ EX_ASSERT = 0x09
 EX_NOTHING = 0x0B
 EX_LABEL_TABLE = 0x0C
 EX_GOTO_LABEL = 0x0D
+EX_EAT_STRING = 0x0E
 EX_NEW = 0x11
 EX_LET = 0x0F
 EX_SKIP = 0x18
@@ -80,6 +81,12 @@ _PRIMITIVE_TYPES = frozenset({"int", "float", "bool", "byte", "string", "name"})
 _BUILTIN_STRUCTS = frozenset({"vector", "rotator", "plane", "coords", "color", "region", "scale",
                               "box", "boundingbox", "quat", "matrix", "pointregion"})
 _WORD_OPS = {"dot": "Dot", "cross": "Cross", "clockwisefrom": "ClockwiseFrom"}
+_EXPECTED_TYPE_AWARE = frozenset({"binary", "unary", "paren"})
+# Sentinel `expected` value meaning "this operand is genuinely NESTED (not a direct operand of the
+# outermost assignment/return expression) -- never fold a constant here." Distinct from `None`
+# ("unknown/not yet threaded", e.g. a function-call argument -- keeps the prior always-fold
+# behavior). See `_ex_binary`'s docstring for the live-probed evidence this distinction rests on.
+_NESTED = object()
 
 # Size in bytes of a value on the VM stack, for a Context's bSize field (verified: Vector=12; the
 # primitives are 4-byte DWORDs / refs). An unknown size raises LowerError rather than guessing.
@@ -129,6 +136,8 @@ class Symbol:
     storage: str                    # "local" | "member"
     type: str
     owner: str | None = None
+    meta: str | None = None         # the `T` in `class<T>`, when `type == "class"`; else None
+    array_dim: int = 1              # declared ArrayDim (1 for a scalar) — backs `ArrayCount(...)`
 
 
 def _member_ident(field: str, owner: str | None) -> str:
@@ -202,12 +211,29 @@ class Scope:
     def __init__(self, *, locals_: dict[str, str], own_members: dict[str, str],
                  own_funcs: dict[str, LocalFunc], class_name: str | None,
                  super_name: str | None, graph=None, enums: dict[str, int] | None = None,
-                 consts: dict[str, Expr] | None = None) -> None:
+                 consts: dict[str, Expr] | None = None,
+                 locals_meta: dict[str, str] | None = None,
+                 own_members_meta: dict[str, str] | None = None,
+                 locals_array_dim: dict[str, int] | None = None,
+                 own_members_array_dim: dict[str, int] | None = None,
+                 local_structs: dict[str, dict[str, str]] | None = None) -> None:
         self._locals = {k.casefold(): v for k, v in locals_.items()}
         self._members = {k.casefold(): v for k, v in own_members.items()}
         self._funcs = {k.casefold(): v for k, v in own_funcs.items()}
         self._enums = {k.casefold(): v for k, v in (enums or {}).items()}
         self._consts = {k.casefold(): v for k, v in (consts or {}).items()}
+        # `class<T>` meta-class per local/param and own member — only `.default` field access reads
+        # these (`_meta_class_of`); every ordinary "class"-typed local/member stays untouched.
+        self._locals_meta = {k.casefold(): v for k, v in (locals_meta or {}).items()}
+        self._members_meta = {k.casefold(): v for k, v in (own_members_meta or {}).items()}
+        # declared ArrayDim per local/param and own member — only `ArrayCount(...)` reads these
+        # (`_array_count_dim`); absent (default 1) for a scalar.
+        self._locals_array_dim = {k.casefold(): v for k, v in (locals_array_dim or {}).items()}
+        self._members_array_dim = {k.casefold(): v for k, v in (own_members_array_dim or {}).items()}
+        # LOCALLY-declared structs' own field types (struct-name cf -> {field cf: type label}) --
+        # `graph.struct_member_type` only knows a struct on the search path's loaded packages.
+        self._local_structs = {k.casefold(): {kk.casefold(): vv for kk, vv in v.items()}
+                              for k, v in (local_structs or {}).items()}
         self.class_name = class_name
         self.super_name = super_name
         self.graph = graph
@@ -231,14 +257,18 @@ class Scope:
     def lookup(self, name: str) -> Symbol | None:
         cf = name.casefold()
         if cf in self._locals:
-            return Symbol(storage="local", type=self._locals[cf])
+            return Symbol(storage="local", type=self._locals[cf], meta=self._locals_meta.get(cf),
+                          array_dim=self._locals_array_dim.get(cf, 1))
         if cf in self._members:
-            return Symbol(storage="member", type=self._members[cf])
+            return Symbol(storage="member", type=self._members[cf], meta=self._members_meta.get(cf),
+                          array_dim=self._members_array_dim.get(cf, 1))
         if self.graph and self.super_name:
             t = self.graph.member_type(self.super_name, name)
             if t is not None:
                 owner = self.graph.member_owner(self.super_name, name)
-                return Symbol(storage="member", type=t, owner=owner)
+                meta = self.graph.member_meta_class(self.super_name, name)
+                dim = self.graph.member_array_dim(self.super_name, name) or 1
+                return Symbol(storage="member", type=t, owner=owner, meta=meta, array_dim=dim)
         return None
 
     def func(self, name: str) -> CallTarget | None:
@@ -257,6 +287,8 @@ class Scope:
     def member_of(self, obj_type: str, field: str) -> str | None:
         cls = _class_of(obj_type)
         if _is_struct(obj_type):
+            if cls in self._local_structs:
+                return self._local_structs[cls].get(field.casefold())
             return self.graph.struct_member_type(cls, field) if (self.graph and cls) else None
         if self._is_own(cls):                           # the class being compiled
             cf = field.casefold()
@@ -278,6 +310,39 @@ class Scope:
                     if (self.graph and self.super_name) else None)
         return self.graph.member_owner(cls, field) if (self.graph and cls) else None
 
+    def member_meta_of(self, obj_type: str, field: str) -> str | None:
+        """The `class<T>` meta-class of a `class<T>`-typed FIELD `field` on `obj_type` — backs a
+        NESTED `.default` chain (`A.default.B.default.Field`, where `B` is itself `class<T>`). None
+        when `field` isn't `class<T>`-typed, is a struct field, or is unresolved."""
+        cls = _class_of(obj_type)
+        if _is_struct(obj_type):
+            return None
+        if self._is_own(cls):
+            cf = field.casefold()
+            if cf in self._members_meta:
+                return self._members_meta[cf]
+            if cf in self._members:
+                return None
+            return (self.graph.member_meta_class(self.super_name, field)
+                    if (self.graph and self.super_name) else None)
+        return self.graph.member_meta_class(cls, field) if (self.graph and cls) else None
+
+    def member_array_dim_of(self, obj_type: str, field: str) -> int:
+        """The declared ArrayDim of FIELD `field` on `obj_type` (1 for a scalar or an unresolved
+        field) — backs `ArrayCount(...)`, see `_array_count_dim`."""
+        cls = _class_of(obj_type)
+        if _is_struct(obj_type):
+            return 1
+        if self._is_own(cls):
+            cf = field.casefold()
+            if cf in self._members_array_dim:
+                return self._members_array_dim[cf]
+            if cf in self._members:
+                return 1
+            return ((self.graph.member_array_dim(self.super_name, field) or 1)
+                    if (self.graph and self.super_name) else 1)
+        return (self.graph.member_array_dim(cls, field) or 1) if (self.graph and cls) else 1
+
     def method_of(self, obj_type: str, name: str) -> CallTarget | None:
         cls = _class_of(obj_type)
         if self._is_own(cls):
@@ -288,12 +353,17 @@ class Scope:
         return _target_of(fb) if fb is not None else None
 
     def is_class_name(self, name: str) -> bool:
-        return bool(self.graph and self.graph.class_sig(name) is not None)
+        """True for a resolvable class — including one known only via another package's IMPORT table
+        (a fully-native class with no exported script body anywhere on the search path, e.g. UT99's
+        `Engine.NetConnection` — see `natives.ClassGraph.is_known_class`)."""
+        return bool(self.graph and self.graph.is_known_class(name))
 
 
-def type_label(tr: TypeRef | None, graph=None, enum_names=frozenset()) -> str:
+def type_label(tr: TypeRef | None, graph=None, enum_names=frozenset(),
+               struct_names=frozenset()) -> str:
     """The lowering type label for a declared type (`object:X`/`struct:X`/primitive/`class`).
-    An enum type resolves to `byte`. `enum_names` covers the class's own enums (not in the graph)."""
+    An enum type resolves to `byte`. `enum_names`/`struct_names` cover the class's own enums/structs
+    (not in `graph` — see `struct_type_names`)."""
     if tr is None:
         return "none"
     base = tr.base
@@ -306,13 +376,51 @@ def type_label(tr: TypeRef | None, graph=None, enum_names=frozenset()) -> str:
         return "array"
     if low in enum_names or (graph is not None and graph.is_enum_name(base)):
         return "byte"
-    is_struct = graph.is_struct_name(base) if graph is not None else (low in _BUILTIN_STRUCTS)
+    is_struct = low in struct_names or (
+        graph.is_struct_name(base) if graph is not None else (low in _BUILTIN_STRUCTS))
     return f"struct:{low}" if is_struct else f"object:{low}"
+
+
+def meta_of_type(tr: TypeRef | None) -> str | None:
+    """The `T` in a `class<T>` declared type — None for anything else (`type_label` above collapses
+    every `class<T>` to the bare string `"class"`, losing `T`; this is the one place that recovers it,
+    read only by `_meta_class_of` to resolve a `.default` field access's target class)."""
+    if tr is None or tr.base.casefold() != "class" or not tr.meta_class:
+        return None
+    return tr.meta_class.rsplit(".", 1)[-1]
 
 
 def enum_type_names(class_members) -> frozenset[str]:
     """Casefolded names of a `ClassDecl`'s own `EnumDecl` types."""
     return frozenset(m.name.casefold() for m in class_members if isinstance(m, EnumDecl))
+
+
+def struct_type_names(class_members) -> frozenset[str]:
+    """Casefolded names of a `ClassDecl`'s own `StructDecl` types -- mirrors `enum_type_names`, needed
+    so `type_label` recognises a struct declared in the CURRENTLY-COMPILING class (`graph.
+    is_struct_name` only knows structs on the search path's loaded packages, not one declared locally
+    -- found compiling the real `Ignore` community mutator: `struct Victim {...}; var Victim
+    Players[32];`, a local var of the struct read back `v.PIDs[...]` inside a function resolved to
+    `object:victim` instead of `struct:victim`, raising `unresolved member object:victim.PIDs`)."""
+    return frozenset(m.name.casefold() for m in class_members if isinstance(m, StructDecl))
+
+
+def local_struct_members_of(class_members, graph=None) -> dict[str, dict[str, str]]:
+    """struct-name(casefold) -> {field-name(casefold): type-label}, for a `ClassDecl`'s own
+    `StructDecl`s -- backs `Scope.member_of`'s struct-field lookup for a LOCALLY-declared struct
+    (`graph.struct_member_type` only knows a struct on the search path's loaded packages, same gap
+    `struct_type_names` fixes for the TYPE itself; this is the matching fix for reading a FIELD off
+    one -- `Ignore`'s `v.PIDs`, `v` a local `Victim`, `Victim` declared in the same class)."""
+    snames = struct_type_names(class_members)
+    out: dict[str, dict[str, str]] = {}
+    for m in class_members:
+        if isinstance(m, StructDecl):
+            fields: dict[str, str] = {}
+            for sm in m.members:
+                for n in sm.names:
+                    fields[n.casefold()] = type_label(sm.type, graph, frozenset(), snames)
+            out[m.name.casefold()] = fields
+    return out
 
 
 def consts_of(class_members) -> dict[str, Expr]:
@@ -340,23 +448,65 @@ def _parse_value_expr(text: str) -> Expr | None:
 def members_of(class_members, graph=None) -> dict[str, str]:
     """Type-label map for a `ClassDecl`'s own `VarDecl` members."""
     enums = enum_type_names(class_members)
+    structs = struct_type_names(class_members)
     out: dict[str, str] = {}
     for m in class_members:
         if isinstance(m, VarDecl):
             for n in m.names:
-                out[n] = type_label(m.type, graph, enums)
+                out[n] = type_label(m.type, graph, enums, structs)
     return out
 
 
-def local_funcs_of(class_funcs, graph=None, enum_names=frozenset()) -> list[LocalFunc]:
+def members_meta_of(class_members) -> dict[str, str]:
+    """Field name -> its `class<T>` meta-class name, for a `ClassDecl`'s own `VarDecl` members that
+    are `class<T>`-typed (absent for every other field)."""
+    out: dict[str, str] = {}
+    for m in class_members:
+        if isinstance(m, VarDecl):
+            meta = meta_of_type(m.type)
+            if meta:
+                for n in m.names:
+                    out[n] = meta
+    return out
+
+
+def _resolved_array_dim(dim: int | str | None) -> int:
+    """Resolve a declared `array_dim` (as parsed) to an int — mirrors `compile._dim_value` (kept here
+    too since `lower.py` cannot import from `compile.py`, which imports FROM `lower.py`). A const-
+    named dim (`var string Maps[MAX_MAPS];`) isn't supported anywhere in this compiler yet — declaring
+    such a var already raises earlier via `compile._dim_value`, so a live string here is unreachable;
+    this mirrors that raise rather than silently guessing 1."""
+    if dim is None:
+        return 1
+    if isinstance(dim, int):
+        return dim
+    raise NotImplementedError(f"const-named static array size {dim!r} not supported yet")
+
+
+def members_array_dim_of(class_members) -> dict[str, int]:
+    """Field name -> its declared ArrayDim, for a `ClassDecl`'s own `VarDecl` members (1 for a
+    scalar — only entries with a real size matter, but every field is included for simplicity)."""
+    out: dict[str, int] = {}
+    for m in class_members:
+        if isinstance(m, VarDecl):
+            dim = _resolved_array_dim(m.array_dim)
+            for n in m.names:
+                out[n] = dim
+    return out
+
+
+def local_funcs_of(class_funcs, graph=None, enum_names=frozenset(),
+                   struct_names=frozenset()) -> list[LocalFunc]:
     out: list[LocalFunc] = []
     for f in class_funcs:
         if not f.has_body and f.kind not in ("function", "event"):
             continue
         out.append(LocalFunc(
             name=f.name, is_final="final" in f.modifiers,
-            return_type=type_label(f.return_type, graph, enum_names) if f.return_type else None,
-            param_types=tuple(type_label(p.type, graph, enum_names) for p in f.params),
+            return_type=(type_label(f.return_type, graph, enum_names, struct_names)
+                        if f.return_type else None),
+            param_types=tuple(type_label(p.type, graph, enum_names, struct_names)
+                             for p in f.params),
             native_index=f.native_index))
     return out
 
@@ -375,20 +525,37 @@ def build_scope(func: FuncDecl, *, members: dict[str, str] | None = None,
                 funcs: list[LocalFunc] | None = None, class_name: str | None = None,
                 super_name: str | None = None, graph=None,
                 enums: dict[str, int] | None = None, enum_names=frozenset(),
-                consts: dict[str, Expr] | None = None) -> Scope:
+                struct_names=frozenset(),
+                consts: dict[str, Expr] | None = None,
+                members_meta: dict[str, str] | None = None,
+                members_array_dim: dict[str, int] | None = None,
+                local_structs: dict[str, dict[str, str]] | None = None) -> Scope:
     """Scope from a function's params + locals plus the class's own members/functions/enums and, via
     `graph`, its inherited symbols, other classes' fields/methods, and imported enum tags.
-    `enums` maps own enum tags to ordinals; `enum_names` are the own enum TYPE names."""
+    `enums` maps own enum tags to ordinals; `enum_names`/`struct_names` are the own enum/struct TYPE
+    names (see `struct_type_names`)."""
     locals_: dict[str, str] = {}
+    locals_meta: dict[str, str] = {}
+    locals_array_dim: dict[str, int] = {}
     for p in func.params:
-        locals_[p.name] = type_label(p.type, graph, enum_names)
+        locals_[p.name] = type_label(p.type, graph, enum_names, struct_names)
+        meta = meta_of_type(p.type)
+        if meta:
+            locals_meta[p.name] = meta
+        locals_array_dim[p.name] = _resolved_array_dim(p.array_dim)
     for vd in func.locals:
         for n in vd.names:
-            locals_[n] = type_label(vd.type, graph, enum_names)
+            locals_[n] = type_label(vd.type, graph, enum_names, struct_names)
+            meta = meta_of_type(vd.type)
+            if meta:
+                locals_meta[n] = meta
+            locals_array_dim[n] = _resolved_array_dim(vd.array_dim)
     own_funcs = {f.name: f for f in (funcs or [])}
     return Scope(locals_=locals_, own_members=dict(members or {}), own_funcs=own_funcs,
                  class_name=class_name, super_name=super_name, graph=graph, enums=enums,
-                 consts=consts)
+                 consts=consts, locals_meta=locals_meta, own_members_meta=members_meta,
+                 locals_array_dim=locals_array_dim, own_members_array_dim=members_array_dim,
+                 local_structs=local_structs)
 
 
 # ── conversions (EExprToken 0x39..0x5F) — each opcode VERIFIED against a UCC compile ─────────────
@@ -397,8 +564,9 @@ def build_scope(func: FuncDecl, *, members: dict[str, str] | None = None,
 _CONV: dict[tuple[str, str], int] = {
     ("byte", "int"): 0x3A, ("byte", "float"): 0x3C,
     ("int", "byte"): 0x3D, ("int", "bool"): 0x3E, ("int", "float"): 0x3F,
+    ("float", "byte"): 0x43,  # live-probed (`UscFloatByteProbe`): `b = f;` (byte <- float)
     ("float", "int"): 0x44,
-    ("string", "int"): 0x4A, ("string", "float"): 0x4C,
+    ("string", "int"): 0x4A, ("string", "bool"): 0x4B, ("string", "float"): 0x4C,
     ("byte", "string"): 0x52,
     ("int", "string"): 0x53, ("bool", "string"): 0x54, ("float", "string"): 0x55,
     ("name", "string"): 0x57,
@@ -510,7 +678,8 @@ def _mem_size(tok: Tok) -> int:
 
 # ── the lowerer ────────────────────────────────────────────────────────────────
 def lower_function(func: FuncDecl, scope: Scope, catalog: Catalog,
-                   extra_deps: list[str] | None = None) -> list[Tok]:
+                   extra_deps: list[str] | None = None, enum_names=frozenset(),
+                   struct_names=frozenset()) -> list[Tok]:
     """Lower one function body to its token stream (with the trailing implicit Return(Nothing)).
 
     `extra_deps`, if given, collects one entry (real-cased class name) per Context node lowered in
@@ -518,9 +687,15 @@ def lower_function(func: FuncDecl, scope: Scope, catalog: Catalog,
     in source-textual order (outer Context before one nested in its own call's arguments). NOT
     deduped: UCC repeats a `Dependency` (`deep=0`) once per occurrence, alongside the `deep=1`
     self/super entries. The caller assembles the class's full array across every function/state in
-    REVERSE declaration order (`compile._build_callables`) — measured against real UWeb, 2026-09-13."""
-    low = _Lowerer(scope, catalog, type_label(func.return_type) if func.return_type else "none",
-                   extra_deps=extra_deps)
+    REVERSE declaration order (`compile._build_callables`) — measured against real UWeb, 2026-09-13.
+
+    `enum_names`/`struct_names` are the class's own enum/struct TYPE names (same values
+    `build_scope`'s own param/local `type_label` calls already use) — without them, a function
+    RETURNING a locally-declared enum/struct type mislabels as `object:x` (only `scope.graph`
+    resolves ON-DISK enums/structs; a class's own aren't in it)."""
+    ret = type_label(func.return_type, scope.graph, enum_names, struct_names) \
+        if func.return_type else "none"
+    low = _Lowerer(scope, catalog, ret, extra_deps=extra_deps)
     for stmt in func.body:
         low.stmt(stmt)
     low.body.tok(Tok(EX_RETURN, (("sub", Tok(EX_NOTHING)),)))
@@ -613,6 +788,7 @@ class _Lowerer:
         self.body = _Body()
         self.break_targets: list[int] = []      # loops AND switch push here
         self.continue_targets: list[int] = []   # only loops push here
+        self.foreach_depth = 0                  # active `foreach` nesting -- see `_st_return`
         self.state_labels: list[tuple[str, int]] = []   # (name, label id) in DECLARATION order
 
     # ── statements ────────────────────────────────────────────────────────────
@@ -652,14 +828,24 @@ class _Lowerer:
             self.stmt(inner)
 
     def _st_expr(self, s) -> None:
-        tok, _ = self.expr(s.exprs[0])
+        """A bare expression statement (almost always a function call whose result is discarded).
+        Live-probed (real UT99 `UTServerAdmin`, `Level.ConsoleCommand(...);` called for its side
+        effect alone — `dev/docs/spikes/2026-09-14-utserveradmin-class-ref-gaps/spike.md` #8): a
+        STRING-typed result is wrapped in `EatString`(0x0E) --
+        presumably because a string needs its refcount released, unlike a fixed-size scalar. Only the
+        string case is verified; any other non-trivial discarded type (a struct/array return) is
+        untouched, since no fixture exercises it -- a future gap there would surface as a normal gate
+        failure to investigate, not a silent guess."""
+        tok, ty = self.expr(s.exprs[0])
+        if ty == "string":
+            tok = Tok(EX_EAT_STRING, (("sub", tok),))
         self.body.tok(tok)
 
     def _st_assign(self, s) -> None:
         lhs, rhs = s.exprs
         ltok, ltype = self.expr(lhs)
         if s.text == "=":
-            rtok, rtype = self.expr(rhs)
+            rtok, rtype = self.expr(rhs, ltype)
             rtok = self._coerce(rtok, rtype, ltype, fold=True)
             op = EX_LET_BOOL if ltype == "bool" else EX_LET
             self.body.tok(Tok(op, (("sub", ltok), ("sub", rtok))))
@@ -671,10 +857,17 @@ class _Lowerer:
         self.body.tok(self._binary(s.text, ltok, ltype, rtok, rtype, compound=True)[0])
 
     def _st_return(self, s) -> None:
+        # A `return` inside an active `foreach` must release it first -- one `IteratorPop` per
+        # enclosing loop, innermost first, same as `break`'s "always release the iterator" rule but
+        # emitted directly (a `return` doesn't flow through the loop's own trailing Pop the way a
+        # break's jump-to-`end` does). Live-probed: ArenaFallback's `CheckForWeapons` (a `return;`
+        # as the last statement inside a single `foreach AllActors(...)` block).
+        for _ in range(self.foreach_depth):
+            self.body.tok(Tok(EX_ITERATOR_POP))
         if not s.exprs:
             self.body.tok(Tok(EX_RETURN, (("sub", Tok(EX_NOTHING)),)))
             return
-        tok, ty = self.expr(s.exprs[0])
+        tok, ty = self.expr(s.exprs[0], self.return_type)
         tok = self._coerce(tok, ty, self.return_type, fold=True)
         self.body.tok(Tok(EX_RETURN, (("sub", tok),)))
 
@@ -761,8 +954,10 @@ class _Lowerer:
         self.body.iterator(call_tok, end)
         self.break_targets.append(end)
         self.continue_targets.append(cont)
+        self.foreach_depth += 1
         for inner in s.body:
             self.stmt(inner)
+        self.foreach_depth -= 1
         self.continue_targets.pop()
         self.break_targets.pop()
         self.body.place(cont)
@@ -808,7 +1003,7 @@ class _Lowerer:
         if e.op == "assign":
             ltok, ltype = self.expr(e.children[0])
             if e.text == "=":
-                rtok, rtype = self.expr(e.children[1])
+                rtok, rtype = self.expr(e.children[1], ltype)
                 rtok = self._coerce(rtok, rtype, ltype, fold=True)
                 op = EX_LET_BOOL if ltype == "bool" else EX_LET
                 return Tok(op, (("sub", ltok), ("sub", rtok)))
@@ -816,14 +1011,22 @@ class _Lowerer:
             return self._binary(e.text, ltok, ltype, rtok, rtype, compound=True)[0]
         return self.expr(e)[0]
 
-    def expr(self, e: Expr) -> tuple[Tok, str]:
+    def expr(self, e: Expr, expected: str | None = None) -> tuple[Tok, str]:
+        """`expected`, when given, is the type this expression's RESULT is about to be coerced to
+        (an assignment LHS / a `return`'s declared type) -- NOT propagated to sub-expressions in
+        general. Only `binary`/`paren` actually read it (`paren` passes it straight through, being
+        transparent); `unary` still accepts it for dispatch-signature uniformity but ignores it (its
+        own fold rule is unverified for the expected-type-mismatch case, see `_ex_unary`); every
+        other node ignores it too. See `_binary`'s docstring for why it exists."""
         method = getattr(self, f"_ex_{e.op}", None)
         if method is None:
             raise LowerError(f"expression {e.op!r} not supported yet")
+        if e.op in _EXPECTED_TYPE_AWARE:
+            return method(e, expected)
         return method(e)
 
-    def _ex_paren(self, e):
-        return self.expr(e.children[0])
+    def _ex_paren(self, e, expected=None):
+        return self.expr(e.children[0], expected)
 
     def _ex_intconst(self, e):
         return _int_const(int(e.value)), "int"
@@ -898,34 +1101,171 @@ class _Lowerer:
         var = Tok(op, (("obj", field),))
         return Tok(EX_BOOL_VARIABLE, (("sub", var),)) if ty == "bool" else var
 
+    def _meta_class_of(self, e: Expr) -> str | None:
+        """Best-effort STATIC resolution of the class name a `class<T>`-typed expression `e` names at
+        compile time -- walked from the AST, no bytecode emitted (`type_label` collapses every
+        `class<T>` to the bare string "class", losing `T` -- this is the one place that matters, and
+        the only place this is read is `_ex_member`'s `.default` branch below). Handles: a class
+        literal (`class'X'`); a metaclass cast (`class<T>(x)`); a bare local/param/member declared
+        `class<T>`; and, recursing, a `class<T>`-typed FIELD reached through a nested `.default`
+        access (`A.default.B` where `B` is itself `class<T>`). None if `e` isn't statically
+        class-typed -- the caller then falls back to an OBJECT-INSTANCE `.default`, which uses the
+        instance's own declared type instead. Live-probed against a fresh UED22 UCC build (`_scratch/
+        probe_meta.py`, 4 shapes: a class<T> local, an inline metaclass cast, an object instance, and
+        a nested class<T>-typed field) -- token shapes and `Dependencies`-array entries all matched."""
+        if e.op == "objref" and e.text.casefold() == "class":
+            val = e.value
+            return str(val).rsplit(".", 1)[-1] if val else None
+        if e.op == "call" and e.children and e.children[0].op == "name" \
+                and e.children[0].text.casefold().startswith("class<"):
+            meta = e.children[0].text[len("class<"):-1].strip()
+            return meta.rsplit(".", 1)[-1] if meta else None
+        if e.op == "name":
+            sym = self.scope.lookup(e.text)
+            return sym.meta if sym else None
+        if e.op == "member" and e.children and e.children[0].op == "member" \
+                and e.children[0].text.casefold() == "default":
+            base_meta = self._meta_class_of(e.children[0].children[0])
+            if base_meta is None:
+                return None
+            return self.scope.member_meta_of(f"object:{base_meta.casefold()}", e.text)
+        return None
+
+    def _record_default_chain_deps(self, e: Expr) -> str | None:
+        """Mirrors `_ex_member`'s `.default`-branch recursion, but records ONLY the Dependency side
+        effects it would produce, never bytecode -- backs `ArrayCount(...)` on a `.default` chain
+        argument. Live-probed (`dev/docs/spikes/2026-09-14-utserveradmin-class-ref-gaps/
+        probe_array_count_default_chain.py`): real UCC drops the argument's
+        bytecode down to a bare int constant, but still records every Dependency entry evaluating it
+        normally would have, in the same inner-before-outer order `self.expr`'s own recursion uses.
+        Returns the chain's own final meta-class (None if `e` isn't a `.default` chain at all)."""
+        if not (e.op == "member" and e.children and e.children[0].op == "member"
+                and e.children[0].text.casefold() == "default"):
+            return None
+        cls_expr = e.children[0].children[0]
+        self._record_default_chain_deps(cls_expr)        # inner level(s) first
+        meta = self._meta_class_of(cls_expr)
+        if meta is None:
+            raise LowerError(f"ArrayCount(...): cannot resolve the class for {e.text!r}'s "
+                             "'.default' access")
+        self._record_dep("object:class")
+        self._record_dep(f"object:{meta.casefold()}")
+        return meta
+
+    def _array_count_dim(self, e: Expr) -> int:
+        """The declared ArrayDim UCC resolves for `ArrayCount(e)`'s argument. Live-probed
+        (`dev/docs/spikes/2026-09-14-utserveradmin-class-ref-gaps/
+        probe_array_count_plain_member.py`/`probe_array_count_default_chain.py`): the argument's
+        bytecode collapses
+        entirely to a bare int constant (no Context/ClassContext token at all), but any Dependency
+        entry evaluating it normally would have produced is still recorded. Handles a bare local/
+        param/own-member array (no Dependency of its own) and a `.default` chain (any nesting, via
+        `_record_default_chain_deps`); a PLAIN (non-`.default`) member access as the sole argument is
+        not exercised by any fixture yet and raises rather than guess."""
+        if e.op == "name":
+            sym = self.scope.lookup(e.text)
+            if sym is None:
+                raise LowerError(f"ArrayCount(...): unresolved identifier {e.text!r}")
+            return sym.array_dim
+        if e.op == "member":
+            meta = self._record_default_chain_deps(e)
+            if meta is not None:
+                return self.scope.member_array_dim_of(f"object:{meta.casefold()}", e.text)
+            raise NotImplementedError(
+                f"ArrayCount(...) on a plain (non-'.default') member access not supported yet: "
+                f"{e.text!r}")
+        raise LowerError(f"ArrayCount(...) argument must be a field access, got {e.op!r}")
+
     def _ex_member(self, e):
         """`base.field`: struct field -> StructMember(0x36); object field -> Context(0x19).
-        `class'X'.default.field` is a special two-level form: `.default` is a compile-time-only
-        qualifier with no bytecode of its own, so `class'X'.default` never lowers as its own
-        sub-expression -- probed live against UED22 UCC (`X = class'A'.default.Foo`): the class
-        literal (ObjectConst) becomes the base of a ClassContext(0x12) -- NOT the ordinary
-        Context(0x19) -- wrapping a DefaultVariable(0x02) member token in place of the
-        InstanceVariable(0x01) an ordinary object member access would use."""
+        `<expr>.default.field` is a special two-level form -- `.default` is a compile-time-only
+        qualifier with no bytecode of its own, so it never lowers as its own sub-expression. Two
+        shapes, both live-probed (`dev/docs/spikes/2026-09-14-utserveradmin-class-ref-gaps/
+        probe_default_meta_class.py`): a CLASS-typed base (a class literal, a
+        metaclass cast, a `class<T>` local/param/member, or a nested `class<T>`-typed field read via
+        another `.default`) wraps the DefaultVariable member in ClassContext(0x12) and additionally
+        records a "Class" Dependency entry (the base's own static metatype) before the target class's
+        usual one; an OBJECT-INSTANCE base (any other object-typed expression, e.g. `SomeActor.
+        default.Field`) wraps it in the ORDINARY Context(0x19) instead, using the instance's own
+        declared type as the target class, and records only ONE Dependency entry (no extra "Class"
+        one -- the base is already a real object reference of that class, not a class reference)."""
         field = e.text
         inner = e.children[0]
+        if inner.op == "default":
+            # Bare `default.Field` (implicit Self, no explicit class/object base at all -- a
+            # DIFFERENT shape than `X.default.Field` below, where `inner.op == "member"`) reads the
+            # COMPILING class's own default value. Live-probed (`UscBareDefaultProbe`): a bare
+            # DefaultVariable(0x02) token, no Context wrapping -- same shape as any other own-member
+            # access (`_ex_name`'s `EX_INSTANCE_VARIABLE` case), just the Default op instead.
+            sym = self.scope.lookup(field)
+            if sym is None or sym.storage != "member":
+                raise LowerError(f"unresolved default member {field!r}")
+            return self._var(EX_DEFAULT_VARIABLE, _member_ident(field, sym.owner), sym.type), sym.type
         if inner.op == "member" and inner.text.casefold() == "default":
-            cls_lit = inner.children[0]
-            if cls_lit.op != "objref" or cls_lit.text.casefold() != "class":
-                raise LowerError("'default' qualifier needs a class literal base")
-            base_tok, _lit_type = self.expr(cls_lit)          # EX_OBJECT_CONST for the class literal
-            leaf = str(cls_lit.value).rsplit(".", 1)[-1] if cls_lit.value else cls_lit.text
-            base_type = f"object:{leaf.casefold()}"
-            ftype = self.scope.member_of(base_type, field)
-            if ftype is None:
-                raise LowerError(f"unresolved default member {base_type}.{field}")
-            owner = self.scope.member_owner_of(base_type, field)
-            member = self._var(EX_DEFAULT_VARIABLE, _member_ident(field, owner), ftype)
-            # the class-literal expression's OWN type (`Class`, the metaclass) records its own
-            # Dependency entry before the ClassContext's usual one for the target class -- probed
-            # live: `class'A'.default.Foo` -> Dependencies gets Core.Class THEN A, every occurrence.
-            self._record_dep("object:class")
-            return self._context(base_tok, base_type, member, ftype, op=EX_CLASS_CONTEXT), ftype
+            cls_expr = inner.children[0]
+            meta = self._meta_class_of(cls_expr)
+            base_tok, base_type_natural = self.expr(cls_expr)
+            if meta is not None:
+                base_type = f"object:{meta.casefold()}"
+                ftype = self.scope.member_of(base_type, field)
+                if ftype is None:
+                    raise LowerError(f"unresolved default member {base_type}.{field}")
+                owner = self.scope.member_owner_of(base_type, field)
+                member = self._var(EX_DEFAULT_VARIABLE, _member_ident(field, owner), ftype)
+                # the class expression's OWN type (`Class`, the metaclass) records its own Dependency
+                # entry before the ClassContext's usual one for the target class -- probed live:
+                # `class<T>_expr.default.Foo` -> Dependencies gets Core.Class THEN the target, every
+                # occurrence (true for a literal, a metaclass cast, and a `class<T>` local alike).
+                self._record_dep("object:class")
+                dim = self.scope.member_array_dim_of(base_type, field)
+                return self._context(base_tok, base_type, member, ftype, op=EX_CLASS_CONTEXT,
+                                     array_dim=dim), ftype
+            if _is_object(base_type_natural):            # an INSTANCE base: `Foo.default.Field`
+                base_type = base_type_natural
+                ftype = self.scope.member_of(base_type, field)
+                if ftype is None:
+                    raise LowerError(f"unresolved default member {base_type}.{field}")
+                owner = self.scope.member_owner_of(base_type, field)
+                member = self._var(EX_DEFAULT_VARIABLE, _member_ident(field, owner), ftype)
+                dim = self.scope.member_array_dim_of(base_type, field)
+                return self._context(base_tok, base_type, member, ftype, array_dim=dim), ftype
+            raise LowerError("'default' qualifier needs a class or object base")
         base_tok, base_type = self.expr(inner)
+        if base_type == "class":
+            # `Obj.Class` itself reads as an ORDINARY object member (type "class", ClassProperty,
+            # one Dependency entry via the plain `_is_object` branch below) -- a further `.Field` off
+            # it (`mut.Class.Name`) is member access on a real Class-typed value, and records TWO of
+            # its own: live-probed in isolation, `UscClassOnlyDepProbe`'s `return mut.Class;` gets ONE
+            # extra entry (`engine.mutator`, the base's real class) beyond the class's own self-dep,
+            # and `UscClassNameDepProbe2`'s `return mut.Class.Name;` gets THREE more -- the same one
+            # from `.Class`, plus TWO from the outer `.Name`: `core.class` then `engine.mutator`
+            # again (the chain's REAL underlying class, not `Object`, `Name`'s declaring class).
+            # MEMBER LOOKUP resolves against `Object` -- `Class` (UState/UStruct/UField/UObject) isn't
+            # itself indexed (noexport, no visible script), and everything reachable here (`Name`) is
+            # inherited from Object anyway (confirmed: imported as `core.nameproperty
+            # 'core.object.name'`). The real class is only resolvable when the base is textually
+            # `X.Class` (the sole evidenced source of a "class"-typed value here); anything else falls
+            # back to `Object` for the second entry, unverified.
+            real_dep = "object:object"
+            # Only re-derive the type for a BARE-NAME base (`mut.Class.Name` -- the only measured
+            # shape): `self.expr` on anything else would re-lower it a second time (it was already
+            # lowered once above, resolving `inner`), double-recording any Dependency it records --
+            # a bare name never records one, so this is side-effect-free only for that case.
+            if inner.op == "member" and inner.text.casefold() == "class" \
+                    and inner.children[0].op == "name":
+                _, real_base_type = self.expr(inner.children[0])
+                if _is_object(real_base_type):
+                    real_dep = real_base_type
+            ftype = self.scope.member_of("object:object", field)
+            if ftype is None:
+                raise LowerError(f"unresolved member object:object.{field}")
+            owner = self.scope.member_owner_of("object:object", field)
+            member = self._var(EX_INSTANCE_VARIABLE, _member_ident(field, owner), ftype)
+            dim = self.scope.member_array_dim_of("object:object", field)
+            tok = self._context(base_tok, "object:object", member, ftype, record=False, array_dim=dim)
+            self._record_dep("object:class")
+            self._record_dep(real_dep)
+            return tok, ftype
         if _is_struct(base_type):
             ftype = self.scope.member_of(base_type, field)
             if ftype is None:
@@ -941,33 +1281,53 @@ class _Lowerer:
                 raise LowerError(f"unresolved member {base_type}.{field}")
             owner = self.scope.member_owner_of(base_type, field)
             member = self._var(EX_INSTANCE_VARIABLE, _member_ident(field, owner), ftype)
-            return self._context(base_tok, base_type, member, ftype), ftype
+            dim = self.scope.member_array_dim_of(base_type, field)
+            return self._context(base_tok, base_type, member, ftype, array_dim=dim), ftype
         raise LowerError(f"member access on non-object/struct type {base_type!r}")
 
     def _context(self, base: Tok, base_type: str, member: Tok, member_type: str, *,
-                record: bool = True, op: int = EX_CONTEXT) -> Tok:
+                record: bool = True, op: int = EX_CONTEXT, array_dim: int = 1) -> Tok:
         if record:
             self._record_dep(base_type)
-        size = _value_size(member_type, self.scope.graph)
+        # `array_dim` is the field's declared ArrayDim (a STATIC array, e.g. `TeamInfo Teams[4]`) --
+        # the Context's bSize is the member's WHOLE storage footprint, not one element, since the
+        # field is read here as a unit (any `[index]` is a separate, outer ArrayElement token).
+        # array_dim=1 (the default, every scalar field) leaves this identical to before. Live-probed
+        # against real UT99 UCC (`PubliciseScore`'s `TournamentGameReplicationInfo(...).Teams[0]`:
+        # golden's bSize is 16 = 4 TeamInfo refs * 4 bytes, not the single-element 4).
+        size = _value_size(member_type, self.scope.graph) * array_dim
         skip = struct.pack("<H", _mem_size(member)) + bytes((size,))
         return Tok(op, (("sub", base), ("raw", skip), ("sub", member)))
 
     def _record_dep(self, base_type: str) -> None:
-        """Record a `Dependency` (deep=0) for the class behind a Context, unless it's self/super
-        (those already carry their own deep=1 entry). UCC records ONE entry per syntactic Context
-        occurrence -- NOT deduped by class (measured against real UWeb, 2026-09-13: `HelloWeb`'s
-        `WebRequest`/`WebResponse` params repeat a dozen+ times each). `Class` (the metaclass a
-        `class'X'` literal's own type is) is a special case: it's a bootstrap Core type with no
-        `ClassSig` (no members/ScriptText to decode), so it can't resolve via `class_sig` the way an
-        ordinary class does -- `compile._add_import` already falls back to a bare Core import for any
-        unresolvable class, which is exactly right for `Class` itself."""
+        """Record a `Dependency` (deep=0) for the class behind a Context. UCC records ONE entry per
+        syntactic Context occurrence -- NOT deduped by class (measured against real UWeb,
+        2026-09-13: `HelloWeb`'s `WebRequest`/`WebResponse` params repeat a dozen+ times each) -- and
+        NOT skipped even when the target is the COMPILING class itself, reached through an explicit
+        TYPED variable (a bare `Self`/unqualified own-member access never reaches `_record_dep` at
+        all, since it never builds a Context) -- live-probed (`dev/docs/spikes/
+        2026-09-14-utserveradmin-class-ref-gaps/probe_self_typed_dependency.py`; found
+        compiling the real UT99 `ListItem`, a self-referencing linked-list class whose own methods
+        Context through `local ListItem T; ... T.Next`/`T.Tag` throughout): a controlled self-
+        referencing class (`local SelfDepNode T; ... T.Next`/`T.Tag`) gets 3 deep=0 self-entries
+        against a fresh UED22 UCC build, contradicting the earlier (unverified) "self already has its
+        own deep=1 entry, so skip" assumption -- an EARLIER version of this method skipped self/super;
+        the super half was dead code anyway (`_call_super` never calls `_record_dep`, so only the
+        self skip had any real effect, and it was simply wrong). `Class` (the metaclass a `class'X'`
+        literal's own type is) is a special case: it's a bootstrap Core type with no `ClassSig` (no
+        members/ScriptText to decode), so it can't resolve via `class_sig` the way an ordinary class
+        does -- `compile._add_import` already falls back to a bare Core import for any unresolvable
+        class, which is exactly right for `Class` itself."""
         if self.extra_deps is None or not _is_object(base_type):
             return
         cf = base_type.split(":", 1)[1]
-        if cf == (self.scope.class_name or "").casefold() or cf == (self.scope.super_name or "").casefold():
-            return
         if cf == "class":
             self.extra_deps.append("Class")
+            return
+        if cf == (self.scope.class_name or "").casefold():
+            # the class being compiled has no on-disk export yet for a single-class compile's plain
+            # (disk-only) `ClassGraph` to find -- its own real name is already known without it.
+            self.extra_deps.append(self.scope.class_name)
             return
         sig = self.scope.graph.class_sig(cf) if self.scope.graph else None
         if sig is None:
@@ -984,7 +1344,7 @@ class _Lowerer:
         idx_tok = self._coerce(idx_tok, idx_type, "int")  # index must be int (FloatToInt etc.)
         return Tok(EX_ARRAY_ELEMENT, (("sub", idx_tok), ("sub", base_tok))), base_type
 
-    def _ex_unary(self, e):
+    def _ex_unary(self, e, expected=None):
         operand, ty = self.expr(e.children[0])
         if e.text in ("-", "+"):                         # unary +/- of a numeric literal folds
             cv = _const_num(operand)
@@ -994,8 +1354,12 @@ class _Lowerer:
         fb = self.cat.unary_operator(sym, ty, pre=True)
         if fb is None:
             raise LowerError(f"no preoperator {e.text!r} for {ty}")
+        ret = fb.return_type or ty
+        # `_should_fold` is live-probed for BINARY operators only (`MessageAdmin`/`UscFoldProbe`);
+        # a unary preoperator always folds its constant operand, the prior (unverified-but-never-
+        # wrong) behavior -- no fixture exercises the expected-type-mismatch shape for unary.
         arg = self._coerce(operand, ty, fb.param_types[0], fold=True)
-        return _native_call(fb, (arg,)), fb.return_type or ty
+        return _native_call(fb, (arg,)), ret
 
     def _ex_postfix(self, e):
         operand, ty = self.expr(e.children[0])
@@ -1005,23 +1369,55 @@ class _Lowerer:
         arg = self._coerce(operand, ty, fb.param_types[0])
         return _native_call(fb, (arg,)), fb.return_type or ty
 
-    def _ex_binary(self, e):
-        ltok, ltype = self.expr(e.children[0])
-        rtok, rtype = self.expr(e.children[1])
-        return self._binary(e.text, ltok, ltype, rtok, rtype)
+    def _ex_binary(self, e, expected=None):
+        # A literal NESTED inside either operand (not itself a direct operand of the OUTERMOST
+        # assignment/return expression) never folds, regardless of `expected` -- BOTH operands
+        # recurse with the `_NESTED` sentinel, never with `expected` itself (only THIS operator's own
+        # `_should_fold` call below, a few lines down in `_binary`, still sees the real `expected` it
+        # was given). Live-probed against real UT99 UCC compiling `PainSoundsMutator`, two shapes:
+        # `i = 4*FRand() + ...;` (`i` an int) -- `4`, the left operand of `*`, itself the OUTER `+`'s
+        # left operand, compiles at its natural `IntConstByte` type plus an explicit `int->float`
+        # conversion, NOT a bare `FloatConst`; and `pitch = 64 + 128*FRand();` (`pitch` a float) --
+        # the OUTER `+`'s own DIRECT left operand `64` DOES fold (`expected(float) == ret(float)`,
+        # the already-verified top-level rule), but `128`, nested one level deeper as the left operand
+        # of the RIGHT operand `128*FRand()`, does NOT fold even though ITS OWN enclosing multiply's
+        # ret (float) also equals `expected` (float) -- ruling out "propagate the real `expected`
+        # through a left-recursion chain" as the mechanism (that would still correctly predict case
+        # one, coincidentally, since `expected != ret` there regardless of propagation, but it gets
+        # case two wrong). `paren` stays transparent (unchanged): a paren is syntax only, not nesting.
+        #
+        # `_NESTED` only applies UNDER a real tracked `expected` (an assignment/return target) --
+        # when `expected` is `None` (an UNTRACKED context, e.g. a function-call argument, per the
+        # open gap noted in `_should_fold`), a nested operand must keep `None` too, not `_NESTED`,
+        # or it would wrongly stop folding in a context this campaign's own fold-gate was never
+        # meant to touch (found in review: `_NESTED` propagating into a call-argument's own nested
+        # binary broke the previously-byte-exact `ExtendedBuilders`, e.g. `Vertex3f(i*dx/2, ...)`).
+        nested = _NESTED if expected is not None else None
+        ltok, ltype = self.expr(e.children[0], nested)
+        rtok, rtype = self.expr(e.children[1], nested)
+        return self._binary(e.text, ltok, ltype, rtok, rtype, expected=expected)
 
-    def _binary(self, op: str, ltok, ltype, rtok, rtype, *, compound: bool = False) -> tuple[Tok, str]:
+    def _binary(self, op: str, ltok, ltype, rtok, rtype, *, compound: bool = False,
+               expected: str | None = None) -> tuple[Tok, str]:
         sym = _WORD_OPS.get(op.lower(), op)
         fb = (self.cat.compound_assign_operator(sym, ltype, rtype) if compound
               else self.cat.binary_operator(sym, ltype, rtype))
         if fb is None:
             raise LowerError(f"no operator {op!r} for ({ltype}, {rtype})")
-        # UCC folds a constant LEFT operand into the param type, but converts the right at runtime.
-        a = self._coerce(ltok, ltype, fb.param_types[0], fold=True)
+        ret = fb.return_type or ltype
+        # UCC folds a constant LEFT operand into the param type -- but ONLY when the operator's own
+        # result is used as-is (no further outer conversion). Live-probed (`44 + w`, UscFoldProbe):
+        # assigned straight to a float var, `44` compiles as a bare FloatConst; assigned to an int
+        # var (needing an outer float->int conversion), `44` instead compiles at ITS OWN natural
+        # type (IntConst) with an explicit inner int->float conversion, same as the non-literal right
+        # operand always gets. `expected` is the type this whole operator's result is about to be
+        # coerced to by the caller (`_st_assign`/`_st_return`); `None` means "unknown" (e.g. a
+        # function-call argument, not yet threaded through) and keeps the prior always-fold behavior.
+        a = self._coerce(ltok, ltype, fb.param_types[0], fold=_should_fold(expected, ret))
         b = self._coerce(rtok, rtype, fb.param_types[1])
         if sym in ("&&", "||"):                          # short-circuit: skip the right operand
             b = Tok(EX_SKIP, (("raw", struct.pack("<H", _mem_size(b) + 1)), ("sub", b)))
-        return _native_call(fb, (a, b)), fb.return_type or ltype
+        return _native_call(fb, (a, b)), ret
 
     def _ex_call(self, e):
         callee = e.children[0]
@@ -1076,6 +1472,8 @@ class _Lowerer:
 
     def _call_named(self, name: str, args) -> tuple[Tok, str]:
         low = name.casefold()
+        if low == "arraycount" and len(args) == 1:       # `ArrayCount(Field)` compile-time constant
+            return _int_const(self._array_count_dim(args[0])), "int"
         if low in ("vect", "rot") and len(args) == 3:    # `Vect(x,y,z)`/`Rot(p,y,r)` literal
             return self._vec_or_rot_literal(low, args)
         if low in _PRIMITIVE_TYPES and len(args) == 1:  # primitive cast `int(x)`
@@ -1084,6 +1482,10 @@ class _Lowerer:
         if low.startswith("class<") and len(args) == 1:  # metaclass cast `class<Actor>(c)`
             meta = name[len("class<"):-1].strip().rsplit(".", 1)[-1]
             inner, _ = self.expr(args[0])
+            # A plain cast records NO extra Dependency of its own -- live-probed in isolation
+            # (`UscCastDepProbe`'s `return mutator(o);`: only the class's usual self-dependency, none
+            # added for the cast). An earlier version of this fix wrongly added two entries here,
+            # fitted to a confounded probe that also exercised `.Class.Name` in the same function.
             return Tok(EX_METACAST, (("obj", f"class:{meta}"), ("sub", inner))), "class"
         if len(args) == 1 and self.scope.is_class_name(name):   # object cast `Pawn(x)`
             inner, _ = self.expr(args[0])
@@ -1121,19 +1523,36 @@ class _Lowerer:
         return Tok(EX_ROTATION_CONST, (("raw", raw),)), "struct:rotator"
 
     def _call_method(self, base: Expr, name: str, args) -> tuple[Tok, str]:
+        """`Base.Method(...)`. A CLASS-typed base (`ClassRef.Static.Method(...)`, or bare
+        `ClassRef.Method(...)`) calls a function dynamically through a class reference -- live-probed
+        (`dev/docs/spikes/2026-09-14-utserveradmin-class-ref-gaps/probe_class_ref_static_call.py`):
+        the SAME ClassContext(0x12) wrapper `.default` field access
+        uses, here wrapping a VirtualFunction call instead of a DefaultVariable, and the SAME extra
+        "Class" Dependency entry before the target class's own. An ordinary OBJECT-typed base uses
+        the plain Context(0x19), as before."""
         base_tok, base_type = self.expr(base)
-        if not _is_object(base_type):
+        op = EX_CONTEXT
+        if base_type == "class":
+            meta = self._meta_class_of(base)
+            if meta is None:
+                raise LowerError("cannot resolve the class for a call through a class reference")
+            base_type = f"object:{meta.casefold()}"
+            op = EX_CLASS_CONTEXT
+        elif not _is_object(base_type):
             raise LowerError(f"method call on non-object type {base_type!r}")
         tgt = self.scope.method_of(base_type, name)
         if tgt is None:
             raise LowerError(f"unresolved method {base_type}.{name}")
         # Record the Context's Dependency BEFORE lowering the arguments: UCC records it at the
         # `Base.Method(` token, in source-textual order, ahead of any Context nested inside the
-        # call's own arguments (measured against real UWeb `HelloWeb.Query`, 2026-09-13).
+        # call's own arguments (measured against real UWeb `HelloWeb.Query`, 2026-09-13). A
+        # CLASS-typed base additionally records its own "Class" entry first, same as `.default`.
+        if op == EX_CLASS_CONTEXT:
+            self._record_dep("object:class")
         self._record_dep(base_type)
         arg_toks, arg_types = self._lower_args(args)
         call, ret = self._emit_target(tgt, arg_toks, arg_types)
-        return self._context(base_tok, base_type, call, ret, record=False), ret
+        return self._context(base_tok, base_type, call, ret, record=False, op=op), ret
 
     def _emit_target(self, tgt: CallTarget, arg_toks, arg_types) -> tuple[Tok, str]:
         coerced = self._coerce_args(arg_toks, arg_types, tgt.param_types)
@@ -1227,6 +1646,17 @@ def _const_num(tok: Tok):
     if op == EX_FLOAT_CONST:
         return struct.unpack("<f", tok.parts[0][1])[0]
     return None
+
+
+def _should_fold(expected, ret: str) -> bool:
+    """Whether a binary/unary operator's own constant operand should fold into the operator's param
+    type. `expected` is `None` when the caller hasn't threaded a target type through (keep the prior
+    default: fold); `_NESTED` when this operator is a genuinely nested operand of an outer one (never
+    fold, regardless of `ret`) -- otherwise fold only if the operator's result needs no further outer
+    conversion (`expected == ret`). See `_binary`'s docstring for the live-probed evidence."""
+    if expected is _NESTED:
+        return False
+    return expected is None or expected == ret
 
 
 def _num_const(value, ttype: str) -> Tok:

@@ -137,6 +137,9 @@ def test_the_builder_brush_and_viewport_cameras_are_dropped(paste_text):
     own `Tag=U2Viewport1`, `Tag=MeshBrowser` and so on.
     """
     level = model.parse_t3d(paste_text)
+    # The builder-brush test is POSITIONAL (order[1], see is_builder_brush_position) — populate
+    # `.order` from the fresh decode order first, exactly as `level.py`'s real `_level_import` does.
+    level.order = list(level.actors)
 
     dropped = mapimport.drop_editor_scratch(level)
 
@@ -149,13 +152,15 @@ def test_the_builder_brush_and_viewport_cameras_are_dropped(paste_text):
 def test_the_drop_is_independent_of_class_qualification(paste_text):
     """The scratch drop fires whether the class is stored short or fully qualified.
 
-    `is_builder_brush` matches the BARE class name (`(a.cls or '').rsplit('.', 1)[-1]`), so a builder
-    brush is dropped whether its class is `Brush` or `Engine.Brush`; the camera check already strips
-    qualification itself. So `drop_editor_scratch` no longer depends on running before import's
+    The builder-brush test (`is_builder_brush_position`) is purely POSITIONAL — it never looks at
+    `Class` at all, so qualification is moot for it. The `Camera` test matches the BARE class name
+    (`(a.cls or '').rsplit('.', 1)[-1]`), so it is dropped whether its class is `Camera` or
+    `Engine.Camera`. So `drop_editor_scratch` no longer depends on running before import's
     class-qualification rewrite. This pins that qualification-independence: qualify FIRST, then assert
     both are still dropped.
     """
     level = model.parse_t3d(paste_text)
+    level.order = list(level.actors)                    # see the sibling test above
     for a in level.actors.values():                    # simulate qualify_and_validate's rewrite
         if a.cls in ("Brush", "Camera", "LevelInfo"):
             a.cls = f"Engine.{a.cls}"
@@ -173,6 +178,46 @@ def test_dropping_scratch_is_a_no_op_on_a_level_that_has_none():
 
     assert mapimport.drop_editor_scratch(level) == []
     assert list(level.actors) == ["Light0"]
+
+
+def test_drop_editor_scratch_drops_a_stray_builder_brush_named_model_by_position():
+    """Real regression (dev/docs/spikes/2026-09-15-builder-brush-is-actors1-not-a-content-heuristic/
+    spike.md): a real stray builder brush's inner model is plainly named `Model`, not the old
+    reserved `Brush` — the OLD content heuristic MISSED this on real UNATCO content (`Brush74`).
+    `drop_editor_scratch` now identifies it by ARRAY POSITION (`order[1]`) alone, so it is dropped
+    regardless of its inner model name."""
+    level_info = model.Actor(name="LevelInfo0", cls="LevelInfo")
+    stray = model.Actor(name="Brush74", cls="Brush")
+    stray.brush = model.Brush(model_name="Model", polys=[])
+    light = model.Actor(name="L1", cls="Light")
+    level = model.Level(
+        actors={"LevelInfo0": level_info, "Brush74": stray, "L1": light},
+        order=["LevelInfo0", "Brush74", "L1"])
+
+    dropped = mapimport.drop_editor_scratch(level)
+
+    assert dropped == ["Brush74"]
+    assert list(level.actors) == ["LevelInfo0", "L1"]
+
+
+def test_drop_editor_scratch_keeps_an_ordinary_content_brush_not_at_position_1():
+    """A genuine content brush is never mistaken for the builder brush as long as it does not sit
+    at `order[1]` — position, not content, decides. Only the real builder brush (`Brush0`, at
+    position 1) is dropped; `Brush1`, an ordinary CsgOper-bearing content brush right after it,
+    survives."""
+    level_info = model.Actor(name="LevelInfo0", cls="LevelInfo")
+    builder = model.Actor(name="Brush0", cls="Brush")
+    builder.brush = model.Brush(model_name="Brush", polys=[])
+    content = model.Actor(name="Brush1", cls="Brush", props=[("CsgOper", "CSG_Add")])
+    content.brush = model.Brush(model_name="Model5", polys=[])
+    level = model.Level(
+        actors={"LevelInfo0": level_info, "Brush0": builder, "Brush1": content},
+        order=["LevelInfo0", "Brush0", "Brush1"])
+
+    dropped = mapimport.drop_editor_scratch(level)
+
+    assert dropped == ["Brush0"]
+    assert list(level.actors) == ["LevelInfo0", "Brush1"]
 
 
 # ── brush geometry, on real editor output ────────────────────────────────────────────────────

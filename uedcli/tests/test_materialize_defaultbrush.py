@@ -13,7 +13,6 @@ import pytest
 from uedcli import model
 from uedcli.native.pkg_write import parse_package
 from uedcli.native.unbuilt import assemble_unbuilt
-from uedcli.normalize import level_order, normalize_level
 from uedcli.upackage import _parse_package, read_compact_index, read_property_tags
 
 _POLY = ("         Begin Polygon\n"
@@ -35,9 +34,14 @@ def _level_with_brush(name: str) -> model.Level:
            f"    Begin Brush Name=Model_{name}\n       Begin PolyList\n{_POLY}       End PolyList\n"
            f"    End Brush\n    Brush=Model'MyLevel.Model_{name}'\n    Name=\"{name}\"\nEnd Actor\n"
            "End Map\n")
+    # This is TRUNK content, already clean of any real builder brush (`level import`'s own
+    # `drop_editor_scratch` guarantees that at ingest) -- production (`apply._assembly_level`) sets
+    # `.order` straight from the trunk's materialized order, with no `normalize_level`/`level_order`
+    # pass. Mirror that here: routing through `level_order` would wrongly treat this level's own
+    # FIRST real content actor (order[1]) as the builder brush, per `is_builder_brush_position` --
+    # a check that only makes sense on a fresh, unstripped decode, never on trunk content.
     lv = model.parse_t3d(t3d)
-    lv.order = level_order(lv)
-    normalize_level(lv)
+    lv.order = list(lv.actors)
     return lv
 
 
@@ -113,8 +117,7 @@ def _level_no_levelinfo() -> model.Level:
            "Begin Actor Class=Engine.PathNode Name=PathNode0\n    Name=\"PathNode0\"\nEnd Actor\n"
            "End Map\n")
     lv = model.parse_t3d(t3d)
-    lv.order = level_order(lv)
-    normalize_level(lv)
+    lv.order = list(lv.actors)
     return lv
 
 
@@ -146,8 +149,7 @@ def test_levelinfo_region_not_zoned_in_built_world(monkeypatch):
            "Begin Actor Class=Engine.PathNode Name=PathNode0\n    Name=\"PathNode0\"\nEnd Actor\n"
            "End Map\n")
     lv = model.parse_t3d(t3d)
-    lv.order = level_order(lv)
-    normalize_level(lv)
+    lv.order = list(lv.actors)
 
     class _FakeWorld:                                    # truthy .nodes triggers the recompute path
         nodes = [1]

@@ -1,0 +1,175 @@
+render.dll live base = 0x15b0000
+
+[New LWP 133]
+[New LWP 142]
+[New LWP 143]
+[New LWP 144]
+[New LWP 145]
+[New LWP 146]
+[New LWP 147]
+[New LWP 148]
+[New LWP 149]
+[New LWP 150]
+[New LWP 151]
+[New LWP 152]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 170]
+[New LWP 180]
+[New LWP 212]
+[New LWP 213]
+[New LWP 226]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f23cfc in __kernel_vsyscall ()
+=== callsite_window @ 0x15c9940 ===
+Dump of assembler code from 0x15c9940 to 0x15c9b40:
+   0x015c9940:	(bad)
+   0x015c9941:	decl   -0x9306b(%eax)
+   0x015c9947:	decl   (%edi)
+   0x015c9949:	mov    $0xc2,%dh
+   0x015c994b:	mov    %eax,-0x924(%ebp)
+   0x015c9951:	shl    $0x5,%eax
+   0x015c9954:	lea    -0x854(%ebp,%eax,1),%eax
+   0x015c995b:	mov    %eax,-0x91c(%ebp)
+   0x015c9961:	cmpl   $0x0,0x8(%eax)
+   0x015c9965:	jle    0x15ca7eb
+   0x015c996b:	rdtsc
+   0x015c996d:	sub    %eax,0x160faa4
+   0x015c9973:	incl   0x160fab0
+   0x015c9979:	lea    -0x904(%ebp),%eax
+   0x015c997f:	push   %eax
+   0x015c9980:	push   %esi
+   0x015c9981:	mov    -0x8b8(%ebp),%ecx
+   0x015c9987:	call   0x15c3cf0
+   0x015c998c:	mov    %eax,%esi
+   0x015c998e:	mov    %esi,-0x8c4(%ebp)
+   0x015c9994:	rdtsc
+   0x015c9996:	mov    0x160faa4,%ecx
+   0x015c999c:	add    $0xffffffde,%ecx
+   0x015c999f:	add    %eax,%ecx
+   0x015c99a1:	mov    %ecx,0x160faa4
+   0x015c99a7:	test   %esi,%esi
+   0x015c99a9:	je     0x15ca7eb
+   0x015c99af:	mov    -0x8dc(%ebp),%edi
+   0x015c99b5:	test   %edi,%edi
+   0x015c99b7:	jne    0x15c99ca
+   0x015c99b9:	testl  $0x4000100,-0x8c0(%ebp)
+   0x015c99c3:	je     0x15c99ca
+   0x015c99c5:	lea    0x1(%edi),%ecx
+   0x015c99c8:	jmp    0x15c99cc
+   0x015c99ca:	xor    %ecx,%ecx
+   0x015c99cc:	mov    -0x8b4(%ebp),%eax
+   0x015c99d2:	movss  0x20(%eax),%xmm0
+   0x015c99d7:	ucomiss 0x15e55d0,%xmm0
+   0x015c99de:	lahf
+   0x015c99df:	test   $0x44,%ah
+   0x015c99e2:	jp     0x15c99eb
+   0x015c99e4:	mov    $0x1,%eax
+   0x015c99e9:	jmp    0x15c99ed
+   0x015c99eb:	xor    %eax,%eax
+   0x015c99ed:	cmp    %ecx,%eax
+   0x015c99ef:	je     0x15c9a2c
+   0x015c99f1:	xor    %esi,%esi
+   0x015c99f3:	mov    %esi,-0x9b4(%ebp)
+   0x015c99f9:	mov    -0x904(%ebp),%edi
+   0x015c99ff:	nop
+   0x015c9a00:	mov    -0x8c4(%ebp),%ecx
+   0x015c9a06:	mov    %ecx,%eax
+   0x015c9a08:	cltd
+   0x015c9a09:	sub    %edx,%eax
+   0x015c9a0b:	sar    %eax
+   0x015c9a0d:	cmp    %eax,%esi
+   0x015c9a0f:	jge    0x15c9a34
+   0x015c9a11:	mov    %ecx,%edx
+   0x015c9a13:	sub    %esi,%edx
+   0x015c9a15:	mov    (%edi,%esi,4),%ecx
+   0x015c9a18:	mov    -0x4(%edi,%edx,4),%eax
+   0x015c9a1c:	mov    %eax,(%edi,%esi,4)
+   0x015c9a1f:	mov    %ecx,-0x4(%edi,%edx,4)
+   0x015c9a23:	inc    %esi
+   0x015c9a24:	mov    %esi,-0x9b4(%ebp)
+   0x015c9a2a:	jmp    0x15c9a00
+   0x015c9a2c:	mov    -0x8c4(%ebp),%ecx
+   0x015c9a32:	jmp    0x15c9a3a
+   0x015c9a34:	mov    -0x8dc(%ebp),%edi
+   0x015c9a3a:	rdtsc
+   0x015c9a3c:	sub    %eax,0x160faa8
+   0x015c9a42:	mov    -0x8b4(%ebp),%eax
+   0x015c9a48:	push   0xac(%eax)
+   0x015c9a4e:	mov    -0x8bc(%ebp),%eax
+   0x015c9a54:	testb  $0x8,0x37(%eax)
+   0x015c9a58:	mov    $0x0,%eax
+   0x015c9a5d:	cmovne -0x91c(%ebp),%eax
+   0x015c9a64:	push   %eax
+   0x015c9a65:	push   %ecx
+   0x015c9a66:	push   -0x904(%ebp)
+   0x015c9a6c:	call   0x15cb470
+   0x015c9a71:	add    $0x10,%esp
+   0x015c9a74:	mov    %eax,%ecx
+   0x015c9a76:	rdtsc
+   0x015c9a78:	mov    %eax,%esi
+   0x015c9a7a:	mov    %edx,-0x8ec(%ebp)
+   0x015c9a80:	mov    0x160faa8,%eax
+   0x015c9a85:	add    $0xffffffde,%eax
+   0x015c9a88:	add    %esi,%eax
+   0x015c9a8a:	mov    %eax,0x160faa8
+   0x015c9a8f:	test   %ecx,%ecx
+   0x015c9a91:	je     0x15ca7eb
+   0x015c9a97:	mov    -0x920(%ebp),%eax
+   0x015c9a9d:	mov    (%eax),%ecx
+   0x015c9a9f:	mov    -0x8c0(%ebp),%eax
+   0x015c9aa5:	test   %ecx,%ecx
+   0x015c9aa7:	je     0x15c9ab5
+   0x015c9aa9:	or     0x80(%ecx),%eax
+   0x015c9aaf:	mov    %eax,-0x8fc(%ebp)
+   0x015c9ab5:	and    -0x9b8(%ebp),%eax
+   0x015c9abb:	mov    %eax,-0x8c0(%ebp)
+   0x015c9ac1:	mov    %eax,-0x8fc(%ebp)
+   0x015c9ac7:	and    $0x14030047,%eax
+   0x015c9acc:	mov    $0x0,%eax
+   0x015c9ad1:	mov    %eax,-0x918(%ebp)
+   0x015c9ad7:	jne    0x15c9b14
+   0x015c9ad9:	mov    -0x8bc(%ebp),%esi
+   0x015c9adf:	movzbl 0x34(%edi,%esi,1),%eax
+   0x015c9ae4:	push   %eax
+   0x015c9ae5:	mov    -0x8b4(%ebp),%eax
+   0x015c9aeb:	mov    0x4(%eax),%ecx
+   0x015c9aee:	call   *0x15e438c
+   0x015c9af4:	mov    0x1c(%esi),%ecx
+   0x015c9af7:	mov    -0x948(%ebp),%edx
+   0x015c9afd:	mov    (%edx,%ecx,4),%ecx
+   0x015c9b00:	mov    %ecx,-0x918(%ebp)
+   0x015c9b06:	test   %ecx,%ecx
+   0x015c9b08:	je     0x15c9b14
+   0x015c9b0a:	cmp    %eax,0x34(%ecx)
+   0x015c9b0d:	je     0x15c9b25
+   0x015c9b0f:	mov    0x3c(%ecx),%ecx
+   0x015c9b12:	jmp    0x15c9b00
+   0x015c9b14:	mov    -0x8f4(%ebp),%eax
+   0x015c9b1a:	cmpl   $0x0,0x48(%eax)
+   0x015c9b1e:	mov    $0x15f6bf0,%eax
+   0x015c9b23:	jne    0x15c9b2a
+   0x015c9b25:	mov    0x15e41b8,%eax
+   0x015c9b2a:	mov    -0x8c8(%ebp),%esi
+   0x015c9b30:	add    $0x14,%esi
+   0x015c9b33:	push   %eax
+   0x015c9b34:	push   0x160fa40
+   0x015c9b3a:	push   0x160fa3c
+End of assembler dump.
+[Inferior 1 (process 28) detached]

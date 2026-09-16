@@ -65,28 +65,37 @@ export function cameraBasis(pitch: number, yaw: number): { forward: Vec3; right:
 
 /** LMB-drag: move forward/back in the HORIZONTAL plane (vertical drag) + turn/yaw (horizontal drag).
  * Movement is along the yaw direction projected onto XY (`[cos(yaw), sin(yaw), 0]`), NEVER Z, so a
- * pitched camera still "walks" level along the ground (classic UnrealEd; Z is LMB+RMB's job). */
+ * pitched camera still "walks" level along the ground (classic UnrealEd; Z is LMB+RMB's job).
+ *
+ * Yaw is `pose.yaw + dx*speed` (dragging screen-right turns the view right, i.e. `forward` sweeps
+ * toward the camera's own `right` -- `cameraBasis`'s `d(forward)/dyaw == cos(pitch)*right`, positive).
+ * This was `- dx` until the owner reported rotation still inverted after `applyCameraPose`'s render
+ * mirror (`Viewport3D.tsx`) landed: that mirror fixed world `+Y`/`cameraBasis.right` to render on
+ * screen-RIGHT (previously screen-left, the "meshes render reverted" bug); `- dx` was tuned/left
+ * unchanged from before that fix, so the two wrongs cancelled and only stopped feeling right once
+ * the render was corrected -- same stale-calibration failure as `geometry.ts`'s `REVERSE_FAN`. */
 export function dollyAndTurn(
   pose: CameraPose,
   dx: number,
   dy: number,
   speeds: CameraSpeeds = DEFAULT_SPEEDS,
 ): CameraPose {
-  const yaw = wrapYaw(pose.yaw - dx * speeds.yawPerPixel)
+  const yaw = wrapYaw(pose.yaw + dx * speeds.yawPerPixel)
   const y = yaw * DEG2RAD
   const horizForward: Vec3 = [Math.cos(y), Math.sin(y), 0]
   const position = addScaled(pose.position, horizForward, -dy * speeds.dollyPerPixel)
   return { position, pitch: pose.pitch, yaw }
 }
 
-/** RMB-drag: look in place -- pitch/yaw change, position fixed. */
+/** RMB-drag: look in place -- pitch/yaw change, position fixed. Yaw sign matches `dollyAndTurn`'s
+ * (see its doc comment) -- both are "drag right turns view right" controls and must agree. */
 export function look(
   pose: CameraPose,
   dx: number,
   dy: number,
   speeds: CameraSpeeds = DEFAULT_SPEEDS,
 ): CameraPose {
-  const yaw = wrapYaw(pose.yaw - dx * speeds.yawPerPixel)
+  const yaw = wrapYaw(pose.yaw + dx * speeds.yawPerPixel)
   const pitch = clampPitch(pose.pitch - dy * speeds.pitchPerPixel)
   return { position: pose.position, pitch, yaw }
 }
@@ -115,6 +124,43 @@ export function zoom(
 ): CameraPose {
   const { forward } = cameraBasis(pose.pitch, pose.yaw)
   const position = addScaled(pose.position, forward, -wheelDeltaY * speeds.zoomPerWheelUnit)
+  return { position, pitch: pose.pitch, yaw: pose.yaw }
+}
+
+/** Maps the set of currently-held `KeyboardEvent.code`s to `flyMove`'s input triple. Each component
+ * is -1/0/1; holding both keys of a pair cancels to 0.
+ *
+ * `D` is `right: +1` and `A` is `right: -1`, because `flyMove` strafes along `cameraBasis.right`,
+ * which `applyCameraPose`'s render mirror (`Viewport3D.tsx`) puts on screen-RIGHT. This was A=+1/
+ * D=-1 (and asserted that way in `camera.test.ts`) from before that mirror landed, when
+ * `cameraBasis.right` still rendered on screen-LEFT -- so A strafed right and D strafed left once
+ * the render was corrected. Same stale-calibration failure as `geometry.ts`'s `REVERSE_FAN` and
+ * `look`/`dollyAndTurn`'s yaw sign. */
+export function flyInput(held: ReadonlySet<string>): { forward: number; right: number; up: number } {
+  const axis = (positive: string, negative: string) => (held.has(positive) ? 1 : 0) - (held.has(negative) ? 1 : 0)
+  return { forward: axis('KeyW', 'KeyS'), right: axis('KeyD', 'KeyA'), up: axis('KeyE', 'KeyQ') }
+}
+
+/** Keyboard fly movement (WASD horizontal + Q/E vertical) -- translation only, no rotation, and
+ * independent of any mouse button. W/S move along the horizontal forward/back (like
+ * `dollyAndTurn`, projected to XY so pitch never leaks into it); A/D strafe along the horizontal
+ * `right`; Q/E move along world Z. `input` components are each -1/0/1 (`flyInput` maps keys to
+ * them); `speedPerSecond` is world units/second, `dt` the frame delta in seconds, so movement is
+ * frame-rate independent. */
+export function flyMove(
+  pose: CameraPose,
+  input: { forward: number; right: number; up: number },
+  speedPerSecond: number,
+  dt: number,
+): CameraPose {
+  if (input.forward === 0 && input.right === 0 && input.up === 0) return pose
+  const y = pose.yaw * DEG2RAD
+  const horizForward: Vec3 = [Math.cos(y), Math.sin(y), 0]
+  const horizRight: Vec3 = [-Math.sin(y), Math.cos(y), 0]
+  const dist = speedPerSecond * dt
+  let position = addScaled(pose.position, horizForward, input.forward * dist)
+  position = addScaled(position, horizRight, input.right * dist)
+  position = addScaled(position, [0, 0, 1], input.up * dist)
   return { position, pitch: pose.pitch, yaw: pose.yaw }
 }
 

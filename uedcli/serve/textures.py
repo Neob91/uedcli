@@ -10,31 +10,7 @@ from __future__ import annotations
 
 import io
 
-_MAX_ATLAS_WIDTH = 2048
-
-
-def _pack_rects(sizes: list[tuple[int, int]]) -> tuple[int, int, list[tuple[int, int]]]:
-    """Shelf-pack `sizes` (w, h), left to right, wrapping at `_MAX_ATLAS_WIDTH` (or the widest
-    single entry, if that alone exceeds it). Returns `(atlas_w, atlas_h, positions)`, `positions[i]`
-    the `(x, y)` origin of `sizes[i]`. Not space-optimal — Slice 1 needs a correct index→rect
-    mapping, not a dense pack."""
-    if not sizes:
-        return 0, 0, []
-    max_w = max(w for w, _h in sizes)
-    target_w = max(max_w, min(_MAX_ATLAS_WIDTH, sum(w for w, _h in sizes)))
-    x = y = shelf_h = 0
-    atlas_w = 0
-    positions = []
-    for w, h in sizes:
-        if x and x + w > target_w:
-            y += shelf_h
-            x = 0
-            shelf_h = 0
-        positions.append((x, y))
-        atlas_w = max(atlas_w, x + w)
-        shelf_h = max(shelf_h, h)
-        x += w
-    return atlas_w, y + shelf_h, positions
+from .atlas_pack import pack_rects
 
 
 def build_atlas(texture_table: list[tuple[int, int, bytes, bytes]]) -> tuple[bytes, dict, int, int]:
@@ -45,7 +21,7 @@ def build_atlas(texture_table: list[tuple[int, int, bytes, bytes]]) -> tuple[byt
     from PIL import Image
 
     sizes = [(w, h) for w, h, _rgb, _mask in texture_table]
-    atlas_w, atlas_h, positions = _pack_rects(sizes)
+    atlas_w, atlas_h, positions = pack_rects(sizes)
     atlas_w, atlas_h = max(atlas_w, 1), max(atlas_h, 1)
     img = Image.new("RGBA", (atlas_w, atlas_h), (0, 0, 0, 0))
     manifest: dict[int, dict[str, int]] = {}

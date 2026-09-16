@@ -1,0 +1,821 @@
+[New LWP 132]
+[New LWP 141]
+[New LWP 142]
+[New LWP 143]
+[New LWP 144]
+[New LWP 145]
+[New LWP 146]
+[New LWP 147]
+[New LWP 148]
+[New LWP 149]
+[New LWP 150]
+[New LWP 151]
+[New LWP 152]
+[New LWP 153]
+[New LWP 154]
+[New LWP 155]
+[New LWP 156]
+[New LWP 157]
+[New LWP 158]
+[New LWP 159]
+[New LWP 160]
+[New LWP 161]
+[New LWP 162]
+[New LWP 163]
+[New LWP 164]
+[New LWP 165]
+[New LWP 166]
+[New LWP 167]
+[New LWP 168]
+[New LWP 169]
+[New LWP 179]
+[New LWP 210]
+[New LWP 211]
+[New LWP 224]
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+0xf7f63cfc in __kernel_vsyscall ()
+Breakpoint 1 at 0x100a4f10
+Breakpoint 2 at 0x100a4f15
+Breakpoint 3 at 0x100a557f
+ORACLE_ATTACHED
+W hit=1 isurf=0 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c377c before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=1 slot=0x113c377c after=1
+W hit=2 isurf=1 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3788 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=2 slot=0x113c3788 after=1
+W hit=3 isurf=2 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3794 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=3 slot=0x113c3794 after=1
+W hit=4 isurf=13 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3818 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=4 slot=0x113c3818 after=1
+W hit=5 isurf=12 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c380c before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=5 slot=0x113c380c after=1
+W hit=6 isurf=9 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37e8 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=6 slot=0x113c37e8 after=1
+W hit=7 isurf=8 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37dc before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=7 slot=0x113c37dc after=1
+W hit=8 isurf=146 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e54 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=8 slot=0x113c3e54 after=1
+W hit=9 isurf=144 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e3c before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=9 slot=0x113c3e3c after=1
+W hit=10 isurf=28 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c38cc before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=10 slot=0x113c38cc after=1
+W hit=11 isurf=27 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c38c0 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=11 slot=0x113c38c0 after=1
+W hit=12 isurf=177 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3fc8 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=12 slot=0x113c3fc8 after=1
+W hit=13 isurf=50 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39d4 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=13 slot=0x113c39d4 after=1
+W hit=14 isurf=223 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c41f0 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=14 slot=0x113c41f0 after=1
+W hit=15 isurf=49 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39c8 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=15 slot=0x113c39c8 after=1
+W hit=16 isurf=23 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3890 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=16 slot=0x113c3890 after=1
+W hit=17 isurf=152 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e9c before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=17 slot=0x113c3e9c after=1
+W hit=18 isurf=150 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e84 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=18 slot=0x113c3e84 after=1
+W hit=19 isurf=22 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3884 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=19 slot=0x113c3884 after=1
+W hit=20 isurf=44 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c398c before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=20 slot=0x113c398c after=1
+W hit=21 isurf=48 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39bc before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=21 slot=0x113c39bc after=1
+W hit=22 isurf=46 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39a4 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=22 slot=0x113c39a4 after=1
+W hit=23 isurf=41 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3968 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=23 slot=0x113c3968 after=1
+W hit=24 isurf=265 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c43e8 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=24 slot=0x113c43e8 after=1
+W hit=25 isurf=45 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3998 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=25 slot=0x113c3998 after=1
+W hit=26 isurf=276 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c446c before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=26 slot=0x113c446c after=1
+W hit=27 isurf=274 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4454 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=27 slot=0x113c4454 after=1
+W hit=28 isurf=278 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4484 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=28 slot=0x113c4484 after=1
+W hit=29 isurf=268 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c440c before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=29 slot=0x113c440c after=1
+W hit=30 isurf=280 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c449c before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=30 slot=0x113c449c after=1
+W hit=31 isurf=40 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c395c before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=31 slot=0x113c395c after=1
+W hit=32 isurf=296 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c455c before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=32 slot=0x113c455c after=1
+W hit=33 isurf=149 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e78 before=0 light=0xd58944c loc=-805.992676,252.807938,145.119934
+WR hit=33 slot=0x113c3e78 after=1
+W hit=34 isurf=0 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c377c before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=34 slot=0x113c377c after=2
+W hit=35 isurf=1 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3788 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=35 slot=0x113c3788 after=2
+W hit=36 isurf=41 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3968 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=36 slot=0x113c3968 after=2
+W hit=37 isurf=280 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c449c before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=37 slot=0x113c449c after=2
+W hit=38 isurf=40 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c395c before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=38 slot=0x113c395c after=2
+W hit=39 isurf=13 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3818 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=39 slot=0x113c3818 after=2
+W hit=40 isurf=12 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c380c before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=40 slot=0x113c380c after=2
+W hit=41 isurf=9 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37e8 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=41 slot=0x113c37e8 after=2
+W hit=42 isurf=8 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37dc before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=42 slot=0x113c37dc after=2
+W hit=43 isurf=146 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e54 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=43 slot=0x113c3e54 after=2
+W hit=44 isurf=144 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e3c before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=44 slot=0x113c3e3c after=2
+W hit=45 isurf=2 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3794 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=45 slot=0x113c3794 after=2
+W hit=46 isurf=28 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c38cc before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=46 slot=0x113c38cc after=2
+W hit=47 isurf=27 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c38c0 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=47 slot=0x113c38c0 after=2
+W hit=48 isurf=50 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39d4 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=48 slot=0x113c39d4 after=2
+W hit=49 isurf=49 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39c8 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=49 slot=0x113c39c8 after=2
+W hit=50 isurf=23 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3890 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=50 slot=0x113c3890 after=2
+W hit=51 isurf=22 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3884 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=51 slot=0x113c3884 after=2
+W hit=52 isurf=177 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3fc8 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=52 slot=0x113c3fc8 after=2
+W hit=53 isurf=190 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4064 before=0 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=53 slot=0x113c4064 after=1
+W hit=54 isurf=173 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f98 before=0 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=54 slot=0x113c3f98 after=1
+W hit=55 isurf=161 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f08 before=0 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=55 slot=0x113c3f08 after=1
+W hit=56 isurf=228 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c422c before=0 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=56 slot=0x113c422c after=1
+W hit=57 isurf=223 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c41f0 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=57 slot=0x113c41f0 after=2
+W hit=58 isurf=265 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c43e8 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=58 slot=0x113c43e8 after=2
+W hit=59 isurf=45 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3998 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=59 slot=0x113c3998 after=2
+W hit=60 isurf=276 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c446c before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=60 slot=0x113c446c after=2
+W hit=61 isurf=272 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c443c before=0 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=61 slot=0x113c443c after=1
+W hit=62 isurf=152 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e9c before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=62 slot=0x113c3e9c after=2
+W hit=63 isurf=154 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3eb4 before=0 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=63 slot=0x113c3eb4 after=1
+W hit=64 isurf=150 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e84 before=1 light=0xd589ff4 loc=-1284.25464,254.31752,129.119934
+WR hit=64 slot=0x113c3e84 after=2
+W hit=65 isurf=7 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37d0 before=0 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=65 slot=0x113c37d0 after=1
+W hit=66 isurf=0 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c377c before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=66 slot=0x113c377c after=3
+W hit=67 isurf=1 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3788 before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=67 slot=0x113c3788 after=3
+W hit=68 isurf=2 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3794 before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=68 slot=0x113c3794 after=3
+W hit=69 isurf=41 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3968 before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=69 slot=0x113c3968 after=3
+W hit=70 isurf=280 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c449c before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=70 slot=0x113c449c after=3
+W hit=71 isurf=40 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c395c before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=71 slot=0x113c395c after=3
+W hit=72 isurf=13 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3818 before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=72 slot=0x113c3818 after=3
+W hit=73 isurf=12 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c380c before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=73 slot=0x113c380c after=3
+W hit=74 isurf=9 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37e8 before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=74 slot=0x113c37e8 after=3
+W hit=75 isurf=8 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37dc before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=75 slot=0x113c37dc after=3
+W hit=76 isurf=146 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e54 before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=76 slot=0x113c3e54 after=3
+W hit=77 isurf=144 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e3c before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=77 slot=0x113c3e3c after=3
+W hit=78 isurf=177 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3fc8 before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=78 slot=0x113c3fc8 after=3
+W hit=79 isurf=189 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4058 before=0 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=79 slot=0x113c4058 after=1
+W hit=80 isurf=190 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4064 before=1 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=80 slot=0x113c4064 after=2
+W hit=81 isurf=173 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f98 before=1 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=81 slot=0x113c3f98 after=2
+W hit=82 isurf=162 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f14 before=0 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=82 slot=0x113c3f14 after=1
+W hit=83 isurf=229 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4238 before=0 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=83 slot=0x113c4238 after=1
+W hit=84 isurf=161 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f08 before=1 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=84 slot=0x113c3f08 after=2
+W hit=85 isurf=158 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3ee4 before=0 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=85 slot=0x113c3ee4 after=1
+W hit=86 isurf=228 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c422c before=1 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=86 slot=0x113c422c after=2
+W hit=87 isurf=225 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4208 before=0 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=87 slot=0x113c4208 after=1
+W hit=88 isurf=223 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c41f0 before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=88 slot=0x113c41f0 after=3
+W hit=89 isurf=50 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39d4 before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=89 slot=0x113c39d4 after=3
+W hit=90 isurf=53 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39f8 before=0 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=90 slot=0x113c39f8 after=1
+W hit=91 isurf=49 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39c8 before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=91 slot=0x113c39c8 after=3
+W hit=92 isurf=297 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4568 before=0 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=92 slot=0x113c4568 after=1
+W hit=93 isurf=152 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e9c before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=93 slot=0x113c3e9c after=3
+W hit=94 isurf=155 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3ec0 before=0 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=94 slot=0x113c3ec0 after=1
+W hit=95 isurf=150 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e84 before=2 light=0xd58a214 loc=-1668.12939,256.805847,129.119934
+WR hit=95 slot=0x113c3e84 after=3
+W hit=96 isurf=5 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37b8 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=96 slot=0x113c37b8 after=1
+W hit=97 isurf=0 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c377c before=3 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=97 slot=0x113c377c after=4
+W hit=98 isurf=23 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3890 before=2 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=98 slot=0x113c3890 after=3
+W hit=99 isurf=1 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3788 before=3 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=99 slot=0x113c3788 after=4
+W hit=100 isurf=3 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37a0 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=100 slot=0x113c37a0 after=1
+W hit=101 isurf=153 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3ea8 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=101 slot=0x113c3ea8 after=1
+W hit=102 isurf=150 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e84 before=3 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=102 slot=0x113c3e84 after=4
+W hit=103 isurf=180 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3fec before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=103 slot=0x113c3fec after=1
+W hit=104 isurf=173 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f98 before=2 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=104 slot=0x113c3f98 after=3
+W hit=105 isurf=168 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f5c before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=105 slot=0x113c3f5c after=1
+W hit=106 isurf=188 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c404c before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=106 slot=0x113c404c after=1
+W hit=107 isurf=190 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4064 before=2 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=107 slot=0x113c4064 after=3
+W hit=108 isurf=177 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3fc8 before=3 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=108 slot=0x113c3fc8 after=4
+W hit=109 isurf=182 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4004 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=109 slot=0x113c4004 after=1
+W hit=110 isurf=179 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3fe0 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=110 slot=0x113c3fe0 after=1
+W hit=111 isurf=50 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39d4 before=3 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=111 slot=0x113c39d4 after=4
+W hit=112 isurf=186 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4034 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=112 slot=0x113c4034 after=1
+W hit=113 isurf=185 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4028 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=113 slot=0x113c4028 after=1
+W hit=114 isurf=204 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c410c before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=114 slot=0x113c410c after=1
+W hit=115 isurf=245 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c42f8 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=115 slot=0x113c42f8 after=1
+W hit=116 isurf=248 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c431c before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=116 slot=0x113c431c after=1
+W hit=117 isurf=249 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4328 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=117 slot=0x113c4328 after=1
+W hit=118 isurf=163 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f20 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=118 slot=0x113c3f20 after=1
+W hit=119 isurf=209 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4148 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=119 slot=0x113c4148 after=1
+W hit=120 isurf=212 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c416c before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=120 slot=0x113c416c after=1
+W hit=121 isurf=211 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4160 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=121 slot=0x113c4160 after=1
+W hit=122 isurf=230 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4244 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=122 slot=0x113c4244 after=1
+W hit=123 isurf=161 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f08 before=2 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=123 slot=0x113c3f08 after=3
+W hit=124 isurf=220 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c41cc before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=124 slot=0x113c41cc after=1
+W hit=125 isurf=159 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3ef0 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=125 slot=0x113c3ef0 after=1
+W hit=126 isurf=157 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3ed8 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=126 slot=0x113c3ed8 after=1
+W hit=127 isurf=228 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c422c before=2 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=127 slot=0x113c422c after=3
+W hit=128 isurf=226 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4214 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=128 slot=0x113c4214 after=1
+W hit=129 isurf=224 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c41fc before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=129 slot=0x113c41fc after=1
+W hit=130 isurf=223 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c41f0 before=3 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=130 slot=0x113c41f0 after=4
+W hit=131 isurf=49 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39c8 before=3 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=131 slot=0x113c39c8 after=4
+W hit=132 isurf=54 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3a04 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=132 slot=0x113c3a04 after=1
+W hit=133 isurf=201 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c40e8 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=133 slot=0x113c40e8 after=1
+W hit=134 isurf=196 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c40ac before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=134 slot=0x113c40ac after=1
+W hit=135 isurf=193 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4088 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=135 slot=0x113c4088 after=1
+W hit=136 isurf=165 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f38 before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=136 slot=0x113c3f38 after=1
+W hit=137 isurf=232 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c425c before=0 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=137 slot=0x113c425c after=1
+W hit=138 isurf=22 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3884 before=2 light=0xd58a62c loc=-1956.11267,-254.630981,129.119934
+WR hit=138 slot=0x113c3884 after=3
+W hit=139 isurf=0 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c377c before=4 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=139 slot=0x113c377c after=5
+W hit=140 isurf=49 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39c8 before=4 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=140 slot=0x113c39c8 after=5
+W hit=141 isurf=213 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4178 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=141 slot=0x113c4178 after=1
+W hit=142 isurf=1 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3788 before=4 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=142 slot=0x113c3788 after=5
+W hit=143 isurf=183 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4010 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=143 slot=0x113c4010 after=1
+W hit=144 isurf=176 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3fbc before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=144 slot=0x113c3fbc after=1
+W hit=145 isurf=171 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f80 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=145 slot=0x113c3f80 after=1
+W hit=146 isurf=169 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f68 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=146 slot=0x113c3f68 after=1
+W hit=147 isurf=50 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39d4 before=4 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=147 slot=0x113c39d4 after=5
+W hit=148 isurf=175 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3fb0 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=148 slot=0x113c3fb0 after=1
+W hit=149 isurf=172 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f8c before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=149 slot=0x113c3f8c after=1
+W hit=150 isurf=170 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f74 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=150 slot=0x113c3f74 after=1
+W hit=151 isurf=180 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3fec before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=151 slot=0x113c3fec after=2
+W hit=152 isurf=173 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f98 before=3 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=152 slot=0x113c3f98 after=4
+W hit=153 isurf=168 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f5c before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=153 slot=0x113c3f5c after=2
+W hit=154 isurf=181 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3ff8 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=154 slot=0x113c3ff8 after=1
+W hit=155 isurf=167 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f50 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=155 slot=0x113c3f50 after=1
+W hit=156 isurf=177 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3fc8 before=4 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=156 slot=0x113c3fc8 after=5
+W hit=157 isurf=204 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c410c before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=157 slot=0x113c410c after=2
+W hit=158 isurf=202 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c40f4 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=158 slot=0x113c40f4 after=1
+W hit=159 isurf=201 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c40e8 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=159 slot=0x113c40e8 after=2
+W hit=160 isurf=203 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4100 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=160 slot=0x113c4100 after=1
+W hit=161 isurf=245 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c42f8 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=161 slot=0x113c42f8 after=2
+W hit=162 isurf=214 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4184 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=162 slot=0x113c4184 after=1
+W hit=163 isurf=212 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c416c before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=163 slot=0x113c416c after=2
+W hit=164 isurf=208 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c413c before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=164 slot=0x113c413c after=1
+W hit=165 isurf=248 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c431c before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=165 slot=0x113c431c after=2
+W hit=166 isurf=250 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4334 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=166 slot=0x113c4334 after=1
+W hit=167 isurf=247 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4310 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=167 slot=0x113c4310 after=1
+W hit=168 isurf=249 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4328 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=168 slot=0x113c4328 after=2
+W hit=169 isurf=163 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f20 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=169 slot=0x113c3f20 after=2
+W hit=170 isurf=230 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4244 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=170 slot=0x113c4244 after=2
+W hit=171 isurf=191 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4070 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=171 slot=0x113c4070 after=1
+W hit=172 isurf=193 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4088 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=172 slot=0x113c4088 after=2
+W hit=173 isurf=195 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c40a0 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=173 slot=0x113c40a0 after=1
+W hit=174 isurf=194 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4094 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=174 slot=0x113c4094 after=1
+W hit=175 isurf=165 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f38 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=175 slot=0x113c3f38 after=2
+W hit=176 isurf=232 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c425c before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=176 slot=0x113c425c after=2
+W hit=177 isurf=237 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4298 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=177 slot=0x113c4298 after=1
+W hit=178 isurf=222 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c41e4 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=178 slot=0x113c41e4 after=1
+W hit=179 isurf=215 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4190 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=179 slot=0x113c4190 after=1
+W hit=180 isurf=216 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c419c before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=180 slot=0x113c419c after=1
+W hit=181 isurf=221 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c41d8 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=181 slot=0x113c41d8 after=1
+W hit=182 isurf=164 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f2c before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=182 slot=0x113c3f2c after=1
+W hit=183 isurf=235 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4280 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=183 slot=0x113c4280 after=1
+W hit=184 isurf=242 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c42d4 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=184 slot=0x113c42d4 after=1
+W hit=185 isurf=236 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c428c before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=185 slot=0x113c428c after=1
+W hit=186 isurf=238 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c42a4 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=186 slot=0x113c42a4 after=1
+W hit=187 isurf=162 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f14 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=187 slot=0x113c3f14 after=2
+W hit=188 isurf=161 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3f08 before=3 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=188 slot=0x113c3f08 after=4
+W hit=189 isurf=228 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c422c before=3 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=189 slot=0x113c422c after=4
+W hit=190 isurf=231 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4250 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=190 slot=0x113c4250 after=1
+W hit=191 isurf=229 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4238 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=191 slot=0x113c4238 after=2
+W hit=192 isurf=223 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c41f0 before=4 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=192 slot=0x113c41f0 after=5
+W hit=193 isurf=297 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c4568 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=193 slot=0x113c4568 after=2
+W hit=194 isurf=53 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39f8 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=194 slot=0x113c39f8 after=2
+W hit=195 isurf=52 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39ec before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=195 slot=0x113c39ec after=1
+W hit=196 isurf=54 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3a04 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=196 slot=0x113c3a04 after=2
+W hit=197 isurf=51 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39e0 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=197 slot=0x113c39e0 after=1
+W hit=198 isurf=5 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37b8 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=198 slot=0x113c37b8 after=2
+W hit=199 isurf=7 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37d0 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=199 slot=0x113c37d0 after=2
+W hit=200 isurf=6 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c37c4 before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=200 slot=0x113c37c4 after=1
+W hit=201 isurf=153 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3ea8 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=201 slot=0x113c3ea8 after=2
+W hit=202 isurf=155 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3ec0 before=1 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=202 slot=0x113c3ec0 after=2
+W hit=203 isurf=150 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3e84 before=4 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=203 slot=0x113c3e84 after=5
+W hit=204 isurf=24 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c389c before=0 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=204 slot=0x113c389c after=1
+W hit=205 isurf=23 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3890 before=3 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=205 slot=0x113c3890 after=4
+W hit=206 isurf=22 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3884 before=3 light=0xd58aa44 loc=-1733.22034,-453.062469,152.812012
+WR hit=206 slot=0x113c3884 after=4
+W hit=207 isurf=61 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3a58 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=207 slot=0x113c3a58 after=1
+W hit=208 isurf=56 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3a1c before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=208 slot=0x113c3a1c after=1
+W hit=209 isurf=91 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3bc0 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=209 slot=0x113c3bc0 after=1
+W hit=210 isurf=62 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3a64 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=210 slot=0x113c3a64 after=1
+W hit=211 isurf=64 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3a7c before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=211 slot=0x113c3a7c after=1
+W hit=212 isurf=63 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3a70 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=212 slot=0x113c3a70 after=1
+W hit=213 isurf=65 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3a88 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=213 slot=0x113c3a88 after=1
+W hit=214 isurf=92 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3bcc before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=214 slot=0x113c3bcc after=1
+W hit=215 isurf=93 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3bd8 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=215 slot=0x113c3bd8 after=1
+W hit=216 isurf=89 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3ba8 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=216 slot=0x113c3ba8 after=1
+W hit=217 isurf=50 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39d4 before=5 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=217 slot=0x113c39d4 after=6
+W hit=218 isurf=49 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c39c8 before=5 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=218 slot=0x113c39c8 after=6
+W hit=219 isurf=1 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3788 before=5 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=219 slot=0x113c3788 after=6
+W hit=220 isurf=0 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c377c before=5 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=220 slot=0x113c377c after=6
+W hit=221 isurf=23 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3890 before=4 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=221 slot=0x113c3890 after=5
+W hit=222 isurf=22 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3884 before=4 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=222 slot=0x113c3884 after=5
+W hit=223 isurf=32 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c38fc before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=223 slot=0x113c38fc after=1
+W hit=224 isurf=31 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c38f0 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=224 slot=0x113c38f0 after=1
+W hit=225 isurf=58 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3a34 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=225 slot=0x113c3a34 after=1
+W hit=226 isurf=57 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3a28 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=226 slot=0x113c3a28 after=1
+W hit=227 isurf=55 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3a10 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=227 slot=0x113c3a10 after=1
+W hit=228 isurf=133 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3db8 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=228 slot=0x113c3db8 after=1
+W hit=229 isurf=132 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3dac before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=229 slot=0x113c3dac after=1
+W hit=230 isurf=130 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3d94 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=230 slot=0x113c3d94 after=1
+W hit=231 isurf=67 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3aa0 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=231 slot=0x113c3aa0 after=1
+W hit=232 isurf=95 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3bf0 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=232 slot=0x113c3bf0 after=1
+W hit=233 isurf=97 gatherctx=0x146c6c8 base=0x113c377c slot=0x113c3c08 before=0 light=0xd58b1dc loc=-2944.19849,384.973572,129.119934
+WR hit=233 slot=0x113c3c08 after=1
+R hit=1 isurf=0 this=0x146c6c8 base=0x113c377c count=6
+R hit=2 isurf=1 this=0x146c6c8 base=0x113c377c count=6
+R hit=3 isurf=2 this=0x146c6c8 base=0x113c377c count=3
+R hit=4 isurf=3 this=0x146c6c8 base=0x113c377c count=1
+R hit=5 isurf=4 this=0x146c6c8 base=0x113c377c count=0
+R hit=6 isurf=5 this=0x146c6c8 base=0x113c377c count=2
+R hit=7 isurf=6 this=0x146c6c8 base=0x113c377c count=1
+R hit=8 isurf=7 this=0x146c6c8 base=0x113c377c count=2
+R hit=9 isurf=8 this=0x146c6c8 base=0x113c377c count=3
+R hit=10 isurf=9 this=0x146c6c8 base=0x113c377c count=3
+R hit=11 isurf=10 this=0x146c6c8 base=0x113c377c count=0
+R hit=12 isurf=11 this=0x146c6c8 base=0x113c377c count=0
+R hit=13 isurf=12 this=0x146c6c8 base=0x113c377c count=3
+R hit=14 isurf=13 this=0x146c6c8 base=0x113c377c count=3
+R hit=15 isurf=14 this=0x146c6c8 base=0x113c377c count=0
+R hit=16 isurf=15 this=0x146c6c8 base=0x113c377c count=0
+R hit=17 isurf=16 this=0x146c6c8 base=0x113c377c count=0
+R hit=18 isurf=17 this=0x146c6c8 base=0x113c377c count=0
+R hit=19 isurf=18 this=0x146c6c8 base=0x113c377c count=0
+R hit=20 isurf=19 this=0x146c6c8 base=0x113c377c count=0
+R hit=21 isurf=20 this=0x146c6c8 base=0x113c377c count=0
+R hit=22 isurf=21 this=0x146c6c8 base=0x113c377c count=0
+R hit=23 isurf=22 this=0x146c6c8 base=0x113c377c count=5
+R hit=24 isurf=23 this=0x146c6c8 base=0x113c377c count=5
+R hit=25 isurf=24 this=0x146c6c8 base=0x113c377c count=1
+R hit=26 isurf=25 this=0x146c6c8 base=0x113c377c count=0
+R hit=27 isurf=26 this=0x146c6c8 base=0x113c377c count=0
+R hit=28 isurf=27 this=0x146c6c8 base=0x113c377c count=2
+R hit=29 isurf=28 this=0x146c6c8 base=0x113c377c count=2
+R hit=30 isurf=29 this=0x146c6c8 base=0x113c377c count=0
+R hit=31 isurf=30 this=0x146c6c8 base=0x113c377c count=0
+R hit=32 isurf=31 this=0x146c6c8 base=0x113c377c count=1
+R hit=33 isurf=32 this=0x146c6c8 base=0x113c377c count=1
+R hit=34 isurf=33 this=0x146c6c8 base=0x113c377c count=0
+R hit=35 isurf=34 this=0x146c6c8 base=0x113c377c count=0
+R hit=36 isurf=35 this=0x146c6c8 base=0x113c377c count=0
+R hit=37 isurf=36 this=0x146c6c8 base=0x113c377c count=0
+R hit=38 isurf=37 this=0x146c6c8 base=0x113c377c count=0
+R hit=39 isurf=38 this=0x146c6c8 base=0x113c377c count=0
+R hit=40 isurf=39 this=0x146c6c8 base=0x113c377c count=0
+R hit=41 isurf=40 this=0x146c6c8 base=0x113c377c count=3
+R hit=42 isurf=41 this=0x146c6c8 base=0x113c377c count=3
+R hit=43 isurf=42 this=0x146c6c8 base=0x113c377c count=0
+R hit=44 isurf=43 this=0x146c6c8 base=0x113c377c count=0
+R hit=45 isurf=44 this=0x146c6c8 base=0x113c377c count=1
+R hit=46 isurf=45 this=0x146c6c8 base=0x113c377c count=2
+R hit=47 isurf=46 this=0x146c6c8 base=0x113c377c count=1
+R hit=48 isurf=47 this=0x146c6c8 base=0x113c377c count=0
+R hit=49 isurf=48 this=0x146c6c8 base=0x113c377c count=1
+R hit=50 isurf=49 this=0x146c6c8 base=0x113c377c count=6
+R hit=51 isurf=50 this=0x146c6c8 base=0x113c377c count=6
+R hit=52 isurf=51 this=0x146c6c8 base=0x113c377c count=1
+R hit=53 isurf=52 this=0x146c6c8 base=0x113c377c count=1
+R hit=54 isurf=53 this=0x146c6c8 base=0x113c377c count=2
+R hit=55 isurf=54 this=0x146c6c8 base=0x113c377c count=2
+R hit=56 isurf=55 this=0x146c6c8 base=0x113c377c count=1
+R hit=57 isurf=56 this=0x146c6c8 base=0x113c377c count=1
+R hit=58 isurf=57 this=0x146c6c8 base=0x113c377c count=1
+R hit=59 isurf=58 this=0x146c6c8 base=0x113c377c count=1
+R hit=60 isurf=59 this=0x146c6c8 base=0x113c377c count=0
+R hit=61 isurf=60 this=0x146c6c8 base=0x113c377c count=0
+R hit=62 isurf=61 this=0x146c6c8 base=0x113c377c count=1
+R hit=63 isurf=62 this=0x146c6c8 base=0x113c377c count=1
+R hit=64 isurf=63 this=0x146c6c8 base=0x113c377c count=1
+R hit=65 isurf=64 this=0x146c6c8 base=0x113c377c count=1
+R hit=66 isurf=65 this=0x146c6c8 base=0x113c377c count=1
+R hit=67 isurf=66 this=0x146c6c8 base=0x113c377c count=0
+R hit=68 isurf=67 this=0x146c6c8 base=0x113c377c count=1
+R hit=69 isurf=68 this=0x146c6c8 base=0x113c377c count=0
+R hit=70 isurf=69 this=0x146c6c8 base=0x113c377c count=0
+R hit=71 isurf=70 this=0x146c6c8 base=0x113c377c count=0
+R hit=72 isurf=71 this=0x146c6c8 base=0x113c377c count=0
+R hit=73 isurf=72 this=0x146c6c8 base=0x113c377c count=0
+R hit=74 isurf=73 this=0x146c6c8 base=0x113c377c count=0
+R hit=75 isurf=74 this=0x146c6c8 base=0x113c377c count=0
+R hit=76 isurf=75 this=0x146c6c8 base=0x113c377c count=0
+R hit=77 isurf=76 this=0x146c6c8 base=0x113c377c count=0
+R hit=78 isurf=77 this=0x146c6c8 base=0x113c377c count=0
+R hit=79 isurf=78 this=0x146c6c8 base=0x113c377c count=0
+R hit=80 isurf=79 this=0x146c6c8 base=0x113c377c count=0
+R hit=81 isurf=80 this=0x146c6c8 base=0x113c377c count=0
+R hit=82 isurf=81 this=0x146c6c8 base=0x113c377c count=0
+R hit=83 isurf=82 this=0x146c6c8 base=0x113c377c count=0
+R hit=84 isurf=83 this=0x146c6c8 base=0x113c377c count=0
+R hit=85 isurf=84 this=0x146c6c8 base=0x113c377c count=0
+R hit=86 isurf=85 this=0x146c6c8 base=0x113c377c count=0
+R hit=87 isurf=86 this=0x146c6c8 base=0x113c377c count=0
+R hit=88 isurf=87 this=0x146c6c8 base=0x113c377c count=0
+R hit=89 isurf=88 this=0x146c6c8 base=0x113c377c count=0
+R hit=90 isurf=89 this=0x146c6c8 base=0x113c377c count=1
+R hit=91 isurf=90 this=0x146c6c8 base=0x113c377c count=0
+R hit=92 isurf=91 this=0x146c6c8 base=0x113c377c count=1
+R hit=93 isurf=92 this=0x146c6c8 base=0x113c377c count=1
+R hit=94 isurf=93 this=0x146c6c8 base=0x113c377c count=1
+R hit=95 isurf=94 this=0x146c6c8 base=0x113c377c count=0
+R hit=96 isurf=95 this=0x146c6c8 base=0x113c377c count=1
+R hit=97 isurf=96 this=0x146c6c8 base=0x113c377c count=0
+R hit=98 isurf=97 this=0x146c6c8 base=0x113c377c count=1
+R hit=99 isurf=98 this=0x146c6c8 base=0x113c377c count=0
+R hit=100 isurf=99 this=0x146c6c8 base=0x113c377c count=0
+R hit=101 isurf=100 this=0x146c6c8 base=0x113c377c count=0
+R hit=102 isurf=101 this=0x146c6c8 base=0x113c377c count=0
+R hit=103 isurf=102 this=0x146c6c8 base=0x113c377c count=0
+R hit=104 isurf=103 this=0x146c6c8 base=0x113c377c count=0
+R hit=105 isurf=104 this=0x146c6c8 base=0x113c377c count=0
+R hit=106 isurf=105 this=0x146c6c8 base=0x113c377c count=0
+R hit=107 isurf=106 this=0x146c6c8 base=0x113c377c count=0
+R hit=108 isurf=107 this=0x146c6c8 base=0x113c377c count=0
+R hit=109 isurf=108 this=0x146c6c8 base=0x113c377c count=0
+R hit=110 isurf=109 this=0x146c6c8 base=0x113c377c count=0
+R hit=111 isurf=110 this=0x146c6c8 base=0x113c377c count=0
+R hit=112 isurf=111 this=0x146c6c8 base=0x113c377c count=0
+R hit=113 isurf=112 this=0x146c6c8 base=0x113c377c count=0
+R hit=114 isurf=113 this=0x146c6c8 base=0x113c377c count=0
+R hit=115 isurf=114 this=0x146c6c8 base=0x113c377c count=0
+R hit=116 isurf=115 this=0x146c6c8 base=0x113c377c count=0
+R hit=117 isurf=116 this=0x146c6c8 base=0x113c377c count=0
+R hit=118 isurf=117 this=0x146c6c8 base=0x113c377c count=0
+R hit=119 isurf=118 this=0x146c6c8 base=0x113c377c count=0
+R hit=120 isurf=119 this=0x146c6c8 base=0x113c377c count=0
+R hit=121 isurf=120 this=0x146c6c8 base=0x113c377c count=0
+R hit=122 isurf=121 this=0x146c6c8 base=0x113c377c count=0
+R hit=123 isurf=122 this=0x146c6c8 base=0x113c377c count=0
+R hit=124 isurf=123 this=0x146c6c8 base=0x113c377c count=0
+R hit=125 isurf=124 this=0x146c6c8 base=0x113c377c count=0
+R hit=126 isurf=125 this=0x146c6c8 base=0x113c377c count=0
+R hit=127 isurf=126 this=0x146c6c8 base=0x113c377c count=0
+R hit=128 isurf=127 this=0x146c6c8 base=0x113c377c count=0
+R hit=129 isurf=128 this=0x146c6c8 base=0x113c377c count=0
+R hit=130 isurf=129 this=0x146c6c8 base=0x113c377c count=0
+R hit=131 isurf=130 this=0x146c6c8 base=0x113c377c count=1
+R hit=132 isurf=131 this=0x146c6c8 base=0x113c377c count=0
+R hit=133 isurf=132 this=0x146c6c8 base=0x113c377c count=1
+R hit=134 isurf=133 this=0x146c6c8 base=0x113c377c count=1
+R hit=135 isurf=134 this=0x146c6c8 base=0x113c377c count=0
+R hit=136 isurf=135 this=0x146c6c8 base=0x113c377c count=0
+R hit=137 isurf=136 this=0x146c6c8 base=0x113c377c count=0
+R hit=138 isurf=137 this=0x146c6c8 base=0x113c377c count=0
+R hit=139 isurf=138 this=0x146c6c8 base=0x113c377c count=0
+R hit=140 isurf=139 this=0x146c6c8 base=0x113c377c count=0
+R hit=141 isurf=140 this=0x146c6c8 base=0x113c377c count=0
+R hit=142 isurf=141 this=0x146c6c8 base=0x113c377c count=0
+R hit=143 isurf=142 this=0x146c6c8 base=0x113c377c count=0
+R hit=144 isurf=143 this=0x146c6c8 base=0x113c377c count=0
+R hit=145 isurf=144 this=0x146c6c8 base=0x113c377c count=3
+R hit=146 isurf=145 this=0x146c6c8 base=0x113c377c count=0
+R hit=147 isurf=146 this=0x146c6c8 base=0x113c377c count=3
+R hit=148 isurf=147 this=0x146c6c8 base=0x113c377c count=0
+R hit=149 isurf=148 this=0x146c6c8 base=0x113c377c count=0
+R hit=150 isurf=149 this=0x146c6c8 base=0x113c377c count=1
+R hit=151 isurf=150 this=0x146c6c8 base=0x113c377c count=5
+R hit=152 isurf=151 this=0x146c6c8 base=0x113c377c count=0
+R hit=153 isurf=152 this=0x146c6c8 base=0x113c377c count=3
+R hit=154 isurf=153 this=0x146c6c8 base=0x113c377c count=2
+R hit=155 isurf=154 this=0x146c6c8 base=0x113c377c count=1
+R hit=156 isurf=155 this=0x146c6c8 base=0x113c377c count=2
+R hit=157 isurf=156 this=0x146c6c8 base=0x113c377c count=0
+R hit=158 isurf=157 this=0x146c6c8 base=0x113c377c count=1
+R hit=159 isurf=158 this=0x146c6c8 base=0x113c377c count=1
+R hit=160 isurf=159 this=0x146c6c8 base=0x113c377c count=1
+R hit=161 isurf=160 this=0x146c6c8 base=0x113c377c count=0
+R hit=162 isurf=161 this=0x146c6c8 base=0x113c377c count=4
+R hit=163 isurf=162 this=0x146c6c8 base=0x113c377c count=2
+R hit=164 isurf=163 this=0x146c6c8 base=0x113c377c count=2
+R hit=165 isurf=164 this=0x146c6c8 base=0x113c377c count=1
+R hit=166 isurf=165 this=0x146c6c8 base=0x113c377c count=2
+R hit=167 isurf=166 this=0x146c6c8 base=0x113c377c count=0
+R hit=168 isurf=167 this=0x146c6c8 base=0x113c377c count=1
+R hit=169 isurf=168 this=0x146c6c8 base=0x113c377c count=2
+R hit=170 isurf=169 this=0x146c6c8 base=0x113c377c count=1
+R hit=171 isurf=170 this=0x146c6c8 base=0x113c377c count=1
+R hit=172 isurf=171 this=0x146c6c8 base=0x113c377c count=1
+R hit=173 isurf=172 this=0x146c6c8 base=0x113c377c count=1
+R hit=174 isurf=173 this=0x146c6c8 base=0x113c377c count=4
+R hit=175 isurf=174 this=0x146c6c8 base=0x113c377c count=0
+R hit=176 isurf=175 this=0x146c6c8 base=0x113c377c count=1
+R hit=177 isurf=176 this=0x146c6c8 base=0x113c377c count=1
+R hit=178 isurf=177 this=0x146c6c8 base=0x113c377c count=5
+R hit=179 isurf=178 this=0x146c6c8 base=0x113c377c count=0
+R hit=180 isurf=179 this=0x146c6c8 base=0x113c377c count=1
+R hit=181 isurf=180 this=0x146c6c8 base=0x113c377c count=2
+R hit=182 isurf=181 this=0x146c6c8 base=0x113c377c count=1
+R hit=183 isurf=182 this=0x146c6c8 base=0x113c377c count=1
+R hit=184 isurf=183 this=0x146c6c8 base=0x113c377c count=1
+R hit=185 isurf=184 this=0x146c6c8 base=0x113c377c count=0
+R hit=186 isurf=185 this=0x146c6c8 base=0x113c377c count=1
+R hit=187 isurf=186 this=0x146c6c8 base=0x113c377c count=1
+R hit=188 isurf=187 this=0x146c6c8 base=0x113c377c count=0
+R hit=189 isurf=188 this=0x146c6c8 base=0x113c377c count=1
+R hit=190 isurf=189 this=0x146c6c8 base=0x113c377c count=1
+R hit=191 isurf=190 this=0x146c6c8 base=0x113c377c count=3
+R hit=192 isurf=191 this=0x146c6c8 base=0x113c377c count=1
+R hit=193 isurf=192 this=0x146c6c8 base=0x113c377c count=0
+R hit=194 isurf=193 this=0x146c6c8 base=0x113c377c count=2
+R hit=195 isurf=194 this=0x146c6c8 base=0x113c377c count=1
+R hit=196 isurf=195 this=0x146c6c8 base=0x113c377c count=1
+R hit=197 isurf=196 this=0x146c6c8 base=0x113c377c count=1
+R hit=198 isurf=197 this=0x146c6c8 base=0x113c377c count=0
+R hit=199 isurf=198 this=0x146c6c8 base=0x113c377c count=0
+R hit=200 isurf=199 this=0x146c6c8 base=0x113c377c count=0
+R hit=201 isurf=200 this=0x146c6c8 base=0x113c377c count=0
+R hit=202 isurf=201 this=0x146c6c8 base=0x113c377c count=2
+R hit=203 isurf=202 this=0x146c6c8 base=0x113c377c count=1
+R hit=204 isurf=203 this=0x146c6c8 base=0x113c377c count=1
+R hit=205 isurf=204 this=0x146c6c8 base=0x113c377c count=2
+R hit=206 isurf=205 this=0x146c6c8 base=0x113c377c count=0
+R hit=207 isurf=206 this=0x146c6c8 base=0x113c377c count=0
+R hit=208 isurf=207 this=0x146c6c8 base=0x113c377c count=0
+R hit=209 isurf=208 this=0x146c6c8 base=0x113c377c count=1
+R hit=210 isurf=209 this=0x146c6c8 base=0x113c377c count=1
+R hit=211 isurf=210 this=0x146c6c8 base=0x113c377c count=0
+R hit=212 isurf=211 this=0x146c6c8 base=0x113c377c count=1
+R hit=213 isurf=212 this=0x146c6c8 base=0x113c377c count=2
+R hit=214 isurf=213 this=0x146c6c8 base=0x113c377c count=1
+R hit=215 isurf=214 this=0x146c6c8 base=0x113c377c count=1
+R hit=216 isurf=215 this=0x146c6c8 base=0x113c377c count=1
+R hit=217 isurf=216 this=0x146c6c8 base=0x113c377c count=1
+R hit=218 isurf=217 this=0x146c6c8 base=0x113c377c count=0
+R hit=219 isurf=218 this=0x146c6c8 base=0x113c377c count=0
+R hit=220 isurf=219 this=0x146c6c8 base=0x113c377c count=0
+R hit=221 isurf=220 this=0x146c6c8 base=0x113c377c count=1
+R hit=222 isurf=221 this=0x146c6c8 base=0x113c377c count=1
+R hit=223 isurf=222 this=0x146c6c8 base=0x113c377c count=1
+R hit=224 isurf=223 this=0x146c6c8 base=0x113c377c count=5
+R hit=225 isurf=224 this=0x146c6c8 base=0x113c377c count=1
+R hit=226 isurf=225 this=0x146c6c8 base=0x113c377c count=1
+R hit=227 isurf=226 this=0x146c6c8 base=0x113c377c count=1
+R hit=228 isurf=227 this=0x146c6c8 base=0x113c377c count=0
+R hit=229 isurf=228 this=0x146c6c8 base=0x113c377c count=4
+R hit=230 isurf=229 this=0x146c6c8 base=0x113c377c count=2
+R hit=231 isurf=230 this=0x146c6c8 base=0x113c377c count=2
+R hit=232 isurf=231 this=0x146c6c8 base=0x113c377c count=1
+R hit=233 isurf=232 this=0x146c6c8 base=0x113c377c count=2
+R hit=234 isurf=235 this=0x146c6c8 base=0x113c377c count=1
+R hit=235 isurf=236 this=0x146c6c8 base=0x113c377c count=1
+R hit=236 isurf=237 this=0x146c6c8 base=0x113c377c count=1
+R hit=237 isurf=238 this=0x146c6c8 base=0x113c377c count=1
+R hit=238 isurf=239 this=0x146c6c8 base=0x113c377c count=0
+R hit=239 isurf=240 this=0x146c6c8 base=0x113c377c count=0
+R hit=240 isurf=241 this=0x146c6c8 base=0x113c377c count=0
+R hit=241 isurf=242 this=0x146c6c8 base=0x113c377c count=1
+R hit=242 isurf=243 this=0x146c6c8 base=0x113c377c count=0
+R hit=243 isurf=244 this=0x146c6c8 base=0x113c377c count=0
+R hit=244 isurf=245 this=0x146c6c8 base=0x113c377c count=2
+R hit=245 isurf=246 this=0x146c6c8 base=0x113c377c count=0
+R hit=246 isurf=247 this=0x146c6c8 base=0x113c377c count=1
+R hit=247 isurf=248 this=0x146c6c8 base=0x113c377c count=2
+R hit=248 isurf=249 this=0x146c6c8 base=0x113c377c count=2
+R hit=249 isurf=250 this=0x146c6c8 base=0x113c377c count=1
+R hit=250 isurf=251 this=0x146c6c8 base=0x113c377c count=0
+R hit=251 isurf=252 this=0x146c6c8 base=0x113c377c count=0
+R hit=252 isurf=253 this=0x146c6c8 base=0x113c377c count=0
+R hit=253 isurf=254 this=0x146c6c8 base=0x113c377c count=0
+R hit=254 isurf=255 this=0x146c6c8 base=0x113c377c count=0
+R hit=255 isurf=256 this=0x146c6c8 base=0x113c377c count=0
+R hit=256 isurf=257 this=0x146c6c8 base=0x113c377c count=0
+R hit=257 isurf=258 this=0x146c6c8 base=0x113c377c count=0
+R hit=258 isurf=259 this=0x146c6c8 base=0x113c377c count=0
+R hit=259 isurf=260 this=0x146c6c8 base=0x113c377c count=0
+R hit=260 isurf=261 this=0x146c6c8 base=0x113c377c count=0
+R hit=261 isurf=262 this=0x146c6c8 base=0x113c377c count=0
+R hit=262 isurf=263 this=0x146c6c8 base=0x113c377c count=0
+R hit=263 isurf=264 this=0x146c6c8 base=0x113c377c count=0
+R hit=264 isurf=265 this=0x146c6c8 base=0x113c377c count=2
+R hit=265 isurf=266 this=0x146c6c8 base=0x113c377c count=0
+R hit=266 isurf=267 this=0x146c6c8 base=0x113c377c count=0
+R hit=267 isurf=268 this=0x146c6c8 base=0x113c377c count=1
+R hit=268 isurf=269 this=0x146c6c8 base=0x113c377c count=0
+R hit=269 isurf=270 this=0x146c6c8 base=0x113c377c count=0
+R hit=270 isurf=271 this=0x146c6c8 base=0x113c377c count=0
+R hit=271 isurf=272 this=0x146c6c8 base=0x113c377c count=1
+R hit=272 isurf=273 this=0x146c6c8 base=0x113c377c count=0
+R hit=273 isurf=274 this=0x146c6c8 base=0x113c377c count=1
+R hit=274 isurf=275 this=0x146c6c8 base=0x113c377c count=0
+R hit=275 isurf=276 this=0x146c6c8 base=0x113c377c count=2
+R hit=276 isurf=277 this=0x146c6c8 base=0x113c377c count=0
+R hit=277 isurf=278 this=0x146c6c8 base=0x113c377c count=1
+R hit=278 isurf=279 this=0x146c6c8 base=0x113c377c count=0
+R hit=279 isurf=280 this=0x146c6c8 base=0x113c377c count=3
+R hit=280 isurf=281 this=0x146c6c8 base=0x113c377c count=0
+R hit=281 isurf=282 this=0x146c6c8 base=0x113c377c count=0
+R hit=282 isurf=283 this=0x146c6c8 base=0x113c377c count=0
+R hit=283 isurf=284 this=0x146c6c8 base=0x113c377c count=0
+R hit=284 isurf=285 this=0x146c6c8 base=0x113c377c count=0
+R hit=285 isurf=286 this=0x146c6c8 base=0x113c377c count=0
+R hit=286 isurf=287 this=0x146c6c8 base=0x113c377c count=0
+R hit=287 isurf=288 this=0x146c6c8 base=0x113c377c count=0
+R hit=288 isurf=289 this=0x146c6c8 base=0x113c377c count=0
+R hit=289 isurf=290 this=0x146c6c8 base=0x113c377c count=0
+R hit=290 isurf=291 this=0x146c6c8 base=0x113c377c count=0
+R hit=291 isurf=292 this=0x146c6c8 base=0x113c377c count=0
+R hit=292 isurf=293 this=0x146c6c8 base=0x113c377c count=0
+R hit=293 isurf=294 this=0x146c6c8 base=0x113c377c count=0
+R hit=294 isurf=295 this=0x146c6c8 base=0x113c377c count=0
+R hit=295 isurf=296 this=0x146c6c8 base=0x113c377c count=1
+R hit=296 isurf=297 this=0x146c6c8 base=0x113c377c count=2
+R hit=297 isurf=298 this=0x146c6c8 base=0x113c377c count=0
+R hit=298 isurf=299 this=0x146c6c8 base=0x113c377c count=0
+R hit=299 isurf=300 this=0x146c6c8 base=0x113c377c count=0
+R hit=300 isurf=301 this=0x146c6c8 base=0x113c377c count=0
+R hit=301 isurf=302 this=0x146c6c8 base=0x113c377c count=0
+R hit=302 isurf=303 this=0x146c6c8 base=0x113c377c count=0
+R hit=303 isurf=304 this=0x146c6c8 base=0x113c377c count=0
+R hit=304 isurf=305 this=0x146c6c8 base=0x113c377c count=0
+R hit=305 isurf=306 this=0x146c6c8 base=0x113c377c count=0
+R hit=306 isurf=307 this=0x146c6c8 base=0x113c377c count=0
+R hit=307 isurf=308 this=0x146c6c8 base=0x113c377c count=0
+R hit=308 isurf=309 this=0x146c6c8 base=0x113c377c count=0
+R hit=309 isurf=310 this=0x146c6c8 base=0x113c377c count=0
+R hit=310 isurf=311 this=0x146c6c8 base=0x113c377c count=0
+R hit=311 isurf=312 this=0x146c6c8 base=0x113c377c count=0
+R hit=312 isurf=313 this=0x146c6c8 base=0x113c377c count=0
+R hit=313 isurf=314 this=0x146c6c8 base=0x113c377c count=0
+R hit=314 isurf=315 this=0x146c6c8 base=0x113c377c count=0

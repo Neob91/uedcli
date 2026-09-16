@@ -32,12 +32,14 @@ from .env import InstallEnv
 from .lower import (EX_DEFAULT_VARIABLE, EX_DYNAMIC_CAST, EX_FINAL_FUNCTION, EX_INSTANCE_VARIABLE,
                     EX_LABEL_TABLE, EX_METACAST, EX_NOTHING, EX_OBJECT_CONST, EX_RETURN, LowerError,
                     Scope, build_scope, consts_of, enum_type_names, enums_of, local_funcs_of,
-                    lower_function, lower_state_body, members_of, _mem_size)
+                    local_struct_members_of, lower_function, lower_state_body, members_array_dim_of,
+                    members_meta_of, members_of, struct_type_names, _mem_size)
 from .model import (ClassBody, CompiledPackage, ConstBody, Dependency, EnumBody, Export, FunctionBody,
                     Import, Name, ObjectBody, PropertyBody, StateBody, StructBody, TextBufferBody,
                     TextureBody, TextureMip)
 from .global_index import default_global_index, engine_name_pool, highlight_name_pool, pool_case
-from .natives import ClassGraph, ClassSig, FuncBody, load_catalog, load_graph, prop_type_label
+from .natives import (FUNC_NET, FUNC_NET_RELIABLE, ClassGraph, ClassSig, FuncBody, class_of,
+                      load_catalog, load_graph, prop_type_label)
 from .ordering import ObjInput, order_package
 from .parser import parse
 from . import texture_import
@@ -250,6 +252,7 @@ class _Func:
     toks: tuple                      # lowered token stream (list[Tok])
     script_size: int                 # in-memory ScriptSize (sum of _mem_size)
     super_ref_key: str | None = None  # import key of an overridden inherited function (else 0)
+    rep_offset: int | None = None    # inherited from an overridden FUNC_Net function; else None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -303,6 +306,11 @@ class _Build:
     local_enums: set[str] = field(default_factory=set)
     local_structs: set[str] = field(default_factory=set)
     in_pkg_class_names: dict[str, str] = field(default_factory=dict)  # casefold -> declared class name
+    in_pkg_decls: dict[str, ClassDecl] = field(default_factory=dict)  # casefold -> its ClassDecl
+                                                  # (multi-class: every sibling's AST, incl. one not
+                                                  # yet built — backs `_super_field_order`'s in-package
+                                                  # fallback, since an in-progress class has no
+                                                  # compiled export to decode field order from)
     graph_override: object | None = None      # multi-class: a ClassGraph seeing in-package classes
     catalog_override: object | None = None
     extra_deps: list[str] = field(default_factory=list)  # classes Context'd into (deep=0 Dependency
@@ -396,7 +404,7 @@ def _compile_single(src: str, env: InstallEnv,
                                   f"{super_info.package!r}) — deeper rung")
 
     crlf_source = _to_crlf(_script_text(decl.source or src))
-    class_flags, config_name, within_key = _class_header(decl, env)
+    class_flags, config_name, within_key = _class_header(decl, env, super_info.config_name)
     class_flags |= super_info.class_flags & _CLASS_INHERIT_MASK
 
     b = _Build(class_name=class_name, env=env, class_object_flags=_class_object_flags(decl),
@@ -517,9 +525,17 @@ def _build_texture_imports(b: _Build, decl: ClassDecl, texture_files: dict[str, 
 
 
 # ── class header ────────────────────────────────────────────────────────────────────────────────
-def _class_header(decl: ClassDecl, env: InstallEnv) -> tuple[int, str, str]:
-    """Returns (ClassFlags, ClassConfigName, ClassWithin import-object-name). Default within=Object,
-    config=System."""
+def _class_header(decl: ClassDecl, env: InstallEnv, super_config_name: str = "System"
+                  ) -> tuple[int, str, str]:
+    """Returns (ClassFlags, ClassConfigName, ClassWithin import-object-name). Default within=Object.
+    A BARE `config;` modifier (no explicit name) INHERITS the super's own ClassConfigName rather than
+    resetting to `System` — live-probed (`dev/docs/spikes/2026-09-14-utserveradmin-class-ref-gaps/
+    probe_config_name_inheritance.py`): real UT99 `Engine.
+    MessagingSpectator`/`Engine.Spectator` are both `config(User)`-declared (`'User'`, not `'System'`),
+    and a subclass with bare `config;` (e.g. real `UTServerAdminSpectator`) keeps `'User'`. A class
+    with NO `config` modifier at all is left at the prior, unverified default (`"System"`) — only the
+    evidenced bare-`config;` shape changes; whether ConfigName ALSO inherits with no `config` keyword
+    present at all is untested, not guessed at here."""
     flags = _CLASS_FLAGS_BASE
     config_name = "System"
     within_key = "Object"
@@ -527,7 +543,7 @@ def _class_header(decl: ClassDecl, env: InstallEnv) -> tuple[int, str, str]:
         head, _, arg = mod.partition("(")
         arg = arg[:-1] if arg.endswith(")") else arg
         if head == "config":
-            config_name = arg or "System"
+            config_name = arg or super_config_name
         elif head in _CLASS_MODIFIER_FLAGS:
             flags |= _CLASS_MODIFIER_FLAGS[head]
         else:
@@ -634,8 +650,12 @@ def _build_callables(b: _Build, decl: ClassDecl, super_name: str, crlf_source: s
     graph = b.graph_override if b.graph_override is not None else load_graph(search_dir)
     catalog = b.catalog_override if b.catalog_override is not None else load_catalog(search_dir)
     enames = enum_type_names(decl.members)
+    snames = struct_type_names(decl.members)
+    lstructs = local_struct_members_of(decl.members, graph)
     members = members_of(decl.members, graph)
-    lfuncs = local_funcs_of(decl.functions, graph, enames)
+    members_meta = members_meta_of(decl.members)
+    members_array_dim = members_array_dim_of(decl.members)
+    lfuncs = local_funcs_of(decl.functions, graph, enames, snames)
     enums = enums_of(decl.members)
     consts = consts_of(decl.members)
     if decl.functions:
@@ -648,21 +668,25 @@ def _build_callables(b: _Build, decl: ClassDecl, super_name: str, crlf_source: s
     for item in decl.callables:
         if isinstance(item, StateDecl):
             line, text_pos = state_pos[id(item)]
-            _build_one_state(b, decl, item, super_name, graph, catalog, members, lfuncs, line,
-                             text_pos, enums, consts, dep_slices)
+            _build_one_state(b, decl, item, super_name, graph, catalog, members, members_meta,
+                             members_array_dim, lfuncs, line, text_pos, enums, consts, dep_slices,
+                             lstructs)
         else:
             line, text_pos = func_pos[id(item)]
-            _build_one_function(b, decl, item, super_name, graph, catalog, members, lfuncs, line,
-                                text_pos, enames, enums, consts, dep_slices)
+            _build_one_function(b, decl, item, super_name, graph, catalog, members, members_meta,
+                                members_array_dim, lfuncs, line, text_pos, enames, snames, enums,
+                                consts, dep_slices, lstructs)
     b.extra_deps = [dep for slice_ in reversed(dep_slices) for dep in slice_]
 
 
 def _build_one_state(b: _Build, decl: ClassDecl, state: StateDecl, super_name: str, graph, catalog,
-                     members, lfuncs, line: int, text_pos: int, enums, consts,
-                     dep_slices: list[list[str]]) -> None:
+                     members, members_meta, members_array_dim, lfuncs, line: int, text_pos: int,
+                     enums, consts, dep_slices: list[list[str]], lstructs=None) -> None:
     skey = b.okey(f"state:{state.name}")
-    scope = Scope(locals_={}, own_members=members, own_funcs={f.name: f for f in lfuncs},
-                 class_name=decl.name, super_name=super_name, graph=graph, enums=enums, consts=consts)
+    scope = Scope(locals_={}, own_members=members, own_members_meta=members_meta,
+                 own_members_array_dim=members_array_dim, own_funcs={f.name: f for f in lfuncs},
+                 class_name=decl.name, super_name=super_name, graph=graph, enums=enums, consts=consts,
+                 local_structs=lstructs)
     own_deps: list[str] = []
     try:
         toks = lower_state_body(state, scope, catalog, extra_deps=own_deps)
@@ -710,12 +734,27 @@ def _state_positions(crlf: str, states) -> list[tuple[int, int]]:
 
 
 def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: str, graph, catalog,
-                        members, lfuncs, line: int, text_pos: int, enames, enums, consts,
-                        dep_slices: list[list[str]]) -> None:
+                        members, members_meta, members_array_dim, lfuncs, line: int, text_pos: int,
+                        enames, snames, enums, consts, dep_slices: list[list[str]],
+                        lstructs=None) -> None:
     if func.kind not in ("function", "event"):
         raise NotImplementedError(f"function kind {func.kind!r} not supported yet ({func.name!r})")
     fkey = b.okey(f"fn:{func.name}")
     flags = _func_flags(func) | (FUNC_DEFINED if func.has_body else 0)  # native flag via modifier
+    # An override inherits FUNC_Net (+FUNC_NetReliable) + RepOffset from the function it overrides —
+    # replication is a property of the FUNCTION ITSELF (its `replication` block lives on the
+    # DECLARING class), not redeclared per override. `replication` blocks in the class being compiled
+    # aren't supported yet (`_reject_unsupported`), so this is the only source of FUNC_Net for now —
+    # live-probed against real UT99 `UTServerAdminSpectator` (extends `Engine.MessagingSpectator`,
+    # itself extending `PlayerPawn`): `ClientMessage`/`ClientVoiceMessage`/`TeamMessage`/
+    # `ReceiveLocalizedMessage`, all bodyless overrides with no local `replication` block, each carry
+    # the SAME FunctionFlags/RepOffset as `PlayerPawn`'s own declaration (`0x40|0x80`, i.e. a
+    # `reliable` replicated function — FUNC_NetReliable always travels with FUNC_Net together).
+    super_fb = graph.function(super_name, func.name) if graph else None
+    rep_offset = None
+    if super_fb is not None and super_fb.flags & FUNC_NET:
+        flags |= super_fb.flags & (FUNC_NET | FUNC_NET_RELIABLE)
+        rep_offset = super_fb.rep_offset
 
     child_keys: list[str] = []
     local_by_name: dict[str, str] = {}
@@ -732,12 +771,15 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
             child_keys.append(lkey); local_by_name[n.casefold()] = lkey
 
     if func.has_body:
-        scope = build_scope(func, members=members, funcs=lfuncs, class_name=decl.name,
-                            super_name=super_name, graph=graph,
-                            enums=enums, enum_names=enames, consts=consts)
+        scope = build_scope(func, members=members, members_meta=members_meta,
+                            members_array_dim=members_array_dim, funcs=lfuncs,
+                            class_name=decl.name, super_name=super_name, graph=graph,
+                            enums=enums, enum_names=enames, struct_names=snames, consts=consts,
+                            local_structs=lstructs)
         own_deps: list[str] = []
         try:
-            toks = lower_function(func, scope, catalog, extra_deps=own_deps)
+            toks = lower_function(func, scope, catalog, extra_deps=own_deps,
+                                  enum_names=enames, struct_names=snames)
         except LowerError as e:
             raise NotImplementedError(f"cannot lower function {func.name!r}: {e}") from e
         dep_slices.append(own_deps)
@@ -759,7 +801,8 @@ def _build_one_function(b: _Build, decl: ClassDecl, func: FuncDecl, super_name: 
                           function_flags=flags, child_keys=tuple(child_keys),
                           local_by_name=local_by_name, toks=tuple(toks),
                           script_size=sum(_mem_size(t) for t in toks),
-                          super_ref_key=_super_func_import(b, super_name, func.name, graph))
+                          super_ref_key=_super_func_import(b, super_name, func.name, graph),
+                          rep_offset=rep_offset)
     b.chain_fields.append((fkey, False))
 
 
@@ -840,13 +883,67 @@ def _func_prop_type(b: _Build, tr, func_name: str, pname: str) -> tuple[str, int
     if base.casefold() in b.in_pkg_class_names:           # a same-package sibling class -> export ref
         real = b.in_pkg_class_names[base.casefold()]
         return "ObjectProperty", 0, (_RefSpec(key=f"{real}::class:{real}", is_export=True),)
-    if b.env.resolve_class(base) is None:
+    # A class with NO exported script body anywhere on the search path (a fully-native class, e.g.
+    # `Sound`/`Music`/UT99's `Engine.NetConnection`) is still a valid var/param/local TYPE — resolved
+    # via `class_home_from_imports`, the same fallback `_add_import` already applies for cast targets
+    # (found compiling the real `PainSoundsMutator`: `local Sound snd;`).
+    if b.env.resolve_class(base) is None and b.env.import_only_class_package(base) is None:
         raise NotImplementedError(f"param/local type {base!r} ({func_name}.{pname}) not supported yet")
     obj_key = _add_import(b, base)
     return "ObjectProperty", 0, (_RefSpec(key=obj_key, is_export=False),)
 
 
 _FUNC_KW = r"\b(?:function|event|operator|preoperator|postoperator|delegate)\b"
+
+
+def _mask_lexical_noise(source: str) -> str:
+    """Same-length copy of `source` with every `//`/`/* */` comment and `"..."`/`'...'` literal
+    replaced by spaces (newlines kept as-is, so line counting over the result stays correct) — a
+    regex/whitespace scan over it can't be fooled by comment or string text that happens to look like
+    a declaration, a brace, or a keyword. Mirrors the real lexer's own rules (`lexer.py`
+    `_skip_block_comment` nests `/* */`; `_scan_string`/`_scan_name` stop at the closing quote or an
+    unescaped newline) rather than a narrower ad hoc scan."""
+    n = len(source)
+    out = list(source)
+
+    def blank(a: int, b: int) -> None:
+        for x in range(a, b):
+            if out[x] != "\n":
+                out[x] = " "
+
+    i = 0
+    while i < n:
+        two = source[i:i + 2]
+        if two == "//":
+            end = source.find("\n", i)
+            end = n if end == -1 else end
+            blank(i, end)
+            i = end
+            continue
+        if two == "/*":
+            start, depth, i = i, 1, i + 2
+            while i < n and depth > 0:
+                pair = source[i:i + 2]
+                if pair == "/*":
+                    depth += 1; i += 2
+                elif pair == "*/":
+                    depth -= 1; i += 2
+                else:
+                    i += 1
+            blank(start, i)
+            continue
+        c = source[i]
+        if c == '"' or c == "'":
+            start, i = i, i + 1
+            while i < n and source[i] != c and source[i] != "\n":
+                i += 2 if (c == '"' and source[i] == "\\" and i + 1 < n
+                          and source[i + 1] != "\n") else 1
+            if i < n and source[i] == c:
+                i += 1
+            blank(start, i)
+            continue
+        i += 1
+    return "".join(out)
 
 
 def _function_positions(crlf: str, funcs) -> list[tuple[int, int]]:
@@ -856,21 +953,25 @@ def _function_positions(crlf: str, funcs) -> list[tuple[int, int]]:
     its declaration. Line = 1-based source line, TextPos = byte offset into the CRLF ScriptText (RE'd
     2026-09-05 against UCC; verified byte-exact for every UscW/UscFn/FrameBuilder function and UWeb's
     native functions). The declaration is anchored on the `function`/`event`/… keyword (a bare
-    name-`(` substring also matches a CALL to the function, and body-less functions have no `{`)."""
+    name-`(` substring also matches a CALL to the function, and body-less functions have no `{`) --
+    searched against a COMMENT/STRING-MASKED view (`_mask_lexical_noise`) so a duplicate, commented-
+    out declaration earlier in the file (real UT99 `RandomMutators`, two `SplitString`s, the first
+    inside a `/* */` block) can't match ahead of the real one."""
     out: list[tuple[int, int]] = []
+    masked = _mask_lexical_noise(crlf)
     cur = 0
     ws = " \t\r\n"
     for f in funcs:
         namepat = (r"\b" + re.escape(f.name) + r"\b") if (f.name[:1].isalnum() or f.name[:1] == "_") \
             else re.escape(f.name)
-        m = re.compile(_FUNC_KW + r"[^{};]*?" + namepat + r"\s*\(", re.IGNORECASE).search(crlf, cur)
+        m = re.compile(_FUNC_KW + r"[^{};]*?" + namepat + r"\s*\(", re.IGNORECASE).search(masked, cur)
         if m is None:
             raise NotImplementedError(f"could not locate declaration of function {f.name!r} in source "
                                       "for TextPos")
         j = m.end() - 1                                 # the matched param-list open paren
         depth = 0
         while True:                                     # matching close of the parameter list
-            c = crlf[j]
+            c = masked[j]
             if c == "(":
                 depth += 1
             elif c == ")":
@@ -879,25 +980,17 @@ def _function_positions(crlf: str, funcs) -> list[tuple[int, int]]:
                     break
             j += 1
         if not f.has_body:                              # native/declared: TextPos = the ';'
-            k = crlf.index(";", j)
+            k = masked.index(";", j)
             out.append((crlf.count("\n", 0, k) + 1, k))
             cur = k + 1
             continue
-        k = crlf.index("{", j) + 1
+        k = masked.index("{", j) + 1
         while True:                                     # skip to the first executable statement
-            while k < len(crlf) and crlf[k] in ws:
+            while k < len(masked) and masked[k] in ws:  # comments are already blanked to spaces
                 k += 1
-            if crlf[k:k + 2] == "//":                    # line comment
-                nl = crlf.find("\n", k)
-                k = len(crlf) if nl < 0 else nl + 1
-                continue
-            if crlf[k:k + 2] == "/*":                    # block comment
-                end = crlf.find("*/", k)
-                k = len(crlf) if end < 0 else end + 2
-                continue
-            if crlf[k:k + 5].casefold() == "local" and (
-                    k + 5 >= len(crlf) or not (crlf[k + 5].isalnum() or crlf[k + 5] == "_")):
-                k = crlf.index(";", k) + 1
+            if masked[k:k + 5].casefold() == "local" and (
+                    k + 5 >= len(masked) or not (masked[k + 5].isalnum() or masked[k + 5] == "_")):
+                k = masked.index(";", k) + 1
                 continue
             break
         out.append((crlf.count("\n", 0, k) + 1, k))
@@ -971,9 +1064,10 @@ def _resolve_var_type(b: _Build, m: VarDecl, pname: str
         real = b.in_pkg_class_names[base.casefold()]       # or mutually referenced) -> an export ref,
         return ("ObjectProperty", 0,                        # never an import (it has no home package
                (_RefSpec(key=f"{real}::class:{real}", is_export=True),), PT_OBJECT, None)  # of its own)
-    # otherwise an object type: a class reference resolved via env.
-    info = b.env.resolve_class(base)
-    if info is None:
+    # otherwise an object type: a class reference resolved via env — including a class with NO
+    # exported script body anywhere on the search path (a fully-native class, e.g. `Sound`/`Music`),
+    # the same `class_home_from_imports` fallback `_func_prop_type`/`_add_import` already apply.
+    if b.env.resolve_class(base) is None and b.env.import_only_class_package(base) is None:
         raise NotImplementedError(f"var {pname!r}: unknown type {base!r} (not scalar/local/class)")
     obj_key = _add_import(b, base)
     return ("ObjectProperty", 0, (_RefSpec(key=obj_key, is_export=False),), PT_OBJECT, None)
@@ -1004,9 +1098,9 @@ def _resolve_array_type(b: _Build, m: VarDecl, pname: str
         real = b.in_pkg_class_names[base.casefold()]
         inner_class = "ObjectProperty"
         inner_tail = (_RefSpec(key=f"{real}::class:{real}", is_export=True),)
-    elif b.env.resolve_class(base) is not None:
-        inner_class = "ObjectProperty"
-        inner_tail = (_RefSpec(key=_add_import(b, base), is_export=False),)
+    elif b.env.resolve_class(base) is not None or b.env.import_only_class_package(base) is not None:
+        inner_class = "ObjectProperty"                    # incl. an import-only class, see
+        inner_tail = (_RefSpec(key=_add_import(b, base), is_export=False),)  # `_resolve_var_type`
     else:
         raise NotImplementedError(f"var {pname!r}: array<{base}> element not supported yet")
     b.props[inner_key] = _Prop(key=inner_key, name=pname, prop_class=inner_class,
@@ -1054,7 +1148,7 @@ def _emit_inherited_defaults(b: _Build, decl: ClassDecl, entries: list) -> None:
     if not entries:
         return
     graph = _defaults_graph(b, decl.super_name)
-    order = _super_field_order(graph, decl.super_name)
+    order = _super_field_order(b, graph, decl.super_name)
     label_by = {cf: label for cf, label in order}
     pos_by = {cf: i for i, (cf, _label) in enumerate(order)}
     resolved = []
@@ -1116,15 +1210,27 @@ def _own_props_in_order(pkg, idx1: int) -> list[tuple[str, str]]:
     return out
 
 
-def _super_field_order(graph: ClassGraph, super_name: str) -> list[tuple[str, str]]:
+def _super_field_order(b: _Build, graph: ClassGraph, super_name: str) -> list[tuple[str, str]]:
     """Inherited fields in class field-iteration order — the super's own properties first (Children
-    order), then its ancestors', up the chain."""
+    order), then its ancestors', up the chain. A same-package super (`b.in_pkg_decls`) has no compiled
+    export yet to decode field order from — its own properties resolve from its AST instead
+    (`members_of`, forward declaration order; only non-var chain fields ever reverse, so this needs no
+    chain-reversal logic). Disk-backed ancestors keep decoding compiled bytes."""
     out: list[tuple[str, str]] = []
     seen: set[str] = set()
     name: str | None = super_name
     for _ in range(64):
         if name is None:
             break
+        decl = b.in_pkg_decls.get(name.casefold())
+        if decl is not None:
+            for n, label in members_of(decl.members, graph).items():
+                cf = n.casefold()
+                if cf not in seen:
+                    seen.add(cf)
+                    out.append((cf, label))
+            name = decl.super_name
+            continue
         loc = graph._locate(name)
         if loc is None:
             break
@@ -1246,6 +1352,13 @@ def _mem_zero(p: _Prop) -> object:
 def _scalar_default(pname: str, ptype: int, expr) -> object:
     if expr is None:
         return _SCALAR_ZERO[ptype]
+    if expr.op == "empty" and ptype in (PT_STR, PT_NAME):
+        # `Field=` with nothing after (parser.py's defaultproperties-value parse): a native/pointer
+        # field decompiles this way, but real UCC also accepts it hand-authored for String/Name as an
+        # explicit empty value (probed: RandomMutators' `var String chosenMutators;` /
+        # `chosenMutators=`) -- compiles clean to the type's zero value. No legal empty literal form
+        # exists for the other scalar types, so they still fall through to the raise below.
+        return _SCALAR_ZERO[ptype]
     if ptype == PT_NAME:
         if expr.op == "stringconst":                     # a name default may be written quoted
             return expr.value
@@ -1306,7 +1419,10 @@ def _extra_dep_crc(env: InstallEnv, dep: str) -> int:
 def _add_import(b: _Build, obj: str) -> str:
     """Ensure `obj` (a class or the Core package) is imported; return its import key (object name).
     A Core class imports with outer=Core; a class in another package pulls in that package import
-    (not into `PackageImports` — see `_build_class_unit`'s `package_imports` comment)."""
+    (not into `PackageImports` — see `_build_class_unit`'s `package_imports` comment). A class with
+    NO exported script body anywhere on the search path (a fully-native class, e.g. UT99's
+    `Engine.NetConnection` — see `env.class_home_from_imports`) falls back to its home package as
+    discovered from another package's own IMPORT table, rather than defaulting to Core."""
     if obj == "Core":
         return obj
     existing = obj if obj in b.imports else next(       # FName is case-insensitive: `texture` (a member
@@ -1314,11 +1430,11 @@ def _add_import(b: _Build, obj: str) -> str:
     if existing is not None:
         return existing
     info = b.env.resolve_class(obj)
-    if info is None or info.package.casefold() == "core":
+    pkg = info.package if info is not None else b.env.import_only_class_package(obj)
+    if pkg is None or pkg.casefold() == "core":
         b.imports[obj] = _ImportSpec(class_package="Core", class_name="Class", outer="Core",
                                      object_name=obj)
         return obj
-    pkg = info.package
     if pkg not in b.imports:
         b.imports[pkg] = _ImportSpec(class_package="Core", class_name="Package", outer=None,
                                      object_name=pkg)
@@ -1358,6 +1474,18 @@ def _struct_location(graph: ClassGraph, struct_name: str):
     return pkg, pkg.name_of_ref(e["outer"]), pkg.names[e["nm"]]
 
 
+def _existing_import_key(b: _Build, ident: str) -> str | None:
+    """The existing `b.imports` key matching `ident` case-insensitively (FName identity), or None.
+    Two SOURCE occurrences of the same inherited field/function/struct member differing only in case
+    (real UT99 `UTServerAdmin`: `GameReplicationInfo.MOTDLine1` vs `.MOTDline1`) must dedupe onto ONE
+    import row — the same rule `_add_import` already applies to a plain class/package name. Without
+    this, two b.imports entries end up representing the "same" identity, and whichever one
+    `_imports_by_display`'s ambiguous-name tie-break keeps can differ from the one a token's own
+    (differently-cased) `resolve_inv` lookup expects, a silent `KeyError` at encode time."""
+    return ident if ident in b.imports else next(
+        (k for k in b.imports if k.casefold() == ident.casefold()), None)
+
+
 def _add_struct_import(b: _Build, graph: ClassGraph, struct_name: str) -> str:
     """Import a struct object (e.g. `Core.Object.Vector`): Class=Struct, Outer=its declaring class.
     Returns the import key (the struct's object name)."""
@@ -1377,28 +1505,52 @@ def _add_struct_member_import(b: _Build, graph: ClassGraph, ident: str, struct_n
     `StructMember` (0x36) bytecode token. Outer = the struct import. Keyed by the qualified
     `smem:<Struct>.<Field>` ident (`lower._struct_member_ident`), never the bare field name — a bare
     key would let `resolve_inv`'s local/param lookup shadow it (a param sharing the field's name, e.g.
-    real UT99 `IpAddr`'s own `Addr` field vs a param also named `Addr`)."""
+    real UT99 `IpAddr`'s own `Addr` field vs a param also named `Addr`). Dedupes case-insensitively
+    (`_existing_import_key`) — two occurrences differing only in case are the SAME struct member."""
+    if _existing_import_key(b, ident) is not None:
+        return
     skey = _add_struct_import(b, graph, struct_name)
     label = graph.struct_member_type(struct_name, field)
     if label is None or label not in _SCALAR_KINDS:
         raise NotImplementedError(f"struct member {struct_name}.{field}: type {label!r} unsupported")
     prop_class = _SCALAR_KINDS[label].prop_class
-    b.imports.setdefault(ident, _ImportSpec(class_package="Core", class_name=prop_class,
-                                            outer=skey, object_name=field))
+    b.imports[ident] = _ImportSpec(class_package="Core", class_name=prop_class,
+                                   outer=skey, object_name=field)
+
+
+def _local_struct_member_map(b: _Build) -> dict[str, str]:
+    """casefold `"<Struct>.<Field>"` -> export key, for every LOCALLY-declared struct's own field
+    properties (`_build_struct`) -- backs a `smem:`-identity `EX_StructMember` token's resolution to a
+    SAME-PACKAGE export instead of an import (mirrors the class-literal/enum-tag same-package
+    fallbacks already in `_sibling_export_ref`/`ClassGraph`). Found compiling the real `Ignore`
+    community mutator: `struct Victim {...}; var Victim Players[32];`, `v.PIDs` where `v` is a local
+    `Victim` -- `_add_struct_member_import`'s `_add_struct_import` only resolves a struct via the
+    disk-backed `ClassGraph` (loaded packages), never a struct declared in the class being compiled
+    right now. See `dev/docs/board/inbox/uscript-local-struct-member-access-untested/`."""
+    out: dict[str, str] = {}
+    for sdef in b.structs.values():
+        for pkey in sdef.member_keys:
+            prop = b.props[pkey]
+            out[f"{sdef.name}.{prop.name}".casefold()] = pkey
+    return out
 
 
 def _register_struct_member_imports(b: _Build, toks, graph: ClassGraph) -> None:
-    """After lowering, create an import for every struct member a `StructMember` token references.
-    `lower.py` tags the token's field identity `smem:<Struct>.<Field>` directly — the owning struct is
-    already known at lowering time (`lower._ex_member` has the base expression's resolved type), so
-    unlike the qualifier-stripped `func:`/`mem:` idents this needs no post-hoc re-derivation from the
-    base sub-expression."""
+    """After lowering, create an import for every struct member a `StructMember` token references —
+    except one whose struct is declared LOCALLY (same-package export instead, resolved at encode time
+    via `_local_struct_member_map`). `lower.py` tags the token's field identity `smem:<Struct>.<Field>`
+    directly — the owning struct is already known at lowering time (`lower._ex_member` has the base
+    expression's resolved type), so unlike the qualifier-stripped `func:`/`mem:` idents this needs no
+    post-hoc re-derivation from the base sub-expression."""
+    local_cf = {s.casefold() for s in b.local_structs}
+
     def walk(t) -> None:
         if t.op == 0x36:
             ident = next((v for k, v in t.parts if k == "obj"), None)
             if ident is not None and ident.startswith("smem:"):
                 struct_name, field = ident[len("smem:"):].rsplit(".", 1)
-                _add_struct_member_import(b, graph, ident, struct_name, field)
+                if struct_name.casefold() not in local_cf:
+                    _add_struct_member_import(b, graph, ident, struct_name, field)
         for kind, val in t.parts:
             if kind == "sub":
                 walk(val)
@@ -1424,7 +1576,7 @@ def _register_final_call_imports(b: _Build, toks) -> None:
     def walk(t) -> None:
         if t.op == EX_FINAL_FUNCTION:
             ident = next((v for k, v in t.parts if k == "obj"), None)
-            if ident is not None and ident.startswith("func:") and ident not in b.imports:
+            if ident is not None and ident.startswith("func:") and _existing_import_key(b, ident) is None:
                 owner_cls, func_name = ident[len("func:"):].rsplit(".", 1)
                 if owner_cls.casefold() not in b.in_pkg_class_names:
                     outer = _add_import(b, owner_cls)
@@ -1468,11 +1620,13 @@ def _register_member_var_imports(b: _Build, toks, graph: ClassGraph) -> None:
     field, resolved as a same-package export) — same shape as `_register_final_call_imports`, but a
     Property import (the field's concrete UProperty subclass, e.g. IntProperty) rather than a
     Function import. When `<Class>` is one of THIS package's own classes, no import is registered —
-    see `_register_final_call_imports`."""
+    see `_register_final_call_imports`. Dedupes case-insensitively (`_existing_import_key`): real UT99
+    `UTServerAdmin` reads `GameReplicationInfo.MOTDLine1` in one place and writes `.MOTDline1` in
+    another — the SAME field, case-insensitive `FName`, one import row."""
     def walk(t) -> None:
         if t.op in (EX_INSTANCE_VARIABLE, EX_DEFAULT_VARIABLE):
             ident = next((v for k, v in t.parts if k == "obj"), None)
-            if ident is not None and ident.startswith("mem:") and ident not in b.imports:
+            if ident is not None and ident.startswith("mem:") and _existing_import_key(b, ident) is None:
                 owner_cls, field = ident[len("mem:"):].rsplit(".", 1)
                 if owner_cls.casefold() not in b.in_pkg_class_names:
                     label = graph.member_type(owner_cls, field)
@@ -1948,6 +2102,7 @@ def _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, i
     func_by_name = {f.name.casefold(): f.key for f in b.funcs.values()}
     import_by_name = {k.casefold(): k for k in b.imports}
     texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
+    local_smember = _local_struct_member_map(b)
 
     def resolver(fn):
         def resolve_inv(kind: str, ident: str) -> int:
@@ -1955,6 +2110,10 @@ def _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, i
                 return name_cf[ident.casefold()]
             if ident.startswith("class:"):                # a cast/class-literal target: see
                 return imp_ref[import_by_name[ident[len("class:"):].casefold()]]  # `_sibling_export_ref`
+            if ident.startswith("smem:"):                 # a LOCAL struct's own field: see
+                key = local_smember.get(ident[len("smem:"):].casefold())  # `_local_struct_member_map`
+                if key is not None:
+                    return exp_ref[key]
             cf = ident.casefold()
             if cf in fn.local_by_name:
                 return exp_ref[fn.local_by_name[cf]]
@@ -1981,7 +2140,8 @@ def _build_function_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, i
                 next_field=next_lookup.get(fkey, 0), children=children,
                 friendly_name=nidx(fn.name), line=fn.line, text_pos=fn.text_pos,
                 script=encode_script(list(fn.toks), resolver(fn)), script_size=fn.script_size,
-                inative=0, oper_precedence=0, function_flags=fn.function_flags))
+                inative=0, oper_precedence=0, function_flags=fn.function_flags,
+                rep_offset=fn.rep_offset))
 
 
 def _build_state_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs) -> None:
@@ -1994,12 +2154,17 @@ def _build_state_exports(b, class_key, next_lookup, nidx, name_cf, exp_ref, imp_
     func_by_name = {f.name.casefold(): f.key for f in b.funcs.values()}
     import_by_name = {k.casefold(): k for k in b.imports}
     texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
+    local_smember = _local_struct_member_map(b)
 
     def resolve_inv(kind: str, ident: str) -> int:
         if kind == "name":
             return name_cf[ident.casefold()]
         if ident.startswith("class:"):                    # a cast/class-literal target: see
             return imp_ref[import_by_name[ident[len("class:"):].casefold()]]  # `_sibling_export_ref`
+        if ident.startswith("smem:"):                      # a LOCAL struct's own field: see
+            key = local_smember.get(ident[len("smem:"):].casefold())  # `_local_struct_member_map`
+            if key is not None:
+                return exp_ref[key]
         cf = ident.casefold()
         if cf in member_by_name:
             return exp_ref[member_by_name[cf]]
@@ -2040,7 +2205,10 @@ def _class_export(b, class_name, super_name, super_crc, crlf_source, class_flags
             dependencies=(Dependency(cls=exp_ref[f"class:{class_name}"], deep=1,
                                      script_text_crc=script_text_crc(crlf_source)),
                           Dependency(cls=imp_ref[super_name], deep=1, script_text_crc=super_crc),
-                          *(Dependency(cls=imp_ref[_add_import(b, dep)], deep=0,
+                          *(Dependency(cls=exp_ref[f"class:{class_name}"], deep=0,
+                                      script_text_crc=script_text_crc(crlf_source))
+                            if dep.casefold() == class_name.casefold() else
+                            Dependency(cls=imp_ref[_add_import(b, dep)], deep=0,
                                       script_text_crc=_extra_dep_crc(b.env, dep))
                             for dep in b.extra_deps)),
             package_imports=(name_index[class_name], name_index["Core"]),
@@ -2050,21 +2218,97 @@ def _class_export(b, class_name, super_name, super_crc, crlf_source, class_flags
 
 
 # ── helpers ───────────────────────────────────────────────────────────────────────────────────────
+def _skip_defaultproperties_block(source: str, start: int) -> int:
+    """Return the index right after the `}` that closes the `defaultproperties {...}` block whose
+    keyword ends at `start`. Mirrors the real lexer's own skipping (`lexer.py` `_skip_line_comment`/
+    `_skip_block_comment`/`_scan_string`/`_scan_name`) over the WHOLE scan -- including locating the
+    opening `{` itself -- so a brace inside a `//`/`/* */` comment, a `"..."` string, or a `'...'`
+    name literal never perturbs the depth count."""
+    n = len(source)
+    i, depth = start, 0
+    while i < n:
+        two = source[i:i + 2]
+        if two == "//":
+            nl = source.find("\n", i)
+            i = n if nl == -1 else nl
+            continue
+        if two == "/*":
+            cdepth, i = 1, i + 2
+            while i < n and cdepth > 0:
+                pair = source[i:i + 2]
+                if pair == "/*":
+                    cdepth += 1; i += 2
+                elif pair == "*/":
+                    cdepth -= 1; i += 2
+                else:
+                    i += 1
+            continue
+        c = source[i]
+        if c == '"':
+            i += 1
+            while i < n and source[i] not in ('"', "\n"):
+                if source[i] == "\\" and i + 1 < n and source[i + 1] != "\n":
+                    i += 2
+                else:
+                    break
+            i += 1
+            continue
+        if c == "'":
+            i += 1
+            while i < n and source[i] not in ("'", "\n"):
+                i += 1
+            i += 1
+            continue
+        if c == "{":
+            depth += 1; i += 1
+            continue
+        if c == "}":
+            depth -= 1; i += 1
+            if depth == 0:
+                return i
+            continue
+        i += 1
+    raise NotImplementedError("unterminated defaultproperties block")
+
+
 def _script_text(source: str) -> str:
-    """The text UCC stores in `ScriptText`: the class source up to (not including) the
-    `defaultproperties` block, which the compiler consumes separately. With NO `defaultproperties`
-    block, UCC's own capture drops any wholly-blank trailing line(s) the source file ends with,
-    keeping exactly the newline that terminates the last real line (measured on `NoGunsMutator`, a
-    hand-authored community mutator with no `defaultproperties` and a trailing blank line — a
-    community source shape no prior fixture, which always had `defaultproperties`, exercised). A
-    source with no trailing newline at all is a different, unmeasured shape and is left untouched
-    rather than guessed at."""
+    """The text UCC stores in `ScriptText`: the class source with the `defaultproperties {...}`
+    block EXCISED (not merely truncated there) — declarations after it (a shape real source puts
+    `defaultproperties` mid-file, before later functions, e.g. the real UT99 mutator
+    `CrouchBlocksDamage`) still compile and their own Line/TextPos are measured against this SAME
+    excised stream, confirmed byte-exact against a live UT99 UCC build: the block (keyword through
+    its matching `}`) plus exactly one immediate trailing line terminator is removed as one unit,
+    everything before and after stays untouched (no line-count "holdover" — text following the
+    block is renumbered as if the block had never been there). With NO `defaultproperties` block,
+    or nothing left after excising the one it has, UCC's own capture always ends with exactly ONE
+    line terminator after the last real line, regardless of how many (including zero) the source
+    file itself ends with — measured on two community shapes: `NoGunsMutator` (a trailing blank
+    line, collapsed to one) and the real UT99 mutator `SeanMutator`'s `HelloMut.uc` (no trailing
+    newline at all, one added)."""
     m = re.search(r"(?im)^[ \t]*defaultproperties\b", source)
     if m:
-        return source[:m.start()]
-    if not re.search(r"(\r\n|\r|\n)\Z", source):
-        return source
-    return re.sub(r"(\r\n|\r|\n)(?:[ \t]*(?:\r\n|\r|\n))*\Z", r"\1", source)
+        close = _skip_defaultproperties_block(source, m.end())
+        tail = close
+        while tail < len(source) and source[tail] in " \t":
+            tail += 1
+        tail = tail + 2 if source[tail:tail + 2] == "\r\n" \
+            else tail + 1 if source[tail:tail + 1] in ("\n", "\r") else close
+        before, after = source[:m.start()], source[tail:]
+        if after.strip() == "":
+            return before   # defaultproperties was the last real content -- `before` needs no
+                            # further normalisation, it already ends at a real source line's newline
+        source = after     # real declarations follow -- normalise only THIS tail's own trailing
+                            # blank line(s)/EOF the same way the no-block branch below does, then
+                            # reattach `before` untouched (the seam itself is never collapsed)
+    else:
+        before = ""
+    lines = source.splitlines()
+    while lines and lines[-1].strip() == "":
+        lines.pop()
+    if not lines:
+        return source   # no real content -- pathological, leave untouched rather than guess (only
+                        # reachable via the no-defaultproperties path -- `before` is always "" there)
+    return before + "\n".join(lines) + "\n"
 
 
 def _to_crlf(text: str) -> str:
@@ -2133,19 +2377,30 @@ def _prepass_signatures(decls: dict[str, tuple[ClassDecl, str]], disk_graph: Cla
         decl, _src = decls[by_cf[cf]]
         members: dict[str, str] = {}
         member_owner: dict[str, str] = {}
+        member_meta: dict[str, str] = {}
+        member_array_dim: dict[str, int] = {}
         functions: dict[str, FuncBody] = {}
         if decl.super_name:
             sup = sig_of(decl.super_name)
             if sup is not None:
                 members.update(sup.members)
                 member_owner.update(sup.member_owner)
+                member_meta.update(sup.member_meta)
+                member_array_dim.update(sup.member_array_dim)
                 functions.update(sup.functions)
         enames = enum_type_names(decl.members)
+        snames = struct_type_names(decl.members)
         for n, label in members_of(decl.members, disk_graph).items():
             ncf = n.casefold()
             members[ncf] = label
             member_owner[ncf] = decl.name
-        for f in local_funcs_of(decl.functions, disk_graph, enames):
+        member_meta.update({n.casefold(): m for n, m in members_meta_of(decl.members).items()})
+        for m in decl.members:
+            if isinstance(m, VarDecl):
+                dim = _dim_value(m.array_dim)
+                for n in m.names:
+                    member_array_dim[n.casefold()] = dim
+        for f in local_funcs_of(decl.functions, disk_graph, enames, snames):
             functions[f.name.casefold()] = FuncBody(
                 name=f.name, package="", class_name=decl.name, script_size=0, tokens=(),
                 inative=f.native_index or 0, precedence=0,
@@ -2154,7 +2409,8 @@ def _prepass_signatures(decls: dict[str, tuple[ClassDecl, str]], disk_graph: Cla
         enums = {tag.casefold(): ordinal for m in decl.members if isinstance(m, EnumDecl)
                 for ordinal, tag in enumerate(m.values)}
         sig = ClassSig(name=decl.name, package="", super_name=decl.super_name,
-                       members=members, member_owner=member_owner, functions=functions, enums=enums)
+                       members=members, member_owner=member_owner, functions=functions, enums=enums,
+                       member_meta=member_meta, member_array_dim=member_array_dim)
         sigs[cf] = sig
         building.discard(cf)
         return sig
@@ -2230,7 +2486,8 @@ def compile_package_dir(classes: dict[str, str], env: InstallEnv, *,
     graph = _PkgSigGraph(base_paths, pkg_sigs)
 
     b = _Build(class_name="", env=env,
-               in_pkg_class_names={name.casefold(): name for name in decls})
+               in_pkg_class_names={name.casefold(): name for name in decls},
+               in_pkg_decls={name.casefold(): decl for name, (decl, _src) in decls.items()})
     units: list[_ClassUnit] = []
     # Pass 2 (lowering): each class's bytecode body, in turn. `graph` already sees every class's
     # signature (pass 1), so a class may reference a sibling compiled EARLIER OR LATER in `order`.
@@ -2355,8 +2612,18 @@ def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[s
     discovered class's own `package_imports` (its complete transitive super-chain package set, e.g.
     `UTTeleportEffect`'s is `(Botpack, UnrealShare, Engine, Core)` — its super `PawnTeleportEffect`
     lives in UnrealShare, not Botpack) are added too, not just its own home package — one level of
-    package discovery isn't enough for a transitive super chain crossing a third package."""
+    package discovery isn't enough for a transitive super chain crossing a third package.
+
+    A class reached only through such a discovery may itself declare a MEMBER whose type lives in a
+    further, still-undiscovered package — no declared type or cast anywhere in the compiling source's
+    own text names it (found compiling the real `PubliciseScore` community mutator:
+    `TournamentGameReplicationInfo(Level.Game.GameReplicationInfo).Teams[0].Score` — `Teams`'s element
+    type, `TeamInfo`, lives in `UnrealShare`, a package `PubliciseScore` itself never mentions).
+    `frontier` below drives a fixed-point walk of every newly-discovered class's own member types,
+    against a throwaway `ClassGraph` spanning the WHOLE search path (discovery only — this graph never
+    backs the final catalog/lowering, only decides which extra packages belong in it)."""
     out: list[str] = []
+    frontier: list[str] = []
 
     def add(name: str | None) -> None:
         if name is None or name.casefold() in in_pkg_cf or name.casefold() in _SCALAR_KINDS \
@@ -2368,6 +2635,7 @@ def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[s
         for pkg in info.package_imports:
             if pkg.casefold() not in ("core", "engine") and pkg not in out:
                 out.append(pkg)
+        frontier.append(name)
 
     def add_type(tr) -> None:
         if tr is None:
@@ -2375,6 +2643,39 @@ def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[s
         add(tr.base)
         add_type(tr.inner)
         add(tr.meta_class)
+
+    def add_expr_class_lits(e) -> None:
+        """A CLASS LITERAL (`class'X'`), metaclass cast (`class<X>(...)`), or plain CAST CALL
+        (`SomeClass(expr)`) inside a function/state BODY, not just a declared var/param/local/return
+        TYPE — needed because such an expression names its own package without any declaration
+        anywhere naming it (found compiling the real `UTServerAdmin`: `class'UdpServerUplink'.
+        default.DoUplink`, `UdpServerUplink` living in `IpServer`, a package no declared type in
+        `UTServerAdmin` itself ever names; and the real `RocketArenaMutator`:
+        `TeamGamePlus(Level.Game).FriendlyFireScale`, `TeamGamePlus` never appearing as a declared
+        type anywhere in the class). The bare-name-call branch is safe against ordinary function
+        calls (`Rand(100)`) — `add()` no-ops unless the name actually resolves to a real class."""
+        if e.op == "objref" and e.text.casefold() == "class" and e.value:
+            add(str(e.value).rsplit(".", 1)[-1])
+        elif e.op == "call" and e.children and e.children[0].op == "name":
+            callee = e.children[0].text
+            if callee.casefold().startswith("class<"):
+                meta = callee[len("class<"):-1].strip()
+                if meta:
+                    add(meta.rsplit(".", 1)[-1])
+            else:
+                add(callee)
+        for c in e.children:
+            add_expr_class_lits(c)
+
+    def add_stmt_class_lits(stmts) -> None:
+        for s in stmts:
+            for e in s.exprs:
+                add_expr_class_lits(e)
+            for cond, body in s.clauses:
+                if cond is not None:
+                    add_expr_class_lits(cond)
+                add_stmt_class_lits(body)
+            add_stmt_class_lits(s.body)
 
     for decl, _src in decls.values():
         add(decl.super_name)
@@ -2391,6 +2692,26 @@ def _extra_super_packages(decls, env: InstallEnv, in_pkg_cf: set[str]) -> list[s
                 add_type(p.type)
             for lv in f.locals:
                 add_type(lv.type)
+            add_stmt_class_lits(f.body)
+        for s in decl.states:
+            add_stmt_class_lits(s.body)
+
+    # Transitive member-type discovery (see docstring) — fixed-point over `frontier`.
+    full_graph = ClassGraph(env._package_paths())
+    examined: set[str] = set()
+    while frontier:
+        name = frontier.pop()
+        cf = name.casefold()
+        if cf in examined:
+            continue
+        examined.add(cf)
+        sig = full_graph.class_sig(name)
+        if sig is None:
+            continue
+        for t in sig.members.values():
+            add(class_of(t))
+        for meta in sig.member_meta.values():
+            add(meta)
     return out
 
 
@@ -2411,6 +2732,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
         super_class_flags = super_unit.class_flags
         super_pkg_imports = super_unit.package_imports
         super_probe_mask = super_unit.probe_mask
+        super_config_name = super_unit.config_name
     else:
         info = env.resolve_class(super_name)
         if info is None:
@@ -2419,6 +2741,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
         super_class_flags = info.class_flags
         super_pkg_imports = info.package_imports
         super_probe_mask = info.probe_mask
+        super_config_name = info.config_name
 
     b.prefix = f"{class_name}::"
     b.class_name = class_name
@@ -2433,7 +2756,7 @@ def _build_class_unit(b: _Build, decl: ClassDecl, src: str, env: InstallEnv, in_
     b.catalog_override = catalog
 
     crlf_source = _to_crlf(_script_text(src))
-    class_flags, config_name, within_key = _class_header(decl, env)
+    class_flags, config_name, within_key = _class_header(decl, env, super_config_name)
     b.emit_zero_defaults = _auto_emit_defaults(
         decl, class_flags | (super_class_flags & _CLASS_INHERIT_MASK), substrate=env.substrate)
 
@@ -2776,18 +3099,23 @@ def _sibling_export_ref(b: _Build, ident: str, members_by_class: dict[str, dict[
 
 def _resolve_class_ident(b: _Build, ident: str, members_by_class: dict[str, dict[str, str]],
                          funcs_by_class: dict[str, dict[str, str]], exp_ref: dict[str, int],
-                         imp_ref: dict[str, int]) -> int | None:
+                         imp_ref: dict[str, int], import_by_name: dict[str, str]) -> int | None:
     """A `class:<Name>` obj ident (a cast/`class<T>()`/`class'X'` target — see `_sibling_export_ref`'s
     docstring for why it's prefixed) resolves BEFORE any local/member/func lookup: a same-package class
     via `_sibling_export_ref`, else an import (pre-registered by `_register_cast_class_imports`, since
     an import discovered this late would miss the already-frozen import table). Returns None for any
-    OTHER ident, so the caller continues its normal local/member/func/import resolution."""
+    OTHER ident, so the caller continues its normal local/member/func/import resolution. The import
+    lookup is CASEFOLD (`import_by_name`, keyed like every other resolver's), matching `_add_import`'s
+    own case-insensitive dedup -- a metaclass cast can spell the target in source casing that differs
+    from the class's canonical import spelling (`class<mutator>(...)` for `Engine.Mutator`, live
+    UT99-probed via `RandomMutators`; the single-class resolvers already casefolded this same lookup,
+    only this multi-class one didn't)."""
     if not ident.startswith("class:"):
         return None
     sib = _sibling_export_ref(b, ident, members_by_class, funcs_by_class, exp_ref)
     if sib is not None:
         return sib
-    return imp_ref[ident[len("class:"):]]
+    return imp_ref[import_by_name[ident[len("class:"):].casefold()]]
 
 
 def _register_cast_class_imports(b: _Build, toks) -> None:
@@ -2829,6 +3157,7 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
     # `#exec TEXTURE IMPORT` objects are top-level package objects (Outer=0), not class members --
     # a `Texture'Pkg.Name'` literal in ANY class of this package can reach one built by another.
     texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
+    local_smember = _local_struct_member_map(b)
 
     def resolver(fn: _Func):
         own_members = members_by_class.get(fn.class_key, {})
@@ -2837,9 +3166,14 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
         def resolve_inv(kind: str, ident: str) -> int:
             if kind == "name":
                 return name_cf[ident.casefold()]
-            cls_ref = _resolve_class_ident(b, ident, members_by_class, funcs_by_class, exp_ref, imp_ref)
+            cls_ref = _resolve_class_ident(b, ident, members_by_class, funcs_by_class, exp_ref, imp_ref,
+                                          import_by_name)
             if cls_ref is not None:
                 return cls_ref
+            if ident.startswith("smem:"):                 # a LOCAL struct's own field: see
+                key = local_smember.get(ident[len("smem:"):].casefold())  # `_local_struct_member_map`
+                if key is not None:
+                    return exp_ref[key]
             cf = ident.casefold()
             if cf in fn.local_by_name:
                 return exp_ref[fn.local_by_name[cf]]
@@ -2871,7 +3205,8 @@ def _multi_function_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_
                 next_field=next_lookup.get(fkey, 0), children=children,
                 friendly_name=nidx(fn.name), line=fn.line, text_pos=fn.text_pos,
                 script=encode_script(list(fn.toks), resolver(fn)), script_size=fn.script_size,
-                inative=0, oper_precedence=0, function_flags=fn.function_flags))
+                inative=0, oper_precedence=0, function_flags=fn.function_flags,
+                rep_offset=fn.rep_offset))
 
 
 def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref, recs) -> None:
@@ -2887,6 +3222,7 @@ def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref
         funcs_by_class.setdefault(f.class_key, {})[f.name.casefold()] = f.key
     import_by_name = {k.casefold(): k for k in b.imports}
     texture_by_name = {t.name.casefold(): t.key for t in b.textures.values()}
+    local_smember = _local_struct_member_map(b)
 
     def resolver(st: _State):
         own_members = members_by_class.get(st.class_key, {})
@@ -2895,9 +3231,14 @@ def _multi_state_exports(b: _Build, next_lookup, nidx, name_cf, exp_ref, imp_ref
         def resolve_inv(kind: str, ident: str) -> int:
             if kind == "name":
                 return name_cf[ident.casefold()]
-            cls_ref = _resolve_class_ident(b, ident, members_by_class, funcs_by_class, exp_ref, imp_ref)
+            cls_ref = _resolve_class_ident(b, ident, members_by_class, funcs_by_class, exp_ref, imp_ref,
+                                          import_by_name)
             if cls_ref is not None:
                 return cls_ref
+            if ident.startswith("smem:"):                 # a LOCAL struct's own field: see
+                key = local_smember.get(ident[len("smem:"):].casefold())  # `_local_struct_member_map`
+                if key is not None:
+                    return exp_ref[key]
             cf = ident.casefold()
             if cf in own_members:
                 return exp_ref[own_members[cf]]

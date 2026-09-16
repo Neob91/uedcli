@@ -63,19 +63,26 @@ def test_reimporting_the_same_map_is_a_true_no_op(tmp_project):
     assert before_mtimes == after_mtimes, "an unchanged reimport must touch NO file on disk"
 
 
-def test_reimporting_a_different_map_with_the_same_actor_names_is_also_a_no_op(tmp_project):
-    """paste.dx/import.dx/importadd.dx decode to byte-identical content actors (differing only in
-    the editor scratch objects, which are dropped) — so this is still a real no-op, exercised
-    through a genuinely different source file."""
+def test_reimporting_via_bare_map_import_correctly_drops_the_actor_at_position_1(tmp_project):
+    """`paste.dx` (EDIT PASTE) seeds a level with a real separate builder brush ahead of its
+    content, so `ProbeRoom` survives at a position past `Actors[1]`. `import.dx`/`importadd.dx`
+    (bare `MAP IMPORT`/`MAP IMPORTADD FILE=`, no prepended builder) have NO separate builder brush
+    — `ProbeRoom` itself sits at `Actors[1]` there, matching real UED22's own
+    `ULevel::Brush() == Actors[1]` rule (dev/docs/spikes/2026-09-15-builder-brush-is-actors1-not-a-
+    content-heuristic/). This is genuinely NOT a no-op: reimporting via `import.dx` correctly drops
+    `ProbeRoom`, the same way a real MAP REBUILD would silently exclude it from CSG. The existing
+    reimport blast-radius guard (1/3 = 33%, over the 20% threshold) catches this and refuses without
+    `--force` — exactly the safety net this kind of surprising, position-dependent drop needs."""
     _seed(tmp_project, fixture="paste.dx")
-    level_dir = tmp_project / "maps" / "m03-study"
-    before_mtimes = {p: p.stat().st_mtime_ns for p in level_dir.rglob("*") if p.is_file()}
 
     rc = _reimport(_FIXTURES / "import.dx", "level/m03-study", project=tmp_project)
+    assert rc == 2   # guard refuses: 1/3 actors deleted is over the 20% blast-radius threshold
 
+    rc = _reimport(_FIXTURES / "import.dx", "level/m03-study", project=tmp_project, force=True)
     assert rc == 0
-    after_mtimes = {p: p.stat().st_mtime_ns for p in level_dir.rglob("*") if p.is_file()}
-    assert before_mtimes == after_mtimes
+    level_dir = tmp_project / "maps" / "m03-study"
+    level, _ranks = trunk.read_level(level_dir)
+    assert set(level.actors) == {"LevelInfo0", "ProbePillar"}   # ProbeRoom dropped, at Actors[1]
 
 
 def test_reimport_prints_actor_names_to_stdout_and_summary_to_stderr(capsys, tmp_project):

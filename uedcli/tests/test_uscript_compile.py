@@ -153,12 +153,40 @@ def test_export_order_matches_golden_without_override():
         assert got == [name for name, _outer in golden_exports], f"{class_name}: {got}"
 
 
+def test_self_typed_dependency_single_class_compile():
+    """A single-class compile (`compile_package`, not `compile_package_dir`) with a Context/class-
+    literal dependency on the class's OWN type must not crash: `_class_export`'s `extra_deps` loop
+    used to feed a self-reference through `_add_import`/`_extra_dep_crc` (`env.resolve_class` on a
+    class with no on-disk export yet, since it's the one being compiled) -- an `AttributeError` on
+    `None.self_crc`. Only the multi-class path (`_multi_class_export`'s `units_by_name` sibling
+    lookup) had the guard; `_class_export` needs the same one for a self-reference."""
+    src = "class Foo expands Object;\n\nfunction class<Foo> G()\n{\n    return class'Foo';\n}\n"
+    out = serialize(compile_package(src, _env()))
+    assert out[:4] == b"\xc1\x83\x2a\x9e"   # a valid UE1 package, no exception
+
+
 def test_script_text_no_defaultproperties():
-    """With no `defaultproperties` block, `_script_text` drops trailing wholly-blank line(s)
-    (measured on `NoGunsMutator`, `test_uscript_ut99.py`) but leaves a source with no trailing
-    newline at all untouched — that shape is unmeasured, not guessed at."""
+    """With no `defaultproperties` block, `_script_text` always ends with exactly ONE line
+    terminator after the last real line: it drops extra trailing wholly-blank line(s) (measured on
+    `NoGunsMutator`, `test_uscript_ut99.py`) and ADDS one when the source has no trailing newline
+    at all (measured on the real UT99 mutator `SeanMutator`'s `HelloMut.uc`, which ends `}` with no
+    newline whatsoever)."""
     body = "class Foo expands Object;\n\nfunction F() {\n}"
     assert _script_text(body + "\n") == body + "\n"                # single trailing newline: no-op
     assert _script_text(body + "\n\n") == body + "\n"               # one trailing blank line: dropped
     assert _script_text(body + "\n\n   \n") == body + "\n"          # blank line w/ trailing spaces
-    assert _script_text(body + "\n\n   ") == body + "\n\n   "       # no final newline: untouched
+    assert _script_text(body) == body + "\n"                        # no trailing newline: one added
+    assert _script_text(body + "\n\n   ") == body + "\n"            # blank line, no final newline
+
+
+def test_script_text_excises_defaultproperties_mid_file():
+    """`defaultproperties` before other declarations (`CrouchBlocksDamage`, `test_uscript_ut99.py`)
+    is EXCISED as a unit, not truncated there -- a brace inside a `//` comment, a `'...'` name
+    literal, or trailing whitespace before the seam's own newline must not perturb where the block's
+    real end is found."""
+    head = "class Foo expands Object;\n"
+    tail = "function F() {}\n"
+    assert _script_text(f"{head}defaultproperties // use {{ for structs\n{{\n Foo=1\n}}\n{tail}") \
+        == head + tail                                              # brace inside a line comment
+    assert _script_text(f"{head}defaultproperties\n{{\n Tag='Room}}A'\n}}\n{tail}") == head + tail
+    assert _script_text(f"{head}defaultproperties\n{{\n}}   \n{tail}") == head + tail   # trailing ws

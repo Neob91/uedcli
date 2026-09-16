@@ -156,10 +156,20 @@ def normalize_actor(a: Actor) -> None:
 
 
 def is_builder_brush(a: Actor) -> bool:
-    """The red builder brush is a transient editing tool, not level content. Identify it by
-    `Class=Brush` AND the reserved UNNUMBERED inner model name `Brush` (content brushes use
-    `Model<N>`) AND no explicit `CsgOper` (its op is CSG_Active, which UnrealEd writes by
-    OMISSION while every world brush carries an explicit CSG_Add/CSG_Subtract).
+    """CONTENT-based builder-brush guess, for callers with no reliable Actors[] position to check
+    against (an ad-hoc/subset actor list, or a hand-authored/external T3D snippet with no
+    LevelInfo to anchor a position on — `stash.py`/`brush/edit.py`/`actor/edit.py`/
+    `preview_native.solve_world_surfaces`). Identify it by `Class=Brush` AND the reserved
+    UNNUMBERED inner model name `Brush` (content brushes use `Model<N>`) AND no explicit
+    `CsgOper` (its op is CSG_Active, which UnrealEd writes by OMISSION while every world brush
+    carries an explicit CSG_Add/CSG_Subtract).
+
+    For a FULL level decode (a fresh, unstripped `Actors[]` order — `mapimport.import_map` and its
+    downstream `normalize_level`/`level_order`), use `is_builder_brush_position` instead: per
+    `dev/docs/spikes/2026-09-15-builder-brush-is-actors1-not-a-content-heuristic/spike.md`,
+    UnrealEd itself identifies the builder brush purely by ARRAY POSITION (`ULevel::Brush()` is
+    `Actors(1)`, no content inspection at all), and this content guess is proven to MISS a real
+    stray builder brush whose inner model is plainly named `Model` (every real trunk surveyed).
 
     Task 4a (spike, 2026-06-18) corrected the plan's `Name == "Brush0"` rule: a fresh editor
     numbers the builder brush `Brush1+`, so the exact name is NOT a constant — keying on it
@@ -176,9 +186,28 @@ def is_builder_brush(a: Actor) -> bool:
     return a.brush.model_name == BUILDER_BRUSH_MODEL_NAME
 
 
+def is_builder_brush_position(order: list[str], name: str) -> bool:
+    """The GROUND-TRUTH builder-brush test for a FULL, freshly-decoded level: `name` is the
+    builder brush iff it sits at `order[1]` — immediately after the `LevelInfo` singleton at
+    `order[0]` — matching the engine's own `ULevel::Brush()`, which is literally
+    `(ABrush*)Actors(1)`, no content/class/CsgOper inspection whatsoever
+    (`dev/docs/spikes/2026-09-15-builder-brush-is-actors1-not-a-content-heuristic/spike.md`).
+
+    `order` MUST be the real ingest-time `Actors[]` order of an UNSTRIPPED decode (e.g.
+    `mapimport.import_map`'s order, or a level parsed straight from a compiled map/offline export,
+    before any builder-brush removal) — never a trunk's post-strip/re-ranked order, where position
+    1 is simply whatever real content actor now sits there once the actual builder brush is gone."""
+    return len(order) > 1 and order[1] == name
+
+
 def normalize_level(level: Level) -> None:
-    """Drop the transient builder brush, strip computed props, impose stable actor ordering."""
-    level.actors = {n: a for n, a in level.actors.items() if not is_builder_brush(a)}
+    """Drop the transient builder brush (by ARRAY POSITION — `is_builder_brush_position`), strip
+    computed props, impose stable actor ordering. Only valid on a level whose CURRENT actor-dict
+    insertion order is still the real, unstripped ingest-time order (a fresh decode) — see
+    `is_builder_brush_position`."""
+    order = list(level.actors)
+    level.actors = {n: a for n, a in level.actors.items()
+                    if not is_builder_brush_position(order, n)}
     for a in level.actors.values():
         normalize_actor(a)
     # Stable ordering: actors sorted by Name.
@@ -187,11 +216,14 @@ def normalize_level(level: Level) -> None:
 
 def level_order(level: Level) -> list[str]:
     """ALL actor Names in full export order (insertion order of level.actors), EXCLUDING the
-    builder brush (via is_builder_brush — the SAME predicate normalize_level strips by, so the
-    order set always equals the normalized content set; closes C-1 without name-only fragility).
-    Every other actor is ordered (C2) — the brush subsequence is CSG precedence; non-brush order
-    is preserved for determinism/stability. MUST be called BEFORE normalize_level re-sorts."""
-    return [name for name, a in level.actors.items() if not is_builder_brush(a)]
+    builder brush (via `is_builder_brush_position` — the SAME predicate `normalize_level` strips
+    by, so the order set always equals the normalized content set; closes C-1). Every other actor
+    is ordered (C2) — the brush subsequence is CSG precedence; non-brush order is preserved for
+    determinism/stability. MUST be called BEFORE `normalize_level` re-sorts, and only on a level
+    whose current actor-dict order is still the real, unstripped ingest-time order — see
+    `is_builder_brush_position`."""
+    order = list(level.actors)
+    return [name for name in order if not is_builder_brush_position(order, name)]
 
 
 # The engine Actors[0] singleton class (short name). NOT `DeusExLevelInfo`: that is a subclass
