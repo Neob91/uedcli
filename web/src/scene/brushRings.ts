@@ -7,10 +7,16 @@
 // requirement (spec §2): every brush actor's own rings, in its own colour, with the selected one(s)
 // bold.
 import type { SceneActor } from '../api'
+import { resolveWireColor, scaleColor } from './selectionColor'
 
 export interface BrushRing {
   actorName: string
   color: [number, number, number]
+  // The server's own CSG classification (`preview.py`'s `_CSG_PALETTE` keys: add/subtract/
+  // semisolid/nonsolid/mover) -- carried alongside `color` (the server's tuned palette value, kept
+  // verbatim here so this stays a passthrough) so a consumer can resolve the FAITHFUL UED22
+  // WireColor via `selectionColor.ts`'s `resolveWireColor` without a second actor lookup.
+  csgClass: string
   verts: number[]
   bold: boolean
 }
@@ -33,7 +39,7 @@ export function buildBrushRings(actors: SceneActor[], selectedNames: ReadonlySet
     const isSelected = selectedNames.has(actor.name)
     if (mode === 'selected-only' && !isSelected && !actor.is_mover) continue
     for (const verts of actor.brush.polys) {
-      rings.push({ actorName: actor.name, color: actor.brush.color, verts, bold: isSelected })
+      rings.push({ actorName: actor.name, color: actor.brush.color, csgClass: actor.brush.csg_class, verts, bold: isSelected })
     }
   }
   return rings
@@ -64,7 +70,14 @@ export function mergeThinRings(rings: BrushRing[]): MergedWireframe {
   let seg = 0
   for (const ring of rings) {
     const n = ring.verts.length / 3
-    const [r, g, b] = [ring.color[0] / 255, ring.color[1] / 255, ring.color[2] / 255]
+    // Thin rings are always the UNSELECTED appearance -- even for a currently-selected actor's
+    // ring, which is included here too (perf: BrushOutlines.tsx's `'csg-all'` merge intentionally
+    // doesn't depend on `selectedNames`) but gets fully covered by its own undimmed `BoldRing` drawn
+    // on top, so dimming it here is harmless. Real UED22: `DrawColor = WireColor * 0.5` when NOT
+    // selected (`selectionColor.ts`'s doc comment; `UnEdRend.cpp`'s `DrawLevelBrush`).
+    const faithful = resolveWireColor(ring.csgClass, ring.color)
+    const dimmed = scaleColor(faithful, 0.5)
+    const [r, g, b] = [dimmed[0] / 255, dimmed[1] / 255, dimmed[2] / 255]
     for (let i = 0; i < n; i++) {
       const j = (i + 1) % n
       positions[offset] = ring.verts[i * 3]

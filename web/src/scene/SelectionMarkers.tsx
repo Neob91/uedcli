@@ -13,7 +13,7 @@ import * as THREE from 'three'
 import type { SceneActor } from '../api'
 import { worldUnitsPerPixelAt } from './markers'
 import { primarySelection } from './selectionSet'
-import { brightenWireColor } from './selectionColor'
+import { resolveWireColor, scaleColor, toThreeColor } from './selectionColor'
 
 // Matches `preview.py`'s `_PIVOT_RED`.
 const PIVOT_RED = new THREE.Color(255 / 255, 63 / 255, 63 / 255)
@@ -116,7 +116,10 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
   return (
     <group>
       {selectedBrushes.map((actor) => {
-        const color = brightenWireColor(actor.brush.color)
+        // Real UED22: a brush's vertex-handle dots are `VertexColor = WireColor * 1.2`
+        // (`UnEdRend.cpp`'s `DrawLevelBrush`, `selectionColor.ts`'s doc comment) -- always this,
+        // regardless of selection (vertex dots only ever draw on a selected brush here anyway).
+        const color = toThreeColor(scaleColor(resolveWireColor(actor.brush.csg_class, actor.brush.color), 1.2))
         const verts: [number, number, number][] = []
         for (const poly of actor.brush.polys) {
           for (let i = 0; i + 2 < poly.length; i += 3) {

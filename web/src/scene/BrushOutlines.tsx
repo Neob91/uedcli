@@ -1,7 +1,8 @@
 // CSG-colored brush wireframe rings (quad-layout Part 2): the shared rendering piece both the
 // perspective and ortho panes draw from buildBrushRings' pure logic. Every ring is a 1px
 // LineBasicMaterial/LineLoop; the SELECTED brush's ring is the same 1px line but in the brush's
-// BRIGHTENED CSG hue, drawn depthTest-off + high-renderOrder so it shows over the solid mesh and
+// plain, undimmed WireColor (UNselected rings are the ones dimmed, not this one brightened -- real
+// UED22's actual mechanism, `selectionColor.ts`), drawn depthTest-off + high-renderOrder so it shows over the solid mesh and
 // through walls (see BoldRing). WebGL ignores LineBasicMaterial.linewidth > 1px, so a wider
 // "bold" line is not attempted here -- the Line2/LineMaterial pixel-width path that used to try it
 // rendered nothing at all (silent no-op, confirmed live 2026-09-16); selection reads via the
@@ -13,7 +14,7 @@ import * as THREE from 'three'
 import type { SceneActor } from '../api'
 import type { BrushRing, BrushRingMode } from './brushRings'
 import { buildBrushRings, mergeThinRings } from './brushRings'
-import { brightenWireColor } from './selectionColor'
+import { resolveWireColor, toThreeColor } from './selectionColor'
 
 // The selected brush's ring draws above everything (markers are at 10) so it shows in solid shading
 // modes and through walls -- see BoldRing.
@@ -45,7 +46,7 @@ function MergedThinWireframe({ rings }: { rings: BrushRing[] }) {
  * thin rings use -- the `Line2`/`LineMaterial` pixel-width path that used to live here rendered
  * NOTHING (a long-suspected silent no-op, confirmed live 2026-09-16: forcing its colour to pure
  * white left the selected ring unchanged, because only the thin merged ring was ever drawing). It's
- * drawn in the brush's BRIGHTENED CSG hue (`brightenWireColor`), with `depthTest={false}` and a high
+ * drawn in the brush's plain, undimmed CSG `WireColor` (`resolveWireColor`), with `depthTest={false}` and a high
  * `renderOrder` so it draws OVER the solid mesh and through walls -- a selected brush must always
  * show its outline, brighter, in every pane and shading mode (owner ruling). `<lineLoop>` auto-closes
  * the ring. `userData.actorName` lets the viewport raycast resolve a hit back to this actor. */
@@ -109,9 +110,11 @@ export function BrushOutlines({ actors, selectedNames, mode, groupRef }: BrushOu
     <group ref={groupRef}>
       <MergedThinWireframe rings={thinRings} />
       {boldRings.map((ring, i) => {
-        // A selected brush's ring is drawn in its own CSG hue, BRIGHTENED (UED22's WireColor*1.2) --
-        // so selection is a visible colour change, not just a thicker line (owner ruling).
-        const color = brightenWireColor(ring.color)
+        // A selected brush's ring shows its plain, undimmed WireColor -- real UED22 doesn't brighten
+        // on select at all (`DrawColor = WireColor * 1.0` when selected, `* 0.5` when not,
+        // `selectionColor.ts`'s doc comment); the visible change is the UNSELECTED thin rings being
+        // dimmed instead (`mergeThinRings`), not this one getting brighter.
+        const color = toThreeColor(resolveWireColor(ring.csgClass, ring.color))
         return <BoldRing key={`${ring.actorName}-${i}`} verts={ring.verts} color={color} actorName={ring.actorName} />
       })}
     </group>

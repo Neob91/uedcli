@@ -1,17 +1,48 @@
 import * as THREE from 'three'
 
-// A selected brush's outline ring (BrushOutlines) and its vertex-handle dots (SelectionMarkers) are
-// drawn in a clearly BRIGHTER version of the brush's own CSG hue, so a selected brush visibly pops in
-// every pane and mode (owner ruling: it must be obviously brighter). A plain `WireColor * 1.2`
-// multiply (UED22's `_brighten`, preview.py) barely moves a saturated CSG colour -- a blue `add`
-// brush (70,110,255) has a channel already maxed, so multiplying does almost nothing. Instead lift
-// each channel a fixed fraction of the way to white: that brightens EVERY hue, saturated or not,
-// while keeping it recognisably the CSG colour.
-export const SELECTION_WHITE_LIFT = 0.45
+// Real UED22 brush-wireframe selection mechanism (GUI-PARITY.md "Brush wireframe selection color",
+// `UnEdRend.cpp`'s `DrawLevelBrush`, source-confirmed 2026-09-16 -- owner report "brush colors seem
+// off, at least on highlight" traced this codebase's PREVIOUS `brightenWireColor` (lift 45% toward
+// white on select) to a double error: (1) it conflated two DIFFERENT real formulas --
+// `DrawColor = WireColor * (selected ? 1.0 : 0.5)` for the brush wire itself, `VertexColor =
+// WireColor * 1.2` for the vertex-handle dots ONLY -- into one function applied to both; (2) UED22
+// doesn't brighten on select at all, it DIMS when NOT selected. Direction was backwards.
+//
+// `WireColor` itself is chosen per brush CSG kind -- these are UED22's real `Default.ini` values
+// (`Engine/Config/Default.ini`, v200 shipped defaults; not yet confirmed against this project's
+// actual DeusEx-customized `Editor.dll`/its own `.ini`, same gap noted throughout GUI-PARITY.md),
+// not this codebase's previous `preview.py`-derived, dark-bg-tuned palette. Scoped to the web GUI
+// only (owner ruling 2026-09-16) -- `preview.py`'s own `_CSG_PALETTE` (actor diagram/level
+// photo/eval screenshots) is untouched.
+export const CSG_WIRE_COLOR: Record<string, [number, number, number]> = {
+  add: [127, 127, 255],
+  subtract: [255, 192, 63],
+  semisolid: [127, 255, 0],
+  nonsolid: [63, 192, 32],
+  mover: [255, 0, 255],
+}
 
-export function brightenWireColor(rgb: [number, number, number], lift = SELECTION_WHITE_LIFT): THREE.Color {
-  const toward = (c: number) => (c / 255) + (1 - c / 255) * lift
-  return new THREE.Color(toward(rgb[0]), toward(rgb[1]), toward(rgb[2]))
+/** The real `WireColor` for a brush's CSG kind, or `fallback` (the server's own color, currently
+ * `preview.py`'s tuned palette) for a `csgClass` not in the faithful table above -- e.g. intersect/
+ * deintersect, which this codebase doesn't yet distinguish from `add` server-side (a separate,
+ * already-tracked gap, `gui-csg-brush-coloring-never-distinguishes`; not silently guessed here). */
+export function resolveWireColor(csgClass: string, fallback: [number, number, number]): [number, number, number] {
+  return CSG_WIRE_COLOR[csgClass] ?? fallback
+}
+
+/** A plain per-channel multiply, clamped to a byte -- `DrawColor`'s 0.5 (unselected-brush dim) and
+ * `VertexColor`'s 1.2 (vertex-handle dots, always brightened regardless of selection) both reduce to
+ * this same real UED22 operation, just a different factor. */
+export function scaleColor(rgb: [number, number, number], factor: number): [number, number, number] {
+  return [
+    Math.min(255, Math.round(rgb[0] * factor)),
+    Math.min(255, Math.round(rgb[1] * factor)),
+    Math.min(255, Math.round(rgb[2] * factor)),
+  ]
+}
+
+export function toThreeColor(rgb: [number, number, number]): THREE.Color {
+  return new THREE.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255)
 }
 
 // UED22's own selected-actor colors for sprites/meshes (GUI-PARITY.md "Selection highlight
