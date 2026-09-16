@@ -72,7 +72,15 @@ const ATLAS: AtlasPayload = { width: 1, height: 1, manifest: {}, png_base64: '' 
  * QuadLayout holding its own state. */
 function Harness({ buildSolved = false }: { buildSolved?: boolean }) {
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set())
-  const onSelectActor = (name: string, additive: boolean) => setSelectedNames((s) => toggleSelection(s, name, additive))
+  const [selectedSurfaces, setSelectedSurfaces] = useState<Set<string>>(new Set())
+  const onSelectActor = (name: string, additive: boolean) => {
+    setSelectedNames((s) => toggleSelection(s, name, additive))
+    setSelectedSurfaces(new Set())
+  }
+  const onSelectSurface = (actor: string, polyIndex: number, additive: boolean) => {
+    setSelectedSurfaces((s) => toggleSelection(s, `${actor}#${polyIndex}`, additive))
+    setSelectedNames(new Set())
+  }
   return (
     <QuadLayout
       scene={SCENE}
@@ -80,8 +88,13 @@ function Harness({ buildSolved = false }: { buildSolved?: boolean }) {
       lightmap={null}
       selectedNames={selectedNames}
       onSelectActor={onSelectActor}
+      selectedSurfaces={selectedSurfaces}
+      onSelectSurface={onSelectSurface}
       onSelectMany={(names, additive) => setSelectedNames((s) => (additive ? new Set([...s, ...names]) : new Set(names)))}
-      onDeselect={() => setSelectedNames(new Set())}
+      onDeselect={() => {
+        setSelectedNames(new Set())
+        setSelectedSurfaces(new Set())
+      }}
       buildSolved={buildSolved}
     />
   )

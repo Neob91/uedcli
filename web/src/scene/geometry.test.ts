@@ -48,6 +48,27 @@ describe('buildGeometryData', () => {
     expect(got.triangleOwners).toEqual([null, null])
   })
 
+  it('tags each triangle with its SOURCE poly index (the identity of local index by default)', () => {
+    const got = buildGeometryData(
+      [quad({ owner: 'Room' }), quad({ tex_index: 0, owner: 'Inner' })],
+      { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' },
+    )
+    // 2 groups (different tex_index), 2 triangles each -- poly 0 (Room) then poly 1 (Inner).
+    expect(got.trianglePolyIndex).toEqual([0, 0, 1, 1])
+  })
+
+  it('remaps to the caller-supplied ORIGINAL (unfiltered) index when sourceIndices is given', () => {
+    // Simulates SceneResourcesContext.tsx's non-Mover/Mover split: `polys` here is a FILTERED
+    // subset (local indices 0,1) whose true index in the original scene.polys array is 3 and 7.
+    const got = buildGeometryData(
+      [quad({ owner: 'A' }), quad({ tex_index: 0, owner: 'B' })],
+      { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' },
+      null,
+      [3, 7],
+    )
+    expect(got.trianglePolyIndex).toEqual([3, 3, 7, 7])
+  })
+
   it('groups by (texture, masked) pair -- one group per distinct texture', () => {
     const got = buildGeometryData(
       [quad({ tex_index: 0 }), quad({ tex_index: 1 }), quad({ tex_index: 0, masked: true })],

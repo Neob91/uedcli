@@ -38,7 +38,12 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 
-import { selectedTriangleGroups, type TriangleGroupRange } from './selectedTriangles'
+import {
+  selectedSurfaceTriangleGroups,
+  selectedTriangleGroups,
+  type SelectedTriangleGroup,
+  type TriangleGroupRange,
+} from './selectedTriangles'
 
 // Additive white, not a new hue -- a brightness boost that reads correctly over any base texture/CSG
 // color. Moderate opacity so it reads as "lit up," not a blown-out white silhouette.
@@ -61,6 +66,52 @@ export function SelectionHighlight({ bufferGeometry, triangleOwners, selectedNam
     () => selectedTriangleGroups(triangleOwners, selectedNames, bufferGeometry.groups as TriangleGroupRange[]),
     [triangleOwners, selectedNames, bufferGeometry],
   )
+  return <HighlightGroups groups={groups} bufferGeometry={bufferGeometry} materials={materials} />
+}
+
+/** The surface (single-polygon) counterpart of `SelectionHighlight` above (GUI.md "Selection & the
+ * Inspector"): a texture selection is a DISTINCT selection kind from a whole-brush selection, and
+ * highlights only the ONE clicked polygon's triangles -- never the whole brush's, even when the
+ * brush itself is also drawn. Same additive-white overlay technique (see the module doc comment
+ * above), just driven from `selectedSurfaces` (`selectionSet.ts`'s `surfaceKey` strings) instead of
+ * `selectedNames`. */
+export interface SurfaceSelectionHighlightProps {
+  bufferGeometry: THREE.BufferGeometry
+  triangleOwners: (string | null)[]
+  trianglePolyIndex: (number | null)[]
+  selectedSurfaces: ReadonlySet<string>
+  materials: readonly THREE.Material[]
+}
+
+export function SurfaceSelectionHighlight({
+  bufferGeometry,
+  triangleOwners,
+  trianglePolyIndex,
+  selectedSurfaces,
+  materials,
+}: SurfaceSelectionHighlightProps) {
+  const groups = useMemo(
+    () =>
+      selectedSurfaceTriangleGroups(
+        triangleOwners,
+        trianglePolyIndex,
+        selectedSurfaces,
+        bufferGeometry.groups as TriangleGroupRange[],
+      ),
+    [triangleOwners, trianglePolyIndex, selectedSurfaces, bufferGeometry],
+  )
+  return <HighlightGroups groups={groups} bufferGeometry={bufferGeometry} materials={materials} />
+}
+
+function HighlightGroups({
+  groups,
+  bufferGeometry,
+  materials,
+}: {
+  groups: SelectedTriangleGroup[]
+  bufferGeometry: THREE.BufferGeometry
+  materials: readonly THREE.Material[]
+}) {
   if (groups.length === 0) return null
   return (
     <>

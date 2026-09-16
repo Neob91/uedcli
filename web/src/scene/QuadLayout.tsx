@@ -29,6 +29,10 @@ export interface QuadLayoutProps {
   lightmap: LightmapPayload | null
   selectedNames: ReadonlySet<string>
   onSelectActor: (name: string, additive: boolean) => void
+  // Surface (single-polygon texture) selection -- see Viewport3D.tsx's identical prop doc for the
+  // full model. A distinct set from `selectedNames`, threaded to every pane the same way.
+  selectedSurfaces: ReadonlySet<string>
+  onSelectSurface: (actor: string, polyIndex: number, additive: boolean) => void
   // OrgPanel's own batch-select shape (Task 23): a folder-node click replaces/adds a whole actor
   // set at once -- distinct from the single-name onSelectActor above, which selectionSet.ts's
   // toggleSelection doesn't need to grow a bulk form to cover.
@@ -65,6 +69,8 @@ export function QuadLayout({
   lightmap,
   selectedNames,
   onSelectActor,
+  selectedSurfaces,
+  onSelectSurface,
   onSelectMany,
   onDeselect,
   buildSolved,
@@ -244,6 +250,8 @@ export function QuadLayout({
                 lightmap={lightmap}
                 selectedNames={selectedNames}
                 onSelectActor={onSelectActor}
+                selectedSurfaces={selectedSurfaces}
+                onSelectSurface={onSelectSurface}
                 onDeselect={onDeselect}
                 frameRequest={frameRequest}
                 mode={resolveEffectiveMode(modes[pane], buildSolved)}
@@ -255,6 +263,8 @@ export function QuadLayout({
                 axis={pane}
                 selectedNames={selectedNames}
                 onSelectActor={onSelectActor}
+                selectedSurfaces={selectedSurfaces}
+                onSelectSurface={onSelectSurface}
                 onDeselect={onDeselect}
                 frameRequest={frameRequest}
                 mode={resolveEffectiveMode(modes[pane], buildSolved)}

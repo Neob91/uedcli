@@ -48,6 +48,14 @@ export interface GeometryData {
   // `faceIndex` on a non-indexed geometry indexes this array directly, so a raycast hit resolves
   // to its owning actor without a second geometry pass (click-to-select, `selection.ts`).
   triangleOwners: (string | null)[]
+  // Same per-triangle indexing as `triangleOwners`, but the SOURCE poly's index into the original
+  // (unfiltered) `ScenePayload.polys` array -- not the local index into whatever subset `polys`
+  // here happens to be (SceneResourcesContext builds this twice, for non-Mover and Mover polys
+  // separately, so a local index would collide across the two). Callers that build from a subset
+  // pass `sourceIndices` (below); a caller building from the full array can omit it. This is the
+  // surface (single-polygon) click-to-select identity -- distinct from `triangleOwners`, which
+  // resolves to the whole owning ACTOR (`selection.ts`'s `resolveHitSurface`).
+  trianglePolyIndex: (number | null)[]
 }
 
 function dot(a: number[], b: number[]): number {
@@ -121,6 +129,7 @@ function flatShade(poly: ScenePoly): number {
 /** Fan-triangulate a convex n-gon ring (BSP node polys are convex) into the flat output arrays. */
 function appendTriangleFan(
   poly: ScenePoly,
+  sourceIndex: number,
   uvs: [number, number][],
   lmUVs: [number, number][] | null,
   shade: number,
@@ -136,6 +145,7 @@ function appendTriangleFan(
       else out.color.push(shade, shade, shade)
     }
     out.owner.push(poly.owner) // one entry per TRIANGLE, not per vertex
+    out.polyIndex.push(sourceIndex)
   }
 }
 
@@ -150,12 +160,17 @@ interface Bucket {
   uv1: number[]
   color: number[]
   owner: (string | null)[]
+  polyIndex: number[]
 }
 
 export function buildGeometryData(
   polys: ScenePoly[],
   atlas: AtlasPayload,
   lightmap: LightmapPayload | null = null,
+  // Maps `polys`' own local index to its index in the original `ScenePayload.polys` array -- see
+  // `GeometryData.trianglePolyIndex`'s doc comment. Defaults to the identity (`polys` IS the
+  // canonical index space), matching every existing caller that doesn't pre-filter its input.
+  sourceIndices?: number[],
 ): GeometryData {
   const buckets = new Map<string, Bucket>()
   const order: string[] = []
@@ -170,12 +185,13 @@ export function buildGeometryData(
     if (!bucket) {
       bucket = {
         texIndex: poly.tex_index, masked: poly.masked, twoSided: poly.two_sided, blend: poly.blend,
-        lit, pos: [], uv: [], uv1: [], color: [], owner: [],
+        lit, pos: [], uv: [], uv1: [], color: [], owner: [], polyIndex: [],
       }
       buckets.set(key, bucket)
       order.push(key)
     }
-    appendTriangleFan(poly, uvs, lmUVs, lit ? 1 : flatShade(poly), bucket)
+    const sourceIndex = sourceIndices ? sourceIndices[polyIndex] : polyIndex
+    appendTriangleFan(poly, sourceIndex, uvs, lmUVs, lit ? 1 : flatShade(poly), bucket)
   })
 
   const positions: number[] = []
@@ -184,6 +200,7 @@ export function buildGeometryData(
   const colors: number[] = []
   const groups: GeometryGroup[] = []
   const triangleOwners: (string | null)[] = []
+  const trianglePolyIndex: (number | null)[] = []
   for (const key of order) {
     const bucket = buckets.get(key) as Bucket
     const start = positions.length / 3
@@ -192,6 +209,7 @@ export function buildGeometryData(
     uv1.push(...bucket.uv1)
     colors.push(...bucket.color)
     triangleOwners.push(...bucket.owner)
+    trianglePolyIndex.push(...bucket.polyIndex)
     groups.push({
       texIndex: bucket.texIndex, masked: bucket.masked, twoSided: bucket.twoSided,
       blend: bucket.blend, lit: bucket.lit, start, count: bucket.pos.length / 3,
@@ -205,5 +223,6 @@ export function buildGeometryData(
     colors: new Float32Array(colors),
     groups,
     triangleOwners,
+    trianglePolyIndex,
   }
 }

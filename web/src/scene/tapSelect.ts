@@ -8,8 +8,8 @@
 import * as THREE from 'three'
 
 import type { SceneActor } from '../api'
-import { canSelectBrushTap, pickActor, resolveHitActor, resolveSegmentHitActor, resolveTapAction } from './selection'
-import type { Ray, TapAction } from './selection'
+import { pickActor, resolveHitSurface, resolveSegmentHitActor, resolveTapAction } from './selection'
+import type { Ray, RawTapHit, TapAction } from './selection'
 import type { ShadingMode } from './shadingMode'
 
 export interface TapSelectParams {
@@ -31,14 +31,19 @@ export interface TapSelectParams {
   brushObjects: THREE.Object3D[]
   actors: SceneActor[]
   triangleOwners: (string | null)[]
+  // Same per-triangle indexing as `triangleOwners` -- resolves a mesh hit to the specific polygon
+  // clicked (surface/texture selection), not just its owning actor.
+  trianglePolyIndex: (number | null)[]
 }
 
 /** Runs the raycast-then-AABB-fallback hit-test and resolves it to a `TapAction`: raycast the real
  * drawn geometry (main scene mesh + point-actor marker sprites +, in wireframe mode, the brush
  * outline lines) together so the nearest hit wins regardless of which one it lands on, else fall
- * back to ray-vs-AABB (never for a brush actor in wireframe mode). */
+ * back to ray-vs-AABB (never for a brush actor in wireframe mode). The click-target (surface vs.
+ * whole actor) and modifier-key rules live in `selection.ts`'s `resolveTapAction` -- this function
+ * only builds the raw hit-test result it needs. */
 export function resolveTapSelect(params: TapSelectParams): TapAction {
-  const { camera, rect, clientX, clientY, additive, shiftKey, mode, lineThreshold, meshObject, markerObjects, brushObjects, actors, triangleOwners } =
+  const { camera, rect, clientX, clientY, additive, shiftKey, mode, lineThreshold, meshObject, markerObjects, brushObjects, actors, triangleOwners, trianglePolyIndex } =
     params
   const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1
   const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1
@@ -50,35 +55,34 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
   raycaster.params.Line = { threshold: lineThreshold }
   raycaster.params.Line2 = { threshold: 6 }
 
-  let hitActor: SceneActor | null = null
+  let hit: RawTapHit | null = null
   const candidates: THREE.Object3D[] = [...(meshObject ? [meshObject] : []), ...markerObjects, ...brushObjects]
   if (candidates.length > 0) {
     const hits = raycaster.intersectObjects(candidates, false)
     if (hits.length > 0) {
-      const hit = hits[0]
-      if (hit.object === meshObject) {
-        hitActor = resolveHitActor(hit.faceIndex, triangleOwners, actors)
-      } else if (hit.object.userData.segmentOwners) {
-        const segmentOwners = hit.object.userData.segmentOwners as (string | null)[]
-        hitActor = resolveSegmentHitActor(hit.index, segmentOwners, actors)
+      const raw = hits[0]
+      if (raw.object === meshObject) {
+        const surface = resolveHitSurface(raw.faceIndex, triangleOwners, trianglePolyIndex, actors)
+        hit = surface ? { actor: surface.actor, polyIndex: surface.polyIndex } : null
+      } else if (raw.object.userData.segmentOwners) {
+        const segmentOwners = raw.object.userData.segmentOwners as (string | null)[]
+        const actor = resolveSegmentHitActor(raw.index, segmentOwners, actors)
+        hit = actor ? { actor, polyIndex: null } : null
       } else {
-        const name = hit.object.userData.actorName as string | undefined
-        hitActor = name ? (actors.find((a) => a.name === name) ?? null) : null
+        const name = raw.object.userData.actorName as string | undefined
+        const actor = name ? (actors.find((a) => a.name === name) ?? null) : null
+        hit = actor ? { actor, polyIndex: null } : null
       }
     }
   }
-  if (!hitActor) {
+  if (!hit) {
     const ray: Ray = {
       origin: [raycaster.ray.origin.x, raycaster.ray.origin.y, raycaster.ray.origin.z],
       direction: [raycaster.ray.direction.x, raycaster.ray.direction.y, raycaster.ray.direction.z],
     }
     const aabbCandidates = mode === 'wireframe' ? actors.filter((a) => !a.brush) : actors
-    hitActor = pickActor(ray, aabbCandidates)
+    const actor = pickActor(ray, aabbCandidates)
+    hit = actor ? { actor, polyIndex: null } : null
   }
-  // Capture the raw hit-test result BEFORE the Shift gate below -- `resolveTapAction` needs both (a
-  // click that actually landed on a brush, just rejected for lack of Shift, must leave the current
-  // selection alone; only a tap that hit NOTHING at all deselects).
-  const rawHit = hitActor
-  if (hitActor?.brush && !canSelectBrushTap(mode, shiftKey)) hitActor = null
-  return resolveTapAction(rawHit, hitActor, additive)
+  return resolveTapAction(hit, mode, shiftKey, additive)
 }

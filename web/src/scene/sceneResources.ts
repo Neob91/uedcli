@@ -251,6 +251,8 @@ export interface BuiltGeometry {
    * uses; the two arrays share one `BufferGeometry`/one set of `addGroup` indices. */
   unlitMaterials: THREE.Material[]
   triangleOwners: (string | null)[]
+  // Same per-triangle indexing, mapped to `geometry.ts`'s `trianglePolyIndex` -- see its doc comment.
+  trianglePolyIndex: (number | null)[]
 }
 
 /** Builds the ONE `THREE.BufferGeometry` + per-group materials for a poly set -- one draw group per
@@ -271,9 +273,13 @@ export function useBuiltGeometry(
   lightmap: LightmapPayload | null,
   textures: { map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> },
   lightmapTexture: THREE.Texture | null,
+  // `polys`' own index into the original `ScenePayload.polys` array -- see `geometry.ts`'s
+  // `buildGeometryData` doc comment. Needed because `SceneResourcesProvider` calls this hook TWICE
+  // on two disjoint SUBSETS of `scene.polys` (non-Mover / Mover), so a local index would collide.
+  sourceIndices?: number[],
 ): BuiltGeometry {
-  const { bufferGeometry, materials, unlitMaterials, triangleOwners } = useMemo(() => {
-    const built = buildGeometryData(polys, atlas, lightmap)
+  const { bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex } = useMemo(() => {
+    const built = buildGeometryData(polys, atlas, lightmap, sourceIndices)
     const geo = new THREE.BufferGeometry()
     geo.setAttribute('position', new THREE.BufferAttribute(built.positions, 3))
     geo.setAttribute('uv', new THREE.BufferAttribute(built.uvs, 2))
@@ -313,8 +319,11 @@ export function useBuiltGeometry(
       geo.addGroup(group.start, group.count, index)
     }
     geo.computeVertexNormals()
-    return { bufferGeometry: geo, materials: mats, unlitMaterials: unlitMats, triangleOwners: built.triangleOwners }
-  }, [polys, atlas, lightmap, textures, lightmapTexture])
+    return {
+      bufferGeometry: geo, materials: mats, unlitMaterials: unlitMats,
+      triangleOwners: built.triangleOwners, trianglePolyIndex: built.trianglePolyIndex,
+    }
+  }, [polys, atlas, lightmap, textures, lightmapTexture, sourceIndices])
 
   // Every live-reload replaces `bufferGeometry`/`materials`/`unlitMaterials` with fresh THREE
   // objects; without an explicit dispose the PREVIOUS ones (a full geometry buffer, its materials)
@@ -328,5 +337,5 @@ export function useBuiltGeometry(
     }
   }, [bufferGeometry, materials, unlitMaterials])
 
-  return { bufferGeometry, materials, unlitMaterials, triangleOwners }
+  return { bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex }
 }

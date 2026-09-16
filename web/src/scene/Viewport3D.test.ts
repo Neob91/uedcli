@@ -3,7 +3,15 @@ import * as THREE from 'three'
 
 import { cameraBasis } from './camera'
 import type { CameraPose } from './camera'
-import { applyCameraPose } from './Viewport3D'
+import { applyCameraPose, WIREFRAME_LINE_HIT_WORLD_UNITS } from './Viewport3D'
+
+// Widened hit-test tolerance (owner report, live testing: brush-outline selection in wireframe mode
+// needed near-pixel-exact clicks) -- pins the value so a future edit can't silently narrow it back.
+describe('WIREFRAME_LINE_HIT_WORLD_UNITS', () => {
+  it('is wider than the original 4-world-unit threshold', () => {
+    expect(WIREFRAME_LINE_HIT_WORLD_UNITS).toBe(8)
+  })
+})
 
 // Pins the mirror fix (owner bug report: "meshes render reverted (mirror image)") against real
 // three.js math -- no WebGL context needed, `Vector3.project` is pure matrix arithmetic. The world

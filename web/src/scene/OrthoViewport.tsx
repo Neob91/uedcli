@@ -22,7 +22,7 @@ import type { OrthoAxis, OrthoPose } from './orthoCamera'
 import { orthoBasis, orthoDragZoom, orthoFrameFit, orthoLineHitThresholdUU, orthoPan, orthoZoom, screenToWorld } from './orthoCamera'
 import { RadiiOverlays } from './RadiiOverlays'
 import { useSceneResourcesContext } from './SceneResourcesContext'
-import { SelectionHighlight } from './SelectionHighlight'
+import { SelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
 import { SelectionMarkers } from './SelectionMarkers'
 import { selectedNonBrushBoxes } from './selectionBoxes'
 import { resolveTapSelect } from './tapSelect'
@@ -134,6 +134,12 @@ export interface OrthoViewportProps {
   axis: OrthoAxis
   selectedNames: ReadonlySet<string>
   onSelectActor: (name: string, additive: boolean) => void
+  // Surface (single-polygon texture) selection -- see Viewport3D.tsx's identical prop doc. Ortho
+  // panes are always wireframe (no solid mesh drawn), so a surface hit never actually occurs here in
+  // practice; threaded through anyway so this pane shares the exact same tap-resolution pipeline as
+  // Viewport3D.tsx rather than special-casing itself out of it.
+  selectedSurfaces: ReadonlySet<string>
+  onSelectSurface: (actor: string, polyIndex: number, additive: boolean) => void
   // A tap that hits nothing selectable deselects everything (owner ruling 2026-09-15) -- see
   // Viewport3D.tsx's identical prop doc.
   onDeselect: () => void
@@ -162,6 +168,8 @@ export function OrthoViewport({
   axis,
   selectedNames,
   onSelectActor,
+  selectedSurfaces,
+  onSelectSurface,
   onDeselect,
   frameRequest = null,
   mode = 'wireframe',
@@ -173,8 +181,10 @@ export function OrthoViewport({
   // The cursor's projected world-space (UU) position, for the coordinate readout (Task 28) -- null
   // when the pointer hasn't moved inside this pane yet (or has left it).
   const [hoverWorld, setHoverWorld] = useState<Vec3 | null>(null)
-  const { bufferGeometry, materials, unlitMaterials, triangleOwners, textures, markerTexture, markerActors, actors } =
-    useSceneResourcesContext()
+  const {
+    bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
+    textures, markerTexture, markerActors, actors,
+  } = useSceneResourcesContext()
   const activeMaterials = usesUnlitMaterials(mode) ? unlitMaterials : materials
   // Every SELECTED non-brush actor's AABB box (Task 14: one per selected actor) -- shared with
   // Viewport3D.tsx via `selectionBoxes.ts` (item 16).
@@ -217,11 +227,13 @@ export function OrthoViewport({
         brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
         actors,
         triangleOwners,
+        trianglePolyIndex,
       })
-      if (action.kind === 'select') onSelectActor(action.name, action.additive)
+      if (action.kind === 'select-actor') onSelectActor(action.name, action.additive)
+      else if (action.kind === 'select-surface') onSelectSurface(action.actor, action.polyIndex, action.additive)
       else if (action.kind === 'deselect') onDeselect()
     },
-    [actors, triangleOwners, onSelectActor, onDeselect, mode, pose.worldUnitsPerPixel],
+    [actors, triangleOwners, trianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode, pose.worldUnitsPerPixel],
   )
 
   const dragCallbacks = useMemo<DragGestureCallbacks>(
@@ -313,6 +325,17 @@ export function OrthoViewport({
             bufferGeometry={bufferGeometry}
             triangleOwners={triangleOwners}
             selectedNames={selectedNames}
+            materials={activeMaterials}
+          />
+        )}
+        {/* Texture (single-surface) selection highlight -- see Viewport3D.tsx's identical block
+            (never actually visible here in practice: ortho panes are always wireframe). */}
+        {mode !== 'wireframe' && (
+          <SurfaceSelectionHighlight
+            bufferGeometry={bufferGeometry}
+            triangleOwners={triangleOwners}
+            trianglePolyIndex={trianglePolyIndex}
+            selectedSurfaces={selectedSurfaces}
             materials={activeMaterials}
           />
         )}

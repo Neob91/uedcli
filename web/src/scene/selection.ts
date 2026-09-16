@@ -29,6 +29,33 @@ export function resolveHitActor(
   return actors.find((a) => a.name === name) ?? null
 }
 
+/** A raycast hit resolved to its owning actor AND the specific polygon (`ScenePayload.polys` index)
+ * that was hit -- the surface (texture) selection identity (GUI.md "Selection & the Inspector": a
+ * plain click in non-wireframe mode selects the one clicked surface's texture, distinct from
+ * selecting the whole brush actor). */
+export interface SurfaceHit {
+  actor: SceneActor
+  polyIndex: number
+}
+
+/** Resolves a raycast hit on the merged scene geometry to its owning actor AND poly, mirroring
+ * `resolveHitActor` but also carrying `trianglePolyIndex[faceIndex]` -- `geometry.ts`'s
+ * `buildGeometryData` emits one entry per triangle in the same order for both arrays. Returns null
+ * under the same conditions `resolveHitActor` does (no hit, no resolved owner/poly, or a stale
+ * name/index from a live-reload race), plus when the poly index itself is unresolved. */
+export function resolveHitSurface(
+  faceIndex: number | null | undefined,
+  triangleOwners: (string | null)[],
+  trianglePolyIndex: (number | null)[],
+  actors: SceneActor[],
+): SurfaceHit | null {
+  const actor = resolveHitActor(faceIndex, triangleOwners, actors)
+  if (!actor || faceIndex == null) return null
+  const polyIndex = trianglePolyIndex[faceIndex]
+  if (polyIndex == null) return null
+  return { actor, polyIndex }
+}
+
 /** Resolves a raycast hit on `BrushOutlines`' merged thin-wireframe `LineSegments` (bug report item
  * 4/6) to its owning actor: `index` is `THREE.Intersection.index` -- for a `LineSegments` hit,
  * three.js's own `Line.raycast` sets it to the segment's FIRST vertex index, so `index / 2` is the
@@ -46,30 +73,56 @@ export function resolveSegmentHitActor(
 }
 
 export type TapAction =
-  | { kind: 'select'; name: string; additive: boolean }
+  | { kind: 'select-actor'; name: string; additive: boolean }
+  | { kind: 'select-surface'; actor: string; polyIndex: number; additive: boolean }
   | { kind: 'deselect' }
   | { kind: 'none' }
 
+/** What the raycast+AABB hit-test pipeline (`tapSelect.ts`'s `resolveTapSelect`) found, before the
+ * click-target (surface vs. whole actor) and modifier-key rules below are applied. `polyIndex` is
+ * non-null ONLY for a genuine hit on the drawn solid mesh (`selection.ts`'s `resolveHitSurface`) --
+ * a marker/wireframe-line hit or an AABB-fallback hit (missed all real geometry) carries `null`,
+ * since neither identifies one specific polygon. */
+export interface RawTapHit {
+  actor: SceneActor
+  polyIndex: number | null
+}
+
 /** The tap-resolution decision Viewport3D/OrthoViewport's `performTapSelect` both make once they've
- * run the hit-test pipeline (quad-layout Part 3, Task 13; deselect-on-miss added by owner ruling
- * 2026-09-15, reversing spec §9's earlier "Esc is the only deselect path"). Two hit-test results feed
- * it: `rawHit` is whatever the raycast+AABB pipeline found BEFORE `canSelectBrushTap`'s Shift gate;
- * `gatedHit` is the same value AFTER that gate (null if the gate rejected it). Three outcomes:
- * - `gatedHit` is real -> `'select'` (the actor's name + the `additive` flag threaded from the drag
- *   gesture's Ctrl/Cmd state).
- * - `gatedHit` is null but `rawHit` was real -> `'none'`: the tap landed on something (a brush the
- *   Shift gate rejected), so it is absorbed rather than wiping the current selection -- a plain click
- *   used only to disambiguate from camera-fly must not also clear an existing selection.
- * - `rawHit` is null too -> `'deselect'`: a genuine miss, clicked empty space.
+ * run the hit-test pipeline (GUI.md "Selection & the Inspector"). `rawHit` is null for a genuine
+ * miss (clicked empty space) -- ALWAYS `'deselect'`, in any pane/mode (owner ruling 2026-09-15,
+ * reversing spec §9's earlier "Esc is the only deselect path"). Otherwise:
+ * - A POINT actor (`!actor.brush`) is always plain-tap-selectable, everywhere, unaffected by Shift
+ *   or shading mode -- `'select-actor'` with the passed-through (Ctrl/Cmd-driven) `additive`.
+ * - A genuine SURFACE hit (`polyIndex` set) in a NON-wireframe mode is the one case Shift forks the
+ *   SAME click target between texture-select (unmodified) and actor-select (shifted): unmodified ->
+ *   `'select-surface'` (additive = Ctrl, "multi-selects textures"); Shift held -> `'select-actor'`,
+ *   ALWAYS additive (repeated Shift+LMB accumulates multiple brush selections, no Ctrl needed).
+ * - Anything else -- a wireframe outline-LINE hit, or a non-wireframe hit that missed all real
+ *   geometry (AABB fallback, no specific surface to fall back to a texture-select on) -- is a
+ *   whole-brush pick, gated the same way brush selection has always been (`canSelectBrushTap`):
+ *   wireframe needs no modifier (Ctrl still multi-selects); a non-wireframe fallback hit still needs
+ *   Shift, and a hit that Shift didn't clear is ABSORBED (`'none'`), not treated as a miss -- the tap
+ *   landed on something, so it must not wipe an existing selection.
  * Pulled out as a pure, tiny function so this exact decision is testable without a WebGL raycast. */
 export function resolveTapAction(
-  rawHit: SceneActor | null,
-  gatedHit: SceneActor | null,
+  rawHit: RawTapHit | null,
+  mode: ShadingMode,
+  shiftKey: boolean,
   additive: boolean,
 ): TapAction {
-  if (gatedHit) return { kind: 'select', name: gatedHit.name, additive }
   if (!rawHit) return { kind: 'deselect' }
-  return { kind: 'none' }
+  const { actor, polyIndex } = rawHit
+
+  if (!actor.brush) return { kind: 'select-actor', name: actor.name, additive }
+
+  if (polyIndex != null && mode !== 'wireframe') {
+    if (shiftKey) return { kind: 'select-actor', name: actor.name, additive: true }
+    return { kind: 'select-surface', actor: actor.name, polyIndex, additive }
+  }
+
+  if (!canSelectBrushTap(mode, shiftKey)) return { kind: 'none' }
+  return { kind: 'select-actor', name: actor.name, additive: mode === 'wireframe' ? additive : true }
 }
 
 export interface Ray {

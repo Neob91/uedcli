@@ -20,6 +20,9 @@ export interface SceneResources {
   // no per-mode variant).
   unlitMaterials: THREE.Material[]
   triangleOwners: (string | null)[]
+  // Same per-triangle indexing as `triangleOwners`, into the original `scene.polys` array -- the
+  // surface (single-polygon) click-to-select identity (`selection.ts`'s `resolveHitSurface`).
+  trianglePolyIndex: (number | null)[]
   // A Mover's own solved geometry, split OUT of the fields above (GUI.md "Movers"): a Mover always
   // renders wireframe-outline-only by default, in every shading mode, so its solid triangles must
   // NOT ride the default `bufferGeometry`/`materials` a pane draws unconditionally -- they draw only
@@ -30,6 +33,7 @@ export interface SceneResources {
   moverMaterials: THREE.Material[]
   moverUnlitMaterials: THREE.Material[]
   moverTriangleOwners: (string | null)[]
+  moverTrianglePolyIndex: (number | null)[]
   textures: { map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> }
   markerTexture: THREE.Texture | null
   markerActors: SceneActor[]
@@ -67,22 +71,41 @@ export function SceneResourcesProvider({
     () => new Set(scene.actors.filter((a) => a.is_mover).map((a) => a.name)),
     [scene.actors],
   )
-  const nonMoverPolys = useMemo(
-    () => scene.polys.filter((p) => p.owner == null || !moverNames.has(p.owner)),
-    [scene.polys, moverNames],
-  )
-  const moverPolys = useMemo(
-    () => scene.polys.filter((p) => p.owner != null && moverNames.has(p.owner)),
-    [scene.polys, moverNames],
-  )
-  const { bufferGeometry, materials, unlitMaterials, triangleOwners } =
-    useBuiltGeometry(nonMoverPolys, atlas, lightmap, textures, lightmapTexture)
+  // Each subset carries its own polys' index into the ORIGINAL `scene.polys` array alongside the
+  // filtered poly itself -- `useBuiltGeometry`'s `sourceIndices` needs this to build a surface
+  // (single-polygon) selection identity that survives the non-Mover/Mover split (geometry.ts's
+  // `trianglePolyIndex` doc comment: a plain local index would collide across the two subsets).
+  const { polys: nonMoverPolys, indices: nonMoverIndices } = useMemo(() => {
+    const polys: typeof scene.polys = []
+    const indices: number[] = []
+    scene.polys.forEach((p, i) => {
+      if (p.owner == null || !moverNames.has(p.owner)) {
+        polys.push(p)
+        indices.push(i)
+      }
+    })
+    return { polys, indices }
+  }, [scene.polys, moverNames])
+  const { polys: moverPolys, indices: moverIndices } = useMemo(() => {
+    const polys: typeof scene.polys = []
+    const indices: number[] = []
+    scene.polys.forEach((p, i) => {
+      if (p.owner != null && moverNames.has(p.owner)) {
+        polys.push(p)
+        indices.push(i)
+      }
+    })
+    return { polys, indices }
+  }, [scene.polys, moverNames])
+  const { bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex } =
+    useBuiltGeometry(nonMoverPolys, atlas, lightmap, textures, lightmapTexture, nonMoverIndices)
   const {
     bufferGeometry: moverGeometry,
     materials: moverMaterials,
     unlitMaterials: moverUnlitMaterials,
     triangleOwners: moverTriangleOwners,
-  } = useBuiltGeometry(moverPolys, atlas, lightmap, textures, lightmapTexture)
+    trianglePolyIndex: moverTrianglePolyIndex,
+  } = useBuiltGeometry(moverPolys, atlas, lightmap, textures, lightmapTexture, moverIndices)
 
   // Point actors with no owned rendered poly (lights, triggers, patrol nodes, sounds, an unresolved
   // DT_Mesh) -- markers.ts's own filter, computed once here rather than per-pane. Unions BOTH
@@ -97,13 +120,13 @@ export function SceneResourcesProvider({
 
   const value = useMemo<SceneResources>(
     () => ({
-      bufferGeometry, materials, unlitMaterials, triangleOwners,
-      moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners,
+      bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
+      moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners, moverTrianglePolyIndex,
       textures, markerTexture, markerActors, actors: scene.actors,
     }),
     [
-      bufferGeometry, materials, unlitMaterials, triangleOwners,
-      moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners,
+      bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
+      moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners, moverTrianglePolyIndex,
       textures, markerTexture, markerActors, scene.actors,
     ],
   )

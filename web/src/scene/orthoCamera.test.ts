@@ -98,9 +98,12 @@ describe('orthoDragZoom', () => {
 
 describe('orthoLineHitThresholdUU', () => {
   it('scales with worldUnitsPerPixel so the click buffer stays a constant screen width', () => {
-    expect(orthoLineHitThresholdUU(4)).toBeCloseTo(8) // 2px default * 4 UU/px
-    expect(orthoLineHitThresholdUU(1)).toBeCloseTo(2)
-    expect(orthoLineHitThresholdUU(512)).toBeCloseTo(1024) // zoomed way out -- still ~2 screen px
+    // Widened default: 6px (was 2px) -- owner report, live testing: brush-outline selection in the
+    // 2D/wireframe views still needed near-pixel-exact clicks; matches tapSelect.ts's own Line2
+    // (bold-ring) threshold, already 6 screen px.
+    expect(orthoLineHitThresholdUU(4)).toBeCloseTo(24) // 6px default * 4 UU/px
+    expect(orthoLineHitThresholdUU(1)).toBeCloseTo(6)
+    expect(orthoLineHitThresholdUU(512)).toBeCloseTo(3072) // zoomed way out -- still ~6 screen px
   })
 
   it('honors an explicit screenPx override', () => {

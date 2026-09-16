@@ -3,11 +3,12 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { AtlasPayload, LightmapPayload, ScenePayload, StatusPayload } from './api'
 import { fetchLevelState, fetchStatus, postLoad, postRebuild, switchLevel } from './api'
 import { Inspector } from './panels/Inspector'
+import type { SurfaceSelection } from './panels/Inspector'
 import { LevelPicker } from './panels/LevelPicker'
 import { subscribeChangesAvailable } from './reload'
 import { resolveBuildSolved } from './scene/buildStatus'
 import { QuadLayout } from './scene/QuadLayout'
-import { clearSelection, toggleSelection } from './scene/selectionSet'
+import { clearSelection, parseSurfaceKey, surfaceKey, toggleSelection } from './scene/selectionSet'
 import { useTheme } from './theme/useTheme'
 import type { ThemePreference } from './theme/useTheme'
 
@@ -84,18 +85,36 @@ function App() {
   const [buildError, setBuildError] = useState<string | null>(null)
   // Multi-actor selection (spec §9): a plain tap replaces it, Ctrl+tap toggles membership
   // (selectionSet.ts's toggleSelection) -- one lifted set, shared by every QuadLayout pane.
+  //
+  // Surface (single-polygon texture) selection is a SECOND, DISTINCT selection kind (GUI.md
+  // "Selection & the Inspector"): a plain LMB-tap on a brush surface in a non-wireframe mode selects
+  // just that one polygon's texture (highlight + inspect only); Shift+LMB on the same surface
+  // selects the whole brush instead. The two kinds are mutually exclusive at any moment -- switching
+  // which kind a click targets clears the OTHER kind's set, so "the current selection" (point 1 of
+  // the spec: a miss always clears it) reads as one selection, not two independently-surviving ones.
   const [selectedNames, setSelectedNames] = useState<Set<string>>(() => new Set())
+  const [selectedSurfaces, setSelectedSurfaces] = useState<Set<string>>(() => new Set())
   const onSelectActor = useCallback((name: string, additive: boolean) => {
     setSelectedNames((s) => toggleSelection(s, name, additive))
+    setSelectedSurfaces(clearSelection())
+  }, [])
+  const onSelectSurface = useCallback((actor: string, polyIndex: number, additive: boolean) => {
+    setSelectedSurfaces((s) => toggleSelection(s, surfaceKey(actor, polyIndex), additive))
+    setSelectedNames(clearSelection())
   }, [])
   // OrgPanel's own batch-select shape (Task 23): a folder-node click replaces/adds a whole actor
   // set at once (mirrors a plain tap's replace / Ctrl+tap's additive semantics over a SET, not a
   // single name) -- a plain union/replace, not a second selection model.
   const onSelectMany = useCallback((names: ReadonlySet<string>, additive: boolean) => {
     setSelectedNames((s) => (additive ? new Set([...s, ...names]) : new Set(names)))
+    setSelectedSurfaces(clearSelection())
   }, [])
-  // `Esc` (SelectionKeys, Task 15): the only path that clears the selection entirely.
-  const onDeselect = useCallback(() => setSelectedNames(clearSelection()), [])
+  // `Esc` (SelectionKeys, Task 15) and a tap that hits empty space (owner ruling 2026-09-15): the
+  // paths that clear BOTH selection kinds entirely.
+  const onDeselect = useCallback(() => {
+    setSelectedNames(clearSelection())
+    setSelectedSurfaces(clearSelection())
+  }, [])
   const [reloading, setReloading] = useState(false)
   const [busy, setBusy] = useState<'load' | 'rebuild' | null>(null)
   // Level switching (owner ruling): unload the OLD level's state the instant a switch starts, and
@@ -196,6 +215,7 @@ function App() {
       setLightmap(null)
       setStatus(null)
       setSelectedNames(clearSelection())
+      setSelectedSurfaces(clearSelection())
       switchLevel(name)
         .then(() => setLevel(name)) // drives the fetch-on-level-change effect above
         .catch((e: unknown) => {
@@ -221,6 +241,22 @@ function App() {
     () => scene?.actors.filter((a) => selectedNames.has(a.name)) ?? [],
     [scene, selectedNames],
   )
+
+  // Every selected SURFACE, resolved to its actor name + poly index + the poly's own data --
+  // Inspector's second selection-kind prop (GUI.md "Selection & the Inspector"). A key that no
+  // longer resolves (a stale selection surviving a Rebuild/reload that replaced `scene.polys`) is
+  // silently dropped rather than shown broken -- the same "a rename/delete invalidates a stale
+  // selectedNames entry" tolerance `selectedActors` above already has via its `.filter`.
+  const selectedSurfaceInfos = useMemo(() => {
+    if (!scene) return []
+    const infos: SurfaceSelection[] = []
+    for (const key of selectedSurfaces) {
+      const parsed = parseSurfaceKey(key)
+      const poly = parsed ? scene.polys[parsed.polyIndex] : undefined
+      if (parsed && poly) infos.push({ actorName: parsed.actor, polyIndex: parsed.polyIndex, poly })
+    }
+    return infos
+  }, [scene, selectedSurfaces])
 
   // The real shading-mode gating signal (Task 19) -- derived from the /status polling this toolbar
   // already does, not a second fetch.
@@ -259,13 +295,15 @@ function App() {
           lightmap={lightmap}
           selectedNames={selectedNames}
           onSelectActor={onSelectActor}
+          selectedSurfaces={selectedSurfaces}
+          onSelectSurface={onSelectSurface}
           onSelectMany={onSelectMany}
           onDeselect={onDeselect}
           buildSolved={buildSolved}
         />
       </div>
       <div className="inspector-pane">
-        <Inspector selected={selectedActors} />
+        <Inspector selected={selectedActors} selectedSurfaces={selectedSurfaceInfos} />
       </div>
     </div>
   )

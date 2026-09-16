@@ -187,14 +187,57 @@ draw order among siblings is otherwise scene-graph/insertion order, not guarante
 
 ## Selection & the Inspector
 
-- **Hit-testing**: in wireframe/ortho mode, a brush is selectable only by clicking its outline
-  lines — never its filled interior/silhouette (matches UED22; a bounding-box fallback there was a
-  real, fixed bug).
-- **Vertex + pivot markers** (`SelectionMarkers.tsx`) port `preview.py`'s `_draw_vertex_dot`/
-  `_draw_pivot_marker`: a small square dot (`VERTEX_DOT_SIZE = 2` world units — tuned down from an
-  earlier `6`, which read as an oversized blob against the 2px selection outline) per poly vertex in
-  the brush's own brightened CSG wire color, plus a red (`_PIVOT_RED`, `(255,63,63)`) crosshair+square
-  at the actor's true `Location`. A third dot, the same square glyph as the poly vertices, marks the
+Two DISTINCT selection kinds exist, mutually exclusive at any moment (picking one clears the
+other): a **whole-actor selection** (`selectedNames`, a `Set` of actor names — the original kind)
+and a **surface (texture) selection** (`selectedSurfaces`, a `Set` of `selectionSet.ts`'s
+`surfaceKey(actor, polyIndex)` strings — one specific polygon on a brush). Selecting a texture is
+**highlight + inspect only** — there is no editing action for it yet (this GUI is P1, read-only, no
+write path).
+
+- **A tap that hits nothing (no actor/brush/texture under the cursor) always clears BOTH selection
+  sets, in every pane and every mode** (owner ruling 2026-09-15) — `resolveTapAction`'s `'deselect'`
+  outcome, wired to `onDeselect` alongside `Esc` (`SelectionKeys.tsx`).
+- **Wireframe mode** (every ortho pane always; the perspective pane when its own mode is
+  `'wireframe'`): a brush is selected by clicking its outline LINES — never its filled
+  interior/silhouette (matches UED22; a bounding-box fallback there was a real, fixed bug). This is
+  the existing, unchanged rule. Ctrl+LMB multi-selects brushes (additive), matching this GUI's
+  general Ctrl-multi-select convention.
+- **Non-wireframe perspective mode** (`unlit`/`flat`/`lit`): a plain LMB-tap on a brush SURFACE
+  selects that ONE polygon's texture (highlight + inspect); **Shift+LMB on the same surface instead
+  selects the WHOLE BRUSH actor** — Shift forks the same click target between texture-select
+  (unmodified) and actor-select (shifted), because plain LMB-drag here is camera-fly (dolly+turn)
+  and would otherwise be ambiguous with an incidental camera nudge. Repeated Shift+LMB (no Ctrl
+  needed) accumulates multiple brush selections; Ctrl+LMB (no Shift) accumulates multiple texture
+  selections instead. A non-wireframe click that misses all real surface geometry but still lands
+  inside a brush's bounding box (the AABB fallback) has no specific polygon to fall back to a
+  texture-select on, so it follows the same Shift gate as a whole-brush pick: rejected without
+  Shift, but ABSORBED rather than deselecting (the tap landed on something). `selection.ts`'s
+  `resolveTapAction(rawHit, mode, shiftKey, additive)` is the single decision function for all of
+  this — pure, tested without a WebGL raycast (`selection.test.ts`).
+- **Point actors are unaffected** by any of the above — always plain-tap-selectable everywhere, in
+  every pane/mode, unaffected by Shift.
+- **Not RE-verified against a live UED22** (owner ask, 2026-09-16): the click-target/modifier rules
+  above match the owner's own spec and the well-known general UnrealEd 1.x editing convention
+  (plain click on a face selects its texture/current-surface for the Surface Properties panel;
+  Shift/a separate action selects the whole brush actor). A live capture was not attempted this
+  session — the project's own console-driven RE method (`unrealed/extracting-from-dll.md`) covers
+  exec-verb behavior, not mouse-click-with-modifier GUI interaction, and no prior spike built a
+  harness for that; separately, per-polygon selection state has no query/export path at all
+  (`unrealed/quirks.md` "Selection": `PF_Selected` does not round-trip — "you can't ask the editor
+  which poly is this surface"), so even a live capture could only confirm the ACTOR-level half
+  (via `EDIT COPY`'s `bSelected`), not the texture-level half. The sandbox's docker/wine
+  infrastructure for driving a live editor was also at a disk-exhaustion risk this session (2.7 GB
+  free on a 32 GB root filesystem, and the project's own native-materialize campaign notes have
+  logged real disk-exhaustion incidents from concurrent editor use). Flagged as unverified, not
+  silently trusted as RE-confirmed — see the board item this change filed.
+- **Vertex + pivot markers** (`SelectionMarkers.tsx`), **the CSG-outline bold ring**
+  (`BrushOutlines.tsx`), and the **whole-brush surface highlight** below are all ACTOR-selection-only
+  (`selectedNames`) — a texture-only selection shows none of them, only its own highlight (next
+  bullet). `SelectionMarkers.tsx` ports `preview.py`'s `_draw_vertex_dot`/`_draw_pivot_marker`: a
+  small square dot (`VERTEX_DOT_SIZE = 2` world units — tuned down from an earlier `6`, which read
+  as an oversized blob against the 2px selection outline) per poly vertex in the brush's own
+  brightened CSG wire color, plus a red (`_PIVOT_RED`, `(255,63,63)`) crosshair+square at the
+  actor's true `Location`. A third dot, the same square glyph as the poly vertices, marks the
   brush's PrePivot-shifted "local origin" (`BrushHighlight.local_origin`, `Location - R·PrePivot`,
   computed server-side in `scene.py`'s `_brush_highlight` the same way `preview.py` does — coincides
   with the pivot only when `PrePivot=0`). This dot renders for at most ONE actor even when several
@@ -211,22 +254,29 @@ draw order among siblings is otherwise scene-graph/insertion order, not guarante
   point on already-drawn geometry).
 - **Selection line width**: 2px, matching `preview.py`'s real `weight=2` for a highlighted edge —
   not a rounder "looks about right" value.
-- **Surface highlight**: a selected brush's drawn surface brightens (`SelectionHighlight.tsx`), an
-  additive-white overlay over just that brush's own triangles (`selectedTriangles.ts`'s
-  `selectedTriangleIndices`, filtered from `sceneResources.ts`'s `triangleOwners`) — a brightness
+- **Whole-brush surface highlight** (`SelectionHighlight.tsx`): a selected brush's drawn surface
+  brightens, an additive-white overlay over just that brush's own triangles (`selectedTriangles.ts`'s
+  `selectedTriangleGroups`, filtered from `sceneResources.ts`'s `triangleOwners`) — a brightness
   boost on the actor's own material/hue, not a new tint color, matching `BrushOutlines`' "same hue,
   just bolder" selected-ring convention. Real UnrealEd's exact selected-surface render rule isn't
   pinned by a citable fact in `unrealed/quirks.md`/`rendering.md` (checked); this is the closest
   citable in-codebase convention. Only drawn when the mode also draws the solid mesh (not
-  `'wireframe'`, which has no surface).
-- **Brush-selection click modifier is SHADING-MODE-gated, not viewport-gated** (corrected owner
-  ruling 2026-09-15 — an earlier pass had this backwards as 3D-vs-2D): in **wireframe** mode, plain
-  LMB selects a brush directly — true in every ortho pane (always wireframe) and in the perspective
-  pane whenever it's in wireframe mode too. In a **non-wireframe** perspective mode (`unlit`/`flat`/
-  `lit`), a brush needs **Shift+LMB**, because plain LMB-drag there is camera-fly (dolly+turn) and
-  would otherwise be ambiguous with an incidental camera nudge. Point actors are unaffected — always
-  plain-tap-selectable everywhere. `selection.ts`'s `canSelectBrushTap(mode, shiftKey)` is the gate;
-  `dragGesture.ts`'s `onTap` threads the release-time `shiftKey` for it.
+  `'wireframe'`, which has no surface). This fires only for an actor-kind selection made via Shift
+  (or a wireframe click) — a plain non-wireframe click never highlights the whole brush, only the
+  one clicked surface (next bullet), per the owner's ruling that a plain click must NOT brighten
+  every poly of the selected brush.
+- **Texture (single-surface) highlight** (`SurfaceSelectionHighlight`, same file): the same
+  additive-white overlay technique, restricted to the ONE selected polygon's own triangles
+  (`selectedTriangles.ts`'s `selectedSurfaceTriangleGroups`, keyed on `(owner, polyIndex)` via
+  `trianglePolyIndex` — `geometry.ts`'s per-triangle source-poly index, threaded alongside the
+  existing per-triangle `triangleOwners`). Distinct selection kind, own highlight, never the whole
+  brush's triangles.
+- **Brush-outline hit-test tolerance** (`orthoCamera.ts`'s `orthoLineHitThresholdUU`,
+  `Viewport3D.tsx`'s `WIREFRAME_LINE_HIT_WORLD_UNITS`): widened from a 2px / 4-world-unit default to
+  6px / 8 world units (owner report, live testing: selecting a brush by its outline needed
+  near-pixel-exact clicks) — a tuning judgment call (no RE evidence pins an exact editor value),
+  picked to match `tapSelect.ts`'s own pre-existing 6px `Line2` (bold-ring) threshold rather than an
+  arbitrary new number.
 
 **Inspector props/categories** (`web/src/panels/Inspector.tsx`): draws exactly what the backend
 sends, no model logic of its own — `SceneActor.props`/`.categories` (parallel arrays) are the raw

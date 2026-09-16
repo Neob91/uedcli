@@ -29,6 +29,7 @@
 // already uses (`sceneResources.ts`'s `triangleOwners`, one entry per triangle in `geometry.ts`'s
 // `buildGeometryData` order) and the base mesh's own `THREE.BufferGeometry.groups` (contiguous
 // [start, count) vertex ranges in the SAME triangle order, tagged with the group's `materialIndex`).
+import { surfaceKey } from './selectionSet'
 
 /** One draw group's own selected-triangle subset: `materialIndex` names which of the base mesh's
  * per-group materials this subset's real cutout/cull state should be read from; `indices` is the
@@ -59,6 +60,35 @@ export function selectedTriangleGroups(
     for (let tri = group.start / 3; tri < (group.start + group.count) / 3; tri++) {
       const owner = triangleOwners[tri]
       if (owner != null && selectedNames.has(owner)) {
+        const base = tri * 3
+        indices.push(base, base + 1, base + 2)
+      }
+    }
+    if (indices.length > 0) out.push({ materialIndex: group.materialIndex ?? 0, indices })
+  }
+  return out
+}
+
+/** The surface (single-polygon) counterpart of `selectedTriangleGroups` above (GUI.md "Selection &
+ * the Inspector": a texture selection highlights only the ONE clicked polygon's triangles, not the
+ * whole brush's -- a distinct selection kind from a whole-actor selection). `selectedSurfaces` holds
+ * `selectionSet.ts`'s `surfaceKey(owner, polyIndex)` strings; a triangle qualifies when its OWN
+ * owner+poly-index pair encodes to a member of that set, mirroring `selectedTriangleGroups`'
+ * owner-only membership test. */
+export function selectedSurfaceTriangleGroups(
+  triangleOwners: (string | null)[],
+  trianglePolyIndex: (number | null)[],
+  selectedSurfaces: ReadonlySet<string>,
+  groups: readonly TriangleGroupRange[],
+): SelectedTriangleGroup[] {
+  if (selectedSurfaces.size === 0) return []
+  const out: SelectedTriangleGroup[] = []
+  for (const group of groups) {
+    const indices: number[] = []
+    for (let tri = group.start / 3; tri < (group.start + group.count) / 3; tri++) {
+      const owner = triangleOwners[tri]
+      const polyIndex = trianglePolyIndex[tri]
+      if (owner != null && polyIndex != null && selectedSurfaces.has(surfaceKey(owner, polyIndex))) {
         const base = tri * 3
         indices.push(base, base + 1, base + 2)
       }

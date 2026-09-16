@@ -22,7 +22,7 @@ import { bboxCenter, bboxMaxExtent } from './frame'
 import { MARKER_COLOR } from './markers'
 import { PointActorMarker } from './PointActorMarker'
 import { RadiiOverlays } from './RadiiOverlays'
-import { SelectionHighlight } from './SelectionHighlight'
+import { SelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
 import { SelectionMarkers } from './SelectionMarkers'
 import { selectedNonBrushBoxes } from './selectionBoxes'
 import type { ShadingMode } from './shadingMode'
@@ -66,6 +66,15 @@ const INITIAL_POSE: CameraPose = { position: [0, -500, 200], pitch: -10, yaw: 90
  * `<Canvas>` in this app MUST spread the same `CANVAS_COLOR_MANAGEMENT` constant (OrthoViewport.tsx
  * does, quad-layout Part 8). */
 export const CANVAS_COLOR_MANAGEMENT = { flat: true, linear: true, legacy: true } as const
+
+// `THREE.Raycaster.params.Line.threshold` for a wireframe brush-outline hit in THIS pane, in WORLD
+// units -- fixed rather than zoom-scaled (unlike `OrthoViewport.tsx`'s `orthoLineHitThresholdUU`)
+// because the perspective pane's own dolly-zoom already keeps nearby geometry at a roughly stable
+// screen size (`performTapSelect`'s own doc comment). Widened 4 -> 8 (owner report, live testing:
+// brush-outline selection needed near-pixel precision) -- a tuning judgment call, doubled alongside
+// `orthoCamera.ts`'s `LINE_HIT_SCREEN_PX` widening (2 -> 6px) for the same complaint; no RE evidence
+// pins an exact editor value here.
+export const WIREFRAME_LINE_HIT_WORLD_UNITS = 8
 
 /** Applies `pose` to a `THREE.PerspectiveCamera` -- Z-up (`camera.up`), aimed via `lookAt` (a
  * proper, always-valid rotation -- keeps roll disambiguation simple for a Z-up world with no roll
@@ -182,6 +191,12 @@ export interface Viewport3DProps {
   lightmap: LightmapPayload | null
   selectedNames: ReadonlySet<string>
   onSelectActor: (name: string, additive: boolean) => void
+  // Surface (single-polygon texture) selection -- a DISTINCT selection kind from `selectedNames`
+  // above (GUI.md "Selection & the Inspector"): a plain LMB-tap on a brush surface in a non-wireframe
+  // mode selects just that one polygon; Shift+LMB on the same surface selects the whole brush
+  // instead (`onSelectActor`). `selectedSurfaces` holds `selectionSet.ts`'s `surfaceKey` strings.
+  selectedSurfaces: ReadonlySet<string>
+  onSelectSurface: (actor: string, polyIndex: number, additive: boolean) => void
   // A tap that hits nothing selectable deselects everything (owner ruling 2026-09-15) -- the same
   // callback QuadLayout already wires to SelectionKeys' `Esc` handler, so a miss and `Esc` land on
   // one shared deselect path rather than two.
@@ -219,6 +234,8 @@ export function Viewport3D({
   scene,
   selectedNames,
   onSelectActor,
+  selectedSurfaces,
+  onSelectSurface,
   onDeselect,
   frameRequest = null,
   mode = 'lit',
@@ -267,7 +284,7 @@ export function Viewport3D({
   // SceneResourcesContext (Part 0, Tasks 1-2) -- Viewport3D no longer builds its own (Task 3;
   // camera/pointer handling/click-to-select are UNCHANGED in this task).
   const {
-    bufferGeometry, materials, unlitMaterials, triangleOwners,
+    bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
     moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners,
     textures, markerTexture, markerActors,
   } = useSceneResourcesContext()
@@ -321,17 +338,19 @@ export function Viewport3D({
         // it in wireframe/ortho views). A fixed world-unit threshold (unlike OrthoViewport's
         // zoom-scaled one) is fine here: the perspective pane's own dolly-zoom already keeps nearby
         // geometry at a roughly stable screen size.
-        lineThreshold: 4,
+        lineThreshold: WIREFRAME_LINE_HIT_WORLD_UNITS,
         meshObject: meshRef.current,
         markerObjects: markerGroupRef.current?.children ?? [],
         brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
         actors: scene.actors,
         triangleOwners,
+        trianglePolyIndex,
       })
-      if (action.kind === 'select') onSelectActor(action.name, action.additive)
+      if (action.kind === 'select-actor') onSelectActor(action.name, action.additive)
+      else if (action.kind === 'select-surface') onSelectSurface(action.actor, action.polyIndex, action.additive)
       else if (action.kind === 'deselect') onDeselect()
     },
-    [scene.actors, triangleOwners, onSelectActor, onDeselect, mode],
+    [scene.actors, triangleOwners, trianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode],
   )
 
   // Mouse-only pointer-lock/capture/tap-vs-drag plumbing, shared with ortho panes (Part 0, Task 4).
@@ -469,6 +488,19 @@ export function Viewport3D({
             bufferGeometry={bufferGeometry}
             triangleOwners={triangleOwners}
             selectedNames={selectedNames}
+            materials={activeMaterials}
+          />
+        )}
+        {/* Texture (single-surface) selection highlight -- a DISTINCT selection kind from the
+            whole-brush highlight above (GUI.md "Selection & the Inspector"); only ever one of the
+            two sets is non-empty at a time (App.tsx clears the other kind on every selection
+            change), so this and `SelectionHighlight` never light up the same brush at once. */}
+        {mode !== 'wireframe' && (
+          <SurfaceSelectionHighlight
+            bufferGeometry={bufferGeometry}
+            triangleOwners={triangleOwners}
+            trianglePolyIndex={trianglePolyIndex}
+            selectedSurfaces={selectedSurfaces}
             materials={activeMaterials}
           />
         )}

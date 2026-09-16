@@ -19,6 +19,27 @@ export function clearSelection(): Set<string> {
   return new Set()
 }
 
+/** Encodes a surface (single-polygon) selection identity into the stable string key the
+ * `selectedSurfaces` Set (App.tsx) and `toggleSelection` above use -- `polyIndex` is the poly's
+ * index into `ScenePayload.polys` (`geometry.ts`'s `trianglePolyIndex`), which only changes across a
+ * Rebuild/reload (a fresh scene payload replaces every `ScenePoly`, naturally invalidating any stale
+ * selection along with it, the same way a renamed/deleted actor already invalidates `selectedNames`).
+ * Splits on the LAST `#` (`parseSurfaceKey`) so an actor name containing `#` still round-trips. */
+export function surfaceKey(actor: string, polyIndex: number): string {
+  return `${actor}#${polyIndex}`
+}
+
+/** Inverse of `surfaceKey` -- null for a malformed key (should not happen from this module's own
+ * output, but a defensive parse boundary is cheap and avoids a silent `NaN` polyIndex downstream). */
+export function parseSurfaceKey(key: string): { actor: string; polyIndex: number } | null {
+  const i = key.lastIndexOf('#')
+  if (i < 0) return null
+  const actor = key.slice(0, i)
+  const polyIndex = Number(key.slice(i + 1))
+  if (!actor || !Number.isInteger(polyIndex)) return null
+  return { actor, polyIndex }
+}
+
 /** The "primary" (most-recently-selected) actor, or undefined for an empty selection --
  * UED22's real pivot widget drops onto whichever actor a human click lands on (one widget per
  * SELECTION, never one per actor; `dev/docs/spikes/2026-06-19-multiactor-rotate-groundtruth.md`

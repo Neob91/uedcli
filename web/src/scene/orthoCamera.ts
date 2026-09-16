@@ -144,7 +144,14 @@ export function orthoDragZoom(pose: OrthoPose, dyPx: number): OrthoPose {
 // point of needing near-pixel-exact clicks on a brush outline at typical zoom (owner report: "Hard
 // to select brushes in 2D view"). Scaling by `worldUnitsPerPixel` keeps the tolerance a constant
 // number of ON-SCREEN pixels regardless of zoom.
-const LINE_HIT_SCREEN_PX = 2
+//
+// Widened 2 -> 6px (owner report, live testing: selecting a brush by its outline still needed
+// near-pixel precision even after the zoom-independence fix above) -- matches `tapSelect.ts`'s own
+// `Line2` (bold/selected-ring) hit threshold, already 6 screen px, so a thin and a bold outline now
+// forgive the same on-screen miss. A tuning judgment call (no RE evidence pins an exact editor
+// value here), picked to be forgiving without pulling in an adjacent parallel line at typical brush
+// spacing -- widen further only against a specific new complaint, not preemptively.
+const LINE_HIT_SCREEN_PX = 6
 
 /** World-unit `Raycaster.params.Line.threshold` for a `screenPx`-wide click buffer around a thin
  * (non-`Line2`) brush outline at the pane's current zoom. */

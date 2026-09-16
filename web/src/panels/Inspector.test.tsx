@@ -1,8 +1,27 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 
-import type { SceneActor } from '../api'
+import type { ScenePoly, SceneActor } from '../api'
 import { groupByCategory, Inspector } from './Inspector'
+import type { SurfaceSelection } from './Inspector'
+
+function fixturePoly(overrides: Partial<ScenePoly> = {}): ScenePoly {
+  return {
+    verts: [0, 0, 0, 1, 0, 0, 1, 1, 0],
+    base: [0, 0, 0],
+    tu: [1, 0, 0],
+    tv: [0, 1, 0],
+    pan: [4, 8],
+    tex_index: 12,
+    masked: false,
+    two_sided: false,
+    blend: 'opaque',
+    flags: 0,
+    lightmap: null,
+    owner: 'Room',
+    ...overrides,
+  }
+}
 
 afterEach(cleanup)
 
@@ -112,6 +131,47 @@ describe('Inspector', () => {
     expect(screen.getByText('C')).toBeTruthy()
     // Not the single-actor detail view's own markup.
     expect(screen.queryByTestId('inspector')).toBeNull()
+  })
+
+  // Surface (single-polygon texture) selection -- a DISTINCT selection kind from a whole-actor
+  // selection (GUI.md "Selection & the Inspector"), owner-answered as highlight+inspect only.
+  it('renders a single surface\'s detail view when exactly one texture is selected and no actor is', () => {
+    const surface: SurfaceSelection = { actorName: 'Room', polyIndex: 4, poly: fixturePoly() }
+    render(<Inspector selected={[]} selectedSurfaces={[surface]} />)
+    expect(screen.getByTestId('inspector-surface')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Room -- surface 4' })).toBeTruthy()
+    expect(screen.getByText('#12')).toBeTruthy() // tex_index
+    expect(screen.getByText('4, 8')).toBeTruthy() // pan
+    expect(screen.queryByTestId('inspector-empty')).toBeNull()
+  })
+
+  it('renders "(untextured)" for a surface with no texture', () => {
+    const surface: SurfaceSelection = { actorName: 'Room', polyIndex: 0, poly: fixturePoly({ tex_index: -1 }) }
+    render(<Inspector selected={[]} selectedSurfaces={[surface]} />)
+    expect(screen.getByText('(untextured)')).toBeTruthy()
+  })
+
+  it('renders a lightweight "N surfaces selected" summary for 2+ selected surfaces', () => {
+    const surfaces: SurfaceSelection[] = [
+      { actorName: 'Room', polyIndex: 1, poly: fixturePoly() },
+      { actorName: 'Room', polyIndex: 2, poly: fixturePoly() },
+    ]
+    render(<Inspector selected={[]} selectedSurfaces={surfaces} />)
+    expect(screen.getByTestId('inspector-multi-surfaces')).toBeTruthy()
+    expect(screen.getByText('2 surfaces selected')).toBeTruthy()
+    expect(screen.queryByTestId('inspector-surface')).toBeNull()
+  })
+
+  it('defaults selectedSurfaces to empty -- an actor-only call site is unaffected', () => {
+    render(<Inspector selected={[]} />)
+    expect(screen.getByTestId('inspector-empty')).toBeTruthy()
+  })
+
+  it('an actor selection takes priority over a (should-be-empty) stale surface selection', () => {
+    const surface: SurfaceSelection = { actorName: 'Room', polyIndex: 4, poly: fixturePoly() }
+    render(<Inspector selected={[fixtureActor()]} selectedSurfaces={[surface]} />)
+    expect(screen.getByTestId('inspector')).toBeTruthy()
+    expect(screen.queryByTestId('inspector-surface')).toBeNull()
   })
 })
 
