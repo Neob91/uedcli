@@ -382,6 +382,27 @@ body {
   color: var(--fg-muted);
 }
 
+/* Base grid-size dropdown (dev/docs/GUI.md "The world-anchored grid") -- placed further left than
+   .radii-toggle so the three buttons don't overlap: .radii-toggle sits at right:84px and is itself
+   roughly 80-90px wide ("Radii: off" at this font/padding), putting its own left edge around
+   x=164-174px from the pane's right edge; right:172px leaves a small gap past that.
+   (.mover-solid-toggle has no positioning at all yet -- a separate, already-tracked layout bug, not
+   part of this overlap budget.) */
+.grid-size-select {
+  position: absolute;
+  top: 4px;
+  right: 172px;
+  z-index: 3;
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
 /* Cursor UU coordinate readout (Task 28) -- bottom-left of each ortho pane. */
 .ortho-cursor-readout {
   position: absolute;

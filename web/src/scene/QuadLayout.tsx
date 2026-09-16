@@ -12,6 +12,7 @@ import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
 import { OrgPanel } from '../panels/OrgPanel'
 import type { FrameRequest } from './frame'
 import { unionBBox } from './frame'
+import { DEFAULT_GRID_SIZE, GRID_SIZE_OPTIONS } from './grid'
 import { ModeSelector } from './ModeSelector'
 import { OrthoViewport } from './OrthoViewport'
 import type { PaneId } from './paneLayout'
@@ -95,6 +96,10 @@ export function QuadLayout({
   const [modes, setModes] = useState<Record<PaneId, ShadingMode>>(DEFAULT_MODES)
   // Grid visibility toggle (Part 8, Task 28) -- one switch for all three ortho panes.
   const [showGrid, setShowGrid] = useState(true)
+  // Base grid size (dev/docs/GUI.md "The world-anchored grid") -- UnrealEd's own persistent "Grid
+  // Size" preference: the smallest grid unit the escalation algorithm (grid.ts) builds from as a
+  // pane zooms. One value for all three ortho panes, same convention as showGrid/showRadii.
+  const [baseGridSize, setBaseGridSize] = useState<number>(DEFAULT_GRID_SIZE)
   // Collision-cylinder / light-radius overlay toggle -- one switch for all four panes (mirrors
   // showGrid's convention). Default OFF: radii clutter a level fast, unlike the grid.
   const [showRadii, setShowRadii] = useState(false)
@@ -175,6 +180,22 @@ export function QuadLayout({
         >
           Grid: {showGrid ? 'on' : 'off'}
         </button>
+        {/* Base grid-size dropdown (dev/docs/GUI.md "The world-anchored grid") -- UnrealEd's own
+            "Grid Size" preference, the SMALLEST grid unit the escalation algorithm builds from as a
+            pane zooms out. Positioned further left than .grid-toggle/.radii-toggle so the three
+            don't overlap (index.css's own comment has the offset math). */}
+        <select
+          className="grid-size-select"
+          aria-label="Grid size"
+          value={baseGridSize}
+          onChange={(e) => setBaseGridSize(Number(e.target.value))}
+        >
+          {GRID_SIZE_OPTIONS.map((n) => (
+            <option key={n} value={n}>
+              Grid Size: {n}
+            </option>
+          ))}
+        </select>
         <button
           type="button"
           className="radii-toggle"
@@ -238,6 +259,7 @@ export function QuadLayout({
                 frameRequest={frameRequest}
                 mode={resolveEffectiveMode(modes[pane], buildSolved)}
                 showGrid={showGrid}
+                baseGridSize={baseGridSize}
                 showRadii={showRadii}
               />
             )}

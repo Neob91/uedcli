@@ -14,6 +14,7 @@ import { BrushOutlines } from './BrushOutlines'
 import { useDragGesture } from './dragGesture'
 import type { DragGestureCallbacks } from './dragGesture'
 import type { FrameRequest } from './frame'
+import { DEFAULT_GRID_SIZE } from './grid'
 import { GridOverlay } from './GridOverlay'
 import { MARKER_COLOR } from './markers'
 import { PointActorMarker } from './PointActorMarker'
@@ -145,6 +146,10 @@ export interface OrthoViewportProps {
   // Grid visibility (Part 8, Task 28) -- a single toggle for all three ortho panes, owned by
   // QuadLayout, not a per-pane preference (classic level editors have one "show grid" switch).
   showGrid?: boolean
+  // The escalation algorithm's base/minimum step (dev/docs/GUI.md "The world-anchored grid") --
+  // UnrealEd's own persistent "Grid Size" preference, owned by QuadLayout's dropdown, one value for
+  // all three ortho panes (not per-pane, matching showGrid's convention).
+  baseGridSize?: number
   // Collision-cylinder / light-radius overlay toggle -- one switch for every pane (QuadLayout),
   // mirroring showGrid's convention; default off. Scoped to the current selection (owner ruling
   // 2026-09-15) -- on shows only the selected actor(s)' radii, not every actor's.
@@ -161,6 +166,7 @@ export function OrthoViewport({
   frameRequest = null,
   mode = 'wireframe',
   showGrid = true,
+  baseGridSize = DEFAULT_GRID_SIZE,
   showRadii = false,
 }: OrthoViewportProps) {
   const [pose, setPose] = useState<OrthoPose>(initialOrthoPose)
@@ -298,7 +304,7 @@ export function OrthoViewport({
             showing through a transparent canvas (bug report item 1). */}
         <color attach="background" args={['#404040']} />
         <OrthoCameraRig pose={pose} axis={axis} cameraRef={cameraRef} />
-        {showGrid && <GridOverlay pose={pose} axis={axis} />}
+        {showGrid && <GridOverlay pose={pose} axis={axis} baseGridSize={baseGridSize} />}
         {mode !== 'wireframe' && <mesh ref={meshRef} geometry={bufferGeometry} material={activeMaterials} />}
         {/* Issue 1: a selected brush's surface "lights up" (additive brightness boost), same as the
             3D perspective pane -- no surface to light up in wireframe mode (no solid mesh above). */}

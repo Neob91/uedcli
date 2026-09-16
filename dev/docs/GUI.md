@@ -144,20 +144,27 @@ already on screen therefore slides opposite the drag.
 `web/src/scene/grid.ts`'s `orthoGridWindow` computes the ortho grid's line-placement bounds in
 **absolute world u/v** (the camera center's own projection onto the axis basis), not a window
 centered on 0 — otherwise the grid slides with the camera instead of staying locked to geometry.
-`gridSpacingUU` snaps to a 1-2-5-10-per-decade sequence targeting ~50px on-screen spacing.
 
-**Grid color**: `GridOverlay.tsx`'s `GRID_COLOR` is `0x808088`. It was `0x3a3d4a` (~58,61,74),
-nearly the same brightness as the ortho background (`#404040`, 64,64,64) and effectively invisible
-— unlike `preview.py`'s grid, this one has no major/minor tiering (below), so a single flat color
-needs real contrast against the background on its own.
+**Decided: real UED22 parity, ported from `preview.py`.** `grid.ts`'s `gridEscalation`/
+`gridLineColor`/`gridIndices` are a faithful port of `preview.py`'s own `_grid_escalation`/
+`_grid_line_color`/`_grid_indices` (themselves ported from disassembled
+`UEditorEngine::DrawGridSection`, `dev/docs/spikes/2026-08-30-unrealed-ortho-grid-density/`): a
+fixed base step doubles ("escalates") as a pane zooms out, until lines land >= 4px apart on screen;
+every 8th (drawn-unit) line renders as a distinct "major" color, the rest "minor," and an odd line
+(one the next doubling would drop) fades toward the background first rather than popping away.
+`GridOverlay.tsx`'s escalation reads the pane's pixel WIDTH only (never its height), matching the
+real editor's own `Frame->X`-only rule — a citable fact, not a GUI-specific choice, so a non-square
+pane still escalates the same way UED22 would.
 
-**Open, unreconciled with `preview.py`**: `preview.py`'s own grid (`_grid_escalation`,
-`_grid_line_color`, ported from disassembled `UEditorEngine::DrawGridSection`) snaps to
-power-of-two steps and gives every 8th line a distinct "major" color with odd-line fade-before-drop.
-The GUI's grid has none of that tiering and a different step algorithm — `grid.ts`'s own comment
-already flags this as "flagged for owner confirmation, not treated as final." Needs an explicit
-decision (port `preview.py`'s algorithm for real parity, or confirm the GUI's own convention is
-intentional), not a silent implementation choice either way.
+The base step itself — UnrealEd's own persistent "Grid Size" preference, the smallest unit the
+escalation builds from — is a GUI toolbar control (`QuadLayout.tsx`'s grid-size dropdown, powers of
+two 1..512, default 16), not auto-derived from zoom the way `preview.py`'s own no-`--grid-size`
+default path (`_auto_grid_step`) is.
+
+**Grid color**: `GridOverlay.tsx`'s lines are colored per-vertex from `gridLineColor`'s lerp between
+`GRID_BASE` (`(64,64,64)`, also the ortho background `#404040`, so a fully-faded odd line fades to
+invisible) and `GRID_TARGET` (`(96,96,96)`, the major-line color) — the same two endpoints
+`preview.py` uses, picked locally since the editor's own base color isn't ported (see the spike).
 
 ## Ortho-pane draw order (grid / brushes / point actors)
 
@@ -238,7 +245,6 @@ at the wire boundary, never in the frontend — the Inspector's whole design poi
   `SceneActor.radii`/`uedcli/serve/scene.py::ActorRadii`) — a global toggle (`QuadLayout`'s
   `Radii:` button, default off) that, when on, draws radii only for the currently-selected actor(s)
   (nothing selected draws nothing), in both 3D and every 2D ortho pane.
-- Grid major/minor tiering (above).
 
 ## Future direction (not yet scoped)
 
