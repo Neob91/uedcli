@@ -150,7 +150,7 @@ describe('resolveTapAction', () => {
   it('a point-actor hit always selects the actor, Shift/mode irrelevant', () => {
     for (const mode of ['wireframe', 'unlit', 'flat', 'lit'] as const) {
       for (const shiftKey of [false, true]) {
-        expect(resolveTapAction({ actor: point, polyIndex: null }, mode, shiftKey, false)).toEqual({
+        expect(resolveTapAction({ actor: point, polyIndex: null, isLineHit: false }, mode, shiftKey, false)).toEqual({
           kind: 'select-actor', name: 'Light1', additive: false,
         })
       }
@@ -158,7 +158,7 @@ describe('resolveTapAction', () => {
   })
 
   it('a point-actor hit threads the Ctrl-driven additive flag through unchanged', () => {
-    expect(resolveTapAction({ actor: point, polyIndex: null }, 'lit', false, true)).toEqual({
+    expect(resolveTapAction({ actor: point, polyIndex: null, isLineHit: false }, 'lit', false, true)).toEqual({
       kind: 'select-actor', name: 'Light1', additive: true,
     })
   })
@@ -166,25 +166,25 @@ describe('resolveTapAction', () => {
   // The core of the new model: a genuine surface hit (polyIndex set) in a non-wireframe mode.
   describe('a surface hit on a brush, non-wireframe mode', () => {
     it('unmodified -> selects the TEXTURE, non-additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4 }, 'lit', false, false)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', false, false)).toEqual({
         kind: 'select-surface', actor: 'Brush1', polyIndex: 4, additive: false,
       })
     })
 
     it('Ctrl -> selects the TEXTURE, additively (multi-selects textures)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4 }, 'unlit', false, true)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'unlit', false, true)).toEqual({
         kind: 'select-surface', actor: 'Brush1', polyIndex: 4, additive: true,
       })
     })
 
     it('Shift -> forks the SAME click to the whole BRUSH actor instead, always additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4 }, 'lit', true, false)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', true, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
       })
     })
 
     it('Shift+Ctrl -> still the whole-actor fork, additive (Ctrl adds nothing new here)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4 }, 'flat', true, true)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'flat', true, true)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
       })
     })
@@ -194,19 +194,19 @@ describe('resolveTapAction', () => {
   // no modifier needed, Ctrl still multi-selects, Shift plays no special role.
   describe('a line hit on a brush, wireframe mode', () => {
     it('unmodified -> selects the actor, non-additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null }, 'wireframe', false, false)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', false, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: false,
       })
     })
 
     it('Ctrl -> selects the actor, additive (existing multi-select convention)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null }, 'wireframe', false, true)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', false, true)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
       })
     })
 
     it('Shift has no effect on the resulting additive flag (unlike the non-wireframe surface fork)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null }, 'wireframe', true, false)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', true, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: false,
       })
     })
@@ -217,12 +217,38 @@ describe('resolveTapAction', () => {
   // always has been: Shift required, a rejected hit absorbed rather than deselecting.
   describe('a non-wireframe fallback hit on a brush with no resolved surface', () => {
     it('unmodified -> absorbed (hit something, but not selectable without Shift)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null }, 'lit', false, false)).toEqual({ kind: 'none' })
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'lit', false, false)).toEqual({ kind: 'none' })
     })
 
     it('Shift -> selects the whole actor, additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null }, 'unlit', true, false)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'unlit', true, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
+      })
+    })
+  })
+
+  // A genuine LINE hit (a Mover's always-visible outline, `isLineHit: true`) in a NON-wireframe
+  // mode -- owner ruling 2026-09-17 (`shift-modifier-convention-broken-for-poly-and`, Bug B): this
+  // must behave exactly like wireframe mode's own line-hit rule (no modifier needed), NOT like the
+  // AABB-fallback case right above, even though both carry `polyIndex: null`. A line click has no
+  // competing poly/texture-select interpretation to disambiguate from a camera-fly drag, unlike an
+  // AABB-fallback hit (which GUI.md's rationale still gates behind Shift).
+  describe('a genuine line hit on a brush, NON-wireframe mode (e.g. a Mover outline)', () => {
+    it('unmodified -> selects the actor, non-additive -- no Shift needed', () => {
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'lit', false, false)).toEqual({
+        kind: 'select-actor', name: 'Brush1', additive: false,
+      })
+    })
+
+    it('Ctrl -> selects the actor, additive', () => {
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'unlit', false, true)).toEqual({
+        kind: 'select-actor', name: 'Brush1', additive: true,
+      })
+    })
+
+    it('Shift is not required (unlike the AABB-fallback case) and changes nothing', () => {
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'flat', true, false)).toEqual({
+        kind: 'select-actor', name: 'Brush1', additive: false,
       })
     })
   })
@@ -359,6 +385,20 @@ describe('pickHit', () => {
       { value: 'the-actual-clicked-line', isLine: true, alwaysOnTop: false, screenX: 100, screenY: 100 },
     ]
     expect(pickHit(hits, 100, 100)).toBe('the-actual-clicked-line')
+  })
+
+  it('an always-on-top line FARTHER from the click than a precise hit does NOT win (the bug)', () => {
+    // Real bug found live 2026-09-17 (`shift-modifier-convention-broken-for-poly-and`, Bug A):
+    // `DeusExMover4`'s outline is threshold-accepted (world-unit `Raycaster.params.Line.threshold`
+    // can span several screen pixels), so it was a candidate even when a click was actually centered
+    // on `Brush803`'s own poly right next to it -- and the old code let ANY always-on-top line beat
+    // ANY precise hit outright, with no distance comparison at all. The always-on-top line must only
+    // win when it's genuinely at least as close to the click as the precise hit.
+    const hits = [
+      { value: 'brush-poly-under-cursor', isLine: false, alwaysOnTop: false, screenX: 100, screenY: 100 },
+      { value: 'mover-outline-off-to-the-side', isLine: true, alwaysOnTop: true, screenX: 150, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('brush-poly-under-cursor')
   })
 })
 

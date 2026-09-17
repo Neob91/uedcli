@@ -151,24 +151,28 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
       if (raw) {
         if (raw.object === meshObject) {
           const surface = resolveHitSurface(raw.faceIndex, triangleOwners, trianglePolyIndex, actors)
-          hit = surface ? { actor: surface.actor, polyIndex: surface.polyIndex } : null
+          hit = surface ? { actor: surface.actor, polyIndex: surface.polyIndex, isLineHit: false } : null
         } else if (raw.object === moverMeshObject) {
           const surface = resolveHitSurface(raw.faceIndex, moverTriangleOwners, moverTrianglePolyIndex, actors)
-          hit = surface ? { actor: surface.actor, polyIndex: surface.polyIndex } : null
+          hit = surface ? { actor: surface.actor, polyIndex: surface.polyIndex, isLineHit: false } : null
         } else if (raw.object === meshPickObject) {
           // A mesh-actor triangle hit: resolve to the owning actor. `resolveTapAction` returns
           // select-actor for it regardless of polyIndex (a mesh actor has no brush), so the surface
           // index isn't load-bearing here -- it just identifies the actor.
           const surface = resolveHitSurface(raw.faceIndex, meshTriangleOwners, meshTrianglePolyIndex, actors)
-          hit = surface ? { actor: surface.actor, polyIndex: surface.polyIndex } : null
+          hit = surface ? { actor: surface.actor, polyIndex: surface.polyIndex, isLineHit: false } : null
         } else if (raw.object.userData.segmentOwners) {
+          // A brush/Mover outline segment -- a genuine hit on drawn LINE geometry
+          // (`RawTapHit.isLineHit`'s doc comment: never gated behind Shift, board item
+          // `shift-modifier-convention-broken-for-poly-and`).
           const segmentOwners = raw.object.userData.segmentOwners as (string | null)[]
           const actor = resolveSegmentHitActor(raw.index, segmentOwners, actors)
-          hit = actor ? { actor, polyIndex: null } : null
+          hit = actor ? { actor, polyIndex: null, isLineHit: true } : null
         } else {
+          // The selected-actor bold ring (`BrushOutlines.tsx`'s `BoldRing`) -- also a genuine line hit.
           const name = raw.object.userData.actorName as string | undefined
           const actor = name ? (actors.find((a) => a.name === name) ?? null) : null
-          hit = actor ? { actor, polyIndex: null } : null
+          hit = actor ? { actor, polyIndex: null, isLineHit: true } : null
         }
       }
     }
@@ -185,7 +189,7 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
     }
     const aabbCandidates = mode === 'wireframe' ? actors.filter((a) => !a.brush) : actors
     const actor = pickActor(ray, aabbCandidates)
-    hit = actor ? { actor, polyIndex: null } : null
+    hit = actor ? { actor, polyIndex: null, isLineHit: false } : null
   }
   return resolveTapAction(hit, mode, shiftKey, additive)
 }

@@ -42,3 +42,12 @@ gesture selects the whole brush actor) — implemented faithfully as given, not 
 3. Read back ACTOR-level results via `EDIT COPY`'s `bSelected` (confirms whether Shift toggled the
    whole-brush selection). Polygon-level results have no read-back path — would need a screenshot
    diff against the surface-highlight render, a genuinely new investigation.
+
+## Partially settled by owner decree (2026-09-17), not RE
+
+`shift-modifier-convention-broken-for-poly-and` fixed two real bugs in the poly-vs-line
+half of this question, per a direct owner ruling ("Shift is only to select BRUSHES ... by clicking on
+its VISIBLE POLY") rather than a live UED22 capture — so this settles the POLY-vs-LINE modifier
+question by decree, not evidence, and the "not RE-verified" caveat above still stands for everything
+else here (Ctrl multi-select semantics, the AABB-fallback Shift gate, and the poly-vs-actor fork
+itself). Still open.

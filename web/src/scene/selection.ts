@@ -84,10 +84,14 @@ export type TapAction =
  * click-target (surface vs. whole actor) and modifier-key rules below are applied. `polyIndex` is
  * non-null ONLY for a genuine hit on the drawn solid mesh (`selection.ts`'s `resolveHitSurface`) --
  * a marker/wireframe-line hit or an AABB-fallback hit (missed all real geometry) carries `null`,
- * since neither identifies one specific polygon. */
+ * since neither identifies one specific polygon. `isLineHit` distinguishes those two `polyIndex:
+ * null` cases: true for a genuine hit on drawn LINE geometry (a brush/Mover outline,
+ * `resolveSegmentHitActor`/the bold-ring branch in `tapSelect.ts`), false for the ray-vs-AABB
+ * fallback (`pickActor`, engaged only once the raycast found nothing at all to hit). */
 export interface RawTapHit {
   actor: SceneActor
   polyIndex: number | null
+  isLineHit: boolean
 }
 
 /** The tap-resolution decision Viewport3D/OrthoViewport's `performTapSelect` both make once they've
@@ -100,8 +104,12 @@ export interface RawTapHit {
  *   SAME click target between texture-select (unmodified) and actor-select (shifted): unmodified ->
  *   `'select-surface'` (additive = Ctrl, "multi-selects textures"); Shift held -> `'select-actor'`,
  *   ALWAYS additive (repeated Shift+LMB accumulates multiple brush selections, no Ctrl needed).
- * - Anything else -- a wireframe outline-LINE hit, or a non-wireframe hit that missed all real
- *   geometry (AABB fallback, no specific surface to fall back to a texture-select on) -- is a
+ * - A genuine LINE hit (`isLineHit`, e.g. a Mover's always-visible outline) never needs a modifier,
+ *   in ANY shading mode -- same rule as wireframe mode's own outline click, since a line click has no
+ *   competing poly/texture-select interpretation to disambiguate from a camera-fly drag (owner
+ *   ruling 2026-09-17, `shift-modifier-convention-broken-for-poly-and`).
+ * - Anything else -- a wireframe-mode click with no poly hit, or a non-wireframe hit that missed all
+ *   real geometry (AABB fallback, no specific surface to fall back to a texture-select on) -- is a
  *   whole-brush pick, gated the same way brush selection has always been (`canSelectBrushTap`):
  *   wireframe needs no modifier (Ctrl still multi-selects); a non-wireframe fallback hit still needs
  *   Shift, and a hit that Shift didn't clear is ABSORBED (`'none'`), not treated as a miss -- the tap
@@ -114,7 +122,7 @@ export function resolveTapAction(
   additive: boolean,
 ): TapAction {
   if (!rawHit) return { kind: 'deselect' }
-  const { actor, polyIndex } = rawHit
+  const { actor, polyIndex, isLineHit } = rawHit
 
   if (!actor.brush) return { kind: 'select-actor', name: actor.name, additive }
 
@@ -122,6 +130,8 @@ export function resolveTapAction(
     if (shiftKey) return { kind: 'select-actor', name: actor.name, additive: true }
     return { kind: 'select-surface', actor: actor.name, polyIndex, additive }
   }
+
+  if (isLineHit) return { kind: 'select-actor', name: actor.name, additive }
 
   if (!canSelectBrushTap(mode, shiftKey)) return { kind: 'none' }
   return { kind: 'select-actor', name: actor.name, additive: mode === 'wireframe' ? additive : true }
@@ -194,25 +204,38 @@ export interface HitCandidate<T> {
  * hits, since any two points on the SAME ray reproject to the same screen pixel regardless of depth.
  *
  * Between the two kinds: the screen-nearest LINE only beats the depth-nearest PRECISE hit when THAT
- * WINNING line is `alwaysOnTop` -- it's drawn over the precise hit's surface regardless of real
- * depth, so it's what's actually visible at that pixel (e.g. a Mover's outline over the wall it
- * doesn't occlude, board item `mover-not-selectable-via-wireframe-click`). A merely-screen-nearest
- * ORDINARY line does not override a genuine precise hit -- only the WINNING line's own
- * always-on-top-ness matters, never some other, losing line candidate's. */
+ * WINNING line is `alwaysOnTop` AND is at least as close to the click as the precise hit --
+ * `alwaysOnTop` alone is not enough (bug found 2026-09-17, `shift-modifier-convention-broken-for-
+ * poly-and`): a Mover's outline is threshold-accepted out to `lineThreshold` world units, which can
+ * be several screen pixels wide, so an always-on-top line can be a valid raycast candidate while
+ * sitting well off to the side of a click that's actually centered on a closer, ordinary poly (e.g.
+ * a brush's own wall right next to a Mover's frame) -- live-confirmed on `showcase_bar`: a precise
+ * hit on `Brush803`'s own poly was silently discarded in favor of `DeusExMover4`'s outline merely
+ * because the outline was ALSO within threshold, regardless of which was actually nearer the click.
+ * The intended case (a Mover's outline drawn over the wall it doesn't occlude, board item
+ * `mover-not-selectable-via-wireframe-click`) still wins: there the outline IS the nearest thing to
+ * the click, so the distance check still passes. A merely-screen-nearest ORDINARY (non-always-on-top)
+ * line never overrides a genuine precise hit either way -- only the WINNING line's own
+ * always-on-top-ness (and now its distance) matters, never some other, losing line candidate's. */
 export function pickHit<T>(hits: HitCandidate<T>[], clickX: number, clickY: number): T | null {
   if (hits.length === 0) return null
   const lineHits = hits.filter((h) => h.isLine)
   const preciseHits = hits.filter((h) => !h.isLine)
   let bestLine: HitCandidate<T> | null = null
-  let bestDistSq = Infinity
+  let bestLineDistSq = Infinity
   for (const h of lineHits) {
     const distSq = (h.screenX - clickX) ** 2 + (h.screenY - clickY) ** 2
-    if (distSq < bestDistSq) {
-      bestDistSq = distSq
+    if (distSq < bestLineDistSq) {
+      bestLineDistSq = distSq
       bestLine = h
     }
   }
-  if (preciseHits.length > 0 && !(bestLine?.alwaysOnTop ?? false)) return preciseHits[0].value
+  if (preciseHits.length > 0) {
+    const precise = preciseHits[0]
+    const preciseDistSq = (precise.screenX - clickX) ** 2 + (precise.screenY - clickY) ** 2
+    const lineWins = (bestLine?.alwaysOnTop ?? false) && bestLineDistSq <= preciseDistSq
+    if (!lineWins) return precise.value
+  }
   if (bestLine) return bestLine.value
   return preciseHits[0]?.value ?? null
 }
