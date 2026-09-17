@@ -26,6 +26,17 @@ function brushActor(name: string, isMover: boolean): SceneActor {
   }
 }
 
+// `BrushOutlines` renders TWO sibling root groups (a Fragment) -- the ordinary `groupRef` group and
+// a separate `moverGroupRef` group holding just the Mover thin ring (board item
+// `mover-not-selectable-via-wireframe-click`: exposed separately so the outer viewport can wire it
+// into the raycast candidate set in every mode, not just wireframe) -- so a test must search both
+// roots, not just `renderer.scene.children[0]`.
+function allLines(renderer: Awaited<ReturnType<typeof ReactThreeTestRenderer.create>>) {
+  return renderer.scene.children.flatMap((root) => root.children).filter((c) => c.instance instanceof THREE.LineSegments) as {
+    instance: THREE.LineSegments
+  }[]
+}
+
 // Board `mover-wireframe-occluded-by-geometry`: a Mover's wireframe must always composite on top of
 // other geometry, in every render mode -- normal depth-testing was letting an opaque wall/floor in
 // front of it hide the outline. An ordinary (non-Mover) brush's thin wireframe must keep normal
@@ -36,9 +47,9 @@ describe('BrushOutlines -- Mover wireframe always composites on top, ordinary br
     const renderer = await ReactThreeTestRenderer.create(
       <BrushOutlines actors={[mover]} selectedNames={new Set()} mode="csg-all" />,
     )
-    const lines = renderer.scene.children[0].children.filter((c) => c.instance instanceof THREE.LineSegments)
+    const lines = allLines(renderer)
     expect(lines).toHaveLength(1)
-    const line = lines[0].instance as THREE.LineSegments
+    const line = lines[0].instance
     const material = line.material as THREE.LineBasicMaterial
     expect(material.depthTest).toBe(false)
     expect(line.renderOrder).toBeGreaterThan(0)
@@ -49,9 +60,9 @@ describe('BrushOutlines -- Mover wireframe always composites on top, ordinary br
     const renderer = await ReactThreeTestRenderer.create(
       <BrushOutlines actors={[brush]} selectedNames={new Set()} mode="csg-all" />,
     )
-    const lines = renderer.scene.children[0].children.filter((c) => c.instance instanceof THREE.LineSegments)
+    const lines = allLines(renderer)
     expect(lines).toHaveLength(1)
-    const line = lines[0].instance as THREE.LineSegments
+    const line = lines[0].instance
     const material = line.material as THREE.LineBasicMaterial
     expect(material.depthTest).toBe(true)
     expect(line.renderOrder).toBe(0)
@@ -63,9 +74,7 @@ describe('BrushOutlines -- Mover wireframe always composites on top, ordinary br
     const renderer = await ReactThreeTestRenderer.create(
       <BrushOutlines actors={[mover, brush]} selectedNames={new Set()} mode="csg-all" />,
     )
-    const lines = renderer.scene.children[0].children.filter(
-      (c) => c.instance instanceof THREE.LineSegments,
-    ) as { instance: THREE.LineSegments }[]
+    const lines = allLines(renderer)
     expect(lines).toHaveLength(2)
     const byDepthTest = new Map(lines.map((l) => [(l.instance.material as THREE.LineBasicMaterial).depthTest, l.instance]))
     expect(byDepthTest.get(false)?.renderOrder).toBeGreaterThan(0)

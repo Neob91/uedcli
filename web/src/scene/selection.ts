@@ -170,6 +170,53 @@ export function nearestScreenHit<T>(hits: ScreenHit<T>[], clickX: number, clickY
   return best.value
 }
 
+/** One raycast hit, tagged with what `pickHit` needs to rank it. `isLine` distinguishes a
+ * `THREE.Line`/`LineSegments`/`LineLoop` hit (only THRESHOLD-accepted -- see `nearestScreenHit`'s
+ * doc comment) from a PRECISE mesh/sprite hit (a real ray-triangle/quad intersection). `alwaysOnTop`
+ * is only meaningful when `isLine` is true: whether that line renders `depthTest: false`, so it
+ * composites over other geometry regardless of real depth (a Mover's outline, a selected brush's
+ * bold ring -- `BrushOutlines.tsx`). `hits` must arrive with PRECISE hits already in real ray-depth
+ * order (`intersectObjects`' own ascending-distance sort) -- `pickHit` never reorders them. */
+export interface HitCandidate<T> {
+  value: T
+  isLine: boolean
+  alwaysOnTop: boolean
+  screenX: number
+  screenY: number
+}
+
+/** Decides which of several accepted raycast hits wins a click -- pulled out of `tapSelect.ts` so
+ * the decision is directly unit-testable without a real `THREE.Raycaster`/camera.
+ *
+ * Among LINE hits, screen-nearest wins (`nearestScreenHit`'s own rationale: a line's reported point
+ * may be genuinely off to the side of the click). Among PRECISE hits, the one already nearest in
+ * real depth wins outright (`hits`' own order) -- screen-distance can't disambiguate two precise
+ * hits, since any two points on the SAME ray reproject to the same screen pixel regardless of depth.
+ *
+ * Between the two kinds: the screen-nearest LINE only beats the depth-nearest PRECISE hit when THAT
+ * WINNING line is `alwaysOnTop` -- it's drawn over the precise hit's surface regardless of real
+ * depth, so it's what's actually visible at that pixel (e.g. a Mover's outline over the wall it
+ * doesn't occlude, board item `mover-not-selectable-via-wireframe-click`). A merely-screen-nearest
+ * ORDINARY line does not override a genuine precise hit -- only the WINNING line's own
+ * always-on-top-ness matters, never some other, losing line candidate's. */
+export function pickHit<T>(hits: HitCandidate<T>[], clickX: number, clickY: number): T | null {
+  if (hits.length === 0) return null
+  const lineHits = hits.filter((h) => h.isLine)
+  const preciseHits = hits.filter((h) => !h.isLine)
+  let bestLine: HitCandidate<T> | null = null
+  let bestDistSq = Infinity
+  for (const h of lineHits) {
+    const distSq = (h.screenX - clickX) ** 2 + (h.screenY - clickY) ** 2
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq
+      bestLine = h
+    }
+  }
+  if (preciseHits.length > 0 && !(bestLine?.alwaysOnTop ?? false)) return preciseHits[0].value
+  if (bestLine) return bestLine.value
+  return preciseHits[0]?.value ?? null
+}
+
 /** A point-actor sprite's icon has transparent padding around its drawn shape (`tapSelect.ts`'s
  * `resolveTapSelect` raycasts the sprite's full billboard quad, then samples this alpha at the hit
  * point). Whether a sampled alpha counts as "nothing drawn there" -- board item

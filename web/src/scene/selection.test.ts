@@ -7,6 +7,7 @@ import {
   isTransparentPixel,
   nearestScreenHit,
   pickActor,
+  pickHit,
   rayAabbIntersect,
   resolveHitActor,
   resolveHitSurface,
@@ -296,6 +297,68 @@ describe('nearestScreenHit', () => {
       { value: 'the-actual-clicked-line', screenX: 100, screenY: 100 },
     ]
     expect(nearestScreenHit(depthOrderedHits, 100, 100)).toBe('the-actual-clicked-line')
+  })
+})
+
+describe('pickHit', () => {
+  it('returns null for an empty candidate list', () => {
+    expect(pickHit([], 100, 100)).toBeNull()
+  })
+
+  it('a single precise hit wins with no lines present', () => {
+    const hits = [{ value: 'mesh', isLine: false, alwaysOnTop: false, screenX: 100, screenY: 100 }]
+    expect(pickHit(hits, 100, 100)).toBe('mesh')
+  })
+
+  it('among several PRECISE hits, the first (real ray-depth order) wins outright, not screen distance', () => {
+    // Two points on the same ray reproject to (as good as) the same screen pixel regardless of
+    // depth, so screen-distance can't disambiguate two precise hits -- `hits[0]`'s real depth order
+    // must decide, even if a LATER entry happens to report a marginally closer screen position.
+    const hits = [
+      { value: 'depth-nearest', isLine: false, alwaysOnTop: false, screenX: 100.4, screenY: 100 },
+      { value: 'depth-farther', isLine: false, alwaysOnTop: false, screenX: 100.1, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('depth-nearest')
+  })
+
+  it('an ORDINARY (not always-on-top) line never overrides a precise hit, even when screen-nearer', () => {
+    // board `flaky-masked-surface-and-sprite-picking-30pct`-shaped case: a genuine precise hit under
+    // the cursor must not lose to an unrelated ordinary line merely because it threshold-accepted.
+    const hits = [
+      { value: 'precise-under-cursor', isLine: false, alwaysOnTop: false, screenX: 100, screenY: 100 },
+      { value: 'ordinary-line', isLine: true, alwaysOnTop: false, screenX: 100, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('precise-under-cursor')
+  })
+
+  it('an always-on-top line beats a precise hit at the same pixel', () => {
+    // board `mover-not-selectable-via-wireframe-click`: a Mover's outline (depthTest:false) is drawn
+    // over whatever real geometry sits behind it, so a click there must resolve to the line.
+    const hits = [
+      { value: 'wall-behind', isLine: false, alwaysOnTop: false, screenX: 100, screenY: 100 },
+      { value: 'mover-outline', isLine: true, alwaysOnTop: true, screenX: 100, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('mover-outline')
+  })
+
+  it('only the winning line\'s always-on-top-ness matters, not a losing candidate\'s', () => {
+    // Review finding: an ordinary line that is screen-NEAREST must still win over a precise hit
+    // check -- a farther, always-on-top line merely being present elsewhere must not force the
+    // precise hit to be discarded.
+    const hits = [
+      { value: 'precise-under-cursor', isLine: false, alwaysOnTop: false, screenX: 100, screenY: 100 },
+      { value: 'ordinary-line-close', isLine: true, alwaysOnTop: false, screenX: 101, screenY: 100 },
+      { value: 'always-on-top-line-far', isLine: true, alwaysOnTop: true, screenX: 400, screenY: 400 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('precise-under-cursor')
+  })
+
+  it('among several LINE hits with no precise hit, screen-nearest wins (matches nearestScreenHit)', () => {
+    const hits = [
+      { value: 'depth-nearest-but-off-screen', isLine: true, alwaysOnTop: false, screenX: 400, screenY: 400 },
+      { value: 'the-actual-clicked-line', isLine: true, alwaysOnTop: false, screenX: 100, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('the-actual-clicked-line')
   })
 })
 
