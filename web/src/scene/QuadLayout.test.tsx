@@ -80,7 +80,8 @@ function Harness({ buildSolved = false }: { buildSolved?: boolean }) {
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set())
   const [selectedSurfaces, setSelectedSurfaces] = useState<Set<string>>(new Set())
   const onSelectActor = (name: string, additive: boolean) => {
-    setSelectedNames((s) => toggleSelection(s, name, additive))
+    // deselectSole=true mirrors App.tsx's real onSelectActor wiring -- keep this in sync with it.
+    setSelectedNames((s) => toggleSelection(s, name, additive, true))
     setSelectedSurfaces(new Set())
   }
   const onSelectSurface = (actor: string, polyIndex: number, additive: boolean) => {
@@ -161,6 +162,19 @@ describe('QuadLayout cross-pane selection consistency', () => {
 
     fireEvent.click(screen.getByTestId('pane-perspective-select-poly'))
     expect(screen.getByTestId('pane-perspective-selected-surfaces').textContent).toBe('')
+  })
+
+  // Board item click-on-selected-mesh-actor-does-not-deselect: through the REAL onSelectActor
+  // wiring (Harness mirrors App.tsx exactly), clicking the sole selected actor again must clear it,
+  // same as the poly case above.
+  it('clicking the sole selected actor again deselects it', () => {
+    render(<Harness />)
+
+    fireEvent.click(screen.getByTestId('pane-perspective-select'))
+    expect(screen.getByTestId('pane-perspective-selected').textContent).toBe('ActorA')
+
+    fireEvent.click(screen.getByTestId('pane-perspective-select'))
+    expect(screen.getByTestId('pane-perspective-selected').textContent).toBe('')
   })
 })
 
