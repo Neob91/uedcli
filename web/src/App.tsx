@@ -99,7 +99,9 @@ function App() {
     setSelectedSurfaces(clearSelection())
   }, [])
   const onSelectSurface = useCallback((actor: string, polyIndex: number, additive: boolean) => {
-    setSelectedSurfaces((s) => toggleSelection(s, surfaceKey(actor, polyIndex), additive))
+    // deselectSole=true: re-tapping the one currently-selected poly clears it (bug report: clicking
+    // an already-selected poly did nothing) -- actor selection keeps the no-op-reselect default.
+    setSelectedSurfaces((s) => toggleSelection(s, surfaceKey(actor, polyIndex), additive, true))
     setSelectedNames(clearSelection())
   }, [])
   // OrgPanel's own batch-select shape (Task 23): a folder-node click replaces/adds a whole actor

@@ -14,21 +14,27 @@ vi.mock('./Viewport3D', () => ({
   Viewport3D: ({
     selectedNames,
     onSelectActor,
+    selectedSurfaces,
+    onSelectSurface,
     onDeselect,
     mode,
     showMoverSolid,
   }: {
     selectedNames: ReadonlySet<string>
     onSelectActor: (name: string, additive: boolean) => void
+    selectedSurfaces: ReadonlySet<string>
+    onSelectSurface: (actor: string, polyIndex: number, additive: boolean) => void
     onDeselect: () => void
     mode: string
     showMoverSolid: boolean
   }) => (
     <div>
       <span data-testid="pane-perspective-selected">{[...selectedNames].join(',')}</span>
+      <span data-testid="pane-perspective-selected-surfaces">{[...selectedSurfaces].join(',')}</span>
       <span data-testid="pane-perspective-mode">{mode}</span>
       <span data-testid="pane-perspective-mover-solid">{String(showMoverSolid)}</span>
       <button type="button" data-testid="pane-perspective-select" onClick={() => onSelectActor('ActorA', false)} />
+      <button type="button" data-testid="pane-perspective-select-poly" onClick={() => onSelectSurface('BrushA', 0, false)} />
       <button type="button" data-testid="pane-perspective-miss" onClick={onDeselect} />
     </div>
   ),
@@ -78,7 +84,8 @@ function Harness({ buildSolved = false }: { buildSolved?: boolean }) {
     setSelectedSurfaces(new Set())
   }
   const onSelectSurface = (actor: string, polyIndex: number, additive: boolean) => {
-    setSelectedSurfaces((s) => toggleSelection(s, surfaceKey(actor, polyIndex), additive))
+    // deselectSole=true mirrors App.tsx's real onSelectSurface wiring -- keep this in sync with it.
+    setSelectedSurfaces((s) => toggleSelection(s, surfaceKey(actor, polyIndex), additive, true))
     setSelectedNames(new Set())
   }
   return (
@@ -142,6 +149,18 @@ describe('QuadLayout cross-pane selection consistency', () => {
     for (const pane of ['perspective', 'top', 'front', 'side']) {
       expect(screen.getByTestId(`pane-${pane}-selected`).textContent).toBe('')
     }
+  })
+
+  // Board item click-on-a-selected-poly-does-not-deselect-it: through the REAL onSelectSurface
+  // wiring (Harness mirrors App.tsx exactly), clicking the sole selected poly again must clear it.
+  it('clicking the sole selected poly again deselects it', () => {
+    render(<Harness />)
+
+    fireEvent.click(screen.getByTestId('pane-perspective-select-poly'))
+    expect(screen.getByTestId('pane-perspective-selected-surfaces').textContent).toBe('BrushA#0')
+
+    fireEvent.click(screen.getByTestId('pane-perspective-select-poly'))
+    expect(screen.getByTestId('pane-perspective-selected-surfaces').textContent).toBe('')
   })
 })
 

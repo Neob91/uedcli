@@ -3,10 +3,24 @@
 
 /** `additive=false`: REPLACE the set with exactly `{name}` (a plain tap's semantics), regardless of
  * what was previously selected -- including a re-tap of the sole already-selected actor (a no-op
- * reselect, not a toggle-off). `additive=true`: toggle `name`'s membership in `current` (add if
- * absent, remove if present -- Ctrl+tap's "multi-selects" semantics). */
-export function toggleSelection(current: ReadonlySet<string>, name: string, additive: boolean): Set<string> {
-  if (!additive) return new Set([name])
+ * reselect, not a toggle-off; this is deliberate for actor selection, spec §9). `additive=true`:
+ * toggle `name`'s membership in `current` (add if absent, remove if present -- Ctrl+tap's
+ * "multi-selects" semantics).
+ *
+ * `deselectSole`: when true, a non-additive re-tap of the CURRENT sole selection member clears the
+ * set instead of replacing it with itself -- poly click-to-deselect semantics (bug report: clicking
+ * an already-selected poly did nothing). Defaults to false, preserving the actor no-op-reselect
+ * behavior above. */
+export function toggleSelection(
+  current: ReadonlySet<string>,
+  name: string,
+  additive: boolean,
+  deselectSole = false,
+): Set<string> {
+  if (!additive) {
+    if (deselectSole && current.size === 1 && current.has(name)) return new Set()
+    return new Set([name])
+  }
   const next = new Set(current)
   if (next.has(name)) next.delete(name)
   else next.add(name)

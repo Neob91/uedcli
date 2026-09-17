@@ -22,6 +22,15 @@ describe('toggleSelection', () => {
     const result = toggleSelection(new Set(['A', 'B']), 'A', true)
     expect([...result]).toEqual(['B'])
   })
+
+  it('deselectSole=true clears a non-additive re-tap of the sole selected member (poly deselect)', () => {
+    expect(toggleSelection(new Set(['A']), 'A', false, true).size).toBe(0)
+  })
+
+  it('deselectSole=true still replaces when the sole member differs, or when several are selected', () => {
+    expect([...toggleSelection(new Set(['A']), 'B', false, true)]).toEqual(['B'])
+    expect([...toggleSelection(new Set(['A', 'B']), 'A', false, true)]).toEqual(['A'])
+  })
 })
 
 describe('clearSelection', () => {
