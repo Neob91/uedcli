@@ -61,6 +61,21 @@ Primary code suspects:
 3. Click a plain opaque shelf poly a few pixels in from its edge (still clearly inside its visible
    footprint) -- expect it to sometimes select the object behind it instead of the shelf poly itself.
 
+## Related fix landed (2026-09-17, not yet verified against THIS item's own repro)
+
+`mover-not-selectable-via-wireframe-click` (`done/`) fixed exactly the over-broad-`nearestScreenHit`
+mechanism symptom 3 points at: the old ranking always used screen-distance across EVERY hit once
+`hits.length > 1`, including two PRECISE (mesh) hits along the same ray -- which can't be
+disambiguated by screen distance at all (two points on one ray reproject to the same pixel), so the
+"winner" was effectively picked by sub-pixel floating-point noise. `selection.ts`'s new `pickHit`
+(unit-tested) now takes the depth-nearest precise hit outright unless a genuine always-on-top line
+wins the ranking. This class of bug plausibly explains symptom 3 (plain opaque poly) directly, and
+possibly symptoms 1-2 too if the masked-surface/sprite alpha-rejection paths were hitting the same
+precise-vs-precise coincidence rather than (or in addition to) an alpha-sampling bug. NOT verified
+against this item's own repro (`Brush100:0` etc., a real sprite, the reported shelf poly) -- re-test
+with `pickHit` before assuming this is closed; the alpha-sampling suspects below may still be real,
+separate issues even if the hit-ranking fix helps.
+
 ## Scope
 
 Root-cause and fix ONLY this regression. A separate item
