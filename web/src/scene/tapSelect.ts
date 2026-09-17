@@ -8,8 +8,8 @@
 import * as THREE from 'three'
 
 import type { SceneActor } from '../api'
-import { pickActor, resolveHitSurface, resolveSegmentHitActor, resolveTapAction } from './selection'
-import type { Ray, RawTapHit, TapAction } from './selection'
+import { nearestScreenHit, pickActor, resolveHitSurface, resolveSegmentHitActor, resolveTapAction } from './selection'
+import type { Ray, RawTapHit, ScreenHit, TapAction } from './selection'
 import type { ShadingMode } from './shadingMode'
 
 export interface TapSelectParams {
@@ -45,10 +45,12 @@ export interface TapSelectParams {
 
 /** Runs the raycast-then-AABB-fallback hit-test and resolves it to a `TapAction`: raycast the real
  * drawn geometry (main scene mesh + point-actor marker sprites +, in wireframe mode, the brush
- * outline lines) together so the nearest hit wins regardless of which one it lands on, else fall
- * back to ray-vs-AABB (never for a brush actor in wireframe mode). The click-target (surface vs.
- * whole actor) and modifier-key rules live in `selection.ts`'s `resolveTapAction` -- this function
- * only builds the raw hit-test result it needs. */
+ * outline lines) together, and among every threshold-accepted hit pick the one whose PROJECTED
+ * SCREEN POSITION is nearest the actual click (`nearestScreenHit`) -- not three.js's own
+ * depth-nearest sort, which is the wrong tie-break for a threshold-based line hit-test (see that
+ * function's doc comment). Falls back to ray-vs-AABB on a genuine miss (never for a brush actor in
+ * wireframe mode). The click-target (surface vs. whole actor) and modifier-key rules live in
+ * `selection.ts`'s `resolveTapAction` -- this function only builds the raw hit-test result it needs. */
 export function resolveTapSelect(params: TapSelectParams): TapAction {
   const { camera, rect, clientX, clientY, additive, shiftKey, mode, lineThreshold, meshObject, meshPickObject, meshTriangleOwners, meshTrianglePolyIndex, markerObjects, brushObjects, actors, triangleOwners, trianglePolyIndex } =
     params
@@ -67,7 +69,17 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
   if (candidates.length > 0) {
     const hits = raycaster.intersectObjects(candidates, false)
     if (hits.length > 0) {
-      const raw = hits[0]
+      // `intersectObjects` sorts by ray-depth, not by proximity to the actual click on screen --
+      // wrong for a THRESHOLD-based line hit-test, where several candidates can pass the threshold
+      // at once (see `nearestScreenHit`'s doc comment). Re-rank by projected screen distance to the
+      // click pixel; a single hit skips the projection work.
+      const clickPx = clientX - rect.left
+      const clickPy = clientY - rect.top
+      const screenHits: ScreenHit<THREE.Intersection>[] = hits.map((h) => {
+        const ndc = h.point.clone().project(camera)
+        return { value: h, screenX: ((ndc.x + 1) / 2) * rect.width, screenY: ((1 - ndc.y) / 2) * rect.height }
+      })
+      const raw = hits.length === 1 ? hits[0] : (nearestScreenHit(screenHits, clickPx, clickPy) ?? hits[0])
       if (raw.object === meshObject) {
         const surface = resolveHitSurface(raw.faceIndex, triangleOwners, trianglePolyIndex, actors)
         hit = surface ? { actor: surface.actor, polyIndex: surface.polyIndex } : null

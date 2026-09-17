@@ -132,6 +132,44 @@ export interface Ray {
   direction: Vec3
 }
 
+/** One raycast candidate, reduced to its screen-pixel position (`tapSelect.ts` projects each
+ * `THREE.Intersection.point` through the camera before calling this). */
+export interface ScreenHit<T> {
+  value: T
+  screenX: number
+  screenY: number
+}
+
+/** Picks the candidate whose PROJECTED SCREEN POSITION is closest to the actual click point --
+ * fixes a real bug in naively taking `Raycaster.intersectObjects(...)[0]`: three.js sorts line/mesh
+ * intersections by `distance` (depth from the ray origin to the intersection point), NOT by how
+ * close the hit is to the click on screen (`node_modules/three/src/objects/Line.js`'s
+ * `checkIntersection`: `distance = raycaster.ray.origin.distanceTo(_intersectPointOnRay)`). For a
+ * THRESHOLD-based line hit-test (wireframe brush/mover outlines, `WIREFRAME_LINE_HIT_WORLD_UNITS`/
+ * `orthoLineHitThresholdUU`) that threshold can, in a busy or tightly-framed scene, admit several
+ * candidates at once -- and depth-nearest is frequently NOT the one visually under the cursor (an
+ * unrelated line or marker sprite merely closer to the camera along that ray). Confirmed live
+ * (`wireframe-brush-selection-should-hit-test-lines`/`mover-near-brush803-unclickable-in-wireframe-
+ * 2d`): clicking squarely on a Mover's own rendered outline line consistently resolved to a
+ * different, farther-on-screen actor whose line happened to sit nearer the camera. Real UED22's own
+ * click hit-test (disassembled `UEditorEngine::Click`, `Editor.dll`) is fundamentally screen-space
+ * too -- it scans a fixed ~5x5 PIXEL box around the cursor, never a world-space radius -- so
+ * screen-nearest is the faithful tie-break, not merely a plausible one. A genuine miss (empty hits
+ * array) is unaffected -- this only re-ranks candidates the threshold already accepted. */
+export function nearestScreenHit<T>(hits: ScreenHit<T>[], clickX: number, clickY: number): T | null {
+  if (hits.length === 0) return null
+  let best = hits[0]
+  let bestDistSq = (best.screenX - clickX) ** 2 + (best.screenY - clickY) ** 2
+  for (let i = 1; i < hits.length; i++) {
+    const distSq = (hits[i].screenX - clickX) ** 2 + (hits[i].screenY - clickY) ** 2
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq
+      best = hits[i]
+    }
+  }
+  return best.value
+}
+
 /** Ray-vs-AABB slab test. Returns the entry distance (clamped to >= 0 for a ray starting inside
  * the box), or null if the ray misses. */
 export function rayAabbIntersect(ray: Ray, lo: Vec3, hi: Vec3): number | null {

@@ -59,7 +59,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Topic | Question | State | Evidence / board item |
 |---|---|---|---|
 | Selection highlight rendering | What color/blend/technique does UED22 use to show a selected sprite/mesh actor? | ✅ closed, implemented | ✅ binary (`render.dll` disassembly), see Findings below |
-| Click/hit-detection algorithm | How does UED22 resolve a click to a surface/actor/brush when candidates overlap? | ⬜ open | `dev/docs/board/inbox/gui-click-detection-algorithm-not-re-d-against/` |
+| Click/hit-detection algorithm | How does UED22 resolve a click to a surface/actor/brush when candidates overlap? | 🔶 investigating | `dev/docs/board/inbox/gui-click-detection-algorithm-not-re-d-against/` — see Findings below |
 | Modifier-key click-select rules | Are the Shift/Ctrl select-surface-vs-actor rules real UED22 behavior? | ⬜ open | `dev/docs/board/inbox/gui-texture-actor-click-select-modifier-rules/` |
 | Marquee containment rule | Full-containment for brushes vs. pivot-in-box for point actors — confirmed fact, not yet wired into the (deferred) marquee feature | ⬜ open (marquee itself deferred) | `dev/docs/board/inbox/gui-ortho-marquee-spec-omits-unrealed-s-brush/` |
 | CSG brush coloring | Does UED22 give Intersect/Deintersect brushes a distinct color from Add? | ⬜ open | `dev/docs/board/inbox/gui-csg-brush-coloring-never-distinguishes/` |
@@ -118,6 +118,45 @@ needed). Three distinct techniques, not one shared overlay:
 
 Not yet folded into `dev/docs/unrealed/rendering.md` as a permanent verified fact — that edit needs
 the owner's yes per `CLAUDE.md`; this section is the campaign's own working record until then.
+
+### Click/hit-detection algorithm — screen-space tie-break, not depth-nearest (investigating, 2026-09-17)
+
+Two owner-reported bugs (`wireframe-brush-selection-should-hit-test-lines`,
+`mover-near-brush803-unclickable-in-wireframe-2d`) turned out to be the SAME root cause, not the two
+different mechanisms each report guessed at (an invisible poly face; an actor-vs-brush priority rule).
+
+📖 **Disassembly** (`Editor.dll`/`Engine.dll`, this repo's `uned/UED22/`): `UEditorEngine::Click`
+(`Editor.dll`) builds a fixed screen-space PIXEL box around the cursor — measured from the actual
+clamp arithmetic, not inferred: `(coord+3) - (coord-2) = 5` on both axes, a genuine 5×5 px box — and
+hands it to `UViewport::ExecuteHits` (`Engine.dll`) against a rendered hit-proxy buffer for that box
+(`HActor`/`HBspSurf`/`HBrushVertex`/`HHitProxy` exports confirm the classic UE1 hit-proxy
+architecture). UED22's own click hit-test is fundamentally SCREEN-SPACE — never a world-space radius.
+
+This directly explains the bug: our own `tapSelect.ts` raycasts wireframe brush/mover outlines with a
+generous THRESHOLD (`WIREFRAME_LINE_HIT_WORLD_UNITS`/`orthoLineHitThresholdUU`) so thin 1px lines stay
+clickable, and then took `THREE.Raycaster.intersectObjects(...)`'s own `hits[0]`. But three.js sorts
+line hits by `distance` = depth from the camera along the ray (`node_modules/three/src/objects/
+Line.js`'s `checkIntersection`), not by proximity to the actual click on screen — so once several
+candidates pass the threshold at once, the depth-nearest one often is NOT the one under the cursor (an
+unrelated marker sprite, or a farther-on-screen brush's line merely closer to the camera along that
+ray).
+
+🔬 **Live-probed** (own GUI, `showcase_bar`, headless Chromium): clicking squarely on `DeusExMover4`'s
+own rendered outline (the exact Mover the `mover-near-brush803` report named) resolved to a WRONG
+actor on every one of 13 test points before a fix — `Light199`/`Brush803`/`Brush812`/`Brush813`, never
+the Mover. Fix: `tapSelect.ts`'s `resolveTapSelect` now re-ranks threshold-accepted hits by projected
+SCREEN distance to the click (`selection.ts`'s `nearestScreenHit`) instead of `hits[0]`. Re-verified:
+the same battery went from 0/13 to 6/13 correct in the perspective pane and 13/13 in the ortho top
+pane (independently reproduced by a reviewing subagent, including its own separate causal A/B and an
+ortho-pane pass). The remaining perspective misses are two actors' lines genuinely close together on
+screen at that exact pixel — consistent with UED22's own ~5px hit box, not a further bug.
+
+**Not closed.** This fixes one real mechanism (screen-space vs. depth-nearest tie-break) with
+disassembly evidence for what UED22 does generically — it does not live-verify the recovered algorithm
+against a real UED22 boot on N overlap test scenes, the bar this topic needs to close. The AABB
+fallback path (`selection.ts`'s `pickActor`, engaged only on a genuine raycast miss) still ranks by
+depth and is untouched — a candidate for the same bug class if a future report describes a
+miss-fallback mis-pick rather than a hit-reranking one.
 
 ### Radii overlay colors (investigating, 2026-09-16)
 

@@ -4,6 +4,7 @@ import type { BrushHighlight, SceneActor } from '../api'
 import {
   canSelectBrushTap,
   isTap,
+  nearestScreenHit,
   pickActor,
   rayAabbIntersect,
   resolveHitActor,
@@ -266,5 +267,33 @@ describe('isTap', () => {
   it('is exactly at the threshold boundary (inclusive)', () => {
     expect(isTap(0, 0, 4, 0, 4)).toBe(true)
     expect(isTap(0, 0, 4.01, 0, 4)).toBe(false)
+  })
+})
+
+describe('nearestScreenHit', () => {
+  it('returns null for an empty candidate list', () => {
+    expect(nearestScreenHit([], 100, 100)).toBeNull()
+  })
+
+  it('picks the candidate closest to the click on screen, not array order', () => {
+    const hits = [
+      { value: 'far', screenX: 0, screenY: 0 },
+      { value: 'near', screenX: 101, screenY: 100 },
+      { value: 'farther', screenX: 500, screenY: 500 },
+    ]
+    expect(nearestScreenHit(hits, 100, 100)).toBe('near')
+  })
+
+  it('reproduces the real bug: a depth-nearer but screen-farther hit must NOT win', () => {
+    // This is the exact failure mode found live (wireframe-brush-selection-should-hit-test-lines /
+    // mover-near-brush803-unclickable-in-wireframe-2d): three.js's own Raycaster sorts by ray
+    // DEPTH, so a hit far from the click on screen but physically nearer the camera used to be
+    // `hits[0]` and win. Simulating that array order here: the depth-nearest candidate is listed
+    // FIRST, but it is screen-farther from the click than the second candidate.
+    const depthOrderedHits = [
+      { value: 'depth-nearest-but-off-screen', screenX: 400, screenY: 400 },
+      { value: 'the-actual-clicked-line', screenX: 100, screenY: 100 },
+    ]
+    expect(nearestScreenHit(depthOrderedHits, 100, 100)).toBe('the-actual-clicked-line')
   })
 })
