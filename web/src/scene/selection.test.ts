@@ -4,6 +4,7 @@ import type { BrushHighlight, SceneActor } from '../api'
 import {
   canSelectBrushTap,
   isTap,
+  isTransparentPixel,
   nearestScreenHit,
   pickActor,
   rayAabbIntersect,
@@ -295,5 +296,20 @@ describe('nearestScreenHit', () => {
       { value: 'the-actual-clicked-line', screenX: 100, screenY: 100 },
     ]
     expect(nearestScreenHit(depthOrderedHits, 100, 100)).toBe('the-actual-clicked-line')
+  })
+})
+
+describe('isTransparentPixel', () => {
+  it('is transparent at alpha 0 (the sprite icon padding)', () => {
+    expect(isTransparentPixel(0)).toBe(true)
+  })
+
+  it('is not transparent at full opacity', () => {
+    expect(isTransparentPixel(1)).toBe(false)
+  })
+
+  it('uses the same 0.5 cutoff as the masked-material alphaTest', () => {
+    expect(isTransparentPixel(0.49)).toBe(true)
+    expect(isTransparentPixel(0.5)).toBe(false)
   })
 })

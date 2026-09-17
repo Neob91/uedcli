@@ -170,6 +170,27 @@ export function nearestScreenHit<T>(hits: ScreenHit<T>[], clickX: number, clickY
   return best.value
 }
 
+/** A point-actor sprite's icon has transparent padding around its drawn shape (`tapSelect.ts`'s
+ * `resolveTapSelect` raycasts the sprite's full billboard quad, then samples this alpha at the hit
+ * point). Whether a sampled alpha counts as "nothing drawn there" -- board item
+ * `point-actor-sprite-picking-ignores-sprite-alpha`. UED22's own click hit-test needs no special
+ * sprite-alpha rule at all: it reads a rendered hit-proxy buffer back for the cursor's ~5x5 pixel box
+ * (`nearestScreenHit`'s doc comment), and its masked-sprite BLIT (`SoftDrv/Src/DrawTile.cpp`'s
+ * `FlashSprite32Masked`: `if (Texel) Screen[x] = Palette[Texel]` -- source confirmed against the
+ * `SoftDrv.SoftwareRenderDevice` this project's own headless editor uses, `dev/docs/unrealed/
+ * rendering.md`) never writes the destination pixel at all when the source texel is the reserved
+ * transparent palette index -- so a transparent pixel is invisible to the SAME hit-proxy readback
+ * that makes the sprite's opaque pixels selectable, as a pure side effect of the shared raster path,
+ * not a separately-coded rule (📖 source: `Source/SoftDrv/Src/{Hit,DrawTile}.cpp`, `fgsfdsfgs/UE1`;
+ * cross-checked against this repo's `Editor.dll`/`render.dll` exports -- `HActor`'s `PUSH_HIT` call
+ * site in `UnSprite.cpp`'s `DrawActorSprite` matches the real DLL's hit-proxy class exports). UE1's
+ * masking is a hard binary test (palette index 0 or not); this codebase's atlas textures are
+ * anti-aliased PNGs with soft edges, so `threshold` reuses the existing masked-material alphaTest
+ * cutoff (`sceneResources.ts`'s `resolveMaterialState`, 0.5) rather than testing for exact zero. */
+export function isTransparentPixel(alpha: number, threshold = 0.5): boolean {
+  return alpha < threshold
+}
+
 /** Ray-vs-AABB slab test. Returns the entry distance (clamped to >= 0 for a ray starting inside
  * the box), or null if the ray misses. */
 export function rayAabbIntersect(ray: Ray, lo: Vec3, hi: Vec3): number | null {

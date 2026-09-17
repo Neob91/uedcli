@@ -8,9 +8,29 @@
 import * as THREE from 'three'
 
 import type { SceneActor } from '../api'
-import { nearestScreenHit, pickActor, resolveHitSurface, resolveSegmentHitActor, resolveTapAction } from './selection'
+import { isTransparentPixel, nearestScreenHit, pickActor, resolveHitSurface, resolveSegmentHitActor, resolveTapAction } from './selection'
 import type { Ray, RawTapHit, ScreenHit, TapAction } from './selection'
 import type { ShadingMode } from './shadingMode'
+
+/** Whether a raycast hit on a point-actor marker sprite landed on a transparent icon pixel --
+ * `isTransparentPixel`'s doc comment has the UED22 mechanism this reproduces. Samples the sprite's
+ * own `CanvasTexture` source canvas (built by `sceneResources.ts`'s `useTextures`/`useMarkerTexture`,
+ * always a real `HTMLCanvasElement`) at the intersection's `uv` -- `flipY` stays the THREE.Texture
+ * default (true), so GL v=1 (top of texture) is canvas row 0, hence `1 - uv.y`. Non-sprite hits, or a
+ * sprite whose map/uv/canvas isn't available (a test stub, a still-loading texture), are never
+ * rejected -- this only narrows an already-accepted hit, never widens one. */
+function isSpriteHitTransparent(hit: THREE.Intersection): boolean {
+  if (!(hit.object instanceof THREE.Sprite) || !hit.uv) return false
+  const map = hit.object.material.map
+  const canvas = map?.image as HTMLCanvasElement | undefined
+  if (!canvas || typeof canvas.getContext !== 'function') return false
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return false
+  const x = Math.min(canvas.width - 1, Math.max(0, Math.floor(hit.uv.x * canvas.width)))
+  const y = Math.min(canvas.height - 1, Math.max(0, Math.floor((1 - hit.uv.y) * canvas.height)))
+  const alpha = ctx.getImageData(x, y, 1, 1).data[3] / 255
+  return isTransparentPixel(alpha)
+}
 
 export interface TapSelectParams {
   camera: THREE.Camera
@@ -45,12 +65,15 @@ export interface TapSelectParams {
 
 /** Runs the raycast-then-AABB-fallback hit-test and resolves it to a `TapAction`: raycast the real
  * drawn geometry (main scene mesh + point-actor marker sprites +, in wireframe mode, the brush
- * outline lines) together, and among every threshold-accepted hit pick the one whose PROJECTED
- * SCREEN POSITION is nearest the actual click (`nearestScreenHit`) -- not three.js's own
- * depth-nearest sort, which is the wrong tie-break for a threshold-based line hit-test (see that
- * function's doc comment). Falls back to ray-vs-AABB on a genuine miss (never for a brush actor in
- * wireframe mode). The click-target (surface vs. whole actor) and modifier-key rules live in
- * `selection.ts`'s `resolveTapAction` -- this function only builds the raw hit-test result it needs. */
+ * outline lines) together -- dropping any marker-sprite hit that lands on the icon's transparent
+ * padding (`isSpriteHitTransparent`) -- and among every remaining threshold-accepted hit pick the
+ * one whose PROJECTED SCREEN POSITION is nearest the actual click (`nearestScreenHit`) -- not
+ * three.js's own depth-nearest sort, which is the wrong tie-break for a threshold-based line
+ * hit-test (see that function's doc comment). Falls back to ray-vs-AABB on a genuine miss (never for
+ * a brush actor in wireframe mode; a point actor's own AABB is a zero-size point at its Location, so
+ * this fallback can't re-select it through a transparent sprite pixel the raycast just rejected).
+ * The click-target (surface vs. whole actor) and modifier-key rules live in `selection.ts`'s
+ * `resolveTapAction` -- this function only builds the raw hit-test result it needs. */
 export function resolveTapSelect(params: TapSelectParams): TapAction {
   const { camera, rect, clientX, clientY, additive, shiftKey, mode, lineThreshold, meshObject, meshPickObject, meshTriangleOwners, meshTrianglePolyIndex, markerObjects, brushObjects, actors, triangleOwners, trianglePolyIndex } =
     params
@@ -67,7 +90,10 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
   let hit: RawTapHit | null = null
   const candidates: THREE.Object3D[] = [...(meshObject ? [meshObject] : []), ...(meshPickObject ? [meshPickObject] : []), ...markerObjects, ...brushObjects]
   if (candidates.length > 0) {
-    const hits = raycaster.intersectObjects(candidates, false)
+    // A marker sprite hit landing on its icon's transparent padding is dropped before ranking --
+    // exactly like a genuine raycast miss on that candidate, so a click there falls through to
+    // whatever else is actually drawn underneath (`isSpriteHitTransparent`'s doc comment).
+    const hits = raycaster.intersectObjects(candidates, false).filter((h) => !isSpriteHitTransparent(h))
     if (hits.length > 0) {
       // `intersectObjects` sorts by ray-depth, not by proximity to the actual click on screen --
       // wrong for a THRESHOLD-based line hit-test, where several candidates can pass the threshold
