@@ -19,7 +19,7 @@ import type { DragGestureCallbacks } from './dragGesture'
 import { useDragGesture } from './dragGesture'
 import type { FrameRequest } from './frame'
 import { bboxCenter, bboxMaxExtent } from './frame'
-import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR } from './markers'
+import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR, MARKER_RENDER_ORDER } from './markers'
 import { MeshWireframe, SelectedMeshWireframe } from './MeshWireframe'
 import { PointActorMarker } from './PointActorMarker'
 import { RadiiOverlays } from './RadiiOverlays'
@@ -443,6 +443,8 @@ export function Viewport3D({
             // `depthTest={mode !== 'wireframe'}` (owner ruling): a marker is OCCLUDED behind geometry
             // in the solid shading modes (a torch icon behind a wall is hidden, UED22 parity), but in
             // wireframe mode -- where there's no solid mesh to occlude it -- it always shows.
+            // `renderOrder={MARKER_RENDER_ORDER}` (see its doc comment above): draws after a
+            // coincident-depth surface highlight regardless of the transparent-sort tiebreak.
             const spriteTex = actor.sprite ? textures.sprite.get(actor.sprite.tex_index) : undefined
             const isSelected = selectedNames.has(actor.name)
             if (actor.sprite && spriteTex) {
@@ -453,6 +455,7 @@ export function Viewport3D({
                   width={actor.sprite.width}
                   height={actor.sprite.height}
                   userData={{ actorName: actor.name }}
+                  renderOrder={MARKER_RENDER_ORDER}
                 >
                   <spriteMaterial
                     map={spriteTex}
@@ -465,7 +468,14 @@ export function Viewport3D({
             }
             if (!markerTexture) return null
             return (
-              <PointActorMarker key={actor.name} position={actor.location} width={DEFAULT_MARKER_FOOTPRINT_UU} height={DEFAULT_MARKER_FOOTPRINT_UU} userData={{ actorName: actor.name }}>
+              <PointActorMarker
+                key={actor.name}
+                position={actor.location}
+                width={DEFAULT_MARKER_FOOTPRINT_UU}
+                height={DEFAULT_MARKER_FOOTPRINT_UU}
+                userData={{ actorName: actor.name }}
+                renderOrder={MARKER_RENDER_ORDER}
+              >
                 <spriteMaterial
                   map={markerTexture}
                   color={isSelected ? MARKER_COLOR_THREE.clone().multiply(SELECTED_SPRITE_TINT) : MARKER_COLOR_THREE}

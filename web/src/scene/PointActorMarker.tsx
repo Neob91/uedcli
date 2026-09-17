@@ -15,8 +15,9 @@ export interface PointActorMarkerProps {
   width: number
   height: number
   userData?: Record<string, unknown>
-  // Ortho panes draw markers on top of brush wireframe/highlight via a higher renderOrder; the
-  // perspective pane leaves this unset (its scene-graph insertion order draws markers last already).
+  // Both panes pass `MARKER_RENDER_ORDER` (`markers.ts`) so a marker composites after any
+  // coincident-depth transparent overlay (a surface highlight, e.g.) regardless of the two
+  // objects' meaningless distance tiebreak -- see that constant's doc comment for the mechanism.
   renderOrder?: number
   // The `<spriteMaterial>` -- each caller sets its own map/color/depthTest (which differ by pane and
   // shading mode: depthTest is off in wireframe, on otherwise).
