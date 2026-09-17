@@ -36,6 +36,68 @@ function buildOverlayGeometry(): { geo: THREE.BufferGeometry; materials: THREE.M
   return { geo, materials }
 }
 
+// Board `poly-highlight-not-visible-for-brush116-0`, reopened: the real repro was `Brush100:0`/
+// `Brush106:0`/`Brush111:0` -- masked, but every texel alpha=255 (a fully-opaque "Red Star" sign
+// texture, confirmed live via `/api/level/.../atlas`). Root cause (isolated in a standalone three.js
+// harness, `_scratch/browser_verify/harness/`, not speculation): the surface-pick overlay's material
+// `opacity` is fixed at 0.25 (`HIGHLIGHT_OPACITY`), and WebGL's alphaTest discards on
+// `material.opacity * texel.alpha` (`map_fragment` multiplies both channels), not the texel alpha
+// alone -- so `0.25 * 1.0 = 0.25` always failed the base's own `alphaTest` (0.5), discarding every
+// fragment regardless of the real texture. Fixed by scaling the overlay's `alphaTest` by its own
+// effective opacity (1 for the opaque actor-tint variant, `opacity` for the additive surface-pick
+// variant) so the discard decision reduces back to the base's own unscaled `texel.a < alphaTest`.
+function buildMaskedGeometry(): { geo: THREE.BufferGeometry; map: THREE.Texture; materials: THREE.Material[] } {
+  const positions = new Float32Array([
+    0, 0, 0, 1, 0, 0, 1, 1, 0, // triangle 1
+    0, 0, 0, 1, 1, 0, 0, 1, 0, // triangle 2
+  ])
+  const geo = new THREE.BufferGeometry()
+  geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+  geo.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]), 2))
+  geo.addGroup(0, 6, 0)
+  const map = new THREE.Texture() // stub -- no real pixels needed, only object identity/alphaTest matter here
+  const materials = [new THREE.MeshBasicMaterial({ alphaTest: 0.5, map, side: THREE.FrontSide })]
+  return { geo, map, materials }
+}
+
+describe('SelectionHighlight masked-group alphaTest scaling', () => {
+  it('SurfaceSelectionHighlight (additive, opacity 0.25) scales alphaTest by its own opacity', async () => {
+    const { geo, map, materials } = buildMaskedGeometry()
+    const renderer = await ReactThreeTestRenderer.create(
+      <SurfaceSelectionHighlight
+        bufferGeometry={geo}
+        triangleOwners={['Brush100', 'Brush100']}
+        trianglePolyIndex={[0, 0]}
+        selectedSurfaces={new Set([surfaceKey('Brush100', 0)])}
+        materials={materials}
+      />,
+    )
+    const mesh = renderer.scene.children[0].instance as THREE.Mesh
+    const mat = mesh.material as THREE.MeshBasicMaterial
+    // 0.5 (base alphaTest) * 0.25 (this overlay's own opacity) -- NOT the base's raw 0.5, which
+    // would discard every fragment since diffuseColor.a tops out at material.opacity * texel.a.
+    expect(mat.alphaTest).toBeCloseTo(0.125)
+    expect(mat.map).toBe(map)
+  })
+
+  it('ActorSelectionHighlight (opaque, real material opacity 1) leaves alphaTest unscaled', async () => {
+    const { geo, materials } = buildMaskedGeometry()
+    const renderer = await ReactThreeTestRenderer.create(
+      <ActorSelectionHighlight
+        bufferGeometry={geo}
+        triangleOwners={['Hooker0', 'Hooker0']}
+        selectedActorNames={new Set(['Hooker0'])}
+        materials={materials}
+      />,
+    )
+    const mesh = renderer.scene.children[0].instance as THREE.Mesh
+    const mat = mesh.material as THREE.MeshBasicMaterial
+    // The opaque variant's own material never sets `opacity` (defaults to 1), so its scale factor
+    // is 1 -- matches the base material's alphaTest exactly, same as before this fix.
+    expect(mat.alphaTest).toBeCloseTo(0.5)
+  })
+})
+
 describe('SelectionHighlight polygonOffset', () => {
   it('SurfaceSelectionHighlight raises polygonOffsetUnits but leaves polygonOffsetFactor at its original magnitude', async () => {
     const { geo, materials } = buildOverlayGeometry()

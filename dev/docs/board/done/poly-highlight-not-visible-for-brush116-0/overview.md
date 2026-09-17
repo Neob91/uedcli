@@ -74,3 +74,34 @@ shared libraries). Setup + reusable scripts:
 2. Select poly `Brush100:0`, `Brush106:0`, or `Brush111:0` (a masked wall decal, `tex_index` 29).
 3. Inspector shows it selected; viewport shows no highlight.
 4. Contrast: select an unmasked poly (e.g. `Brush7:2`) — highlight shows correctly.
+
+## Root cause and fix
+
+Confirmed with an isolated three.js harness (not speculation): WebGL's `alphatest_fragment` shader
+chunk discards on `diffuseColor.a`, which is `material.opacity * texel.alpha` — not the texel's alpha
+alone. The additive surface-pick overlay's `opacity` is always `HIGHLIGHT_OPACITY` (0.25), so for a
+masked, fully-opaque-alpha texture (every texel alpha=255, e.g. these three brushes) `diffuseColor.a`
+tops out at `0.25`, always below the base material's own `alphaTest` (0.5) — discarding every
+fragment regardless of the real texture content.
+
+Fix (`SelectionHighlight.tsx`): scale the overlay's `alphaTest` by its own effective opacity so
+`discard iff opacity*texel.a < baseAlphaTest*opacity` reduces to `texel.a < baseAlphaTest` — the same
+cutoff the base material itself applies. Verified in the harness: an opaque-alpha texture now lights
+up, and a half-transparent test texture still stays dark on its cut-out half (0 changed pixels
+there). Relies on the base material's own `opacity` being 1 (true today, documented in the code).
+
+## Verification — honest account
+
+- **Mechanism-level**: verified directly against three.js's own `alphatest_fragment`/`map_fragment`
+  shader source, and against an isolated standalone harness with a real opaque-alpha texture and a
+  real half-transparent test texture (both behave as predicted).
+- **Live click-and-see on the exact reported brushes**: NOT achieved. Multiple attempts (this
+  session and an independent review subagent) to land a real synthetic click precisely on
+  `Brush100:0` failed — clicks landed on nearby unrelated actors (a Light, a different Brush)
+  instead. Root cause traced to a separate, pre-existing issue: `tapSelect.ts` falls back to a
+  whole-actor pick (`pickActor`, ray-vs-AABB) whenever a raycast misses the target poly's own thin
+  geometry — a small/thin masked decal is an easy miss. This is a real click-precision bug, not a
+  flaw in this highlight fix; not filed separately yet (worth doing).
+- Given the strong mechanism-level evidence and the independent click-precision obstacle two
+  separate investigations converged on, this fix is accepted without a pixel-perfect live
+  screenshot of these exact three brushes.

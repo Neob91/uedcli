@@ -213,7 +213,24 @@ function SelectionHighlightGroup({ bufferGeometry, indices, baseMaterial, color,
   // needs this for a masked group (see the module doc comment's cosmetic-tradeoff note) -- a flat
   // brightness boost over an unmasked group never needed the texture.
   const map = opaque || masked ? (base?.map ?? null) : null
-  const alphaTest = opaque || masked ? (base?.alphaTest ?? 0) : 0
+  // `poly-highlight-not-visible-for-brush116-0` (reopened): a masked, fully-OPAQUE-alpha texture
+  // (e.g. `Brush100:0`/`Brush106:0`/`Brush111:0`, `masked:true` but every texel alpha=255) never lit
+  // up at all -- root-caused with an isolated three.js harness (`_scratch/browser_verify/harness/`),
+  // not speculation: WebGL's `alphatest_fragment` chunk discards on `diffuseColor.a`, which is
+  // `material.opacity * texel.alpha` (`map_fragment` multiplies opacity by the sampled texel, alpha
+  // channel included), NOT the texel's alpha alone. The additive surface-pick overlay's `opacity` is
+  // always `HIGHLIGHT_OPACITY` (0.25) -- so `diffuseColor.a` tops out at `0.25 * 1.0 = 0.25`, always
+  // below the base's own `alphaTest` (0.5), discarding EVERY fragment regardless of the real texture
+  // content. Scaling `alphaTest` by the overlay's own effective opacity cancels that multiply out:
+  // `discard iff opacity*texel.a < baseAlphaTest*opacity` reduces to `texel.a < baseAlphaTest`, the
+  // exact same cutoff the base material itself applies (verified in the harness: an opaque-alpha
+  // texture now lights up, and a half-transparent test texture still stays dark on its cut-out half
+  // -- 0 changed pixels there). This equivalence assumes the BASE material's own `opacity` is 1 --
+  // true today, since `sceneResources.ts`'s `resolveMaterialState` never sets it. The opaque
+  // (actor-tint) variant's real material opacity is always 1 (its params never set `opacity`
+  // either), so its scale factor is 1 -- unchanged from before this fix.
+  const effectiveOpacity = opaque ? 1 : opacity
+  const alphaTest = opaque || masked ? (base?.alphaTest ?? 0) * effectiveOpacity : 0
   const material = useMemo(
     () =>
       new THREE.MeshBasicMaterial(
