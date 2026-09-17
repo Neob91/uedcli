@@ -44,6 +44,21 @@ import {
   type TriangleGroupRange,
 } from './selectedTriangles'
 
+// `polygonOffsetUnits` magnitude for both highlight variants below (bumped from 1, 2026-09-17,
+// `poly-highlight-not-visible-for-brush116-0`, NOT live-screenshot-confirmed -- an untested guess,
+// not a measured fix): a poly's overlay shares its exact triangle position with the base mesh, so it
+// always needs SOME offset to win the depth-test tie -- but the slope-scaled `polygonOffsetFactor`
+// term contributes ~0 for a surface viewed near HEAD-ON (`Brush116`'s counter-top viewed from above,
+// `Brush111`'s wall sign read face-on -- both verified real, non-degenerate polys, identical in
+// every other data/render-tree respect to a working control poly), leaving only the constant
+// `polygonOffsetUnits` term to separate it. `Viewport3D.tsx`'s camera spans `near: 1, far: 131072`,
+// which compresses depth-buffer precision at distance -- plausibly enough to lose a magnitude-1 tie.
+// Only `polygonOffsetUnits` is raised here, since it's the one term the theory implicates;
+// `polygonOffsetFactor` is left at its original magnitude to avoid changing behavior for
+// steep-angle surfaces this bug never touched.
+const POLYGON_OFFSET_UNITS_MAGNITUDE = 4
+const POLYGON_OFFSET_FACTOR_MAGNITUDE = 1
+
 // Additive white, not a new hue -- a brightness boost that reads correctly over any base texture/CSG
 // color. Moderate opacity so it reads as "lit up," not a blown-out white silhouette.
 const HIGHLIGHT_COLOR = 0xffffff
@@ -210,8 +225,8 @@ function SelectionHighlightGroup({ bufferGeometry, indices, baseMaterial, color,
               // participate in the depth buffer normally, same as any other opaque object this frame.
               depthWrite: true,
               polygonOffset: true, // avoid z-fighting against the base mesh's own coplanar triangles
-              polygonOffsetFactor: -1,
-              polygonOffsetUnits: -1,
+              polygonOffsetFactor: -POLYGON_OFFSET_FACTOR_MAGNITUDE,
+              polygonOffsetUnits: -POLYGON_OFFSET_UNITS_MAGNITUDE,
               side,
               map,
               alphaTest,
@@ -223,8 +238,8 @@ function SelectionHighlightGroup({ bufferGeometry, indices, baseMaterial, color,
               blending,
               depthWrite: false, // a pure visual overlay -- never occludes anything behind it
               polygonOffset: true, // avoid z-fighting against the base mesh's own coplanar triangles
-              polygonOffsetFactor: -1,
-              polygonOffsetUnits: -1,
+              polygonOffsetFactor: -POLYGON_OFFSET_FACTOR_MAGNITUDE,
+              polygonOffsetUnits: -POLYGON_OFFSET_UNITS_MAGNITUDE,
               side,
               map,
               alphaTest,
