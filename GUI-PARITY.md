@@ -77,7 +77,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | CSG brush coloring | Does UED22 give Intersect/Deintersect brushes a distinct color from Add? | ⬜ open | `dev/docs/board/inbox/gui-csg-brush-coloring-never-distinguishes/` |
 | Pan direction (perspective vs ortho) | Which convention (drag-follows-camera vs. content-follows-cursor) matches UED22, if either? | ⬜ open | `dev/docs/board/inbox/gui-perspective-pan-direction-vs-ortho/` |
 | Shading modes | UED22 has a Zones view mode the GUI doesn't | ⬜ open | `dev/docs/board/inbox/gui-shading-modes-omit-unrealed-s-zones-view/` |
-| Mesh-actor wireframe rendering | Should a static mesh actor render as wireframe in wireframe/2D modes? | ⬜ open | `dev/docs/board/inbox/static-mesh-actors-should-render-as-wireframe/` |
+| Mesh-actor wireframe rendering | Should a static mesh actor render as wireframe in wireframe/2D modes? | ✅ closed, already implemented | ✅ binary (`render.dll` disassembly, our own `uned/UED22/`), see Findings below |
 | Radii overlay colors | Collision cylinder vs. light-radius sphere: same color or distinct? | ✅ closed, implemented | ✅ binary (`Editor.dll`/`render.dll`/`Editor.u`, our own `uned/UED22/`) — distinct per PANE, and no alpha; a retracted third-party-sourced answer got this wrong, see Findings below |
 | Radii perspective cylinder | Does/should the collision cylinder render in the perspective pane? | ✅ closed, implemented | ✅ binary (`Editor.dll`'s non-ortho branch calls `URender::DrawCylinder`; no `IsOrtho` gate exists) — see Findings below |
 | Radii cylinder/sphere shape | Wireframe rendering had a triangulation-diagonal artifact ("triangular faces") | ✅ closed, implemented | not an RE question — a `wireframe:true`-on-triangulated-geometry rendering bug, fixed with explicit line segments |
@@ -118,14 +118,14 @@ needed). Three distinct techniques, not one shared overlay:
   highlight now uses the SAME multiplicative technique as the point-actor sprite above instead, an
   owner-directed style choice that departs from the literal `DrawMesh` formula (see
   `selectionColor.ts`'s doc comment).
-- **Mesh actor, wireframe render** (`Source/Render/Src/UnMeshRn.cpp:346`, same function's `bWire`
-  branch): flat line color — selected `(.2,.8,.1)` ≈ RGB(51,204,26); unselected `(.6,.4,.1)` ≈
-  RGB(153,102,26) (an olive/brown, not white). Directly answers part of the still-open "Mesh-actor
-  wireframe rendering" row below (the color; not the wireframe-in-2D-modes question itself).
-  🔶 Binary DATA-confirmed 2026-09-16: both exact 16-byte packed vectors exist in `render.dll`,
-  16 bytes apart, right next to the confirmed 0.4/0.6 ambient constants — essentially certain, but
-  the disassembly pass couldn't trace a direct instruction reference within its assumed function
-  bound (may be wider than the real `DrawMesh` body). Treat as ✅-adjacent, not fully instruction-linked.
+- **Mesh actor, wireframe render** (originally cited to `Source/Render/Src/UnMeshRn.cpp:346`, a
+  third-party UE1 source now banned as evidence by the 2026-09-18 owner ruling — see "Mesh-actor
+  wireframe rendering" Findings below for the redo): flat line color — selected `(.2,.8,.1)` ≈
+  RGB(51,204,26); unselected `(.6,.4,.1)` ≈ RGB(153,102,26) (an olive/brown, not white).
+  **✅ Binary-confirmed 2026-09-18** (upgraded from the original "🔶 data-only, no instruction
+  reference" flag): both exact 16-byte packed vectors are loaded by name in `render.dll`'s
+  `URender::DrawLodMesh` (RVA `0xd050`), gated on `AActor.bSelected` — see "Mesh-actor wireframe
+  rendering" Findings below for the full instruction-level trace, no third-party source involved.
 - **No generic selection bounding box exists in UED22 by default** — `UnEdCam.cpp`'s only
   `DrawBox` calls tied to selection sit inside the opt-in `SHOW_ActorRadii` overlay (already
   documented in `dev/docs/unrealed/rendering.md` as red), not a baseline cue. This codebase's cyan
@@ -133,6 +133,100 @@ needed). Three distinct techniques, not one shared overlay:
 
 Not yet folded into `dev/docs/unrealed/rendering.md` as a permanent verified fact — that edit needs
 the owner's yes per `CLAUDE.md`; this section is the campaign's own working record until then.
+
+### Mesh-actor wireframe rendering — real triangle edges, own-binary confirmed (closed 2026-09-18)
+
+Board item `dev/docs/board/inbox/static-mesh-actors-should-render-as-wireframe/`. Question: in
+UED22's wireframe viewport and the 2D ortho panes, does a StaticMesh (DT_Mesh) actor render its
+actual mesh wireframe (real triangle edges), a simplified proxy (a bounding box), or something else
+(a sprite/icon)? This codebase's `web/src/scene/MeshWireframe.tsx` already draws a StaticMesh
+actor's real per-triangle wireframe edges in wireframe mode (landed commit `279fb903`,
+2026-09-16, predating this investigation) and colors it with the `(.2,.8,.1)`/`(.6,.4,.1)`
+selected/unselected constants from the "Selection highlight rendering" section above — but that
+color finding was sourced from a now-banned third-party UE1 tree, and the "is real-triangle-
+wireframe even the right convention" question itself was never answered from any UED22 evidence at
+all. This pass answers both, from our own `uned/UED22/render.dll` alone (`pefile`+`capstone`,
+`dev/docs/spikes/bspspike/pe.py` harness), no third-party source anywhere.
+
+**✅ Binary-confirmed.** `render.dll`'s exported `?DrawMesh@URender@@...` (RVA `0xff00`) is a thin
+~0xb0-byte dispatcher: it reads `Actor->Mesh->SomeFlag` (`[eax+0x40]`, offset unidentified further)
+to decide one bit of a flags word, then tails straight into `?DrawLodMesh@URender@@...` (RVA
+`0xd050`) with all its own arguments forwarded unchanged — so the GUI-PARITY.md "Selection highlight
+rendering" section's earlier attribution of the ambient-bias/wire-color logic to "`DrawMesh`" is a
+harmless one-level imprecision: the containing function is really `DrawLodMesh`, reached through
+`DrawMesh`'s dispatch. `DrawLodMesh` is ~0x1111 bytes (`0xd050`-`0xe161`, ends `ret 0x24`) and does,
+in order:
+
+1. A large LOD-level/lighting/texture-coordinate setup block (`0xd0dd`-`0xd976`) that computes a
+   per-face normal/lighting basis via `FVector::operator^` (cross product) and constructs an
+   `FCoords` texture-mapping context — the SOLID SHADED triangle path (not traced further here; out
+   of scope for this question).
+2. A gate at `0xd992`-`0xd999`: `cmp dword ptr [ebp-0x468], 0; je 0x1000e164` — skips the entire rest
+   of the function (bones + both wireframe-edge loops below) when a flag computed earlier
+   (`0xd39a`-`0xd3d9`) is zero. That flag is 1 exactly when `Actor->SomeField` (`[Actor+0x3c]`,
+   unidentified) is nonzero, **or** a value read via `Frame->[+0x30]->[+0x480]` (a viewport-chain
+   field, name unconfirmed but its tested values are an exact, non-coincidental match to
+   `dev/docs/unrealed/rendering.md`'s already-established `RendMap` enum) equals **`1` (Wire), `0xd`
+   (13, Ortho XY), `0xe` (14, Ortho XZ), or `0xf` (15, Ortho YZ)** — i.e., **the whole block below
+   only runs in Wire/ortho render modes**, never in a shaded perspective mode. This is exactly the
+   mode set our own GUI's `mode === 'wireframe'` (perspective) + the ortho panes (always
+   `mode = 'wireframe'`) cover.
+3. `0xd9ac`-`0xdb0f`: a SKELETAL-MESH-ONLY sub-block (gated on a `USkeletalMesh`-class check via
+   `?StaticClass@USkeletalMesh@@...`, `0xd3d9`) that walks a bone-like array
+   (`mesh+0x234`/`+0x238`/`+0x240`) drawing one line per entry — almost certainly a skeleton/bone
+   debug overlay, not a mesh wireframe; not chased further (irrelevant to a plain StaticMesh actor,
+   which never takes this branch).
+4. `0xdb15`-`0xdb55`: **the wire-color pick** — `test byte ptr [Actor+0x11c], 4` (the SAME
+   `AActor.bSelected` bitfield/bit this doc's pivot-cross section already established) selects
+   `render.dll`'s own packed vector at VA `0x10035600` = `(0.2, 0.8, 0.1, 0)` when selected, else
+   `0x100355f0` = `(0.6, 0.4, 0.1, 0)`, built into an `FPlane` (`??0FPlane@@...`, the same ctor this
+   doc's other findings already use for a color argument). **These are the exact `(.2,.8,.1)`/
+   `(.6,.4,.1)` values this codebase's `selectionColor.ts` already hardcodes** — now confirmed by a
+   direct instruction reference in our own binary, not by proximity to another constant.
+5. `0xdb70`-`0xdc91`: the FIRST real edge-drawing loop, over the mesh's LOD-aware face list
+   (`mesh+0x148` count, `mesh+0x144` face records, each 3 wedge indices resolved through a
+   progressive-mesh LOD-collapse remap table at `mesh+0x15c`/`+0x150` — a `while` loop that walks a
+   wedge to its LOD-collapsed target until its level clears the current threshold). Per face, once
+   the 3 final (post-collapse) point indices are resolved, it issues 3 draw calls through the render
+   device's own vtable slot `+0x80` (the interface every other line-draw call in this doc's other
+   findings also goes through), each preceded by a fresh `FPlane` copy of the color picked in step 4
+   and pushing two `FVector`s (`sub esp,0xc; mov ecx,esp; ...`) as the line's endpoints — i.e., a
+   genuine `RenDev->DrawLine(Frame, Color, LineFlags, Start, End)`-shaped call per iteration, not a
+   single fixed-shape primitive (a box/sphere call would take a size/radius argument, not two
+   explicit points). **Honest caveat, not smoothed over**: tracing exactly which two of the
+   triangle's three vertices each of the 3 calls connects shows only 2 of them use genuinely distinct
+   points (the resolved-3rd-vertex-of-this-face to each of the other two); the 3rd call's two operand
+   registers trace to the SAME vertex slot in this reading, i.e. a degenerate zero-length line, not
+   the triangle's third edge. On a closed, well-formed mesh this is very likely visually complete —
+   the "missing" edge of one face is typically drawn as one of the two real edges of an adjacent
+   face sharing it — but this is not verified against a live render, and a genuine open/boundary
+   silhouette edge could in principle be missed by this specific per-face scheme. Not chased further
+   (would need a live capture of an asymmetric test mesh to settle, and the host's docker daemon
+   could not mount the repo for a live UED22 boot in this session — see the "Surface selection
+   highlight" section below for the same limitation hit there).
+6. `0xdca9`-`0xdd92`: a SECOND, structurally identical edge-drawing loop over a DIFFERENT face array
+   (`mesh+0x174` data, `mesh+0x178` count, a flat 3-`WORD`-per-face layout with no LOD remap at all,
+   unlike step 5's wedge-indirected one). Which real `ULodMesh`/`UMesh` field this second array is
+   (a StaticMesh's own simpler triangle list vs. some other per-mesh face set) is not pinned down —
+   flagged as unidentified, not guessed at.
+
+**Conclusion: UED22 renders a StaticMesh actor's real mesh geometry as a genuine per-triangle
+wireframe (real triangle edges of the imported mesh, selection-colored) in Wire and the three Ortho
+render modes — not a bounding-box proxy, and not a sprite/icon substitute.** This confirms this
+codebase's already-implemented `MeshWireframe`/`SelectedMeshWireframe` (`web/src/scene/
+MeshWireframe.tsx`, `SceneResourcesContext.tsx`'s `meshWireframeGeometry` built from
+`THREE.WireframeGeometry` over the mesh's real world-space triangle positions, wired into both
+`Viewport3D.tsx` and `OrthoViewport.tsx` gated on `mode === 'wireframe'`) as the RIGHT convention,
+already landed before this investigation and requiring no further code change — this pass only
+upgrades its evidentiary basis from a banned third-party citation to a direct own-binary one, and
+narrows (but does not fully resolve) the per-face-edge-completeness nuance in point 5 above.
+
+Backend note (for whoever next touches this): `uedcli/preview_native.py`'s
+`resolve_mesh_actor_polys`/`resolve_mesh_scene_polys` (landed commit `c0a79460`, "Option A") already
+supply a mesh actor's real per-triangle world-space vertices to `ScenePayload.polys`
+independent of CSG/build state — exactly the shape (already-flattened world-space triangles, not a
+separate vertex/edge topology) a wireframe-edge renderer needs, and exactly what `MeshWireframe.tsx`
+already consumes. No backend gap exists for this topic.
 
 ### Surface selection highlight — a flat blue screen-space stipple (closed 2026-09-18)
 
