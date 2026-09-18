@@ -440,6 +440,22 @@ export function Viewport3D({
             materials={activeMaterials}
           />
         )}
+        {/* Same surface-pick highlight, targeted at the Movers:on solid mesh's OWN geometry/owner
+            arrays (board item `mover-poly-select-in-movers-on-mode-not`): the mover mesh above is a
+            separate `THREE.BufferGeometry` from `bufferGeometry`, with its own `moverTriangleOwners`/
+            `moverTrianglePolyIndex` -- a selected mover poly's (owner, polyIndex) pair never appears
+            in the world mesh's arrays, so the instance above never builds a group for it. Gated
+            identically to the mover mesh itself (`showMoverSolid`, plus wireframe's existing gate) so
+            it only exists while that geometry is actually drawn. */}
+        {mode !== 'wireframe' && showMoverSolid && (
+          <SurfaceSelectionHighlight
+            bufferGeometry={moverGeometry}
+            triangleOwners={moverTriangleOwners}
+            trianglePolyIndex={moverTrianglePolyIndex}
+            selectedSurfaces={selectedSurfaces}
+            materials={activeMoverMaterials}
+          />
+        )}
         {/* A selected mesh actor (never a brush) lights up in UED22's own measured color, not this
             codebase's white surface-pick overlay -- GUI-PARITY.md "Selection highlight rendering". */}
         {mode !== 'wireframe' && (
