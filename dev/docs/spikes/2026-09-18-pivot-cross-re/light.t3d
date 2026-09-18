@@ -1,0 +1,8 @@
+Begin Map
+Begin Actor Class=Light Name=ProbeLight0
+     Location=(X=0.000000,Y=-512.000000,Z=0.000000)
+End Actor
+Begin Actor Class=Light Name=ProbeLight1
+     Location=(X=256.000000,Y=-512.000000,Z=0.000000)
+End Actor
+End Map
