@@ -1,7 +1,7 @@
 +++
 priority = "p3"
 kind = "docs"
-summary = "dev/docs/GUI.md's selection-marker bullets describe behaviour two landed changes replaced -- needs the owner's yes to edit"
+summary = "DONE -- dev/docs/GUI.md's selection-marker bullets corrected, owner approved 2026-09-18"
 +++
 
 # `dev/docs/GUI.md`'s selection-marker bullets are stale

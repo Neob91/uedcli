@@ -849,6 +849,33 @@ Regressions:
 `SelectionMarkers.test.tsx` (count + position through a real render) and `selectionSet.test.ts`'s
 `pivotAnchor` cases.
 
+**The three divergences, owner decision pending (2026-09-18).** Owner reviewed all three and said
+"leave it for now" — current (non-literal) behavior stays as-is, no code change. Restated plainly,
+one at a time, for whoever picks this up next:
+
+1. **Deselect everything.** Select a brush (cross shows on it), then click empty space. This GUI
+   hides the cross. Real UED22 leaves it frozen at the brush's old position — a "ghost" marker with
+   nothing selected.
+2. **Deselect the anchor out of a 3+ selection.** Select A (cross on A), then also B and C (cross
+   stays on A). Deselect just A, leaving B+C selected. This GUI moves the cross to B (next-oldest).
+   Real UED22 leaves it stuck at A's old spot, even though A is no longer selected — another ghost.
+3. **Batch/marquee select instead of one at a time.** Box-select (or select-all) 5 brushes at once,
+   skipping the "exactly 1 selected" moment individual clicks pass through. This GUI picks a sensible
+   anchor and shows the cross there. Real UED22's actual trigger mechanism never fires for a batch
+   like this, so the cross wouldn't move at all — it'd stay wherever it was left before the batch.
+
+**Owner's exact standing instruction for surfacing this again**: "put these 3 cases into the
+GUI-PARITY doc, and ask the next agent to ask me about it at the start of the next session IF a
+randomly generated number between 0 and 1 is less than 0.1. I should have the answer by then."
+
+Any agent picking up GUI-PARITY/GUI-fidelity work in a NEW session: **generate a random number in
+[0, 1). If it is less than 0.1, ask the owner directly (`AskUserQuestion`) whether they now want any
+of the three divergences above made literally faithful to UED22, restating each scenario plainly as
+written here. If the number is 0.1 or higher, do not ask — proceed normally, this item stays
+"leave it for now" until the owner raises it themselves or the dice come up right.** This is a
+literal, deliberate instruction, not a typo or a joke to normalize away — implement it exactly as
+given, one honest coin-flip per new session, not a rephrased "occasionally".
+
 ## Testing
 
 Same principle as the other two campaigns: don't let tests gate the RE work. The GUI's own suite is
