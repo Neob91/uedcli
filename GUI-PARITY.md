@@ -81,6 +81,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Mesh-actor wireframe SELECTION (fill vs. edges) | In wireframe/ortho modes, does UED22 select a mesh actor by a click anywhere inside its silhouette, or only on a drawn wireframe edge? | ✅ closed, fixed — edges only, not the interior | ✅ binary (`render.dll`/`Engine.dll` disassembly, our own `uned/UED22/`) — see Findings below |
 | Radii overlay colors | Collision cylinder vs. light-radius sphere: same color or distinct? | ✅ closed, implemented | ✅ binary (`Editor.dll`/`render.dll`/`Editor.u`, our own `uned/UED22/`) — distinct per PANE, and no alpha; a retracted third-party-sourced answer got this wrong, see Findings below |
 | Radii perspective cylinder | Does/should the collision cylinder render in the perspective pane? | ✅ closed, implemented | ✅ binary (`Editor.dll`'s non-ortho branch calls `URender::DrawCylinder`; no `IsOrtho` gate exists) — see Findings below |
+| Radii light-radius shape | Does the perspective-pane light radius render as a 3D sphere, or a camera-facing circle? | ✅ closed, implemented | ✅ binary (`render.dll`'s `DrawCircle`, our own `uned/UED22/`) — see Findings below |
 | Radii cylinder/sphere shape | Wireframe rendering had a triangulation-diagonal artifact ("triangular faces") | ✅ closed, implemented | not an RE question — a `wireframe:true`-on-triangulated-geometry rendering bug, fixed with explicit line segments |
 | `C_ActorArrow` exact RGB | The radii overlay's real color value | ✅ closed, implemented | ✅ our own `uned/UED22/unrealtournament.ini` line 388, `(163,0,0)` — the member it fills is `UEditorEngine+0x1f8`, pinned by disassembly; see Findings below |
 | Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed, implemented | 📖 source-only, GUI-only scope (owner ruling) — see Findings below |
@@ -747,7 +748,8 @@ than silently changed):
 1. **The light radius is a `DrawCircle` in EVERY pane, including perspective** — and `DrawCircle`
    builds its ring from the scene node's own camera axes (`render.dll` `0x1001c5c9`-`0x1001c62d`
    reads `FSceneNode+0x40..0x54`), i.e. a camera-facing circle. Our GUI draws a three-ring wire
-   SPHERE there. `DrawSphere` exists in the vtable but this block never calls it.
+   SPHERE there. `DrawSphere` exists in the vtable but this block never calls it. **FIXED
+   2026-09-18** — see "Radii light-radius shape" below.
 2. **`DrawCircle`'s segment count is adaptive, not fixed** — `0x1001c635` starts at `8` and doubles
    (up to `0x100`) while a screen-size term stays under a threshold (`0x1001c668` loop). Our GUI's
    ortho rings are a flat 32. `DrawCylinder`'s own segment count was NOT determined (its body is not
@@ -784,6 +786,51 @@ perspective black, ortho `#404040`) the change is: perspective collision `(90,0,
 perspective light `(90,0,0)` → `(163,0,0)`; ortho collision and light `(118,29,29)` — within 54 of
 the `(64,64,64)` background on the red channel and BELOW it on green/blue — → `(163,0,0)`. A live
 screenshot A/B remains outstanding and is called for in the board item.
+
+### Radii light-radius shape — camera-facing circle, not a sphere (closed 2026-09-18)
+
+Board item `dev/docs/board/done/gui-light-radius-is-a-camera-facing-circle-not/`, filed as divergence
+1 of the "Radii overlay colors" pass above (already ✅ binary-confirmed there, from
+`uned/UED22/Editor.dll` + `render.dll` — not re-derived here). `Editor.dll`'s radii block calls
+`URender::DrawCircle` for the light radius on EVERY branch including perspective (VA `0x1003d932`),
+and `render.dll`'s `DrawCircle` (RVA `0x1c590`) builds its ring from the scene node's own CAMERA axes
+(`FSceneNode+0x40..0x54`, `0x1001c5c9`-`0x1001c62d`) — a camera-facing circle (a billboard), never a
+world-plane-aligned shape. `RadiiOverlays.tsx`'s `LightSphere3D` instead drew three fixed orthogonal
+world-space rings (an XY/XZ/YZ wire-sphere gizmo) in the perspective pane.
+
+**Ortho panes needed no change.** `OrthoShapeLine` already draws the light circle flat in the pane's
+own fixed `(right, up)` view-plane basis (`orthoBasis(view)`) — under a fixed-axis orthographic
+camera, that IS what a camera-facing circle degenerates to (the view direction never changes, so
+"facing the camera" and "lying in the pane's fixed view plane" are the same plane). Confirmed by
+reading `radiiProjection.ts`/`OrthoShapeLine` directly, not assumed.
+
+**Fix**: `RadiiOverlays.tsx`'s `LightSphere3D` is replaced by `LightRadiusCircle3D`, a genuine
+camera-facing billboard built as explicit `<lineSegments>` (matching every other radii overlay's
+convention — no texture, no alpha, same `C_ACTOR_ARROW` color, same `depthTest={false}`). Every
+frame (`useFrame`, the same mechanism `SelectionMarkers.tsx`'s `PivotMarker`/`VertexDot` already use
+to track live camera state), it rebuilds the ring from `camera.quaternion`'s own local X/Y axes
+(`right`/`up`), the standard sprite-billboard basis. One coordinate-space hazard, the same class as
+`SelectionMarkers.tsx`'s pivot-marker bug: this component's geometry sits inside the world-handedness
+mirror group (`<group scale={[1,-1,1]}>`, a pure Y-flip), while `camera` is posed directly in the
+ALREADY-reflected render space (`viewportRender.ts`'s `applyCameraPose`) — so `right`/`up` need the
+same flip (negate Y) to land back in this component's own pre-reflection local space. Since the
+mirror `R = diag(1,-1,1)` is self-inverse, negating Y once is exactly `R^-1`, not an approximation.
+
+🔬 **Verified by inspecting the actual computed geometry across several camera poses** (this host has
+no runnable headless Chromium, the same limitation on file for the "Surface selection highlight" and
+"Mesh-actor wireframe SELECTION" topics above — a real browser A/B was not possible this session).
+`RadiiOverlaysCameraFacing.test.tsx` renders `LightRadiusCircle3D` through
+`@react-three/test-renderer` with a real `THREE.PerspectiveCamera` posed three different ways (down
+`-Z`, down `-X`, and an oblique angle), advances one frame so `useFrame` runs, and reads the produced
+`BufferGeometry`'s own position array back — not a screenshot, but the exact numbers the renderer
+would draw. For each pose, the ring's own plane normal (cross product of two chords, read from the
+geometry) matches the camera's forward direction (reflected the same way, `Y` negated) to better than
+0.999 absolute dot product — i.e. the ring's plane rotates with the camera, not fixed in world space.
+A fourth test confirms every ring point sits exactly `radius` from the actor's location (a genuine
+circle, not a degenerate shape). All four pass; the full frontend suite (390 tests) stays green.
+
+Regression: `RadiiOverlaysCameraFacing.test.tsx`. `RadiiOverlays.test.tsx`'s existing color/no-blend
+tests are unaffected (still exactly one `<lineSegments>` for the light radius per pane, same color).
 
 ### Earlier pass (2026-09-16) — RETRACTED, third-party source
 
