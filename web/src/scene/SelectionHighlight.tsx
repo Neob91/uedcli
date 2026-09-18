@@ -69,12 +69,13 @@ const POLYGON_OFFSET_FACTOR_MAGNITUDE = 1
 //     mov  byte ptr [ebp+0xd], 0x7f  ; G
 //     mov  byte ptr [ebp+0xe], 0xff  ; B
 //
-// Channel order is not assumed: the 16-bit packer right below (`0x1000e6aa`-`0x1000e6e4`) puts
-// byte0 in the RGB565 R field, byte1 in G, byte2 in B -- and `Engine.dll`'s own
-// `FColor::FColor(const FPlane&)` (RVA `0xf32e0`) writes P.X->byte0, P.Y->byte1, P.Z->byte2, i.e.
-// R,G,B. So the color is RGB(0,127,255), a vivid azure. `PF_Selected = 0x02000000` is confirmed by
-// `Editor.dll`'s `polySelectAll` (RVA `0x4ba50`), which passes exactly that bit to
-// `polySetAndClearPolyFlags`.
+// Channel order is not assumed -- byte-swapped this would be orange. The 32bpp path of the same
+// function (`0x1000e7a6`-`0x1000e7bf`) repacks the bytes as `byte0<<16 | byte1<<8 | byte2` before
+// storing, and a Win32 32bpp surface is `0x00RRGGBB`, so byte0 is R and byte2 is B. (The 16-bit
+// packer below it and `Engine.dll`'s `FColor::FColor(const FPlane&)` agree but only under a
+// convention; the 32bpp repack is the one that settles it.) So: RGB(0,127,255), a vivid azure.
+// `PF_Selected = 0x02000000` is confirmed by `Editor.dll`'s `polySelectReverse` (RVA `0x4c2a0`),
+// which does `xor eax, 0x2000000` on a surf's flags.
 const SURFACE_SELECTION_COLOR = 0x007fff
 
 // ...and the technique is NOT a blend of any kind. The block at `0x1000e66a`-`0x1000e870` walks the

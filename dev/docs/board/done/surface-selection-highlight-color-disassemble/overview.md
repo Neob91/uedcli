@@ -15,11 +15,13 @@ What it turned out to be, in one paragraph. UED22's four viewports are all pinne
 `SoftDrv.SoftwareRenderDevice` (`uned/UED22/UnrealEd.ini`), so the surface draw call is
 `softdrv.dll`'s `USoftwareRenderDevice::DrawComplexSurface` (RVA `0xc3a0`). Its tail, gated on
 `GIsEditor` and `PolyFlags & PF_Selected` (`0x02000000`, confirmed via `Editor.dll`'s
-`polySelectAll`), loads the bytes `00 7f ff` and then re-walks the surface's own span buffer doing a
-RAW framebuffer store of that value -- every second scanline, every eighth pixel, phase alternating
-0/4 per drawn row. So: flat RGB(0,127,255), one pixel in sixteen, no blend of any kind, anchored to
-absolute screen coordinates. Channel order was cross-checked two ways (the RGB565 packer's own bit
-fields, and `Engine.dll`'s `FColor(const FPlane&)`), because byte-swapped it would read orange.
+`polySelectReverse`'s `xor eax, 0x2000000`), loads the bytes `00 7f ff` and then re-walks the
+surface's own span buffer doing a RAW framebuffer store of that value -- every second scanline, every
+eighth pixel, phase alternating 0/4 per drawn row. So: flat RGB(0,127,255), one pixel in sixteen, no
+blend of any kind, anchored to absolute screen coordinates. Channel order is settled by the 32bpp
+path's own repack (`byte0<<16 | byte1<<8 | byte2` into a `0x00RRGGBB` surface), because byte-swapped
+it would read orange. True of SoftDrv, which is what the editor runs; `OpenGLDrv`/`D3D9Drv` each do
+something different (a ~50% blue blend, no stipple).
 
 Replaced `SelectionHighlight.tsx`'s invented additive-white-0.25 overlay with that technique (a
 fragment-shader stipple discard on the standard `MeshBasicMaterial` program, so masked-group

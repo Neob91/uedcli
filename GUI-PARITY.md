@@ -160,14 +160,23 @@ RVA `0xc3a0`) is THE draw call every BSP surface goes through. Its tail, at VA `
 1000e666:  mov   byte ptr [ebp+0xe], 0xff
 ```
 
-- `PF_Selected = 0x02000000` is not assumed: `Editor.dll`'s `?polySelectAll@UEditorEngine@@…`
-  (RVA `0x4ba50`) passes exactly that bit as the set-mask to `polySetAndClearPolyFlags`.
-- The channel order is not assumed either, and it matters (byte-swapped it would read orange). Two
-  independent reads agree it is R,G,B: (a) the 16-bit packer immediately below (`0x1000e6aa`-
-  `0x1000e6e4`) builds an RGB565 word as `R(bits 11-15) <- byte0`, `G(5-10) <- byte1`,
-  `B(0-4) <- byte2`; (b) `Engine.dll`'s `??0FColor@@QAE@ABVFPlane@@Z` (RVA `0xf32e0`) writes
-  `P.X -> [ecx+0]`, `P.Y -> [ecx+1]`, `P.Z -> [ecx+2]`, i.e. R,G,B — and `softdrv`'s own
-  `Draw2DLine` (RVA `0x1d4b0`) feeds that constructor's output through the identical packer.
+- `[esi]` really is `PolyFlags`: the same function tests `[esi]` against other `PF_` masks much
+  earlier (`0x1000c48f`, `0x1000d435`), and `esi` is loaded from `[ebp+0xc]` (the `FSurfaceInfo&`
+  second argument) on both paths that reach this tail.
+- `PF_Selected = 0x02000000`: `Editor.dll`'s `polySelectReverse` (RVA `0x4c2a0`) does
+  `xor eax, 0x2000000` directly on a surf's flags at `0x1004c2fb`, and `polySelectAll` (RVA
+  `0x4ba50`) passes the same bit as the set-mask to `polySetAndClearPolyFlags`.
+- The channel order is not assumed either, and it matters (byte-swapped it would read orange). The
+  decisive read is the **32bpp path in this same function**: `0x1000e7a6`-`0x1000e7bf` explicitly
+  repacks the three bytes as `byte0<<16 | byte1<<8 | byte2` = `0x00007fff` before
+  `mov dword ptr [ecx], esi`, and a Win32 32bpp surface is `0x00RRGGBB` — so byte0 is R (0) and
+  byte2 is B (255). Corroborating but NOT decisive on their own: the 16-bit packer at
+  `0x1000e6aa`-`0x1000e6e4` (byte0 reaches the word's top 5 bits, which is "R" only if the surface
+  is RGB565 rather than BGR565), and `Engine.dll`'s `??0FColor@@QAE@ABVFPlane@@Z` (RVA `0xf32e0`),
+  which writes `P.X -> [ecx+0]` (that is "R" only by FPlane convention). Independent corroboration
+  from the other render devices, which are not used here but encode the same intent: `OpenGLDrv.dll`
+  (`0x10004066`) writes `00 00 7f 7f` and `D3D9Drv.dll` uses `0x7f00007f` — both a half-strength
+  blue, and both nonsense under the byte-swapped reading.
 
 **So the colour is RGB(0, 127, 255) — a vivid azure — and there is NO blend at all.** The block at
 `0x1000e66a`-`0x1000e870` re-walks the surface's own `FSpanBuffer` and does a raw store of that
@@ -179,16 +188,25 @@ esi` at 32bpp, `0x1000e825`) on a sparse lattice:
   with `phase = (y & 2) * 2`, so the phase alternates 0 / 4 on successive drawn rows.
 
 One pixel in sixteen is overwritten with the flat colour, anchored to absolute screen coordinates
-(the dots do not slide with the surface as the camera moves). No other selected-surface treatment
-exists: `Editor.dll`'s own draw entry points (`Draw`, `DrawLevelBrush`, `DrawFPoly`,
-`DrawWireBackground`) contain no `PF_Selected` test at all, and `softdrv.dll` tests the bit in
-exactly this one place.
+(the dots do not slide with the surface as the camera moves). Both depth paths (16bpp and 32bpp) do
+the same thing. **Under the configured device this is the only selected-surface treatment there is:**
+`softdrv.dll` tests the bit in exactly this one place, and `Editor.dll`'s own draw entry points
+(`Draw`, `DrawLevelBrush`, `DrawFPoly`, `DrawWireBackground`) contain no `PF_Selected` test at all —
+its 57 uses of the constant are all in `Exec`/`polySelect*`/`polyTex*`/`MouseDelta`/
+`FEditorHitObserver::Click`/`FixBrushLinks`/`bspBuildBounds`. The scoping matters: `OpenGLDrv.dll`
+and `D3D9Drv.dll` each implement their OWN, different treatment (a ~50% blue blend, no stipple), so
+"UED22 stipples a selected surface" is true of the software renderer the editor actually runs, not
+of the engine in general.
 
 *(Adjacent, deliberately not folded in: `render.dll` has a second `GIsEditor && PF_Selected` gate, at
-`0x10007ece`, which rescales a computed lighting colour to `c*0.5 + (0.5,0.5,0.5)` — but it sits in
-the per-vertex dynamic-lighting helper dispatched from `URender::GlobalLighting`'s `LightEffect`
-table, i.e. the Gouraud mesh/sprite path, not the lightmapped `DrawComplexSurface` path a BSP
-surface takes. Noted here so a later pass doesn't rediscover it and mistake it for this topic.)*
+`0x10007ece`, which rescales a computed lighting colour to `c*0.5 + (0.5,0.5,0.5)`. Its containing
+function (`0x10007be0`) is a lighting handler — same prologue/context shape as the others in its
+family — but where it is called from is UNTRACED: its only reference is a pointer-table slot at
+`0x10034cb4`, and `URender::GlobalLighting` indexes the adjacent table at `0x10034c70` under a hard
+`cmp esi,0xa / jae skip`, so that slot is out of its reach. Calling it "the Gouraud mesh path, not
+the surface path" would be inference, not evidence — what IS established is that a BSP surface's own
+draw call is `DrawComplexSurface`, which does not go through it. Noted so a later pass doesn't
+rediscover the gate and mistake it for this topic.)*
 
 **Implemented** in `web/src/scene/SelectionHighlight.tsx`: the surface overlay is now an opaque,
 unblended flat `0x007fff` draw whose fragment shader discards everything off that lattice
@@ -217,6 +235,23 @@ untouched buffer. Results, floor click / wall click:
   the surface is interrupted by an occluder).
 - the phase alternates exactly as `(y & 2) * 2`: first-dot `x % 8` is **0** on one drawn-row parity
   (50 / 34 rows) and **4** on the other (49 / 34 rows), with no mixing.
+
+An independent reviewer reproduced all of that and added four checks the first pass had not run:
+deselecting leaves **0** pixels differing from the unselected baseline (the highlight goes away
+completely); toggling the shading mode while a surface is selected leaves the result
+pixel-identical; selecting two surfaces at once gives exactly the sum of their individual dot counts
+with both phases still clean (which also settles empirically that three.js's shared shader program
+still binds the pixel-ratio uniform per material); and at DPR 2 the lattice comes out as 2×2
+device-pixel dots every 4 rows / 16 columns — i.e. exactly the CSS-pixel spacing the departure above
+describes, and proof the uniform is bound at all (an unbound one would be 0 and paint the poly
+solid). A 26-point grid scan stippled 10 distinct surfaces and selected nothing on empty space.
+
+**Not verified live: a MASKED surface.** 380 grid clicks reached none of the level's 610 masked polys
+— they are outside the default camera view — so "the mask clips the dots rather than tinting them"
+rests on the unit tests alone. One known behaviour change, low severity and left as is: the scene's
+poly list also contains actor-owned polys, so a surface pick on a near-invisible NPC "glasses" slot
+now gets opaque blue dots where it previously got a faint wash. That follows from UED22's own
+mechanism rather than departing from it.
 
 Harness (disassembly helpers + the browser pixel probe): the board item itself,
 `dev/docs/board/done/surface-selection-highlight-color-disassemble/` (`harness-*.py`) — kept there
