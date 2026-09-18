@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { clearSelection, primarySelection, toggleSelection } from './selectionSet'
+import { clearSelection, pivotAnchor, primarySelection, toggleSelection } from './selectionSet'
 
 describe('toggleSelection', () => {
   it('additive=false always replaces with exactly {name}, regardless of the starting set', () => {
@@ -51,6 +51,39 @@ describe('primarySelection', () => {
   it('is the most-recently-added member of a multi-actor selection', () => {
     const afterA = toggleSelection(new Set(), 'A', false)
     const afterB = toggleSelection(afterA, 'B', true)
+    expect(primarySelection(afterB)).toBe('B')
+  })
+})
+
+// GUI-PARITY.md "Pivot-cross ... Part 4": UED22 recomputes its ONE global pivot only when exactly
+// one actor is selected, so a click-built multi-selection keeps the cross on the first-clicked
+// actor. Live-verified against real UED22 2026-09-18.
+describe('pivotAnchor', () => {
+  it('is undefined for an empty selection', () => {
+    expect(pivotAnchor(new Set())).toBeUndefined()
+  })
+
+  it('is the sole member of a single-actor selection', () => {
+    expect(pivotAnchor(new Set(['A']))).toBe('A')
+  })
+
+  it('stays on the first-clicked actor as Ctrl+clicks add more', () => {
+    const afterA = toggleSelection(new Set(), 'A', false)
+    const afterB = toggleSelection(afterA, 'B', true)
+    const afterC = toggleSelection(afterB, 'C', true)
+    expect(pivotAnchor(afterB)).toBe('A')
+    expect(pivotAnchor(afterC)).toBe('A')
+  })
+
+  it('moves to the remaining actor when a two-actor selection drops back to one', () => {
+    const afterA = toggleSelection(new Set(), 'A', false)
+    const afterB = toggleSelection(afterA, 'B', true)
+    expect(pivotAnchor(toggleSelection(afterB, 'A', true))).toBe('B')
+  })
+
+  it('differs from primarySelection, which tracks the last click instead', () => {
+    const afterB = toggleSelection(toggleSelection(new Set(), 'A', false), 'B', true)
+    expect(pivotAnchor(afterB)).toBe('A')
     expect(primarySelection(afterB)).toBe('B')
   })
 })

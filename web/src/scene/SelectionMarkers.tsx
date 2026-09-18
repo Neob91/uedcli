@@ -1,21 +1,28 @@
 // Vertex + pivot markers for a selected brush (bug report item 7) -- ports `actor diagram
 // --highlight`'s `_draw_vertex_dot`/`_draw_pivot_marker` (uedcli/preview.py, ~lines 597-611) to the
-// GUI: a small square dot at every poly vertex, in the brush's own brightened wire color, plus a
-// distinct marker at the actor's true pivot (`Location`). A third dot, same square glyph as the poly
-// vertices, marks the brush's PrePivot-shifted "local origin" (`BrushHighlight.local_origin`,
-// `Location - R·PrePivot`, computed server-side the same way `preview.py` does) -- coincides with
-// the pivot only when PrePivot is zero. It renders for at most ONE actor even under a multi-selection
-// (see `selectionSet.ts`'s `primarySelection`).
+// GUI: a small square dot at every poly vertex, in the brush's own brightened wire color. A second
+// dot, same square glyph, marks the brush's PrePivot-shifted "local origin"
+// (`BrushHighlight.local_origin`, `Location - R·PrePivot`, computed server-side the same way
+// `preview.py` does). It renders for at most ONE actor even under a multi-selection (see
+// `selectionSet.ts`'s `primarySelection`).
+//
+// The pivot cross is a different thing entirely and is deliberately NOT per-brush: real UED22 draws
+// exactly ONE, from a single global pivot location, anchored to whichever actor was most recently
+// the SOLE selection, and only when that actor snaps to the grid. See GUI-PARITY.md "Pivot-cross ...
+// Part 4" for the disassembly + live capture, and `selectionSet.ts`'s `pivotAnchor`.
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import type { SceneActor } from '../api'
 import { worldUnitsPerPixelAt } from './markers'
-import { primarySelection } from './selectionSet'
+import { pivotAnchor, primarySelection } from './selectionSet'
 import { resolveWireColor, scaleColor, toThreeColor } from './selectionColor'
 
-// Matches `preview.py`'s `_PIVOT_RED`.
+// UED22 draws the global pivot cross in `C_BrushWire` -- the SAME FColor member (UEditorEngine
+// +0x1ac) its builder brush uses, `(255,63,63)` in our own `uned/UED22/unrealtournament.ini`.
+// Confirmed by disassembly of our own `Editor.dll` and by reading the literal pixels out of a live
+// UED22 render (GUI-PARITY.md).
 const PIVOT_RED = new THREE.Color(255 / 255, 63 / 255, 63 / 255)
 
 // Both the vertex/local-origin dots and the pivot marker are gizmos, not geometry markers -- board
@@ -68,8 +75,9 @@ function usePivotTexture(): THREE.Texture | null {
   return texture
 }
 
-/** The pivot gizmo for one selected brush -- constant SCREEN size regardless of zoom/distance (bug
- * report: "pivot's size should be the same on screen, regardless of zoom"). Rescales its own sprite
+/** The one global pivot gizmo -- constant SCREEN size regardless of zoom/distance (bug report:
+ * "pivot's size should be the same on screen, regardless of zoom"), which is also what UED22 does
+ * (it projects the pivot to 2D and draws three fixed-size `Draw2DPoint`s). Rescales its own sprite
  * every frame from the live camera/viewport state rather than using a fixed world-unit `scale`. */
 function PivotMarker({ position, texture }: { position: [number, number, number]; texture: THREE.Texture | null }) {
   const spriteRef = useRef<THREE.Sprite>(null)
@@ -127,10 +135,10 @@ export interface SelectionMarkersProps {
   selectedNames: ReadonlySet<string>
 }
 
-/** Renders vertex + pivot markers for every SELECTED brush actor (one full set per actor, matching
- * `preview.py`'s per-`--highlight`ed-actor loop). Non-brush actors already get their own color-tint
- * highlight elsewhere (`ActorSelectionHighlight`/sprite tint in Viewport3D/OrthoViewport) -- out of
- * scope here. */
+/** Renders vertex-handle dots for every SELECTED brush actor (one full set per actor, matching
+ * `preview.py`'s per-`--highlight`ed-actor loop), plus ONE pivot cross for the whole selection.
+ * Non-brush actors already get their own color-tint highlight elsewhere
+ * (`ActorSelectionHighlight`/sprite tint in Viewport3D/OrthoViewport) -- out of scope here. */
 export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProps) {
   const pivotTexture = usePivotTexture()
   const selectedBrushes = useMemo(
@@ -138,9 +146,23 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
     [actors, selectedNames],
   )
   const primaryName = useMemo(() => primarySelection(selectedNames), [selectedNames])
+  // The ONE global pivot cross. Anchor = the actor that was most recently the sole selection
+  // (`pivotAnchor`). Shown only when that actor SNAPS TO THE GRID: UED22's own visibility test is
+  // `GPivotShown = (SnapCount > 0) || (Count > 1)`, where `SnapCount` counts selected actors whose
+  // `bEdShouldSnap` is set. `Engine.Brush`'s class defaults set `bEdShouldSnap=True` and no point
+  // actor's do, so "is a brush" is the stand-in here -- live-verified in real UED22 (a lone selected
+  // brush shows the cross; a lone selected Light shows nothing). The `Count > 1` term never fires
+  // from clicking alone, because UED22 recomputes the flag only at exactly one selected actor --
+  // also live-verified (three Lights selected: still no cross). Detail: GUI-PARITY.md.
+  const pivotBrush = useMemo(() => {
+    const anchor = pivotAnchor(selectedNames)
+    if (anchor === undefined) return null
+    return actors.find((a) => a.name === anchor && a.brush != null) ?? null
+  }, [actors, selectedNames])
 
   return (
     <group>
+      {pivotBrush && <PivotMarker position={pivotBrush.location} texture={pivotTexture} />}
       {selectedBrushes.map((actor) => {
         // Real UED22: a brush's vertex-handle dots are `VertexColor = WireColor * 1.2`
         // (`UnEdRend.cpp`'s `DrawLevelBrush`, `selectionColor.ts`'s doc comment) -- always this,
@@ -160,7 +182,6 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
             {actor.name === primaryName && (
               <VertexDot position={actor.brush.local_origin} color={color} renderOrder={VERTEX_DOT_RENDER_ORDER} />
             )}
-            <PivotMarker position={actor.location} texture={pivotTexture} />
           </group>
         )
       })}
