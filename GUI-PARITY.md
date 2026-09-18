@@ -68,6 +68,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Topic | Question | State | Evidence / board item |
 |---|---|---|---|
 | Selection highlight rendering | What color/blend/technique does UED22 use to show a selected sprite/mesh actor? | ✅ closed, implemented | ✅ binary (`render.dll` disassembly), see Findings below |
+| Surface selection highlight | What color/blend/technique does UED22 use to show a selected SURFACE (BSP poly)? | ✅ closed, implemented | ✅ binary (`softdrv.dll`/`Editor.dll`/`Engine.dll` disassembly, our own `uned/UED22/`) — see Findings below |
 | Click/hit-detection algorithm | How does UED22 resolve a click to a surface/actor/brush when candidates overlap? | 🔶 investigating | `dev/docs/board/inbox/gui-click-detection-algorithm-not-re-d-against/` — see Findings below |
 | Sprite alpha picking | Does UED22's sprite click hit-test respect the icon's transparent padding? | ✅ closed, implemented | 📖 source (`SoftDrv/Src/{Hit,DrawTile}.cpp`) + 🔬 live (real clicks, A/B against the unfixed code) — see Findings below |
 | Vertex handle screen size | Does UED22 draw vertex/local-origin handles at a constant screen size, or a fixed world size that scales with zoom? | ✅ closed, implemented | 📖 source (`Editor/Src/UnEdRend.cpp`) + 🔬 live (real zoom/dolly sweeps, A/B against the unfixed code) — see Findings below |
@@ -132,6 +133,150 @@ needed). Three distinct techniques, not one shared overlay:
 
 Not yet folded into `dev/docs/unrealed/rendering.md` as a permanent verified fact — that edit needs
 the owner's yes per `CLAUDE.md`; this section is the campaign's own working record until then.
+
+### Surface selection highlight — a flat blue screen-space stipple (closed 2026-09-18)
+
+Board item `surface-selection-highlight-color-disassemble`. Owner's ask: "disassemble UED22 and check
+the surface selection color. Replicate it." A SELECTED SURFACE (a BSP poly/brush face picked with a
+plain tap in a textured pane) is a different code path from the sprite/mesh actor tinting the
+"Selection highlight rendering" section above already covers, and had never been RE'd — our own
+`SelectionHighlight.tsx` drew an invented additive-white overlay at 0.25 opacity, with no citation
+for any part of it.
+
+**✅ Binary-confirmed, from our own `uned/UED22/` binaries only — no third-party source anywhere in
+this pass.** The right binary is `softdrv.dll`, not `Editor.dll` or `render.dll`: `uned/UED22/
+UnrealEd.ini` pins all four viewports to `Device=SoftDrv.SoftwareRenderDevice`, so
+`USoftwareRenderDevice::DrawComplexSurface` (export `?DrawComplexSurface@USoftwareRenderDevice@@…`,
+RVA `0xc3a0`) is THE draw call every BSP surface goes through. Its tail, at VA `0x1000e644`:
+
+```
+1000e644:  mov   eax, ds:0x10030114          ; IAT slot -> Core.dll `?GIsEditor@@3HA`
+1000e649:  cmp   dword ptr [eax], 0
+1000e64c:  je    0x1000e875                  ; editor only; the game never draws this
+1000e652:  test  dword ptr [esi], 0x2000000  ; esi = &Surface (2nd arg); [esi] = PolyFlags
+1000e658:  je    0x1000e875                  ; PF_Selected only
+1000e65e:  mov   byte ptr [ebp+0xc], 0x00
+1000e662:  mov   byte ptr [ebp+0xd], 0x7f
+1000e666:  mov   byte ptr [ebp+0xe], 0xff
+```
+
+- `[esi]` really is `PolyFlags`: the same function tests `[esi]` against other `PF_` masks much
+  earlier (`0x1000c48f`, `0x1000d435`), and `esi` is loaded from `[ebp+0xc]` (the `FSurfaceInfo&`
+  second argument) on both paths that reach this tail.
+- `PF_Selected = 0x02000000`: `Editor.dll`'s `polySelectReverse` (RVA `0x4c2a0`) does
+  `xor eax, 0x2000000` directly on a surf's flags at `0x1004c2fb`, and `polySelectAll` (RVA
+  `0x4ba50`) passes the same bit as the set-mask to `polySetAndClearPolyFlags`.
+- The channel order is not assumed either, and it matters (byte-swapped it would read orange). The
+  decisive read is the **32bpp path in this same function**: `0x1000e7a6`-`0x1000e7bf` explicitly
+  repacks the three bytes as `byte0<<16 | byte1<<8 | byte2` = `0x00007fff` before
+  `mov dword ptr [ecx], esi`, and a Win32 32bpp surface is `0x00RRGGBB` — so byte0 is R (0) and
+  byte2 is B (255). Corroborating but NOT decisive on their own: the 16-bit packer at
+  `0x1000e6aa`-`0x1000e6e4` (byte0 reaches the word's top 5 bits, which is "R" only if the surface
+  is RGB565 rather than BGR565), and `Engine.dll`'s `??0FColor@@QAE@ABVFPlane@@Z` (RVA `0xf32e0`),
+  which writes `P.X -> [ecx+0]` (that is "R" only by FPlane convention). Independent corroboration
+  from the other render devices, which are not used here but encode the same intent: `OpenGLDrv.dll`
+  (`0x10004066`) writes `00 00 7f 7f` and `D3D9Drv.dll` uses `0x7f00007f` — both a half-strength
+  blue, and both nonsense under the byte-swapped reading.
+
+**So the colour is RGB(0, 127, 255) — a vivid azure — and there is NO blend at all.** The block at
+`0x1000e66a`-`0x1000e870` re-walks the surface's own `FSpanBuffer` and does a raw store of that
+value into the framebuffer (`mov word ptr [ecx], si` at 16bpp, `0x1000e755`; `mov dword ptr [ecx],
+esi` at 32bpp, `0x1000e825`) on a sparse lattice:
+
+- rows start at `(SpanBuffer->StartY + 1) & ~1` and step `+= 2` — every second scanline;
+- columns are `x = align_up(span->Start + phase, 8) - phase`, stepping `+= 8` — every eighth pixel,
+  with `phase = (y & 2) * 2`, so the phase alternates 0 / 4 on successive drawn rows.
+
+One pixel in sixteen is overwritten with the flat colour, anchored to absolute screen coordinates
+(the dots do not slide with the surface as the camera moves). Both depth paths (16bpp and 32bpp) do
+the same thing. **Under the configured device this is the only selected-surface treatment there is:**
+`softdrv.dll` tests the bit in exactly this one place, and `Editor.dll`'s own draw entry points
+(`Draw`, `DrawLevelBrush`, `DrawFPoly`, `DrawWireBackground`) contain no `PF_Selected` test at all —
+its 57 uses of the constant are all in `Exec`/`polySelect*`/`polyTex*`/`MouseDelta`/
+`FEditorHitObserver::Click`/`FixBrushLinks`/`bspBuildBounds`. The scoping matters: `OpenGLDrv.dll`
+and `D3D9Drv.dll` each implement their OWN, different treatment (a ~50% blue blend, no stipple), so
+"UED22 stipples a selected surface" is true of the software renderer the editor actually runs, not
+of the engine in general.
+
+*(Adjacent, deliberately not folded in: `render.dll` has a second `GIsEditor && PF_Selected` gate, at
+`0x10007ece`, which rescales a computed lighting colour to `c*0.5 + (0.5,0.5,0.5)`. Its containing
+function (`0x10007be0`) is a lighting handler — same prologue/context shape as the others in its
+family — but where it is called from is UNTRACED: its only reference is a pointer-table slot at
+`0x10034cb4`, and `URender::GlobalLighting` indexes the adjacent table at `0x10034c70` under a hard
+`cmp esi,0xa / jae skip`, so that slot is out of its reach. Calling it "the Gouraud mesh path, not
+the surface path" would be inference, not evidence — what IS established is that a BSP surface's own
+draw call is `DrawComplexSurface`, which does not go through it. Noted so a later pass doesn't
+rediscover the gate and mistake it for this topic.)*
+
+**Implemented** in `web/src/scene/SelectionHighlight.tsx`: the surface overlay is now an opaque,
+unblended flat `0x007fff` draw whose fragment shader discards everything off that lattice
+(`stippleBeforeCompile`, injected into the standard `MeshBasicMaterial` program so the existing
+masked-group `map`/`alphaTest` clipping still works — the map only clips, the dot's colour is
+restored flat after the alpha test). One documented departure: the lattice is evaluated in CSS
+pixels (`gl_FragCoord` divided by the renderer's pixel ratio), not raw device pixels. UED22's
+framebuffer pixel *is* its screen pixel; on a hi-DPI canvas a device pixel is a supersample of a
+screen pixel, so dividing by the DPR reproduces the editor's on-screen dot density instead of
+shrinking it. The actor-tint variant is untouched.
+
+🔬 **Live-verified with real rendered pixels** (headless Chromium, real WebGL 2 via SwiftShader,
+`showcase_bar` rebuilt so the textured mesh exists, perspective pane in Fullbright, real
+`page.mouse.click` on a floor surface then a brick wall). Measured by diffing the pane's exact WebGL
+drawing buffer before and after selection — `page.screenshot()` is useless for the colour half here,
+because this app's canvases land at fractional CSS offsets (`y=521.296875`, CSS width 540.5 over a
+540px buffer) and the compositor resamples every one-pixel dot across two output pixels at ~50%
+each; an init script forcing `preserveDrawingBuffer` and reading `canvas.toDataURL()` gets the
+untouched buffer. Results, floor click / wall click:
+
+- 2627 of 2640 and 642 of 657 changed pixels are **exactly RGB(0,127,255)** (99.5% / 97.7%; the
+  remainder are dots landing on an edge shared with another overlay).
+- every touched row has the same `y % 2`, and the gap between touched rows is **2** on all 98 / 67
+  row transitions — no exceptions.
+- gaps between dots within a row are **8** for 2429 of 2481 and 567 of 574 (the wider gaps are where
+  the surface is interrupted by an occluder).
+- the phase alternates exactly as `(y & 2) * 2`: first-dot `x % 8` is **0** on one drawn-row parity
+  (50 / 34 rows) and **4** on the other (49 / 34 rows), with no mixing.
+
+An independent reviewer reproduced all of that and added four checks the first pass had not run:
+deselecting leaves **0** pixels differing from the unselected baseline (the highlight goes away
+completely); toggling the shading mode while a surface is selected leaves the result
+pixel-identical; selecting two surfaces at once gives exactly the sum of their individual dot counts
+with both phases still clean (which also settles empirically that three.js's shared shader program
+still binds the pixel-ratio uniform per material); and at DPR 2 the lattice comes out as 2×2
+device-pixel dots every 4 rows / 16 columns — i.e. exactly the CSS-pixel spacing the departure above
+describes, and proof the uniform is bound at all (an unbound one would be 0 and paint the poly
+solid). A 26-point grid scan stippled 10 distinct surfaces and selected nothing on empty space.
+
+A MASKED surface is verified live too, on `Brush1300:4` — `showcase_bar`'s hanging "OUT OF ORDER"
+sign, whose texture has 47% of its texels below the 0.5 alpha cutoff. It stipples (124 changed
+pixels, **121 exactly RGB(0,127,255)**, the other 3 MSAA edge blends), so the old "a masked group
+discards every fragment" failure is gone; the dots are CLIPPED rather than filling the quad
+(lattice-cell occupancy **0.50** inside their own bounding box, against **0.86 / 0.88** on two
+unmasked control surfaces in the same session — 0.50 against the texture's 53% opaque fraction); and
+they are the FLAT colour, not the texture modulated by it (one single exact value across 97.6% of
+the change; a modulation would give a spread). Where the texture is opaque the lattice stays exact
+(row gaps 2 ×21, in-row gaps 8 ×94, phase clean); the only exceptions are the clipping signature —
+single row gaps of 4 and 6, in-row gaps of 24 and 40, i.e. runs where a cut-out swallowed whole
+lattice cells. Visually the dots sit on the plaque and along its two one-pixel hanging cords with
+the transparent field between them completely undotted. That selection was driven through the app's
+own `onSelectSurface` rather than a click (the sign is unreachable by cursor from the framed view),
+so it exercises the masked RENDER path; the pick path is covered by the click-driven runs above.
+
+One known behaviour change, low severity and left as is: the scene's poly list also contains
+actor-owned polys, so a surface pick on a near-invisible NPC "glasses" slot now gets opaque blue
+dots where it previously got a faint wash. That follows from UED22's own mechanism rather than
+departing from it.
+
+Harness (disassembly helpers + the browser pixel probe): the board item itself,
+`dev/docs/board/done/surface-selection-highlight-color-disassemble/` (`harness-*.py`) — kept there
+rather than under `dev/docs/spikes/`, which needs the owner's yes per edit while `board/` does not.
+
+**A live UED22 screenshot of the same thing was attempted and could not run in this session** — the
+host's docker daemon is rootless and shares no filesystem with the session, so every bind mount
+`ensure_editor` needs (`/workspace/…`, `/home/agent/…`, even `/tmp`) is refused, and the editor
+container cannot start at all. The finding is disassembly-tier for UED22's side (the same tier the
+already-closed "Selection highlight rendering" topic sits at) plus live-pixel-tier for our own
+reproduction. Confirming the dots visually in a real UED22 render remains available to a session
+whose daemon can mount the repo.
 
 ### Click/hit-detection algorithm — screen-space tie-break, not depth-nearest (investigating, 2026-09-17)
 
