@@ -25,3 +25,7 @@ Deciding it needs the owner: reproduce UED22 (always send the radius; add the li
 client-side), or keep the current filter as a deliberate departure and record it.
 `uedcli/preview.py`'s `actor diagram --show collision` applies its own gate and would need the same
 ruling.
+
+## Outcome (2026-09-18)
+
+Owner declined -- out of scope. No fix.
