@@ -26,8 +26,8 @@ import type { OrthoShape } from './radiiProjection'
 import { collisionOrthoShape, selectedRadiiActors, sphereOrthoShape } from './radiiProjection'
 import { toThreeColor } from './selectionColor'
 
-// Colors and opacity below are read from THIS project's own `uned/UED22` binary + config, not from
-// any third-party UE1 source (GUI-PARITY.md "Radii overlay colors", ✅ binary, 2026-09-18).
+// The colors below are read from THIS project's own `uned/UED22` binary + config, not from any
+// third-party UE1 source (GUI-PARITY.md "Radii overlay colors", ✅ binary, 2026-09-18).
 // `Editor.dll`'s per-actor radii block (VA 0x1003d45b..0x1003da5a, inside `UEditorEngine::Draw`)
 // picks a DIFFERENT color per pane for the collision shape, and one shared color for light:
 //
@@ -35,10 +35,11 @@ import { toThreeColor } from './selectionColor'
 //   ortho collision       -> `DrawCircle`/`DrawBox`  with `C_ActorArrow` (UEditorEngine + 0x1f8)
 //   light radius, EVERY pane -> `DrawCircle`         with `C_ActorArrow`
 //
-// (Both collision branches pick that member only when the actor's `bCollideActors` is set, which is
-// exactly the gate `serve/scene.py::_actor_radii` already applies before sending `collision_radius`
-// at all -- so the binary's other branch, a hard-coded `FPlane(0.3, 0.6, 1.0, 1.0)` for a
-// non-colliding actor, is unreachable from this data and is deliberately not implemented here.)
+// (Both collision branches pick that member only when the actor's `bCollideActors` is set; the
+// binary's other branch draws the SAME shape in a hard-coded `FPlane(0.3, 0.6, 1.0, 1.0)` instead.
+// That branch is unreachable HERE only because `serve/scene.py::_actor_radii` never sends a
+// non-colliding actor's `collision_radius` at all -- a whole missing overlay, tracked separately as
+// `gui-non-colliding-actors-get-no-collision`, not something this file can decide.)
 // The RGB values are our own substrate's `uned/UED22/unrealtournament.ini` `[Editor.EditorEngine]`.
 const C_BRUSH_WIRE = toThreeColor([255, 63, 63])
 const C_ACTOR_ARROW = toThreeColor([163, 0, 0])
@@ -47,8 +48,11 @@ const C_ACTOR_ARROW = toThreeColor([163, 0, 0])
 // here was an invention, and (with the too-dark perspective color above) what made the overlay
 // "hardly visible" (owner report, 2026-09-18).
 const CIRCLE_SEGMENTS = 32
-// UT patch release notes (GUI-PARITY.md "Radii overlay colors"): "rendering the collision cylinder
-// as an 8-sided wire cylinder" in the 3D window. preview.py's own `_ISO_CYL_SEGMENTS = 9` is a
+// UNCONFIRMED against our own binary: this 8 comes from a UT patch release note ("rendering the
+// collision cylinder as an 8-sided wire cylinder" in the 3D window), not from `render.dll`'s real
+// `URender::DrawCylinder`, whose body is not a plain N-gon loop and was not decoded (GUI-PARITY.md
+// "Radii overlay colors"; tracked as `gui-drawcircle-segment-count-is-adaptive`).
+// preview.py's own `_ISO_CYL_SEGMENTS = 9` is a
 // DIFFERENT, deliberately-odd count for its own flat 2D raster (avoids two edges sharing a screen
 // column) -- doesn't apply to a real WebGL mesh, so this uses the literal patch-note value instead.
 const CYLINDER_SEGMENTS = 8

@@ -435,7 +435,7 @@ pivot-cross block (Part 4) reads. Its structure, instruction by instruction:
 0x1003d471  test byte ptr [esi+0x11c], 4   ; Actor->bSelected  (same bit Part 2/3/4 pinned)
 0x1003d480  call AActor::IsBrush           ; a brush -> the moving-brush box path at 0x1003d7da
 0x1003d497  mov  ecx, [eax+0x480]          ; Viewport->Actor->RendMap
-0x1003d49d  cmp  ecx, 0xd / 0xe / 0xf      ; REN_OrthXY / OrthXZ / OrthYZ -> ortho path 0x1003d54a
+0x1003d49d  cmp  ecx, 0xd / 0xe / 0xf      ; the three ortho modes -> ortho path 0x1003d54a
 0x1003d4b8  <perspective path>
 ```
 
@@ -445,8 +445,8 @@ different branch — a different DRAW CALL and a different COLOR — per viewpor
 | Overlay | Pane | Draw call | Color |
 |---|---|---|---|
 | Collision | perspective | `URender::DrawCylinder` (vtable `+0x98`) `0x1003d51c`/`0x1003d53f` | `C_BrushWire` (`+0x1ac`) at `0x1003d4fd` |
-| Collision | ortho XY (top) | `DrawCircle` (`+0x90`) `0x1003d5b7`/`0x1003d6e2` | `C_ActorArrow` (`+0x1f8`) at `0x1003d569` |
-| Collision | ortho XZ/YZ | `DrawBox` (`+0x94`) `0x1003d8a2`/`0x1003d7cf` | `C_ActorArrow`, same `[ebp-0x41c]` spill |
+| Collision | ortho, `RendMap == 0xd` | `DrawCircle` (`+0x90`) `0x1003d5b7`/`0x1003d6e2` | `C_ActorArrow` (`+0x1f8`) at `0x1003d569` |
+| Collision | ortho, `0xe`/`0xf` | `DrawBox` (`+0x94`) `0x1003d8a2`/`0x1003d7cf` | `C_ActorArrow`, same `[ebp-0x41c]` spill |
 | Light radius | EVERY pane | `DrawCircle` `0x1003d932` | `C_ActorArrow` at `0x1003d913` |
 | Volumetric radius | EVERY pane | `DrawCircle` `0x1003d9cd` | `C_Mover` (`+0x208`) at `0x1003d9b4` |
 | Sound radius | EVERY pane | `DrawCircle` `0x1003da4e` | `C_GroundHighlight` (`+0x1a8`) at `0x1003da35` |
@@ -461,13 +461,26 @@ Supporting facts, each measured rather than assumed:
   literals `SHOWACTORRADII` (VA `0x102041d8`) and `HIDEACTORRADII` (`0x102041f8`), and their handlers
   do `mov eax, [ecx+0x47c]; or eax, 2` (`0x10134582`) and `and eax, 0xfffffffd` (`0x101345a5`)
   respectively. So this block IS what "radii view" draws, and nothing else in it is conditional on
-  the view mode beyond the `RendMap` dispatch.
-- **The `URenderBase` vtable offsets** come from `render.dll`'s own `URender` vtable, base
-  `0x100345e0`, anchored by `Project` = `+0x78` — the slot `Draw` calls at
-  `0x1003e7eb` for the pivot cross (Part 4). From that base: `DrawWorld` `+0x70` (called at
-  `0x1003e79d`, immediately before the pivot block), `DrawActor` `+0x74`, `Project` `+0x78`,
-  `DrawCircle` `+0x90` (`?DrawCircle@URender@@…`, RVA `0x1c590`), `DrawBox` `+0x94` (RVA `0x1bf00`),
-  `DrawCylinder` `+0x98` (RVA `0x1c9e0`), `DrawSphere` `+0x9c` (RVA `0x1ce50`).
+  the view mode beyond the `RendMap` dispatch. That `0xd`/`0xe`/`0xf` really are the three ortho
+  panes is corroborated by our own `uned/UED22/UnrealEd.ini`, whose four saved viewports carry
+  `RendMap=13`, `14`, `5`, `15` — the three ortho values plus `5` for the perspective pane. **Which
+  ortho axis `0xd` is, is NOT derivable from our substrate** and is not asserted here; it does not
+  matter for this finding, since all three ortho branches use `C_ActorArrow` either way. (Only the
+  SHAPE differs — `0xd` draws a circle, the other two a box — matching `radiiProjection.ts`'s
+  existing circle-in-top / rect-in-front-and-side split, which came from `preview.py`.)
+- **The `URenderBase` vtable offsets.** Each slot is identified by `render.dll`'s OWN EXPORTED
+  SYMBOL NAME at that address, not by inference: `0x10034670` `?DrawCircle@URender@@…` (RVA
+  `0x1c590`), `0x10034674` `?DrawBox@…` (`0x1bf00`), `0x10034678` `?DrawCylinder@…` (`0x1c9e0`),
+  `0x1003467c` `?DrawSphere@…` (`0x1ce50`), `0x10034658` `?Project@…`, `0x10034650`
+  `?DrawWorld@…`, `0x10034654` `?DrawActor@…`. Turning those addresses into the `+0xNN` the call
+  sites use needs the vtable base, `0x100345e0` (`0x100345bc`–`0x100345d8` are eight identical
+  thunk entries, not slots) — anchored by `Project` = `+0x78`, the slot `Draw` calls at `0x1003e7eb`
+  on `[[ebp-0x3fc]+0x48]`, i.e. on `GEditor->Render` (Part 4's pivot block, which projects the pivot
+  location). Hence `DrawCircle` `+0x90`, `DrawBox` `+0x94`, `DrawCylinder` `+0x98`, `DrawSphere`
+  `+0x9c`. *(An earlier version of this bullet also claimed the `call [eax+0x70]` at `0x1003e79d`
+  was `DrawWorld`. It is not — that call takes four cdecl arguments cleaned with `add esp,0x10` and
+  a `(Cam=%ls,Flags=%i` format string at `0x100de70c`, on a different object, where
+  `URender::DrawWorld` takes one. Corrected after review; it was never load-bearing.)*
 - **The `C_*` member offsets** come from the config-color block's real declaration order, read out
   of our OWN `uned/UED22/Editor.u`'s stored `ScriptText` (one `var(Colors) config color …;`
   declaration, 28 names). That order is NOT the order `unrealtournament.ini` writes them in, which is
@@ -475,9 +488,19 @@ Supporting facts, each measured rather than assumed:
   `C_ActorArrow` … index 26 `C_Mover` … index 27 `C_OrthoBackground`. Anchored on `C_BrushWire` =
   `UEditorEngine+0x1ac` — already pinned by Part 4's live capture (the pivot cross drawn from that
   member measured `(255,63,63)`) — the block base is `+0x1a0` and `C_ActorArrow` is `+0x1f8`.
-  Two independent cross-checks land exactly where that layout predicts: `Draw`'s ortho-background
-  clear uses `+0x20c` = `C_OrthoBackground` (`0x1003c552`), and the scale-box gizmo uses `+0x1fc` =
-  `C_ScaleBox` and `+0x200` = `C_ScaleBoxHi` in one function (`0x1005f339`, `0x1005f54f`).
+  Four independent cross-checks land exactly where that layout predicts (the last three added by the
+  review pass):
+  - `Draw`'s background clear is an if/else PAIR — `0x1003c544 lea ecx,[edi+0x1f0]` against
+    `0x1003c552 lea ecx,[edi+0x20c]`, i.e. `C_WireBackground` for a wireframe pane against
+    `C_OrthoBackground` for an ortho one. Two named colours at a fixed distance in one branch pair
+    rules out any off-by-one on its own.
+  - `?DrawBoundingBox@UEditorEngine@@…` (RVA `0x5f150`) uses `+0x1fc` (`0x1005f333`) and `+0x200`
+    (`0x1005f549`) — `C_ScaleBox` and `C_ScaleBoxHi`, the gizmo's normal and highlighted boxes.
+  - `?DrawWireBackground@UEditorEngine@@…` (RVA `0x60db0`) uses `+0x1a0` six times and `+0x1a8`
+    once — `C_WorldBox` and `C_GroundHighlight`.
+  - `0x1006018f lea ecx,[edi+0x1ac]` fires exactly when `?Brush@ULevel@@QAEPAVABrush@@XZ` (IAT
+    `0x100cee84`) compares equal at `0x10060180`, i.e. for the BUILDER brush — `C_BrushWire`, the
+    same identification Part 4 reached from a live capture.
 - **Each color reaches the draw the same way**: `lea ecx, [GEditor + <offset>]` →
   `call ?Plane@FColor@@QBE?AVFVector@@XZ` (IAT `0x100cede4`) → `??0FPlane@@QAE@ABVFVector@@@Z` (IAT
   `0x100ce4a8`) → pushed as the draw's `FPlane Color`. No blend/alpha parameter exists on any of
@@ -509,8 +532,19 @@ genuinely calls `DrawCylinder`. The retracted third-party v200 reading below ("t
 is gated `Viewport->IsOrtho()`") is simply false for the binary we ship against — there is no
 `IsOrtho` gate on the block at all, only the per-shape `RendMap` dispatch above.
 
-**Two divergences found and deliberately NOT fixed here** (out of this item's scope, filed rather
+**Three divergences found and deliberately NOT fixed here** (out of this item's scope, filed rather
 than silently changed):
+
+0. **UED22 draws a collision shape for a selected actor that does NOT collide; we draw nothing.**
+   The `bCollideActors` test at `0x1003d4e2`/`0x1003d556` chooses only the COLOUR — both arms fall
+   into the same `DrawCylinder`/`DrawCircle`/`DrawBox` call, the false arm with the hard-coded
+   `FPlane(0.3, 0.6, 1.0, 1.0)` (light blue). Our pipeline instead omits the overlay entirely:
+   `serve/scene.py`'s `_actor_radii` only fills `collision_radius` when `bCollideActors == "True"`,
+   so a non-colliding selected actor reaches the client with no collision radius at all. That is a
+   missing overlay class, not a missing colour — the "unreachable branch" note under Implemented
+   below is true of the client only, and this is why.
+
+
 
 1. **The light radius is a `DrawCircle` in EVERY pane, including perspective** — and `DrawCircle`
    builds its ring from the scene node's own camera axes (`render.dll` `0x1001c5c9`-`0x1001c62d`
@@ -525,10 +559,17 @@ than silently changed):
 **Implemented** in `web/src/scene/RadiiOverlays.tsx`: `RADII_COLOR`/`OVERLAY_OPACITY` are gone,
 replaced by `C_BRUSH_WIRE` `(255,63,63)` on the perspective collision cylinder and `C_ACTOR_ARROW`
 `(163,0,0)` on the ortho collision shapes and on the light radius in every pane, all with no
-`transparent`/`opacity` at all. The `bCollideActors` ternary needs no client-side branch:
-`serve/scene.py`'s `_actor_radii` already applies that exact gate before it sends `collision_radius`,
-so the binary's light-blue branch is unreachable from this data and is deliberately not implemented.
+`transparent`/`opacity` at all. The `bCollideActors` ternary needs no client-side branch, because
+the client never sees a non-colliding actor's collision radius at all — see divergence 0 above, which
+is the real (server-side) reason and is filed rather than fixed here.
 Regression: `RadiiOverlays.test.tsx` (per-pane color + "never blends").
+
+**Reviewed** (opus, own worktree, 2026-09-18): every claim above re-derived independently from
+`uned/UED22/` with its own scripts — the 28-name declaration order, the branch decode, the vtable
+slots (by exported symbol name), the `bCollideActors` bit, the `FPlane` constant, the `scene.py`
+gate, both follow-ups, and the suites. Two doc errors found and corrected here (the wrong
+`DrawWorld` attribution, and divergence 0, which this section had reduced to "unreachable"); the
+review could not get real pixels either, for the same reasons.
 
 **Verification, honestly scoped.** Rendered through `@react-three/test-renderer` against a REAL
 `/api/level/showcase_bar/scene` payload (189 actors carrying radii, served from this worktree):
