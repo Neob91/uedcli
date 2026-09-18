@@ -85,6 +85,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | UED22 line widths | What line/wire thickness does UED22 use for wireframe/selection rendering? | ✅ closed — no bug | ✅ source-confirmed: no width parameter exists in the render-interface API UED22 draws through; this codebase's default line width is already correct |
 | Pivot-cross multi-select rendering | With 2+ brushes selected, does our own pivot cross render once per brush? | ✅ closed — no bug | own-code, 🔬 live (real headless-Chromium multi-select + screenshots) — see Findings below |
 | Pivot-cross visibility toggle | Does UED22 have a manual way to toggle the pivot marker's visibility on/off? | ✅ closed — no toggle exists; cross is hidden for a lone non-snapping selection | ✅ binary (`Editor.dll` disassembly, our own `uned/UED22/`) — see Findings below |
+| Pivot-cross anchor under multi-select | Which selected actor's location does UED22's one global cross sit on? | ✅ closed — the actor that was most recently the SOLE selection (= first-clicked, in a click-built multi-select) | ✅ binary (`Editor.dll` disassembly, our own `uned/UED22/`) + 🔬 owner's own live test — see Findings below |
 
 Legend: ⬜ open (not started) · 🔶 investigating · ✅ closed (bar met, live-verified).
 
@@ -477,6 +478,64 @@ directly reads the exact gating condition and draw-site skip, which is a stronge
 than a screenshot diff can settle on its own, and the two are answering the same question at very
 different confidence tiers. Per this doc's own convention, disassembly is the primary/authoritative
 evidence for this finding; the pixel probe is recorded here only for honesty, not as corroboration.
+
+**Part 3 — which selected actor does the one global cross sit on? ✅ binary-confirmed 2026-09-18
+against our own `uned/UED22/Editor.dll`, and it agrees with the owner's own live test.** The owner
+reported that with several brushes selected, real UED22 draws the cross only at the brush selected
+FIRST. It does, and the mechanism is a selection-HISTORY rule, not an actor-array-index rule.
+
+- **`SetPivot` never picks an actor.** It writes `GPivotLocation` (`0x10149214`) and
+  `GSnappedLocation` (`0x10149220`) straight from its own `FVector` argument (`0x100460a0`-
+  `0x100460ab`, `0x100460fc`-`0x10046104`), so the CALLER decides where the pivot lands. The draw
+  site reads `GSnappedLocation`, not `GPivotLocation` (`0x1003e7ad`-`0x1003e7c2`) — i.e. the
+  argument after grid snapping.
+- **`?NoteSelectionChange@UEditorEngine@@UAEXPAVULevel@@@Z` (RVA `0x45880`) is what decides.** Every
+  selection route funnels through it (`Click@…HActor`, `edactBoxSelect`, `edactSelectAll`,
+  `SelectNone`, `SafeExec`, …). It walks `Level->Actors` ascending (`0x100458cf`-`0x100458f4`),
+  counting selected actors (`ObjectFlags` bit `0x04` at `[actor+0x11c]`) into `Count` and
+  overwriting a `SingleActor` slot at every hit, then (`0x100458f6`-`0x1004593a`):
+  - `Count == 0` → `call [vtbl+0xd0]` = `ResetPivot`;
+  - `Count == 1` → `call [vtbl+0xcc]` = `SetPivot(SingleActor->Location, 0, 0)`, the location read
+    from `[esi+0xd0/0xd4/0xd8]` (`AActor::Location`, offset already established by this project's
+    own RE);
+  - `Count > 1` → **neither**: `cmp edx, 1; jne 0x10045940` (`0x10045906`) skips the pivot call
+    outright, so `GPivotLocation`/`GSnappedLocation` keep whatever they already held.
+
+  Vtable slots resolved from the `UEditorEngine` vtable at RVA `0xcf5d4`: `+0xc4`
+  `NoteSelectionChange`, `+0xcc` `SetPivot`, `+0xd0` `ResetPivot`, `+0xd4`
+  `UpdatePropertiesWindows`, `+0x100` `SelectNone`.
+- **So a click-built multi-select anchors on the first brush.** Plain-click A
+  (`Click@FEditorHitObserver@@…HActor@@`, RVA `0x47160`, at `0x100473cc`: `SelectNone(Level,0)`, set
+  A's selected bit, `NoteSelectionChange`) sets the pivot while A is alone; ctrl-click B
+  (`0x100473b0`, toggles B's bit, then `NoteSelectionChange` at `0x10047408`) hits the `Count > 1`
+  path and never moves it. Same for C, D, … ✅ exactly what the owner saw.
+
+**The precise rule is "the actor that was most recently the SOLE selection" — not "first clicked",
+and not "lowest actor index".** The distinction is observable: from an A+B selection, deselecting A
+moves the cross to B, because the selection passes back through `Count == 1`. And a selection that
+never passes through a single-actor state — a marquee `edactBoxSelect`, `edactSelectAll`, an `ACTOR
+SELECT` exec verb going 0 → N — calls `SetPivot` not at all, leaving the cross at a stale location
+from whatever last set it. Array order is a red herring: both `NoteSelectionChange` and `SetPivot`
+walk `Level->Actors` ascending and leave `SingleActor` holding the HIGHEST-index selected actor, but
+that variable is only ever consumed under `Count == 1`, where there is exactly one candidate.
+
+Only five call sites set the pivot at all — every `call [reg+0xcc]` in `Editor.dll`, with no direct
+(`E8`) calls and no other module importing it: `NoteSelectionChange` (`0x1004593a`), `ResetPivot`
+(`0x10045d94`, once per selected brush, ascending), `MouseDelta` (`0x100428a2`, vertex-edit mode
+only — gated on `[this+0x118] == 0x18`), `Click@…HBrushVertex` (`0x10047718`), `Click@…HGlobalPivot`
+(`0x10047d20`).
+
+**Nuance found on the way, reported rather than smoothed over: `GPivotShown` is a LATCH.** It is
+written only inside `SetPivot` (`0x10046453`) and read only at the draw site (`0x1003e7a0`) — every
+reference to `0x101491e8` in the binary was enumerated. Since `NoteSelectionChange` calls `SetPivot`
+only at `Count == 1`, its `Count > 1` term is never evaluated by an ordinary click-built
+multi-select: selecting A alone latches `GPivotShown = 0`, and adding B leaves it there. On that
+reading the cross stays hidden until some other trigger calls `SetPivot` while 2+ actors are selected
+(a brush-vertex click, a click on the pivot proxy, vertex-edit dragging, `ResetPivot`'s per-brush
+loop). This does not affect the anchor answer above, and it does not contradict the owner's report of
+WHICH brush carries the cross — but it does mean Part 2's "hidden for a lone selection" is a latched
+state, not a per-frame recomputation, and the trigger that makes the cross appear during a
+multi-select is not yet identified. Flagged, open.
 
 ## Testing
 
