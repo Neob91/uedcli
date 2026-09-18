@@ -400,6 +400,64 @@ describe('pickHit', () => {
     ]
     expect(pickHit(hits, 100, 100)).toBe('brush-poly-under-cursor')
   })
+
+  it('a Mover outline wins over an obscuring polygon when within the ~5px absolute hit box', () => {
+    // Board `mover-wireframe-should-outrank-polys-not-actors` (owner ruling 2026-09-18): a Mover's
+    // wireframe must win over a polygon even when it's not screen-nearest, as long as the click is
+    // genuinely on/near the rendered line. Live-measured: clicking dead-on an obscured Mover outline
+    // puts the line ~0.1px from the click while the occluding polygon sits at ~0px -- the OLD
+    // relative rule (line must be <= the polygon's own distance) can never fire here, which is why
+    // this needed a new absolute cutoff instead of a tighter relative one.
+    const hits = [
+      { value: 'occluding-wall-poly', isLine: false, alwaysOnTop: false, isActor: false, screenX: 100, screenY: 100 },
+      { value: 'mover-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 103, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('mover-outline')
+  })
+
+  it('a Mover outline does NOT win over a polygon once outside the absolute hit box (preserves Brush803)', () => {
+    // Same mechanism as `DeusExMover4`'s real Brush803 regression above, re-expressed with the new
+    // Mover-specific flags: the offending line there was measurably OFF to the side (well past a 5px
+    // box), so the new absolute rule must not fire for it either -- it falls through to the ordinary
+    // relative rule, which (correctly) rejects it.
+    const hits = [
+      { value: 'brush803-poly', isLine: false, alwaysOnTop: false, isActor: false, screenX: 100, screenY: 100 },
+      { value: 'deusexmover4-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 150, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('brush803-poly')
+  })
+
+  it('exactly at the ~5px boundary, the Mover outline still wins (<=, not <)', () => {
+    const hits = [
+      { value: 'poly', isLine: false, alwaysOnTop: false, isActor: false, screenX: 100, screenY: 100 },
+      { value: 'mover-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 105, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('mover-outline')
+  })
+
+  it('an actor hit still wins over a Mover outline within the absolute hit box (the "not actors" carve-out)', () => {
+    // Owner ruling's explicit carve-out: the Mover-wireframe priority is over POLYGONS, never over
+    // another actor (a point actor, another Mover, a mesh actor). An actor precise hit is exempted
+    // from the new absolute rule and falls through to the ordinary relative rule, which -- since a
+    // real precise hit is always ~0px from the click by construction -- lets the actor win by default.
+    const hits = [
+      { value: 'nearby-actor', isLine: false, alwaysOnTop: false, isActor: true, screenX: 100, screenY: 100 },
+      { value: 'mover-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 101, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('nearby-actor')
+  })
+
+  it('an ORDINARY (non-Mover) line within the absolute hit box still loses to a closer polygon', () => {
+    // Scope check: the new absolute cutoff is Mover-specific (`isMoverLine`). Same geometry as the
+    // "wins within the box" test above, but WITHOUT `isMoverLine` -- if the absolute rule leaked to
+    // ordinary lines, this would wrongly pick the line; it must fall through to the pre-existing
+    // relative rule instead, which rejects a line farther than the polygon.
+    const hits = [
+      { value: 'poly-under-cursor', isLine: false, alwaysOnTop: false, isActor: false, screenX: 100, screenY: 100 },
+      { value: 'ordinary-brush-outline', isLine: true, alwaysOnTop: true, screenX: 103, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('poly-under-cursor')
+  })
 })
 
 describe('isTransparentPixel', () => {

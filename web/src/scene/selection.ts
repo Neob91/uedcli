@@ -185,15 +185,31 @@ export function nearestScreenHit<T>(hits: ScreenHit<T>[], clickX: number, clickY
  * doc comment) from a PRECISE mesh/sprite hit (a real ray-triangle/quad intersection). `alwaysOnTop`
  * is only meaningful when `isLine` is true: whether that line renders `depthTest: false`, so it
  * composites over other geometry regardless of real depth (a Mover's outline, a selected brush's
- * bold ring -- `BrushOutlines.tsx`). `hits` must arrive with PRECISE hits already in real ray-depth
- * order (`intersectObjects`' own ascending-distance sort) -- `pickHit` never reorders them. */
+ * bold ring -- `BrushOutlines.tsx`). `isMoverLine` (meaningful only when `isLine` is true) marks a
+ * hit on a Mover's own always-visible outline specifically (`tapSelect.ts`'s `moverOutlineObjects`),
+ * as opposed to an ordinary brush's outline -- board item `mover-wireframe-should-outrank-polys-not-
+ * actors`. `isActor` (meaningful only when `isLine` is false) marks a PRECISE hit on a genuine ACTOR
+ * candidate -- a point-actor marker sprite or a mesh-actor's own pick mesh -- as opposed to a
+ * polygon hit (the merged world/brush mesh, or a Mover's own solid mesh in Movers:on mode, which is
+ * still a POLYGON for this purpose: a Mover's poly is picked exactly like any other brush's poly).
+ * `hits` must arrive with PRECISE hits already in real ray-depth order (`intersectObjects`' own
+ * ascending-distance sort) -- `pickHit` never reorders them. */
 export interface HitCandidate<T> {
   value: T
   isLine: boolean
   alwaysOnTop: boolean
+  isMoverLine?: boolean
+  isActor?: boolean
   screenX: number
   screenY: number
 }
+
+/** UED22's own click hit-test is a fixed ~5x5 PIXEL screen-space box around the cursor
+ * (disassembly-confirmed, `GUI-PARITY.md` "Click/hit-detection algorithm") -- reused here as an
+ * ABSOLUTE screen-distance cutoff for exactly one pairing: a Mover's own always-visible outline
+ * against a polygon hit (see `pickHit`'s `moverBeatsPoly` below). Owner ruling 2026-09-18
+ * (`mover-wireframe-should-outrank-polys-not-actors`). */
+const MOVER_LINE_HIT_BOX_PX = 5
 
 /** Decides which of several accepted raycast hits wins a click -- pulled out of `tapSelect.ts` so
  * the decision is directly unit-testable without a real `THREE.Raycaster`/camera.
@@ -203,20 +219,40 @@ export interface HitCandidate<T> {
  * real depth wins outright (`hits`' own order) -- screen-distance can't disambiguate two precise
  * hits, since any two points on the SAME ray reproject to the same screen pixel regardless of depth.
  *
- * Between the two kinds: the screen-nearest LINE only beats the depth-nearest PRECISE hit when THAT
- * WINNING line is `alwaysOnTop` AND is at least as close to the click as the precise hit --
- * `alwaysOnTop` alone is not enough (bug found 2026-09-17, `shift-modifier-convention-broken-for-
- * poly-and`): a Mover's outline is threshold-accepted out to `lineThreshold` world units, which can
- * be several screen pixels wide, so an always-on-top line can be a valid raycast candidate while
- * sitting well off to the side of a click that's actually centered on a closer, ordinary poly (e.g.
- * a brush's own wall right next to a Mover's frame) -- live-confirmed on `showcase_bar`: a precise
- * hit on `Brush803`'s own poly was silently discarded in favor of `DeusExMover4`'s outline merely
- * because the outline was ALSO within threshold, regardless of which was actually nearer the click.
- * The intended case (a Mover's outline drawn over the wall it doesn't occlude, board item
- * `mover-not-selectable-via-wireframe-click`) still wins: there the outline IS the nearest thing to
- * the click, so the distance check still passes. A merely-screen-nearest ORDINARY (non-always-on-top)
- * line never overrides a genuine precise hit either way -- only the WINNING line's own
- * always-on-top-ness (and now its distance) matters, never some other, losing line candidate's. */
+ * Between the two kinds, two different rules apply depending on what the winning line is:
+ *
+ * - A Mover's own outline (`isMoverLine`) beats a POLYGON precise hit (`!isActor`) whenever the
+ *   line's own screen distance to the click is within `MOVER_LINE_HIT_BOX_PX` -- an ABSOLUTE cutoff,
+ *   not relative to the polygon's distance. Owner ruling 2026-09-18: a Mover's wireframe must win
+ *   over a polygon "even if it's obscured behind level geometry." The RELATIVE rule below can never
+ *   satisfy this: a polygon hit is, by construction, always at ~0px screen-distance from the click
+ *   (a real ray-triangle intersection reprojects exactly onto the clicked pixel), while a
+ *   threshold-accepted line's reported point is the closest point on the segment to the ray -- almost
+ *   never exactly 0px even when the click lands visually right on the rendered line (live-measured on
+ *   `DeusExMover4`'s own obscured outline: ~0.1px dead-on the line, growing smoothly with lateral
+ *   distance) -- so "at least as close as the polygon" can essentially never hold once real geometry
+ *   sits behind the line. An ACTOR precise hit (`isActor`) is exempted from this absolute rule (the
+ *   ruling's own "(but not other actors)" carve-out) and falls through to the relative rule below,
+ *   which -- by the same construction -- lets a genuine actor hit win by default.
+ * - Otherwise (an ordinary, non-Mover line, or a Mover line against an actor), the screen-nearest
+ *   LINE only beats the depth-nearest PRECISE hit when THAT WINNING line is `alwaysOnTop` AND is at
+ *   least as close to the click as the precise hit -- `alwaysOnTop` alone is not enough (bug found
+ *   2026-09-17, `shift-modifier-convention-broken-for-poly-and`): a Mover's outline is
+ *   threshold-accepted out to `lineThreshold` world units, which can be several screen pixels wide,
+ *   so an always-on-top line can be a valid raycast candidate while sitting well off to the side of a
+ *   click that's actually centered on a closer, ordinary poly (e.g. a brush's own wall right next to
+ *   a Mover's frame) -- live-confirmed on `showcase_bar`: a precise hit on `Brush803`'s own poly was
+ *   silently discarded in favor of `DeusExMover4`'s outline merely because the outline was ALSO
+ *   within threshold, regardless of which was actually nearer the click. This is the SAME Mover
+ *   outline the new absolute rule above targets -- the two don't conflict because Brush803's
+ *   offending click was measurably OUTSIDE `MOVER_LINE_HIT_BOX_PX` of the line (well off to the
+ *   side), so the absolute rule doesn't fire there and this relative rule (correctly) rejects it.
+ *   The intended case (a Mover's outline drawn over the wall it doesn't occlude, board item
+ *   `mover-not-selectable-via-wireframe-click`) still wins here too: the outline IS the nearest thing
+ *   to the click, so the distance check still passes. A merely-screen-nearest ORDINARY
+ *   (non-always-on-top) line never overrides a genuine precise hit either way -- only the WINNING
+ *   line's own always-on-top-ness (and now its distance) matters, never some other, losing line
+ *   candidate's. */
 export function pickHit<T>(hits: HitCandidate<T>[], clickX: number, clickY: number): T | null {
   if (hits.length === 0) return null
   const lineHits = hits.filter((h) => h.isLine)
@@ -233,7 +269,11 @@ export function pickHit<T>(hits: HitCandidate<T>[], clickX: number, clickY: numb
   if (preciseHits.length > 0) {
     const precise = preciseHits[0]
     const preciseDistSq = (precise.screenX - clickX) ** 2 + (precise.screenY - clickY) ** 2
-    const lineWins = (bestLine?.alwaysOnTop ?? false) && bestLineDistSq <= preciseDistSq
+    const moverBeatsPoly =
+      (bestLine?.isMoverLine ?? false) &&
+      !(precise.isActor ?? false) &&
+      bestLineDistSq <= MOVER_LINE_HIT_BOX_PX ** 2
+    const lineWins = moverBeatsPoly || ((bestLine?.alwaysOnTop ?? false) && bestLineDistSq <= preciseDistSq)
     if (!lineWins) return precise.value
   }
   if (bestLine) return bestLine.value

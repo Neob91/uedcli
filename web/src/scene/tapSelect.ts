@@ -136,11 +136,21 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
           const material = Array.isArray(obj.material) ? obj.material[0] : obj.material
           alwaysOnTop = material?.depthTest === false
         }
+        // `isMoverLine`/`isActor` -- `pickHit`'s Mover-wireframe-vs-polygon absolute-distance rule
+        // (board item `mover-wireframe-should-outrank-polys-not-actors`). `moverOutlineObjects` is
+        // its own candidate group (never `brushObjects`), so a Mover's outline is already
+        // structurally distinguishable from an ordinary brush's here -- no new state needed.
+        // `meshPickObject`/`markerObjects` are the only ACTOR candidates; `meshObject`/
+        // `moverMeshObject` are polygon hits (a Mover's own solid poly picks like any other poly).
+        const isMoverLine = isLine && moverOutlineObjects.includes(h.object)
+        const isActor = !isLine && (h.object === meshPickObject || markerObjects.includes(h.object))
         const ndc = h.point.clone().project(camera)
         return {
           value: h,
           isLine,
           alwaysOnTop,
+          isMoverLine,
+          isActor,
           screenX: ((ndc.x + 1) / 2) * rect.width,
           screenY: ((1 - ndc.y) / 2) * rect.height,
         }
