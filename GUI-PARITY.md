@@ -425,10 +425,13 @@ only ever correct for two of the four things it was applied to.
 
 **✅ Binary-confirmed, from `uned/UED22/Editor.dll` + `uned/UED22/render.dll` only.** The radii live
 in one block inside `?Draw@UEditorEngine@@UAEXPAVUViewport@@HPAEPAH@Z` (export RVA `0x3c440`),
-VA `0x1003d45b`–`0x1003da5a`, reached once per actor. Its structure, instruction by instruction:
+VA `0x1003d45b`–`0x1003da5a`, reached once per actor. It is inside `Draw` by its own stack frame:
+it reads `GEditor` from `[ebp-0x3fc]` and the frame argument from `[ebp-0x3f8]`/`[ebp-0x400]`, the
+same spill slots `Draw`'s prologue fills at `0x1003c473`/`0x1003c47c` and the same ones the
+pivot-cross block (Part 4) reads. Its structure, instruction by instruction:
 
 ```
-0x1003d464  test byte ptr [eax+0x47c], 2   ; Viewport->Actor->ShowFlags & SHOW_ActorRadii
+0x1003d464  test byte ptr [eax+0x47c], 2   ; Viewport->Actor->ShowFlags & 2 (the radii toggle)
 0x1003d471  test byte ptr [esi+0x11c], 4   ; Actor->bSelected  (same bit Part 2/3/4 pinned)
 0x1003d480  call AActor::IsBrush           ; a brush -> the moving-brush box path at 0x1003d7da
 0x1003d497  mov  ecx, [eax+0x480]          ; Viewport->Actor->RendMap
@@ -460,7 +463,7 @@ Supporting facts, each measured rather than assumed:
   respectively. So this block IS what "radii view" draws, and nothing else in it is conditional on
   the view mode beyond the `RendMap` dispatch.
 - **The `URenderBase` vtable offsets** come from `render.dll`'s own `URender` vtable, base
-  `0x100345bc`+`0x24` = `0x100345e0`, anchored by `Project` = `+0x78` — the slot `Draw` calls at
+  `0x100345e0`, anchored by `Project` = `+0x78` — the slot `Draw` calls at
   `0x1003e7eb` for the pivot cross (Part 4). From that base: `DrawWorld` `+0x70` (called at
   `0x1003e79d`, immediately before the pivot block), `DrawActor` `+0x74`, `Project` `+0x78`,
   `DrawCircle` `+0x90` (`?DrawCircle@URender@@…`, RVA `0x1c590`), `DrawBox` `+0x94` (RVA `0x1bf00`),
