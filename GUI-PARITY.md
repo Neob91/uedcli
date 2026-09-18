@@ -78,10 +78,10 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Pan direction (perspective vs ortho) | Which convention (drag-follows-camera vs. content-follows-cursor) matches UED22, if either? | ⬜ open | `dev/docs/board/inbox/gui-perspective-pan-direction-vs-ortho/` |
 | Shading modes | UED22 has a Zones view mode the GUI doesn't | ⬜ open | `dev/docs/board/inbox/gui-shading-modes-omit-unrealed-s-zones-view/` |
 | Mesh-actor wireframe rendering | Should a static mesh actor render as wireframe in wireframe/2D modes? | ⬜ open | `dev/docs/board/inbox/static-mesh-actors-should-render-as-wireframe/` |
-| Radii overlay colors | Collision cylinder vs. light-radius sphere: same color or distinct? | ✅ closed, implemented | ✅ source (structural fact), 🔬 live (red, no hex) — see Findings below |
-| Radii perspective cylinder | Does/should the collision cylinder render in the perspective pane? | ✅ closed, implemented | 🔬 wiki + UT patch notes (`dev/docs/spikes/2026-07-21-...`) + owner confirmation — see Findings below |
+| Radii overlay colors | Collision cylinder vs. light-radius sphere: same color or distinct? | ✅ closed, implemented | ✅ binary (`Editor.dll`/`render.dll`/`Editor.u`, our own `uned/UED22/`) — distinct per PANE, and no alpha; a retracted third-party-sourced answer got this wrong, see Findings below |
+| Radii perspective cylinder | Does/should the collision cylinder render in the perspective pane? | ✅ closed, implemented | ✅ binary (`Editor.dll`'s non-ortho branch calls `URender::DrawCylinder`; no `IsOrtho` gate exists) — see Findings below |
 | Radii cylinder/sphere shape | Wireframe rendering had a triangulation-diagonal artifact ("triangular faces") | ✅ closed, implemented | not an RE question — a `wireframe:true`-on-triangulated-geometry rendering bug, fixed with explicit line segments |
-| `C_ActorArrow` exact RGB | The radii overlay's real color value | ✅ closed, implemented | 📖 source (`Default.ini`, v200 shipped default) — see Findings below |
+| `C_ActorArrow` exact RGB | The radii overlay's real color value | ✅ closed, implemented | ✅ our own `uned/UED22/unrealtournament.ini` line 388, `(163,0,0)` — the member it fills is `UEditorEngine+0x1f8`, pinned by disassembly; see Findings below |
 | Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed, implemented | 📖 source-only, GUI-only scope (owner ruling) — see Findings below |
 | UED22 line widths | What line/wire thickness does UED22 use for wireframe/selection rendering? | ✅ closed — no bug | ✅ source-confirmed: no width parameter exists in the render-interface API UED22 draws through; this codebase's default line width is already correct |
 | Pivot-cross multi-select rendering | With 2+ brushes selected, does our own pivot cross render once per brush? | ✅ closed, fixed — it did, and UED22 draws exactly ONE | ✅ binary + 🔬 live UED22 capture — see Findings Part 4 |
@@ -403,9 +403,144 @@ vertex-dot size across a ~32x zoom range in the ortho top pane -- unfixed: 1px s
 sweep (camera pulled back far enough to visibly shrink a nearby actor) held 7-8px at every step with
 the fix, versus visibly shrinking without it.
 
-### Radii overlay colors (investigating, 2026-09-16)
+### Radii overlay colors — REDONE FROM OUR OWN BINARY (2026-09-18)
 
-`web/src/scene/RadiiOverlays.tsx` draws the collision cylinder and light-radius sphere in two
+Board item `radii-overlay-color-hardly-visible-disassemble`. Owner report: "Radii are hardly visible
+in radii view. The color must be off."
+
+**Retraction first.** Everything below the "Earlier pass" heading further down was derived from
+`fgsfdsfgs/UE1`, a third-party UE1 source tree — banned as GUI-PARITY evidence (owner ruling,
+2026-09-18: only our own `uned/UED22/` binary, via disassembly or a live capture, counts). Two of its
+conclusions were wrong and shipped a visible bug:
+
+- It said UED22 draws the collision shape and the light radius in ONE shared constant,
+  `C_ActorArrow`. It does not. The **perspective** pane uses `C_BrushWire` — a bright `(255,63,63)`,
+  not `C_ActorArrow`'s dark `(163,0,0)`. Only the ortho panes use `C_ActorArrow` for collision.
+- It never said anything about alpha, and the implementation invented `OVERLAY_OPACITY = 0.55`.
+  UED22 has no blend stage on any of these draws.
+
+A dark red at 55% alpha, where the real editor paints a bright red at 100%, is exactly the reported
+symptom. The `(163,0,0)` VALUE itself turns out to be right — but it was right by luck, and it was
+only ever correct for two of the four things it was applied to.
+
+**✅ Binary-confirmed, from `uned/UED22/Editor.dll` + `uned/UED22/render.dll` only.** The radii live
+in one block inside `?Draw@UEditorEngine@@UAEXPAVUViewport@@HPAEPAH@Z` (export RVA `0x3c440`),
+VA `0x1003d45b`–`0x1003da5a`, reached once per actor. Its structure, instruction by instruction:
+
+```
+0x1003d464  test byte ptr [eax+0x47c], 2   ; Viewport->Actor->ShowFlags & SHOW_ActorRadii
+0x1003d471  test byte ptr [esi+0x11c], 4   ; Actor->bSelected  (same bit Part 2/3/4 pinned)
+0x1003d480  call AActor::IsBrush           ; a brush -> the moving-brush box path at 0x1003d7da
+0x1003d497  mov  ecx, [eax+0x480]          ; Viewport->Actor->RendMap
+0x1003d49d  cmp  ecx, 0xd / 0xe / 0xf      ; REN_OrthXY / OrthXZ / OrthYZ -> ortho path 0x1003d54a
+0x1003d4b8  <perspective path>
+```
+
+So the radii are per-SELECTED-actor and gated on a show flag, and the collision shape takes a
+different branch — a different DRAW CALL and a different COLOR — per viewport kind:
+
+| Overlay | Pane | Draw call | Color |
+|---|---|---|---|
+| Collision | perspective | `URender::DrawCylinder` (vtable `+0x98`) `0x1003d51c`/`0x1003d53f` | `C_BrushWire` (`+0x1ac`) at `0x1003d4fd` |
+| Collision | ortho XY (top) | `DrawCircle` (`+0x90`) `0x1003d5b7`/`0x1003d6e2` | `C_ActorArrow` (`+0x1f8`) at `0x1003d569` |
+| Collision | ortho XZ/YZ | `DrawBox` (`+0x94`) `0x1003d8a2`/`0x1003d7cf` | `C_ActorArrow`, same `[ebp-0x41c]` spill |
+| Light radius | EVERY pane | `DrawCircle` `0x1003d932` | `C_ActorArrow` at `0x1003d913` |
+| Volumetric radius | EVERY pane | `DrawCircle` `0x1003d9cd` | `C_Mover` (`+0x208`) at `0x1003d9b4` |
+| Sound radius | EVERY pane | `DrawCircle` `0x1003da4e` | `C_GroundHighlight` (`+0x1a8`) at `0x1003da35` |
+| Moving-brush box | EVERY pane | `DrawBox` `0x1003d8a2` | `C_ActorArrow` at `0x1003d883` |
+
+Supporting facts, each measured rather than assumed:
+
+- **The `URenderBase` vtable offsets** come from `render.dll`'s own `URender` vtable, base
+  `0x100345bc`+`0x24` = `0x100345e0`, anchored by `Project` = `+0x78` — the slot `Draw` calls at
+  `0x1003e7eb` for the pivot cross (Part 4). From that base: `DrawWorld` `+0x70` (called at
+  `0x1003e79d`, immediately before the pivot block), `DrawActor` `+0x74`, `Project` `+0x78`,
+  `DrawCircle` `+0x90` (`?DrawCircle@URender@@…`, RVA `0x1c590`), `DrawBox` `+0x94` (RVA `0x1bf00`),
+  `DrawCylinder` `+0x98` (RVA `0x1c9e0`), `DrawSphere` `+0x9c` (RVA `0x1ce50`).
+- **The `C_*` member offsets** come from the config-color block's real declaration order, read out
+  of our OWN `uned/UED22/Editor.u`'s stored `ScriptText` (one `var(Colors) config color …;`
+  declaration, 28 names). That order is NOT the order `unrealtournament.ini` writes them in, which is
+  why the ini can't be used for this. Index 0 `C_WorldBox` … index 3 `C_BrushWire` … index 22
+  `C_ActorArrow` … index 26 `C_Mover` … index 27 `C_OrthoBackground`. Anchored on `C_BrushWire` =
+  `UEditorEngine+0x1ac` — already pinned by Part 4's live capture (the pivot cross drawn from that
+  member measured `(255,63,63)`) — the block base is `+0x1a0` and `C_ActorArrow` is `+0x1f8`.
+  Two independent cross-checks land exactly where that layout predicts: `Draw`'s ortho-background
+  clear uses `+0x20c` = `C_OrthoBackground` (`0x1003c552`), and the scale-box gizmo uses `+0x1fc` =
+  `C_ScaleBox` and `+0x200` = `C_ScaleBoxHi` in one function (`0x1005f339`, `0x1005f54f`).
+- **Each color reaches the draw the same way**: `lea ecx, [GEditor + <offset>]` →
+  `call ?Plane@FColor@@QBE?AVFVector@@XZ` (IAT `0x100cede4`) → `??0FPlane@@QAE@ABVFVector@@@Z` (IAT
+  `0x100ce4a8`) → pushed as the draw's `FPlane Color`. No blend/alpha parameter exists on any of
+  these calls; `LINE_None` (0) is passed for the circles and `1` for the cylinder/box.
+- **`C_ActorArrow`'s value in OUR substrate: `(163, 0, 0)`.** `uned/UED22/unrealtournament.ini` line
+  388, `[Editor.EditorEngine]`: `C_ActorArrow=(R=163,G=0,B=0,A=0)`. Same number the retracted
+  third-party `Default.ini` claimed — now sourced from this project's own config instead.
+  `C_BrushWire` is line 375, `(R=255,G=63,B=63,A=0)`.
+- **The collision color is a ternary on `bCollideActors`.** Both collision branches test
+  `[actor+0x198] & 1` (`0x1003d4e2` perspective, `0x1003d556` ortho) and fall through to a
+  hard-coded `movaps xmm0, [0x100deae0]` when it is CLEAR — the 16 bytes there are
+  `FPlane(0.3, 0.6, 1.0, 1.0)`, a light blue, used at `0x1003d527`, `0x1003d6cc` and `0x1003d7b9`.
+  `bCollideActors` is bit 0 of that dword: `uned/UED22/Engine.u`'s own `AActor` `ScriptText`
+  declares `var(Collision) const float CollisionRadius; … CollisionHeight; …
+  const bool bCollideActors;` — so `+0x190`/`+0x194` are the two floats the same branch loads as the
+  cylinder's radius/height, and `+0x198` is the bitfield they precede.
+- **The light/volumetric/sound gates** confirm the `AActor` offsets independently: light needs
+  `LightType != 0` (`[+0x19c]`), `bSelected`, `GIsEditor` (IAT `0x100ce730`), `LightBrightness != 0`
+  (`[+0x19e]`) and `LightRadius != 0` (`[+0x1a1]`), then calls the actor's own vtable `+0x6c`
+  (`WorldLightRadius`, returns in `st0`). Volumetric needs `VolumeBrightness` (`[+0x1a5]`) and
+  `VolumeRadius` (`[+0x1a6]`), radius `= (VolumeRadius + 1) * 25.0` (the `25.0` at `0x100de9d4`);
+  sound needs `AmbientSound != NULL` (`[+0x7c]`) and uses `SoundRadius` (`[+0x184]`) with the same
+  `*25` scale. That is the exact `LightType/LightEffect/LightBrightness/LightHue/LightSaturation/
+  LightRadius/LightPeriod/LightPhase/LightCone/VolumeBrightness/VolumeRadius` declaration order.
+
+**Perspective radii are settled at ✅ binary tier now, not patch-note tier.** `render.dll` genuinely
+exports `URender::DrawCylinder` and `URender::DrawSphere`, and `Editor.dll`'s non-ortho branch
+genuinely calls `DrawCylinder`. The retracted third-party v200 reading below ("the whole radii block
+is gated `Viewport->IsOrtho()`") is simply false for the binary we ship against — there is no
+`IsOrtho` gate on the block at all, only the per-shape `RendMap` dispatch above.
+
+**Two divergences found and deliberately NOT fixed here** (out of this item's scope, filed rather
+than silently changed):
+
+1. **The light radius is a `DrawCircle` in EVERY pane, including perspective** — and `DrawCircle`
+   builds its ring from the scene node's own camera axes (`render.dll` `0x1001c5c9`-`0x1001c62d`
+   reads `FSceneNode+0x40..0x54`), i.e. a camera-facing circle. Our GUI draws a three-ring wire
+   SPHERE there. `DrawSphere` exists in the vtable but this block never calls it.
+2. **`DrawCircle`'s segment count is adaptive, not fixed** — `0x1001c635` starts at `8` and doubles
+   (up to `0x100`) while a screen-size term stays under a threshold (`0x1001c668` loop). Our GUI's
+   ortho rings are a flat 32. `DrawCylinder`'s own segment count was NOT determined (its body is not
+   a plain N-gon loop); the "8-sided" figure in the retracted patch-note paragraph below is still
+   unconfirmed against the binary.
+
+**Implemented** in `web/src/scene/RadiiOverlays.tsx`: `RADII_COLOR`/`OVERLAY_OPACITY` are gone,
+replaced by `C_BRUSH_WIRE` `(255,63,63)` on the perspective collision cylinder and `C_ACTOR_ARROW`
+`(163,0,0)` on the ortho collision shapes and on the light radius in every pane, all with no
+`transparent`/`opacity` at all. The `bCollideActors` ternary needs no client-side branch:
+`serve/scene.py`'s `_actor_radii` already applies that exact gate before it sends `collision_radius`,
+so the binary's light-blue branch is unreachable from this data and is deliberately not implemented.
+Regression: `RadiiOverlays.test.tsx` (per-pane color + "never blends").
+
+**Verification, honestly scoped.** Rendered through `@react-three/test-renderer` against a REAL
+`/api/level/showcase_bar/scene` payload (189 actors carrying radii, served from this worktree):
+the perspective pane emits one `#ff3f3f` cylinder for `Pinball0` and one `#a30000` ring set for
+`Light0`; top/front/side emit `#a30000` only; every material reports `transparent=false opacity=1`.
+**A real browser screenshot could NOT be taken in this session** — this host has no runnable
+Chromium (`chromium-1243`'s binary is missing 17 shared libraries including `libglib-2.0.so.0`, there
+is no root and `apt-get update` is denied), and the same rootless-docker limitation that blocked the
+surface-selection topic's UED22 capture applies here too. The on-screen pixel is nevertheless
+determined: every `<Canvas>` in this app spreads `CANVAS_COLOR_MANAGEMENT`
+(`{flat, linear, legacy}`, `viewportRender.ts`), a documented passthrough, so a `THREE.Color`
+channel IS the output byte. Against the panes' own documented backgrounds (`dev/docs/GUI.md`:
+perspective black, ortho `#404040`) the change is: perspective collision `(90,0,0)` → `(255,63,63)`;
+perspective light `(90,0,0)` → `(163,0,0)`; ortho collision and light `(118,29,29)` — within 54 of
+the `(64,64,64)` background on the red channel and BELOW it on green/blue — → `(163,0,0)`. A live
+screenshot A/B remains outstanding and is called for in the board item.
+
+### Earlier pass (2026-09-16) — RETRACTED, third-party source
+
+Everything from here to the end of this section predates the 2026-09-18 ruling and is kept only so a
+later reader can see what was claimed and why it was wrong. Do not cite it.
+
+`web/src/scene/RadiiOverlays.tsx` drew the collision cylinder and light-radius sphere in two
 DIFFERENT colors (`COLLISION_COLOR` red-pink, `LIGHT_COLOR` orange) — inherited from `preview.py`'s
 own offline-rasterizer convention, which deliberately deviated light to orange so the two overlays
 stay visually distinct in a flat 2D CLI-rendered diagram. This was carried into the live GUI without
@@ -419,18 +554,16 @@ Render->DrawCircle( Frame, C_ActorArrow.Plane(), LINE_None, Actor->Location, Act
 Render->DrawCircle( Frame, C_ActorArrow.Plane(), LINE_None, Actor->Location, Actor->WorldLightRadius() );
 ```
 Two other radii on the SAME actor (Mover volumetric radius, sound radius) use genuinely DIFFERENT
-constants (`C_Mover`, `C_GroundHighlight`) — so UED22 does distinguish some radii by color, just not
-collision-vs-light. Our GUI doesn't currently draw mover/sound radii at all, so that distinction is
-out of scope for now.
+constants (`C_Mover`, `C_GroundHighlight`). *(Both halves of this are confirmed by the real
+disassembly above — the per-pane split it missed is what made it wrong.)*
 
 **`C_ActorArrow`'s exact RGB found (2026-09-16): `(163, 0, 0)`, a dark red** —
 `Engine/Config/Default.ini` (`fgsfdsfgs/UE1`, line 563), `C_ActorArrow=(R=163,G=0,B=0,A=0)`. Not a
 class-header default (`Editor.h`'s `C_ActorArrow` member has no in-code initializer, confirmed no
 init in `UnEditor.cpp` either) — it's the shipped v200 engine's `.ini` default, loaded at first run.
-Matches `dev/docs/unrealed/rendering.md`'s existing 🔬 live-probed "red" fact for the collision
-cylinder. Confidence: 📖 source (v200 shipped `.ini` default) — not yet confirmed against this
-project's actual DeusEx-customized `Editor.dll`/its own installed `.ini` (same v200-vs-DeusEx-build
-gap flagged throughout this doc). Implemented in `RadiiOverlays.tsx`'s `RADII_COLOR`.
+Confidence at the time: 📖 source — "not yet confirmed against this project's actual
+DeusEx-customized `Editor.dll`/its own installed `.ini`". *(That caveat is what mattered; our own ini
+happens to carry the same value.)*
 
 **The same `Default.ini` pull also surfaced the full adjacent `C_*` wireframe color block** —
 directly relevant to the brush-wire-color question below:
@@ -440,27 +573,18 @@ C_AddWire=(127,127,255)      C_SubtractWire=(255,192,63)   C_GreyWire=(163,163,1
 C_ActorWire=(127,63,0)       C_ActorHiWire=(255,127,0)     C_SemiSolidWire=(127,255,0)
 C_NonSolidWire=(63,192,32)   C_ActorArrow=(163,0,0)        C_Mover=(255,0,255)
 ```
-Not yet folded into a fix — `C_ActorHiWire` ("Actor Highlighted Wire") is a separate constant from
-`C_BrushWire`, not chased against `DrawLevelBrush`'s own `WireColor` selection logic (does a SELECTED
-brush's `DrawColor` ever read from `C_ActorHiWire` instead of the brush-kind color, in some code path
-not yet found?). And `C_SemiSolidWire=(127,255,0)` (bright green) contradicts `preview.py`'s own
-existing comment, which cites "UED's rose (223,149,157)" for semisolid as the value it deliberately
-diverged from — a real discrepancy between this fresh v200 pull and that earlier research, unresolved
-(different UE1 build? different source? not determined here).
+*(Superseded: our own `uned/UED22/unrealtournament.ini` `[Editor.EditorEngine]` carries this whole
+block, with these values — cite that file, not this.)* Still open from it: `C_ActorHiWire` ("Actor
+Highlighted Wire") is a separate constant from `C_BrushWire`, never chased against `DrawLevelBrush`'s
+own `WireColor` selection logic. And `C_SemiSolidWire=(127,255,0)` (bright green) contradicts
+`preview.py`'s own comment citing "UED's rose (223,149,157)" for semisolid — unresolved.
 
-**Bigger finding, same read (`UnEdCam.cpp:1538-1573`): the whole radii block is gated
-`Viewport->IsOrtho() && ...` at its OUTER `if`.** Collision/light/mover/sound radii are NEVER drawn
-in a perspective viewport in real UED22 — only in the three ortho panes. And even there it's not a
-3D cylinder: `REN_OrthXY` (top-down) draws a flat `DrawCircle`; every OTHER ortho view draws a
-`DrawBox` (an axis-aligned box, `Min/Max = Location ∓ (CollisionRadius,CollisionRadius,
-CollisionHeight)`) — never a round cylinder shape at all. Light radius always draws as a circle in
-every ortho pane (no box form). This matches our own `radiiProjection.ts`'s ortho-pane logic
-(circle in top, rect in front/side) reasonably well — but our GUI's `CollisionCylinder3D`/
-`LightSphere3D` (`RadiiOverlays.tsx`), a true 3D wireframe cylinder + sphere drawn in the
-PERSPECTIVE pane, has **no basis in this source** — this source shows nothing there. Confidence: ✅
-source-read, but this reading is DISPUTED. Not yet corroborated against the real UED22 binary this
-project builds against (`fgsfdsfgs/UE1` is third-party UE1 v200-lineage source, not confirmed
-identical to the DeusEx-customized UED22 build).
+**RETRACTED claim (`UnEdCam.cpp:1538-1573`): "the whole radii block is gated
+`Viewport->IsOrtho() && ...`", so radii are never drawn in a perspective viewport.** False for our
+binary — see the disassembly above, which finds no such gate and a real `DrawCylinder` call on the
+non-ortho branch. The ortho half of the claim (top draws a circle, the other two draw an
+axis-aligned box from `Location ∓ (CollisionRadius, CollisionRadius, CollisionHeight)`, light always
+a circle) does match the binary.
 
 **RESOLVED (2026-09-16) — the "no perspective basis" framing above was wrong, and this project
 already knew why.** Owner correction: "The radii cylinder SHOULD render in perspective view. UED22

@@ -24,19 +24,28 @@ import type { OrthoAxis } from './orthoCamera'
 import { orthoBasis } from './orthoCamera'
 import type { OrthoShape } from './radiiProjection'
 import { collisionOrthoShape, selectedRadiiActors, sphereOrthoShape } from './radiiProjection'
+import { toThreeColor } from './selectionColor'
 
-// UED22 draws the collision-radius circle AND the light-radius circle with the SAME color constant
-// (`C_ActorArrow`, `UnEdCam.cpp:1547,1564`, GUI-PARITY.md "Radii overlay colors") -- preview.py's
-// separate COL_COLLISION/COL_LIGHT (light deviated to orange) was its own 2D-diagram readability
-// hack, not a real UED22 distinction, and was wrongly carried into this live 3D GUI. Both now share
-// one constant, at `C_ActorArrow`'s real value: `Engine/Config/Default.ini`,
-// `C_ActorArrow=(R=163,G=0,B=0,A=0)` -- a dark red (📖 source, UE1 v200 shipped default; not yet
-// confirmed against this project's actual DeusEx-customized `Editor.dll`/its own `.ini`, same gap
-// flagged elsewhere in GUI-PARITY.md). preview.py's rasterizer has no alpha blend buffer so it paints
-// these overlays SOLID; three.js does, so a modest opacity reads as "faint" the same way its comment
-// intends.
-const RADII_COLOR = new THREE.Color(163 / 255, 0, 0)
-const OVERLAY_OPACITY = 0.55
+// Colors and opacity below are read from THIS project's own `uned/UED22` binary + config, not from
+// any third-party UE1 source (GUI-PARITY.md "Radii overlay colors", ✅ binary, 2026-09-18).
+// `Editor.dll`'s per-actor radii block (VA 0x1003d45b..0x1003da5a, inside `UEditorEngine::Draw`)
+// picks a DIFFERENT color per pane for the collision shape, and one shared color for light:
+//
+//   perspective collision -> `Render->DrawCylinder` with `C_BrushWire`   (UEditorEngine + 0x1ac)
+//   ortho collision       -> `DrawCircle`/`DrawBox`  with `C_ActorArrow` (UEditorEngine + 0x1f8)
+//   light radius, EVERY pane -> `DrawCircle`         with `C_ActorArrow`
+//
+// (Both collision branches pick that member only when the actor's `bCollideActors` is set, which is
+// exactly the gate `serve/scene.py::_actor_radii` already applies before sending `collision_radius`
+// at all -- so the binary's other branch, a hard-coded `FPlane(0.3, 0.6, 1.0, 1.0)` for a
+// non-colliding actor, is unreachable from this data and is deliberately not implemented here.)
+// The RGB values are our own substrate's `uned/UED22/unrealtournament.ini` `[Editor.EditorEngine]`.
+const C_BRUSH_WIRE = toThreeColor([255, 63, 63])
+const C_ACTOR_ARROW = toThreeColor([163, 0, 0])
+// UED22 draws every one of these as plain `LINE_None` line draws with no blend stage at all, so
+// these materials carry no `transparent`/`opacity` at all either. The 0.55 alpha that used to be
+// here was an invention, and (with the too-dark perspective color above) what made the overlay
+// "hardly visible" (owner report, 2026-09-18).
 const CIRCLE_SEGMENTS = 32
 // UT patch release notes (GUI-PARITY.md "Radii overlay colors"): "rendering the collision cylinder
 // as an 8-sided wire cylinder" in the 3D window. preview.py's own `_ISO_CYL_SEGMENTS = 9` is a
@@ -101,7 +110,7 @@ function CollisionCylinder3D({
   useEffect(() => () => geometry.dispose(), [geometry])
   return (
     <lineSegments geometry={geometry}>
-      <lineBasicMaterial color={RADII_COLOR} transparent opacity={OVERLAY_OPACITY} depthTest={false} />
+      <lineBasicMaterial color={C_BRUSH_WIRE} depthTest={false} />
     </lineSegments>
   )
 }
@@ -132,7 +141,7 @@ function LightSphere3D({ position, radius }: { position: [number, number, number
   useEffect(() => () => geometry.dispose(), [geometry])
   return (
     <lineSegments geometry={geometry}>
-      <lineBasicMaterial color={RADII_COLOR} transparent opacity={OVERLAY_OPACITY} depthTest={false} />
+      <lineBasicMaterial color={C_ACTOR_ARROW} depthTest={false} />
     </lineSegments>
   )
 }
@@ -180,13 +189,11 @@ function OrthoShapeLine({
   center,
   right,
   up,
-  color,
 }: {
   shape: OrthoShape
   center: [number, number, number]
   right: [number, number, number]
   up: [number, number, number]
-  color: THREE.Color
 }) {
   const geometry = useMemo(() => {
     const ring = orthoShapeRing(shape, center, right, up)
@@ -199,7 +206,7 @@ function OrthoShapeLine({
   useEffect(() => () => geometry.dispose(), [geometry])
   return (
     <lineSegments geometry={geometry}>
-      <lineBasicMaterial color={color} transparent opacity={OVERLAY_OPACITY} depthTest={false} />
+      <lineBasicMaterial color={C_ACTOR_ARROW} depthTest={false} />
     </lineSegments>
   )
 }
@@ -239,11 +246,10 @@ export function RadiiOverlays({ actors, view, selectedNames }: RadiiOverlaysProp
                 center={actor.location}
                 right={right}
                 up={up}
-                color={RADII_COLOR}
               />
             )}
             {radii.light_radius != null && (
-              <OrthoShapeLine shape={sphereOrthoShape(radii.light_radius)} center={actor.location} right={right} up={up} color={RADII_COLOR} />
+              <OrthoShapeLine shape={sphereOrthoShape(radii.light_radius)} center={actor.location} right={right} up={up} />
             )}
           </group>
         )
