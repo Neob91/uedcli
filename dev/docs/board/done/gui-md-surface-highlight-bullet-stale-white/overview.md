@@ -21,3 +21,23 @@ Only the SURFACE/TEXTURE-selection variant changed -- confirm before editing whe
 actor-tint variant (a different code path per `SelectionHighlight.tsx`, mentioned in the same GUI.md
 bullet) was also changed or is still additive-white; word the correction precisely for whichever is
 actually still true.
+
+## Outcome (2026-09-18, owner-approved)
+
+Confirmed by reading `web/src/scene/SelectionHighlight.tsx` and its call sites in `Viewport3D.tsx`/
+`OrthoViewport.tsx` directly (not assumed):
+
+- **"Texture (single-surface) highlight"** (`SurfaceSelectionHighlight`) still exists and now draws
+  the disassembly-confirmed flat azure `RGB(0,127,255)` stipple, not additive-white. Bullet reworded
+  to describe it.
+- **"Whole-brush surface highlight"** no longer exists at all, for either color -- a whole selected
+  brush gets NO per-face highlight now; it's shown only by `BrushOutlines`' bold ring (owner ruling,
+  already implemented, code comment: "A selected WHOLE BRUSH is shown as a selected ACTOR ... NOT by
+  lighting up its faces"). The bullet described a mechanism that was removed, not merely recolored --
+  replaced with a short note to that effect, and the stale cross-reference to it earlier in the
+  Selection section (line ~250) is removed too.
+- Found in the same read: `ActorSelectionHighlight` (a THIRD, previously undocumented variant) lights
+  up a selected non-brush mesh actor with the multiplicative tint from `GUI-PARITY.md`'s "Selection
+  highlight rendering" -- added as a new bullet since it was missing from GUI.md entirely.
+
+`dev/docs/GUI.md` updated accordingly.
