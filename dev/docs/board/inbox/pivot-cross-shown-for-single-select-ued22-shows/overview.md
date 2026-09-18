@@ -50,11 +50,35 @@ first-selected one). This also likely explains the inconclusive screenshot probe
 for the marker at a LATER-selected brush's location rather than the first-selected one, it would
 correctly find nothing there even when the real global cross was genuinely showing elsewhere.
 
-**Needs disassembly confirmation of the exact "anchored to first-selected" mechanism** (not yet done)
--- likely `SetPivot`'s own `SingleActor`/actor-array-walk logic decides which actor's location seeds
-`GPivotLocation` when multiple are selected; confirm whether it's genuinely "first selected" or some
-other rule (e.g. lowest actor index, last actor processed in the walk direction, etc.) that happens to
-usually coincide with "first selected" in ordinary use.
+**Anchor mechanism CONFIRMED by disassembly 2026-09-18** (our own `uned/UED22/Editor.dll`, no
+third-party source) -- the owner's "first selected" observation is right, and the underlying rule is
+selection HISTORY, not actor-array index:
+
+- `SetPivot` (RVA `0x46060`) never picks an actor. It writes `GPivotLocation` (`0x10149214`) and
+  `GSnappedLocation` (`0x10149220`) from its own `FVector` argument (`0x100460a0`, `0x100460fc`); the
+  draw site reads `GSnappedLocation` (`0x1003e7ad`). The caller decides the location.
+- `NoteSelectionChange` (RVA `0x45880`), which every selection route funnels through, walks
+  `Level->Actors` ascending counting selected actors, then: `Count == 0` -> `ResetPivot`
+  (`vtbl+0xd0`); `Count == 1` -> `SetPivot(SingleActor->Location, 0, 0)` (`vtbl+0xcc`, location from
+  `[actor+0xd0]`); `Count > 1` -> **neither** (`cmp edx,1; jne` at `0x10045906`), so the pivot keeps
+  whatever it held.
+- Hence click A (pivot set while A is alone), ctrl-click B/C (`Count > 1`, pivot untouched) -> the
+  one cross stays on A.
+
+The precise rule is **"the actor that was most recently the SOLE selection"**. Deselecting A from an
+A+B selection moves the cross to B; a selection that never passes through one actor (marquee
+`edactBoxSelect`, `edactSelectAll`, an `ACTOR SELECT` verb going 0 -> N) never calls `SetPivot` at
+all and leaves the cross at a stale location. "Lowest actor index" and "last in walk order" are both
+refuted: the walk overwrites `SingleActor` at every selected actor (ending on the HIGHEST index), but
+that variable is only read under `Count == 1`.
+
+Newly noticed, not resolved: `GPivotShown` is a **latch** -- written only in `SetPivot`
+(`0x10046453`), read only at the draw site (`0x1003e7a0`). Because `NoteSelectionChange` calls
+`SetPivot` only at `Count == 1`, its `Count > 1` term is never evaluated by a click-built
+multi-select, so on a strict reading the cross would stay hidden until some other trigger fires
+`SetPivot` (brush-vertex click, pivot-proxy click, vertex-edit drag, `ResetPivot`). Doesn't change
+the anchor answer; does mean the visibility rule is latched state, not a per-frame test. Detail:
+`GUI-PARITY.md` "Pivot-cross multi-select rendering ... Part 3".
 
 **The real fidelity gap is now sharper than originally framed**: it's not just "shows too eagerly
 below 2 selections" -- it's structural. Real UED22 draws AT MOST ONE global cross ever; this GUI's
