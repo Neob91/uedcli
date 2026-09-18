@@ -32,6 +32,15 @@ confidence.
 
 ## Method — two tools, pick whichever answers the question cheaper
 
+**Owner ruling, 2026-09-18: never cite or use a third-party UE1 engine source (e.g. `fgsfdsfgs/UE1`
+or similar) for ANY finding in this campaign, no matter how similar its lineage claims to be.** Only
+the actual UED22 binary this project has (`uned/UED22/`) counts as evidence — disassembly of it, or a
+live capture against it running. A finding built on a third-party source alone is not RE of UED22 and
+must not be presented as one, even with a 📖 confidence marker. Several earlier findings in this doc
+were built partly or wholly on such a source before this ruling; they are not automatically wrong,
+but they are not verified either — treat any of them you rely on as needing real confirmation against
+our own binary first, not as settled.
+
 - **Live screenshot/pixel probe** (`dev/docs/unrealed/rendering.md`'s method: `CAMERA OPEN`, `SHOT`,
   `wine_ctl exec`) — the right tool for anything OBSERVABLE in a render: selection highlight color,
   blend technique, box/gizmo shape. Select an actor of the relevant kind in an isolated UED22
@@ -75,7 +84,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed, implemented | 📖 source-only, GUI-only scope (owner ruling) — see Findings below |
 | UED22 line widths | What line/wire thickness does UED22 use for wireframe/selection rendering? | ✅ closed — no bug | ✅ source-confirmed: no width parameter exists in the render-interface API UED22 draws through; this codebase's default line width is already correct |
 | Pivot-cross multi-select rendering | With 2+ brushes selected, does our own pivot cross render once per brush? | ✅ closed — no bug | own-code, 🔬 live (real headless-Chromium multi-select + screenshots) — see Findings below |
-| Pivot-cross visibility toggle | Does UED22 have a manual way to toggle the pivot marker's visibility on/off? | ✅ closed — no toggle exists, none implemented | 📖 source (`Editor/Src/UnEdCam.cpp`) — see Findings below |
+| Pivot-cross visibility toggle | Does UED22 have a manual way to toggle the pivot marker's visibility on/off? | ⬜ open — prior "no toggle" finding RETRACTED (third-party-source-only, never verified against our binary) | none valid yet — see Findings below |
 
 Legend: ⬜ open (not started) · 🔶 investigating · ✅ closed (bar met, live-verified).
 
@@ -389,7 +398,7 @@ still fall back to the server's own (tuned, non-faithful) color -- this codebase
 distinguish them from Add server-side, a separate already-tracked gap
 (`gui-csg-brush-coloring-never-distinguishes`), not expanded into here.
 
-### Pivot-cross multi-select rendering + visibility toggle (closed 2026-09-18)
+### Pivot-cross multi-select rendering (closed) + visibility toggle (RE-OPENED 2026-09-18)
 
 Board item `brush-pivot-cross-multiselect-and-toggle`, two questions.
 
@@ -403,46 +412,34 @@ state, then real screenshots — not a code read alone): selecting 3 brushes (`B
 two of them side by side, each centered on its own brush's own selection outline. The owner's hunch
 ("it does NOT render per-brush currently") did not reproduce. No code change.
 
-**Part 2 — does UED22 have a manual visibility toggle for this marker? Confirmed NO — none
-implemented.** 📖 source-only (`fgsfdsfgs/UE1`, `Source/Editor/Src/UnEdCam.cpp`). Real UED22's own
-pivot marker is a different mechanism entirely: ONE global crosshair (`GPivotLocation`/
-`GSnappedLocation`), not one per selected actor, drawn in the viewport `Draw()` function's default
-case:
-```cpp
-// Show pivot.
-if( (Viewport->Actor->ShowFlags & SHOW_Actors) && GPivotShown ) {
-    ... Draw2DPoint(...) x3 (a 2px center dot + a vertical + a horizontal stroke, an 8px "+"),
-    color C_BrushWire ...
-}
-```
-`GPivotShown` is not a purpose-built visibility toggle — it's a derived boolean, recomputed every
-time selection changes (`NoteSelectionChange` → `SetPivot`/`ResetPivot`):
-`GPivotShown = SnapCount>0 || Count>1` (also true mid grid-snap-drag). Concretely, `SetPivot`'s own
-`Count==1` branch means **selecting exactly ONE actor leaves `GPivotShown` false** — UED22's real
-cross is invisible for a lone selection and only appears once 2+ actors are selected or a snap-drag
-is live. The only gate that exists at all is `ShowFlags & SHOW_Actors`, the same bit that hides every
-actor (`rendering.md`'s own ShowFlags table has no pivot-specific bit).
+**Part 2 — does UED22 have a manual visibility toggle for this marker? RETRACTED, not settled — do
+not treat as fact.** The claims below (no toggle exists; the cross is invisible for a single
+selection) came ONLY from `fgsfdsfgs/UE1`, a third-party UE1 v200 source tree — **owner ruling
+2026-09-18: never cite or use this or any third-party source for GUI-PARITY RE work again.** Every
+finding in this campaign must come from reverse-engineering the actual UED22 binary we have
+(disassembly or a live capture), never a third-party engine source, however similar its lineage.
+This claim was never confirmed against our own `Editor.dll`/`render.dll` and must be treated as
+UNCONFIRMED pending real RE — kept below only as a record of what was claimed and why it doesn't
+count, not as an answer to the toggle/single-select question, which is OPEN again.
 
-One real console command DOES call `ResetPivot()` directly: `ACTOR RESET LOCATION`/`ACTOR RESET ALL`
-(`UnEdSrv.cpp`, already a documented real verb, `dev/docs/unrealed/commands.md`) — found on review, not
-in the first pass. This is not a purpose-built visibility toggle, though: both zero every selected
-actor's `Location`/`PrePivot` too, so hiding the pivot is a side effect of a destructive transform
-reset, not a way to hide-then-restore it. The conclusion is unchanged: no dedicated on/off toggle
-exists.
+<details><summary>Retracted claim (third-party-source-only, do not act on it)</summary>
 
-Per this item's own instruction to confirm before implementing a guessed mechanism: since no manual
-toggle exists in UED22 to reproduce, **no toggle button was added** — inventing one matching the
-Grid/Radii/Movers button convention would have no real UED22 basis.
+Real UED22's own pivot marker was claimed to be a different mechanism entirely: ONE global crosshair
+(`GPivotLocation`/`GSnappedLocation`), not one per selected actor, gated by a derived
+`GPivotShown = SnapCount>0 || Count>1` recomputed on every selection change — with the claim that a
+single selected actor with `bEdShouldSnap` false leaves `GPivotShown` false (cross invisible). This
+entire claim is UNVERIFIED against real UED22 and should not be trusted -- `bEdShouldSnap`'s real
+default value for an ordinary brush was never confirmed either, so even the "single-select is usually
+invisible in practice" inference doesn't hold up. A console command, `ACTOR RESET LOCATION`/`ACTOR
+RESET ALL`, was also claimed to call `ResetPivot()` as a side effect -- also unverified against our
+binary.
 
-Two smaller facts surfaced along the way, worth recording but not acted on (out of this item's two
-explicit questions):
-- Our own `PIVOT_RED` (255,63,63) already matches UED22's real `C_BrushWire` (also (255,63,63),
-  `Default.ini`) — the exact color UED22 draws its own pivot cross with. Coincidence or not, no
-  change needed.
-- UED22's real cross is invisible for a single selected actor and only appears on multi-select/drag —
-  the OPPOSITE of what this GUI does today (always visible per selected brush, including a lone one).
-  A real, sourced fidelity gap, but changing long-standing shipped behavior wasn't this item's ask —
-  filed separately: `dev/docs/board/inbox/pivot-cross-shown-for-single-select-ued22-shows/`.
+</details>
+
+**Next step, if this is picked up again**: RE the toggle/single-select question properly against
+`uned/UED22`'s own `Editor.dll`/`render.dll` (disassembly or a live capture per this doc's own Method
+section), or ask the owner whether it's worth the effort at all given it's a p2/inbox-priority
+question.
 
 ## Testing
 
