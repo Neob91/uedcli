@@ -17,7 +17,14 @@ import * as THREE from 'three'
 export const CSG_WIRE_COLOR: Record<string, [number, number, number]> = {
   add: [127, 127, 255],
   subtract: [255, 192, 63],
-  semisolid: [127, 255, 0],
+  // `semisolid` is NOT a real UED22 `Default.ini` value (unlike its siblings above) -- that value,
+  // (127,255,0), came from the now-banned third-party UE1 source (GUI-PARITY.md, owner ruling
+  // 2026-09-18) and read as bright green, clashing with `mover`. Replaced with this project's own
+  // established, deliberate convention instead: `preview.py`'s `_CSG_PALETTE["semisolid"]` front
+  // value, a warm coral chosen specifically to stay distinct from mover's magenta (see that file's
+  // comment). Scaling this by the 0.5 unselected factor below (~118,60,40) already lands close to
+  // `_CSG_PALETTE`'s own back/unselected tuple (125,62,40) -- no second value needed here.
+  semisolid: [235, 120, 80],
   nonsolid: [63, 192, 32],
   mover: [255, 0, 255],
 }

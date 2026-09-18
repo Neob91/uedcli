@@ -628,8 +628,15 @@ C_NonSolidWire=(63,192,32)   C_ActorArrow=(163,0,0)        C_Mover=(255,0,255)
 *(Superseded: our own `uned/UED22/unrealtournament.ini` `[Editor.EditorEngine]` carries this whole
 block, with these values — cite that file, not this.)* Still open from it: `C_ActorHiWire` ("Actor
 Highlighted Wire") is a separate constant from `C_BrushWire`, never chased against `DrawLevelBrush`'s
-own `WireColor` selection logic. And `C_SemiSolidWire=(127,255,0)` (bright green) contradicts
-`preview.py`'s own comment citing "UED's rose (223,149,157)" for semisolid — unresolved.
+own `WireColor` selection logic. `C_SemiSolidWire=(127,255,0)` (bright green) contradicted
+`preview.py`'s own comment citing "UED's rose (223,149,157)" for semisolid — never resolved (different
+UE1 build? different source? not determined). **Moot now: `C_SemiSolidWire` itself is banned
+third-party-source evidence (owner ruling 2026-09-18) and was never used for the GUI's semisolid
+color anyway — the owner reported the resulting bright green as visibly wrong and asked for
+`preview.py`'s own coral instead. `web/src/scene/selectionColor.ts`'s `CSG_WIRE_COLOR.semisolid` is
+now `[235, 120, 80]` (`preview.py`'s `_CSG_PALETTE["semisolid"]` front value), same GUI-only scoping
+as the "Brush wireframe selection color" fix above
+(`dev/docs/board/done/gui-semisolid-wire-color-wrong-match-level-photo/`).**
 
 **RETRACTED claim (`UnEdCam.cpp:1538-1573`): "the whole radii block is gated
 `Viewport->IsOrtho() && ...`", so radii are never drawn in a perspective viewport.** False for our

@@ -43,3 +43,27 @@ the new color renders and is visually distinct from Mover's own wire color.
 `web/src/scene/selectionColor.ts`'s `CSG_WIRE_COLOR`, `uedcli/preview.py`'s `_CSG_PALETTE` (read
 value, don't touch preview.py itself -- this is scoped to the GUI only, matching the existing brush-
 wire-color item's precedent).
+
+## Outcome (2026-09-18)
+
+Changed `CSG_WIRE_COLOR.semisolid` from `[127, 255, 0]` to `[235, 120, 80]` (`preview.py`'s
+`_CSG_PALETTE["semisolid"]` front value) -- one value, matching the shape every other entry
+(`add`/`subtract`/`nonsolid`/`mover`) already uses. No second (dark) tuple added: the GUI derives its
+own unselected shade via `scaleColor(color, 0.5)` already, and 0.5x of the new value (about
+118,60,40) already lands close to `_CSG_PALETTE`'s own back tuple (125,62,40). `preview.py` untouched.
+
+Added `web/src/scene/selectionColor.test.ts` pinning the exact value and confirming it stays distinct
+from mover's color at both full and dimmed shades. Full frontend suite green (353 tests). Updated
+`GUI-PARITY.md`'s "Radii overlay colors" section to mark the old `C_SemiSolidWire`-vs-`preview.py`
+discrepancy resolved.
+
+Live browser screenshot verification could not be completed in this session: headless Chromium has
+no working system libraries on this host and there is no root/apt to install them, and running a
+browser in a container hit two separate walls -- the rootless Docker daemon refuses every bind mount
+of the checkout, so the app's own game asset trees (726 MB for a full package set, against well under
+1 GB free on a shared host disk) can't be copied in either; and `--network host` does not actually
+share the host's real network namespace (confirmed with a direct probe in both directions: host to
+container and container to host both refused). This is the same class of environment limitation
+`GUI-PARITY.md` already records for a live UED22 capture attempt. The change itself is a plain,
+pure-function color swap (a lookup-table entry plus a per-channel multiply already used and tested
+for every other CSG kind) -- pinned by the new unit test rather than a pixel screenshot.
