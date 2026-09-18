@@ -19,7 +19,7 @@ from ..classdefaults import ClassDefaults
 from ..cli import resources
 from ..cli.errors import CommandError
 from ..preview_native import build_scene as _build_scene
-from ..preview_native import resolve_actor_sprites, resolve_mesh_scene_polys
+from ..preview_native import resolve_actor_sprites, resolve_mesh_scene_polys, resolve_mover_scene_polys
 from . import build_pin
 from .errors import error_to_status
 from .levels import levels_payload
@@ -208,8 +208,9 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # `AttributeError` on the very first call). Fixed to the verified real signature; flagged in
         # the build report rather than silently carried over. `index` is now a real, separate
         # parameter again (board `mesh-actors-should-render-independent-of-geometry-build`):
-        # `resolve_mesh_scene_polys` (mesh-actor triangles, Load-owned like sprites) needs a
-        # `ClassIndex`, not a `ClassDefaults` -- every caller already has one from `_scene_inputs()`.
+        # `resolve_mesh_scene_polys`/`resolve_mover_scene_polys` (mesh-actor/Mover triangles, both
+        # Load-owned like sprites) need a `ClassIndex`, not a `ClassDefaults` -- every caller already
+        # has one from `_scene_inputs()`.
         #
         # `level_name` is the caller's own already-`_require_level`-validated name, not re-read from
         # `_current_level[0]` here (review finding): a concurrent `PUT /api/level` between the
@@ -228,12 +229,16 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                 sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
                 mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
                     lvl, index, search_files)
+                mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
+                    lvl, index, search_files)
                 if _generation[0] != gen_before:
                     continue    # invalidated mid-build: discard, loop back and retry from the top
                 built = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
                                      sprite_table=sprite_table, actor_sprites=actor_sprites,
                                      mesh_polys=mesh_polys, mesh_owners=mesh_owners,
-                                     mesh_texture_table=mesh_texture_table)
+                                     mesh_texture_table=mesh_texture_table,
+                                     mover_polys=mover_polys, mover_owners=mover_owners,
+                                     mover_texture_table=mover_texture_table)
                 _trunk_ref[0] = built
                 # The AUTOMATIC INITIAL LOAD (spec §"Two independent axes"): this branch only ever
                 # runs once per process (gated by `_trunk_ref[0] is None` above), exactly the "first
@@ -266,14 +271,17 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
             with solve_lock:
                 gen_before = _generation[0]
                 trunk_state = _get_trunk(level_name, search_files, index, defaults)
-                # `include_meshes=False`: the GUI resolves mesh-actor triangles itself, independently
-                # of this CSG-solved pipeline (`_get_trunk`'s `resolve_mesh_scene_polys` call, above),
-                # so `geometry.polys` never carries one (board `mesh-actors-should-render-independent-
-                # of-geometry-build`, owner decision "Option A" 2026-09-18) — see `scene.py`'s
+                # `include_meshes=False`/`include_movers=False`: the GUI resolves mesh-actor and
+                # Mover triangles itself, independently of this CSG-solved pipeline (`_get_trunk`'s
+                # `resolve_mesh_scene_polys`/`resolve_mover_scene_polys` calls, above), so
+                # `geometry.polys` never carries either (boards `mesh-actors-should-render-
+                # independent-of-geometry-build`/`mover-triangles-not-build-state-independent`, owner
+                # decision "Option A" for both, 2026-09-18) — see `scene.py`'s
                 # `build_scene_payload`/`filtered_geometry_polys` docstrings.
                 polys, texture_table, owners = _build_scene(
                     trunk_state.level, search_files, index, defaults=defaults, project=project,
-                    level_name=level_name, visibility="editor", include_meshes=False)
+                    level_name=level_name, visibility="editor", include_meshes=False,
+                    include_movers=False)
                 if _generation[0] != gen_before:
                     continue    # invalidated mid-build: discard, retry against the new state
                 built = _BuiltGeometry(geom_hash=None, light_hash=None,   # OQ1 -- see scene.py
@@ -474,20 +482,25 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # The explicit Load action (spec §2, P1: a plain refresh, no staging to conflict with).
         # Re-reads the trunk UNCONDITIONALLY (unlike `_get_trunk`'s own double-checked-lock gate,
         # which only populates an EMPTY slot) -- an explicit Load must see a change even when the
-        # slot is already warm. `resolve_actor_sprites`/`resolve_mesh_scene_polys` ride along, same
-        # as `_get_trunk`'s own build, since sprite/mesh resolution are both Load-owned (spec §"Two
-        # independent axes"; mesh independence: board `mesh-actors-should-render-independent-of-
-        # geometry-build`).
+        # slot is already warm. `resolve_actor_sprites`/`resolve_mesh_scene_polys`/
+        # `resolve_mover_scene_polys` ride along, same as `_get_trunk`'s own build, since sprite/
+        # mesh/Mover resolution are all Load-owned (spec §"Two independent axes"; mesh/Mover
+        # independence: boards `mesh-actors-should-render-independent-of-geometry-build`/
+        # `mover-triangles-not-build-state-independent`).
         _require_level(level_name)
         search_files, index, defaults = _scene_inputs(project)
         lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level_name)
         sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
         mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
             lvl, index, search_files)
+        mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
+            lvl, index, search_files)
         _trunk_ref[0] = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
                                      sprite_table=sprite_table, actor_sprites=actor_sprites,
                                      mesh_polys=mesh_polys, mesh_owners=mesh_owners,
-                                     mesh_texture_table=mesh_texture_table)
+                                     mesh_texture_table=mesh_texture_table,
+                                     mover_polys=mover_polys, mover_owners=mover_owners,
+                                     mover_texture_table=mover_texture_table)
         _changes_available[0] = False
         # Bootstrap-from-disk-pointer: a no-op if a Rebuild already populated the slot this session
         # (spec §1's last bullet -- an on-disk pointer must never overwrite an in-memory pin a
@@ -543,20 +556,23 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # `_get_trunk()`/`_read_geometry()` read: two unsynchronized reads here could observe a
         # DIFFERENT geometry state than `/scene`'s if a `/rebuild` lands mid-flight between them.
         # With geometry pinned: `geometry.texture_table + trunk_state.sprite_table +
-        # trunk_state.mesh_texture_table`, in the same order `scene.py::build_scene_payload` uses
-        # when it wraps `trunk.actor_sprites`/`trunk.mesh_polys` into `SceneActor.sprite`/
-        # `ScenePoly` mesh entries, so a `tex_index` from /scene names the same rect here. With NO
-        # geometry pinned: sprites AND mesh textures are both Load-owned (unaffected by whether
-        # geometry exists -- a point actor's icon and a mesh actor's own texture should both still
+        # trunk_state.mesh_texture_table + trunk_state.mover_texture_table`, in the same order
+        # `scene.py::build_scene_payload` uses when it wraps `trunk.actor_sprites`/`trunk.mesh_polys`/
+        # `trunk.mover_polys` into `SceneActor.sprite`/`ScenePoly` mesh/Mover entries, so a
+        # `tex_index` from /scene names the same rect here. With NO geometry pinned: sprites, mesh
+        # textures AND Mover textures are all Load-owned (unaffected by whether geometry exists -- a
+        # point actor's icon, a mesh actor's own texture, and a Mover's own texture should all still
         # show in wireframe mode), so the atlas is built from `trunk_state.sprite_table +
-        # trunk_state.mesh_texture_table` (`build_wireframe_payload`'s own sprites/mesh polys carry
-        # `tex_index` offset the same way, matching this — board `mesh-actors-should-render-
-        # independent-of-geometry-build`).
+        # trunk_state.mesh_texture_table + trunk_state.mover_texture_table`
+        # (`build_wireframe_payload`'s own sprites/mesh/Mover polys carry `tex_index` offset the same
+        # way, matching this — boards `mesh-actors-should-render-independent-of-geometry-build`/
+        # `mover-triangles-not-build-state-independent`).
         _require_level(level_name)
         search_files, index, defaults = _scene_inputs(project)
         _payload, geometry, trunk_state = _get_payload(level_name, search_files, index, defaults)
         texture_table = ((geometry.texture_table if geometry is not None else [])
-                         + trunk_state.sprite_table + trunk_state.mesh_texture_table)
+                         + trunk_state.sprite_table + trunk_state.mesh_texture_table
+                         + trunk_state.mover_texture_table)
         png_bytes, manifest, width, height = build_atlas(texture_table)
         return {
             "width": width,

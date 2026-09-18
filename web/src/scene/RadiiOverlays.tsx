@@ -9,14 +9,21 @@
 // the point -- "show everything" would defeat it). `selectedRadiiActors` (radiiProjection.ts) is
 // the shared pure filter.
 //
-// The perspective pane draws a REAL 3D shape: an upright wire cylinder (matching preview.py's
-// `_draw_cylinder` docstring -- "upright, world-axis-aligned regardless of actor rotation") and a
-// wire sphere (a sphere is the only 3D shape whose silhouette is a circle from every angle, which is
-// exactly what preview.py's `_draw_sphere` relies on for its 2D views). An ortho pane instead draws
-// the exact 2D silhouette `radiiProjection.ts` computes for that axis (ported from preview.py, not
-// re-derived): TOP sees the cylinder's own circular cap; FRONT/SIDE see it edge-on as a `2r x 2h`
-// rect; the light/sound sphere is a circle of its own radius in EVERY ortho axis.
+// The perspective pane draws a REAL 3D shape for collision: an upright wire cylinder (matching
+// preview.py's `_draw_cylinder` docstring -- "upright, world-axis-aligned regardless of actor
+// rotation"). The light radius is NOT a 3D shape at all -- GUI-PARITY.md "Radii overlay colors"
+// divergence 1 (closed 2026-09-18, `dev/docs/board/done/gui-light-radius-is-a-camera-facing-circle-
+// not/`): `Editor.dll`'s radii block calls `URender::DrawCircle` for it on EVERY branch including
+// perspective (VA 0x1003d932), and `render.dll`'s `DrawCircle` (RVA 0x1c590) builds its ring from
+// the scene node's own CAMERA axes (`FSceneNode+0x40..0x54`) -- a camera-facing circle (a
+// billboard), not a world-plane-aligned sphere silhouette. An ortho pane draws the exact 2D
+// silhouette `radiiProjection.ts` computes for that axis (ported from preview.py, not re-derived):
+// TOP sees the collision cylinder's own circular cap; FRONT/SIDE see it edge-on as a `2r x 2h` rect;
+// the light circle is drawn flat in the pane's own view plane in EVERY ortho axis -- already exactly
+// what a camera-facing circle degenerates to under a fixed-axis orthographic camera, so `OrthoShapeLine`
+// below needs no change for this divergence.
 import { useEffect, useMemo } from 'react'
+import { useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import type { SceneActor } from '../api'
@@ -119,30 +126,58 @@ function CollisionCylinder3D({
   )
 }
 
-// A classic "wire sphere" gizmo -- three orthogonal circles (XY/XZ/YZ planes through `center`), not
-// a triangulated `SphereGeometry` in wireframe mode (same triangulation-diagonal problem as the
-// cylinder above). preview.py's own `_draw_sphere` docstring already establishes the underlying
-// fact this relies on -- a sphere's silhouette is a circle from every angle -- so three perpendicular
-// silhouette-radius circles read as an unambiguous sphere outline without ever triangulating.
-function LightSphere3D({ position, radius }: { position: [number, number, number]; radius: number }) {
+// A camera-facing circle (a billboard) -- GUI-PARITY.md "Radii overlay colors" divergence 1: real
+// UED22 builds the light-radius ring from the scene node's own CAMERA axes (`render.dll`'s
+// `DrawCircle`, RVA 0x1c590), not a world-plane-aligned shape. Recomputed every frame from the live
+// camera orientation (`useFrame`), the same reason `SelectionMarkers.tsx`'s `PivotMarker`/`VertexDot`
+// rescale every frame -- a camera-facing shape can't be baked once into a static `useMemo` geometry.
+//
+// Coordinate-space hazard, same class as `SelectionMarkers.tsx`'s pivot-marker bug (see that file's
+// `PivotMarker` doc comment): this component's content sits inside the world-handedness mirror group
+// (`<group scale={[1,-1,1]}>` in Viewport3D.tsx/OrthoViewport.tsx), a pure Y-flip with no rotation,
+// while `camera` (from `useThree()`) is posed directly in the ALREADY-reflected render space
+// (`viewportRender.ts`'s `applyCameraPose` sets `camera.position`/`lookAt` with Y already negated).
+// So a camera-space direction vector needs the SAME flip applied to land back in this component's
+// own (pre-reflection) local space -- negate Y. Since `R = diag(1,-1,1)` is self-inverse, this one
+// negation is exactly `R^-1`, not an approximation. `PivotMarker`/`VertexDot` sidestep this by using
+// `sprite.getWorldPosition()` (a real scene-graph transform); this component builds explicit line
+// geometry instead (matching every other radii overlay's `<lineSegments>` convention, no texture/
+// alpha), so the reflection is applied by hand here.
+function LightRadiusCircle3D({ position, radius }: { position: [number, number, number]; radius: number }) {
   const geometry = useMemo(() => {
-    const [cx, cy, cz] = position
-    const positions: number[] = []
-    const addRing = (at: (theta: number) => THREE.Vector3) => {
-      for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
-        const a = (i / CIRCLE_SEGMENTS) * Math.PI * 2
-        const b = ((i + 1) / CIRCLE_SEGMENTS) * Math.PI * 2
-        positions.push(...at(a).toArray(), ...at(b).toArray())
-      }
-    }
-    addRing((t) => new THREE.Vector3(cx + radius * Math.cos(t), cy + radius * Math.sin(t), cz)) // XY
-    addRing((t) => new THREE.Vector3(cx + radius * Math.cos(t), cy, cz + radius * Math.sin(t))) // XZ
-    addRing((t) => new THREE.Vector3(cx, cy + radius * Math.cos(t), cz + radius * Math.sin(t))) // YZ
     const geo = new THREE.BufferGeometry()
-    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3))
+    const positions = new Float32Array(CIRCLE_SEGMENTS * 2 * 3)
+    geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     return geo
-  }, [position, radius])
+  }, [])
   useEffect(() => () => geometry.dispose(), [geometry])
+  const { camera } = useThree()
+  const right = useMemo(() => new THREE.Vector3(), [])
+  const up = useMemo(() => new THREE.Vector3(), [])
+  useFrame(() => {
+    right.set(1, 0, 0).applyQuaternion(camera.quaternion)
+    up.set(0, 1, 0).applyQuaternion(camera.quaternion)
+    right.y *= -1
+    up.y *= -1
+    const [cx, cy, cz] = position
+    const arr = geometry.attributes.position.array as Float32Array
+    for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
+      const a = (i / CIRCLE_SEGMENTS) * Math.PI * 2
+      const b = ((i + 1) / CIRCLE_SEGMENTS) * Math.PI * 2
+      const ca = Math.cos(a) * radius
+      const sa = Math.sin(a) * radius
+      const cb = Math.cos(b) * radius
+      const sb = Math.sin(b) * radius
+      const o = i * 6
+      arr[o + 0] = cx + right.x * ca + up.x * sa
+      arr[o + 1] = cy + right.y * ca + up.y * sa
+      arr[o + 2] = cz + right.z * ca + up.z * sa
+      arr[o + 3] = cx + right.x * cb + up.x * sb
+      arr[o + 4] = cy + right.y * cb + up.y * sb
+      arr[o + 5] = cz + right.z * cb + up.z * sb
+    }
+    geometry.attributes.position.needsUpdate = true
+  })
   return (
     <lineSegments geometry={geometry}>
       <lineBasicMaterial color={C_ACTOR_ARROW} depthTest={false} />
@@ -229,7 +264,7 @@ export function RadiiOverlays({ actors, view, selectedNames }: RadiiOverlaysProp
               {radii.collision_radius != null && (
                 <CollisionCylinder3D position={actor.location} radius={radii.collision_radius} halfHeight={radii.collision_height ?? 0} />
               )}
-              {radii.light_radius != null && <LightSphere3D position={actor.location} radius={radii.light_radius} />}
+              {radii.light_radius != null && <LightRadiusCircle3D position={actor.location} radius={radii.light_radius} />}
             </group>
           )
         })}
