@@ -143,6 +143,16 @@ Document new learnings about how UnrealEd functions, our goals, or architectural
 — `dev/docs/unrealed/` for engine findings, back-referenced from code comments. The public
 documentation is very lacking and discovering this knowledge is expensive.
 
+Reverse-engineering evidence comes ONLY from this project's own binaries (disassembly, or a live
+capture against them running) — never a third-party source claiming similar lineage, however
+plausible. A finding built on one is not RE and must not be presented as one, at any confidence tier.
+Write down every reverse-engineered detail in full — every traced function/RVA/VA, register or memory
+value, and confirmed-or-refuted hypothesis — in the relevant doc (`dev/docs/unrealed/`, or a campaign
+root doc like `GUI-PARITY.md`), not summarized away or left to live only in a chat reply or a
+subagent's final report. An honest "not yet confirmed" or a genuine open contradiction belongs in the
+doc too, exactly as found — never smoothed over into a cleaner-sounding answer. *(Owner ruling,
+2026-09-18.)*
+
 ## The board — the backlog, and where findings go
 
 The board is one directory per work item (`dev/docs/board/<stage>/<slug>/overview.md`, plus optional
