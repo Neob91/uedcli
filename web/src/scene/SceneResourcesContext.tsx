@@ -12,7 +12,7 @@ import type { ReactNode } from 'react'
 import * as THREE from 'three'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
-import { buildGeometryData } from './geometry'
+import { buildEdgePickData, buildGeometryData } from './geometry'
 import { actorsNeedingMarkers } from './markers'
 import { useBuiltGeometry, useLightmapTexture, useMarkerTexture, useTextures } from './sceneResources'
 import type { SceneResources } from './sceneResourcesReactContext'
@@ -84,13 +84,15 @@ export function SceneResourcesProvider({
   useEffect(() => {
     return () => meshWireframeGeometry.dispose()
   }, [meshWireframeGeometry])
-  // Invisible, raycastable pick mesh for mesh actors: a DT_Mesh actor's solid triangles are the only
-  // thing that identifies it (it has no brush ring and no marker sprite -- its polys stay in the main
-  // geometry), but in the ortho panes no solid mesh is drawn and its WireframeGeometry carries no
-  // owner data, so it was unselectable there (only the unreliable AABB fallback reached it). This is
-  // the same triangles as `meshWireframeGeometry`, kept as a real (material-invisible) mesh so the
-  // raycast resolves a hit to its owning actor via `meshTriangleOwners` -- mirrors BrushOutlines'
-  // dedicated owner-carrying pick geometry. Drawn nowhere visible; only ever raycast.
+  // Invisible, raycastable pick mesh for mesh actors in SOLID (non-wireframe) shading modes: a
+  // DT_Mesh actor's solid triangles are the only thing that identifies it (it has no brush ring and
+  // no marker sprite -- its polys stay in the main geometry). This is the same triangles as
+  // `meshWireframeGeometry`, kept as a real (material-invisible) mesh so the raycast resolves a hit
+  // to its owning actor via `meshTriangleOwners` -- mirrors BrushOutlines' dedicated owner-carrying
+  // pick geometry. Drawn nowhere visible; only ever raycast. NOT used in wireframe/ortho modes any
+  // more -- see `meshEdgePickGeometry` below (GUI-PARITY.md "Mesh selection in 2D/3D wireframe mode
+  // vs UED22": UED22 only hit-tests a mesh actor's drawn wireframe EDGES there, never its filled
+  // interior, so a filled pick mesh let a click anywhere inside the silhouette wrongly select it).
   const meshPickGeometry = useMemo(() => {
     const g = new THREE.BufferGeometry()
     g.setAttribute('position', new THREE.BufferAttribute(meshGeoData.positions, 3))
@@ -99,6 +101,22 @@ export function SceneResourcesProvider({
   useEffect(() => {
     return () => meshPickGeometry.dispose()
   }, [meshPickGeometry])
+  // Invisible, raycastable EDGE-only pick geometry for mesh actors in WIREFRAME/ortho modes
+  // (GUI-PARITY.md, same section as above): a `THREE.LineSegments` over the mesh's own triangle
+  // edges (not deduped, so each edge keeps its source triangle's owner/polyIndex --
+  // `geometry.ts`'s `buildEdgePickData`), raycast with the same line threshold a brush's own
+  // outline uses. Only line hits within that threshold register, matching UED22's real click hit-
+  // test (a pixel-proximity test against what's actually painted -- only the wireframe lines in
+  // this render mode, never the open interior between them).
+  const meshEdgePickData = useMemo(() => buildEdgePickData(meshGeoData), [meshGeoData])
+  const meshEdgePickGeometry = useMemo(() => {
+    const g = new THREE.BufferGeometry()
+    g.setAttribute('position', new THREE.BufferAttribute(meshEdgePickData.positions, 3))
+    return g
+  }, [meshEdgePickData])
+  useEffect(() => {
+    return () => meshEdgePickGeometry.dispose()
+  }, [meshEdgePickGeometry])
 
   // Point actors with no owned rendered poly (lights, triggers, patrol nodes, sounds, an unresolved
   // DT_Mesh) -- markers.ts's own filter, computed once here rather than per-pane. Unions BOTH
@@ -115,14 +133,15 @@ export function SceneResourcesProvider({
     () => ({
       bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
       moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners, moverTrianglePolyIndex,
-      meshWireframeGeometry, meshPickGeometry,
+      meshWireframeGeometry, meshPickGeometry, meshEdgePickGeometry,
       meshTriangleOwners: meshGeoData.triangleOwners, meshTrianglePolyIndex: meshGeoData.trianglePolyIndex,
+      meshEdgeOwners: meshEdgePickData.edgeOwners, meshEdgePolyIndex: meshEdgePickData.edgePolyIndex,
       textures, markerTexture, markerActors, actors: scene.actors,
     }),
     [
       bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
       moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners, moverTrianglePolyIndex,
-      meshWireframeGeometry, meshPickGeometry, meshGeoData,
+      meshWireframeGeometry, meshPickGeometry, meshEdgePickGeometry, meshGeoData, meshEdgePickData,
       textures, markerTexture, markerActors, scene.actors,
     ],
   )

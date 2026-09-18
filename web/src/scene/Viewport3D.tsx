@@ -189,6 +189,7 @@ export function Viewport3D({
   // on and `mode !== 'wireframe'` -- see performTapSelect below.
   const moverMeshRef = useRef<THREE.Mesh | null>(null)
   const meshPickRef = useRef<THREE.Mesh | null>(null)
+  const meshEdgePickRef = useRef<THREE.LineSegments | null>(null)
   const markerGroupRef = useRef<THREE.Group | null>(null)
   // Wireframe-mode click-to-select (bug report item 6): with no solid mesh drawn, a hit must come
   // from the brush outline LINES themselves, never a bounding-box fallback -- see performTapSelect.
@@ -204,6 +205,7 @@ export function Viewport3D({
     bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
     moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners, moverTrianglePolyIndex,
     meshWireframeGeometry, meshPickGeometry, meshTriangleOwners, meshTrianglePolyIndex,
+    meshEdgePickGeometry, meshEdgeOwners, meshEdgePolyIndex,
     textures, markerTexture, markerActors,
   } = useSceneResourcesContext()
   // 'unlit'/'lit' otherwise rendered the identical mesh (materials built once, shared across every
@@ -270,6 +272,9 @@ export function Viewport3D({
         meshPickObject: meshPickRef.current,
         meshTriangleOwners,
         meshTrianglePolyIndex,
+        meshEdgePickObject: meshEdgePickRef.current,
+        meshEdgeOwners,
+        meshEdgePolyIndex,
         markerObjects: markerGroupRef.current?.children ?? [],
         brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
         // Not gated to wireframe mode -- see `TapSelectParams.moverOutlineObjects`' doc comment.
@@ -284,6 +289,7 @@ export function Viewport3D({
     },
     [
       scene.actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex,
+      meshEdgeOwners, meshEdgePolyIndex,
       moverTriangleOwners, moverTrianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode,
     ],
   )
@@ -543,12 +549,17 @@ export function Viewport3D({
             selectedActorNames={selectedNonBrushNames}
           />
         )}
-        {/* Invisible raycast target for mesh actors -- material.visible=false draws nothing but keeps
-            the object raycastable, so a DT_Mesh actor is click-selectable even in wireframe mode (its
-            solid mesh isn't drawn then). See tapSelect.ts / SceneResourcesContext. */}
+        {/* Invisible raycast target for mesh actors in SOLID modes -- material.visible=false draws
+            nothing but keeps the object raycastable. See tapSelect.ts / SceneResourcesContext. */}
         <mesh ref={meshPickRef} geometry={meshPickGeometry}>
           <meshBasicMaterial visible={false} />
         </mesh>
+        {/* Invisible raycast target for mesh actors' own wireframe EDGES -- used INSTEAD of the fill
+            target above in wireframe mode only (tapSelect.ts gates which one is a raycast
+            candidate); mounted unconditionally like the fill target. */}
+        <lineSegments ref={meshEdgePickRef} geometry={meshEdgePickGeometry}>
+          <lineBasicMaterial visible={false} />
+        </lineSegments>
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={scene.actors} selectedNames={selectedNames} />
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current

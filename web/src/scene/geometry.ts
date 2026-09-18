@@ -226,3 +226,50 @@ export function buildGeometryData(
     trianglePolyIndex,
   }
 }
+
+export interface EdgePickData {
+  // Flat [x,y,z, ...] pairs for `THREE.LineSegments` -- 3 edges per source triangle (v0-v1, v1-v2,
+  // v2-v0), not deduped across triangles sharing an edge (unlike `THREE.WireframeGeometry`, which
+  // dedupes and so cannot carry per-edge owner data -- see `edgeOwners`' doc comment).
+  positions: Float32Array
+  // One entry per EDGE (3 per source triangle, same order as `positions`), copied from that
+  // triangle's own `triangleOwners`/`trianglePolyIndex` entry.
+  edgeOwners: (string | null)[]
+  edgePolyIndex: (number | null)[]
+}
+
+/** A mesh actor's own wireframe EDGES, as a raycastable line-segment geometry with per-edge owner
+ * data -- for click-to-select in wireframe/ortho render modes, where UED22 only paints (and only
+ * hit-tests) a mesh actor's drawn wireframe lines, never its filled triangle interior
+ * (GUI-PARITY.md "Mesh selection in 2D/3D wireframe mode vs UED22": `render.dll`'s `DrawLodMesh`
+ * Wire/Ortho branch issues only per-face line-draw calls, and the actor's single `PushHit(HActor)`
+ * call wraps that same draw, so only the painted line pixels are ever stamped into the hit-proxy
+ * buffer `UViewport::ExecuteHits` reads back). `THREE.WireframeGeometry` (the VISUAL wireframe,
+ * `meshWireframeGeometry`) dedupes shared edges and so cannot carry this array; this is a second,
+ * pick-only geometry over the same triangles, mirroring how `meshPickGeometry` already does this
+ * for the filled-triangle (solid-mode) case. */
+export function buildEdgePickData(geo: GeometryData): EdgePickData {
+  const { positions: tri, triangleOwners, trianglePolyIndex } = geo
+  const triCount = triangleOwners.length
+  const positions = new Float32Array(triCount * 18) // 3 edges * 2 verts * 3 coords
+  const edgeOwners: (string | null)[] = new Array(triCount * 3)
+  const edgePolyIndex: (number | null)[] = new Array(triCount * 3)
+  for (let t = 0; t < triCount; t++) {
+    const base = t * 9
+    const v = [
+      [tri[base], tri[base + 1], tri[base + 2]],
+      [tri[base + 3], tri[base + 4], tri[base + 5]],
+      [tri[base + 6], tri[base + 7], tri[base + 8]],
+    ]
+    const edgePairs: [number, number][] = [[0, 1], [1, 2], [2, 0]]
+    for (let e = 0; e < 3; e++) {
+      const [a, b] = edgePairs[e]
+      const out = (t * 3 + e) * 6
+      positions.set(v[a], out)
+      positions.set(v[b], out + 3)
+      edgeOwners[t * 3 + e] = triangleOwners[t]
+      edgePolyIndex[t * 3 + e] = trianglePolyIndex[t]
+    }
+  }
+  return { positions, edgeOwners, edgePolyIndex }
+}

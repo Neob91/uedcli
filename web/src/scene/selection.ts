@@ -74,6 +74,25 @@ export function resolveSegmentHitActor(
   return actors.find((a) => a.name === name) ?? null
 }
 
+/** Resolves a raycast hit on a mesh actor's own EDGE-only pick geometry (`SceneResources`'
+ * `meshEdgePickGeometry`, `geometry.ts`'s `buildEdgePickData`) to its owning actor -- same
+ * `index / 2` segment math as `resolveSegmentHitActor`, but returning a full `SurfaceHit` (mirroring
+ * `resolveHitSurface`) since `tapSelect.ts` resolves every mesh-actor hit the same way regardless of
+ * whether it landed on the fill (`meshPickGeometry`, solid modes) or an edge (wireframe/ortho
+ * modes) -- a mesh actor has no brush, so `polyIndex` is never load-bearing here, only `actor` is. */
+export function resolveEdgeHitSurface(
+  index: number | null | undefined,
+  edgeOwners: (string | null)[],
+  edgePolyIndex: (number | null)[],
+  actors: SceneActor[],
+): SurfaceHit | null {
+  if (index == null) return null
+  const segment = Math.floor(index / 2)
+  const actor = resolveHitActor(segment, edgeOwners, actors)
+  if (!actor) return null
+  return { actor, polyIndex: edgePolyIndex[segment] ?? null }
+}
+
 export type TapAction =
   | { kind: 'select-actor'; name: string; additive: boolean }
   | { kind: 'select-surface'; actor: string; polyIndex: number; additive: boolean }
