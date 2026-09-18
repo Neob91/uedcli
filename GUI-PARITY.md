@@ -61,6 +61,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Selection highlight rendering | What color/blend/technique does UED22 use to show a selected sprite/mesh actor? | ✅ closed, implemented | ✅ binary (`render.dll` disassembly), see Findings below |
 | Click/hit-detection algorithm | How does UED22 resolve a click to a surface/actor/brush when candidates overlap? | 🔶 investigating | `dev/docs/board/inbox/gui-click-detection-algorithm-not-re-d-against/` — see Findings below |
 | Sprite alpha picking | Does UED22's sprite click hit-test respect the icon's transparent padding? | ✅ closed, implemented | 📖 source (`SoftDrv/Src/{Hit,DrawTile}.cpp`) + 🔬 live (real clicks, A/B against the unfixed code) — see Findings below |
+| Vertex handle screen size | Does UED22 draw vertex/local-origin handles at a constant screen size, or a fixed world size that scales with zoom? | ✅ closed, implemented | 📖 source (`Editor/Src/UnEdRend.cpp`) + 🔬 live (real zoom/dolly sweeps, A/B against the unfixed code) — see Findings below |
 | Modifier-key click-select rules | Are the Shift/Ctrl select-surface-vs-actor rules real UED22 behavior? | ⬜ open | `dev/docs/board/inbox/gui-texture-actor-click-select-modifier-rules/` |
 | Marquee containment rule | Full-containment for brushes vs. pivot-in-box for point actors — confirmed fact, not yet wired into the (deferred) marquee feature | ⬜ open (marquee itself deferred) | `dev/docs/board/inbox/gui-ortho-marquee-spec-omits-unrealed-s-brush/` |
 | CSG brush coloring | Does UED22 give Intersect/Deintersect brushes a distinct color from Add? | ⬜ open | `dev/docs/board/inbox/gui-csg-brush-coloring-never-distinguishes/` |
@@ -209,6 +210,41 @@ stash`, no rebuild needed — Vite HMR): every one of them SELECTED `HKMarketLig
 click point is genuinely within the sprite's hit geometry and that the fix (not a geometric miss) is
 what rejects it. Popping the stash and re-testing reproduced the exact original "miss from ~18px"
 result. Full A/B transcript in the board item's `done/` writeup.
+
+### Vertex handle screen size (closed 2026-09-18)
+
+Board item `vertex-handles-should-be-screen-size-constant`: vertex/local-origin handle dots on a
+selected brush shrank/grew with camera zoom/distance (a fixed WORLD-space sprite size), instead of
+staying a constant size on screen.
+
+📖 **Source** (`fgsfdsfgs/UE1`, `Source/Editor/Src/UnEdRend.cpp`, `UEditorEngine::DrawLevelBrush`):
+UED22 draws a vertex handle as a literal 2D screen-space dot, not a 3D-space sprite at all --
+
+```cpp
+if( Render->Project( Frame, *V1, X, Y, NULL ) )
+    Frame->Viewport->RenDev->Draw2DPoint( Frame, VertexColor, LINE_None, X-1, Y-1, X+1, Y+1 );
+```
+
+`Project` maps the 3D vertex to raw screen pixel coordinates `X`/`Y`; `Draw2DPoint` then draws a
+fixed `X±1` box (a ~2px dot) directly in screen space, with no distance/zoom term anywhere in the
+call. This settles the question directly: UED22's vertex handles are constant-screen-size BY
+CONSTRUCTION (a 2D draw), not a coincidence of some other mechanism. The literal ~2px size is tuned
+for a low-resolution 1990s software renderer and would be barely visible on a modern high-DPI canvas,
+so the fix uses a practical modern size (6px) rather than copying the literal pixel count -- the same
+kind of departure this doc already made for `DrawMesh`'s selection-highlight formula.
+
+**Fix**: `web/src/scene/SelectionMarkers.tsx`'s new `VertexDot` component reuses the exact per-frame
+rescale mechanism the existing `PivotMarker` gizmo already used (`worldUnitsPerPixelAt`, camera- and
+viewport-size-aware) instead of a fixed-world-unit sprite `scale`. Applies to both the per-vertex dots
+and the selected brush's local-origin dot, in both viewport kinds (perspective and ortho share the
+same `useThree()`-driven mechanism).
+
+🔬 **Live-verified** (real headless-Chromium zoom/dolly sweeps against `showcase_bar`, measuring the
+dot's actual rendered pixel footprint, not reasoning about the math): selected `Brush113`, scanned its
+vertex-dot size across a ~32x zoom range in the ortho top pane -- unfixed: 1px shrinking to 0px
+(invisible) past a threshold; fixed: held 2-6px throughout. In the perspective pane, a 10-step dolly
+sweep (camera pulled back far enough to visibly shrink a nearby actor) held 7-8px at every step with
+the fix, versus visibly shrinking without it.
 
 ### Radii overlay colors (investigating, 2026-09-16)
 

@@ -18,11 +18,16 @@ import { resolveWireColor, scaleColor, toThreeColor } from './selectionColor'
 // Matches `preview.py`'s `_PIVOT_RED`.
 const PIVOT_RED = new THREE.Color(255 / 255, 63 / 255, 63 / 255)
 
-// World-unit sizes -- used as-is for the vertex dots (they mark a precise point on already-drawn
-// geometry, so a fixed world size is fine there). The pivot marker below is different: bug report
-// "pivot's size should be the same on screen, regardless of zoom" -- it's a gizmo, not a geometry
-// marker, so it needs constant SCREEN size instead (see PivotMarker).
-const VERTEX_DOT_SIZE = 2
+// Both the vertex/local-origin dots and the pivot marker are gizmos, not geometry markers -- board
+// item `vertex-handles-should-be-screen-size-constant`: they must hold a constant SCREEN size
+// regardless of zoom/distance, like PivotMarker below (see its own doc comment for the mechanism).
+// 📖 GUI-PARITY.md "Vertex handle screen size": UED22 itself (`UnEdRend.cpp`'s `DrawLevelBrush`)
+// confirms this is genuinely how the real editor draws vertex handles -- and confirms the exact
+// mechanism (project the vertex to 2D, then draw a fixed-size 2D screen dot via `Draw2DPoint`, no
+// distance falloff at all) -- but its own literal size (a ~2px dot) is tuned for a low-res 1990s
+// software renderer and would be barely visible on a modern high-DPI canvas; `VERTEX_DOT_SCREEN_PX`
+// is a practical modern size, not a copy of UED22's literal pixel count (see that doc for detail).
+const VERTEX_DOT_SCREEN_PX = 6
 const PIVOT_MARKER_SCREEN_PX = 14
 // The pivot renders above markers (10) and the selected ring (20) -- always on top, every pane.
 const PIVOT_RENDER_ORDER = 40
@@ -96,6 +101,27 @@ function PivotMarker({ position, texture }: { position: [number, number, number]
   )
 }
 
+/** A vertex or local-origin handle dot for a selected brush -- constant SCREEN size regardless of
+ * zoom/distance, same mechanism as `PivotMarker` above (see its doc comment for why the sprite is
+ * rescaled every frame from live camera/viewport state instead of a fixed world-unit `scale`). */
+function VertexDot({ position, color, renderOrder }: { position: [number, number, number]; color: THREE.Color; renderOrder: number }) {
+  const spriteRef = useRef<THREE.Sprite>(null)
+  const { camera, size } = useThree()
+  const worldPos = useMemo(() => new THREE.Vector3(), [])
+  useFrame(() => {
+    const sprite = spriteRef.current
+    if (!sprite) return
+    sprite.getWorldPosition(worldPos)
+    const scale = VERTEX_DOT_SCREEN_PX * worldUnitsPerPixelAt(camera, worldPos, size.height)
+    sprite.scale.set(scale, scale, 1)
+  })
+  return (
+    <sprite ref={spriteRef} position={position} renderOrder={renderOrder}>
+      <spriteMaterial color={color} depthTest={false} />
+    </sprite>
+  )
+}
+
 export interface SelectionMarkersProps {
   actors: SceneActor[]
   selectedNames: ReadonlySet<string>
@@ -129,14 +155,10 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
         return (
           <group key={actor.name}>
             {verts.map((v, i) => (
-              <sprite key={i} position={v} scale={[VERTEX_DOT_SIZE, VERTEX_DOT_SIZE, 1]} renderOrder={VERTEX_DOT_RENDER_ORDER}>
-                <spriteMaterial color={color} depthTest={false} />
-              </sprite>
+              <VertexDot key={i} position={v} color={color} renderOrder={VERTEX_DOT_RENDER_ORDER} />
             ))}
             {actor.name === primaryName && (
-              <sprite position={actor.brush.local_origin} scale={[VERTEX_DOT_SIZE, VERTEX_DOT_SIZE, 1]} renderOrder={VERTEX_DOT_RENDER_ORDER}>
-                <spriteMaterial color={color} depthTest={false} />
-              </sprite>
+              <VertexDot position={actor.brush.local_origin} color={color} renderOrder={VERTEX_DOT_RENDER_ORDER} />
             )}
             <PivotMarker position={actor.location} texture={pivotTexture} />
           </group>
