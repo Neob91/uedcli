@@ -77,3 +77,49 @@ whether it already gets it or is a separate, pre-existing case.
 `uedcli/serve/scene.py` (`build_wireframe_payload`, `build_scene_payload`, `_build_actors`,
 `filtered_geometry_polys`), `uedcli/preview_native.py` (`_mesh_actor_polys`), `uedcli/meshworld.py`
 (world-space placement), `uedcli/serve/app.py` (the `/atlas` route's texture-table assembly).
+
+## Done (2026-09-18) — Option A implemented
+
+`preview_native._mesh_actor_polys`'s per-actor mesh-triangle-resolution logic (linear map, degenerate
+check, per-triangle UV solve, texture dedup) is extracted into a new shared function,
+`preview_native.resolve_mesh_actor_polys(level, index, search_files, *, hidden_prop, textures,
+in_solid=None)` — no CSG/BSP dependency, takes the caller's own `_TextureTable`. `build_scene`'s own
+former inline mesh loop now just calls it (passing its `in_solid` gate, unchanged behavior, default
+`include_meshes=True`) — `level photo --native` is byte-for-byte unaffected. A new
+`build_scene(..., include_meshes=False)` skips the mesh loop entirely; `app.py`'s
+`_build_and_publish_geometry` (the GUI's Rebuild path) now passes it, so `geometry.polys` never
+contains a mesh-actor triangle any more (confirmed by reading `_node_polys`/`_mover_world_polys`
+still populate it — only the mesh loop was removed).
+
+A second new function, `preview_native.resolve_mesh_scene_polys(level, index, search_files)`, is the
+GUI's OWN independent entry point: builds a private `_TextureTable`, calls
+`resolve_mesh_actor_polys` with no `in_solid` gate (there's no CSG model pre-build, and Option A says
+post-build must match), returns `(polys, owners, texture_table)`. `uedcli/serve/scene.py`'s
+`_LoadedTrunk` grew `mesh_polys`/`mesh_owners`/`mesh_texture_table` (Load-owned, computed in
+`app.py`'s `_get_trunk`/`load()` alongside `resolve_actor_sprites`, same independence sprites already
+had). A new `_wrap_mesh_scene_polys(trunk, *, tex_offset)` wraps them into `ScenePoly` and is called
+by BOTH `build_wireframe_payload` (mesh polys are now its ONLY polys, `tex_offset=len(sprite_table)`)
+and `build_scene_payload` (mesh polys appended AFTER the filtered world/BSP/mover polys —
+preserves `/lightmap`'s positional indexing into the unfiltered-by-mesh prefix — offset
+`len(geometry.texture_table)+len(sprite_table)`). `/atlas` now assembles
+`geometry.texture_table + sprite_table + mesh_texture_table`, consistently pre- and post-build.
+
+**Verified**: a standalone script (not committed — sandbox couldn't build `uedcli_native`, see below)
+exercised `resolve_mesh_scene_polys` directly against the real UED22 corpus and a real DT_Mesh class
+(`DeusEx.CrateUnbreakableLarge`) with NO CSG involved at all, confirming real triangles + a real
+decoded texture resolve; a hidden (`bHiddenEd`) mesh actor contributes nothing; empty `search_files`
+degrades to `([], [], [])` cleanly (no crash); `build_wireframe_payload`/`build_scene_payload` (fed a
+deliberately EMPTY `_BuiltGeometry`) both wrap the SAME mesh triangles with correctly-offset
+`tex_index`, and the two payloads' mesh vertex sets are byte-identical — Option A's core claim,
+directly demonstrated. The pytest suite's own `test_serve_scene.py`/`test_serve_app.py`/
+`test_preview_native.py` were updated (new `_LoadedTrunk` fields, `_load_and_build_for` now mirrors
+production's `include_meshes=False` + `resolve_mesh_scene_polys` call) but could not be RUN in this
+session: this sandbox's Docker daemon cannot bind-mount any path under `/workspace` (`mkdir
+/workspace: permission denied`), so `uedcli_native` cannot be built here — the same class of
+limitation this campaign's own docs call out for a missing browser. Whoever next has a working
+native-ext build should run `bin/test -k "test_serve_scene or test_serve_app or test_preview_native
+or test_serve_textures"` once to confirm.
+
+**Movers**: found to have the SAME architectural gap (CSG-independent triangles, still gated behind
+build state) — out of scope for this change (owner's brief scoped Option A to mesh actors only),
+filed separately: `dev/docs/board/inbox/mover-triangles-not-build-state-independent/`.
