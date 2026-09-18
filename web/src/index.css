@@ -365,10 +365,13 @@ body {
 .quad-toolbar {
   position: absolute;
   top: 4px;
+  left: 4px;
   right: 4px;
   z-index: 3;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
