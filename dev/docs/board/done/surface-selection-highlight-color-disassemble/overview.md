@@ -31,9 +31,11 @@ DPR-shrunk one.
 
 Live-verified on real rendered pixels (headless Chromium, real WebGL, `showcase_bar` rebuilt, real
 clicks): 99.5% / 97.7% of every changed pixel is exactly RGB(0,127,255), row gaps are 2 with no
-exceptions, dot gaps are 8, and the first-dot phase is 0/4 split cleanly by drawn-row parity. A live
-UED22 screenshot could not be taken in that session -- the host's rootless docker daemon shares no
-filesystem with it, so the editor container cannot start at all.
+exceptions, dot gaps are 8, and the first-dot phase is 0/4 split cleanly by drawn-row parity. A
+review pass added deselect (0 changed pixels), two-surfaces-at-once, DPR 2, and a masked surface
+(clipped to the texture's shape, not tinted by it). A live UED22 screenshot could not be taken in
+that session -- the host's rootless docker daemon shares no filesystem with it, so the editor
+container cannot start at all.
 
 ## Re-running the harness
 

@@ -246,12 +246,25 @@ device-pixel dots every 4 rows / 16 columns — i.e. exactly the CSS-pixel spaci
 describes, and proof the uniform is bound at all (an unbound one would be 0 and paint the poly
 solid). A 26-point grid scan stippled 10 distinct surfaces and selected nothing on empty space.
 
-**Not verified live: a MASKED surface.** 380 grid clicks reached none of the level's 610 masked polys
-— they are outside the default camera view — so "the mask clips the dots rather than tinting them"
-rests on the unit tests alone. One known behaviour change, low severity and left as is: the scene's
-poly list also contains actor-owned polys, so a surface pick on a near-invisible NPC "glasses" slot
-now gets opaque blue dots where it previously got a faint wash. That follows from UED22's own
-mechanism rather than departing from it.
+A MASKED surface is verified live too, on `Brush1300:4` — `showcase_bar`'s hanging "OUT OF ORDER"
+sign, whose texture has 47% of its texels below the 0.5 alpha cutoff. It stipples (124 changed
+pixels, **121 exactly RGB(0,127,255)**, the other 3 MSAA edge blends), so the old "a masked group
+discards every fragment" failure is gone; the dots are CLIPPED rather than filling the quad
+(lattice-cell occupancy **0.50** inside their own bounding box, against **0.86 / 0.88** on two
+unmasked control surfaces in the same session — 0.50 against the texture's 53% opaque fraction); and
+they are the FLAT colour, not the texture modulated by it (one single exact value across 97.6% of
+the change; a modulation would give a spread). Where the texture is opaque the lattice stays exact
+(row gaps 2 ×21, in-row gaps 8 ×94, phase clean); the only exceptions are the clipping signature —
+single row gaps of 4 and 6, in-row gaps of 24 and 40, i.e. runs where a cut-out swallowed whole
+lattice cells. Visually the dots sit on the plaque and along its two one-pixel hanging cords with
+the transparent field between them completely undotted. That selection was driven through the app's
+own `onSelectSurface` rather than a click (the sign is unreachable by cursor from the framed view),
+so it exercises the masked RENDER path; the pick path is covered by the click-driven runs above.
+
+One known behaviour change, low severity and left as is: the scene's poly list also contains
+actor-owned polys, so a surface pick on a near-invisible NPC "glasses" slot now gets opaque blue
+dots where it previously got a faint wash. That follows from UED22's own mechanism rather than
+departing from it.
 
 Harness (disassembly helpers + the browser pixel probe): the board item itself,
 `dev/docs/board/done/surface-selection-highlight-color-disassemble/` (`harness-*.py`) — kept there
