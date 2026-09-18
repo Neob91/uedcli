@@ -39,3 +39,25 @@ at a single selection, but its position matched neither selected brush's own loc
 likely caught a different, ungated per-brush marker (`DrawLevelBrush`'s own vertex/local-origin dot)
 rather than the `GPivotShown`-gated global cross. Recorded honestly in `GUI-PARITY.md` rather than
 smoothed over; the disassembly is the authoritative evidence for this finding, not the screenshot.
+
+**Owner's own direct test, real UED22, 2026-09-18 (higher confidence than anything above -- first-
+party, hands-on confirmation): with multiple brushes selected, the red cross renders only for the
+brush selected FIRST. Later selections in the same multi-select do not get their own cross.** This is
+consistent with -- and sharpens -- the disassembly finding: `GPivotLocation`/`GPivotShown` are GLOBAL,
+SINGULAR values, not per-actor, so UED22 draws AT MOST ONE cross total regardless of how many actors
+are selected, anchored to whichever actor `SetPivot` used to set `GPivotLocation` (empirically: the
+first-selected one). This also likely explains the inconclusive screenshot probe above: if it checked
+for the marker at a LATER-selected brush's location rather than the first-selected one, it would
+correctly find nothing there even when the real global cross was genuinely showing elsewhere.
+
+**Needs disassembly confirmation of the exact "anchored to first-selected" mechanism** (not yet done)
+-- likely `SetPivot`'s own `SingleActor`/actor-array-walk logic decides which actor's location seeds
+`GPivotLocation` when multiple are selected; confirm whether it's genuinely "first selected" or some
+other rule (e.g. lowest actor index, last actor processed in the walk direction, etc.) that happens to
+usually coincide with "first selected" in ordinary use.
+
+**The real fidelity gap is now sharper than originally framed**: it's not just "shows too eagerly
+below 2 selections" -- it's structural. Real UED22 draws AT MOST ONE global cross ever; this GUI's
+`PivotMarker` draws ONE PER SELECTED BRUSH, unconditionally, always. Both the visibility-count
+threshold AND the one-vs-many structural difference are real, confirmed divergences from real UED22,
+still left as a product decision for the owner (no code changed here).
