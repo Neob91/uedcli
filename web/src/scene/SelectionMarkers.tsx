@@ -149,11 +149,12 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
   // The ONE global pivot cross. Anchor = the actor that was most recently the sole selection
   // (`pivotAnchor`). Shown only when that actor SNAPS TO THE GRID: UED22's own visibility test is
   // `GPivotShown = (SnapCount > 0) || (Count > 1)`, where `SnapCount` counts selected actors whose
-  // `bEdShouldSnap` is set. `Engine.Brush`'s class defaults set `bEdShouldSnap=True` and no point
-  // actor's do, so "is a brush" is the stand-in here -- live-verified in real UED22 (a lone selected
-  // brush shows the cross; a lone selected Light shows nothing). The `Count > 1` term never fires
-  // from clicking alone, because UED22 recomputes the flag only at exactly one selected actor --
-  // also live-verified (three Lights selected: still no cross). Detail: GUI-PARITY.md.
+  // `bEdShouldSnap` is set. Exactly two classes in `uned/UED22`'s packages default it True --
+  // `Engine.Brush` and `Engine.ClipMarker` (an editor-only clip-plane marker this GUI never renders)
+  // -- so "is a brush" is the stand-in here. Live-verified in real UED22: a lone selected brush
+  // shows the cross; a lone selected Light shows nothing. The `Count > 1` term never fires from
+  // clicking alone, because UED22 recomputes the flag only at exactly one selected actor -- also
+  // live-verified (three Lights selected: still no cross). Detail: GUI-PARITY.md.
   const pivotBrush = useMemo(() => {
     const anchor = pivotAnchor(selectedNames)
     if (anchor === undefined) return null

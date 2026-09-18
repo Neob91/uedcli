@@ -411,7 +411,9 @@ Chromium session against `showcase_bar` (React-fiber `onSelectActor` calls drivi
 state, then real screenshots — not a code read alone): selecting 3 brushes (`Brush1`/`Brush6`/
 `Brush7`) shows 3 distinct red crosses at 3 distinct world positions; the SIDE ortho pane alone shows
 two of them side by side, each centered on its own brush's own selection outline. The owner's hunch
-("it does NOT render per-brush currently") did not reproduce. No code change.
+("it does NOT render per-brush currently") did not reproduce. No code change. *(Superseded by Part 4
+below: rendering one cross per brush was correctly OBSERVED here but wrongly called "no bug" — real
+UED22 draws exactly one, and the GUI now does too.)*
 
 **Part 2 — does UED22 have a manual visibility toggle for this marker, or hide it for a single
 selection? RE-DONE FOR REAL 2026-09-18 against our own `uned/UED22/Editor.dll` — ✅ binary-confirmed,
@@ -560,18 +562,28 @@ Then the tail at `0x10046441`-`0x10046453`: `test edi,edi; jg true; cmp esi,1; j
 `GPivotShown = (SnapCount > 0) || (Count > 1)`.
 
 **Bit `0x40` is `bEdShouldSnap` — and that is why a single selected brush already shows the cross.**
-Nothing in `Editor.dll` or `Engine.dll` ever writes or tests bit `0x40` at `[actor+0x11c]` (both
-scanned exhaustively), so it can only arrive from class defaults. `Engine.Actor`'s own bool
-properties include `bEdSnap`, `bEdShouldSnap`, `bEdLocked`, `bSelected`; decoding
-`uned/UED22/Engine.u`'s class defaults shows **`Engine.Brush` sets `bEdShouldSnap=True`** and
-`Engine.Light` sets no snap flag at all. Live capture confirms the consequence directly: one selected
-BRUSH → cross drawn; one selected LIGHT → no cross anywhere. So in ordinary editing the cross is on
-because of the `SnapCount` term, not the `Count` term, and **Part 2's "UED22 hides the cross for a
-single selected actor" is wrong for brushes** (right for point actors). `Engine.Mover` extends
-`Engine.Brush`, so movers inherit the flag. Honest limit on this identification: the `UBoolProperty`
-bitmasks in `Engine.u` were NOT decoded, so "bit `0x40` = `bEdShouldSnap`" rests on elimination (no
-code writes it; only a class default can) plus the measured brush-vs-light split, not on reading the
-mask out of the package.
+`[actor+0x11c]` is one DWORD of `AActor`'s editor bool bitfields, and UE1 assigns their masks in
+declaration order. `Engine.Actor`'s OWN stored `ScriptText` inside `uned/UED22/Engine.u` (lines
+162-169) declares them consecutively:
+
+```
+bHiddenEd 0x01 · bDirectional 0x02 · bSelected 0x04 · bMemorized 0x08
+bHighlighted 0x10 · bEdLocked 0x20 · bEdShouldSnap 0x40 · bEdSnap 0x80
+```
+
+Two independent anchors in the binary land exactly on that layout: `SetPivot` and
+`NoteSelectionChange` both use bit `0x04` as "selected", and `Click@…HActor` tests bit `0x20` to SKIP
+an actor (`0x1004726b`, `0x10047347`, `0x1004739c`) — precisely what `bEdLocked` ("Locked in editor —
+no movement or rotation") means. So `SnapCount`'s bit `0x40` is `bEdShouldSnap`, measured rather than
+inferred.
+
+Decoding class defaults across every `uned/UED22/*.u`, exactly two classes default `bEdShouldSnap`
+True: **`Engine.Brush`** and `Engine.ClipMarker` (an editor-only clip-plane marker, never in level
+content). `Engine.Actor`'s own default is False, so `Engine.Light` and every other point actor is
+False; `Engine.Mover` extends `Engine.Brush` and inherits True. Live capture confirms the consequence
+directly: one selected BRUSH → cross drawn; one selected LIGHT → no cross anywhere. So in ordinary
+editing the cross is on because of the `SnapCount` term, not the `Count` term, and **Part 2's "UED22
+hides the cross for a single selected actor" is wrong for brushes** (right for point actors).
 
 **All seven `SetPivot` call sites.** Part 3's scan looked only for the one-instruction dispatch
 `call dword ptr [reg+0xcc]` and so missed the two-instruction form MSVC also emits,
@@ -610,16 +622,18 @@ makes `[ebp-0x3fc]+0x1ac` a `UEditorEngine` colour member and `[ebp-0x3fc]+0x48`
 `SetPivot` (`0x10046453`) and the read at the draw site (`0x1003e7a0`) — so nothing outside `SetPivot`
 can change it, and none of the seven sites is a general "on every click" handler.
 
-**What the cross actually looks like.** The draw block sits at top level in
-`Draw@UEditorEngine` and is gated only by `cmp dword ptr [0x101491e8],0; je 0x1003ea04`
-(`0x1003e7a0`) plus the `Render->Project` success test. It projects `GSnappedLocation`
-(`0x10149220`, NOT `GPivotLocation`), registers an `HGlobalPivot` hit proxy when the frame is
-hit-testing, and issues three `Draw2DPoint` calls: a 3×3 dot (`X±1, Y±1`, constant `1.0` at
-`0x100d2f80`), a 9px horizontal bar and a 9px vertical bar (`±4.0` at `0x100de9a8`) — a plus with a
-fat centre. Colour comes from the `FColor` member at `UEditorEngine+0x1ac`, the SAME member
-`DrawLevelBrush` uses for the builder brush; in our own `uned/UED22/unrealtournament.ini`'s
-`[Editor.EditorEngine]` that is `C_BrushWire=(R=255,G=63,B=63)`. The live capture reads back exactly
-that colour and exactly that shape:
+**What the cross actually looks like.** Inside `Draw@UEditorEngine` the preceding call
+(`0x1003e79d`) falls straight through into the gate `cmp dword ptr [0x101491e8],0; je 0x1003ea04`
+(`0x1003e7a0`), and between that gate and the first draw there is no condition but the
+`Render->Project` success test (an enclosing conditional further up the function was not ruled out).
+It projects `GSnappedLocation` (`0x10149220`, NOT `GPivotLocation`), registers an `HGlobalPivot` hit
+proxy when the frame is hit-testing, and issues three `Draw2DPoint` calls: a centre dot at `X±1, Y±1`
+(constant `1.0` at `0x100d2f80`), then a VERTICAL bar at `X, Y±4` and a HORIZONTAL bar at `X±4, Y`
+(constant `4.0` at `0x100de9a8`) — a plus with a fat centre, 9 px across as the live capture renders
+it. Colour comes from the `FColor` member at `UEditorEngine+0x1ac`, the SAME member `DrawLevelBrush`
+uses for the builder brush; in our own `uned/UED22/unrealtournament.ini`'s `[Editor.EditorEngine]`
+that is `C_BrushWire=(R=255,G=63,B=63)`. The live capture reads back exactly that colour and exactly
+that shape:
 
 ```
  433 ....#....      21 pixels of RGB (255,63,63):
@@ -632,9 +646,11 @@ that colour and exactly that shape:
 ```
 
 (The `C_*` block's base offset is not independently pinned; `+0x1ac` is identified as `C_BrushWire`
-because `DrawLevelBrush` at `0x10060195` uses it exactly when the brush being drawn IS
-`Level->Brush()`, the builder brush, and the live capture shows the builder brush and the pivot cross
-in the same `(255,63,63)`.)
+because `DrawLevelBrush` at `0x10060195` uses it exactly when the brush being drawn IS the builder
+brush — the guard is a call through IAT slot `0x100cee84`, which resolves to the imported symbol
+`?Brush@ULevel@@QAEPAVABrush@@XZ`, i.e. `ULevel::Brush()` — and the live capture shows the builder
+brush and the pivot cross in the same `(255,63,63)`. The colour is fetched via `0x100cede4` =
+`?Plane@FColor@@QBE?AVFVector@@XZ`, which is what identifies the member as an `FColor` at all.)
 
 **The live capture — what was actually done and measured.** Throwaway `ued-x86-runtime` container,
 `MAP NEW` + `MAP IMPORTADD` of three cube brushes at `(-512,0,0)`, `(512,0,0)`, `(0,512,0)` plus two
@@ -675,14 +691,16 @@ traced — they cannot change `GPivotShown`, only where the cross sits while dra
 
 **What was built from this (`web/src/scene/SelectionMarkers.tsx`, `selectionSet.ts`).** The GUI drew
 one cross per selected brush, unconditionally. It now draws exactly ONE, at `pivotAnchor`'s actor —
-the first (oldest) member of the selection set, which for every click-built path IS "the actor most
-recently the sole selection" — and only when that actor is a brush (the stand-in for
-`bEdShouldSnap`, per `Engine.Brush`'s class default). Three deliberate, recorded divergences from the
-literal UED22 state machine: nothing is drawn when nothing is selected (UED22 leaves a stale cross —
-the owner asked for hidden); deselecting the anchor out of a 3+ selection moves the cross to the
-next-oldest rather than leaving it on the now-deselected actor; and a batch select that jumps 0 → N
-without passing through one actor (the org panel's `onSelectMany`, UED22's own marquee/select-all)
-anchors on the batch's first member rather than leaving the cross where it was. Regressions:
+the first (oldest) member of the selection set, which for the ordinary click paths (plain tap,
+Ctrl+tap add, Ctrl+tap remove down to one) is "the actor most recently the sole selection" — and only
+when that actor is a brush (the stand-in for `bEdShouldSnap`, per `Engine.Brush`'s class default).
+Three deliberate, recorded divergences from the literal UED22 state machine: nothing is drawn when
+nothing is selected (UED22 leaves a stale cross — the owner asked for hidden); deselecting the anchor
+out of a 3+ selection moves the cross to the next-oldest rather than leaving it on the now-deselected
+actor; and a batch select that jumps straight to 2+ actors without passing through one — the org
+panel's `onSelectMany`, whether from empty or replacing another selection; UED22's own marquee/
+select-all — anchors on the batch's first member rather than leaving the cross where it was.
+Regressions:
 `SelectionMarkers.test.tsx` (count + position through a real render) and `selectionSet.test.ts`'s
 `pivotAnchor` cases.
 

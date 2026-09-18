@@ -86,4 +86,23 @@ describe('pivotAnchor', () => {
     expect(pivotAnchor(afterB)).toBe('A')
     expect(primarySelection(afterB)).toBe('B')
   })
+
+  // The three DELIBERATE divergences from UED22, pinned so none is silently "fixed" later.
+  // UED22's own behaviour in each case is in `pivotAnchor`'s doc comment and GUI-PARITY.md Part 4.
+  it('deliberately diverges: deselecting the anchor out of a 3+ selection moves it on', () => {
+    let s = toggleSelection(new Set(), 'A', false)
+    s = toggleSelection(s, 'B', true)
+    s = toggleSelection(s, 'C', true)
+    // UED22 leaves its cross on the now-deselected A (the selection never returns to one actor).
+    expect(pivotAnchor(toggleSelection(s, 'A', true))).toBe('B')
+  })
+
+  it('deliberately diverges: a batch select re-anchors on its first member', () => {
+    // UED22's marquee/select-all never passes through one actor, so its cross stays put.
+    expect(pivotAnchor(new Set(['X', 'Y', 'Z']))).toBe('X')
+  })
+
+  it('deliberately diverges: an empty selection has no anchor (UED22 keeps a stale cross)', () => {
+    expect(pivotAnchor(clearSelection())).toBeUndefined()
+  })
 })
