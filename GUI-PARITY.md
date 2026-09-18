@@ -59,7 +59,8 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Topic | Question | State | Evidence / board item |
 |---|---|---|---|
 | Selection highlight rendering | What color/blend/technique does UED22 use to show a selected sprite/mesh actor? | ✅ closed, implemented | ✅ binary (`render.dll` disassembly), see Findings below |
-| Click/hit-detection algorithm | How does UED22 resolve a click to a surface/actor/brush when candidates overlap? | ⬜ open | `dev/docs/board/inbox/gui-click-detection-algorithm-not-re-d-against/` |
+| Click/hit-detection algorithm | How does UED22 resolve a click to a surface/actor/brush when candidates overlap? | 🔶 investigating | `dev/docs/board/inbox/gui-click-detection-algorithm-not-re-d-against/` — see Findings below |
+| Sprite alpha picking | Does UED22's sprite click hit-test respect the icon's transparent padding? | ✅ closed, implemented | 📖 source (`SoftDrv/Src/{Hit,DrawTile}.cpp`) + 🔬 live (real clicks, A/B against the unfixed code) — see Findings below |
 | Modifier-key click-select rules | Are the Shift/Ctrl select-surface-vs-actor rules real UED22 behavior? | ⬜ open | `dev/docs/board/inbox/gui-texture-actor-click-select-modifier-rules/` |
 | Marquee containment rule | Full-containment for brushes vs. pivot-in-box for point actors — confirmed fact, not yet wired into the (deferred) marquee feature | ⬜ open (marquee itself deferred) | `dev/docs/board/inbox/gui-ortho-marquee-spec-omits-unrealed-s-brush/` |
 | CSG brush coloring | Does UED22 give Intersect/Deintersect brushes a distinct color from Add? | ⬜ open | `dev/docs/board/inbox/gui-csg-brush-coloring-never-distinguishes/` |
@@ -118,6 +119,96 @@ needed). Three distinct techniques, not one shared overlay:
 
 Not yet folded into `dev/docs/unrealed/rendering.md` as a permanent verified fact — that edit needs
 the owner's yes per `CLAUDE.md`; this section is the campaign's own working record until then.
+
+### Click/hit-detection algorithm — screen-space tie-break, not depth-nearest (investigating, 2026-09-17)
+
+Two owner-reported bugs (`wireframe-brush-selection-should-hit-test-lines`,
+`mover-near-brush803-unclickable-in-wireframe-2d`) turned out to be the SAME root cause, not the two
+different mechanisms each report guessed at (an invisible poly face; an actor-vs-brush priority rule).
+
+📖 **Disassembly** (`Editor.dll`/`Engine.dll`, this repo's `uned/UED22/`): `UEditorEngine::Click`
+(`Editor.dll`) builds a fixed screen-space PIXEL box around the cursor — measured from the actual
+clamp arithmetic, not inferred: `(coord+3) - (coord-2) = 5` on both axes, a genuine 5×5 px box — and
+hands it to `UViewport::ExecuteHits` (`Engine.dll`) against a rendered hit-proxy buffer for that box
+(`HActor`/`HBspSurf`/`HBrushVertex`/`HHitProxy` exports confirm the classic UE1 hit-proxy
+architecture). UED22's own click hit-test is fundamentally SCREEN-SPACE — never a world-space radius.
+
+This directly explains the bug: our own `tapSelect.ts` raycasts wireframe brush/mover outlines with a
+generous THRESHOLD (`WIREFRAME_LINE_HIT_WORLD_UNITS`/`orthoLineHitThresholdUU`) so thin 1px lines stay
+clickable, and then took `THREE.Raycaster.intersectObjects(...)`'s own `hits[0]`. But three.js sorts
+line hits by `distance` = depth from the camera along the ray (`node_modules/three/src/objects/
+Line.js`'s `checkIntersection`), not by proximity to the actual click on screen — so once several
+candidates pass the threshold at once, the depth-nearest one often is NOT the one under the cursor (an
+unrelated marker sprite, or a farther-on-screen brush's line merely closer to the camera along that
+ray).
+
+🔬 **Live-probed** (own GUI, `showcase_bar`, headless Chromium): clicking squarely on `DeusExMover4`'s
+own rendered outline (the exact Mover the `mover-near-brush803` report named) resolved to a WRONG
+actor on every one of 13 test points before a fix — `Light199`/`Brush803`/`Brush812`/`Brush813`, never
+the Mover. Fix: `tapSelect.ts`'s `resolveTapSelect` now re-ranks threshold-accepted hits by projected
+SCREEN distance to the click (`selection.ts`'s `nearestScreenHit`) instead of `hits[0]`. Re-verified:
+the same battery went from 0/13 to 6/13 correct in the perspective pane and 13/13 in the ortho top
+pane (independently reproduced by a reviewing subagent, including its own separate causal A/B and an
+ortho-pane pass). The remaining perspective misses are two actors' lines genuinely close together on
+screen at that exact pixel — consistent with UED22's own ~5px hit box, not a further bug.
+
+**Not closed.** This fixes one real mechanism (screen-space vs. depth-nearest tie-break) with
+disassembly evidence for what UED22 does generically — it does not live-verify the recovered algorithm
+against a real UED22 boot on N overlap test scenes, the bar this topic needs to close. The AABB
+fallback path (`selection.ts`'s `pickActor`, engaged only on a genuine raycast miss) still ranks by
+depth and is untouched — a candidate for the same bug class if a future report describes a
+miss-fallback mis-pick rather than a hit-reranking one.
+
+### Sprite alpha picking (closed 2026-09-17)
+
+Board item `point-actor-sprite-picking-ignores-sprite-alpha`: a point-actor's billboard sprite
+selected on any click inside its full square quad, including the transparent padding around the
+drawn icon shape.
+
+📖 **Source** (`fgsfdsfgs/UE1`, `Source/SoftDrv/Src/{Hit,DrawTile}.cpp` — the software render
+DEVICE, `SoftDrv.SoftwareRenderDevice`, the exact one this project's own headless editor setup uses,
+`dev/docs/unrealed/rendering.md`): UED22's click hit-test (`Hit.cpp`'s `PushHit`/`PopHit`) is a
+literal pixel readback, not per-object math — confirming and extending the mechanism this doc's
+"Click/hit-detection algorithm" section above already established. `PushHit` stamps a sentinel value
+(`IGNORE`) over every screen pixel in the cursor's hit box, THEN the normal draw call for that
+hit-proxy-tagged object runs; `PopHit` checks whether any pixel in the box still differs from the
+sentinel — i.e. whether the object's own rasterizer actually PAINTED something there. `UnSprite.cpp`'s
+`DrawActorSprite` (the same function this doc's "Selection highlight rendering" section already
+disassembly-confirmed) calls `PUSH_HIT(Frame, HActor, Sprite->Actor)` immediately before its own
+`Canvas->DrawIcon(...)` call — the identical draw used for the actor's real on-screen render, not a
+separate hit-test-only pass. `DrawTile.cpp`'s masked-texture blitter (`FlashSprite32Masked`,
+`BlitMask32`) skips the screen write outright when the source texel equals the reserved transparent
+palette index (`if (Texel) Screen[x] = Palette[Texel];` — no `else` branch, no write at all otherwise).
+So a transparent icon pixel is invisible to the hit-proxy readback as a pure SIDE EFFECT of sharing
+the real rasterizer with the real render, not a separately-coded alpha rule — confirming the hint this
+board item was filed with. Cross-checked against this repo's own `Editor.dll`/`render.dll`: the
+`HActor`/`HBspSurf`/`HBrushVertex`/`HHitProxy` hit-proxy classes `UnSprite.cpp`'s `PUSH_HIT` call
+targets are real exported symbols there, and `DrawActorSprite`'s disassembly (already on file above)
+shows the exact call structure this source predicts.
+
+UE1's own masking is a hard BINARY test (palette index 0 or not); this codebase's atlas/marker
+textures are anti-aliased PNGs with soft edges, so the fix reuses the existing masked-material
+alphaTest cutoff (0.5, `sceneResources.ts`'s `resolveMaterialState`) rather than testing for exact
+zero — `selection.ts`'s new `isTransparentPixel`.
+
+**Fix**: `tapSelect.ts`'s `resolveTapSelect` now filters out any marker-sprite raycast hit whose
+sampled texture alpha (at the intersection's own `uv`, read directly off the sprite's `CanvasTexture`
+source canvas) is below that cutoff, BEFORE ranking hits — exactly like a genuine raycast miss on
+that candidate, so the click falls through to whatever else is actually drawn underneath (or to a
+real miss). A point actor's own AABB fallback can't undo this: its bbox is a zero-size point at
+`Location` (`writes.py`'s `actor_bounds`), so it was never really what made a marker selectable in the
+first place — the bare sprite-quad raycast was, which is exactly what's now filtered.
+
+🔬 **Live-verified** (real synthetic `page.mouse.click`, headless Chromium, `showcase_bar`): searched
+and framed a real level actor (`HKMarketLight1`, a point Light) via the org panel + `F`, then scanned
+a real click along its marker's screen-space diagonal in ~2px steps. With the fix: clicks land on the
+actor from the marker's center out to ~15px, then miss (`(empty)`) from ~18px outward. To confirm this
+miss is the alpha filter and not merely the click straying outside the sprite's raycastable quad, the
+SAME exact pixel coordinates (231,525)–(239,533) were re-clicked against the UNFIXED code (`git
+stash`, no rebuild needed — Vite HMR): every one of them SELECTED `HKMarketLight1` there, proving the
+click point is genuinely within the sprite's hit geometry and that the fix (not a geometric miss) is
+what rejects it. Popping the stash and re-testing reproduced the exact original "miss from ~18px"
+result. Full A/B transcript in the board item's `done/` writeup.
 
 ### Radii overlay colors (investigating, 2026-09-16)
 

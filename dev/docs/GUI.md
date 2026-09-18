@@ -213,17 +213,23 @@ write path).
   the existing, unchanged rule. Ctrl+LMB multi-selects brushes (additive), matching this GUI's
   general Ctrl-multi-select convention.
 - **Non-wireframe perspective mode** (`unlit`/`flat`/`lit`): a plain LMB-tap on a brush SURFACE
-  selects that ONE polygon's texture (highlight + inspect); **Shift+LMB on the same surface instead
-  selects the WHOLE BRUSH actor** — Shift forks the same click target between texture-select
-  (unmodified) and actor-select (shifted), because plain LMB-drag here is camera-fly (dolly+turn)
-  and would otherwise be ambiguous with an incidental camera nudge. Repeated Shift+LMB (no Ctrl
-  needed) accumulates multiple brush selections; Ctrl+LMB (no Shift) accumulates multiple texture
-  selections instead. A non-wireframe click that misses all real surface geometry but still lands
-  inside a brush's bounding box (the AABB fallback) has no specific polygon to fall back to a
-  texture-select on, so it follows the same Shift gate as a whole-brush pick: rejected without
-  Shift, but ABSORBED rather than deselecting (the tap landed on something). `selection.ts`'s
+  (a genuine poly hit) selects that ONE polygon's texture (highlight + inspect); **Shift+LMB on the
+  same surface instead selects the WHOLE BRUSH actor** — Shift forks the same click target between
+  texture-select (unmodified) and actor-select (shifted), because plain LMB-drag here is camera-fly
+  (dolly+turn) and would otherwise be ambiguous with an incidental camera nudge. Repeated Shift+LMB
+  (no Ctrl needed) accumulates multiple brush selections; Ctrl+LMB (no Shift) accumulates multiple
+  texture selections instead. Shift's role is scoped to exactly this poly case — selecting a brush by
+  clicking its visible poly (owner ruling 2026-09-17). It does not extend to a LINE hit: a click on a
+  brush's own always-visible outline (e.g. a Mover's outline, drawn in every shading mode since a
+  Mover has no other representation when its solid geometry isn't shown) selects the actor directly,
+  no modifier needed, exactly like wireframe mode's own line-click rule — a line click has no
+  competing poly/texture-select interpretation to fork. A non-wireframe click that misses all real
+  surface/line geometry but still lands inside a brush's bounding box (the AABB fallback) has no
+  specific polygon OR line to key off of, so it keeps the old Shift gate: rejected without Shift, but
+  ABSORBED rather than deselecting (the tap landed on something). `selection.ts`'s
   `resolveTapAction(rawHit, mode, shiftKey, additive)` is the single decision function for all of
-  this — pure, tested without a WebGL raycast (`selection.test.ts`).
+  this — pure, tested without a WebGL raycast (`selection.test.ts`); `RawTapHit.isLineHit`
+  distinguishes a genuine line hit from an AABB-fallback hit (both otherwise carry `polyIndex: null`).
 - **Point actors are unaffected** by any of the above — always plain-tap-selectable everywhere, in
   every pane/mode, unaffected by Shift.
 - **Not RE-verified against a live UED22** (owner ask, 2026-09-16): the click-target/modifier rules

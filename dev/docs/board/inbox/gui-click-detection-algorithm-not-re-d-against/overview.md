@@ -31,3 +31,18 @@ architecture — unconfirmed here), then live-verify the recovered algorithm aga
 Not started this session — filed so it's tracked, not attempted opportunistically alongside other
 work (the same resource-risk note as `gui-texture-actor-click-select-modifier-rules` applies: a fresh
 UED22 container boot is not cheap, and this needs several).
+
+## Progress (2026-09-17) — one real mechanism found and fixed, item stays open
+
+Disassembled `UEditorEngine::Click`/`UViewport::ExecuteHits` (`Editor.dll`/`Engine.dll`): UED22's own
+click hit-test scans a fixed 5×5 PIXEL box around the cursor — confirmed screen-space, never a
+world-space radius. This explained (and fixed) two other bugs,
+`wireframe-brush-selection-should-hit-test-lines` and `mover-near-brush803-unclickable-in-wireframe-
+2d`: our own raycast picked the DEPTH-nearest threshold-passing hit (three.js's own sort), not the
+screen-nearest one — see `GUI-PARITY.md`'s "Click/hit-detection algorithm" Findings for the full
+writeup and the fix (`web/src/scene/selection.ts`'s `nearestScreenHit`).
+
+**Not closed**: no live UED22 boot ran this session to confirm the recovered mechanism against overlap
+test scenes (own-GUI live testing substituted, per the fix above) — the disassembly gives UED22's
+general mechanism (screen-space, not depth), not a scenario-by-scenario tie-break match. The AABB
+fallback path (`pickActor`, only on a genuine raycast miss) still ranks by depth, untouched.

@@ -4,7 +4,10 @@ import type { BrushHighlight, SceneActor } from '../api'
 import {
   canSelectBrushTap,
   isTap,
+  isTransparentPixel,
+  nearestScreenHit,
   pickActor,
+  pickHit,
   rayAabbIntersect,
   resolveHitActor,
   resolveHitSurface,
@@ -147,7 +150,7 @@ describe('resolveTapAction', () => {
   it('a point-actor hit always selects the actor, Shift/mode irrelevant', () => {
     for (const mode of ['wireframe', 'unlit', 'flat', 'lit'] as const) {
       for (const shiftKey of [false, true]) {
-        expect(resolveTapAction({ actor: point, polyIndex: null }, mode, shiftKey, false)).toEqual({
+        expect(resolveTapAction({ actor: point, polyIndex: null, isLineHit: false }, mode, shiftKey, false)).toEqual({
           kind: 'select-actor', name: 'Light1', additive: false,
         })
       }
@@ -155,7 +158,7 @@ describe('resolveTapAction', () => {
   })
 
   it('a point-actor hit threads the Ctrl-driven additive flag through unchanged', () => {
-    expect(resolveTapAction({ actor: point, polyIndex: null }, 'lit', false, true)).toEqual({
+    expect(resolveTapAction({ actor: point, polyIndex: null, isLineHit: false }, 'lit', false, true)).toEqual({
       kind: 'select-actor', name: 'Light1', additive: true,
     })
   })
@@ -163,25 +166,25 @@ describe('resolveTapAction', () => {
   // The core of the new model: a genuine surface hit (polyIndex set) in a non-wireframe mode.
   describe('a surface hit on a brush, non-wireframe mode', () => {
     it('unmodified -> selects the TEXTURE, non-additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4 }, 'lit', false, false)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', false, false)).toEqual({
         kind: 'select-surface', actor: 'Brush1', polyIndex: 4, additive: false,
       })
     })
 
     it('Ctrl -> selects the TEXTURE, additively (multi-selects textures)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4 }, 'unlit', false, true)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'unlit', false, true)).toEqual({
         kind: 'select-surface', actor: 'Brush1', polyIndex: 4, additive: true,
       })
     })
 
     it('Shift -> forks the SAME click to the whole BRUSH actor instead, always additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4 }, 'lit', true, false)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', true, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
       })
     })
 
     it('Shift+Ctrl -> still the whole-actor fork, additive (Ctrl adds nothing new here)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4 }, 'flat', true, true)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'flat', true, true)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
       })
     })
@@ -191,19 +194,19 @@ describe('resolveTapAction', () => {
   // no modifier needed, Ctrl still multi-selects, Shift plays no special role.
   describe('a line hit on a brush, wireframe mode', () => {
     it('unmodified -> selects the actor, non-additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null }, 'wireframe', false, false)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', false, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: false,
       })
     })
 
     it('Ctrl -> selects the actor, additive (existing multi-select convention)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null }, 'wireframe', false, true)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', false, true)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
       })
     })
 
     it('Shift has no effect on the resulting additive flag (unlike the non-wireframe surface fork)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null }, 'wireframe', true, false)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', true, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: false,
       })
     })
@@ -214,12 +217,38 @@ describe('resolveTapAction', () => {
   // always has been: Shift required, a rejected hit absorbed rather than deselecting.
   describe('a non-wireframe fallback hit on a brush with no resolved surface', () => {
     it('unmodified -> absorbed (hit something, but not selectable without Shift)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null }, 'lit', false, false)).toEqual({ kind: 'none' })
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'lit', false, false)).toEqual({ kind: 'none' })
     })
 
     it('Shift -> selects the whole actor, additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null }, 'unlit', true, false)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'unlit', true, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
+      })
+    })
+  })
+
+  // A genuine LINE hit (a Mover's always-visible outline, `isLineHit: true`) in a NON-wireframe
+  // mode -- owner ruling 2026-09-17 (`shift-modifier-convention-broken-for-poly-and`, Bug B): this
+  // must behave exactly like wireframe mode's own line-hit rule (no modifier needed), NOT like the
+  // AABB-fallback case right above, even though both carry `polyIndex: null`. A line click has no
+  // competing poly/texture-select interpretation to disambiguate from a camera-fly drag, unlike an
+  // AABB-fallback hit (which GUI.md's rationale still gates behind Shift).
+  describe('a genuine line hit on a brush, NON-wireframe mode (e.g. a Mover outline)', () => {
+    it('unmodified -> selects the actor, non-additive -- no Shift needed', () => {
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'lit', false, false)).toEqual({
+        kind: 'select-actor', name: 'Brush1', additive: false,
+      })
+    })
+
+    it('Ctrl -> selects the actor, additive', () => {
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'unlit', false, true)).toEqual({
+        kind: 'select-actor', name: 'Brush1', additive: true,
+      })
+    })
+
+    it('Shift is not required (unlike the AABB-fallback case) and changes nothing', () => {
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'flat', true, false)).toEqual({
+        kind: 'select-actor', name: 'Brush1', additive: false,
       })
     })
   })
@@ -266,5 +295,182 @@ describe('isTap', () => {
   it('is exactly at the threshold boundary (inclusive)', () => {
     expect(isTap(0, 0, 4, 0, 4)).toBe(true)
     expect(isTap(0, 0, 4.01, 0, 4)).toBe(false)
+  })
+})
+
+describe('nearestScreenHit', () => {
+  it('returns null for an empty candidate list', () => {
+    expect(nearestScreenHit([], 100, 100)).toBeNull()
+  })
+
+  it('picks the candidate closest to the click on screen, not array order', () => {
+    const hits = [
+      { value: 'far', screenX: 0, screenY: 0 },
+      { value: 'near', screenX: 101, screenY: 100 },
+      { value: 'farther', screenX: 500, screenY: 500 },
+    ]
+    expect(nearestScreenHit(hits, 100, 100)).toBe('near')
+  })
+
+  it('reproduces the real bug: a depth-nearer but screen-farther hit must NOT win', () => {
+    // This is the exact failure mode found live (wireframe-brush-selection-should-hit-test-lines /
+    // mover-near-brush803-unclickable-in-wireframe-2d): three.js's own Raycaster sorts by ray
+    // DEPTH, so a hit far from the click on screen but physically nearer the camera used to be
+    // `hits[0]` and win. Simulating that array order here: the depth-nearest candidate is listed
+    // FIRST, but it is screen-farther from the click than the second candidate.
+    const depthOrderedHits = [
+      { value: 'depth-nearest-but-off-screen', screenX: 400, screenY: 400 },
+      { value: 'the-actual-clicked-line', screenX: 100, screenY: 100 },
+    ]
+    expect(nearestScreenHit(depthOrderedHits, 100, 100)).toBe('the-actual-clicked-line')
+  })
+})
+
+describe('pickHit', () => {
+  it('returns null for an empty candidate list', () => {
+    expect(pickHit([], 100, 100)).toBeNull()
+  })
+
+  it('a single precise hit wins with no lines present', () => {
+    const hits = [{ value: 'mesh', isLine: false, alwaysOnTop: false, screenX: 100, screenY: 100 }]
+    expect(pickHit(hits, 100, 100)).toBe('mesh')
+  })
+
+  it('among several PRECISE hits, the first (real ray-depth order) wins outright, not screen distance', () => {
+    // Two points on the same ray reproject to (as good as) the same screen pixel regardless of
+    // depth, so screen-distance can't disambiguate two precise hits -- `hits[0]`'s real depth order
+    // must decide, even if a LATER entry happens to report a marginally closer screen position.
+    const hits = [
+      { value: 'depth-nearest', isLine: false, alwaysOnTop: false, screenX: 100.4, screenY: 100 },
+      { value: 'depth-farther', isLine: false, alwaysOnTop: false, screenX: 100.1, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('depth-nearest')
+  })
+
+  it('an ORDINARY (not always-on-top) line never overrides a precise hit, even when screen-nearer', () => {
+    // board `flaky-masked-surface-and-sprite-picking-30pct`-shaped case: a genuine precise hit under
+    // the cursor must not lose to an unrelated ordinary line merely because it threshold-accepted.
+    const hits = [
+      { value: 'precise-under-cursor', isLine: false, alwaysOnTop: false, screenX: 100, screenY: 100 },
+      { value: 'ordinary-line', isLine: true, alwaysOnTop: false, screenX: 100, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('precise-under-cursor')
+  })
+
+  it('an always-on-top line beats a precise hit at the same pixel', () => {
+    // board `mover-not-selectable-via-wireframe-click`: a Mover's outline (depthTest:false) is drawn
+    // over whatever real geometry sits behind it, so a click there must resolve to the line.
+    const hits = [
+      { value: 'wall-behind', isLine: false, alwaysOnTop: false, screenX: 100, screenY: 100 },
+      { value: 'mover-outline', isLine: true, alwaysOnTop: true, screenX: 100, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('mover-outline')
+  })
+
+  it('only the winning line\'s always-on-top-ness matters, not a losing candidate\'s', () => {
+    // Review finding: an ordinary line that is screen-NEAREST must still win over a precise hit
+    // check -- a farther, always-on-top line merely being present elsewhere must not force the
+    // precise hit to be discarded.
+    const hits = [
+      { value: 'precise-under-cursor', isLine: false, alwaysOnTop: false, screenX: 100, screenY: 100 },
+      { value: 'ordinary-line-close', isLine: true, alwaysOnTop: false, screenX: 101, screenY: 100 },
+      { value: 'always-on-top-line-far', isLine: true, alwaysOnTop: true, screenX: 400, screenY: 400 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('precise-under-cursor')
+  })
+
+  it('among several LINE hits with no precise hit, screen-nearest wins (matches nearestScreenHit)', () => {
+    const hits = [
+      { value: 'depth-nearest-but-off-screen', isLine: true, alwaysOnTop: false, screenX: 400, screenY: 400 },
+      { value: 'the-actual-clicked-line', isLine: true, alwaysOnTop: false, screenX: 100, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('the-actual-clicked-line')
+  })
+
+  it('an always-on-top line FARTHER from the click than a precise hit does NOT win (the bug)', () => {
+    // Real bug found live 2026-09-17 (`shift-modifier-convention-broken-for-poly-and`, Bug A):
+    // `DeusExMover4`'s outline is threshold-accepted (world-unit `Raycaster.params.Line.threshold`
+    // can span several screen pixels), so it was a candidate even when a click was actually centered
+    // on `Brush803`'s own poly right next to it -- and the old code let ANY always-on-top line beat
+    // ANY precise hit outright, with no distance comparison at all. The always-on-top line must only
+    // win when it's genuinely at least as close to the click as the precise hit.
+    const hits = [
+      { value: 'brush-poly-under-cursor', isLine: false, alwaysOnTop: false, screenX: 100, screenY: 100 },
+      { value: 'mover-outline-off-to-the-side', isLine: true, alwaysOnTop: true, screenX: 150, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('brush-poly-under-cursor')
+  })
+
+  it('a Mover outline wins over an obscuring polygon when within the ~5px absolute hit box', () => {
+    // Board `mover-wireframe-should-outrank-polys-not-actors` (owner ruling 2026-09-18): a Mover's
+    // wireframe must win over a polygon even when it's not screen-nearest, as long as the click is
+    // genuinely on/near the rendered line. Live-measured: clicking dead-on an obscured Mover outline
+    // puts the line ~0.1px from the click while the occluding polygon sits at ~0px -- the OLD
+    // relative rule (line must be <= the polygon's own distance) can never fire here, which is why
+    // this needed a new absolute cutoff instead of a tighter relative one.
+    const hits = [
+      { value: 'occluding-wall-poly', isLine: false, alwaysOnTop: false, isActor: false, screenX: 100, screenY: 100 },
+      { value: 'mover-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 103, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('mover-outline')
+  })
+
+  it('a Mover outline does NOT win over a polygon once outside the absolute hit box (preserves Brush803)', () => {
+    // Same mechanism as `DeusExMover4`'s real Brush803 regression above, re-expressed with the new
+    // Mover-specific flags: the offending line there was measurably OFF to the side (well past a 5px
+    // box), so the new absolute rule must not fire for it either -- it falls through to the ordinary
+    // relative rule, which (correctly) rejects it.
+    const hits = [
+      { value: 'brush803-poly', isLine: false, alwaysOnTop: false, isActor: false, screenX: 100, screenY: 100 },
+      { value: 'deusexmover4-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 150, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('brush803-poly')
+  })
+
+  it('exactly at the ~5px boundary, the Mover outline still wins (<=, not <)', () => {
+    const hits = [
+      { value: 'poly', isLine: false, alwaysOnTop: false, isActor: false, screenX: 100, screenY: 100 },
+      { value: 'mover-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 105, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('mover-outline')
+  })
+
+  it('an actor hit still wins over a Mover outline within the absolute hit box (the "not actors" carve-out)', () => {
+    // Owner ruling's explicit carve-out: the Mover-wireframe priority is over POLYGONS, never over
+    // another actor (a point actor, another Mover, a mesh actor). An actor precise hit is exempted
+    // from the new absolute rule and falls through to the ordinary relative rule, which -- since a
+    // real precise hit is always ~0px from the click by construction -- lets the actor win by default.
+    const hits = [
+      { value: 'nearby-actor', isLine: false, alwaysOnTop: false, isActor: true, screenX: 100, screenY: 100 },
+      { value: 'mover-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 101, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('nearby-actor')
+  })
+
+  it('an ORDINARY (non-Mover) line within the absolute hit box still loses to a closer polygon', () => {
+    // Scope check: the new absolute cutoff is Mover-specific (`isMoverLine`). Same geometry as the
+    // "wins within the box" test above, but WITHOUT `isMoverLine` -- if the absolute rule leaked to
+    // ordinary lines, this would wrongly pick the line; it must fall through to the pre-existing
+    // relative rule instead, which rejects a line farther than the polygon.
+    const hits = [
+      { value: 'poly-under-cursor', isLine: false, alwaysOnTop: false, isActor: false, screenX: 100, screenY: 100 },
+      { value: 'ordinary-brush-outline', isLine: true, alwaysOnTop: true, screenX: 103, screenY: 100 },
+    ]
+    expect(pickHit(hits, 100, 100)).toBe('poly-under-cursor')
+  })
+})
+
+describe('isTransparentPixel', () => {
+  it('is transparent at alpha 0 (the sprite icon padding)', () => {
+    expect(isTransparentPixel(0)).toBe(true)
+  })
+
+  it('is not transparent at full opacity', () => {
+    expect(isTransparentPixel(1)).toBe(false)
+  })
+
+  it('uses the same 0.5 cutoff as the masked-material alphaTest', () => {
+    expect(isTransparentPixel(0.49)).toBe(true)
+    expect(isTransparentPixel(0.5)).toBe(false)
   })
 })

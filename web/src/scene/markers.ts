@@ -8,6 +8,18 @@ import * as THREE from 'three'
 
 import type { SceneActor } from '../api'
 
+// Board `selected-surface-highlight-renders-above-point`: a selected surface's translucent overlay
+// (`SelectionHighlight.tsx`'s `SurfaceSelectionHighlight`) rendered on top of a point-actor sprite
+// genuinely closer to the camera. Both are `transparent` objects with the default `renderOrder` (0),
+// and three.js's transparent-pass sort only falls back to distance-from-camera once `renderOrder`
+// ties -- and that distance is each object's own `matrixWorld` origin, meaningless for the highlight
+// mesh (it never sets a `.position`; its triangles live only in a shared-attribute index subset).
+// Both `Viewport3D.tsx` and `OrthoViewport.tsx` pass this to every `PointActorMarker`/marker sprite
+// so a marker always composites after a coincident-depth highlight, sidestepping that tiebreak
+// entirely (checked before distance). `depthTest` is untouched -- this only fixes draw order among
+// coincident-depth translucent overlays, not sprite-vs-wall occlusion.
+export const MARKER_RENDER_ORDER = 10
+
 /** World units per screen pixel at `point`, for either camera kind this app uses -- the constant-
  * screen-size scale factor a marker/gizmo sprite needs to stay a fixed size on screen regardless of
  * zoom (ortho) or camera distance (perspective, where a fixed WORLD-unit sprite shrinks with

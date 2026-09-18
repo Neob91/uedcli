@@ -16,7 +16,7 @@ import type { DragGestureCallbacks } from './dragGesture'
 import type { FrameRequest } from './frame'
 import { DEFAULT_GRID_SIZE } from './grid'
 import { GridOverlay } from './GridOverlay'
-import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR } from './markers'
+import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR, MARKER_RENDER_ORDER } from './markers'
 import { MeshWireframe, SelectedMeshWireframe } from './MeshWireframe'
 import { PointActorMarker } from './PointActorMarker'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
@@ -37,14 +37,13 @@ import { applyOrthoCameraPose, CANVAS_COLOR_MANAGEMENT } from './viewportRender'
 
 // Same fallback dot tint as Viewport3D's identical marker rendering.
 const MARKER_COLOR_THREE = new THREE.Color(...MARKER_COLOR)
-// Point actors must always render on top of brush wireframe/highlight (owner ruling; Viewport3D.tsx
-// sets the identical depthTest={false} on its own marker materials for the same reason -- a wall-
-// mounted actor's Location often coincides with the wall surface, so depth-testing lost that marker
-// to the wall's own geometry). This pane ALSO needs an explicit renderOrder, higher than everything
-// else drawn here (grid's -10, brush outlines' default 0), so draw order is explicit rather than
-// incidental scene-graph position; Viewport3D.tsx leaves its own marker renderOrder unset since its
-// scene-graph insertion order already draws markers last.
-const MARKER_RENDER_ORDER = 10
+// `MARKER_RENDER_ORDER` (`markers.ts`): this pane's own `depthTest={mode !== 'wireframe'}` below
+// always evaluates false (ortho panes never leave 'wireframe', GUI.md "Shading modes"), so a real
+// depth test against the wall was already a non-issue here -- but the pane still needs the explicit
+// renderOrder, since three.js's transparent-pass sort falls back to scene-graph/insertion order only
+// once renderOrder AND distance-from-the-object's-own-origin both tie, and relying on insertion order
+// alone is fragile. See `markers.ts`'s doc comment for the mechanism this constant fixes for real in
+// `Viewport3D.tsx` (a surface highlight winning that distance tiebreak against a nearer sprite).
 
 function OrthoCameraRig({
   pose,
@@ -134,6 +133,10 @@ export function OrthoViewport({
   // with no solid mesh drawn, a hit must come from the brush outline LINES themselves, never a
   // bounding-box fallback.
   const brushGroupRef = useRef<THREE.Group | null>(null)
+  // A Mover's own always-visible outline -- see Viewport3D.tsx's identical comment. Ortho panes are
+  // always wireframe in practice (GUI.md "Shading modes"), so `brushGroupRef` above already covers
+  // Movers here too -- this is wired for interface consistency with Viewport3D, not a behavior gap.
+  const moverOutlineGroupRef = useRef<THREE.Group | null>(null)
   const containerRef = useRef<HTMLDivElement | null>(null)
 
   // Shared by the tap path (item 16: the raycast pipeline itself is shared with Viewport3D.tsx via
@@ -161,11 +164,16 @@ export function OrthoViewport({
         // deliberate delta this pane's zoom range needs and the perspective pane doesn't.
         lineThreshold: orthoLineHitThresholdUU(pose.worldUnitsPerPixel),
         meshObject: meshRef.current,
+        // Ortho panes never render the Movers:on solid-mesh overlay (perspective-only toggle).
+        moverMeshObject: null,
+        moverTriangleOwners: [],
+        moverTrianglePolyIndex: [],
         meshPickObject: meshPickRef.current,
         meshTriangleOwners,
         meshTrianglePolyIndex,
         markerObjects: markerGroupRef.current?.children ?? [],
         brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
+        moverOutlineObjects: moverOutlineGroupRef.current?.children ?? [],
         actors,
         triangleOwners,
         trianglePolyIndex,
@@ -341,6 +349,7 @@ export function OrthoViewport({
           selectedNames={selectedNames}
           mode={mode === 'wireframe' ? 'csg-all' : 'selected-only'}
           groupRef={brushGroupRef}
+          moverGroupRef={moverOutlineGroupRef}
         />
         {/* Ortho panes are always wireframe -- a mesh actor draws its own triangle-edge wireframe
             here, matching a brush's wireframe convention (GUI.md "Shading modes"), instead of the

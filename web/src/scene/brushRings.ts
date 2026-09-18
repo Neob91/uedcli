@@ -19,6 +19,11 @@ export interface BrushRing {
   csgClass: string
   verts: number[]
   bold: boolean
+  // Carried through so a consumer (BrushOutlines.tsx) can render a Mover's ring depthTest-off/
+  // high-renderOrder without a second actor lookup -- a Mover's wireframe must always composite on
+  // top, in every shading mode, regardless of what's rendered in front of it (board item
+  // `mover-wireframe-occluded-by-geometry`).
+  isMover: boolean
 }
 
 export type BrushRingMode = 'csg-all' | 'selected-only'
@@ -39,7 +44,14 @@ export function buildBrushRings(actors: SceneActor[], selectedNames: ReadonlySet
     const isSelected = selectedNames.has(actor.name)
     if (mode === 'selected-only' && !isSelected && !actor.is_mover) continue
     for (const verts of actor.brush.polys) {
-      rings.push({ actorName: actor.name, color: actor.brush.color, csgClass: actor.brush.csg_class, verts, bold: isSelected })
+      rings.push({
+        actorName: actor.name,
+        color: actor.brush.color,
+        csgClass: actor.brush.csg_class,
+        verts,
+        bold: isSelected,
+        isMover: actor.is_mover,
+      })
     }
   }
   return rings

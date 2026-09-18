@@ -95,11 +95,17 @@ function App() {
   const [selectedNames, setSelectedNames] = useState<Set<string>>(() => new Set())
   const [selectedSurfaces, setSelectedSurfaces] = useState<Set<string>>(() => new Set())
   const onSelectActor = useCallback((name: string, additive: boolean) => {
-    setSelectedNames((s) => toggleSelection(s, name, additive))
+    // deselectSole=true: re-tapping the one currently-selected actor clears it (bug report:
+    // clicking an already-selected mesh actor did nothing) -- same fix as onSelectSurface below,
+    // extended to actors. onSelectActor is the single shared path for every actor kind (mesh,
+    // point, brush, mover), so this applies uniformly, not just to mesh actors.
+    setSelectedNames((s) => toggleSelection(s, name, additive, true))
     setSelectedSurfaces(clearSelection())
   }, [])
   const onSelectSurface = useCallback((actor: string, polyIndex: number, additive: boolean) => {
-    setSelectedSurfaces((s) => toggleSelection(s, surfaceKey(actor, polyIndex), additive))
+    // deselectSole=true: re-tapping the one currently-selected poly clears it (bug report: clicking
+    // an already-selected poly did nothing).
+    setSelectedSurfaces((s) => toggleSelection(s, surfaceKey(actor, polyIndex), additive, true))
     setSelectedNames(clearSelection())
   }, [])
   // OrgPanel's own batch-select shape (Task 23): a folder-node click replaces/adds a whole actor

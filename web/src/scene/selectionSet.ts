@@ -2,11 +2,24 @@
 // the selection; Ctrl+tap TOGGLES one actor's membership; Esc is the only way to clear it entirely.
 
 /** `additive=false`: REPLACE the set with exactly `{name}` (a plain tap's semantics), regardless of
- * what was previously selected -- including a re-tap of the sole already-selected actor (a no-op
- * reselect, not a toggle-off). `additive=true`: toggle `name`'s membership in `current` (add if
- * absent, remove if present -- Ctrl+tap's "multi-selects" semantics). */
-export function toggleSelection(current: ReadonlySet<string>, name: string, additive: boolean): Set<string> {
-  if (!additive) return new Set([name])
+ * what was previously selected. `additive=true`: toggle `name`'s membership in `current` (add if
+ * absent, remove if present -- Ctrl+tap's "multi-selects" semantics).
+ *
+ * `deselectSole`: when true, a non-additive re-tap of the CURRENT sole selection member clears the
+ * set instead of replacing it with itself -- click-to-deselect semantics (bug reports: clicking an
+ * already-selected poly, then an already-selected actor, both did nothing). Both `App.tsx`'s
+ * `onSelectActor` and `onSelectSurface` pass `true`; defaults to `false` for any future caller that
+ * wants a plain replace on re-tap instead. */
+export function toggleSelection(
+  current: ReadonlySet<string>,
+  name: string,
+  additive: boolean,
+  deselectSole = false,
+): Set<string> {
+  if (!additive) {
+    if (deselectSole && current.size === 1 && current.has(name)) return new Set()
+    return new Set([name])
+  }
   const next = new Set(current)
   if (next.has(name)) next.delete(name)
   else next.add(name)

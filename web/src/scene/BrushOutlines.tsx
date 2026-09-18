@@ -19,13 +19,22 @@ import { resolveWireColor, toThreeColor } from './selectionColor'
 // The selected brush's ring draws above everything (markers are at 10) so it shows in solid shading
 // modes and through walls -- see BoldRing.
 const SELECTED_RING_RENDER_ORDER = 20
+// A Mover's (unselected) ring draws depthTest-off too, same reason -- see MergedThinWireframe's
+// `alwaysOnTop` doc. Below the selected-ring order so a selected Mover's BoldRing still wins.
+const MOVER_RING_RENDER_ORDER = 15
 
 /** Every ordinary-weight (non-selected) ring, merged into ONE `LineSegments` draw call (bug report
  * item 4 -- see `mergeThinRings`' docstring for the measured cost this replaces). Per-vertex color
  * reproduces each ring's own CSG hue; `userData.segmentOwners` lets the outer viewport's raycast
  * resolve a hit segment back to its owning actor (Viewport3D/OrthoViewport's `performTapSelect`),
- * the same role `userData.actorName` plays on a single-actor object like `BoldRing`. */
-function MergedThinWireframe({ rings }: { rings: BrushRing[] }) {
+ * the same role `userData.actorName` plays on a single-actor object like `BoldRing`.
+ *
+ * `alwaysOnTop` (board item `mover-wireframe-occluded-by-geometry`): a Mover's wireframe outline is
+ * its only visible representation in every shading mode (its solid geometry is hidden by default,
+ * `Viewport3D.tsx`'s `showMoverSolid` toggle), so it must always composite on top like the selected
+ * ring above -- `depthTest={false}` + a renderOrder over the solid mesh. Ordinary (non-Mover) thin
+ * rings keep normal depth-testing, unaffected -- this only applies to the caller's Mover-only rings. */
+function MergedThinWireframe({ rings, alwaysOnTop = false }: { rings: BrushRing[]; alwaysOnTop?: boolean }) {
   const merged = useMemo(() => mergeThinRings(rings), [rings])
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
@@ -36,8 +45,12 @@ function MergedThinWireframe({ rings }: { rings: BrushRing[] }) {
   useEffect(() => () => geometry.dispose(), [geometry])
   if (merged.segmentOwners.length === 0) return null
   return (
-    <lineSegments geometry={geometry} userData={{ segmentOwners: merged.segmentOwners }}>
-      <lineBasicMaterial vertexColors />
+    <lineSegments
+      geometry={geometry}
+      userData={{ segmentOwners: merged.segmentOwners }}
+      renderOrder={alwaysOnTop ? MOVER_RING_RENDER_ORDER : 0}
+    >
+      <lineBasicMaterial vertexColors depthTest={!alwaysOnTop} />
     </lineSegments>
   )
 }
@@ -71,8 +84,16 @@ export interface BrushOutlinesProps {
   // Exposes the rendered ring objects for the outer viewport's click-to-select raycast (bug report
   // item 6: in wireframe/ortho views, a click must only hit a brush's own outline LINES, never
   // anywhere inside its silhouette) -- mirrors Viewport3D/OrthoViewport's existing `markerGroupRef`
-  // pattern for marker sprites.
+  // pattern for marker sprites. Only wired into the raycast candidate set in wireframe mode -- see
+  // `moverGroupRef` below for the one candidate that's always wired in.
   groupRef?: MutableRefObject<THREE.Group | null>
+  // Exposes JUST the always-visible (unselected-Mover) thin-ring `LineSegments`, separately from
+  // `groupRef`'s full set -- board item `mover-not-selectable-via-wireframe-click`: a Mover's own
+  // outline must be a click target in EVERY mode, not just wireframe, since it's the only thing
+  // drawn there when the "Movers: on" solid overlay is off. Scoped to Movers only (not every brush's
+  // bold/thin ring) so this fix touches nothing about how an ordinary (non-Mover) brush is picked in
+  // non-wireframe mode -- see `tapSelect.ts`'s `TapSelectParams.moverOutlineObjects`.
+  moverGroupRef?: MutableRefObject<THREE.Group | null>
 }
 
 // `'csg-all'` mode's ring SET (every brush actor's own rings) never actually depends on
@@ -98,7 +119,7 @@ const EMPTY_SELECTION: ReadonlySet<string> = new Set()
  * own content (verts/color/actorName) doesn't depend on mode, only its inclusion/`bold` flag does --
  * so `'selected-only'`'s own ring list (already small, and already keyed on `selectedNames`) doubles
  * as the bold-overlay source for BOTH modes. */
-export function BrushOutlines({ actors, selectedNames, mode, groupRef }: BrushOutlinesProps) {
+export function BrushOutlines({ actors, selectedNames, mode, groupRef, moverGroupRef }: BrushOutlinesProps) {
   const csgAllRings = useMemo(() => buildBrushRings(actors, EMPTY_SELECTION, 'csg-all'), [actors])
   const selectedOnlyRings = useMemo(() => buildBrushRings(actors, selectedNames, 'selected-only'), [actors, selectedNames])
   const boldRings = useMemo(() => selectedOnlyRings.filter((r) => r.bold), [selectedOnlyRings])
@@ -106,17 +127,28 @@ export function BrushOutlines({ actors, selectedNames, mode, groupRef }: BrushOu
     () => (mode === 'csg-all' ? csgAllRings : selectedOnlyRings.filter((r) => !r.bold)),
     [mode, csgAllRings, selectedOnlyRings],
   )
+  // Movers always render depthTest-off (see MergedThinWireframe's `alwaysOnTop` doc) -- split out of
+  // the ordinary merged buffer so non-Mover thin rings keep normal depth-testing, unaffected. Also
+  // rendered in its OWN group (`moverGroupRef`) so the outer viewport can wire it into the raycast
+  // candidate set unconditionally, not just in wireframe mode.
+  const thinMoverRings = useMemo(() => thinRings.filter((r) => r.isMover), [thinRings])
+  const thinOtherRings = useMemo(() => thinRings.filter((r) => !r.isMover), [thinRings])
   return (
-    <group ref={groupRef}>
-      <MergedThinWireframe rings={thinRings} />
-      {boldRings.map((ring, i) => {
-        // A selected brush's ring shows its plain, undimmed WireColor -- real UED22 doesn't brighten
-        // on select at all (`DrawColor = WireColor * 1.0` when selected, `* 0.5` when not,
-        // `selectionColor.ts`'s doc comment); the visible change is the UNSELECTED thin rings being
-        // dimmed instead (`mergeThinRings`), not this one getting brighter.
-        const color = toThreeColor(resolveWireColor(ring.csgClass, ring.color))
-        return <BoldRing key={`${ring.actorName}-${i}`} verts={ring.verts} color={color} actorName={ring.actorName} />
-      })}
-    </group>
+    <>
+      <group ref={groupRef}>
+        <MergedThinWireframe rings={thinOtherRings} />
+        {boldRings.map((ring, i) => {
+          // A selected brush's ring shows its plain, undimmed WireColor -- real UED22 doesn't
+          // brighten on select at all (`DrawColor = WireColor * 1.0` when selected, `* 0.5` when
+          // not, `selectionColor.ts`'s doc comment); the visible change is the UNSELECTED thin rings
+          // being dimmed instead (`mergeThinRings`), not this one getting brighter.
+          const color = toThreeColor(resolveWireColor(ring.csgClass, ring.color))
+          return <BoldRing key={`${ring.actorName}-${i}`} verts={ring.verts} color={color} actorName={ring.actorName} />
+        })}
+      </group>
+      <group ref={moverGroupRef}>
+        <MergedThinWireframe rings={thinMoverRings} alwaysOnTop />
+      </group>
+    </>
   )
 }

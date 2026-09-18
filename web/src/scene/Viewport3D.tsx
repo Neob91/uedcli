@@ -19,7 +19,7 @@ import type { DragGestureCallbacks } from './dragGesture'
 import { useDragGesture } from './dragGesture'
 import type { FrameRequest } from './frame'
 import { bboxCenter, bboxMaxExtent } from './frame'
-import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR } from './markers'
+import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR, MARKER_RENDER_ORDER } from './markers'
 import { MeshWireframe, SelectedMeshWireframe } from './MeshWireframe'
 import { PointActorMarker } from './PointActorMarker'
 import { RadiiOverlays } from './RadiiOverlays'
@@ -184,17 +184,25 @@ export function Viewport3D({
   const touchTap = useRef<TouchTapTracker | null>(null)
   const cameraRef = useRef<THREE.Camera | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
+  // The Movers:on toggle's own solid mesh (board item `mover-polys-unselectable-in-movers-on-mode`):
+  // a separate ref from `meshRef` since it's a distinct <mesh>, only mounted when `showMoverSolid` is
+  // on and `mode !== 'wireframe'` -- see performTapSelect below.
+  const moverMeshRef = useRef<THREE.Mesh | null>(null)
   const meshPickRef = useRef<THREE.Mesh | null>(null)
   const markerGroupRef = useRef<THREE.Group | null>(null)
   // Wireframe-mode click-to-select (bug report item 6): with no solid mesh drawn, a hit must come
   // from the brush outline LINES themselves, never a bounding-box fallback -- see performTapSelect.
   const brushGroupRef = useRef<THREE.Group | null>(null)
+  // A Mover's own always-visible outline (`BrushOutlines.tsx`'s `moverGroupRef`) -- wired into
+  // performTapSelect's raycast candidates in EVERY mode, not just wireframe (board item
+  // `mover-not-selectable-via-wireframe-click`).
+  const moverOutlineGroupRef = useRef<THREE.Group | null>(null)
   // Geometry/textures/markers are built ONCE and shared across every pane via
   // SceneResourcesContext (Part 0, Tasks 1-2) -- Viewport3D no longer builds its own (Task 3;
   // camera/pointer handling/click-to-select are UNCHANGED in this task).
   const {
     bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
-    moverGeometry, moverMaterials, moverUnlitMaterials,
+    moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners, moverTrianglePolyIndex,
     meshWireframeGeometry, meshPickGeometry, meshTriangleOwners, meshTrianglePolyIndex,
     textures, markerTexture, markerActors,
   } = useSceneResourcesContext()
@@ -256,11 +264,16 @@ export function Viewport3D({
         // geometry at a roughly stable screen size.
         lineThreshold: WIREFRAME_LINE_HIT_WORLD_UNITS,
         meshObject: meshRef.current,
+        moverMeshObject: moverMeshRef.current,
+        moverTriangleOwners,
+        moverTrianglePolyIndex,
         meshPickObject: meshPickRef.current,
         meshTriangleOwners,
         meshTrianglePolyIndex,
         markerObjects: markerGroupRef.current?.children ?? [],
         brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
+        // Not gated to wireframe mode -- see `TapSelectParams.moverOutlineObjects`' doc comment.
+        moverOutlineObjects: moverOutlineGroupRef.current?.children ?? [],
         actors: scene.actors,
         triangleOwners,
         trianglePolyIndex,
@@ -269,7 +282,10 @@ export function Viewport3D({
       else if (action.kind === 'select-surface') onSelectSurface(action.actor, action.polyIndex, action.additive)
       else if (action.kind === 'deselect') onDeselect()
     },
-    [scene.actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode],
+    [
+      scene.actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex,
+      moverTriangleOwners, moverTrianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode,
+    ],
   )
 
   // Mouse-only pointer-lock/capture/tap-vs-drag plumbing, shared with ortho panes (Part 0, Task 4).
@@ -402,9 +418,13 @@ export function Viewport3D({
         {/* Movers: wireframe-outline-only by default in every mode (GUI.md "Movers") -- their solid
             geometry is split OUT of `bufferGeometry` above (SceneResourcesContext) and only drawn
             here when the "Movers: on" toggle is active, ADDITIONALLY on top of the outline (never
-            replacing it -- `BrushOutlines` below still draws every Mover's ring unconditionally). */}
+            replacing it -- `BrushOutlines` below still draws every Mover's ring unconditionally).
+            `ref={moverMeshRef}` makes it a real click-to-select target (board item
+            `mover-polys-unselectable-in-movers-on-mode`) -- without it a click here fell through to
+            whatever solid geometry happened to sit behind the Mover, since this mesh wasn't part of
+            `performTapSelect`'s raycast candidates at all. */}
         {mode !== 'wireframe' && showMoverSolid && (
-          <mesh geometry={moverGeometry} material={activeMoverMaterials} />
+          <mesh ref={moverMeshRef} geometry={moverGeometry} material={activeMoverMaterials} />
         )}
         {/* A selected WHOLE BRUSH is shown as a selected ACTOR (its bold, brightened outline ring +
             SelectionMarkers' vertex/pivot markers, both drawn below in every mode), NOT by lighting
@@ -443,6 +463,8 @@ export function Viewport3D({
             // `depthTest={mode !== 'wireframe'}` (owner ruling): a marker is OCCLUDED behind geometry
             // in the solid shading modes (a torch icon behind a wall is hidden, UED22 parity), but in
             // wireframe mode -- where there's no solid mesh to occlude it -- it always shows.
+            // `renderOrder={MARKER_RENDER_ORDER}` (see its doc comment above): draws after a
+            // coincident-depth surface highlight regardless of the transparent-sort tiebreak.
             const spriteTex = actor.sprite ? textures.sprite.get(actor.sprite.tex_index) : undefined
             const isSelected = selectedNames.has(actor.name)
             if (actor.sprite && spriteTex) {
@@ -453,6 +475,7 @@ export function Viewport3D({
                   width={actor.sprite.width}
                   height={actor.sprite.height}
                   userData={{ actorName: actor.name }}
+                  renderOrder={MARKER_RENDER_ORDER}
                 >
                   <spriteMaterial
                     map={spriteTex}
@@ -465,7 +488,14 @@ export function Viewport3D({
             }
             if (!markerTexture) return null
             return (
-              <PointActorMarker key={actor.name} position={actor.location} width={DEFAULT_MARKER_FOOTPRINT_UU} height={DEFAULT_MARKER_FOOTPRINT_UU} userData={{ actorName: actor.name }}>
+              <PointActorMarker
+                key={actor.name}
+                position={actor.location}
+                width={DEFAULT_MARKER_FOOTPRINT_UU}
+                height={DEFAULT_MARKER_FOOTPRINT_UU}
+                userData={{ actorName: actor.name }}
+                renderOrder={MARKER_RENDER_ORDER}
+              >
                 <spriteMaterial
                   map={markerTexture}
                   color={isSelected ? MARKER_COLOR_THREE.clone().multiply(SELECTED_SPRITE_TINT) : MARKER_COLOR_THREE}
@@ -486,6 +516,7 @@ export function Viewport3D({
           selectedNames={selectedNames}
           mode={mode === 'wireframe' ? 'csg-all' : 'selected-only'}
           groupRef={brushGroupRef}
+          moverGroupRef={moverOutlineGroupRef}
         />
         {/* A mesh actor (never a brush -- no CSG ring above) renders its own triangle-edge wireframe
             here instead, matching a brush's wireframe convention in this mode (GUI.md "Shading
