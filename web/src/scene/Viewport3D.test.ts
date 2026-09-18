@@ -1,9 +1,51 @@
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 
 import { cameraBasis } from './camera'
 import type { CameraPose } from './camera'
 import { applyCameraPose, WIREFRAME_LINE_HIT_WORLD_UNITS } from './viewportRender'
+
+// This repo has no Canvas-in-test pattern (see `QuadLayout.test.tsx`'s own comment) -- Viewport3D
+// owns a real `<Canvas>` and can't be rendered here the way `SelectionHighlight.test.tsx` renders
+// `SurfaceSelectionHighlight` directly. `SelectionHighlight.test.tsx` already proves the component
+// itself is geometry-agnostic (any owner/polyIndex arrays highlight correctly); what's specific to
+// board item `mover-poly-select-in-movers-on-mode-not` is that Viewport3D actually WIRES a second
+// instance to the Movers:on solid mesh's own arrays, gated the same as that mesh. Pinned as a
+// source-text assertion (`toolbarLayout.test.ts`'s established pattern for this kind of gap).
+const VIEWPORT3D_SOURCE = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'Viewport3D.tsx'), 'utf8')
+
+describe('Viewport3D -- mover-poly selection highlight (mover-poly-select-in-movers-on-mode-not)', () => {
+  it('wires a SECOND SurfaceSelectionHighlight at the Movers:on solid mesh\'s own geometry/owner arrays', () => {
+    // Two SurfaceSelectionHighlight instances: one on the world mesh, one on the mover mesh.
+    const count = (VIEWPORT3D_SOURCE.match(/<SurfaceSelectionHighlight/g) ?? []).length
+    expect(count).toBe(2)
+    expect(VIEWPORT3D_SOURCE).toMatch(
+      /<SurfaceSelectionHighlight\s+bufferGeometry=\{moverGeometry\}\s+triangleOwners=\{moverTriangleOwners\}\s+trianglePolyIndex=\{moverTrianglePolyIndex\}/,
+    )
+  })
+
+  it('gates the mover highlight identically to the mover solid mesh itself (both `showMoverSolid`)', () => {
+    // The mover mesh and its highlight must share the exact same JSX gate, or the highlight can
+    // exist (or not) independent of the geometry it's supposed to overlay.
+    const moverMeshGate = /\{mode !== 'wireframe' && showMoverSolid && \(\s*<mesh ref=\{moverMeshRef\}/
+    const moverHighlightGate =
+      /\{mode !== 'wireframe' && showMoverSolid && \(\s*<SurfaceSelectionHighlight\s+bufferGeometry=\{moverGeometry\}/
+    expect(VIEWPORT3D_SOURCE).toMatch(moverMeshGate)
+    expect(VIEWPORT3D_SOURCE).toMatch(moverHighlightGate)
+  })
+
+  it('the mover highlight uses the mover mesh\'s own materials, not the world mesh\'s', () => {
+    const moverHighlightBlock = /<SurfaceSelectionHighlight\s+bufferGeometry=\{moverGeometry\}[\s\S]*?\/>/.exec(
+      VIEWPORT3D_SOURCE,
+    )?.[0]
+    expect(moverHighlightBlock).toBeDefined()
+    expect(moverHighlightBlock).toContain('materials={activeMoverMaterials}')
+  })
+})
 
 // Widened hit-test tolerance (owner report, live testing: brush-outline selection in wireframe mode
 // needed near-pixel-exact clicks) -- pins the value so a future edit can't silently narrow it back.
