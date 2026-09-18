@@ -74,6 +74,8 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | `C_ActorArrow` exact RGB | The radii overlay's real color value | ✅ closed, implemented | 📖 source (`Default.ini`, v200 shipped default) — see Findings below |
 | Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed, implemented | 📖 source-only, GUI-only scope (owner ruling) — see Findings below |
 | UED22 line widths | What line/wire thickness does UED22 use for wireframe/selection rendering? | ✅ closed — no bug | ✅ source-confirmed: no width parameter exists in the render-interface API UED22 draws through; this codebase's default line width is already correct |
+| Pivot-cross multi-select rendering | With 2+ brushes selected, does our own pivot cross render once per brush? | ✅ closed — no bug | own-code, 🔬 live (real headless-Chromium multi-select + screenshots) — see Findings below |
+| Pivot-cross visibility toggle | Does UED22 have a manual way to toggle the pivot marker's visibility on/off? | ✅ closed — no toggle exists, none implemented | 📖 source (`Editor/Src/UnEdCam.cpp`) — see Findings below |
 
 Legend: ⬜ open (not started) · 🔶 investigating · ✅ closed (bar met, live-verified).
 
@@ -386,6 +388,61 @@ unselected default noticeably dims across a whole level's wireframe. Intersect/D
 still fall back to the server's own (tuned, non-faithful) color -- this codebase doesn't yet
 distinguish them from Add server-side, a separate already-tracked gap
 (`gui-csg-brush-coloring-never-distinguishes`), not expanded into here.
+
+### Pivot-cross multi-select rendering + visibility toggle (closed 2026-09-18)
+
+Board item `brush-pivot-cross-multiselect-and-toggle`, two questions.
+
+**Part 1 — does our pivot cross render once per selected brush under multi-select? Confirmed YES,
+already correct, no bug.** `SelectionMarkers.tsx`'s `<PivotMarker>` sits inside the `.map()` over
+every entry of `selectedBrushes`, unconditionally — only the separate local-origin dot is gated to
+one "primary" actor (deliberately, per its own doc comment). Live-verified with a real headless-
+Chromium session against `showcase_bar` (React-fiber `onSelectActor` calls driving real selection
+state, then real screenshots — not a code read alone): selecting 3 brushes (`Brush1`/`Brush6`/
+`Brush7`) shows 3 distinct red crosses at 3 distinct world positions; the SIDE ortho pane alone shows
+two of them side by side, each centered on its own brush's own selection outline. The owner's hunch
+("it does NOT render per-brush currently") did not reproduce. No code change.
+
+**Part 2 — does UED22 have a manual visibility toggle for this marker? Confirmed NO — none
+implemented.** 📖 source-only (`fgsfdsfgs/UE1`, `Source/Editor/Src/UnEdCam.cpp`). Real UED22's own
+pivot marker is a different mechanism entirely: ONE global crosshair (`GPivotLocation`/
+`GSnappedLocation`), not one per selected actor, drawn in the viewport `Draw()` function's default
+case:
+```cpp
+// Show pivot.
+if( (Viewport->Actor->ShowFlags & SHOW_Actors) && GPivotShown ) {
+    ... Draw2DPoint(...) x3 (a 2px center dot + a vertical + a horizontal stroke, an 8px "+"),
+    color C_BrushWire ...
+}
+```
+`GPivotShown` is not a purpose-built visibility toggle — it's a derived boolean, recomputed every
+time selection changes (`NoteSelectionChange` → `SetPivot`/`ResetPivot`):
+`GPivotShown = SnapCount>0 || Count>1` (also true mid grid-snap-drag). Concretely, `SetPivot`'s own
+`Count==1` branch means **selecting exactly ONE actor leaves `GPivotShown` false** — UED22's real
+cross is invisible for a lone selection and only appears once 2+ actors are selected or a snap-drag
+is live. The only gate that exists at all is `ShowFlags & SHOW_Actors`, the same bit that hides every
+actor (`rendering.md`'s own ShowFlags table has no pivot-specific bit).
+
+One real console command DOES call `ResetPivot()` directly: `ACTOR RESET LOCATION`/`ACTOR RESET ALL`
+(`UnEdSrv.cpp`, already a documented real verb, `dev/docs/unrealed/commands.md`) — found on review, not
+in the first pass. This is not a purpose-built visibility toggle, though: both zero every selected
+actor's `Location`/`PrePivot` too, so hiding the pivot is a side effect of a destructive transform
+reset, not a way to hide-then-restore it. The conclusion is unchanged: no dedicated on/off toggle
+exists.
+
+Per this item's own instruction to confirm before implementing a guessed mechanism: since no manual
+toggle exists in UED22 to reproduce, **no toggle button was added** — inventing one matching the
+Grid/Radii/Movers button convention would have no real UED22 basis.
+
+Two smaller facts surfaced along the way, worth recording but not acted on (out of this item's two
+explicit questions):
+- Our own `PIVOT_RED` (255,63,63) already matches UED22's real `C_BrushWire` (also (255,63,63),
+  `Default.ini`) — the exact color UED22 draws its own pivot cross with. Coincidence or not, no
+  change needed.
+- UED22's real cross is invisible for a single selected actor and only appears on multi-select/drag —
+  the OPPOSITE of what this GUI does today (always visible per selected brush, including a lone one).
+  A real, sourced fidelity gap, but changing long-standing shipped behavior wasn't this item's ask —
+  filed separately: `dev/docs/board/inbox/pivot-cross-shown-for-single-select-ued22-shows/`.
 
 ## Testing
 
