@@ -4,6 +4,7 @@ import * as THREE from 'three'
 
 import { SurfaceSelectionHighlight, ActorSelectionHighlight } from './SelectionHighlight'
 import { surfaceKey } from './selectionSet'
+import { SELECTED_SPRITE_TINT } from './selectionColor'
 
 // Board `poly-highlight-not-visible-for-brush116-0`: selecting `Brush116:0`/`Brush111:0` (both real
 // polys, verified non-degenerate and correctly matched by `selectedTriangles.ts`'s own tests) showed
@@ -39,13 +40,12 @@ function buildOverlayGeometry(): { geo: THREE.BufferGeometry; materials: THREE.M
 // Board `poly-highlight-not-visible-for-brush116-0`, reopened: the real repro was `Brush100:0`/
 // `Brush106:0`/`Brush111:0` -- masked, but every texel alpha=255 (a fully-opaque "Red Star" sign
 // texture, confirmed live via `/api/level/.../atlas`). Root cause (isolated in a standalone three.js
-// harness, `_scratch/browser_verify/harness/`, not speculation): the surface-pick overlay's material
-// `opacity` is fixed at 0.25 (`HIGHLIGHT_OPACITY`), and WebGL's alphaTest discards on
+// harness, `_scratch/browser_verify/harness/`, not speculation): WebGL's alphaTest discards on
 // `material.opacity * texel.alpha` (`map_fragment` multiplies both channels), not the texel alpha
-// alone -- so `0.25 * 1.0 = 0.25` always failed the base's own `alphaTest` (0.5), discarding every
-// fragment regardless of the real texture. Fixed by scaling the overlay's `alphaTest` by its own
-// effective opacity (1 for the opaque actor-tint variant, `opacity` for the additive surface-pick
-// variant) so the discard decision reduces back to the base's own unscaled `texel.a < alphaTest`.
+// alone -- so the old 0.25-opacity additive overlay could never reach the base's own 0.5 cutoff and
+// discarded every fragment regardless of the real texture. Both variants now draw fully opaque
+// (the surface one stipples instead of blending), so the base cutoff is used unscaled and the
+// failure mode is gone at its source rather than compensated for.
 function buildMaskedGeometry(): { geo: THREE.BufferGeometry; map: THREE.Texture; materials: THREE.Material[] } {
   const positions = new Float32Array([
     0, 0, 0, 1, 0, 0, 1, 1, 0, // triangle 1
@@ -60,8 +60,8 @@ function buildMaskedGeometry(): { geo: THREE.BufferGeometry; map: THREE.Texture;
   return { geo, map, materials }
 }
 
-describe('SelectionHighlight masked-group alphaTest scaling', () => {
-  it('SurfaceSelectionHighlight (additive, opacity 0.25) scales alphaTest by its own opacity', async () => {
+describe('SelectionHighlight masked-group alphaTest', () => {
+  it('SurfaceSelectionHighlight keeps the base cutoff unscaled (it draws opaque, not at 0.25)', async () => {
     const { geo, map, materials } = buildMaskedGeometry()
     const renderer = await ReactThreeTestRenderer.create(
       <SurfaceSelectionHighlight
@@ -74,9 +74,7 @@ describe('SelectionHighlight masked-group alphaTest scaling', () => {
     )
     const mesh = renderer.scene.children[0].instance as THREE.Mesh
     const mat = mesh.material as THREE.MeshBasicMaterial
-    // 0.5 (base alphaTest) * 0.25 (this overlay's own opacity) -- NOT the base's raw 0.5, which
-    // would discard every fragment since diffuseColor.a tops out at material.opacity * texel.a.
-    expect(mat.alphaTest).toBeCloseTo(0.125)
+    expect(mat.alphaTest).toBeCloseTo(0.5)
     expect(mat.map).toBe(map)
   })
 
@@ -95,6 +93,77 @@ describe('SelectionHighlight masked-group alphaTest scaling', () => {
     // The opaque variant's own material never sets `opacity` (defaults to 1), so its scale factor
     // is 1 -- matches the base material's alphaTest exactly, same as before this fix.
     expect(mat.alphaTest).toBeCloseTo(0.5)
+  })
+})
+
+// GUI-PARITY.md "Surface selection highlight": UED22's own selected-surface rendering, read out of
+// this project's `uned/UED22/softdrv.dll` (`USoftwareRenderDevice::DrawComplexSurface`, RVA
+// `0xc3a0`; the gate + color literals at VA `0x1000e644`-`0x1000e666`, the stipple writer at
+// `0x1000e66a`-`0x1000e870`). Pins the three things that finding fixed -- the color, the absence of
+// any blend, and the screen-space dot lattice -- so none silently reverts to the invented
+// additive-white wash this file used to draw.
+describe('SelectionHighlight reproduces UED22 surface selection', () => {
+  it('paints the exact RGB(0,127,255) softdrv literal, opaque and unblended', async () => {
+    const { geo, materials } = buildOverlayGeometry()
+    const renderer = await ReactThreeTestRenderer.create(
+      <SurfaceSelectionHighlight
+        bufferGeometry={geo}
+        triangleOwners={['Brush116', 'Brush116']}
+        trianglePolyIndex={[0, 0]}
+        selectedSurfaces={new Set([surfaceKey('Brush116', 0)])}
+        materials={materials}
+      />,
+    )
+    const mat = (renderer.scene.children[0].instance as THREE.Mesh).material as THREE.MeshBasicMaterial
+    expect(mat.color.getHex()).toBe(0x007fff)
+    expect(mat.transparent).toBe(false)
+    expect(mat.opacity).toBe(1)
+    expect(mat.blending).toBe(THREE.NormalBlending)
+    expect(mat.depthWrite).toBe(false) // a pure overlay of scattered dots
+  })
+
+  it('installs the stipple shader: 1-in-2 rows, 1-in-8 columns, 4px alternating phase', async () => {
+    const { geo, materials } = buildOverlayGeometry()
+    const renderer = await ReactThreeTestRenderer.create(
+      <SurfaceSelectionHighlight
+        bufferGeometry={geo}
+        triangleOwners={['Brush116', 'Brush116']}
+        trianglePolyIndex={[0, 0]}
+        selectedSurfaces={new Set([surfaceKey('Brush116', 0)])}
+        materials={materials}
+      />,
+    )
+    const mat = (renderer.scene.children[0].instance as THREE.Mesh).material as THREE.MeshBasicMaterial
+    // Run the real `onBeforeCompile` the renderer would and inspect the GLSL it produces -- there's
+    // no WebGL context in this suite, so this is the closest checkable proxy for "the dots get
+    // drawn on UED22's lattice."
+    const shader = { uniforms: {} as Record<string, { value: unknown }>, fragmentShader: THREE.ShaderLib.basic.fragmentShader }
+    mat.onBeforeCompile(shader as never, null as never)
+    expect(shader.uniforms.uStipplePixelRatio).toBeDefined()
+    expect(shader.fragmentShader).toContain('mod( sp.y, 2.0 ) > 0.5 ) discard')
+    expect(shader.fragmentShader).toContain('mod( sp.x + phase, 8.0 ) > 0.5 ) discard')
+    expect(shader.fragmentShader).toContain('mod( floor( sp.y * 0.5 ), 2.0 ) * 4.0')
+    // The map (when a masked group supplies one) only alpha-clips; the dot's own color is flat.
+    expect(shader.fragmentShader).toContain('diffuseColor = vec4( diffuse, 1.0 )')
+  })
+
+  it('leaves the actor-tint variant alone (no stipple, still the multiplicative tint)', async () => {
+    const { geo, materials } = buildOverlayGeometry()
+    const renderer = await ReactThreeTestRenderer.create(
+      <ActorSelectionHighlight
+        bufferGeometry={geo}
+        triangleOwners={['Hooker0', 'Hooker0']}
+        selectedActorNames={new Set(['Hooker0'])}
+        materials={materials}
+      />,
+    )
+    const mat = (renderer.scene.children[0].instance as THREE.Mesh).material as THREE.MeshBasicMaterial
+    expect(mat.color.getHex()).toBe(SELECTED_SPRITE_TINT.getHex())
+    expect(mat.depthWrite).toBe(true)
+    // three's default no-op `onBeforeCompile` has an empty body; ours injects the lattice.
+    const shader = { uniforms: {} as Record<string, { value: unknown }>, fragmentShader: THREE.ShaderLib.basic.fragmentShader }
+    mat.onBeforeCompile(shader as never, null as never)
+    expect(shader.fragmentShader).not.toContain('uStipplePixelRatio')
   })
 })
 
