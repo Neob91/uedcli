@@ -68,6 +68,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Topic | Question | State | Evidence / board item |
 |---|---|---|---|
 | Selection highlight rendering | What color/blend/technique does UED22 use to show a selected sprite/mesh actor? | ✅ closed, implemented | ✅ binary (`render.dll` disassembly), see Findings below |
+| Surface selection highlight | What color/blend/technique does UED22 use to show a selected SURFACE (BSP poly)? | ✅ closed, implemented | ✅ binary (`softdrv.dll`/`Editor.dll`/`Engine.dll` disassembly, our own `uned/UED22/`) — see Findings below |
 | Click/hit-detection algorithm | How does UED22 resolve a click to a surface/actor/brush when candidates overlap? | 🔶 investigating | `dev/docs/board/inbox/gui-click-detection-algorithm-not-re-d-against/` — see Findings below |
 | Sprite alpha picking | Does UED22's sprite click hit-test respect the icon's transparent padding? | ✅ closed, implemented | 📖 source (`SoftDrv/Src/{Hit,DrawTile}.cpp`) + 🔬 live (real clicks, A/B against the unfixed code) — see Findings below |
 | Vertex handle screen size | Does UED22 draw vertex/local-origin handles at a constant screen size, or a fixed world size that scales with zoom? | ✅ closed, implemented | 📖 source (`Editor/Src/UnEdRend.cpp`) + 🔬 live (real zoom/dolly sweeps, A/B against the unfixed code) — see Findings below |
@@ -83,9 +84,9 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | `C_ActorArrow` exact RGB | The radii overlay's real color value | ✅ closed, implemented | 📖 source (`Default.ini`, v200 shipped default) — see Findings below |
 | Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed, implemented | 📖 source-only, GUI-only scope (owner ruling) — see Findings below |
 | UED22 line widths | What line/wire thickness does UED22 use for wireframe/selection rendering? | ✅ closed — no bug | ✅ source-confirmed: no width parameter exists in the render-interface API UED22 draws through; this codebase's default line width is already correct |
-| Pivot-cross multi-select rendering | With 2+ brushes selected, does our own pivot cross render once per brush? | ✅ closed — no bug | own-code, 🔬 live (real headless-Chromium multi-select + screenshots) — see Findings below |
-| Pivot-cross visibility toggle | Does UED22 have a manual way to toggle the pivot marker's visibility on/off? | ✅ closed — no toggle exists; cross is hidden for a lone non-snapping selection | ✅ binary (`Editor.dll` disassembly, our own `uned/UED22/`) — see Findings below |
-| Pivot-cross anchor under multi-select | Which selected actor's location does UED22's one global cross sit on? | ✅ closed — the actor that was most recently the SOLE selection (= first-clicked, in a click-built multi-select) | ✅ binary (`Editor.dll` disassembly, our own `uned/UED22/`) + 🔬 owner's own live test — see Findings below |
+| Pivot-cross multi-select rendering | With 2+ brushes selected, does our own pivot cross render once per brush? | ✅ closed, fixed — it did, and UED22 draws exactly ONE | ✅ binary + 🔬 live UED22 capture — see Findings Part 4 |
+| Pivot-cross visibility toggle | Does UED22 have a manual way to toggle the pivot marker's visibility on/off? | ✅ closed — no toggle exists; visibility is `(SnapCount > 0) \|\| (Count > 1)`, latched | ✅ binary (`Editor.dll` disassembly, our own `uned/UED22/`) + 🔬 live capture — see Findings Part 2 + Part 4 |
+| Pivot-cross anchor under multi-select | Which selected actor's location does UED22's one global cross sit on? | ✅ closed — the actor that was most recently the SOLE selection (= first-clicked, in a click-built multi-select) | ✅ binary (`Editor.dll` disassembly, our own `uned/UED22/`) + 🔬 live capture + owner's own live test — see Findings Part 3 + Part 4 |
 
 Legend: ⬜ open (not started) · 🔶 investigating · ✅ closed (bar met, live-verified).
 
@@ -132,6 +133,150 @@ needed). Three distinct techniques, not one shared overlay:
 
 Not yet folded into `dev/docs/unrealed/rendering.md` as a permanent verified fact — that edit needs
 the owner's yes per `CLAUDE.md`; this section is the campaign's own working record until then.
+
+### Surface selection highlight — a flat blue screen-space stipple (closed 2026-09-18)
+
+Board item `surface-selection-highlight-color-disassemble`. Owner's ask: "disassemble UED22 and check
+the surface selection color. Replicate it." A SELECTED SURFACE (a BSP poly/brush face picked with a
+plain tap in a textured pane) is a different code path from the sprite/mesh actor tinting the
+"Selection highlight rendering" section above already covers, and had never been RE'd — our own
+`SelectionHighlight.tsx` drew an invented additive-white overlay at 0.25 opacity, with no citation
+for any part of it.
+
+**✅ Binary-confirmed, from our own `uned/UED22/` binaries only — no third-party source anywhere in
+this pass.** The right binary is `softdrv.dll`, not `Editor.dll` or `render.dll`: `uned/UED22/
+UnrealEd.ini` pins all four viewports to `Device=SoftDrv.SoftwareRenderDevice`, so
+`USoftwareRenderDevice::DrawComplexSurface` (export `?DrawComplexSurface@USoftwareRenderDevice@@…`,
+RVA `0xc3a0`) is THE draw call every BSP surface goes through. Its tail, at VA `0x1000e644`:
+
+```
+1000e644:  mov   eax, ds:0x10030114          ; IAT slot -> Core.dll `?GIsEditor@@3HA`
+1000e649:  cmp   dword ptr [eax], 0
+1000e64c:  je    0x1000e875                  ; editor only; the game never draws this
+1000e652:  test  dword ptr [esi], 0x2000000  ; esi = &Surface (2nd arg); [esi] = PolyFlags
+1000e658:  je    0x1000e875                  ; PF_Selected only
+1000e65e:  mov   byte ptr [ebp+0xc], 0x00
+1000e662:  mov   byte ptr [ebp+0xd], 0x7f
+1000e666:  mov   byte ptr [ebp+0xe], 0xff
+```
+
+- `[esi]` really is `PolyFlags`: the same function tests `[esi]` against other `PF_` masks much
+  earlier (`0x1000c48f`, `0x1000d435`), and `esi` is loaded from `[ebp+0xc]` (the `FSurfaceInfo&`
+  second argument) on both paths that reach this tail.
+- `PF_Selected = 0x02000000`: `Editor.dll`'s `polySelectReverse` (RVA `0x4c2a0`) does
+  `xor eax, 0x2000000` directly on a surf's flags at `0x1004c2fb`, and `polySelectAll` (RVA
+  `0x4ba50`) passes the same bit as the set-mask to `polySetAndClearPolyFlags`.
+- The channel order is not assumed either, and it matters (byte-swapped it would read orange). The
+  decisive read is the **32bpp path in this same function**: `0x1000e7a6`-`0x1000e7bf` explicitly
+  repacks the three bytes as `byte0<<16 | byte1<<8 | byte2` = `0x00007fff` before
+  `mov dword ptr [ecx], esi`, and a Win32 32bpp surface is `0x00RRGGBB` — so byte0 is R (0) and
+  byte2 is B (255). Corroborating but NOT decisive on their own: the 16-bit packer at
+  `0x1000e6aa`-`0x1000e6e4` (byte0 reaches the word's top 5 bits, which is "R" only if the surface
+  is RGB565 rather than BGR565), and `Engine.dll`'s `??0FColor@@QAE@ABVFPlane@@Z` (RVA `0xf32e0`),
+  which writes `P.X -> [ecx+0]` (that is "R" only by FPlane convention). Independent corroboration
+  from the other render devices, which are not used here but encode the same intent: `OpenGLDrv.dll`
+  (`0x10004066`) writes `00 00 7f 7f` and `D3D9Drv.dll` uses `0x7f00007f` — both a half-strength
+  blue, and both nonsense under the byte-swapped reading.
+
+**So the colour is RGB(0, 127, 255) — a vivid azure — and there is NO blend at all.** The block at
+`0x1000e66a`-`0x1000e870` re-walks the surface's own `FSpanBuffer` and does a raw store of that
+value into the framebuffer (`mov word ptr [ecx], si` at 16bpp, `0x1000e755`; `mov dword ptr [ecx],
+esi` at 32bpp, `0x1000e825`) on a sparse lattice:
+
+- rows start at `(SpanBuffer->StartY + 1) & ~1` and step `+= 2` — every second scanline;
+- columns are `x = align_up(span->Start + phase, 8) - phase`, stepping `+= 8` — every eighth pixel,
+  with `phase = (y & 2) * 2`, so the phase alternates 0 / 4 on successive drawn rows.
+
+One pixel in sixteen is overwritten with the flat colour, anchored to absolute screen coordinates
+(the dots do not slide with the surface as the camera moves). Both depth paths (16bpp and 32bpp) do
+the same thing. **Under the configured device this is the only selected-surface treatment there is:**
+`softdrv.dll` tests the bit in exactly this one place, and `Editor.dll`'s own draw entry points
+(`Draw`, `DrawLevelBrush`, `DrawFPoly`, `DrawWireBackground`) contain no `PF_Selected` test at all —
+its 57 uses of the constant are all in `Exec`/`polySelect*`/`polyTex*`/`MouseDelta`/
+`FEditorHitObserver::Click`/`FixBrushLinks`/`bspBuildBounds`. The scoping matters: `OpenGLDrv.dll`
+and `D3D9Drv.dll` each implement their OWN, different treatment (a ~50% blue blend, no stipple), so
+"UED22 stipples a selected surface" is true of the software renderer the editor actually runs, not
+of the engine in general.
+
+*(Adjacent, deliberately not folded in: `render.dll` has a second `GIsEditor && PF_Selected` gate, at
+`0x10007ece`, which rescales a computed lighting colour to `c*0.5 + (0.5,0.5,0.5)`. Its containing
+function (`0x10007be0`) is a lighting handler — same prologue/context shape as the others in its
+family — but where it is called from is UNTRACED: its only reference is a pointer-table slot at
+`0x10034cb4`, and `URender::GlobalLighting` indexes the adjacent table at `0x10034c70` under a hard
+`cmp esi,0xa / jae skip`, so that slot is out of its reach. Calling it "the Gouraud mesh path, not
+the surface path" would be inference, not evidence — what IS established is that a BSP surface's own
+draw call is `DrawComplexSurface`, which does not go through it. Noted so a later pass doesn't
+rediscover the gate and mistake it for this topic.)*
+
+**Implemented** in `web/src/scene/SelectionHighlight.tsx`: the surface overlay is now an opaque,
+unblended flat `0x007fff` draw whose fragment shader discards everything off that lattice
+(`stippleBeforeCompile`, injected into the standard `MeshBasicMaterial` program so the existing
+masked-group `map`/`alphaTest` clipping still works — the map only clips, the dot's colour is
+restored flat after the alpha test). One documented departure: the lattice is evaluated in CSS
+pixels (`gl_FragCoord` divided by the renderer's pixel ratio), not raw device pixels. UED22's
+framebuffer pixel *is* its screen pixel; on a hi-DPI canvas a device pixel is a supersample of a
+screen pixel, so dividing by the DPR reproduces the editor's on-screen dot density instead of
+shrinking it. The actor-tint variant is untouched.
+
+🔬 **Live-verified with real rendered pixels** (headless Chromium, real WebGL 2 via SwiftShader,
+`showcase_bar` rebuilt so the textured mesh exists, perspective pane in Fullbright, real
+`page.mouse.click` on a floor surface then a brick wall). Measured by diffing the pane's exact WebGL
+drawing buffer before and after selection — `page.screenshot()` is useless for the colour half here,
+because this app's canvases land at fractional CSS offsets (`y=521.296875`, CSS width 540.5 over a
+540px buffer) and the compositor resamples every one-pixel dot across two output pixels at ~50%
+each; an init script forcing `preserveDrawingBuffer` and reading `canvas.toDataURL()` gets the
+untouched buffer. Results, floor click / wall click:
+
+- 2627 of 2640 and 642 of 657 changed pixels are **exactly RGB(0,127,255)** (99.5% / 97.7%; the
+  remainder are dots landing on an edge shared with another overlay).
+- every touched row has the same `y % 2`, and the gap between touched rows is **2** on all 98 / 67
+  row transitions — no exceptions.
+- gaps between dots within a row are **8** for 2429 of 2481 and 567 of 574 (the wider gaps are where
+  the surface is interrupted by an occluder).
+- the phase alternates exactly as `(y & 2) * 2`: first-dot `x % 8` is **0** on one drawn-row parity
+  (50 / 34 rows) and **4** on the other (49 / 34 rows), with no mixing.
+
+An independent reviewer reproduced all of that and added four checks the first pass had not run:
+deselecting leaves **0** pixels differing from the unselected baseline (the highlight goes away
+completely); toggling the shading mode while a surface is selected leaves the result
+pixel-identical; selecting two surfaces at once gives exactly the sum of their individual dot counts
+with both phases still clean (which also settles empirically that three.js's shared shader program
+still binds the pixel-ratio uniform per material); and at DPR 2 the lattice comes out as 2×2
+device-pixel dots every 4 rows / 16 columns — i.e. exactly the CSS-pixel spacing the departure above
+describes, and proof the uniform is bound at all (an unbound one would be 0 and paint the poly
+solid). A 26-point grid scan stippled 10 distinct surfaces and selected nothing on empty space.
+
+A MASKED surface is verified live too, on `Brush1300:4` — `showcase_bar`'s hanging "OUT OF ORDER"
+sign, whose texture has 47% of its texels below the 0.5 alpha cutoff. It stipples (124 changed
+pixels, **121 exactly RGB(0,127,255)**, the other 3 MSAA edge blends), so the old "a masked group
+discards every fragment" failure is gone; the dots are CLIPPED rather than filling the quad
+(lattice-cell occupancy **0.50** inside their own bounding box, against **0.86 / 0.88** on two
+unmasked control surfaces in the same session — 0.50 against the texture's 53% opaque fraction); and
+they are the FLAT colour, not the texture modulated by it (one single exact value across 97.6% of
+the change; a modulation would give a spread). Where the texture is opaque the lattice stays exact
+(row gaps 2 ×21, in-row gaps 8 ×94, phase clean); the only exceptions are the clipping signature —
+single row gaps of 4 and 6, in-row gaps of 24 and 40, i.e. runs where a cut-out swallowed whole
+lattice cells. Visually the dots sit on the plaque and along its two one-pixel hanging cords with
+the transparent field between them completely undotted. That selection was driven through the app's
+own `onSelectSurface` rather than a click (the sign is unreachable by cursor from the framed view),
+so it exercises the masked RENDER path; the pick path is covered by the click-driven runs above.
+
+One known behaviour change, low severity and left as is: the scene's poly list also contains
+actor-owned polys, so a surface pick on a near-invisible NPC "glasses" slot now gets opaque blue
+dots where it previously got a faint wash. That follows from UED22's own mechanism rather than
+departing from it.
+
+Harness (disassembly helpers + the browser pixel probe): the board item itself,
+`dev/docs/board/done/surface-selection-highlight-color-disassemble/` (`harness-*.py`) — kept there
+rather than under `dev/docs/spikes/`, which needs the owner's yes per edit while `board/` does not.
+
+**A live UED22 screenshot of the same thing was attempted and could not run in this session** — the
+host's docker daemon is rootless and shares no filesystem with the session, so every bind mount
+`ensure_editor` needs (`/workspace/…`, `/home/agent/…`, even `/tmp`) is refused, and the editor
+container cannot start at all. The finding is disassembly-tier for UED22's side (the same tier the
+already-closed "Selection highlight rendering" topic sits at) plus live-pixel-tier for our own
+reproduction. Confirming the dots visually in a real UED22 render remains available to a session
+whose daemon can mount the repo.
 
 ### Click/hit-detection algorithm — screen-space tie-break, not depth-nearest (investigating, 2026-09-17)
 
@@ -411,7 +556,9 @@ Chromium session against `showcase_bar` (React-fiber `onSelectActor` calls drivi
 state, then real screenshots — not a code read alone): selecting 3 brushes (`Brush1`/`Brush6`/
 `Brush7`) shows 3 distinct red crosses at 3 distinct world positions; the SIDE ortho pane alone shows
 two of them side by side, each centered on its own brush's own selection outline. The owner's hunch
-("it does NOT render per-brush currently") did not reproduce. No code change.
+("it does NOT render per-brush currently") did not reproduce. No code change. *(Superseded by Part 4
+below: rendering one cross per brush was correctly OBSERVED here but wrongly called "no bug" — real
+UED22 draws exactly one, and the GUI now does too.)*
 
 **Part 2 — does UED22 have a manual visibility toggle for this marker, or hide it for a single
 selection? RE-DONE FOR REAL 2026-09-18 against our own `uned/UED22/Editor.dll` — ✅ binary-confirmed,
@@ -523,7 +670,8 @@ Only five call sites set the pivot at all — every `call [reg+0xcc]` in `Editor
 (`E8`) calls and no other module importing it: `NoteSelectionChange` (`0x1004593a`), `ResetPivot`
 (`0x10045d94`, once per selected brush, ascending), `MouseDelta` (`0x100428a2`, vertex-edit mode
 only — gated on `[this+0x118] == 0x18`), `Click@…HBrushVertex` (`0x10047718`), `Click@…HGlobalPivot`
-(`0x10047d20`).
+(`0x10047d20`). *(Corrected in Part 4 below: there are SEVEN, not five — this scan missed the
+two-instruction dispatch form.)*
 
 **Nuance found on the way, reported rather than smoothed over: `GPivotShown` is a LATCH.** It is
 written only inside `SetPivot` (`0x10046453`) and read only at the draw site (`0x1003e7a0`) — every
@@ -535,7 +683,171 @@ reading the cross stays hidden until some other trigger calls `SetPivot` while 2
 loop). This does not affect the anchor answer above, and it does not contradict the owner's report of
 WHICH brush carries the cross — but it does mean Part 2's "hidden for a lone selection" is a latched
 state, not a per-frame recomputation, and the trigger that makes the cross appear during a
-multi-select is not yet identified. Flagged, open.
+multi-select is not yet identified. Flagged, open. *(Resolved in Part 4 below: the latch is real, and
+Part 2's "hidden for a lone selection" is WRONG for a brush — the `SnapCount` term, not the `Count`
+term, is what shows the cross in ordinary use.)*
+
+### Part 4 — the complete mechanism, resolved (2026-09-18): all 7 call sites + a live UED22 capture
+
+Part 3 left one thing unexplained: on a strict reading of the latch, a click-built multi-selection
+could never turn the cross on, yet the owner reported seeing it. This pass closes that, with a
+disassembly re-scan of our own `uned/UED22/Editor.dll` and a live capture in a real UED22 (a
+throwaway `ued-x86-runtime` container, real XTEST mouse clicks, screenshots read pixel by pixel).
+**Part 2's framing was wrong in one specific way, and the correction is the whole answer.**
+
+**What `GPivotShown` really is.** `SetPivot` (RVA `0x46060`) walks `GEditor->Level->Actors`
+(`[this+0xa8]`, data `+0x2c` / count `+0x30`) at `0x10046309`-`0x10046347` and tallies TWO counters
+off each actor's bitfield dword at `[actor+0x11c]`:
+
+- `Count` (`esi`) — actors with bit `0x04` set (`test al,4` at `0x1004632a`). That bit is `bSelected`.
+- `SnapCount` (`edi`) — of those, the ones with bit `0x40` also set (`shr eax,6; and eax,1; add edi,eax`
+  at `0x10046332`-`0x10046338`).
+
+Then the tail at `0x10046441`-`0x10046453`: `test edi,edi; jg true; cmp esi,1; jg true; else 0` →
+`GPivotShown = (SnapCount > 0) || (Count > 1)`.
+
+**Bit `0x40` is `bEdShouldSnap` — and that is why a single selected brush already shows the cross.**
+`[actor+0x11c]` is one DWORD of `AActor`'s editor bool bitfields, and UE1 assigns their masks in
+declaration order. `Engine.Actor`'s OWN stored `ScriptText` inside `uned/UED22/Engine.u` (lines
+162-169) declares them consecutively:
+
+```
+bHiddenEd 0x01 · bDirectional 0x02 · bSelected 0x04 · bMemorized 0x08
+bHighlighted 0x10 · bEdLocked 0x20 · bEdShouldSnap 0x40 · bEdSnap 0x80
+```
+
+Two independent anchors in the binary land exactly on that layout: `SetPivot` and
+`NoteSelectionChange` both use bit `0x04` as "selected", and `Click@…HActor` tests bit `0x20` to SKIP
+an actor (`0x1004726b`, `0x10047347`, `0x1004739c`) — precisely what `bEdLocked` ("Locked in editor —
+no movement or rotation") means. So `SnapCount`'s bit `0x40` is `bEdShouldSnap`, measured rather than
+inferred.
+
+Decoding class defaults across every `uned/UED22/*.u`, exactly two classes default `bEdShouldSnap`
+True: **`Engine.Brush`** and `Engine.ClipMarker` (an editor-only clip-plane marker, never in level
+content). `Engine.Actor`'s own default is False, so `Engine.Light` and every other point actor is
+False; `Engine.Mover` extends `Engine.Brush` and inherits True. Live capture confirms the consequence
+directly: one selected BRUSH → cross drawn; one selected LIGHT → no cross anywhere. So in ordinary
+editing the cross is on because of the `SnapCount` term, not the `Count` term, and **Part 2's "UED22
+hides the cross for a single selected actor" is wrong for brushes** (right for point actors).
+
+**All seven `SetPivot` call sites.** Part 3's scan looked only for the one-instruction dispatch
+`call dword ptr [reg+0xcc]` and so missed the two-instruction form MSVC also emits,
+`mov eax,[reg+0xcc]` + `call eax`. Re-done as an exhaustive enumeration instead: EVERY instruction in
+`Editor.dll`'s `.text` whose memory operand carries the disp32 `0xcc` — 24 of them, brute-force
+decoded at each byte offset where the pattern appears rather than by a linear sweep (a linear sweep
+desyncs on data-in-text, which is how the earlier pass under-counted). Seventeen are unrelated member
+accesses (`UEditorEngine+0xcc` is also a data member; so are `UBrushBuilder+0xcc`, `UClass+0xcc`);
+the other seven are these. There are no direct (`E8`) calls to `SetPivot`'s RVA anywhere in the file.
+
+| # | Site | VA | What it passes | When it fires |
+|---|---|---|---|---|
+| 1 | `NoteSelectionChange` | `0x1004593a` | `SetPivot(SingleActor->Location, 0, 0)` | only at `Count == 1` |
+| 2 | `ResetPivot` | `0x10045d94` | `SetPivot(Location + transformed PrePivot, 0, 1)`, once per selected brush (ascending, last wins) | only from `NoteSelectionChange` at `Count == 0` (so the loop body never runs) and from `ACTOR RESET PIVOT` |
+| 3 | `MouseDelta` | `0x100428a2` | `SetPivot(vertex-list centre, 1, 0)` | drag start (`[ebp+0xc] & 8`) in vertex-edit mode only (`[this+0x118] == 0x18`) |
+| 4 | `Click@…HBrushVertex` | `0x10047718` | the clicked brush vertex | clicking a vertex handle |
+| 5 | `Click@…HGlobalPivot` | `0x10047d20` | `SetPivot(HGlobalPivot.Location, (Buttons>>1)&1, 1)` | clicking the cross itself |
+| 6 | `Exec` | `0x10064ec3` | `SetPivot(GEditor->ClickLocation, snapped?1:0, 0)`, between `NoteActorMovement` (`0x10064e8c`) and `FinishAllSnaps` (`0x10064ed5`) | the `PIVOT HERE` / `PIVOT SNAPPED` exec verbs (the frontend's "Place Pivot Here" / "Place Pivot Snapped Here" menu items — `unrealed.exe` sends exactly those two strings, with no `EDIT` prefix) |
+| 7 | `Exec` | `0x10067981` | `SetPivot(mover->Location, 0, 0)`, once per selected mover | the `MOVER KEYFRAME NUM=` verb ("Set mover keyframe") |
+
+`ResetPivot` itself has exactly two call sites: `NoteSelectionChange` (`0x100458fe`, `Count == 0`) and
+`Exec` (`0x10067487`, `ACTOR RESET PIVOT`). Vtable slots read from the `UEditorEngine` vtable at
+`0x100cf5d4`: `+0xc4` `NoteSelectionChange`, `+0xc8` `NoteActorMovement`, `+0xcc` `SetPivot`, `+0xd0`
+`ResetPivot`, `+0xd4` `UpdatePropertiesWindows`, `+0x100` `SelectNone`.
+
+Reading sites 6 and 7 needs one decoding note: inside `Exec` the compiler keeps `this` in `esi` but
+ALSO holds a base pointer `edi = this + 0x28`, so `[edi+0x80]` is `UEditorEngine::Level` (`this+0xa8`,
+the offset `SetPivot`/`ResetPivot` use directly) and `[edi+0x100]` is `ClickLocation` — pinned as
+`this+0x128` by `?edSetClickLocation@UEditorEngine@@…` (RVA `0x46810`), which writes its `FVector`
+argument to `[this+0x128 .. +0x130]`, and by `Click@…HActor` (`0x100471bd`) storing the clicked
+actor's `Location` there. In `Draw`, `this` is spilled to `[ebp-0x3fc]` at `0x1003c473`, which is what
+makes `[ebp-0x3fc]+0x1ac` a `UEditorEngine` colour member and `[ebp-0x3fc]+0x48` its `Render`.
+
+**No plain per-click pivot re-evaluation exists.** That was the other hypothesis worth killing:
+`GPivotShown` (`0x101491e8`) has exactly two references in the whole binary — the write inside
+`SetPivot` (`0x10046453`) and the read at the draw site (`0x1003e7a0`) — so nothing outside `SetPivot`
+can change it, and none of the seven sites is a general "on every click" handler.
+
+**What the cross actually looks like.** Inside `Draw@UEditorEngine` the preceding call
+(`0x1003e79d`) falls straight through into the gate `cmp dword ptr [0x101491e8],0; je 0x1003ea04`
+(`0x1003e7a0`), and between that gate and the first draw there is no condition but the
+`Render->Project` success test (an enclosing conditional further up the function was not ruled out).
+It projects `GSnappedLocation` (`0x10149220`, NOT `GPivotLocation`), registers an `HGlobalPivot` hit
+proxy when the frame is hit-testing, and issues three `Draw2DPoint` calls: a centre dot at `X±1, Y±1`
+(constant `1.0` at `0x100d2f80`), then a VERTICAL bar at `X, Y±4` and a HORIZONTAL bar at `X±4, Y`
+(constant `4.0` at `0x100de9a8`) — a plus with a fat centre, 9 px across as the live capture renders
+it. Colour comes from the `FColor` member at `UEditorEngine+0x1ac`, the SAME member `DrawLevelBrush`
+uses for the builder brush; in our own `uned/UED22/unrealtournament.ini`'s `[Editor.EditorEngine]`
+that is `C_BrushWire=(R=255,G=63,B=63)`. The live capture reads back exactly that colour and exactly
+that shape:
+
+```
+ 433 ....#....      21 pixels of RGB (255,63,63):
+ 434 ....#....      the 9px vertical bar, the 9px horizontal bar,
+ 435 ....#....      and the 3x3 centre dot -- byte-for-byte what the
+ 436 ...###...      three Draw2DPoint calls predict.
+ 437 #########
+ 438 ...###...
+ 439 ....#....
+```
+
+(The `C_*` block's base offset is not independently pinned; `+0x1ac` is identified as `C_BrushWire`
+because `DrawLevelBrush` at `0x10060195` uses it exactly when the brush being drawn IS the builder
+brush — the guard is a call through IAT slot `0x100cee84`, which resolves to the imported symbol
+`?Brush@ULevel@@QAEPAVABrush@@XZ`, i.e. `ULevel::Brush()` — and the live capture shows the builder
+brush and the pivot cross in the same `(255,63,63)`. The colour is fetched via `0x100cede4` =
+`?Plane@FColor@@QBE?AVFVector@@XZ`, which is what identifies the member as an `FColor` at all.)
+
+**The live capture — what was actually done and measured.** Throwaway `ued-x86-runtime` container,
+`MAP NEW` + `MAP IMPORTADD` of three cube brushes at `(-512,0,0)`, `(512,0,0)`, `(0,512,0)` plus two
+`Light`s, real XTEST clicks (`xdotool mousemove … keydown ctrl click 1 keyup ctrl`), `wine_ctl shot`
+of the editor window, pixels read with PIL. Every step below is a measured pixel result, not an
+inference:
+
+| Action (real clicks unless noted) | Selected | Cross |
+|---|---|---|
+| boot, nothing clicked | 0 | none (`GPivotShown` starts 0) |
+| plain-click BrushB's outline | 1 brush | **at BrushB** |
+| ctrl-click BrushA | 2 brushes | **still at BrushB** — unmoved |
+| ctrl-click BrushB off | 1 brush (A) | **moved to BrushA** |
+| plain-click empty space | 0 | **still at BrushA** — the latch, drawn with nothing selected |
+| `ACTOR SELECT OFCLASS CLASS=ENGINE.LIGHT`, one Light in level | 1 light | none |
+| re-import Lights, select all 3 by the same verb | 3 lights | none — `Count > 1` alone does NOT show it |
+| then `PIVOT HERE` | 3 lights | **appears**, at `ClickLocation` — the `Count > 1` term, once something calls `SetPivot` |
+
+Two by-products worth keeping. Selected-vs-unselected brush wire measured live as
+`(127,127,255)` vs `(63,63,128)` for `C_AddWire`, and vertex handles as `(255,75,75)` on a
+`C_BrushWire` brush and `(152,152,255)` on a `C_AddWire` one — i.e. the 1.0×/0.5× selected/unselected
+rule and `VertexColor = WireColor * 1.2` (with per-channel clamping), both already implemented in
+`selectionColor.ts`, now confirmed against the real editor rather than source. And **`SELECTNAME` does
+NOT notify**: driving selection with it leaves the pivot wherever it was, which is exactly why Part
+2's supplementary screenshot probe found a marker at neither selected brush. That inconclusive result
+is now explained, not merely set aside.
+
+**Not determined.** Whether `unrealed.exe` ever dispatches this same vtable slot itself — it holds
+many `call [reg+0xcc]` sites, none attributable to a `UEditorEngine` receiver from a static read, and
+its own pivot menu items demonstrably go through the exec verbs above ("Place Pivot Here" →
+`PIVOT HERE`, "Reset &Pivot" → `ACTOR RESET PIVOT`). It would not change the mechanism either way: any
+such call still lands in `SetPivot` and recomputes `GPivotShown` the same way. Also not determined:
+whether a point actor can ever carry `bEdShouldSnap=True` in real content (a
+level author could set it per-actor; our GUI has no access to the value); the exact `C_*` block base
+offset (only `+0x1ac`'s identity is pinned, by behaviour); and what the pivot does mid-drag (the
+`MousePosition`/`MoveVertex` writes to `GPivotLocation`/`GSnappedLocation` at `0x10044f16`… were not
+traced — they cannot change `GPivotShown`, only where the cross sits while dragging).
+
+**What was built from this (`web/src/scene/SelectionMarkers.tsx`, `selectionSet.ts`).** The GUI drew
+one cross per selected brush, unconditionally. It now draws exactly ONE, at `pivotAnchor`'s actor —
+the first (oldest) member of the selection set, which for the ordinary click paths (plain tap,
+Ctrl+tap add, Ctrl+tap remove down to one) is "the actor most recently the sole selection" — and only
+when that actor is a brush (the stand-in for `bEdShouldSnap`, per `Engine.Brush`'s class default).
+Three deliberate, recorded divergences from the literal UED22 state machine: nothing is drawn when
+nothing is selected (UED22 leaves a stale cross — the owner asked for hidden); deselecting the anchor
+out of a 3+ selection moves the cross to the next-oldest rather than leaving it on the now-deselected
+actor; and a batch select that jumps straight to 2+ actors without passing through one — the org
+panel's `onSelectMany`, whether from empty or replacing another selection; UED22's own marquee/
+select-all — anchors on the batch's first member rather than leaving the cross where it was.
+Regressions:
+`SelectionMarkers.test.tsx` (count + position through a real render) and `selectionSet.test.ts`'s
+`pivotAnchor` cases.
 
 ## Testing
 
