@@ -11,9 +11,8 @@ symptoms, not a UED22-parity question -- pure web-app input/UX work:
 
 1. **Mobile: can't pinch-zoom in the 2D (ortho) panes.** Touch zoom gesture isn't wired up (or is
    captured/blocked) for ortho viewports.
-2. **3D view: moving forward is only possible by zooming in.** There's no separate forward/dolly
-   gesture on mobile -- zoom is currently the only way to move into the scene, which is awkward
-   compared to a proper pan/fly control.
+2. **3D view: moving forward is only possible by zooming in.** Full spec below (owner-approved, not
+   left to implementer judgment) -- an on-screen virtual joystick, not a new gesture.
 3. **Mobile layout: the two side panes take up most of the screen.** On a small viewport, the
    org/inspector panels leave little room for the actual 3D/2D views -- needs a more compact or
    collapsible mobile layout. Full spec below (owner-approved, not left to implementer judgment).
@@ -44,6 +43,35 @@ symptoms, not a UED22-parity question -- pure web-app input/UX work:
    stays visible. This reduces the toolbar's button count from 4 to 3 (Movers, Radii, the new combined
    Grid control), which also shrinks how much of `.quad-layout-root`'s width these controls need,
    easing (but not replacing the need to fix) symptom 5's positioning bug.
+
+## Mobile 3D move control -- owner-approved spec, not left to implementer judgment
+
+Symptom 2's real cause (checked against the actual code, not assumed): touch controls already exist
+in `web/src/scene/Viewport3D.tsx` and are reasonably designed -- 1-finger drag rotates the camera in
+place (`look`, the Google Maps 3D / SketchFab convention), 2-finger drag pans + pinch zooms
+(`computeTwoFingerDelta` feeds both `pan` and `zoom` from one gesture). The actual problem: pinch-zoom
+is a POSITIONAL gesture, bounded by how far apart two fingers can physically spread on a screen --
+unlike desktop's continuous fly (WASD, held for as long as needed), moving any real distance through
+a level on mobile means repeatedly re-pinching. There is no missing gesture to add; the fix is a
+dedicated, velocity-based movement control.
+
+Owner-approved mechanism (`AskUserQuestion`, 2026-09-18), implement exactly as specified:
+
+- **An on-screen virtual joystick**, visible only on touch/mobile (hidden on desktop/mouse input),
+  controlling continuous forward/back + strafe left/right -- the same two axes desktop's `W`/`S` and
+  `A`/`D` already drive. Default placement: bottom-left of the perspective viewport (a common
+  convention for this control shape) -- open to being wrong on the exact corner/margins, but the
+  mechanism itself (a persistent on-screen joystick, not a gesture) is decided, not a guess.
+- **A separate up/down button PAIR** (not a 3rd joystick axis) near the main joystick, for the
+  equivalent of desktop's `Q`/`E` vertical fly -- owner's explicit choice over cramming vertical
+  input onto the same single thumbstick, since a 2-axis stick is easier to control precisely with one
+  thumb than a 3-axis one.
+- Only applies to the PERSPECTIVE (3D) viewport -- the ortho panes' existing 2-finger
+  pan+pinch-zoom (symptom 1, once fixed) is a complete, sufficient 2D navigation scheme on its own;
+  don't add a joystick there.
+- Exact widget styling/size, whether it fades when idle, and precise sensitivity/acceleration curve
+  are implementation details -- not owner-specified, use judgment matching this codebase's existing
+  UI conventions.
 
 ## Sidebar collapse -- owner-approved spec, not left to implementer judgment
 
