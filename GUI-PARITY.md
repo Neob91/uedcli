@@ -84,7 +84,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed, implemented | 📖 source-only, GUI-only scope (owner ruling) — see Findings below |
 | UED22 line widths | What line/wire thickness does UED22 use for wireframe/selection rendering? | ✅ closed — no bug | ✅ source-confirmed: no width parameter exists in the render-interface API UED22 draws through; this codebase's default line width is already correct |
 | Pivot-cross multi-select rendering | With 2+ brushes selected, does our own pivot cross render once per brush? | ✅ closed — no bug | own-code, 🔬 live (real headless-Chromium multi-select + screenshots) — see Findings below |
-| Pivot-cross visibility toggle | Does UED22 have a manual way to toggle the pivot marker's visibility on/off? | ⬜ open — prior "no toggle" finding RETRACTED (third-party-source-only, never verified against our binary) | none valid yet — see Findings below |
+| Pivot-cross visibility toggle | Does UED22 have a manual way to toggle the pivot marker's visibility on/off? | ✅ closed — no toggle exists; cross is hidden for a lone non-snapping selection | ✅ binary (`Editor.dll` disassembly, our own `uned/UED22/`) — see Findings below |
 
 Legend: ⬜ open (not started) · 🔶 investigating · ✅ closed (bar met, live-verified).
 
@@ -398,7 +398,7 @@ still fall back to the server's own (tuned, non-faithful) color -- this codebase
 distinguish them from Add server-side, a separate already-tracked gap
 (`gui-csg-brush-coloring-never-distinguishes`), not expanded into here.
 
-### Pivot-cross multi-select rendering (closed) + visibility toggle (RE-OPENED 2026-09-18)
+### Pivot-cross multi-select rendering (closed) + visibility toggle (closed 2026-09-18, real RE)
 
 Board item `brush-pivot-cross-multiselect-and-toggle`, two questions.
 
@@ -412,34 +412,71 @@ state, then real screenshots — not a code read alone): selecting 3 brushes (`B
 two of them side by side, each centered on its own brush's own selection outline. The owner's hunch
 ("it does NOT render per-brush currently") did not reproduce. No code change.
 
-**Part 2 — does UED22 have a manual visibility toggle for this marker? RETRACTED, not settled — do
-not treat as fact.** The claims below (no toggle exists; the cross is invisible for a single
-selection) came ONLY from `fgsfdsfgs/UE1`, a third-party UE1 v200 source tree — **owner ruling
-2026-09-18: never cite or use this or any third-party source for GUI-PARITY RE work again.** Every
-finding in this campaign must come from reverse-engineering the actual UED22 binary we have
-(disassembly or a live capture), never a third-party engine source, however similar its lineage.
-This claim was never confirmed against our own `Editor.dll`/`render.dll` and must be treated as
-UNCONFIRMED pending real RE — kept below only as a record of what was claimed and why it doesn't
-count, not as an answer to the toggle/single-select question, which is OPEN again.
+**Part 2 — does UED22 have a manual visibility toggle for this marker, or hide it for a single
+selection? RE-DONE FOR REAL 2026-09-18 against our own `uned/UED22/Editor.dll` — ✅ binary-confirmed,
+no third-party source used anywhere in this pass.**
 
-<details><summary>Retracted claim (third-party-source-only, do not act on it)</summary>
+An earlier pass (now retracted) asserted this same mechanism but cited it from `fgsfdsfgs/UE1`, a
+third-party UE1 source tree — banned as GUI-PARITY evidence (owner ruling 2026-09-18: only our own
+`uned/UED22/` binary, via disassembly or a live capture, counts). This is a full redo from scratch,
+disassembling our own `Editor.dll` (`pefile`+`capstone`, the `dev/docs/spikes/bspspike/` harness) —
+disassembly is the primary/authoritative evidence here, not a screenshot diff (see the live-probe
+caveat below for why).
 
-Real UED22's own pivot marker was claimed to be a different mechanism entirely: ONE global crosshair
-(`GPivotLocation`/`GSnappedLocation`), not one per selected actor, gated by a derived
-`GPivotShown = SnapCount>0 || Count>1` recomputed on every selection change — with the claim that a
-single selected actor with `bEdShouldSnap` false leaves `GPivotShown` false (cross invisible). This
-entire claim is UNVERIFIED against real UED22 and should not be trusted -- `bEdShouldSnap`'s real
-default value for an ordinary brush was never confirmed either, so even the "single-select is usually
-invisible in practice" inference doesn't hold up. A console command, `ACTOR RESET LOCATION`/`ACTOR
-RESET ALL`, was also claimed to call `ResetPivot()` as a side effect -- also unverified against our
-binary.
+**The mechanism, read directly from `Editor.dll`'s own machine code:**
 
-</details>
+- `?SetPivot@UEditorEngine@@UAEXVFVector@@HH@Z` (export RVA `0x46060`) tallies the level's own actor
+  array itself (`Actor->ObjectFlags` at `[actor+0x11c]`, testing bit `0x04` = selected) into `Count`,
+  and a second bit (`0x40` of the same byte, consistent with a per-actor grid-snap/drag status flag)
+  into `SnapCount`. Its tail (VA `0x10046441`-`0x10046453`) is:
+  ```
+  test edi, edi        ; edi = SnapCount
+  jg   set_true
+  cmp  esi, 1          ; esi = Count
+  jg   set_true
+  ; else: eax = 0
+  jmp  store
+  set_true: eax = 1
+  store: mov dword ptr [0x101491e8], eax   ; global GPivotShown
+  ```
+  i.e. **`GPivotShown = (SnapCount > 0) || (Count > 1)`, byte-for-byte** — for exactly one ordinary
+  (non-snap-dragging) selected actor, `Count==1` and `SnapCount==0`, so `GPivotShown` is written `0`.
+- The actual draw site, inside `?Draw@UEditorEngine@@UAEXPAVUViewport@@HPAEPAH@Z` (the per-viewport
+  frame draw, export RVA `0x3c440`), reads that exact global before doing anything else for the
+  pivot: `cmp dword ptr [0x101491e8], 0; je <skip>` (VA `0x1003e7a0`) — when `GPivotShown` is 0, this
+  jump skips the ENTIRE block: projecting the pivot location to screen space, registering an
+  `HGlobalPivot` hit-proxy (a real exported hit-proxy class —
+  `?Click@FEditorHitObserver@@UAEXABUFHitCause@@ABUHGlobalPivot@@@Z`, RVA `0x47c80` — confirming this
+  is a genuine hit-testable object in the real binary, not an invented name), and three 2D line-draw
+  calls building a cross shape around the projected point. None of it runs when `GPivotShown` is
+  false.
+- `?NoteSelectionChange@UEditorEngine@@UAEXPAVULevel@@@Z` (RVA `0x45880`, the real
+  selection-changed notifier) tallies `Count` itself and always ends by invoking the same pivot
+  recompute (`ResetPivot`/`SetPivot`-equivalent vtable calls) — confirming the pivot's state is
+  genuinely tied to selection-change notifications, not some unrelated global.
 
-**Next step, if this is picked up again**: RE the toggle/single-select question properly against
-`uned/UED22`'s own `Editor.dll`/`render.dll` (disassembly or a live capture per this doc's own Method
-section), or ask the owner whether it's worth the effort at all given it's a p2/inbox-priority
-question.
+**Answer: UED22 has no manual visibility toggle for this marker (none exists to reproduce), and it
+genuinely hides the cross for a single ordinary selected actor — shown only once 2+ actors are
+selected, or while a snap/drag is active.** This is the exact mechanism the retracted pass described,
+now independently re-derived from our own binary's disassembly rather than borrowed from a
+third-party source — same conclusion, real evidence this time.
+
+**Live screenshot cross-check — inconclusive, flagged honestly rather than smoothed over.** A
+supplementary live probe (fresh ephemeral `uned/UED22` container, `CAMERA OPEN … REN=13` top-ortho
+screenshots, pixel-diffed with PIL/numpy) drove selection via console verbs (`SELECTNAME`,
+`ACTOR SELECT ALL`) on three pasted test brushes and found a small marker-like pixel cluster even
+with exactly one brush selected — on its face, contradicting the disassembly. This is **not**
+trusted over the disassembly: the cluster's position didn't track either selected brush's own
+location in a follow-up test (it sat at neither brush's projected point), so it does not cleanly
+identify as the `GPivotShown`-gated global cross at all — most likely it's `DrawLevelBrush`'s own
+always-per-selected-brush vertex/local-origin dot (a different, ungated marker this doc's "Brush
+wireframe selection color" section already covers), or an artifact of driving selection through
+console verbs rather than a real GUI click (`NoteSelectionChange`'s call chain may not be reached the
+same way `SELECTNAME`/`ACTOR SELECT ALL` mutate selection state). Not chased further: the disassembly
+directly reads the exact gating condition and draw-site skip, which is a stronger, more precise claim
+than a screenshot diff can settle on its own, and the two are answering the same question at very
+different confidence tiers. Per this doc's own convention, disassembly is the primary/authoritative
+evidence for this finding; the pixel probe is recorded here only for honesty, not as corroboration.
 
 ## Testing
 
