@@ -451,6 +451,14 @@ different branch — a different DRAW CALL and a different COLOR — per viewpor
 
 Supporting facts, each measured rather than assumed:
 
+- **`[viewport+0x30]` is the viewport's `Actor`, `+0x47c` its `ShowFlags` and `+0x480` its
+  `RendMap`.** `uned/UED22/Engine.u`'s `PlayerPawn` `ScriptText` declares `var int ShowFlags; var int
+  RendMap;` adjacent, and the block reads exactly those two, 4 bytes apart. **Bit `0x02` is the
+  radii toggle**, named by the engine's own exec verbs: `uned/UED22/Engine.dll` holds the wide
+  literals `SHOWACTORRADII` (VA `0x102041d8`) and `HIDEACTORRADII` (`0x102041f8`), and their handlers
+  do `mov eax, [ecx+0x47c]; or eax, 2` (`0x10134582`) and `and eax, 0xfffffffd` (`0x101345a5`)
+  respectively. So this block IS what "radii view" draws, and nothing else in it is conditional on
+  the view mode beyond the `RendMap` dispatch.
 - **The `URenderBase` vtable offsets** come from `render.dll`'s own `URender` vtable, base
   `0x100345bc`+`0x24` = `0x100345e0`, anchored by `Project` = `+0x78` — the slot `Draw` calls at
   `0x1003e7eb` for the pivot cross (Part 4). From that base: `DrawWorld` `+0x70` (called at
