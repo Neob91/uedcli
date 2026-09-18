@@ -27,3 +27,8 @@ gives it context; the dropdown doesn't need to repeat the word. Keep `aria-label
 
 `web/src/scene/QuadLayout.tsx`, the `<option key={n} value={n}>Grid Size: {n}</option>` line inside
 the `grid-control` div.
+
+## Outcome (2026-09-18)
+
+Fixed: `QuadLayout.tsx`'s grid-size `<select>` options now read just `{n}` instead of
+`Grid Size: {n}` -- the checkbox's own "Grid" label already says what the control is.

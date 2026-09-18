@@ -240,7 +240,7 @@ export function QuadLayout({
             >
               {GRID_SIZE_OPTIONS.map((n) => (
                 <option key={n} value={n}>
-                  Grid Size: {n}
+                  {n}
                 </option>
               ))}
             </select>
