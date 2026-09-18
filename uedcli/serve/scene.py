@@ -8,7 +8,10 @@ Mesh-actor triangles are resolved independently of BOTH — `_LoadedTrunk.mesh_p
 (`preview_native.resolve_mesh_scene_polys`, Load-owned, no CSG/BSP dependency) feeds
 `_wrap_mesh_scene_polys` into both payloads identically, so a mesh actor renders the same way
 before and after a Rebuild (board `mesh-actors-should-render-independent-of-geometry-build`, owner
-decision "Option A" 2026-09-18)."""
+decision "Option A" 2026-09-18). Mover triangles are resolved the same way, via
+`_LoadedTrunk.mover_polys`/`preview_native.resolve_mover_scene_polys` and
+`_wrap_mover_scene_polys` (board `mover-triangles-not-build-state-independent`, mirroring the mesh
+fix exactly)."""
 from __future__ import annotations
 
 import sys
@@ -189,7 +192,11 @@ class _LoadedTrunk:
     raw (poly tuples + a private texture table), not wrapped into `ScenePoly`, for the same reason
     `actor_sprites` stays raw: wrapping needs a `tex_offset` that depends on how many OTHER texture
     slots (geometry's, then sprites') precede this one, which isn't known until the caller picks
-    `build_wireframe_payload` vs `build_scene_payload` — see `_wrap_mesh_scene_polys` below."""
+    `build_wireframe_payload` vs `build_scene_payload` — see `_wrap_mesh_scene_polys` below.
+
+    `mover_polys`/`mover_owners`/`mover_texture_table` are the same shape, from
+    `preview_native.resolve_mover_scene_polys` (board `mover-triangles-not-build-state-independent`
+    — mirrors the mesh fix exactly: a Mover's own brush polys need no CSG/BSP solve either)."""
     level: Level
     ranks: dict[str, str]
     folders: dict[str, str | None]
@@ -198,6 +205,9 @@ class _LoadedTrunk:
     mesh_polys: list[tuple]
     mesh_owners: list[tuple[str, None]]
     mesh_texture_table: list[tuple[int, int, bytes, bytes]]
+    mover_polys: list[tuple]
+    mover_owners: list[tuple[str, int]]
+    mover_texture_table: list[tuple[int, int, bytes, bytes]]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -481,12 +491,14 @@ def filtered_geometry_polys(level: Level, geometry: _BuiltGeometry, hidden_ed: d
     routes' poly-index positions can never disagree. `owner` is `(name, i_brush_poly) | None` --
     the membership test below reads just the name half.
 
-    `geometry.polys` never contains a mesh-actor triangle (`build_scene(..., include_meshes=False)`,
-    `app.py`'s `_build_and_publish_geometry`) -- this function's output is scoped to true world/BSP-
-    solved surfaces and Mover triangles only. Mesh polys are a SEPARATE, appended-after-the-fact
-    source (`_wrap_mesh_scene_polys`, board `mesh-actors-should-render-independent-of-geometry-
-    build`) that `build_scene_payload` adds to its own returned list but that never passes through
-    this filter and never reaches `/lightmap` (mesh actors are never lit)."""
+    `geometry.polys` never contains a mesh-actor OR Mover triangle
+    (`build_scene(..., include_meshes=False, include_movers=False)`, `app.py`'s
+    `_build_and_publish_geometry`) -- this function's output is scoped to true world/BSP-solved
+    surfaces only. Mesh and Mover polys are SEPARATE, appended-after-the-fact sources
+    (`_wrap_mesh_scene_polys`/`_wrap_mover_scene_polys`, boards `mesh-actors-should-render-
+    independent-of-geometry-build`/`mover-triangles-not-build-state-independent`) that
+    `build_scene_payload` adds to its own returned list but that never pass through this filter and
+    never reach `/lightmap` (neither mesh nor Mover triangles are ever lit)."""
     hidden_add_owners = {
         name for name, hidden in hidden_ed.items()
         if hidden and (a := level.actors.get(name)) is not None and a.brush is not None
@@ -513,6 +525,27 @@ def _wrap_mesh_scene_polys(trunk: _LoadedTrunk, *, tex_offset: int) -> list[Scen
                  lightmap=None, owner=owner[0], i_brush_poly=owner[1])
         for (verts, base, tu, tv, pan, tex_index, masked, flags), owner in
         zip(trunk.mesh_polys, trunk.mesh_owners)
+    ]
+
+
+def _wrap_mover_scene_polys(trunk: _LoadedTrunk, *, tex_offset: int) -> list[ScenePoly]:
+    """`trunk.mover_polys`/`.mover_owners` (Load-owned, CSG-independent —
+    `preview_native.resolve_mover_scene_polys`) wrapped into `ScenePoly`, exactly like
+    `_wrap_mesh_scene_polys` — `tex_offset` shifts each poly's index into `trunk.mover_texture_table`
+    to the request's real atlas-wide index; `-1` (no texture assigned) is never offset. Shared by
+    `build_wireframe_payload`/`build_scene_payload` so a Mover renders IDENTICALLY pre- and
+    post-Rebuild (board `mover-triangles-not-build-state-independent`). A Mover poly has no lightmap
+    (never lit, same as a mesh poly) but DOES have a real `i_brush_poly` — `resolve_mover_scene_polys`
+    resolves each poly back to its own index into `owner`'s `brush.polys` (`BRUSH:IDX` addressing),
+    the same convention a CSG-solved Mover surface used to carry via `build_scene`'s own
+    `actor_names_by_poly`, so `owner`/`i_brush_poly`-based selection is unaffected by this move."""
+    return [
+        ScenePoly(verts=verts, base=list(base), tu=list(tu), tv=list(tv), pan=list(pan),
+                 tex_index=tex_index + tex_offset if tex_index >= 0 else -1, masked=masked,
+                 two_sided=poly_two_sided(flags), blend=poly_blend(flags), flags=flags,
+                 lightmap=None, owner=owner[0], i_brush_poly=owner[1])
+        for (verts, base, tu, tv, pan, tex_index, masked, flags), owner in
+        zip(trunk.mover_polys, trunk.mover_owners)
     ]
 
 
@@ -552,30 +585,30 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     owner ruling 2026-09-14: the GUI hides editor-hidden actors and ignores `bHidden` (the opposite
     of `level photo --native`). A hidden mesh actor's own triangles never reach `trunk.mesh_polys` in
     the first place (`resolve_mesh_scene_polys`'s own `_mesh_actor_polys` check, same `bHiddenEd`
-    read), so this actor-list drop is what additionally hides its selection highlight and its
-    `markers.ts` fallback marker — one filter for brushes and bare point actors, and a second,
-    independent one (Load-owned, not this function's) for meshes.
+    read), and a hidden Mover's own triangles never reach `trunk.mover_polys` either
+    (`resolve_mover_scene_polys`'s own inline check, same convention) — so this actor-list drop is
+    what additionally hides either one's selection highlight and its `markers.ts` fallback marker —
+    one filter for bare point actors and non-Mover brushes, and a second, independent one (Load-owned,
+    not this function's) for meshes and Movers alike.
 
-    **Mesh-actor triangles never come from `geometry.polys`** (board `mesh-actors-should-render-
-    independent-of-geometry-build`, owner decision "Option A" 2026-09-18): `geometry.polys` is built
-    by `build_scene(..., include_meshes=False)` (`app.py`'s `_build_and_publish_geometry`) and so
-    never contains one — `filtered_geometry_polys` below is scoped to true world/BSP-solved surfaces
-    (and Mover triangles, which are CSG-independent for a separate, still-open reason — see that
-    board item's write-up) only. Mesh triangles instead ride in `trunk.mesh_polys`
-    (`resolve_mesh_scene_polys`, Load-owned, no CSG dependency at all) and are wrapped in by
-    `_wrap_mesh_scene_polys` below, exactly like `build_wireframe_payload` does — so a mesh actor
-    renders IDENTICALLY before and after a Rebuild.
+    **Mesh-actor and Mover triangles never come from `geometry.polys`** (boards `mesh-actors-should-
+    render-independent-of-geometry-build`/`mover-triangles-not-build-state-independent`, owner
+    decision "Option A" for both, 2026-09-18): `geometry.polys` is built by
+    `build_scene(..., include_meshes=False, include_movers=False)` (`app.py`'s
+    `_build_and_publish_geometry`) and so contains neither — `filtered_geometry_polys` below is
+    scoped to true world/BSP-solved surfaces only. Mesh triangles ride in `trunk.mesh_polys`
+    (`resolve_mesh_scene_polys`) and Mover triangles in `trunk.mover_polys`
+    (`resolve_mover_scene_polys`) — both Load-owned, no CSG dependency at all — wrapped in by
+    `_wrap_mesh_scene_polys`/`_wrap_mover_scene_polys` below, exactly like `build_wireframe_payload`
+    does — so a mesh actor or a Mover renders IDENTICALLY before and after a Rebuild.
 
-    A `bHiddenEd` BRUSH additionally drops its own rendered CSG surfaces from `ScenePayload.polys`
-    (owner-attributed via `geometry.owners` / `ScenePoly.owner`) — but ONLY when the brush is a
-    `CSG_Add`: its own surfaces are its solid contribution, safe to omit like any other hidden
-    actor's geometry. A `CSG_Subtract` (or other non-Add) brush's own surfaces are the WALLS of the
-    volume it carved, not a separate solid to hide — omitting them would open a real hole in the
-    built geometry (no other brush supplies that face), so they stay rendered regardless of
-    `bHiddenEd`. A Mover carries no `CsgOper` prop at all (it never participates in world CSG), so
-    `hidden_add_owners`'s `CsgOper` lookup below defaults it to `"CSG_Add"` — correctly: a Mover's own
-    surfaces are its own solid contribution (like a CSG_Add brush's), never another actor's wall, so
-    dropping them when it's hidden is safe the same way.
+    A `bHiddenEd` BRUSH (never a Mover — see above) additionally drops its own rendered CSG surfaces
+    from `ScenePayload.polys` (owner-attributed via `geometry.owners` / `ScenePoly.owner`) — but ONLY
+    when the brush is a `CSG_Add`: its own surfaces are its solid contribution, safe to omit like any
+    other hidden actor's geometry. A `CSG_Subtract` (or other non-Add) brush's own surfaces are the
+    WALLS of the volume it carved, not a separate solid to hide — omitting them would open a real hole
+    in the built geometry (no other brush supplies that face), so they stay rendered regardless of
+    `bHiddenEd`.
 
     A class-resolution failure IN `_is_hidden_ed` ITSELF degrades to "not hidden" — both the actor
     and its surfaces stay — with one stderr note per affected actor, rather than a raised exception
@@ -603,31 +636,38 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     # `tex_offset + local_index` names the same atlas rect on both endpoints.
     actors = _build_actors(trunk, hidden_ed, tex_offset=len(texture_table), index=index,
                            radii_map=radii_map)
-    # Mesh-actor triangles: appended AFTER the filtered world/BSP/mover polys above, never mixed in
-    # or reordered among them -- `/lightmap`'s manifest indexes `filtered`'s polys by ARRAY POSITION
-    # (`app.py`'s `/lightmap` route docstring), and a mesh poly always carries `lightmap=None`, so
-    # inserting them anywhere but the tail would shift every later lit poly's index. Atlas order is
-    # `geometry.texture_table + trunk.sprite_table + trunk.mesh_texture_table` (`app.py`'s `/atlas`
-    # route), so this offset is the sprite slot's own end.
+    # Mesh-actor and Mover triangles: appended AFTER the filtered world/BSP polys above, never mixed
+    # in or reordered among them -- `/lightmap`'s manifest indexes `filtered`'s polys by ARRAY
+    # POSITION (`app.py`'s `/lightmap` route docstring), and neither a mesh nor a Mover poly ever
+    # carries a lightmap, so inserting them anywhere but the tail would shift every later lit poly's
+    # index. Atlas order is `geometry.texture_table + trunk.sprite_table + trunk.mesh_texture_table +
+    # trunk.mover_texture_table` (`app.py`'s `/atlas` route), so mesh polys offset past texture_table
+    # + sprite_table, and mover polys past that plus mesh_texture_table too.
     scene_polys += _wrap_mesh_scene_polys(trunk, tex_offset=len(texture_table) + len(trunk.sprite_table))
+    scene_polys += _wrap_mover_scene_polys(
+        trunk, tex_offset=len(texture_table) + len(trunk.sprite_table) + len(trunk.mesh_texture_table))
     return ScenePayload(polys=scene_polys, actors=actors)
 
 
 def build_wireframe_payload(trunk: _LoadedTrunk, index, defaults) -> ScenePayload:
     """The cold-open / no-Rebuild-yet payload (gui-explicit-rebuild spec §4): no solved geometry is
-    pinned, so `polys` carries ONLY mesh-actor triangles (`trunk.mesh_polys`, Load-owned, no CSG
-    dependency) -- world/BSP surfaces genuinely don't exist yet, but every brush actor's own
-    AUTHORED `SceneActor.brush` shape still lets the client draw an outline, and a mesh actor now
-    renders its real triangles too (board `mesh-actors-should-render-independent-of-geometry-build`,
-    owner decision "Option A" 2026-09-18 -- previously `polys` was unconditionally `[]` here, so a
-    mesh actor rendered as a white/untextured spot until the first Rebuild). `tex_offset` for
-    sprites is 0 (unchanged): `/atlas` builds its atlas from `trunk.sprite_table +
-    trunk.mesh_texture_table` in this case (`app.py`'s `atlas` route skips `geometry.texture_table`
+    pinned, so `polys` carries ONLY mesh-actor and Mover triangles (`trunk.mesh_polys`/
+    `trunk.mover_polys`, both Load-owned, no CSG dependency) -- world/BSP surfaces genuinely don't
+    exist yet, but every brush actor's own AUTHORED `SceneActor.brush` shape still lets the client
+    draw an outline, and a mesh actor or Mover now renders its real triangles too (boards `mesh-
+    actors-should-render-independent-of-geometry-build`/`mover-triangles-not-build-state-independent`,
+    owner decision "Option A" for both -- previously `polys` was unconditionally `[]` here, so either
+    kind rendered as a white/untextured spot until the first Rebuild). `tex_offset` for sprites is 0
+    (unchanged): `/atlas` builds its atlas from `trunk.sprite_table + trunk.mesh_texture_table +
+    trunk.mover_texture_table` in this case (`app.py`'s `atlas` route skips `geometry.texture_table`
     entirely when no geometry is pinned), so a sprite's `tex_index` names a rect in THAT atlas, at
-    the sprite's own position with no offset; mesh polys shift by `len(trunk.sprite_table)`, the
-    sprite slot's own end -- same atlas-order convention `build_scene_payload` uses."""
+    the sprite's own position with no offset; mesh polys shift by `len(trunk.sprite_table)` and Mover
+    polys by that plus `len(trunk.mesh_texture_table)` -- same atlas-order convention
+    `build_scene_payload` uses."""
     hidden_ed = _resolve_hidden_ed(trunk.level, defaults)
     radii_map = _resolve_actor_radii(trunk.level, defaults, hidden_ed)
     actors = _build_actors(trunk, hidden_ed, tex_offset=0, index=index, radii_map=radii_map)
-    mesh_polys = _wrap_mesh_scene_polys(trunk, tex_offset=len(trunk.sprite_table))
-    return ScenePayload(polys=mesh_polys, actors=actors)
+    polys = _wrap_mesh_scene_polys(trunk, tex_offset=len(trunk.sprite_table))
+    polys += _wrap_mover_scene_polys(
+        trunk, tex_offset=len(trunk.sprite_table) + len(trunk.mesh_texture_table))
+    return ScenePayload(polys=polys, actors=actors)

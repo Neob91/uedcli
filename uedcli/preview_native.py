@@ -195,21 +195,100 @@ def _mover_actor_world_polys(actor) -> list[tuple[list, object, object]]:
     return out
 
 
-def _mover_world_polys(level, index) -> list[tuple[list, object, object, int]]:
+def _mover_world_polys(level, index, *, skip=None) -> list[tuple[list, object, object, int]]:
     """Movers render directly (no BSP surfs): each brush poly world-transformed at the BASE
     pose. A draft preview without doors would be actively misleading (spec §5). The 4th element
     is the poly's own index into `actor.brush.polys` -- `BRUSH:IDX` addressing (`uedcli/surface.py`),
     the same index space `_node_polys` reports as `i_brush_poly` for CSG-solved surfaces. Enumerated
     here (not inside `_mover_actor_world_polys`, whose other two callers -- `solve_world_surfaces`,
-    `preview_wire.py` -- have no use for it) since its per-actor output is already poly-ordered."""
+    `preview_wire.py` -- have no use for it) since its per-actor output is already poly-ordered.
+
+    `skip`, if given, is called once per Mover actor (before transforming its polys) and drops the
+    whole actor's polys when it returns True -- `resolve_mover_actor_polys`'s independent,
+    build-state-free resolver uses it for hidden-actor filtering; `build_scene`'s own call passes
+    none, unchanged."""
     out = []
     for name in level.order:
         actor = level.actors.get(name)
         if actor is None or actor.brush is None or not movers.is_mover(actor, index):
             continue
+        if skip is not None and skip(actor):
+            continue
         out += [(world, a, poly, i)
                for i, (world, a, poly) in enumerate(_mover_actor_world_polys(actor))]
     return out
+
+
+def resolve_mover_actor_polys(level, index, *, textures: _TextureTable,
+                              hidden_prop: str | None = None
+                              ) -> list[tuple[tuple, tuple[str, int]]]:
+    """Every Mover's own brush polys, world-transformed at the base pose -> `[(poly_tuple,
+    (actor.name, i_brush_poly)), ...]`, `poly_tuple` the same 8-tuple `resolve_mesh_actor_polys`
+    returns. Built from `_mover_world_polys` alone -- already world-space, no CSG/BSP dependency,
+    unlike world-solved brush surfaces (board `mover-triangles-not-build-state-independent`,
+    mirroring the mesh-actor fix's "Option A": one mover pipeline, always). Texture resolution
+    reuses each poly's OWN authored `Texture`/`TextureU`/`TextureV` (`texframe.world_uv_frame` +
+    `textures.index_for`) -- simpler than a mesh actor's skin-decode, since a Mover carries real
+    per-poly textures already and needs no `MultiSkins`/material-index resolution.
+
+    `hidden_prop`, when given, drops a Mover WHOLESALE when its own resolved value (instance else
+    class default, the same convention `_mesh_actor_polys` uses) is `"True"` -- `uedcli serve`'s
+    independent path (`resolve_mover_scene_polys`) passes `"bhiddened"`. `None` (this function's own
+    default, `build_scene`'s call) skips no actor -- unchanged behavior: `build_scene`'s own callers
+    rely on `serve/scene.py::filtered_geometry_polys`'s downstream hidden-owner drop instead, and
+    `level photo --native` has never filtered a hidden Mover at all."""
+    from .uprops import resolve_class_defaults
+
+    def _hidden(actor) -> bool:
+        if hidden_prop is None:
+            return False
+        class_defaults = resolve_class_defaults(actor.cls, resolver=index.resolver())
+        instance = {k.casefold(): v for k, v in actor.props}
+        value = instance[hidden_prop] if hidden_prop in instance else class_defaults.get(
+            (hidden_prop, 0))
+        return str(value or "False").strip() == "True"
+
+    out: list[tuple[tuple, tuple[str, int]]] = []
+    for world_verts, actor, poly, i_brush_poly in _mover_world_polys(level, index, skip=_hidden):
+        flags = ((poly.flags or 0) | poly_flags_int(dict(actor.props))) & 0xFFFFFFFF
+        if flags & PF_INVISIBLE:
+            continue                                          # dropped Python-side, matches add_poly
+        try:
+            base_w, tu, tv, pan = world_uv_frame(actor, poly)
+        except DegenerateTransformError as e:    # degenerate-scale mover -> exit 2 (spec §7)
+            raise NativePreviewError(str(e)) from e
+        tex_index = textures.index_for(poly.texture)
+        masked = bool(flags & PF_MASKED) or textures.is_bmasked(tex_index)
+        verts_flat = [c for v in world_verts for c in (float(v[0]), float(v[1]), float(v[2]))]
+        out.append(((verts_flat, list(base_w), list(tu), list(tv), list(pan), tex_index, masked,
+                    flags), (actor.name, i_brush_poly)))
+    return out
+
+
+def resolve_mover_scene_polys(level, index, search_files, *, hidden_prop: str = "bhiddened"
+                              ) -> tuple[list[tuple], list[tuple[str, int]], list[tuple]]:
+    """`uedcli serve`'s Load-owned, build-state-independent Mover resolution entry point (mirrors
+    `resolve_mesh_scene_polys`): every Mover's world-space triangles + a PRIVATE texture table, from
+    `level`/`index` alone -- no CSG/BSP dependency (board `mover-triangles-not-build-state-
+    independent`). Returns `(polys, owners, texture_table)`: `polys`/`owners` are
+    `resolve_mover_actor_polys`'s own pairs, unzipped; `texture_table` is the private
+    `_TextureTable.table` this call built, for the caller to publish as its own atlas slot
+    (`uedcli/serve/app.py`'s `/atlas` route) alongside `geometry.texture_table`/`sprite_table`/
+    `mesh_texture_table` — never folded into any of them.
+
+    Returns `([], [], [])` when `search_files` is empty -- matches `resolve_mesh_scene_polys`'s own
+    degrade disposition for the same condition, never a crash. `hidden_prop` defaults to
+    `"bhiddened"` (EDITOR visibility, owner ruling 2026-09-14) -- unconditionally drops a hidden
+    Mover's own triangles, the same disposition its own surfaces got when they still rode in
+    `geometry.polys` (a Mover has no `CsgOper`, defaults to `CSG_Add`, always safe to drop whole --
+    see `serve/scene.py::filtered_geometry_polys`'s docstring)."""
+    if not search_files:
+        return [], [], []
+    textures = _TextureTable(TextureResolver(search_files, class_index=index))
+    resolved = resolve_mover_actor_polys(level, index, textures=textures, hidden_prop=hidden_prop)
+    polys = [poly for poly, _owner in resolved]
+    owners = [owner for _poly, owner in resolved]
+    return polys, owners, textures.table
 
 
 def _mesh_actor_polys(actor, index, search_files, *, hidden_prop: str = "bhidden"
@@ -717,7 +796,8 @@ def _scene_hashes(level, light_names: set[str]) -> tuple[str, str]:
 
 def build_scene(level, search_files, index, *, defaults, project=None,
                 level_name=None, visibility: Literal["gameplay", "editor"] = "gameplay",
-                include_meshes: bool = True) -> tuple[list, list, list]:
+                include_meshes: bool = True, include_movers: bool = True
+                ) -> tuple[list, list, list]:
     """Trunk → (render polys, texture table, per-poly owner names): CSG build + node-poly
     extraction + source-poly join + Python UV frames + mover extra_polys + native texture decode +
     world-surf lighting (board `bake-lighting-into-level-photo-native`). Raises NativePreviewError
@@ -776,7 +856,14 @@ def build_scene(level, search_files, index, *, defaults, project=None,
     and after a Rebuild. `level photo --native` never passes this (default `True`, unchanged
     behavior) — meshes there are genuinely part of the one-shot photo build. Folded into `geom_hash`
     below alongside `visibility`, for the same reason: the same actor content builds a DIFFERENT
-    `polys_no_light` depending on this flag too."""
+    `polys_no_light` depending on this flag too.
+
+    `include_movers=False` (`uedcli serve`'s ONLY use, board `mover-triangles-not-build-state-
+    independent`, mirroring `include_meshes`) skips the mover loop entirely — the GUI resolves Mover
+    triangles itself via `resolve_mover_scene_polys` (`uedcli/serve/scene.py`), independently of this
+    CSG-solved pipeline, so a Mover renders the SAME way before and after a Rebuild. `level photo
+    --native` never passes this (default `True`, unchanged behavior). Folded into `geom_hash` below
+    too, for the same reason as `include_meshes`."""
     try:
         from uedcli.native_ext import import_native
         uedcli_native = import_native()
@@ -799,10 +886,12 @@ def build_scene(level, search_files, index, *, defaults, project=None,
     geom_hash = light_hash = None
     if cache:
         geom_hash, light_hash = _scene_hashes(level, {n for n, *_ in lights})
-        # `visibility`/`include_meshes` change `polys_no_light`/`actor_names_by_poly` for THE SAME
-        # actor content (see docstring) — tag both onto geom_hash so `render_shots` and
-        # `build_scene_payload` never share a cache entry built under the other's rule.
-        geom_hash += ("e" if visibility == "editor" else "g") + ("" if include_meshes else "x")
+        # `visibility`/`include_meshes`/`include_movers` change `polys_no_light`/
+        # `actor_names_by_poly` for THE SAME actor content (see docstring) — tag all three onto
+        # geom_hash so `render_shots` and `build_scene_payload` never share a cache entry built
+        # under the other's rule.
+        geom_hash += (("e" if visibility == "editor" else "g")
+                     + ("" if include_meshes else "x") + ("" if include_movers else "m"))
         cached_scene = preview_cache.load_scene(project, level_name, geom_hash, light_hash)
         if cached_scene is not None:
             return cached_scene
@@ -920,8 +1009,13 @@ def build_scene(level, search_files, index, *, defaults, project=None,
                 add_poly(world_verts, None, None, surf_flags=poly_flags,
                          i_surf=i_surf)                       # out-of-range owner (§4.4)
 
-        for world_verts, actor, poly, i_brush_poly in _mover_world_polys(level, index):
-            add_poly(world_verts, actor, poly, i_brush_poly=i_brush_poly)
+        if include_movers:
+            for poly_tuple, owner in resolve_mover_actor_polys(level, index, textures=textures):
+                verts_flat, base_w, tu, tv, pan, tex_index, masked, flags = poly_tuple
+                polys_no_light.append((verts_flat, base_w, tu, tv, pan, tex_index, masked, flags))
+                i_surf_by_poly.append(None)   # movers: no lightmap (out of scope, board
+                                              # `mesh-mover-per-vertex-lighting-in-level-photo`)
+                actor_names_by_poly.append(owner)
 
         hidden_prop = "bhiddened" if visibility == "editor" else "bhidden"
         if include_meshes:

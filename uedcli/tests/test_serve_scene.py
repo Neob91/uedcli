@@ -16,7 +16,12 @@ from uedcli import config, trunk
 from uedcli.classdefaults import ClassDefaults
 from uedcli.classindex import ClassIndex
 from uedcli.model import Actor, Level
-from uedcli.preview_native import build_scene, resolve_actor_sprites, resolve_mesh_scene_polys
+from uedcli.preview_native import (
+    build_scene,
+    resolve_actor_sprites,
+    resolve_mesh_scene_polys,
+    resolve_mover_scene_polys,
+)
 from uedcli.tests.conftest import cube_room
 
 uedcli_native = pytest.importorskip("uedcli_native")
@@ -69,19 +74,25 @@ def _load_and_build_for(project, level_name, index, defaults, search_files):
 
     maps_dir = Path(config.project_maps_dir(project))
     level, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_dir / level_name)
-    # `include_meshes=False`: matches `app.py`'s real production call now that mesh-actor triangles
-    # are resolved independently of the CSG solve (board `mesh-actors-should-render-independent-of-
-    # geometry-build`) -- `resolve_mesh_scene_polys` below is the SAME independent call `_get_trunk`
-    # makes in production.
+    # `include_meshes=False`/`include_movers=False`: matches `app.py`'s real production call now
+    # that mesh-actor and Mover triangles are both resolved independently of the CSG solve (boards
+    # `mesh-actors-should-render-independent-of-geometry-build`/`mover-triangles-not-build-state-
+    # independent`) -- `resolve_mesh_scene_polys`/`resolve_mover_scene_polys` below are the SAME
+    # independent calls `_get_trunk` makes in production.
     polys, texture_table, owners = build_scene(level, search_files, index, defaults=defaults,
                                                project=project, level_name=level_name,
-                                               visibility="editor", include_meshes=False)
+                                               visibility="editor", include_meshes=False,
+                                               include_movers=False)
     sprite_table, actor_sprites = resolve_actor_sprites(level, search_files, defaults)
     mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(level, index, search_files)
+    mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
+        level, index, search_files)
     trunk_state = _LoadedTrunk(level=level, ranks=ranks, folders=folders,
                                sprite_table=sprite_table, actor_sprites=actor_sprites,
                                mesh_polys=mesh_polys, mesh_owners=mesh_owners,
-                               mesh_texture_table=mesh_texture_table)
+                               mesh_texture_table=mesh_texture_table,
+                               mover_polys=mover_polys, mover_owners=mover_owners,
+                               mover_texture_table=mover_texture_table)
     geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=polys,
                               texture_table=texture_table, owners=owners)
     return trunk_state, geometry
@@ -174,7 +185,8 @@ def test_build_scene_payload_categories_stub_index_fallback():
     level = Level(actors={room.name: room}, order=[room.name])
     trunk_state = _LoadedTrunk(level=level, ranks={room.name: "m"}, folders={room.name: None},
                                sprite_table=[], actor_sprites={}, mesh_polys=[], mesh_owners=[],
-                               mesh_texture_table=[])
+                               mesh_texture_table=[], mover_polys=[], mover_owners=[],
+                               mover_texture_table=[])
     geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=[], texture_table=[], owners=[])
 
     payload = build_scene_payload(trunk_state, geometry, StubClassIndex(), DEFAULTS)
@@ -225,7 +237,8 @@ def test_location_prop_synthesis():
     level = Level(actors={room.name: room}, order=[room.name])
     trunk_state = _LoadedTrunk(level=level, ranks={room.name: "m"}, folders={room.name: None},
                                sprite_table=[], actor_sprites={}, mesh_polys=[], mesh_owners=[],
-                               mesh_texture_table=[])
+                               mesh_texture_table=[], mover_polys=[], mover_owners=[],
+                               mover_texture_table=[])
     geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=[], texture_table=[], owners=[])
 
     payload = build_scene_payload(trunk_state, geometry, StubClassIndex(), DEFAULTS)
@@ -251,7 +264,8 @@ def test_brush_highlight_local_origin_is_location_minus_prepivot():
     level = Level(actors={room.name: room}, order=[room.name])
     trunk_state = _LoadedTrunk(level=level, ranks={room.name: "m"}, folders={room.name: None},
                                sprite_table=[], actor_sprites={}, mesh_polys=[], mesh_owners=[],
-                               mesh_texture_table=[])
+                               mesh_texture_table=[], mover_polys=[], mover_owners=[],
+                               mover_texture_table=[])
     geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=[], texture_table=[], owners=[])
 
     payload = build_scene_payload(trunk_state, geometry, StubClassIndex(), DEFAULTS)
@@ -265,7 +279,8 @@ def test_brush_highlight_local_origin_is_location_minus_prepivot():
     level2 = Level(actors={plain_room.name: plain_room}, order=[plain_room.name])
     trunk_state2 = _LoadedTrunk(level=level2, ranks={plain_room.name: "m"}, folders={plain_room.name: None},
                                 sprite_table=[], actor_sprites={}, mesh_polys=[], mesh_owners=[],
-                                mesh_texture_table=[])
+                                mesh_texture_table=[], mover_polys=[], mover_owners=[],
+                                mover_texture_table=[])
     payload2 = build_scene_payload(trunk_state2, geometry, StubClassIndex(), DEFAULTS)
     plain_actor = next(a for a in payload2.actors if a.name == "PlainRoom")
     assert plain_actor.brush.local_origin == plain_actor.location
