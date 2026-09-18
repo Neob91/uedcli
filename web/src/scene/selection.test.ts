@@ -458,6 +458,40 @@ describe('pickHit', () => {
     ]
     expect(pickHit(hits, 100, 100)).toBe('poly-under-cursor')
   })
+
+  it('a Mover outline with NO competing precise hit at all does NOT win once outside the hit box', () => {
+    // Board `mover-wireframe-5px-cutoff-only-applies-vs-poly`: `moverBeatsPoly` above only runs when
+    // `preciseHits.length > 0`, so a Mover line with nothing competing at the click point used to
+    // fall straight through to `if (bestLine) return bestLine.value` with no distance check at all --
+    // live-reported as needing a 40px+ click to miss. 20px stands in for "far"; the raycaster's own
+    // world-space line threshold (`tapSelect.ts`) is what actually admits a line this far as a
+    // candidate in the first place.
+    const hits = [{ value: 'mover-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 120, screenY: 100 }]
+    expect(pickHit(hits, 100, 100)).toBeNull()
+  })
+
+  it('a Mover outline with no competing precise hit still wins at the exact 5px boundary (<=, not <)', () => {
+    const hits = [{ value: 'mover-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 105, screenY: 100 }]
+    expect(pickHit(hits, 100, 100)).toBe('mover-outline')
+  })
+
+  it('a Mover outline with no competing precise hit does NOT win just past the boundary', () => {
+    const hits = [{ value: 'mover-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 106, screenY: 100 }]
+    expect(pickHit(hits, 100, 100)).toBeNull()
+  })
+
+  it('a Mover outline with no competing precise hit still wins when genuinely close', () => {
+    const hits = [{ value: 'mover-outline', isLine: true, alwaysOnTop: true, isMoverLine: true, screenX: 102, screenY: 100 }]
+    expect(pickHit(hits, 100, 100)).toBe('mover-outline')
+  })
+
+  it('an ORDINARY (non-Mover) line with no competing precise hit is unaffected by the new gate', () => {
+    // Scope check: the new "no competing precise hit" gate is Mover-specific (`isMoverLine`). An
+    // ordinary brush wireframe line relies on `wireframe-brush-selection-should-hit-test-lines`'s own
+    // threshold-based admission, not this cutoff -- it must keep winning from any distance here.
+    const hits = [{ value: 'ordinary-brush-outline', isLine: true, alwaysOnTop: false, screenX: 140, screenY: 100 }]
+    expect(pickHit(hits, 100, 100)).toBe('ordinary-brush-outline')
+  })
 })
 
 describe('isTransparentPixel', () => {

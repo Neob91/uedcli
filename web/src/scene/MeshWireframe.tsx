@@ -4,9 +4,9 @@
 // and OrthoViewport so both panes draw the identical geometry
 // (`SceneResourcesContext.tsx`'s `meshWireframeGeometry`).
 //
-// Colored per UED22's own measured convention (GUI-PARITY.md "Selection highlight rendering",
-// `UnMeshRn.cpp`'s `DrawMesh` `bWire` branch, source-verified) -- an olive/brown baseline, not the
-// plain white this used before that finding landed.
+// Colored per UED22's own measured convention (GUI-PARITY.md "Mesh-actor wireframe rendering",
+// `render.dll`'s `DrawLodMesh`, own-binary disassembly-confirmed) -- an olive/brown baseline, not
+// the plain white this used before that finding landed.
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 

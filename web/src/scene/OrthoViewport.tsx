@@ -26,7 +26,10 @@ import { useSceneResourcesContext } from './useSceneResourcesContext'
 import { ActorSelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
 import { SELECTED_SPRITE_TINT, UNSELECTED_SPRITE_TINT } from './selectionColor'
 import { SelectionMarkers } from './SelectionMarkers'
+import { isTap } from './selection'
 import { resolveTapSelect } from './tapSelect'
+import { computeTwoFingerDelta } from './touchGesture'
+import type { TouchPoint } from './touchGesture'
 import type { ShadingMode } from './shadingMode'
 import { usesUnlitMaterials } from './shadingMode'
 // `THREE.ColorManagement.enabled` is a process-wide singleton r3f reasserts on every render of
@@ -44,6 +47,15 @@ const MARKER_COLOR_THREE = new THREE.Color(...MARKER_COLOR)
 // once renderOrder AND distance-from-the-object's-own-origin both tie, and relying on insertion order
 // alone is fragile. See `markers.ts`'s doc comment for the mechanism this constant fixes for real in
 // `Viewport3D.tsx` (a surface highlight winning that distance tiebreak against a nearer sprite).
+
+// Which single touch contact is the tap-selection candidate -- see Viewport3D.tsx's identical
+// interface/mechanism (this pane duplicates the small tracker rather than sharing a module, same
+// judgment call as the other small per-pane duplications already in this file).
+interface TouchTapTracker {
+  pointerId: number
+  totalDx: number
+  totalDy: number
+}
 
 function OrthoCameraRig({
   pose,
@@ -126,6 +138,12 @@ export function OrthoViewport({
     [actors, selectedNames],
   )
   const cameraRef = useRef<THREE.OrthographicCamera | null>(null)
+  // Live screen position of every currently-down touch contact, by `pointerId` -- mirrors
+  // Viewport3D.tsx's identical mechanism (mobile: pinch-zoom wasn't wired up for ortho panes at
+  // all; only a single mouse-shaped drag/tap gesture existed here before). Mouse/pen input never
+  // touches this map (gated on `e.pointerType === 'touch'` below).
+  const touchPoints = useRef<Map<number, TouchPoint>>(new Map())
+  const touchTap = useRef<TouchTapTracker | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
   const meshPickRef = useRef<THREE.Mesh | null>(null)
   const markerGroupRef = useRef<THREE.Group | null>(null)
@@ -234,11 +252,63 @@ export function OrthoViewport({
     // `frameRequest` is replaced wholesale on every `F` press -- see Viewport3D's identical note.
   }, [frameRequest, axis])
 
+  // Touch gestures (mobile: pinch-zoom + pan wasn't wired up at all for ortho panes -- only the
+  // mouse-shaped drag/tap path above existed here before). Mirrors Viewport3D.tsx's identical
+  // one-finger/two-finger split, with ortho-appropriate camera moves: a single finger PANS (ortho
+  // has no rotation for a lone finger to drive, unlike perspective's "look"), matching desktop's
+  // plain single-button drag; two fingers pan-from-midpoint + pinch-zoom-from-separation together,
+  // reusing the exact same `computeTwoFingerDelta` math Viewport3D already uses.
+  const onPointerDown = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'touch') {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        const isFirstContact = touchPoints.current.size === 0
+        touchPoints.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+        // Only the FIRST finger down is a tap candidate; a second finger arriving before the first
+        // lifts means this is a two-finger gesture, never a tap (see onPointerUp below).
+        touchTap.current = isFirstContact ? { pointerId: e.pointerId, totalDx: 0, totalDy: 0 } : null
+        return
+      }
+      mouseDrag.onPointerDown(e)
+    },
+    [mouseDrag],
+  )
+
   // Cursor UU coordinate readout (Task 28): tracks EVERY pointer move inside the pane, not just
   // drag moves -- `useDragGesture`'s own onPointerMove is a no-op when no drag is in progress
   // (`drag.current` is null on a plain hover), so this rides alongside it rather than through it.
+  // Touch moves never update the hover readout (no meaningful "hover" between discrete touches).
   const onPointerMoveWithHover = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'touch') {
+        const points = touchPoints.current
+        const prev = points.get(e.pointerId)
+        if (!prev) return // stray move with no matching pointerdown (shouldn't happen)
+        const curr: TouchPoint = { x: e.clientX, y: e.clientY }
+
+        if (points.size === 1) {
+          const dx = curr.x - prev.x
+          const dy = curr.y - prev.y
+          points.set(e.pointerId, curr)
+          if (touchTap.current?.pointerId === e.pointerId) {
+            touchTap.current.totalDx += dx
+            touchTap.current.totalDy += dy
+          }
+          if (dx !== 0 || dy !== 0) setPose((prevPose) => orthoPan(prevPose, axis, dx, dy))
+          return
+        }
+
+        const ids = [...points.keys()].slice(0, 2)
+        const before: [TouchPoint, TouchPoint] = [points.get(ids[0])!, points.get(ids[1])!]
+        points.set(e.pointerId, curr)
+        const after: [TouchPoint, TouchPoint] = [points.get(ids[0])!, points.get(ids[1])!]
+        const { panDx, panDy, zoomDelta } = computeTwoFingerDelta(before, after)
+        if (panDx !== 0 || panDy !== 0 || zoomDelta !== 0) {
+          setPose((prevPose) => orthoZoom(orthoPan(prevPose, axis, panDx, panDy), zoomDelta))
+        }
+        return
+      }
+
       mouseDrag.onPointerMove(e)
       const rect = containerRef.current?.getBoundingClientRect()
       if (!rect || rect.width === 0 || rect.height === 0) return
@@ -248,15 +318,30 @@ export function OrthoViewport({
   )
   const onPointerLeave = useCallback(() => setHoverWorld(null), [])
 
+  const onPointerUp = useCallback(
+    (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.pointerType === 'touch') {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+        touchPoints.current.delete(e.pointerId)
+        const tap = touchTap.current
+        if (tap?.pointerId !== e.pointerId) return // not the tap-candidate finger (or none survived)
+        touchTap.current = null
+        if (isTap(0, 0, tap.totalDx, tap.totalDy)) performTapSelect(e.clientX, e.clientY, false, false) // touch has no Ctrl/Shift-equivalent
+        return
+      }
+      mouseDrag.onPointerUp(e)
+    },
+    [mouseDrag, performTapSelect],
+  )
+
   return (
     <div
       ref={setContainerRef}
       style={{ width: '100%', height: '100%', touchAction: 'none', position: 'relative' }}
-      onPointerDown={mouseDrag.onPointerDown}
+      onPointerDown={onPointerDown}
       onPointerMove={onPointerMoveWithHover}
       onPointerLeave={onPointerLeave}
-      onPointerUp={mouseDrag.onPointerUp}
-      onWheel={mouseDrag.onWheel}
+      onPointerUp={onPointerUp}
       onContextMenu={mouseDrag.onContextMenu}
     >
       <Canvas {...CANVAS_COLOR_MANAGEMENT} orthographic>

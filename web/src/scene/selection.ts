@@ -252,7 +252,13 @@ const MOVER_LINE_HIT_BOX_PX = 5
  *   to the click, so the distance check still passes. A merely-screen-nearest ORDINARY
  *   (non-always-on-top) line never overrides a genuine precise hit either way -- only the WINNING
  *   line's own always-on-top-ness (and now its distance) matters, never some other, losing line
- *   candidate's. */
+ *   candidate's.
+ *
+ * When there's no competing precise hit at all (`preciseHits.length === 0`), a winning Mover line
+ * still needs `MOVER_LINE_HIT_BOX_PX` gating -- otherwise it wins from however far the raycaster's
+ * world-space line threshold happens to admit it as a candidate (board item
+ * `mover-wireframe-5px-cutoff-only-applies-vs-poly`, live-reported as needing a 40px+ click to miss).
+ * An ordinary (non-Mover) line is unaffected -- it keeps winning on `bestLine` alone, same as before. */
 export function pickHit<T>(hits: HitCandidate<T>[], clickX: number, clickY: number): T | null {
   if (hits.length === 0) return null
   const lineHits = hits.filter((h) => h.isLine)
@@ -275,6 +281,13 @@ export function pickHit<T>(hits: HitCandidate<T>[], clickX: number, clickY: numb
       bestLineDistSq <= MOVER_LINE_HIT_BOX_PX ** 2
     const lineWins = moverBeatsPoly || ((bestLine?.alwaysOnTop ?? false) && bestLineDistSq <= preciseDistSq)
     if (!lineWins) return precise.value
+  } else if ((bestLine?.isMoverLine ?? false) && bestLineDistSq > MOVER_LINE_HIT_BOX_PX ** 2) {
+    // No competing precise hit at all, so `moverBeatsPoly` above never ran -- but a Mover line still
+    // needs the same absolute cutoff here, or it wins from however far the raycaster's world-space
+    // line threshold (`tapSelect.ts`) happens to admit it as a candidate, which can reproject to
+    // 40px+ on screen at typical viewing distances. Board item
+    // `mover-wireframe-5px-cutoff-only-applies-vs-poly`.
+    return null
   }
   if (bestLine) return bestLine.value
   return preciseHits[0]?.value ?? null

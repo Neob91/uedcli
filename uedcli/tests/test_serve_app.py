@@ -167,7 +167,7 @@ def test_get_trunk_second_call_is_a_cache_hit(tmp_path, monkeypatch):
     _require_ued22()
     from uedcli import trunk as trunk_module
     from uedcli.tests.conftest import cube_room
-    from uedcli.tests.test_serve_scene import DEFAULTS
+    from uedcli.tests.test_serve_scene import DEFAULTS, _ued22_index
 
     root = tmp_path / "proj"
     _write_fixture_trunk(root, "TestLevel", [cube_room()])
@@ -183,8 +183,9 @@ def test_get_trunk_second_call_is_a_cache_hit(tmp_path, monkeypatch):
 
     monkeypatch.setattr(trunk_module, "read_level_with_bodies", spy)
 
-    first = app.state.get_trunk("TestLevel", [], DEFAULTS)
-    second = app.state.get_trunk("TestLevel", [], DEFAULTS)
+    index = _ued22_index()
+    first = app.state.get_trunk("TestLevel", [], index, DEFAULTS)
+    second = app.state.get_trunk("TestLevel", [], index, DEFAULTS)
     assert first is second
     assert len(calls) == 1
 
@@ -341,8 +342,9 @@ def test_on_trunk_settled_leaves_both_slots_untouched_bumps_generation_sets_chan
     project = SimpleNamespace(root=str(root), maps=None)
     app = create_app(project, "TestLevel")
 
-    trunk_state = app.state.get_trunk("TestLevel", [], DEFAULTS)
-    geometry = app.state.build_and_publish_geometry("TestLevel", [], _ued22_index(), DEFAULTS)
+    index = _ued22_index()
+    trunk_state = app.state.get_trunk("TestLevel", [], index, DEFAULTS)
+    geometry = app.state.build_and_publish_geometry("TestLevel", [], index, DEFAULTS)
     assert app.state.changes_available[0] is False
 
     class FakeWS:
@@ -361,7 +363,7 @@ def test_on_trunk_settled_leaves_both_slots_untouched_bumps_generation_sets_chan
     assert ws.sent == [{"type": "changes_available", "level": "TestLevel"}]
     assert app.state.changes_available[0] is True
     assert app.state.generation[0] == gen_before + 1
-    assert app.state.get_trunk("TestLevel", [], DEFAULTS) is trunk_state    # untouched -- same object, no re-read
+    assert app.state.get_trunk("TestLevel", [], index, DEFAULTS) is trunk_state    # untouched -- same object, no re-read
     assert app.state.read_geometry() is geometry               # untouched -- same object, no rebuild
 
 
@@ -695,7 +697,7 @@ def test_switch_level_resets_all_three_cache_slots(tmp_path, monkeypatch):
 
     # Populate all three slots for "TestLevel".
     index = _ued22_index()
-    app.state.get_trunk("TestLevel", [], DEFAULTS)
+    app.state.get_trunk("TestLevel", [], index, DEFAULTS)
     app.state.build_and_publish_geometry("TestLevel", [], index, DEFAULTS)
     assert c.get("/api/level/TestLevel/scene").status_code == 200
     assert app.state.read_geometry() is not None

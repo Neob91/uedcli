@@ -287,6 +287,120 @@ def _mesh_actor_polys(actor, index, search_files, *, hidden_prop: str = "bhidden
     return meshrender.frame_triangles(mesh), skins, mesh, ref, defaults
 
 
+def resolve_mesh_actor_polys(level, index, search_files, *, hidden_prop: str, textures: _TextureTable,
+                             in_solid=None) -> list[tuple[tuple, tuple[str, None]]]:
+    """Every non-brush actor's DT_Mesh triangles -> `[(poly_tuple, (actor.name, None)), ...]`, where
+    `poly_tuple` is the 8-tuple `(verts_flat, base, axis_u, axis_v, pan, tex_index, masked,
+    poly_flags)` -- the same shape `build_scene`'s own `add_poly` appends to `polys_no_light`. Built
+    from `level`/`index`/`search_files` alone, via `_mesh_actor_polys` + `meshworld` -- no CSG/BSP
+    dependency, unlike world/mover surfaces (board `mesh-actors-should-render-independent-of-
+    geometry-build`, owner decision "Option A" 2026-09-18: one mesh pipeline, always). Extracted
+    from `build_scene`'s own former inline mesh loop so BOTH that CSG-solved pipeline (`level photo
+    --native`, unaffected — see its `in_solid` param below) and `uedcli serve`'s independent,
+    build-state-free mesh resolution (`uedcli/serve/scene.py`'s `resolve_mesh_scene_polys` caller)
+    share one implementation instead of two copies that could drift.
+
+    `textures` is the CALLER's `_TextureTable` — `build_scene` passes its own single world+mesh
+    table (unchanged behavior: one shared atlas per photo); the GUI's independent path passes a
+    PRIVATE table of its own (`uedcli/serve/scene.py`), since it has no `geometry.texture_table` to
+    share and must keep working before any CSG solve exists.
+
+    `in_solid`, if given, is called with a mesh actor and skips it when it returns True — matches
+    `build_scene`'s own "don't draw a mesh in solid space" gate (`_model_point_region`, board
+    `meshes-in-solid-space-render-in-photo-and-gui`). Omitted (the GUI's independent path): no such
+    filtering happens, because there is no CSG model to test solid-space against before a Rebuild,
+    and Option A's ruling ("mesh rendering never depends on build state") means the SAME actor must
+    render the same way after one too — a deliberate, noted divergence from `level photo --native`'s
+    behavior, not an oversight."""
+    from . import meshworld, typedprops
+    from .transform import DegenerateTransformError, flip_winding, reject_degenerate
+
+    out: list[tuple[tuple, tuple[str, None]]] = []
+    for actor in level.actors.values():
+        if actor.brush is not None:
+            continue                                     # brushes/movers handled by the caller
+        tris, skins, mesh, mesh_ref, mesh_class_defaults = _mesh_actor_polys(
+            actor, index, search_files, hidden_prop=hidden_prop)
+        if not tris:
+            continue
+        if in_solid is not None and in_solid(actor):
+            continue
+        # This actor's own skin-relevant override, once -- () for the common no-override actor
+        # (keeps `index_for_decoded`'s cache hit rate), a real fingerprint only when it states one.
+        actor_skin_override = tuple(sorted(
+            (k, v) for k, v in typedprops.stored_prop_map(actor.props).items()
+            if k[0] in ("multiskins", "skin")))
+        L = meshworld.mesh_actor_linear(mesh, actor)
+        translation = meshworld.mesh_actor_translation(actor, class_defaults=mesh_class_defaults)
+        try:
+            reject_degenerate(L, actor.name)
+        except DegenerateTransformError as e:
+            raise NativePreviewError(str(e)) from e
+        flip = flip_winding(L)
+
+        for (v0, v1, v2, uv0, uv1, uv2, material_index, poly_flags) in tris:
+            if poly_flags & PF_INVISIBLE:
+                continue                                  # dropped Python-side, matches add_poly
+            if flip:
+                v0, v2 = v2, v0
+                uv0, uv2 = uv2, uv0
+            w0 = meshworld.apply_mesh_linear(v0, mesh_origin=mesh.origin, L=L,
+                                             translation=translation)
+            w1 = meshworld.apply_mesh_linear(v1, mesh_origin=mesh.origin, L=L,
+                                             translation=translation)
+            w2 = meshworld.apply_mesh_linear(v2, mesh_origin=mesh.origin, L=L,
+                                             translation=translation)
+            skin = skins.get(material_index)
+            if skin is None:
+                tex_index = -1
+                base, axis_u, axis_v = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)
+                pan = (0.0, 0.0)
+            else:
+                tw, th, rgb, b_masked, mask = skin
+                tex_index = textures.index_for_decoded(actor.cls, mesh_ref, material_index,
+                                                       tw, th, rgb, b_masked, mask,
+                                                       actor_override=actor_skin_override)
+                u0 = (uv0[0] * tw / 256.0, uv0[1] * th / 256.0)
+                u1 = (uv1[0] * tw / 256.0, uv1[1] * th / 256.0)
+                u2 = (uv2[0] * tw / 256.0, uv2[1] * th / 256.0)
+                frame = meshworld.solve_uv_frame(w0, w1, w2, u0, u1, u2)
+                if frame is None:
+                    continue          # degenerate triangle, skip (matches render.rs's own skip)
+                base, axis_u, axis_v, pan = frame
+            masked = bool(poly_flags & PF_MASKED) or textures.is_bmasked(tex_index)
+            verts_flat = [c for v in (w0, w1, w2)
+                         for c in (float(v[0]), float(v[1]), float(v[2]))]
+            out.append(((verts_flat, list(base), list(axis_u), list(axis_v), list(pan),
+                        tex_index, masked, poly_flags), (actor.name, None)))
+    return out
+
+
+def resolve_mesh_scene_polys(level, index, search_files, *, hidden_prop: str = "bhiddened"
+                             ) -> tuple[list[tuple], list[tuple[str, None]], list[tuple]]:
+    """`uedcli serve`'s Load-owned, build-state-independent mesh-actor resolution entry point
+    (mirrors `resolve_actor_sprites`'s existing independence for point-actor icons): every DT_Mesh
+    actor's world-space triangles + a PRIVATE texture table, from `level` alone -- no CSG/BSP
+    dependency, no `in_solid` gate (see `resolve_mesh_actor_polys`'s docstring for why). Returns
+    `(polys, owners, texture_table)`: `polys`/`owners` are `resolve_mesh_actor_polys`'s own pairs,
+    unzipped; `texture_table` is the private `_TextureTable.table` this call built, for the caller
+    to publish as its own atlas slot (`uedcli/serve/app.py`'s `/atlas` route) alongside
+    `geometry.texture_table` and `trunk.sprite_table` — never folded into either.
+
+    Returns `([], [], [])` when `search_files` is empty (no configured search path, so no
+    `TextureResolver` is possible) -- matches `resolve_actor_sprites`'s own degrade disposition for
+    the same condition, never a crash. `hidden_prop` defaults to `"bhiddened"` (EDITOR visibility —
+    the GUI hides `bHiddenEd` actors and ignores `bHidden`, owner ruling 2026-09-14), matching every
+    other GUI-facing resolver in this codebase (`build_scene`'s own `visibility="editor"` mode)."""
+    if not search_files:
+        return [], [], []
+    textures = _TextureTable(TextureResolver(search_files, class_index=index))
+    resolved = resolve_mesh_actor_polys(level, index, search_files, hidden_prop=hidden_prop,
+                                        textures=textures)
+    polys = [poly for poly, _owner in resolved]
+    owners = [owner for _poly, owner in resolved]
+    return polys, owners, textures.table
+
+
 # --------------------------------------------------------------------- textures
 
 class _TextureTable:
@@ -602,8 +716,8 @@ def _scene_hashes(level, light_names: set[str]) -> tuple[str, str]:
 # --------------------------------------------------------------------- orchestration
 
 def build_scene(level, search_files, index, *, defaults, project=None,
-                level_name=None, visibility: Literal["gameplay", "editor"] = "gameplay"
-                ) -> tuple[list, list, list]:
+                level_name=None, visibility: Literal["gameplay", "editor"] = "gameplay",
+                include_meshes: bool = True) -> tuple[list, list, list]:
     """Trunk → (render polys, texture table, per-poly owner names): CSG build + node-poly
     extraction + source-poly join + Python UV frames + mover extra_polys + native texture decode +
     world-surf lighting (board `bake-lighting-into-level-photo-native`). Raises NativePreviewError
@@ -653,7 +767,16 @@ def build_scene(level, search_files, index, *, defaults, project=None,
     `_mesh_actor_polys`): the SAME actor content builds a DIFFERENT `polys_no_light` depending on
     this mode, so the on-disk geometry/scene cache must key on it too, or `level photo --native` and
     `uedcli serve` would silently hand each other's cached, wrongly-filtered scene back for the same
-    level."""
+    level.
+
+    `include_meshes=False` (`uedcli serve`'s ONLY use of this flag, board `mesh-actors-should-render-
+    independent-of-geometry-build`, "Option A") skips the mesh-actor loop entirely — the GUI resolves
+    mesh-actor triangles itself, independently of this CSG-solved pipeline, via
+    `resolve_mesh_scene_polys` (`uedcli/serve/scene.py`), so a mesh actor renders the SAME way before
+    and after a Rebuild. `level photo --native` never passes this (default `True`, unchanged
+    behavior) — meshes there are genuinely part of the one-shot photo build. Folded into `geom_hash`
+    below alongside `visibility`, for the same reason: the same actor content builds a DIFFERENT
+    `polys_no_light` depending on this flag too."""
     try:
         from uedcli.native_ext import import_native
         uedcli_native = import_native()
@@ -676,10 +799,10 @@ def build_scene(level, search_files, index, *, defaults, project=None,
     geom_hash = light_hash = None
     if cache:
         geom_hash, light_hash = _scene_hashes(level, {n for n, *_ in lights})
-        # `visibility` changes `polys_no_light`/`actor_names_by_poly` for THE SAME actor content
-        # (see docstring) — tag it onto geom_hash so `render_shots` and `build_scene_payload` never
-        # share a cache entry built under the other's rule.
-        geom_hash += "e" if visibility == "editor" else "g"
+        # `visibility`/`include_meshes` change `polys_no_light`/`actor_names_by_poly` for THE SAME
+        # actor content (see docstring) — tag both onto geom_hash so `render_shots` and
+        # `build_scene_payload` never share a cache entry built under the other's rule.
+        geom_hash += ("e" if visibility == "editor" else "g") + ("" if include_meshes else "x")
         cached_scene = preview_cache.load_scene(project, level_name, geom_hash, light_hash)
         if cached_scene is not None:
             return cached_scene
@@ -800,94 +923,25 @@ def build_scene(level, search_files, index, *, defaults, project=None,
         for world_verts, actor, poly, i_brush_poly in _mover_world_polys(level, index):
             add_poly(world_verts, actor, poly, i_brush_poly=i_brush_poly)
 
-        from .transform import DegenerateTransformError, flip_winding, reject_degenerate
-        from . import meshrender, meshworld, typedprops
-
         hidden_prop = "bhiddened" if visibility == "editor" else "bhidden"
-        for actor in level.actors.values():
-            if actor.brush is not None:
-                continue                                     # brushes/movers handled above
-            tris, skins, mesh, mesh_ref, mesh_class_defaults = _mesh_actor_polys(
-                actor, index, search_files, hidden_prop=hidden_prop)
-            if not tris:
-                continue
-            # A mesh actor whose Location sits in SOLID space (a leaf carved out of nothing) is not
-            # drawn — the engine never renders an actor in a solid leaf (board `meshes-in-solid-
-            # space-render-in-photo-and-gui`). `_model_point_region`'s BSP descent returns i_leaf -1
-            # in solid space; a carved-open leaf always has i_leaf >= 0. Rule is the actor's own
-            # Location point (the simplest faithful test), not its bounds.
-            loc = tuple(float(c) for c in (actor.location or (0.0, 0.0, 0.0)))
-            if _model_point_region(model, loc)[0] < 0:
-                continue
-            # This actor's own skin-relevant override, once -- () for the common no-override actor
-            # (keeps `index_for_decoded`'s cache hit rate), a real fingerprint only when it states
-            # one (`per-actor-skins-override-in-native-mesh-render`'s cache-collision fix).
-            actor_skin_override = tuple(sorted(
-                (k, v) for k, v in typedprops.stored_prop_map(actor.props).items()
-                if k[0] in ("multiskins", "skin")))
-            # `L` + `translation` are the WHOLE placement formula, computed ONCE per actor: the
-            # per-vertex `apply_mesh_linear` below then costs one matvec, where the equivalent
-            # `mesh_vertex_to_world` would re-parse `Rotation` and rebuild both rotation matrices
-            # for every vertex of every triangle (pinned equivalent in `test_meshworld.py`).
-            L = meshworld.mesh_actor_linear(mesh, actor)
-            translation = meshworld.mesh_actor_translation(actor, class_defaults=mesh_class_defaults)
-            try:
-                reject_degenerate(L, actor.name)
-            except DegenerateTransformError as e:
-                raise NativePreviewError(str(e)) from e
-            flip = flip_winding(L)
+        if include_meshes:
+            def _in_solid(actor) -> bool:
+                # A mesh actor whose Location sits in SOLID space (a leaf carved out of nothing) is
+                # not drawn — the engine never renders an actor in a solid leaf (board `meshes-in-
+                # solid-space-render-in-photo-and-gui`). `_model_point_region`'s BSP descent returns
+                # i_leaf -1 in solid space; a carved-open leaf always has i_leaf >= 0.
+                loc = tuple(float(c) for c in (actor.location or (0.0, 0.0, 0.0)))
+                return _model_point_region(model, loc)[0] < 0
 
-            for (v0, v1, v2, uv0, uv1, uv2, material_index, poly_flags) in tris:
-                if poly_flags & PF_INVISIBLE:
-                    continue                                  # dropped Python-side, matches add_poly
-                if flip:
-                    v0, v2 = v2, v0
-                    uv0, uv2 = uv2, uv0
-                w0 = meshworld.apply_mesh_linear(v0, mesh_origin=mesh.origin, L=L,
-                                                 translation=translation)
-                w1 = meshworld.apply_mesh_linear(v1, mesh_origin=mesh.origin, L=L,
-                                                 translation=translation)
-                w2 = meshworld.apply_mesh_linear(v2, mesh_origin=mesh.origin, L=L,
-                                                 translation=translation)
-                skin = skins.get(material_index)
-                if skin is None:
-                    # This material has NO texture assigned — flat grey, the same disposition an
-                    # untextured BSP face already gets (`add_poly`'s unowned branch,
-                    # `index_for(None) -> -1`, `render.rs`'s DEFAULT_GREY). Distinct from a texture
-                    # that IS assigned but won't decode, which `resolve_skins` refuses by name.
-                    # There is nothing to map UV onto, so the UV solve is skipped entirely and a
-                    # neutral frame goes out — `render.rs` never samples it at `tex_index == -1`.
-                    tex_index = -1
-                    base, axis_u, axis_v = (0.0, 0.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)
-                    pan = (0.0, 0.0)
-                else:
-                    tw, th, rgb, b_masked, mask = skin
-                    # Dedup key is (actor.cls, mesh_ref, material_index), NOT (actor.name, ...) --
-                    # many placed instances of the same decoration/crate share one texture-table
-                    # slot, matching `_TextureTable.index_for`'s own content-identity dedup intent
-                    # for world/mover polys. The class is IN the key because skins are
-                    # class-dependent (`index_for_decoded`).
-                    tex_index = textures.index_for_decoded(actor.cls, mesh_ref, material_index,
-                                                           tw, th, rgb, b_masked, mask,
-                                                           actor_override=actor_skin_override)
-                    u0 = (uv0[0] * tw / 256.0, uv0[1] * th / 256.0)
-                    u1 = (uv1[0] * tw / 256.0, uv1[1] * th / 256.0)
-                    u2 = (uv2[0] * tw / 256.0, uv2[1] * th / 256.0)
-                    frame = meshworld.solve_uv_frame(w0, w1, w2, u0, u1, u2)
-                    if frame is None:
-                        continue      # degenerate triangle, skip (matches render.rs's own
-                                      # zero-area poly skip)
-                    base, axis_u, axis_v, pan = frame
-                # Same masking rule as `add_poly`: the triangle's own PF_Masked flag OR the skin
-                # texture's own bMasked (`resolve_skins` carries it out of the decode).
-                masked = bool(poly_flags & PF_MASKED) or textures.is_bmasked(tex_index)
-                verts_flat = [c for v in (w0, w1, w2)
-                             for c in (float(v[0]), float(v[1]), float(v[2]))]
-                polys_no_light.append((verts_flat, list(base), list(axis_u), list(axis_v),
-                                       list(pan), tex_index, masked, poly_flags))
+            for poly_tuple, owner in resolve_mesh_actor_polys(
+                    level, index, search_files, hidden_prop=hidden_prop, textures=textures,
+                    in_solid=_in_solid):
+                verts_flat, base, axis_u, axis_v, pan, tex_index, masked, poly_flags = poly_tuple
+                polys_no_light.append((verts_flat, base, axis_u, axis_v, pan, tex_index, masked,
+                                       poly_flags))
                 i_surf_by_poly.append(None)   # mesh actors: no lightmap (out of scope, board
                                               # `mesh-mover-per-vertex-lighting-in-level-photo`)
-                actor_names_by_poly.append((actor.name, None))  # no `.brush.polys` to index into
+                actor_names_by_poly.append(owner)   # no `.brush.polys` to index into
 
         texture_table = textures.table
         if cache:

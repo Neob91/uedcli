@@ -17,7 +17,14 @@ import * as THREE from 'three'
 export const CSG_WIRE_COLOR: Record<string, [number, number, number]> = {
   add: [127, 127, 255],
   subtract: [255, 192, 63],
-  semisolid: [127, 255, 0],
+  // `semisolid` is NOT a real UED22 `Default.ini` value (unlike its siblings above) -- that value,
+  // (127,255,0), came from the now-banned third-party UE1 source (GUI-PARITY.md, owner ruling
+  // 2026-09-18) and read as bright green, clashing with `mover`. Replaced with this project's own
+  // established, deliberate convention instead: `preview.py`'s `_CSG_PALETTE["semisolid"]` front
+  // value, a warm coral chosen specifically to stay distinct from mover's magenta (see that file's
+  // comment). Scaling this by the 0.5 unselected factor below (~118,60,40) already lands close to
+  // `_CSG_PALETTE`'s own back/unselected tuple (125,62,40) -- no second value needed here.
+  semisolid: [235, 120, 80],
   nonsolid: [63, 192, 32],
   mover: [255, 0, 255],
 }
@@ -46,11 +53,10 @@ export function toThreeColor(rgb: [number, number, number]): THREE.Color {
 }
 
 // UED22's own selected-actor colors for sprites/meshes (GUI-PARITY.md "Selection highlight
-// rendering" -- NOT this codebase's own invention, except where noted). The sprite tint and mesh
-// ambient-bias formulas are ✅ binary-confirmed (disassembly of this project's own `render.dll`, not
-// just the third-party UE1 v200 source tree that first surfaced them); the wireframe edge colors are
-// data-confirmed in the same binary but not instruction-linked (still essentially certain -- see
-// GUI-PARITY.md).
+// rendering" -- NOT this codebase's own invention, except where noted). The sprite tint, mesh
+// ambient-bias, and mesh wireframe-edge formulas are all ✅ binary-confirmed (disassembly of this
+// project's own `render.dll`, not the third-party UE1 v200 source tree that first surfaced them --
+// see GUI-PARITY.md's "Mesh-actor wireframe rendering" section for the wire-color instruction trace).
 //
 // - Point-actor sprite (`DrawActorSprite`): a MULTIPLICATIVE tint on the icon texture,
 //   `Color = bSelected ? (.5,.9,.5) : (1,1,1)` -- halves R/B, keeps G near-full. Apply as
@@ -68,8 +74,8 @@ export function toThreeColor(rgb: [number, number, number]): THREE.Color {
 //   of the real editor than the literal-formula approximation did. The literal `DrawMesh` formula
 //   stays documented in `GUI-PARITY.md` as what real UED22 does; this implementation now knowingly
 //   departs from it.
-// - Mesh actor, wireframe (`DrawMesh`, the `bWire` branch): flat edge-line color, selected
-//   (.2,.8,.1), unselected (.6,.4,.1) -- an olive/brown, not white.
+// - Mesh actor, wireframe (`DrawLodMesh`, reached via `DrawMesh`'s dispatch, RVA `0xd050`): flat
+//   edge-line color, selected (.2,.8,.1), unselected (.6,.4,.1) -- an olive/brown, not white.
 export const SELECTED_SPRITE_TINT = new THREE.Color(0.5, 0.9, 0.5)
 // The explicit UNSELECTED value for the same prop -- react-three-fiber treats an `undefined` prop
 // as "leave whatever's already applied alone," not "reset to default," so a spriteMaterial's

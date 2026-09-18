@@ -199,6 +199,41 @@ body {
   cursor: row-resize;
 }
 
+/* Collapsible sidebar wrapper (mobile/laptop layout spec, owner-approved 2026-09-18): shared shape
+   for the org-panel wrapper here and `.inspector-pane`'s own wrapper in App.tsx -- a toggle button
+   docked at the sidebar's edge, always rendered, plus the panel's own content when expanded. Only
+   `flex: 0 0 auto` sizing and `height: 100%` are shared; each wrapper's toggle sits at whichever edge
+   faces the viewport (see `.org-panel-wrapper .sidebar-toggle` / `.inspector-pane-wrapper
+   .sidebar-toggle` below). */
+.org-panel-wrapper,
+.inspector-pane-wrapper {
+  display: flex;
+  flex: 0 0 auto;
+  height: 100%;
+}
+
+.sidebar-toggle {
+  flex: 0 0 auto;
+  width: 20px;
+  font: inherit;
+  font-size: 11px;
+  border: none;
+  border-left: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--fg-muted);
+  cursor: pointer;
+}
+
+.sidebar-toggle:hover {
+  color: var(--fg);
+  background: var(--surface-2-hover);
+}
+
+/* The inspector pane sits on the far right, so its toggle -- the sidebar's own left edge -- comes
+   BEFORE its content in the wrapper's flex row; the org panel's toggle does too (see the JSX order
+   in QuadLayout.tsx), since it also sits to the right of the quad. Both share the same visual result:
+   a thin always-visible strip at the boundary between the sidebar and the rest of the layout. */
+
 /* Org panel sidebar (Part 6, Task 23): folder tree + label facets + find. */
 .org-panel {
   flex: 0 0 220px;
@@ -318,13 +353,29 @@ body {
   background: var(--sem-selection);
 }
 
-/* Grid visibility toggle (Part 8, Task 28) -- one switch for all three ortho panes, an overlay
-   button in the quad's top-right corner. */
-.grid-toggle {
+/* The Movers/Radii/Grid overlay toolbar (bug fix, dev/docs/GUI.md "Toolbar overlap"): ONE
+   absolutely-positioned flex row, a child of `.quad-layout` (the quad grid itself) -- not of
+   `.quad-layout-root`, which also spans the 220px org-panel sidebar. Each button's old individual
+   `position: absolute; right: <hardcoded px>` anchored to `.quad-layout-root`, so any offset smaller
+   than the sidebar's width landed the button INSIDE the sidebar instead of over the quad. A single
+   positioned flex container with a `gap` needs no per-button offset math, so it stays correct
+   regardless of the sidebar's width -- including once it's collapsible (below). Being
+   `position: absolute` inside a CSS grid container also excludes it from the grid's own auto-
+   placement (it does not consume one of the 2x2 pane cells). */
+.quad-toolbar {
   position: absolute;
   top: 4px;
+  left: 4px;
   right: 4px;
   z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quad-toolbar button {
   font: inherit;
   font-size: 11px;
   padding: 2px 8px;
@@ -335,13 +386,51 @@ body {
   cursor: pointer;
 }
 
-.grid-toggle[aria-pressed='false'] {
+.mover-solid-toggle[aria-pressed='false'],
+.radii-toggle[aria-pressed='false'] {
   color: var(--fg-muted);
 }
 
+/* Grid control (owner ruling): one checkbox+dropdown pair instead of two separate buttons -- the
+   dropdown stays visible but disabled while the checkbox is off, so toggling Grid causes no layout
+   shift and the last-chosen size stays visible. */
+.grid-control {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.grid-control-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.grid-size-select {
+  font: inherit;
+  font-size: 11px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.grid-size-select:disabled {
+  color: var(--fg-muted);
+  cursor: not-allowed;
+}
+
 /* Visible per-pane shading-mode control -- bottom-right of every pane (the one corner none of the
-   existing per-pane/per-quad overlays uses: quad-pane-label is top-left, grid-toggle top-right of
-   the whole quad, ortho-cursor-readout bottom-left of ortho panes only). Mirrors grid-toggle's own
+   existing per-pane/per-quad overlays uses: quad-pane-label is top-left, .quad-toolbar top-right of
+   the whole quad, ortho-cursor-readout bottom-left of ortho panes only). Mirrors .quad-toolbar's own
    look, one button per available mode instead of a single on/off toggle. */
 .mode-selector {
   position: absolute;
@@ -372,70 +461,6 @@ body {
   color: var(--fg-muted);
   opacity: 0.4;
   cursor: not-allowed;
-}
-
-/* Collision-cylinder / light-radius overlay toggle -- same convention as .grid-toggle, one switch
-   for every pane, placed just to its left so the two buttons don't overlap. */
-.radii-toggle {
-  position: absolute;
-  top: 4px;
-  right: 84px;
-  z-index: 3;
-  font: inherit;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--fg);
-  cursor: pointer;
-}
-
-.radii-toggle[aria-pressed='false'] {
-  color: var(--fg-muted);
-}
-
-/* Base grid-size dropdown (dev/docs/GUI.md "The world-anchored grid") -- placed further left than
-   .radii-toggle so the three buttons don't overlap: .radii-toggle sits at right:84px and is itself
-   roughly 80-90px wide ("Radii: off" at this font/padding), putting its own left edge around
-   x=164-174px from the pane's right edge; right:172px leaves a small gap past that. */
-.grid-size-select {
-  position: absolute;
-  top: 4px;
-  right: 172px;
-  z-index: 3;
-  font: inherit;
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--fg);
-  cursor: pointer;
-}
-
-/* Movers solid-geometry toggle (GUI.md "Movers") -- same convention as .grid-toggle/.radii-toggle,
-   placed further left than .grid-size-select so the four buttons don't overlap: the select sits at
-   right:172px and is itself well under 128px wide even at its widest option ("Grid Size: 512"),
-   putting its own left edge comfortably past x=300px from the pane's right edge; right:300px leaves
-   a clear gap past that. (Previously had no positioning at all -- fell into normal document flow.) */
-.mover-solid-toggle {
-  position: absolute;
-  top: 4px;
-  right: 300px;
-  z-index: 3;
-  font: inherit;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--fg);
-  cursor: pointer;
-}
-
-.mover-solid-toggle[aria-pressed='false'] {
-  color: var(--fg-muted);
 }
 
 /* Cursor UU coordinate readout (Task 28) -- bottom-left of each ortho pane. */

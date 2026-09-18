@@ -2,7 +2,13 @@
 Task 1) are the two independently-cached slots `app.py`'s `_get_trunk`/`_read_geometry`/
 `_build_and_publish_geometry` populate — `build_scene_payload` (Task 3) is pure: it assembles a
 `ScenePayload` from two already-built pieces instead of loading/building anything itself.
-`build_wireframe_payload` (gui-explicit-rebuild plan, Task 2) is its no-geometry-pinned sibling."""
+`build_wireframe_payload` (gui-explicit-rebuild plan, Task 2) is its no-geometry-pinned sibling.
+
+Mesh-actor triangles are resolved independently of BOTH — `_LoadedTrunk.mesh_polys`
+(`preview_native.resolve_mesh_scene_polys`, Load-owned, no CSG/BSP dependency) feeds
+`_wrap_mesh_scene_polys` into both payloads identically, so a mesh actor renders the same way
+before and after a Rebuild (board `mesh-actors-should-render-independent-of-geometry-build`, owner
+decision "Option A" 2026-09-18)."""
 from __future__ import annotations
 
 import sys
@@ -14,7 +20,7 @@ from ..emit import fmt_loc
 from ..model import Level
 from ..movers import is_mover
 from ..preview import _CSG_PALETTE, classify_brush, world_light_radius
-from ..preview_native import poly_blend, poly_two_sided
+from ..preview_native import poly_blend, poly_two_sided, resolve_mesh_scene_polys
 from ..rotation import actor_linear, actor_prepivot, actor_rotation_uu, local_offset
 from ..writes import actor_bounds
 
@@ -174,12 +180,24 @@ class _LoadedTrunk:
     `actor_sprites` is DELIBERATELY `dict[str, tuple[int, float, float]]`, not `dict[str,
     ActorSprite]`: wrapping needs `tex_offset = len(geometry.texture_table)`, a GEOMETRY-slot value
     not known while only the trunk slot is being built. The wrap into `ActorSprite` still happens
-    in `build_scene_payload` below, exactly like before this split, once both slots are available."""
+    in `build_scene_payload` below, exactly like before this split, once both slots are available.
+
+    `mesh_polys`/`mesh_owners`/`mesh_texture_table` are `resolve_mesh_scene_polys`'s own raw return
+    (board `mesh-actors-should-render-independent-of-geometry-build`, owner decision "Option A"
+    2026-09-18): every DT_Mesh actor's world-space triangles, resolved from the trunk ALONE — no
+    CSG/BSP dependency, same independence `sprite_table` already has for point-actor icons. Kept
+    raw (poly tuples + a private texture table), not wrapped into `ScenePoly`, for the same reason
+    `actor_sprites` stays raw: wrapping needs a `tex_offset` that depends on how many OTHER texture
+    slots (geometry's, then sprites') precede this one, which isn't known until the caller picks
+    `build_wireframe_payload` vs `build_scene_payload` — see `_wrap_mesh_scene_polys` below."""
     level: Level
     ranks: dict[str, str]
     folders: dict[str, str | None]
     sprite_table: list[tuple[int, int, bytes, bytes]]
     actor_sprites: dict[str, tuple[int, float, float]]
+    mesh_polys: list[tuple]
+    mesh_owners: list[tuple[str, None]]
+    mesh_texture_table: list[tuple[int, int, bytes, bytes]]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -461,7 +479,14 @@ def filtered_geometry_polys(level: Level, geometry: _BuiltGeometry, hidden_ed: d
     route (packs the surviving RAW polys' baked lumel grids -- `ScenePoly.lightmap` has its RGB
     stripped, so `/lightmap` needs these raw tuples, not the wrapped payload) go through, so the two
     routes' poly-index positions can never disagree. `owner` is `(name, i_brush_poly) | None` --
-    the membership test below reads just the name half."""
+    the membership test below reads just the name half.
+
+    `geometry.polys` never contains a mesh-actor triangle (`build_scene(..., include_meshes=False)`,
+    `app.py`'s `_build_and_publish_geometry`) -- this function's output is scoped to true world/BSP-
+    solved surfaces and Mover triangles only. Mesh polys are a SEPARATE, appended-after-the-fact
+    source (`_wrap_mesh_scene_polys`, board `mesh-actors-should-render-independent-of-geometry-
+    build`) that `build_scene_payload` adds to its own returned list but that never passes through
+    this filter and never reaches `/lightmap` (mesh actors are never lit)."""
     hidden_add_owners = {
         name for name, hidden in hidden_ed.items()
         if hidden and (a := level.actors.get(name)) is not None and a.brush is not None
@@ -469,6 +494,26 @@ def filtered_geometry_polys(level: Level, geometry: _BuiltGeometry, hidden_ed: d
     }
     return [(poly, owner) for poly, owner in zip(geometry.polys, geometry.owners)
             if (owner[0] if owner is not None else None) not in hidden_add_owners]
+
+
+def _wrap_mesh_scene_polys(trunk: _LoadedTrunk, *, tex_offset: int) -> list[ScenePoly]:
+    """`trunk.mesh_polys`/`.mesh_owners` (Load-owned, CSG-independent — `resolve_mesh_scene_polys`)
+    wrapped into `ScenePoly`, `tex_offset` shifting each poly's index into `trunk.mesh_texture_table`
+    to the request's real atlas-wide index — mirrors `_build_actors`' own sprite `tex_offset`
+    handling; `-1` (no texture assigned) is never offset. Shared by `build_wireframe_payload`/
+    `build_scene_payload` so a mesh actor renders IDENTICALLY pre- and post-Rebuild (owner decision
+    "Option A", `dev/docs/board/to-build/mesh-actors-should-render-independent-of/overview.md`). A
+    mesh poly has no lightmap (mesh actors are never lit, `build_scene`'s own docstring) and no
+    single source poly to address (`i_brush_poly=None`, matching every other mesh-poly convention in
+    this codebase)."""
+    return [
+        ScenePoly(verts=verts, base=list(base), tu=list(tu), tv=list(tv), pan=list(pan),
+                 tex_index=tex_index + tex_offset if tex_index >= 0 else -1, masked=masked,
+                 two_sided=poly_two_sided(flags), blend=poly_blend(flags), flags=flags,
+                 lightmap=None, owner=owner[0], i_brush_poly=owner[1])
+        for (verts, base, tu, tv, pan, tex_index, masked, flags), owner in
+        zip(trunk.mesh_polys, trunk.mesh_owners)
+    ]
 
 
 def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, defaults
@@ -505,10 +550,21 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
 
     A `bHiddenEd` actor is dropped from `ScenePayload.actors` entirely (`_is_hidden_ed` above) —
     owner ruling 2026-09-14: the GUI hides editor-hidden actors and ignores `bHidden` (the opposite
-    of `level photo --native`). `build_scene` itself already excludes such a mesh actor's triangles
-    (`visibility="editor"`, applied when `geometry` was built), so this actor-list drop is what
-    additionally hides its selection highlight and its `markers.ts` fallback marker — one filter for
-    meshes, brushes, and bare point actors alike, rather than three.
+    of `level photo --native`). A hidden mesh actor's own triangles never reach `trunk.mesh_polys` in
+    the first place (`resolve_mesh_scene_polys`'s own `_mesh_actor_polys` check, same `bHiddenEd`
+    read), so this actor-list drop is what additionally hides its selection highlight and its
+    `markers.ts` fallback marker — one filter for brushes and bare point actors, and a second,
+    independent one (Load-owned, not this function's) for meshes.
+
+    **Mesh-actor triangles never come from `geometry.polys`** (board `mesh-actors-should-render-
+    independent-of-geometry-build`, owner decision "Option A" 2026-09-18): `geometry.polys` is built
+    by `build_scene(..., include_meshes=False)` (`app.py`'s `_build_and_publish_geometry`) and so
+    never contains one — `filtered_geometry_polys` below is scoped to true world/BSP-solved surfaces
+    (and Mover triangles, which are CSG-independent for a separate, still-open reason — see that
+    board item's write-up) only. Mesh triangles instead ride in `trunk.mesh_polys`
+    (`resolve_mesh_scene_polys`, Load-owned, no CSG dependency at all) and are wrapped in by
+    `_wrap_mesh_scene_polys` below, exactly like `build_wireframe_payload` does — so a mesh actor
+    renders IDENTICALLY before and after a Rebuild.
 
     A `bHiddenEd` BRUSH additionally drops its own rendered CSG surfaces from `ScenePayload.polys`
     (owner-attributed via `geometry.owners` / `ScenePoly.owner`) — but ONLY when the brush is a
@@ -547,18 +603,31 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     # `tex_offset + local_index` names the same atlas rect on both endpoints.
     actors = _build_actors(trunk, hidden_ed, tex_offset=len(texture_table), index=index,
                            radii_map=radii_map)
+    # Mesh-actor triangles: appended AFTER the filtered world/BSP/mover polys above, never mixed in
+    # or reordered among them -- `/lightmap`'s manifest indexes `filtered`'s polys by ARRAY POSITION
+    # (`app.py`'s `/lightmap` route docstring), and a mesh poly always carries `lightmap=None`, so
+    # inserting them anywhere but the tail would shift every later lit poly's index. Atlas order is
+    # `geometry.texture_table + trunk.sprite_table + trunk.mesh_texture_table` (`app.py`'s `/atlas`
+    # route), so this offset is the sprite slot's own end.
+    scene_polys += _wrap_mesh_scene_polys(trunk, tex_offset=len(texture_table) + len(trunk.sprite_table))
     return ScenePayload(polys=scene_polys, actors=actors)
 
 
 def build_wireframe_payload(trunk: _LoadedTrunk, index, defaults) -> ScenePayload:
     """The cold-open / no-Rebuild-yet payload (gui-explicit-rebuild spec §4): no solved geometry is
-    pinned, so `polys` is genuinely empty (never an error) and every brush actor's own AUTHORED
-    `SceneActor.brush` shape is all the client can draw -- exactly what lets wireframe mode render
-    with zero dependency on `_BuiltGeometry`. `tex_offset` is 0: `/atlas` builds its atlas from ONLY
-    `trunk.sprite_table` in this case (`app.py`'s `atlas` route skips `geometry.texture_table`
+    pinned, so `polys` carries ONLY mesh-actor triangles (`trunk.mesh_polys`, Load-owned, no CSG
+    dependency) -- world/BSP surfaces genuinely don't exist yet, but every brush actor's own
+    AUTHORED `SceneActor.brush` shape still lets the client draw an outline, and a mesh actor now
+    renders its real triangles too (board `mesh-actors-should-render-independent-of-geometry-build`,
+    owner decision "Option A" 2026-09-18 -- previously `polys` was unconditionally `[]` here, so a
+    mesh actor rendered as a white/untextured spot until the first Rebuild). `tex_offset` for
+    sprites is 0 (unchanged): `/atlas` builds its atlas from `trunk.sprite_table +
+    trunk.mesh_texture_table` in this case (`app.py`'s `atlas` route skips `geometry.texture_table`
     entirely when no geometry is pinned), so a sprite's `tex_index` names a rect in THAT atlas, at
-    the sprite's own position with no offset."""
+    the sprite's own position with no offset; mesh polys shift by `len(trunk.sprite_table)`, the
+    sprite slot's own end -- same atlas-order convention `build_scene_payload` uses."""
     hidden_ed = _resolve_hidden_ed(trunk.level, defaults)
     radii_map = _resolve_actor_radii(trunk.level, defaults, hidden_ed)
     actors = _build_actors(trunk, hidden_ed, tex_offset=0, index=index, radii_map=radii_map)
-    return ScenePayload(polys=[], actors=actors)
+    mesh_polys = _wrap_mesh_scene_polys(trunk, tex_offset=len(trunk.sprite_table))
+    return ScenePayload(polys=mesh_polys, actors=actors)

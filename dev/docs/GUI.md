@@ -250,24 +250,30 @@ write path).
   (`BrushOutlines.tsx`), and the **whole-brush surface highlight** below are all ACTOR-selection-only
   (`selectedNames`) — a texture-only selection shows none of them, only its own highlight (next
   bullet). `SelectionMarkers.tsx` ports `preview.py`'s `_draw_vertex_dot`/`_draw_pivot_marker`: a
-  small square dot (`VERTEX_DOT_SIZE = 2` world units — tuned down from an earlier `6`, which read
-  as an oversized blob against the 2px selection outline) per poly vertex in the brush's own
-  brightened CSG wire color, plus a red (`_PIVOT_RED`, `(255,63,63)`) crosshair+square at the
-  actor's true `Location`. A third dot, the same square glyph as the poly vertices, marks the
-  brush's PrePivot-shifted "local origin" (`BrushHighlight.local_origin`, `Location - R·PrePivot`,
-  computed server-side in `scene.py`'s `_brush_highlight` the same way `preview.py` does — coincides
-  with the pivot only when `PrePivot=0`). This dot renders for at most ONE actor even when several
-  brushes are selected: UED22's real GUI has exactly one pivot WIDGET per selection (it drops onto
-  whichever actor a human click lands on, not one per selected actor —
-  `dev/docs/spikes/2026-06-19-multiactor-rotate-groundtruth.md` "Pivot caveat"). `selectionSet.ts`'s
-  `primarySelection` (the last name in the selection Set's insertion order — `toggleSelection` always
-  appends a freshly-selected name last) stands in for "the actor last clicked." The pre-existing red
-  pivot crosshair still renders per selected actor; the same real-UED22 evidence suggests it may have
-  the same one-widget-per-selection mismatch, not yet addressed here.
-- **The pivot marker is a gizmo, not a geometry marker**: it holds a constant on-screen pixel size
-  regardless of zoom/distance (`PivotMarker`'s per-frame rescale from live camera/viewport state via
-  `worldUnitsPerPixelAt`), unlike the vertex dots, which stay world-scaled (they mark a precise
-  point on already-drawn geometry).
+  small square dot (`VERTEX_DOT_SCREEN_PX = 6`, a constant ON-SCREEN pixel size regardless of zoom/
+  distance — see the next bullet) per poly vertex in the brush's own brightened CSG wire color, plus
+  a red (`_PIVOT_RED`, `(255,63,63)`) crosshair+square. A third dot, the same square glyph as the
+  poly vertices, marks the brush's PrePivot-shifted "local origin" (`BrushHighlight.local_origin`,
+  `Location - R·PrePivot`, computed server-side in `scene.py`'s `_brush_highlight` the same way
+  `preview.py` does — coincides with the pivot only when `PrePivot=0`). This local-origin dot
+  renders for at most ONE actor even when several brushes are selected — `selectionSet.ts`'s
+  `primarySelection` (the last name in the selection Set's insertion order — "the actor last
+  clicked") stands in for it.
+
+  **The red pivot crosshair renders exactly ONE per selection, not one per selected brush** — RE'd by
+  disassembly against the real `Editor.dll` (`GUI-PARITY.md`'s "Pivot-cross ..." findings, not the
+  `2026-06-19` spike's guess): UED22's own global pivot marker is anchored to whichever actor was
+  most recently the SOLE member of the selection, and only shown when that actor snaps to the grid
+  (a stand-in for `bEdShouldSnap`, true by class default for brushes/Movers, false for point actors).
+  `selectionSet.ts`'s `pivotAnchor` (a DIFFERENT function from `primarySelection` above — oldest
+  surviving member, not last-clicked) implements this anchor rule. Three deliberate, owner-approved
+  departures from UED22's literal state machine (which leaves stale/dangling crosshairs in these
+  cases) are recorded in `GUI-PARITY.md`, not reproduced here.
+- **The pivot marker AND the vertex/local-origin dots are all gizmos, not geometry markers**: all
+  hold a constant on-screen pixel size regardless of zoom/distance (`worldUnitsPerPixelAt`, computed
+  per frame from live camera/viewport state) — confirmed as UED22's own real mechanism for both
+  (`UnEdRend.cpp`'s `Draw2DPoint`, and the pivot draw site, both screen-space draws with no distance
+  term).
 - **Selection line width**: 2px, matching `preview.py`'s real `weight=2` for a highlighted edge —
   not a rounder "looks about right" value.
 - **Whole-brush surface highlight** (`SelectionHighlight.tsx`): a selected brush's drawn surface

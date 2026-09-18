@@ -382,7 +382,6 @@ export function Viewport3D({
     [mouseDrag, performTapSelect],
   )
 
-  const onWheel = mouseDrag.onWheel
   const onContextMenu = mouseDrag.onContextMenu
 
   return (
@@ -395,7 +394,6 @@ export function Viewport3D({
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onWheel={onWheel}
       onContextMenu={onContextMenu}
     >
       {/* far spans a whole UE1 level (world is +/-32768 UU, so ~65k across); R3F's default far=1000
