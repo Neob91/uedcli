@@ -63,8 +63,14 @@ The open fork is what happens to the ALREADY-BUILT (post-Rebuild) path once that
   something different pre- vs. post-build), and a mesh actor could visibly change appearance the
   moment a Rebuild finishes even though nothing about the mesh itself changed.
 
-Not decided here per the owner's own instruction ("let me know if there are decisions") -- asked
-directly.
+**Decided (owner, 2026-09-18): Option A.** One mesh pipeline, always -- mesh-actor rendering never
+depends on build state, pre- or post-Rebuild. `build_scene_payload` is to stop sourcing mesh-actor
+triangles from `geometry.polys`; both payloads resolve mesh actors the same way, via the independent
+per-actor path (`_mesh_actor_polys` + `meshworld.py`), same as `trunk.sprite_table` already does for
+point-actor icons. `geometry.polys`/`filtered_geometry_polys` become scoped to true world/BSP-solved
+surfaces only -- a Mover's own brush polys (not part of world CSG either, per the existing
+`_mover_world_polys` comment in `preview_native.py`) may already need the same treatment; check
+whether it already gets it or is a separate, pre-existing case.
 
 ## Where to look
 
