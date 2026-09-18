@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload, ScenePoly, StatusPayload } from './api'
 import { fetchLevelState, fetchStatus, postLoad, postRebuild, switchLevel } from './api'
+import { useCollapsiblePanel } from './layout/useCollapsiblePanel'
 import { Inspector } from './panels/Inspector'
 import type { SurfaceSelection } from './panels/Inspector'
 import { LevelPicker } from './panels/LevelPicker'
@@ -130,6 +131,10 @@ function App() {
   // load) does the actual blocking -- unmounting the whole app is the most thorough "block all UI".
   const [levelSwitching, setLevelSwitching] = useState(false)
   const [levelSwitchError, setLevelSwitchError] = useState<string | null>(null)
+  // Collapsible inspector sidebar (mobile/laptop layout spec, owner-approved 2026-09-18) -- see
+  // QuadLayout.tsx's identical org-panel wiring and useCollapsiblePanel's own doc comment. A
+  // separate storage key: the two sidebars toggle independently, per the owner's spec.
+  const { collapsed: inspectorCollapsed, toggle: toggleInspector } = useCollapsiblePanel('uedcli-inspector-pane-collapsed')
 
   useEffect(() => {
     fetch('/api/health')
@@ -329,8 +334,24 @@ function App() {
           />
         </div>
       </div>
-      <div className="inspector-pane">
-        <Inspector selected={selectedActors} selectedSurfaces={selectedSurfaceInfos} />
+      {/* Collapsible sidebar (mobile/laptop layout spec) -- see QuadLayout.tsx's identical org-panel
+          wrapper for the shared shape/rationale. */}
+      <div className="inspector-pane-wrapper">
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={toggleInspector}
+          aria-pressed={inspectorCollapsed}
+          aria-label={inspectorCollapsed ? 'Show inspector panel' : 'Hide inspector panel'}
+          title={inspectorCollapsed ? 'Show inspector panel' : 'Hide inspector panel'}
+        >
+          {inspectorCollapsed ? '◀' : '▶'}
+        </button>
+        {!inspectorCollapsed && (
+          <div className="inspector-pane">
+            <Inspector selected={selectedActors} selectedSurfaces={selectedSurfaceInfos} />
+          </div>
+        )}
       </div>
     </div>
   )

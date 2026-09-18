@@ -9,6 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
+import { useCollapsiblePanel } from '../layout/useCollapsiblePanel'
 import { OrgPanel } from '../panels/OrgPanel'
 import type { FrameRequest } from './frame'
 import { unionBBox } from './frame'
@@ -115,6 +116,11 @@ export function QuadLayout({
   // wireframe, so it has no visible effect there -- expected, not wired to be disabled for it).
   const [showMoverSolid, setShowMoverSolid] = useState(false)
 
+  // Collapsible org-panel sidebar (mobile/laptop layout spec, owner-approved 2026-09-18): defaults
+  // open above the responsive breakpoint / collapsed below it, overridden permanently once the user
+  // manually toggles it (persisted in localStorage) -- see useCollapsiblePanel's own doc comment.
+  const { collapsed: orgPanelCollapsed, toggle: toggleOrgPanel } = useCollapsiblePanel('uedcli-org-panel-collapsed')
+
   // Resizable panes (bug report item 3): the column/row split as a fraction (0..1) of the quad's
   // own box, in plain component state per the ask -- no persistence needed. `MIN_FRAC`/`MAX_FRAC`
   // keep every pane at least a usable sliver, never fully collapsed by a runaway drag.
@@ -178,57 +184,68 @@ export function QuadLayout({
     <div className="quad-layout-root">
       <SceneResourcesProvider scene={scene} atlas={atlas} lightmap={lightmap}>
         <SelectionKeys selectedNames={selectedNames} onFrame={frameActors} onDeselect={onDeselect} />
-        <button
-          type="button"
-          className="grid-toggle"
-          onClick={() => setShowGrid((v) => !v)}
-          aria-pressed={showGrid}
-        >
-          Grid: {showGrid ? 'on' : 'off'}
-        </button>
-        {/* Base grid-size dropdown (dev/docs/GUI.md "The world-anchored grid") -- UnrealEd's own
-            "Grid Size" preference, the SMALLEST grid unit the escalation algorithm builds from as a
-            pane zooms out. Positioned further left than .grid-toggle/.radii-toggle so the three
-            don't overlap (index.css's own comment has the offset math). */}
-        <select
-          className="grid-size-select"
-          aria-label="Grid size"
-          value={baseGridSize}
-          onChange={(e) => setBaseGridSize(Number(e.target.value))}
-        >
-          {GRID_SIZE_OPTIONS.map((n) => (
-            <option key={n} value={n}>
-              Grid Size: {n}
-            </option>
-          ))}
-        </select>
-        <button
-          type="button"
-          className="radii-toggle"
-          onClick={() => setShowRadii((v) => !v)}
-          aria-pressed={showRadii}
-        >
-          Radii: {showRadii ? 'on' : 'off'}
-        </button>
-        {/* Movers solid-geometry toggle (GUI.md "Movers") -- stays enabled regardless of the focused
-            pane's current shading mode: the click still flips the stored toggle state, which matters
-            the instant that pane switches to a non-wireframe mode, even though it has no immediate
-            visible effect while wireframe (or an ortho pane) is active. Never disabled/greyed on
-            `modes`/`focusedPane`. */}
-        <button
-          type="button"
-          className="mover-solid-toggle"
-          onClick={() => setShowMoverSolid((v) => !v)}
-          aria-pressed={showMoverSolid}
-        >
-          Movers: {showMoverSolid ? 'on' : 'off'}
-        </button>
         <div
           className="quad-layout"
           data-maximized={maximized ?? undefined}
           ref={quadRef}
           style={maximized === null ? { gridTemplateColumns: `${colFrac}fr ${1 - colFrac}fr`, gridTemplateRows: `${rowFrac}fr ${1 - rowFrac}fr` } : undefined}
         >
+        {/* Overlay toolbar (Movers/Radii/Grid), positioned relative to THIS element (`.quad-layout`,
+            the quad grid itself), not `.quad-layout-root` (bug fix: `.quad-layout-root` also spans
+            the org-panel sidebar, so a button anchored to it by a hardcoded `right` offset smaller
+            than the sidebar's width landed INSIDE the sidebar instead of over the quad -- see
+            dev/docs/GUI.md "Toolbar overlap"). One flex row, not per-button hand-computed `right`
+            offsets -- adding/removing/resizing a button no longer needs every sibling's offset
+            recomputed. */}
+        <div className="quad-toolbar">
+          {/* Movers solid-geometry toggle (GUI.md "Movers") -- stays enabled regardless of the
+              focused pane's current shading mode: the click still flips the stored toggle state,
+              which matters the instant that pane switches to a non-wireframe mode, even though it
+              has no immediate visible effect while wireframe (or an ortho pane) is active. Never
+              disabled/greyed on `modes`/`focusedPane`. */}
+          <button
+            type="button"
+            className="mover-solid-toggle"
+            onClick={() => setShowMoverSolid((v) => !v)}
+            aria-pressed={showMoverSolid}
+          >
+            Movers: {showMoverSolid ? 'on' : 'off'}
+          </button>
+          <button
+            type="button"
+            className="radii-toggle"
+            onClick={() => setShowRadii((v) => !v)}
+            aria-pressed={showRadii}
+          >
+            Radii: {showRadii ? 'on' : 'off'}
+          </button>
+          {/* Grid control (owner ruling): a single checkbox+dropdown pair, not two separate buttons
+              -- the dropdown stays visible but DISABLED (not hidden) while the checkbox is off, so
+              toggling Grid never shifts the toolbar's layout and the last-chosen size stays visible. */}
+          <div className="grid-control">
+            <label className="grid-control-toggle">
+              <input
+                type="checkbox"
+                checked={showGrid}
+                onChange={(e) => setShowGrid(e.target.checked)}
+              />
+              Grid
+            </label>
+            <select
+              className="grid-size-select"
+              aria-label="Grid size"
+              value={baseGridSize}
+              disabled={!showGrid}
+              onChange={(e) => setBaseGridSize(Number(e.target.value))}
+            >
+              {GRID_SIZE_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  Grid Size: {n}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
         {PANES.map((pane) => (
           <div
             key={pane}
@@ -306,7 +323,24 @@ export function QuadLayout({
         )}
       </div>
       </SceneResourcesProvider>
-      <OrgPanel actors={scene.actors} selectedNames={selectedNames} onSelectActor={handleOrgSelect} />
+      {/* Collapsible sidebar (mobile/laptop layout spec): the toggle itself always renders, so a
+          collapsed panel can always be reopened; the panel's own (potentially heavy) content only
+          mounts while expanded. */}
+      <div className="org-panel-wrapper">
+        <button
+          type="button"
+          className="sidebar-toggle"
+          onClick={toggleOrgPanel}
+          aria-pressed={orgPanelCollapsed}
+          aria-label={orgPanelCollapsed ? 'Show folders panel' : 'Hide folders panel'}
+          title={orgPanelCollapsed ? 'Show folders panel' : 'Hide folders panel'}
+        >
+          {orgPanelCollapsed ? '◀' : '▶'}
+        </button>
+        {!orgPanelCollapsed && (
+          <OrgPanel actors={scene.actors} selectedNames={selectedNames} onSelectActor={handleOrgSelect} />
+        )}
+      </div>
     </div>
   )
 }

@@ -3,15 +3,14 @@
 // mechanics -- setPointerCapture on down, lazy requestPointerLock on the first real drag movement
 // (avoiding movementX/Y screen-edge clamping), accumulated total drag distance, isTap-gated
 // tap-vs-drag on up with exitPointerLock -- with only what a drag/tap MEANS differing per pane
-// (dolly+turn/look/pan/orbit for Perspective; pan/zoom for ortho). Touch handling stays
-// Viewport3D-local (ortho touch parity is explicitly deferred, desktop-first) -- this hook is
-// mouse-only.
-import { useCallback, useRef } from 'react'
+// (dolly+turn/look/pan/orbit for Perspective; pan/zoom for ortho). Multi-touch gestures stay
+// per-viewport-local (Viewport3D.tsx and OrthoViewport.tsx each wrap this hook's mouse-only
+// handlers with their own pointerType==='touch' branch) -- this hook itself is mouse-only.
+import { useCallback, useEffect, useRef } from 'react'
 import type {
   MouseEvent as ReactMouseEvent,
   MutableRefObject,
   PointerEvent as ReactPointerEvent,
-  WheelEvent as ReactWheelEvent,
 } from 'react'
 
 import { isTap } from './selection'
@@ -36,7 +35,6 @@ export interface DragGestureHandlers {
   onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => void
   onPointerMove: (e: ReactPointerEvent<HTMLDivElement>) => void
   onPointerUp: (e: ReactPointerEvent<HTMLDivElement>) => void
-  onWheel: (e: ReactWheelEvent<HTMLDivElement>) => void
   onContextMenu: (e: ReactMouseEvent<HTMLDivElement>) => void
 }
 
@@ -95,14 +93,30 @@ export function useDragGesture(callbacks: DragGestureCallbacks): DragGestureHand
     [callbacks],
   )
 
-  const onWheel = useCallback(
-    (e: ReactWheelEvent<HTMLDivElement>) => {
-      callbacks.onWheel?.(e.deltaY)
-    },
-    [callbacks],
-  )
-
   const onContextMenu = useCallback((e: ReactMouseEvent<HTMLDivElement>) => e.preventDefault(), [])
 
-  return { containerRef, onPointerDown, onPointerMove, onPointerUp, onWheel, onContextMenu }
+  // A NATIVE (non-passive) `wheel` listener, not a JSX `onWheel` prop: React attaches its own
+  // synthetic `wheel`/`touchstart` listeners passively by default (a perf default since React 17),
+  // so `e.preventDefault()` inside a JSX `onWheel` handler is silently ignored by the browser. That
+  // left ctrl+wheel (a laptop trackpad's pinch-zoom gesture) falling through to the browser's own
+  // page-zoom instead of this viewport's own zoom (owner report, "laptop trackpad: can't zoom in 2D
+  // views without zooming the whole browser page"). This callback holds the latest `callbacks` via a
+  // ref so the listener itself is only attached/removed once per mount, not re-subscribed on every
+  // render.
+  const callbacksRef = useRef(callbacks)
+  useEffect(() => {
+    callbacksRef.current = callbacks
+  })
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    const onNativeWheel = (e: WheelEvent) => {
+      e.preventDefault()
+      callbacksRef.current.onWheel?.(e.deltaY)
+    }
+    el.addEventListener('wheel', onNativeWheel, { passive: false })
+    return () => el.removeEventListener('wheel', onNativeWheel)
+  }, [])
+
+  return { containerRef, onPointerDown, onPointerMove, onPointerUp, onContextMenu }
 }

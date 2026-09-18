@@ -18,11 +18,22 @@ function ruleBody(selector: string): string | null {
 }
 
 describe('toolbar layout CSS (dev/docs/GUI.md toolbar bug fixes)', () => {
-  it('.mover-solid-toggle is positioned like the other overlay toggles, not left in document flow', () => {
-    const body = ruleBody('.mover-solid-toggle')
+  it('.quad-toolbar (Movers/Radii/Grid) is positioned relative to the quad, not left in document flow', () => {
+    const body = ruleBody('.quad-toolbar')
     expect(body).not.toBeNull()
     expect(body).toMatch(/position:\s*absolute/)
     expect(body).toMatch(/(top|right):\s*\d/)
+  })
+
+  it('.mover-solid-toggle/.radii-toggle have no standalone rule of their own anymore -- they lay out via .quad-toolbar\'s flex row, not a hardcoded per-button `right` offset (bug fix: anchored to .quad-layout-root, which also spans the org-panel sidebar, a small offset landed the button INSIDE the sidebar)', () => {
+    expect(ruleBody('.mover-solid-toggle')).toBeNull()
+    expect(ruleBody('.radii-toggle')).toBeNull()
+  })
+
+  it('.grid-control (the consolidated Grid checkbox+dropdown) is not independently absolute-positioned', () => {
+    const body = ruleBody('.grid-control')
+    expect(body).not.toBeNull()
+    expect(body).not.toMatch(/position:\s*absolute/)
   })
 
   it('.toolbar-row is a normal flex-column sibling, not an absolute overlay on top of the quad', () => {
