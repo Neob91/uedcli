@@ -64,3 +64,26 @@ export function parseSurfaceKey(key: string): { actor: string; polyIndex: number
 export function primarySelection(selectedNames: ReadonlySet<string>): string | undefined {
   return [...selectedNames].at(-1)
 }
+
+/** The actor UED22 would anchor its ONE global pivot cross to: the actor that was most recently the
+ * SOLE selection. Not the last-clicked one -- see `primarySelection` above for that.
+ *
+ * Why the first (oldest) set member stands in for it: UED22 recomputes the pivot only inside
+ * `UEditorEngine::NoteSelectionChange`, and only when exactly ONE actor is selected (GUI-PARITY.md
+ * "Pivot-cross ... Part 4" has the disassembly + the live capture). Adding actors with Ctrl+click
+ * leaves the pivot where the first, sole-selected actor put it. A `Set` iterates in insertion order
+ * and `toggleSelection` appends, so for the ordinary click paths -- plain tap, Ctrl+tap add -- the
+ * first member is the one the selection last passed through alone. Live-verified against real UED22
+ * (2026-09-18): plain-click A then Ctrl+click B leaves the cross on A; Ctrl+clicking A off (back to
+ * exactly B) moves it to B.
+ *
+ * Three knowingly-divergent corners, all recorded in GUI-PARITY.md rather than reproduced. UED22
+ * leaves a STALE cross drawn after everything is deselected (this returns undefined -> hidden).
+ * Deselecting the anchor out of a 3+ selection leaves UED22's cross on the now-deselected actor
+ * (this moves it to the next-oldest). And a selection that jumps straight to 2+ actors without
+ * passing through one -- `onSelectMany`'s batch select, from empty OR replacing another selection;
+ * UED22's own marquee/select-all -- leaves UED22's cross wherever it already was (this takes the
+ * batch's first member). */
+export function pivotAnchor(selectedNames: ReadonlySet<string>): string | undefined {
+  return [...selectedNames].at(0)
+}
