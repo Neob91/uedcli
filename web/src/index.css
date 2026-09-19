@@ -101,6 +101,12 @@ body,
   padding: 0;
   width: 100%;
   height: 100%;
+  /* Bug fix: a non-shrinking sidebar (.org-panel-wrapper/.inspector-pane-wrapper, flex: 0 0 auto)
+     could force #app-root's flex row wider than the viewport, and with no overflow-x set anywhere
+     in this chain the browser scrolled the WHOLE PAGE horizontally instead of clipping/scrolling
+     just the sidebar. The page itself must never need horizontal scroll -- each sidebar handles its
+     own overflow (see .org-panel/.inspector-pane's own overflow-x below). */
+  overflow-x: hidden;
 }
 
 body {
@@ -240,6 +246,10 @@ body {
   min-width: 0;
   height: 100%;
   overflow-y: auto;
+  /* Bug fix: a long unwrapped folder/actor name could overflow the sidebar's own fixed width --
+     scroll it internally rather than letting it escape into the page (see #app-root's overflow-x
+     above for why that used to scroll the whole page). */
+  overflow-x: auto;
   padding: 8px;
   border-left: 1px solid var(--border);
   background: var(--surface-1);
@@ -692,7 +702,14 @@ body {
 
 .inspector-pane {
   flex: 0 0 280px;
+  /* Bug fix: matches .org-panel's min-width: 0 -- without it, a flex item's automatic minimum
+     width defaults to its content's min-content size, which can force the pane wider than its
+     280px flex-basis (e.g. a long unbroken inspector value). */
+  min-width: 0;
   overflow-y: auto;
+  /* Bug fix: a wide inspector table/value could overflow the sidebar's own fixed width -- scroll
+     it internally rather than letting it escape into the page (see #app-root's overflow-x above). */
+  overflow-x: auto;
   border-left: 1px solid var(--border);
   padding: 8px 12px;
   box-sizing: border-box;
