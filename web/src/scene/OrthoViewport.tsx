@@ -127,6 +127,7 @@ export function OrthoViewport({
   const {
     bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
     meshWireframeGeometry, meshPickGeometry, meshTriangleOwners, meshTrianglePolyIndex,
+    meshEdgePickGeometry, meshEdgeOwners, meshEdgePolyIndex,
     textures, markerTexture, markerActors, actors,
   } = useSceneResourcesContext()
   const activeMaterials = usesUnlitMaterials(mode) ? unlitMaterials : materials
@@ -146,6 +147,7 @@ export function OrthoViewport({
   const touchTap = useRef<TouchTapTracker | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
   const meshPickRef = useRef<THREE.Mesh | null>(null)
+  const meshEdgePickRef = useRef<THREE.LineSegments | null>(null)
   const markerGroupRef = useRef<THREE.Group | null>(null)
   // Wireframe-mode click-to-select (bug report item 6): see Viewport3D.tsx's identical comment --
   // with no solid mesh drawn, a hit must come from the brush outline LINES themselves, never a
@@ -189,6 +191,9 @@ export function OrthoViewport({
         meshPickObject: meshPickRef.current,
         meshTriangleOwners,
         meshTrianglePolyIndex,
+        meshEdgePickObject: meshEdgePickRef.current,
+        meshEdgeOwners,
+        meshEdgePolyIndex,
         markerObjects: markerGroupRef.current?.children ?? [],
         brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
         moverOutlineObjects: moverOutlineGroupRef.current?.children ?? [],
@@ -200,7 +205,7 @@ export function OrthoViewport({
       else if (action.kind === 'select-surface') onSelectSurface(action.actor, action.polyIndex, action.additive)
       else if (action.kind === 'deselect') onDeselect()
     },
-    [actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode, pose.worldUnitsPerPixel],
+    [actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex, meshEdgeOwners, meshEdgePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode, pose.worldUnitsPerPixel],
   )
 
   const dragCallbacks = useMemo<DragGestureCallbacks>(
@@ -447,11 +452,17 @@ export function OrthoViewport({
             selectedActorNames={selectedNonBrushNames}
           />
         )}
-        {/* Invisible raycast target so a DT_Mesh actor is click-selectable in this pane (no solid mesh
-            drawn here). See tapSelect.ts / SceneResourcesContext. */}
+        {/* Invisible raycast target for mesh actors in SOLID modes -- see tapSelect.ts /
+            SceneResourcesContext. */}
         <mesh ref={meshPickRef} geometry={meshPickGeometry}>
           <meshBasicMaterial visible={false} />
         </mesh>
+        {/* Invisible raycast target for mesh actors' own wireframe EDGES -- used in wireframe mode
+            (this pane, always), matching UED22's real click hit-test there (GUI-PARITY.md "Mesh
+            selection in 2D/3D wireframe mode vs UED22"). */}
+        <lineSegments ref={meshEdgePickRef} geometry={meshEdgePickGeometry}>
+          <lineBasicMaterial visible={false} />
+        </lineSegments>
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={actors} selectedNames={selectedNames} />
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current

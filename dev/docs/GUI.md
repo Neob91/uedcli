@@ -246,10 +246,10 @@ write path).
   free on a 32 GB root filesystem, and the project's own native-materialize campaign notes have
   logged real disk-exhaustion incidents from concurrent editor use). Flagged as unverified, not
   silently trusted as RE-confirmed — see the board item this change filed.
-- **Vertex + pivot markers** (`SelectionMarkers.tsx`), **the CSG-outline bold ring**
-  (`BrushOutlines.tsx`), and the **whole-brush surface highlight** below are all ACTOR-selection-only
-  (`selectedNames`) — a texture-only selection shows none of them, only its own highlight (next
-  bullet). `SelectionMarkers.tsx` ports `preview.py`'s `_draw_vertex_dot`/`_draw_pivot_marker`: a
+- **Vertex + pivot markers** (`SelectionMarkers.tsx`) and **the CSG-outline bold ring**
+  (`BrushOutlines.tsx`) are both ACTOR-selection-only (`selectedNames`) — a texture-only selection
+  shows neither, only its own highlight (see "Texture (single-surface) highlight" below).
+  `SelectionMarkers.tsx` ports `preview.py`'s `_draw_vertex_dot`/`_draw_pivot_marker`: a
   small square dot (`VERTEX_DOT_SCREEN_PX = 6`, a constant ON-SCREEN pixel size regardless of zoom/
   distance — see the next bullet) per poly vertex in the brush's own brightened CSG wire color, plus
   a red (`_PIVOT_RED`, `(255,63,63)`) crosshair+square. A third dot, the same square glyph as the
@@ -276,24 +276,23 @@ write path).
   term).
 - **Selection line width**: 2px, matching `preview.py`'s real `weight=2` for a highlighted edge —
   not a rounder "looks about right" value.
-- **Whole-brush surface highlight** (`SelectionHighlight.tsx`): a selected brush's drawn surface
-  brightens, an additive-white overlay over just that brush's own triangles (`selectedTriangles.ts`'s
-  `selectedTriangleGroups`, filtered from `sceneResources.ts`'s `triangleOwners`) — a brightness
-  boost on the actor's own material/hue, not a new tint color, matching `BrushOutlines`' "same hue,
-  just bolder" selected-ring convention. Real UnrealEd's exact selected-surface render rule isn't
-  pinned by a citable fact in `unrealed/quirks.md`/`rendering.md` (checked); this is the closest
-  citable in-codebase convention. Only drawn when the mode also draws the solid mesh (not
-  `'wireframe'`, which has no surface). This fires only for an actor-kind selection made via Shift
-  (or a wireframe click) — a plain non-wireframe click never highlights the whole brush, only the
-  one clicked surface (next bullet), per the owner's ruling that a plain click must NOT brighten
-  every poly of the selected brush.
-- **Texture (single-surface) highlight** (`SurfaceSelectionHighlight`, same file): the same
-  additive-white overlay technique, restricted to the ONE selected AUTHORED polygon's own triangles
-  (`selectedTriangles.ts`'s `selectedSurfaceTriangleGroups`, keyed on `(owner, polyIndex)` via
-  `trianglePolyIndex` — `geometry.ts`'s per-triangle `ScenePoly.i_brush_poly`, threaded alongside the
-  existing per-triangle `triangleOwners`; several disjoint triangle groups can share one key when CSG
-  split the authored polygon, and all of them light up together). Distinct selection kind, own
-  highlight, never the whole brush's triangles.
+- **A selected whole brush has no per-face highlight** (`Viewport3D.tsx`/`OrthoViewport.tsx`, owner
+  ruling): its faces are never brightened or tinted. It's shown only by the CSG-outline bold ring
+  (`BrushOutlines.tsx`) plus the vertex/pivot markers above. The old additive-white per-face overlay
+  this bullet used to describe is removed.
+- **Texture (single-surface) highlight** (`SurfaceSelectionHighlight`, `SelectionHighlight.tsx`):
+  UED22's own selected-surface technique — a flat, unblended azure `RGB(0,127,255)` screen-space
+  stipple (1 drawn pixel per 16, on a fixed lattice), not an additive-white overlay
+  (disassembly-confirmed, `GUI-PARITY.md` "Surface selection highlight"). Restricted to the ONE
+  selected AUTHORED polygon's own triangles (`selectedTriangles.ts`'s `selectedSurfaceTriangleGroups`,
+  keyed on `(owner, polyIndex)` via `trianglePolyIndex` — `geometry.ts`'s per-triangle
+  `ScenePoly.i_brush_poly`, threaded alongside the existing per-triangle `triangleOwners`; several
+  disjoint triangle groups can share one key when CSG split the authored polygon, and all of them
+  stipple together). Distinct selection kind, own highlight, never the whole brush's triangles.
+- **A selected mesh actor (never a brush) lights up in UED22's own measured color**
+  (`ActorSelectionHighlight`, `SelectionHighlight.tsx`) — the multiplicative tint from
+  `GUI-PARITY.md`'s "Selection highlight rendering", not this file's white surface-pick overlay.
+  Never reached for a brush.
 - **Brush-outline hit-test tolerance** (`orthoCamera.ts`'s `orthoLineHitThresholdUU`,
   `Viewport3D.tsx`'s `WIREFRAME_LINE_HIT_WORLD_UNITS`): widened from a 2px / 4-world-unit default to
   6px / 8 world units (owner report, live testing: selecting a brush by its outline needed

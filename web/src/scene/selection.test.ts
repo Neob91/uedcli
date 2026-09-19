@@ -9,6 +9,7 @@ import {
   pickActor,
   pickHit,
   rayAabbIntersect,
+  resolveEdgeHitSurface,
   resolveHitActor,
   resolveHitSurface,
   resolveTapAction,
@@ -137,6 +138,30 @@ describe('resolveHitSurface', () => {
 
   it('still resolves the actor when the poly index is unresolved (a mesh-actor hit, no brush.polys to index into)', () => {
     expect(resolveHitSurface(0, ['Room'], [null], [room])).toEqual({ actor: room, polyIndex: null })
+  })
+})
+
+// GUI-PARITY.md "Mesh selection in 2D/3D wireframe mode vs UED22" -- a mesh actor's own wireframe
+// EDGES are their own raycast candidate in wireframe mode (`meshEdgePickGeometry`, a `LineSegments`,
+// not the filled `meshPickGeometry`), resolved by segment (`index / 2`) like a brush's own outline.
+describe('resolveEdgeHitSurface', () => {
+  const crate = actor('Crate0', [-50, -50, -50], [50, 50, 50], { brush: null })
+
+  it('resolves a hit segment to its owning actor AND poly index, by index/2', () => {
+    const owners = ['Crate0', 'Crate0']
+    const polyIndex = [2, 2]
+    expect(resolveEdgeHitSurface(0, owners, polyIndex, [crate])).toEqual({ actor: crate, polyIndex: 2 })
+    expect(resolveEdgeHitSurface(1, owners, polyIndex, [crate])).toEqual({ actor: crate, polyIndex: 2 })
+    expect(resolveEdgeHitSurface(2, owners, polyIndex, [crate])).toEqual({ actor: crate, polyIndex: 2 })
+  })
+
+  it('returns null when there is no hit', () => {
+    expect(resolveEdgeHitSurface(null, ['Crate0'], [0], [crate])).toBeNull()
+    expect(resolveEdgeHitSurface(undefined, ['Crate0'], [0], [crate])).toBeNull()
+  })
+
+  it('returns null when the edge has no resolved owner', () => {
+    expect(resolveEdgeHitSurface(0, [null], [0], [crate])).toBeNull()
   })
 })
 

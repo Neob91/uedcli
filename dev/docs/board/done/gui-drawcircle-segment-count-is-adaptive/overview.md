@@ -19,3 +19,7 @@ it is on screen.
 Related and still unconfirmed: that file's `CYLINDER_SEGMENTS = 8` cites a UT patch note
 ("an 8-sided wire cylinder"), not our binary. `URender::DrawCylinder` (RVA `0x1c9e0`) was looked at
 in the same pass and its body is not a plain N-gon loop — the 8 was neither confirmed nor refuted.
+
+## Outcome (2026-09-18)
+
+Owner declined -- out of scope. No fix.

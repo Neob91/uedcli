@@ -21,6 +21,8 @@ import type { FrameRequest } from './frame'
 import { bboxCenter, bboxMaxExtent } from './frame'
 import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR, MARKER_RENDER_ORDER } from './markers'
 import { MeshWireframe, SelectedMeshWireframe } from './MeshWireframe'
+import { MoveJoystick } from './MoveJoystick'
+import type { JoystickVector } from './joystick'
 import { PointActorMarker } from './PointActorMarker'
 import { RadiiOverlays } from './RadiiOverlays'
 import { ActorSelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
@@ -86,6 +88,30 @@ function FlyKeys({ setPose }: { setPose: (fn: (prev: CameraPose) => CameraPose) 
     setPose((prev) => flyMove(prev, input, FLY_SPEED_UU_PER_SEC, delta))
   })
 
+  return null
+}
+
+/** The touch joystick/up-down-buttons' counterpart to `FlyKeys` above -- same `flyMove`/
+ * `FLY_SPEED_UU_PER_SEC` mechanics, driven by `MoveJoystick.tsx`'s continuous analog input instead
+ * of held keys. A separate ref/component (not folded into `FlyKeys`' `held` set) so touch input
+ * never touches keyboard state -- the two channels are fully independent, satisfying "must not
+ * interfere with... keyboard controls when both are present" (a touch-capable laptop with a
+ * keyboard). `inputRef.current` is mutated directly by `MoveJoystick`'s callbacks (Viewport3D's
+ * `onStickChange`/`onVerticalChange`), read fresh every frame here -- the same ref-based, no-React-
+ * state-per-move pattern `FlyKeys`' `held` set already uses, for the same reason (a re-render per
+ * pointer-move would be wasteful). */
+function TouchFlyInput({
+  inputRef,
+  setPose,
+}: {
+  inputRef: MutableRefObject<{ forward: number; right: number; up: number }>
+  setPose: (fn: (prev: CameraPose) => CameraPose) => void
+}) {
+  useFrame((_state, delta) => {
+    const input = inputRef.current
+    if (input.forward === 0 && input.right === 0 && input.up === 0) return
+    setPose((prev) => flyMove(prev, input, FLY_SPEED_UU_PER_SEC, delta))
+  })
   return null
 }
 
@@ -182,6 +208,18 @@ export function Viewport3D({
   // `e.pointerType === 'touch'` below) so desktop behavior is unchanged.
   const touchPoints = useRef<Map<number, TouchPoint>>(new Map())
   const touchTap = useRef<TouchTapTracker | null>(null)
+  // The mobile move-joystick/up-down-buttons' live input (board item
+  // mobile-3d-move-joystick-visual-design-pending) -- mutated directly by MoveJoystick's callbacks
+  // below, read every frame by TouchFlyInput. A ref, not React state: matches FlyKeys' own `held`
+  // set (a per-move re-render would be wasteful and isn't needed for anything visible).
+  const touchFlyInput = useRef<{ forward: number; right: number; up: number }>({ forward: 0, right: 0, up: 0 })
+  const onJoystickStickChange = useCallback((v: JoystickVector) => {
+    touchFlyInput.current.forward = v.forward
+    touchFlyInput.current.right = v.right
+  }, [])
+  const onJoystickVerticalChange = useCallback((up: number) => {
+    touchFlyInput.current.up = up
+  }, [])
   const cameraRef = useRef<THREE.Camera | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
   // The Movers:on toggle's own solid mesh (board item `mover-polys-unselectable-in-movers-on-mode`):
@@ -189,6 +227,7 @@ export function Viewport3D({
   // on and `mode !== 'wireframe'` -- see performTapSelect below.
   const moverMeshRef = useRef<THREE.Mesh | null>(null)
   const meshPickRef = useRef<THREE.Mesh | null>(null)
+  const meshEdgePickRef = useRef<THREE.LineSegments | null>(null)
   const markerGroupRef = useRef<THREE.Group | null>(null)
   // Wireframe-mode click-to-select (bug report item 6): with no solid mesh drawn, a hit must come
   // from the brush outline LINES themselves, never a bounding-box fallback -- see performTapSelect.
@@ -204,6 +243,7 @@ export function Viewport3D({
     bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex,
     moverGeometry, moverMaterials, moverUnlitMaterials, moverTriangleOwners, moverTrianglePolyIndex,
     meshWireframeGeometry, meshPickGeometry, meshTriangleOwners, meshTrianglePolyIndex,
+    meshEdgePickGeometry, meshEdgeOwners, meshEdgePolyIndex,
     textures, markerTexture, markerActors,
   } = useSceneResourcesContext()
   // 'unlit'/'lit' otherwise rendered the identical mesh (materials built once, shared across every
@@ -270,6 +310,9 @@ export function Viewport3D({
         meshPickObject: meshPickRef.current,
         meshTriangleOwners,
         meshTrianglePolyIndex,
+        meshEdgePickObject: meshEdgePickRef.current,
+        meshEdgeOwners,
+        meshEdgePolyIndex,
         markerObjects: markerGroupRef.current?.children ?? [],
         brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
         // Not gated to wireframe mode -- see `TapSelectParams.moverOutlineObjects`' doc comment.
@@ -284,6 +327,7 @@ export function Viewport3D({
     },
     [
       scene.actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex,
+      meshEdgeOwners, meshEdgePolyIndex,
       moverTriangleOwners, moverTrianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode,
     ],
   )
@@ -406,6 +450,7 @@ export function Viewport3D({
         <color attach="background" args={['#000000']} />
         <CameraRig pose={pose} cameraRef={cameraRef} />
         <FlyKeys setPose={setPose} />
+        <TouchFlyInput inputRef={touchFlyInput} setPose={setPose} />
         {/* All world content is reflected by R = diag(1,-1,1): the world is left-handed, and this is
             the handedness fix (viewportRender.ts's applyCameraPose reflects the camera pose by the
             same R). three.js compensates for the group's negative determinant -- winding (frontFace)
@@ -543,12 +588,17 @@ export function Viewport3D({
             selectedActorNames={selectedNonBrushNames}
           />
         )}
-        {/* Invisible raycast target for mesh actors -- material.visible=false draws nothing but keeps
-            the object raycastable, so a DT_Mesh actor is click-selectable even in wireframe mode (its
-            solid mesh isn't drawn then). See tapSelect.ts / SceneResourcesContext. */}
+        {/* Invisible raycast target for mesh actors in SOLID modes -- material.visible=false draws
+            nothing but keeps the object raycastable. See tapSelect.ts / SceneResourcesContext. */}
         <mesh ref={meshPickRef} geometry={meshPickGeometry}>
           <meshBasicMaterial visible={false} />
         </mesh>
+        {/* Invisible raycast target for mesh actors' own wireframe EDGES -- used INSTEAD of the fill
+            target above in wireframe mode only (tapSelect.ts gates which one is a raycast
+            candidate); mounted unconditionally like the fill target. */}
+        <lineSegments ref={meshEdgePickRef} geometry={meshEdgePickGeometry}>
+          <lineBasicMaterial visible={false} />
+        </lineSegments>
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={scene.actors} selectedNames={selectedNames} />
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current
@@ -556,6 +606,14 @@ export function Viewport3D({
         {showRadii && <RadiiOverlays actors={scene.actors} view="perspective" selectedNames={selectedNames} />}
         </group>
       </Canvas>
+      {/* Touch-only virtual joystick + up/down buttons (board item
+          mobile-3d-move-joystick-visual-design-pending) -- a plain DOM overlay, not 3D content, so
+          it sits outside <Canvas> like the other per-pane overlays (QuadLayout.tsx's
+          .quad-pane-label/.mode-selector); MoveJoystick itself renders nothing on a non-touch
+          device. Bottom-left of this pane is the one corner none of QuadLayout's own overlays uses
+          for the perspective pane (top-left = pane label, bottom-right = mode selector, top-right =
+          the quad-wide toolbar) -- see index.css's .move-joystick-controls. */}
+      <MoveJoystick onStickChange={onJoystickStickChange} onVerticalChange={onJoystickVerticalChange} />
     </div>
   )
 }

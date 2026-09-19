@@ -37,3 +37,14 @@ fix is scoped to the perspective pane only, matching `mover-polys-unselectable-i
 own scope.
 
 Full offline `web/` vitest suite: 328/328 passed, no regressions.
+
+Follow-up (re-verification pass): this item's original `git mv` to `done/` left a stale duplicate at
+`to-build/mover-poly-select-in-movers-on-mode-not/` (the pre-fix ticket, never removed) -- deleted.
+Added a regression pinning the actual `Viewport3D.tsx` wiring itself (source-text assertion,
+`Viewport3D.test.ts` -- this repo has no Canvas-in-test pattern to render the real component, per
+`QuadLayout.test.tsx`'s own note): two `SurfaceSelectionHighlight` instances exist, the mover one
+reads `moverGeometry`/`moverTriangleOwners`/`moverTrianglePolyIndex`/`activeMoverMaterials`, and its
+gate is identical to the mover mesh's own (`mode !== 'wireframe' && showMoverSolid`). Re-confirmed via
+source reading (this sandbox's Chromium is still missing 14 shared libraries -- `libglib-2.0.so.0`
+etc. -- so no new live pixel capture was possible here; the original session's A/B above is the live
+evidence of record). Full suite re-verified: 363/363 passed.

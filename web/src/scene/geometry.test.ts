@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AtlasPayload, LightmapPayload, ScenePoly } from '../api'
-import { buildGeometryData } from './geometry'
+import { buildEdgePickData, buildGeometryData } from './geometry'
 
 function quad(overrides: Partial<ScenePoly> = {}): ScenePoly {
   return {
@@ -161,5 +161,37 @@ describe('buildGeometryData', () => {
       { texIndex: 0, masked: false, twoSided: false, blend: 'opaque', lit: true, start: 0, count: 6 },
       { texIndex: 0, masked: false, twoSided: false, blend: 'opaque', lit: false, start: 6, count: 6 },
     ])
+  })
+})
+
+// GUI-PARITY.md "Mesh selection in 2D/3D wireframe mode vs UED22" -- the raycastable EDGE-only
+// geometry a mesh actor picks by in wireframe mode (instead of `buildGeometryData`'s own filled
+// triangles), with per-edge owner data `THREE.WireframeGeometry`'s own edge-dedup would discard.
+describe('buildEdgePickData', () => {
+  it('emits 3 edges (6 verts) per source triangle, each tagged with that triangle\'s own owner/polyIndex', () => {
+    const geo = buildGeometryData([quad({ owner: 'Crate0', i_brush_poly: 3 })], EMPTY_ATLAS)
+    const got = buildEdgePickData(geo)
+    expect(geo.triangleOwners.length).toBe(2) // a quad fan-triangulates to 2 triangles
+    expect(got.positions.length).toBe(2 * 18) // 3 edges * 2 verts * 3 coords, per triangle
+    expect(got.edgeOwners).toEqual(['Crate0', 'Crate0', 'Crate0', 'Crate0', 'Crate0', 'Crate0'])
+    expect(got.edgePolyIndex).toEqual([3, 3, 3, 3, 3, 3])
+  })
+
+  it('the first triangle\'s 3 edges connect its own 3 vertices, v0-v1, v1-v2, v2-v0', () => {
+    const geo = buildGeometryData([quad()], EMPTY_ATLAS)
+    const got = buildEdgePickData(geo)
+    const v0 = Array.from(geo.positions.slice(0, 3))
+    const v1 = Array.from(geo.positions.slice(3, 6))
+    const v2 = Array.from(geo.positions.slice(6, 9))
+    expect(Array.from(got.positions.slice(0, 6))).toEqual([...v0, ...v1])
+    expect(Array.from(got.positions.slice(6, 12))).toEqual([...v1, ...v2])
+    expect(Array.from(got.positions.slice(12, 18))).toEqual([...v2, ...v0])
+  })
+
+  it('an unresolved owner/polyIndex triangle produces edges with the same null owner/polyIndex', () => {
+    const geo = buildGeometryData([quad({ owner: null, i_brush_poly: null })], EMPTY_ATLAS)
+    const got = buildEdgePickData(geo)
+    expect(got.edgeOwners).toEqual([null, null, null, null, null, null])
+    expect(got.edgePolyIndex).toEqual([null, null, null, null, null, null])
   })
 })

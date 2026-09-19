@@ -78,8 +78,10 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Pan direction (perspective vs ortho) | Which convention (drag-follows-camera vs. content-follows-cursor) matches UED22, if either? | ⬜ open | `dev/docs/board/inbox/gui-perspective-pan-direction-vs-ortho/` |
 | Shading modes | UED22 has a Zones view mode the GUI doesn't | ⬜ open | `dev/docs/board/inbox/gui-shading-modes-omit-unrealed-s-zones-view/` |
 | Mesh-actor wireframe rendering | Should a static mesh actor render as wireframe in wireframe/2D modes? | ✅ closed, already implemented | ✅ binary (`render.dll` disassembly, our own `uned/UED22/`), see Findings below |
+| Mesh-actor wireframe SELECTION (fill vs. edges) | In wireframe/ortho modes, does UED22 select a mesh actor by a click anywhere inside its silhouette, or only on a drawn wireframe edge? | ✅ closed, fixed — edges only, not the interior | ✅ binary (`render.dll`/`Engine.dll` disassembly, our own `uned/UED22/`) — see Findings below |
 | Radii overlay colors | Collision cylinder vs. light-radius sphere: same color or distinct? | ✅ closed, implemented | ✅ binary (`Editor.dll`/`render.dll`/`Editor.u`, our own `uned/UED22/`) — distinct per PANE, and no alpha; a retracted third-party-sourced answer got this wrong, see Findings below |
 | Radii perspective cylinder | Does/should the collision cylinder render in the perspective pane? | ✅ closed, implemented | ✅ binary (`Editor.dll`'s non-ortho branch calls `URender::DrawCylinder`; no `IsOrtho` gate exists) — see Findings below |
+| Radii light-radius shape | Does the perspective-pane light radius render as a 3D sphere, or a camera-facing circle? | ✅ closed, implemented | ✅ binary (`render.dll`'s `DrawCircle`, our own `uned/UED22/`) — see Findings below |
 | Radii cylinder/sphere shape | Wireframe rendering had a triangulation-diagonal artifact ("triangular faces") | ✅ closed, implemented | not an RE question — a `wireframe:true`-on-triangulated-geometry rendering bug, fixed with explicit line segments |
 | `C_ActorArrow` exact RGB | The radii overlay's real color value | ✅ closed, implemented | ✅ our own `uned/UED22/unrealtournament.ini` line 388, `(163,0,0)` — the member it fills is `UEditorEngine+0x1f8`, pinned by disassembly; see Findings below |
 | Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed, implemented | 📖 source-only, GUI-only scope (owner ruling) — see Findings below |
@@ -227,6 +229,109 @@ supply a mesh actor's real per-triangle world-space vertices to `ScenePayload.po
 independent of CSG/build state — exactly the shape (already-flattened world-space triangles, not a
 separate vertex/edge topology) a wireframe-edge renderer needs, and exactly what `MeshWireframe.tsx`
 already consumes. No backend gap exists for this topic.
+
+### Mesh-actor wireframe SELECTION — edges only, never the filled interior (closed 2026-09-18)
+
+Board item `dev/docs/board/inbox/mesh-selection-2d-3d-wireframe-mode-vs-ued22/` (owner's hunch: mesh
+selection in wireframe/2D modes may diverge from UED22). Distinct question from the RENDERING topic
+above (already closed): this is whether a click INSIDE a mesh actor's wireframe silhouette, away
+from any drawn edge, should SELECT it. This codebase's `meshPickGeometry` (a filled solid-triangle
+raycast target, `SceneResourcesContext.tsx`) was wired into `tapSelect.ts`'s candidate list
+UNCONDITIONALLY — every mode, wireframe included — so a click anywhere inside a mesh actor's
+projected footprint selected it, even far from any line.
+
+**✅ Binary-confirmed divergence, from our own `uned/UED22/render.dll` + `Engine.dll` only (no
+third-party source anywhere in this pass, `pefile`+`capstone`, `dev/docs/spikes/bspspike/pe.py`).**
+Three own-binary facts, chained:
+
+1. **A hit-proxy is pushed ONCE per actor, wrapping its ENTIRE draw call — not per-primitive.**
+   `render.dll`'s `URender::DrawActorSprite` (RVA `0x1f0a0`, already disassembled for the "Sprite
+   alpha picking" topic) opens with, at VA `0x1001f0e1`-`0x1001f105`:
+   ```
+   cmp dword ptr [eax+0xb8], 0      ; a hit-testing-pass flag off Frame->Viewport (own read)
+   je  0x1001f10b                   ; skip if this frame isn't a hit-test pass
+   push 0xc
+   mov  ecx, [esi+0x94]             ; esi+0x94 = the FDynamicSprite's own Actor*
+   call dword ptr [0x100342f4]      ; IAT -> Engine.dll `?GetHitActor@AActor@@QAEPAV1@XZ`
+   push eax
+   lea  ecx, [ebp-0x7c]
+   call dword ptr [0x100342ec]      ; IAT -> Engine.dll `??0HActor@@QAE@PAVAActor@@@Z` (ctor)
+   push eax
+   mov  ecx, [edi]                  ; edi = Frame arg -> Frame->Viewport
+   call dword ptr [0x10034328]      ; IAT -> Engine.dll `?PushHit@UViewport@@QAEXABUHHitProxy@@H@Z`
+   ```
+   The three IAT slots resolve (by import name, not guessed) to `AActor::GetHitActor`,
+   `HActor::HActor(AActor*)`, `UViewport::PushHit(HHitProxy const&, int)` — a genuine, own-binary-
+   confirmed hit-proxy push, one `HActor` per call, BEFORE any drawing happens. This single call sits
+   at the TOP of the function and is never repeated — the function's own body, disassembled in full
+   (1427 instructions, RVA `0x1f0a0`-`0x206a1`), calls `URender::DrawMesh` (RVA `0xff00`) FOUR
+   separate times later on (VAs `0x1001f4d4`/`0x1001f620`/`0x1001f7d9`/`0x1001fab5`) — i.e.
+   `DrawActorSprite` is the real per-actor draw entry point (its own name is a historical artifact;
+   it dispatches into `DrawMesh`/`DrawLodMesh` for a DT_Mesh actor, not just a 2-D icon), and EVERY
+   one of those `DrawMesh` calls, plus the sprite-icon draw already documented for the alpha-picking
+   topic, happens strictly AFTER this one `PushHit(HActor)` — so one hit-proxy tag covers the whole
+   actor's draw, fill AND wireframe-line calls alike, not a separate tag per triangle/edge.
+   (`GetHitActor` itself, RVA `0x126f70`: `eax=[ecx+0x120]; if (eax) ecx=eax; return ecx` — returns
+   `this->Owner` when set, else the actor itself; `+0x120` matching `AActor::Owner`'s own established
+   offset. So a hit resolves through the Owner chain, same as our own `resolveHitSurface`'s
+   whole-actor semantics.)
+2. **`DrawLodMesh`'s Wire/Ortho branch paints ONLY line pixels, never a filled interior** — already
+   established for the "Mesh-actor wireframe rendering" topic above (own-binary, same RVA `0xd050`):
+   the gate at `0xd992`-`0xd999` skips the ENTIRE shaded/filled-triangle block (`0xd0dd`-`0xd976`)
+   whenever the viewport's render mode is Wire (1) or one of the three Ortho modes (13/14/15), and
+   the two edge-drawing loops that DO run in that branch (`0xdb70`-`0xdc91`, `0xdca9`-`0xdd92`) issue
+   only line-shaped draw calls (two explicit `FVector` endpoints per call, through the render
+   device's own `DrawLine`-shaped vtable slot) — no fill call reaches the renderer in this mode at
+   all.
+3. **The click hit-test itself is a literal buffer/run scan, not an object-level test** —
+   `Engine.dll`'s `?ExecuteHits@UViewport@@QAEXABUFHitCause@@PAEH@Z` (RVA `0x134bc0`) walks a
+   caller-supplied `(count, hitproxy-pointer)` run array (`edi`=buffer, `esi`=length, at
+   `0x10134bf4`-`0x10134c17`: `edi += [ecx]; esi -= [ecx]; [ecx]=0; ebx=edx` per run, i.e. skip past
+   each stamped run, remembering the last one with a non-null hit-proxy pointer), then dispatches the
+   found hit-proxy's own `Click` virtual (`mov eax,[ebx]; call [eax+4]` at `0x10134c37`-`0x10134c3e`,
+   matching the real exported `?Click@HHitProxy@@UAEXABUFHitCause@@@Z`). This directly confirms (own
+   binary, independent of the third-party `Hit.cpp` source the "Sprite alpha picking" topic above
+   partly rested on) that `UViewport::ExecuteHits` — already established generically in the "Click/
+   hit-detection algorithm" topic as reading "a rendered hit-proxy buffer" — really is a per-pixel/
+   per-run BUFFER scan: a pixel with no stamped run has nothing for this scan to find.
+
+**Combined: in Wire/Ortho render modes, a mesh actor's hit-proxy is only ever stamped where its own
+draw call actually painted a pixel — and in that mode the ONLY thing painted is the wireframe edges
+(fact 2). So `ExecuteHits`' buffer scan (fact 3) finds nothing at all for that actor at a click point
+in the open interior between edges, and the click can only ever land the actor's `HActor` proxy
+(fact 1) on/near a drawn edge line — never by clicking well inside its silhouette.** This is the
+exact mechanism this codebase's brush-vs-wireframe fix (`wireframe-brush-selection-should-hit-test-
+lines`, already landed) established for BRUSHES; this pass extends the same real UED22 mechanism to
+mesh actors, which had never been checked against it.
+
+**Not live-verified this session — a live UED22 capture and a live-browser (headless Chromium)
+pixel A/B were both attempted and both blocked by real host constraints, not skipped for
+convenience.** The live-UED22 attempt (`dev/docs/board/inbox/mesh-selection-2d-3d-wireframe-mode-vs-
+ued22/harness-meshsel-probe.py`, following the pivot-cross/surface-stipple probes' own
+`ensure_editor`+real-click recipe) hit the SAME rootless-dockerd-cannot-mount-`/workspace` limitation
+already on file for the surface-selection-highlight and pivot-cross-toggle topics above, and then
+(once retargeted to a daemon-mountable `/tmp` state dir) a genuine HOST-WIDE disk-full condition
+(`df /`: 100% full, 64 KB free) shared with other concurrent sessions — not something to fix here by
+pruning the shared docker image/build cache (the same caution `NATIVE-MATERIALIZE.md`'s own
+disk-exhaustion incidents already flagged). The headless-Chromium attempt hit the same missing-
+shared-library gap already on file for the Radii-overlay topic above (`chrome-linux64/chrome`:
+`libglib-2.0.so.0` and 16 others not found, no root, `apt-get` denied). The harness script is
+committed at the board item above for a session whose docker daemon/host disk can run it.
+
+**Fix implemented** (`web/src/scene/geometry.ts`, `SceneResourcesContext.tsx`,
+`sceneResourcesReactContext.ts`, `tapSelect.ts`, `selection.ts`, `Viewport3D.tsx`,
+`OrthoViewport.tsx`): a new `buildEdgePickData` builds a raycastable `THREE.LineSegments` over a mesh
+actor's own triangle EDGES (3 per source triangle, not deduped like the visual
+`THREE.WireframeGeometry`, so each edge keeps its source triangle's owner/polyIndex) —
+`meshEdgePickGeometry`, mirroring how `meshPickGeometry` already does this for the filled-triangle
+case. `tapSelect.ts` now picks a mesh actor by `meshEdgePickObject` (raycast with the SAME line
+threshold a brush's own outline uses) in wireframe mode, and by the existing filled
+`meshPickObject` in every other mode — never both — and the AABB fallback's existing wireframe-mode
+brush exclusion (`bug report item 6`) is extended to also exclude a resolved mesh actor (its own
+`meshTriangleOwners` name set), so a raycast miss on the edges can't fall through to a full 3-D
+box-test either. Verified with new unit tests (`geometry.test.ts`'s `buildEdgePickData`,
+`selection.test.ts`'s `resolveEdgeHitSurface`) and the full frontend suite (366 tests green, `tsc -b`
+clean save for 4 pre-existing, unrelated errors) — NOT live-pixel-verified, per the constraint above.
 
 ### Surface selection highlight — a flat blue screen-space stipple (closed 2026-09-18)
 
@@ -643,7 +748,8 @@ than silently changed):
 1. **The light radius is a `DrawCircle` in EVERY pane, including perspective** — and `DrawCircle`
    builds its ring from the scene node's own camera axes (`render.dll` `0x1001c5c9`-`0x1001c62d`
    reads `FSceneNode+0x40..0x54`), i.e. a camera-facing circle. Our GUI draws a three-ring wire
-   SPHERE there. `DrawSphere` exists in the vtable but this block never calls it.
+   SPHERE there. `DrawSphere` exists in the vtable but this block never calls it. **FIXED
+   2026-09-18** — see "Radii light-radius shape" below.
 2. **`DrawCircle`'s segment count is adaptive, not fixed** — `0x1001c635` starts at `8` and doubles
    (up to `0x100`) while a screen-size term stays under a threshold (`0x1001c668` loop). Our GUI's
    ortho rings are a flat 32. `DrawCylinder`'s own segment count was NOT determined (its body is not
@@ -680,6 +786,51 @@ perspective black, ortho `#404040`) the change is: perspective collision `(90,0,
 perspective light `(90,0,0)` → `(163,0,0)`; ortho collision and light `(118,29,29)` — within 54 of
 the `(64,64,64)` background on the red channel and BELOW it on green/blue — → `(163,0,0)`. A live
 screenshot A/B remains outstanding and is called for in the board item.
+
+### Radii light-radius shape — camera-facing circle, not a sphere (closed 2026-09-18)
+
+Board item `dev/docs/board/done/gui-light-radius-is-a-camera-facing-circle-not/`, filed as divergence
+1 of the "Radii overlay colors" pass above (already ✅ binary-confirmed there, from
+`uned/UED22/Editor.dll` + `render.dll` — not re-derived here). `Editor.dll`'s radii block calls
+`URender::DrawCircle` for the light radius on EVERY branch including perspective (VA `0x1003d932`),
+and `render.dll`'s `DrawCircle` (RVA `0x1c590`) builds its ring from the scene node's own CAMERA axes
+(`FSceneNode+0x40..0x54`, `0x1001c5c9`-`0x1001c62d`) — a camera-facing circle (a billboard), never a
+world-plane-aligned shape. `RadiiOverlays.tsx`'s `LightSphere3D` instead drew three fixed orthogonal
+world-space rings (an XY/XZ/YZ wire-sphere gizmo) in the perspective pane.
+
+**Ortho panes needed no change.** `OrthoShapeLine` already draws the light circle flat in the pane's
+own fixed `(right, up)` view-plane basis (`orthoBasis(view)`) — under a fixed-axis orthographic
+camera, that IS what a camera-facing circle degenerates to (the view direction never changes, so
+"facing the camera" and "lying in the pane's fixed view plane" are the same plane). Confirmed by
+reading `radiiProjection.ts`/`OrthoShapeLine` directly, not assumed.
+
+**Fix**: `RadiiOverlays.tsx`'s `LightSphere3D` is replaced by `LightRadiusCircle3D`, a genuine
+camera-facing billboard built as explicit `<lineSegments>` (matching every other radii overlay's
+convention — no texture, no alpha, same `C_ACTOR_ARROW` color, same `depthTest={false}`). Every
+frame (`useFrame`, the same mechanism `SelectionMarkers.tsx`'s `PivotMarker`/`VertexDot` already use
+to track live camera state), it rebuilds the ring from `camera.quaternion`'s own local X/Y axes
+(`right`/`up`), the standard sprite-billboard basis. One coordinate-space hazard, the same class as
+`SelectionMarkers.tsx`'s pivot-marker bug: this component's geometry sits inside the world-handedness
+mirror group (`<group scale={[1,-1,1]}>`, a pure Y-flip), while `camera` is posed directly in the
+ALREADY-reflected render space (`viewportRender.ts`'s `applyCameraPose`) — so `right`/`up` need the
+same flip (negate Y) to land back in this component's own pre-reflection local space. Since the
+mirror `R = diag(1,-1,1)` is self-inverse, negating Y once is exactly `R^-1`, not an approximation.
+
+🔬 **Verified by inspecting the actual computed geometry across several camera poses** (this host has
+no runnable headless Chromium, the same limitation on file for the "Surface selection highlight" and
+"Mesh-actor wireframe SELECTION" topics above — a real browser A/B was not possible this session).
+`RadiiOverlaysCameraFacing.test.tsx` renders `LightRadiusCircle3D` through
+`@react-three/test-renderer` with a real `THREE.PerspectiveCamera` posed three different ways (down
+`-Z`, down `-X`, and an oblique angle), advances one frame so `useFrame` runs, and reads the produced
+`BufferGeometry`'s own position array back — not a screenshot, but the exact numbers the renderer
+would draw. For each pose, the ring's own plane normal (cross product of two chords, read from the
+geometry) matches the camera's forward direction (reflected the same way, `Y` negated) to better than
+0.999 absolute dot product — i.e. the ring's plane rotates with the camera, not fixed in world space.
+A fourth test confirms every ring point sits exactly `radius` from the actor's location (a genuine
+circle, not a degenerate shape). All four pass; the full frontend suite (390 tests) stays green.
+
+Regression: `RadiiOverlaysCameraFacing.test.tsx`. `RadiiOverlays.test.tsx`'s existing color/no-blend
+tests are unaffected (still exactly one `<lineSegments>` for the light radius per pane, same color).
 
 ### Earlier pass (2026-09-16) — RETRACTED, third-party source
 

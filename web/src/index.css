@@ -478,6 +478,81 @@ body {
   pointer-events: none;
 }
 
+/* Touch-only mobile move joystick + up/down buttons (board item
+   mobile-3d-move-joystick-visual-design-pending, owner-approved "Minimal HUD cluster" design) --
+   bottom-left of the perspective pane, the one corner none of this pane's other overlays uses
+   (pane label = top-left, mode selector = bottom-right; the quad-wide toolbar sits above the whole
+   quad, not this pane specifically). `pointer-events: none` on the wrapper + `auto` on its two
+   children keeps the gaps around the ring/buttons click-through to the canvas underneath, matching
+   `.ortho-cursor-readout`'s own convention just above. */
+.move-joystick-controls {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  z-index: 2;
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.move-joystick-controls > * {
+  pointer-events: auto;
+}
+
+/* Thin ring, not a solid filled base (the approved design's own wording) -- a soft translucent fill
+   just enough to read as a touch target, with the visible affordance carried by the border + dot. */
+.move-joystick-base {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  border: 1.5px solid var(--accent);
+  background: var(--overlay-bg-soft);
+  touch-action: none;
+}
+
+.move-joystick-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.move-vertical-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.move-vertical-btn {
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: 6px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+  touch-action: none;
+  user-select: none;
+}
+
+.move-vertical-btn:active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
 /* `top`/`left` are relative to `.viewport-content`, which already starts right below the toolbar
    row -- no toolbar-height offset needed here (bug fix: this used to hardcode `top: 44px`, a guess
    at the toolbar's rendered height that broke every time a button was added to it). */

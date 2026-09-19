@@ -44,14 +44,24 @@ export interface SceneResources {
   // the solid mesh when its own mode is wireframe (every ortho pane; the perspective pane in
   // `'wireframe'` mode).
   meshWireframeGeometry: THREE.BufferGeometry
-  // An invisible, raycastable copy of the mesh-actor triangles (same polys as `meshWireframeGeometry`)
-  // plus their per-triangle owner arrays, so a DT_Mesh actor is click-selectable in the ortho panes
-  // (where no solid mesh is drawn and its wireframe carries no owner data). `resolveTapSelect` raycasts
-  // this and resolves a hit to its owning actor via `meshTriangleOwners` (whole-actor select, since a
-  // mesh actor has no brush -- see `selection.ts`'s `resolveTapAction`).
+  // An invisible, raycastable FILLED copy of the mesh-actor triangles (same polys as
+  // `meshWireframeGeometry`) plus their per-triangle owner arrays, so a DT_Mesh actor is
+  // click-selectable in solid (non-wireframe) shading modes, where no dedicated pick geometry
+  // would otherwise exist for it. `resolveTapSelect` raycasts this and resolves a hit to its owning
+  // actor via `meshTriangleOwners` (whole-actor select, since a mesh actor has no brush -- see
+  // `selection.ts`'s `resolveTapAction`). NOT used in wireframe/ortho modes -- see
+  // `meshEdgePickGeometry` below.
   meshPickGeometry: THREE.BufferGeometry
   meshTriangleOwners: (string | null)[]
   meshTrianglePolyIndex: (number | null)[]
+  // A raycastable copy of the mesh-actor triangles' own EDGES (`THREE.LineSegments`, not deduped,
+  // so per-edge owner data survives -- `geometry.ts`'s `buildEdgePickData`), used INSTEAD of
+  // `meshPickGeometry` in wireframe/ortho modes: UED22 only hit-tests a mesh actor's drawn
+  // wireframe lines there, never its filled interior (GUI-PARITY.md "Mesh selection in 2D/3D
+  // wireframe mode vs UED22").
+  meshEdgePickGeometry: THREE.BufferGeometry
+  meshEdgeOwners: (string | null)[]
+  meshEdgePolyIndex: (number | null)[]
   textures: { map: Map<number, THREE.Texture>; sprite: Map<number, THREE.Texture> }
   markerTexture: THREE.Texture | null
   markerActors: SceneActor[]

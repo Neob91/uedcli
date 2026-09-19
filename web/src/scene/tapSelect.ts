@@ -8,7 +8,7 @@
 import * as THREE from 'three'
 
 import type { SceneActor } from '../api'
-import { isTransparentPixel, pickActor, pickHit, resolveHitSurface, resolveSegmentHitActor, resolveTapAction } from './selection'
+import { isTransparentPixel, pickActor, pickHit, resolveEdgeHitSurface, resolveHitSurface, resolveSegmentHitActor, resolveTapAction } from './selection'
 import type { HitCandidate, Ray, RawTapHit, TapAction } from './selection'
 import type { ShadingMode } from './shadingMode'
 
@@ -52,13 +52,20 @@ export interface TapSelectParams {
   moverMeshObject: THREE.Object3D | null
   moverTriangleOwners: (string | null)[]
   moverTrianglePolyIndex: (number | null)[]
-  // The invisible mesh-actor pick mesh + its per-triangle owner arrays (SceneResources). Lets a
-  // DT_Mesh actor be selected in the ortho panes (and the perspective wireframe pane), where the
-  // solid `meshObject` isn't drawn. A hit resolves to the whole owning actor (mesh actors have no
-  // brush) via `resolveHitSurface`.
+  // The invisible mesh-actor FILLED pick mesh + its per-triangle owner arrays (SceneResources) --
+  // solid (non-wireframe) shading modes only. A hit resolves to the whole owning actor (mesh actors
+  // have no brush) via `resolveHitSurface`. NOT used in wireframe mode -- see `meshEdgePickObject`
+  // (GUI-PARITY.md "Mesh selection in 2D/3D wireframe mode vs UED22": UED22 only hit-tests a mesh
+  // actor's drawn wireframe EDGES there, never its filled interior).
   meshPickObject: THREE.Object3D | null
   meshTriangleOwners: (string | null)[]
   meshTrianglePolyIndex: (number | null)[]
+  // The invisible mesh-actor EDGE-only pick geometry (`SceneResources.meshEdgePickGeometry`), used
+  // INSTEAD of `meshPickObject` in wireframe mode (ortho panes always, the perspective pane in
+  // wireframe mode) -- see `meshPickObject`'s doc comment above for why.
+  meshEdgePickObject: THREE.Object3D | null
+  meshEdgeOwners: (string | null)[]
+  meshEdgePolyIndex: (number | null)[]
   markerObjects: THREE.Object3D[]
   // Every brush's own outline (`BrushOutlines.tsx`'s `groupRef`, `csg-all`/`selected-only` per mode)
   // -- only meaningful as a click target in wireframe mode (bug report item 6: never AABB/interior-
@@ -93,7 +100,9 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
   const {
     camera, rect, clientX, clientY, additive, shiftKey, mode, lineThreshold,
     meshObject, moverMeshObject, moverTriangleOwners, moverTrianglePolyIndex,
-    meshPickObject, meshTriangleOwners, meshTrianglePolyIndex, markerObjects, brushObjects, moverOutlineObjects,
+    meshPickObject, meshTriangleOwners, meshTrianglePolyIndex,
+    meshEdgePickObject, meshEdgeOwners, meshEdgePolyIndex,
+    markerObjects, brushObjects, moverOutlineObjects,
     actors, triangleOwners, trianglePolyIndex,
   } = params
   const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1
@@ -107,10 +116,14 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
   raycaster.params.Line2 = { threshold: 6 }
 
   let hit: RawTapHit | null = null
+  // A mesh actor picks by its FILLED triangles outside wireframe mode, and by its wireframe EDGES
+  // only in wireframe mode (never both -- GUI-PARITY.md "Mesh selection in 2D/3D wireframe mode vs
+  // UED22": UED22 never lets a click land inside a mesh actor's silhouette select it there, only a
+  // click on/near an actual drawn wireframe line).
   const candidates: THREE.Object3D[] = [
     ...(meshObject ? [meshObject] : []),
     ...(moverMeshObject ? [moverMeshObject] : []),
-    ...(meshPickObject ? [meshPickObject] : []),
+    ...(mode === 'wireframe' ? (meshEdgePickObject ? [meshEdgePickObject] : []) : (meshPickObject ? [meshPickObject] : [])),
     ...markerObjects,
     ...brushObjects,
     ...moverOutlineObjects,
@@ -171,6 +184,12 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
           // index isn't load-bearing here -- it just identifies the actor.
           const surface = resolveHitSurface(raw.faceIndex, meshTriangleOwners, meshTrianglePolyIndex, actors)
           hit = surface ? { actor: surface.actor, polyIndex: surface.polyIndex, isLineHit: false } : null
+        } else if (raw.object === meshEdgePickObject) {
+          // A mesh-actor WIREFRAME EDGE hit (wireframe mode only) -- resolves the same as
+          // `meshPickObject` above (select-actor; a mesh actor has no brush), via the `index/2`
+          // segment math `resolveEdgeHitSurface` shares with `resolveSegmentHitActor`.
+          const surface = resolveEdgeHitSurface(raw.index, meshEdgeOwners, meshEdgePolyIndex, actors)
+          hit = surface ? { actor: surface.actor, polyIndex: surface.polyIndex, isLineHit: true } : null
         } else if (raw.object.userData.segmentOwners) {
           // A brush/Mover outline segment -- a genuine hit on drawn LINE geometry
           // (`RawTapHit.isLineHit`'s doc comment: never gated behind Shift, board item
@@ -197,7 +216,14 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
       origin: [raycaster.ray.origin.x, -raycaster.ray.origin.y, raycaster.ray.origin.z],
       direction: [raycaster.ray.direction.x, -raycaster.ray.direction.y, raycaster.ray.direction.z],
     }
-    const aabbCandidates = mode === 'wireframe' ? actors.filter((a) => !a.brush) : actors
+    // Wireframe mode excludes brushes from the AABB fallback (bug report item 6: only a brush's own
+    // outline lines may select it there) AND, for the same reason, a resolved mesh actor (GUI-
+    // PARITY.md "Mesh selection in 2D/3D wireframe mode vs UED22") -- its own triangle-owner set
+    // (`meshTriangleOwners`) is exactly the actors `meshEdgePickObject`/`meshPickObject` already
+    // cover, so a raycast miss on both must not fall back to a full 3-D box test either.
+    const meshActorNames = new Set(meshTriangleOwners.filter((n): n is string => n != null))
+    const aabbCandidates =
+      mode === 'wireframe' ? actors.filter((a) => !a.brush && !meshActorNames.has(a.name)) : actors
     const actor = pickActor(ray, aabbCandidates)
     hit = actor ? { actor, polyIndex: null, isLineHit: false } : null
   }
