@@ -47,7 +47,22 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
   // (dot centered, no movement reported beyond the release's own zero).
   const [stickVector, setStickVector] = useState<JoystickVector | null>(null)
 
+  // Every handler below calls `stopPropagation()` first -- Viewport3D.tsx's own container div has
+  // its OWN touch pointerdown/move handler (single-finger look-rotation, two-finger pan/zoom) that
+  // unconditionally calls `setPointerCapture` on itself for ANY touch pointerdown it sees. Without
+  // stopping propagation, a touch starting on the stick/buttons still bubbles up into that handler,
+  // which steals pointer capture away from the element that just captured it -- so every subsequent
+  // move/up/cancel for that pointer routes to the CONTAINER instead of the joystick, and:
+  //  - the stick never sees its own pointermove (the drag is instead read as a one-finger camera
+  //    look-rotation by the container, freezing position while pitch/yaw spin) -- board item
+  //    mobile-joystick-non-functional-updown-stuck symptom 1;
+  //  - the up/down buttons never see their own pointerup/pointercancel, so `onVerticalChange(0)` is
+  //    never called and the button reads (and stays) pressed forever -- symptom 2.
+  // Confirmed live in a real Chromium (CDP-dispatched touch events): reproduced without this fix
+  // (pose froze at its start position while pitch/yaw rotated instead; the up button's vertical
+  // input never returned to 0 after touchend/touchcancel), fixed with it.
   const onStickPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
     dragPointerId.current = e.pointerId
     rawOffset.current = { dx: 0, dy: 0 }
@@ -57,6 +72,7 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
   const onStickPointerMove = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       if (dragPointerId.current !== e.pointerId) return
+      e.stopPropagation()
       rawOffset.current.dx += e.movementX
       rawOffset.current.dy += e.movementY
       const v = joystickVector(rawOffset.current.dx, rawOffset.current.dy, STICK_RADIUS_PX)
@@ -69,6 +85,7 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
   const endStickDrag = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
       if (dragPointerId.current !== e.pointerId) return
+      e.stopPropagation()
       e.currentTarget.releasePointerCapture(e.pointerId)
       dragPointerId.current = null
       setStickVector(null)
@@ -79,6 +96,7 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
 
   const onVerticalPointerDown = useCallback(
     (direction: 1 | -1) => (e: ReactPointerEvent<HTMLButtonElement>) => {
+      e.stopPropagation()
       e.currentTarget.setPointerCapture(e.pointerId)
       onVerticalChange(direction)
     },
@@ -86,6 +104,7 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
   )
   const onVerticalPointerUp = useCallback(
     (e: ReactPointerEvent<HTMLButtonElement>) => {
+      e.stopPropagation()
       e.currentTarget.releasePointerCapture(e.pointerId)
       onVerticalChange(0)
     },

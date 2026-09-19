@@ -110,6 +110,55 @@ describe('MoveJoystick stick drag', () => {
   })
 })
 
+// mobile-joystick-non-functional-updown-stuck: Viewport3D.tsx's OWN container div has a touch
+// pointerdown/pointermove handler (single-finger look-rotation) that unconditionally calls
+// `setPointerCapture` on itself for ANY touch pointerdown -- reproduced here as `onPointerDown` on
+// the wrapper below. Before the fix, a touch starting on the stick/buttons bubbled into this
+// handler too (since MoveJoystick never called `stopPropagation()`), which stole pointer capture
+// away from the joystick element that had just captured it -- confirmed live in a real Chromium
+// (root-caused for this board item): the drag was read as a camera rotation instead of a
+// translation, and the up/down buttons' own pointerup/pointercancel never fired (stuck "pressed").
+// This test proves the wrapper's handler is never invoked for a joystick touch, which is what
+// keeps pointer capture (and so all move/up/cancel delivery) with the joystick element itself.
+function renderInsideCapturingContainer(onStickChange = vi.fn(), onVerticalChange = vi.fn()) {
+  const containerPointerDown = vi.fn()
+  const containerPointerMove = vi.fn()
+  render(
+    <div onPointerDown={containerPointerDown} onPointerMove={containerPointerMove}>
+      <MoveJoystick onStickChange={onStickChange} onVerticalChange={onVerticalChange} />
+    </div>,
+  )
+  return { containerPointerDown, containerPointerMove }
+}
+
+describe('MoveJoystick stops propagation (does not leak touches to an ancestor container)', () => {
+  beforeAll(() => setTouchCapable(true))
+
+  it('a stick drag never reaches the ancestor container, and still reports the drag correctly', () => {
+    const onStickChange = vi.fn()
+    const { containerPointerDown, containerPointerMove } = renderInsideCapturingContainer(onStickChange)
+    const base = screen.getByTestId('move-joystick-base')
+    fireEvent.pointerDown(base, { pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, movementX: 0, movementY: -32 })
+    fireEvent.pointerUp(base, { pointerId: 1 })
+    expect(containerPointerDown).not.toHaveBeenCalled()
+    expect(containerPointerMove).not.toHaveBeenCalled()
+    expect(onStickChange).toHaveBeenCalledWith({ forward: 1, right: 0 })
+    expect(onStickChange).toHaveBeenLastCalledWith({ forward: 0, right: 0 })
+  })
+
+  it('an up-button press never reaches the ancestor container, and still reports up/release', () => {
+    const onVerticalChange = vi.fn()
+    const { containerPointerDown } = renderInsideCapturingContainer(vi.fn(), onVerticalChange)
+    const up = screen.getByLabelText('Move up')
+    fireEvent.pointerDown(up, { pointerId: 9 })
+    expect(containerPointerDown).not.toHaveBeenCalled()
+    expect(onVerticalChange).toHaveBeenLastCalledWith(1)
+    fireEvent.pointerUp(up, { pointerId: 9 })
+    expect(onVerticalChange).toHaveBeenLastCalledWith(0)
+  })
+})
+
 describe('MoveJoystick up/down buttons', () => {
   beforeAll(() => setTouchCapable(true))
 
