@@ -83,17 +83,28 @@ edge against another Add/Mover — never a `carved_by` endpoint in either direct
   (`dev/docs/unrealed/t3d.md`'s "Fractional vertices"), so "touches" means within a small tolerance
   band, not exact zero-gap contact. The exact value is implementation-stage detail; that it exists
   and is named/documented is not.
-- **Non-convex brushes** (freeform, staircase-shaped, CSG-modified): SAT is not exact here regardless
-  of which axis set is used. Fall back to a coarser bounding-box-overlap + sampled-point check, and
-  flag the result `⚠ approximate` in the output — never present an approximate answer as exact
-  (matches this project's existing convention of labeled masks rather than hidden ones). A brush's
-  convexity is decided once and reused, not re-derived per edge.
-- **Containment test** (brush → non-brush actor): point-in-polyhedron test of the actor's `Location`
-  against the brush's volume — well-defined for a valid closed manifold regardless of convexity, so
-  it needs no approximate fallback the way the non-convex touch test does. **Caveat**: a
-  self-intersecting or non-manifold freeform brush (a malformed or hand-authored edge case, not the
-  common case) can make even parity-based point-in-solid ambiguous; this is a real but rare open edge
-  case, flagged here rather than silently assumed away.
+- **Non-convex brushes (freeform, staircase-shaped, CSG-modified): exact, no approximation** (owner
+  ruling, 2026-09-19 — the earlier bounding-box-overlap `⚠ approximate` fallback is REMOVED, not kept
+  as a cheaper option). SAT itself is only exact between two CONVEX shapes, so a non-convex brush is
+  first decomposed into convex CELLS via a SELF-SPLIT: recursively partition the brush's own
+  `PolyList` by its own face planes — a BSP of just that one brush's own geometry, entirely
+  self-contained (no other brush, no native engine, no whole-level solve — the exact same "decoupled
+  from a native build" property the rest of this design already has) — until every leaf cell is
+  convex. An already-convex brush decomposes to exactly one cell, so this is ONE algorithm, not a
+  convex path plus a non-convex fallback. Two brushes then touch/overlap iff ANY convex cell of A and
+  any convex cell of B pass the exact pairwise SAT test above. The decomposition is computed ONCE per
+  brush and memoized/reused across every edge test that brush participates in — cost is bounded by
+  that brush's own face count, not recomputed per edge and not a function of level size.
+- **Containment reuses the SAME decomposition, not a separate algorithm**: a point is inside the brush
+  iff it's inside (or within tolerance of the boundary of) any ONE of its convex cells — a plain
+  half-space test per cell. One decomposition step now backs both edge kinds; there is no longer a
+  separate ray-cast/winding-number containment path to maintain alongside it.
+- **The one honest remaining edge case — a data-validity question, not an algorithm gap no more math
+  can close**: a genuinely self-intersecting or non-manifold brush (faces that don't actually bound a
+  valid closed solid — malformed content, not the common case) makes the self-split itself ill-defined,
+  since there's no well-defined "inside" to decompose in the first place. Report such a brush as a
+  named, skipped node (same treatment as a degenerate zero-area face, below) rather than silently
+  guessing at an answer the input doesn't actually support.
 - A brush too degenerate to test (the same zero-area-face failure `polyalign._world_normal` already
   raises on) is reported as a named, skipped node — never a crash (no exception reaches the user).
 
@@ -188,6 +199,14 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
 - **CSG order picks the label, not a second algorithm.** Whether a Subtract/Add pair is `contains` or
   `carved_by` is decided purely by which one is later in `level.order`; the geometric test (do these
   two volumes touch/overlap) is identical either way.
+- **Non-convex brushes get exact detection via convex decomposition, not full general solid-boolean
+  CSG** (owner ruling, 2026-09-19 — no approximation, full stop). The earlier design conversation
+  already rejected "reimplement full solid boolean intersection" as its own project-sized effort,
+  independent of the native CSG engine. Convex decomposition avoids that cost specifically because a
+  brush is ALWAYS a planar-face-bounded polyhedron (never an arbitrary mesh) — a self-split by its own
+  face planes is a small, well-understood, terminating computation on that specific kind of input, not
+  the general mesh-boolean problem. This gets full exactness at a fraction of the cost the general
+  case would need, precisely because it leans on what a brush actually is.
 - **The U/V-axis blindness and missing rotate-to-align primitive in `brush relation set`** (flagged
   earlier this session) are NOT addressed here. This design discovers structure; it doesn't move
   anything. Those remain open, separate gaps in a different sub-verb.
@@ -195,7 +214,8 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
 ## Module shape / touchpoints (implementation-stage detail, not prescriptive)
 
 - New module `uedcli/actorgraph.py` (mirrors `relation.py`'s shape: pure Python, model-side, no
-  editor, no native CSG) — the SAT touch/overlap test, the point-in-polyhedron containment test, and
+  editor, no native CSG) — the per-brush convex-decomposition self-split, the exact pairwise SAT
+  touch/overlap test over decomposed cells, the shared point-in-cell containment test, and
   `contains`/`carved_by`/`touches` edge classification.
 - Reuses `polyalign._world_verts`/`_world_normal` for a brush's world-space geometry rather than
   re-deriving actor-transform math.
@@ -207,21 +227,25 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
   `_level_graph` function there, matching the existing convention, not a new `level/` subpackage.
   `--from`/`--hops`/`--tree` parsing lands in `uedcli/cli/parsers/level.py` alongside the other
   `level` sub-verbs.
-- A brush-convexity predicate — reuse one if this codebase already has it, otherwise add one — decides
-  exact-SAT vs. approximate-fallback per brush, once.
+- The self-split decomposition (recursive plane partition of a brush's own `PolyList` into convex
+  cells) is computed once per brush and memoized on it — an already-convex brush is the trivial
+  one-cell case of the same function, not a separate code path.
 
 ## Test strategy (host-native `bin/test`, per `dev/docs/rules/tests.md`)
 
 1. **Touching/overlap detection**: two convex brushes sharing a flat face (zero gap); two overlapping
-   convex brushes with no shared flat face; two convex brushes near but not touching (no edge); a
-   non-convex pair, flagged `⚠ approximate`.
-2. **Edge labeling**: Subtract-Subtract and Add-Add always `touches`, undirected; Subtract-then-Add is
-   `contains`; Add-then-Subtract is `carved_by`; same geometry, label flips purely on CSG order.
+   convex brushes with no shared flat face; two convex brushes near but not touching (no edge); an
+   L-shaped (non-convex) brush pair, decomposed and correctly found touching/not-touching with NO
+   approximation flag anywhere in the result; a malformed self-intersecting brush reported as a named,
+   skipped node rather than given a guessed answer.
+2. **Edge labeling**: Subtract-Subtract and Add-or-Mover-Add-or-Mover always `touches`, undirected;
+   Subtract-then-Add is `contains`; Add-then-Subtract is `carved_by`; same geometry, label flips
+   purely on CSG order.
 3. **Multi-edge fan-out**: an Add straddling two touching Subtracts gets `contains` from both; a
    Subtract carving two different Adds gets `carved_by` to both; a non-brush actor inside two
    overlapping brushes gets `contains` from both.
 4. **Containment**: a non-brush actor's Location inside a convex brush, inside a non-convex brush
-   (exact — no approximation needed for point tests), and outside every brush (no edges).
+   (exact, via the same cell decomposition touch/overlap uses), and outside every brush (no edges).
 5. **CLI**: `--from`/`--hops N` scopes to the exact hop count (no off-by-one); `--hops all` is
    unbounded; `--hops` omitted with `--from` given is exit 2; `--hops` given WITHOUT `--from` is
    ALSO exit 2 (the reverse case); no `--from` dumps the whole level; a degenerate brush is a
