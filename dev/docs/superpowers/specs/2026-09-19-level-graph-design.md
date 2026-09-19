@@ -43,9 +43,18 @@ for two brushes, which was placed LATER in `level.order` (CSG order), not two di
 |------------------------------|--------------------|------------|--------------------|
 | Subtract, Subtract           | (irrelevant)       | `touches`  | undirected         |
 | Add, Add                     | (irrelevant)       | `touches`  | undirected         |
+| Add or Mover, Add or Mover   | (irrelevant)       | `touches`  | undirected         |
 | Subtract, Add                | Subtract earlier   | `contains` | Subtract → Add     |
 | Subtract, Add                | Subtract later     | `carved_by`| Add → Subtract     |
+| Subtract, Mover              | (see below)        | `contains` | Subtract → Mover   |
 | Brush (any), non-brush actor | n/a                | `contains` | Brush → actor      |
+
+**Movers are Add-like for labeling, and never appear in a `carved_by` edge.** A mover "carries a
+`PolyList` like any brush" (above) but generates no `CsgOper` at all — `uedcli/builders.py:735`'s own
+comment states it plainly: "a mover does not participate in world CSG." It can neither carve a
+Subtract nor be carved by one; it just sits in the world as solid geometry, exactly like an Add. So a
+Mover is only ever the CONTAINED side of a `contains` edge, or either side of an undirected `touches`
+edge against another Add/Mover — never a `carved_by` endpoint in either direction.
 
 - A brush overlapping SEVERAL others gets one edge per overlapping pair, not just one: an Add
   straddling two already-touching Subtracts gets a `contains` edge from BOTH; a Subtract carving
@@ -61,25 +70,58 @@ for two brushes, which was placed LATER in `level.order` (CSG order), not two di
 
 ### Detection algorithm
 
-- **Touching/overlap test**: convex separating-axis test (SAT) against the brush's actual
-  world-space polyhedron — faces from its `PolyList`, transformed by Rotation/MainScale/PostScale/
-  Location the same way `polyalign._world_verts`/`_world_normal` already do. Exact for convex
-  brushes (cube/cylinder/cone/sheet/most authored shapes).
-- **Non-convex brushes** (freeform, staircase-shaped, CSG-modified): SAT's face-normal test is not
-  exact here. Fall back to a coarser bounding-box-overlap + sampled-point check, and flag the result
-  `⚠ approximate` in the output — never present an approximate answer as exact (matches this
-  project's existing convention of labeled masks rather than hidden ones).
-  A brush's convexity is decided once and reused, not re-derived per edge.
+- **Touching/overlap test**: separating-axis test (SAT) against the brush's actual world-space
+  polyhedron — faces from its `PolyList`, transformed by Rotation/MainScale/PostScale/Location the
+  same way `polyalign._world_verts`/`_world_normal` already do. Exact for two CONVEX brushes, but
+  face normals of both shapes alone are not sufficient in general (two convex prisms/cylinders at
+  certain relative rotations can be genuinely disjoint with no separating FACE normal, only a
+  separating axis along the cross product of one edge from each) — the candidate-axis set is every
+  face normal of both brushes PLUS every cross product of an edge from brush A with an edge from
+  brush B (the standard exact test for two convex polytopes), not face normals alone.
+- **A touching tolerance is required and must be a named, stated constant** — this codebase's own
+  convention (`relation.py`'s `_PARALLEL_EPS`/`_PLANE_EPS`/`_TOUCH_EPS`/`_GAP_EPS`, each a labeled
+  epsilon with a stated reason) applies here too: real editor-placed brushes carry sub-uu float noise
+  (`dev/docs/unrealed/t3d.md`'s "Fractional vertices"), so "touches" means within a small tolerance
+  band, not exact zero-gap contact. The exact value is implementation-stage detail; that it exists
+  and is named/documented is not.
+- **Non-convex brushes** (freeform, staircase-shaped, CSG-modified): SAT is not exact here regardless
+  of which axis set is used. Fall back to a coarser bounding-box-overlap + sampled-point check, and
+  flag the result `⚠ approximate` in the output — never present an approximate answer as exact
+  (matches this project's existing convention of labeled masks rather than hidden ones). A brush's
+  convexity is decided once and reused, not re-derived per edge.
 - **Containment test** (brush → non-brush actor): point-in-polyhedron test of the actor's `Location`
-  against the brush's volume. Well-defined regardless of convexity — no approximation needed here.
+  against the brush's volume — well-defined for a valid closed manifold regardless of convexity, so
+  it needs no approximate fallback the way the non-convex touch test does. **Caveat**: a
+  self-intersecting or non-manifold freeform brush (a malformed or hand-authored edge case, not the
+  common case) can make even parity-based point-in-solid ambiguous; this is a real but rare open edge
+  case, flagged here rather than silently assumed away.
 - A brush too degenerate to test (the same zero-area-face failure `polyalign._world_normal` already
   raises on) is reported as a named, skipped node — never a crash (no exception reaches the user).
+
+### Known limitation — this WILL produce false positives, and that's accepted
+
+Pure geometric touch/overlap is not the same question as "is this a walkable passage," and the
+owner explicitly accepted the gap between them (2026-09-19) rather than paying for a full post-CSG
+BSP solve to close it (see "Design decisions and why"). Concretely: a small, PURELY DECORATIVE
+subtract — a bevel or a structural notch cut into a wall, never meant to let a player through — can
+still geometrically touch volumes on both sides of that wall, and this design has no way to tell that
+apart from a genuine doorway cut through the same wall. Both show up as a `touches` chain bridging
+two rooms; only one of them is real. This is the direct cost of not running the full CSG solve, and
+it is a deliberate, accepted tradeoff, not an oversight — surfaced here so a reader of the graph knows
+to sanity-check a surprising connection rather than trust it blindly.
 
 ### Output format
 
 Flat, ONE EDGE PER LINE, as a subject–relation–object statement. Never a nested/indented tree (a
 tree implies a hierarchy this graph doesn't have — cycles and shared nodes are normal). Never JSON
-in v1 — YAGNI (owner ruling, 2026-09-19; the new CLAUDE.md convention this session added):
+in v1 — YAGNI (owner ruling, 2026-09-19; the new CLAUDE.md convention this session added).
+
+This isn't a novel format for this codebase — it's the same shape `uedcli/eventgraph.py::format_text`
+already renders for `event graph` (`"{src} ({cls}) --{event}--> {dst} ({cls})"`), for the same reason:
+one line per edge is directly grep/scan-able for "everything connected to X" with no need to
+reconstruct adjacency from separate node/edge arrays. `event graph` also already has a working
+`format_dot` (Graphviz) alongside its text form — a real, cheap-to-mirror precedent if a DOT rendering
+is ever wanted here (see "Out of scope"), not speculative new work:
 
 ```
 Subtract_Lobby        --touches-->         Subtract_HallwayDoor
@@ -91,9 +133,13 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
 ```
 
 - The optional `(...)` on a `touches` edge is a rough size of the touching/overlapping area: EXACT
-  when a single matched face pair exists (reusing `relation.classify_footprint_2d`'s area math on
-  that pair), a bounding-box-intersection estimate otherwise. `contains`/`carved_by` edges carry no
-  size — containment is boolean, not a matter of degree the way a gap/overlap is.
+  when a single matched face pair exists, a bounding-box-intersection estimate otherwise.
+  `relation.classify_footprint_2d` itself only returns a shape LABEL (`"partial"`/`"coincident"`/…) —
+  its actual area math is the private `_shoelace_area` helper it calls internally, not a public
+  function this design can call as-is. So the exact-case area needs a small new function built the
+  same way `classify_footprint_2d` already computes area internally, not a call to an existing public
+  API — a real but small addition, not a reuse. `contains`/`carved_by` edges carry no size —
+  containment is boolean, not a matter of degree the way a gap/overlap is.
 - A `touches` edge between two brushes, where a single clean matched face pair exists, additionally
   names that pair as `Name:idx` selectors — `brush relation measure`'s own grammar — so the edge
   pipes straight into it for full plane/footprint/gap/offset detail:
@@ -106,15 +152,25 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
 
 ### CLI grammar
 
-`uedcli level graph [--from NAME --hops N|all]`
+`uedcli level graph [--from NAME --hops N|all] [--tree KIND/NAME]`
 
-- **No `--from`**: the whole level's graph, every node, every edge — mirrors `brush relation find`'s
-  existing "omit candidates → search every brush in the level" default; not a new convention.
+- **No `--from`**: the whole queried actor set's graph, every node, every edge — mirrors `brush
+  relation find`'s existing "omit candidates → search every brush in the level" default; not a new
+  convention. This is also the expensive case: detection is pairwise (every brush tested against
+  every other), so `--from`/`--hops` exists specifically to let a real level with hundreds of actors
+  be queried around one area of interest instead of paying for the whole level every time.
 - **`--from NAME --hops N|all`**: scoped to the connected neighborhood reachable from NAME within N
   hops (or unbounded — `--hops all` mirrors `--top N|all`'s existing spelling for "no cap"). `--hops`
   is REQUIRED when `--from` is given: an omitted count is ambiguous (one hop? unbounded?), and this
-  project's convention is no silent half-answers.
+  project's convention is no silent half-answers. Conversely, **`--hops` given without `--from` is a
+  clean exit 2** — a hop count has nothing to scope without a seed, and a flag that can't act where
+  it's passed is an error here, not a silently-ignored no-op (same rule, same direction).
 - NAME may be any node — brush or non-brush actor — there is no privileged "room" node type.
+- **`--tree KIND/NAME`**: analyze a named T3D tree (level/stash/prefab) instead of the ambient
+  `$UEDCLI_LEVEL`, via the existing shared `_tree_flag` helper (`uedcli/cli/parsers/_arguments.py`) —
+  the same mechanism `event graph` and most other read/analysis verbs already use. `level graph` is
+  exactly that shape of verb; there's no reason for it to be live-level-only when the mechanism to
+  avoid that already exists and is standard here.
 - No `--json` in v1 (owner ruling, 2026-09-19 — YAGNI).
 
 ## Design decisions and why
@@ -144,10 +200,14 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
   `contains`/`carved_by`/`touches` edge classification.
 - Reuses `polyalign._world_verts`/`_world_normal` for a brush's world-space geometry rather than
   re-deriving actor-transform math.
-- Reuses `relation.classify_footprint_2d`'s area computation for a `touches` edge's size annotation
-  when a matched face pair exists; a new helper for the bounding-box-intersection fallback otherwise.
-- New `uedcli/cli/commands/level/graph.py` + the `level graph` sub-parser (`uedcli/cli/parsers/
-  level.py`): `--from`/`--hops` parsing, BFS traversal when scoped.
+- A new small area-computation function, built the same way `classify_footprint_2d` computes area
+  internally (see "Output format"), for the exact-case `touches` size annotation; a new helper for
+  the bounding-box-intersection fallback otherwise.
+- `uedcli/cli/commands/level.py` is a single flat file (786 lines, a `run(args)` dispatcher + per-verb
+  `_level_*` functions) — NOT a package the way `brush`'s command family is. This design adds a new
+  `_level_graph` function there, matching the existing convention, not a new `level/` subpackage.
+  `--from`/`--hops`/`--tree` parsing lands in `uedcli/cli/parsers/level.py` alongside the other
+  `level` sub-verbs.
 - A brush-convexity predicate — reuse one if this codebase already has it, otherwise add one — decides
   exact-SAT vs. approximate-fallback per brush, once.
 
@@ -168,6 +228,11 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
    degenerate brush is a reported, skipped node, never a crash.
 6. **Output format**: exact line shape per edge kind; `Name:idx` selectors present only when a single
    clean face pair was found; size annotation present only on `touches`.
+7. **Movers**: a Mover touching an Add or another Mover gets `touches`; a Mover inside a Subtract gets
+   `contains` (Subtract → Mover); a Mover is never a `carved_by` endpoint even when geometrically
+   positioned where that label would otherwise apply to an Add.
+8. **`--tree`**: `level graph --tree stash/NAME` analyzes a stash's actor set instead of the live
+   level, same as other `_tree_flag`-bearing verbs.
 
 ## Docs to update on build
 
@@ -180,8 +245,10 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
 
 - **`--json`** — explicit YAGNI (owner ruling, 2026-09-19; see the new CLAUDE.md line this session
   added). Add only once a real script/agent workflow needs structured output.
-- **A Mermaid/DOT rendering** for human visualization — a cheap possible follow-on, not needed for the
-  LLM-facing path this design targets.
+- **A DOT rendering** for human visualization — `eventgraph.py::format_dot` is a real, working
+  precedent one file away (same graph-verb family, already handles a mover as a distinct node shape),
+  so this would be cheap to mirror later, not speculative new work. Not built now because nobody has
+  asked for it — the LLM-facing text form is what this design targets.
 - **The zone/portal/BSP-leaf graph** (`uedcli-native`'s `Zone`/`BspLeaf`,
   `zones::assign_leaves_and_zones`/`build_connectivity`) — real, mostly already built, but needs a
   native build + authored zoning content. See "Design decisions and why".
