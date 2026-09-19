@@ -42,7 +42,6 @@ for two brushes, which was placed LATER in `level.order` (CSG order), not two di
 | Endpoint kinds              | CSG order         | Edge       | Direction         |
 |------------------------------|--------------------|------------|--------------------|
 | Subtract, Subtract           | (irrelevant)       | `touches`  | undirected         |
-| Add, Add                     | (irrelevant)       | `touches`  | undirected         |
 | Add or Mover, Add or Mover   | (irrelevant)       | `touches`  | undirected         |
 | Subtract, Add                | Subtract earlier   | `contains` | Subtract → Add     |
 | Subtract, Add                | Subtract later     | `carved_by`| Add → Subtract     |
@@ -224,8 +223,9 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
 4. **Containment**: a non-brush actor's Location inside a convex brush, inside a non-convex brush
    (exact — no approximation needed for point tests), and outside every brush (no edges).
 5. **CLI**: `--from`/`--hops N` scopes to the exact hop count (no off-by-one); `--hops all` is
-   unbounded; `--hops` omitted with `--from` given is exit 2; no `--from` dumps the whole level; a
-   degenerate brush is a reported, skipped node, never a crash.
+   unbounded; `--hops` omitted with `--from` given is exit 2; `--hops` given WITHOUT `--from` is
+   ALSO exit 2 (the reverse case); no `--from` dumps the whole level; a degenerate brush is a
+   reported, skipped node, never a crash.
 6. **Output format**: exact line shape per edge kind; `Name:idx` selectors present only when a single
    clean face pair was found; size annotation present only on `touches`.
 7. **Movers**: a Mover touching an Add or another Mover gets `touches`; a Mover inside a Subtract gets
