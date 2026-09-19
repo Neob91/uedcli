@@ -90,6 +90,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Pivot-cross multi-select rendering | With 2+ brushes selected, does our own pivot cross render once per brush? | ✅ closed, fixed — it did, and UED22 draws exactly ONE | ✅ binary + 🔬 live UED22 capture — see Findings Part 4 |
 | Pivot-cross visibility toggle | Does UED22 have a manual way to toggle the pivot marker's visibility on/off? | ✅ closed — no toggle exists; visibility is `(SnapCount > 0) \|\| (Count > 1)`, latched | ✅ binary (`Editor.dll` disassembly, our own `uned/UED22/`) + 🔬 live capture — see Findings Part 2 + Part 4 |
 | Pivot-cross anchor under multi-select | Which selected actor's location does UED22's one global cross sit on? | ✅ closed — the actor that was most recently the SOLE selection (= first-clicked, in a click-built multi-select) | ✅ binary (`Editor.dll` disassembly, our own `uned/UED22/`) + 🔬 live capture + owner's own live test — see Findings Part 3 + Part 4 |
+| Directional arrow gizmo | Does UED22 draw a per-actor facing-direction arrow (`bDirectional`), what does it look like, and what gates it? | ✅ closed, implemented | ✅ binary (`Editor.dll`/`Engine.dll` disassembly, our own `uned/UED22/*.dll`/`*.u`) — see Findings below |
 
 Legend: ⬜ open (not started) · 🔶 investigating · ✅ closed (bar met, live-verified).
 
@@ -1373,6 +1374,162 @@ written here. If the number is 0.1 or higher, do not ask — proceed normally, t
 "leave it for now" until the owner raises it themselves or the dice come up right.** This is a
 literal, deliberate instruction, not a typo or a joke to normalize away — implement it exactly as
 given, one honest coin-flip per new session, not a rephrased "occasionally".
+
+### Directional arrow gizmo (closed 2026-09-19)
+
+Board item `dev/docs/board/inbox/gui-never-renders-point-actor-directional-arrow/`. Its own cited
+geometry/gating (`UnEdCam.cpp`, `fgsfdsfgs/UE1`) is explicitly THIRD-PARTY-SOURCED and banned as
+GUI-PARITY evidence (2026-09-18 ruling) — this is a full redo from our own `uned/UED22/Editor.dll`/
+`Engine.dll` (`pefile`+`capstone`, harness at the board item's own `harness/` dir), confirming some
+of it, correcting the rest.
+
+**✅ Binary-confirmed: the whole block is a SEPARATE, always-evaluated per-actor overlay — NOT part
+of "radii view".** It sits in `UEditorEngine::Draw` (export RVA `0x3c440`) immediately after the
+sound-radius draw this doc's "Radii overlay colors" section already mapped, at VA
+`0x1003da60`-`0x1003e098`:
+
+```
+0x1003da60  test byte ptr [esi + 0x11c], 2      ; AActor.bDirectional (bit 0x02 -- see below)
+0x1003da67  je    0x1003e09e                     ; skip the WHOLE block if not directional
+0x1003da6d  push  esi
+0x1003da6e  call  0x10037600                     ; IsA(ACamera) -- see below
+0x1003da73  add   esp, 4
+0x1003da76  test  eax, eax
+0x1003da78  je    0x1003da86                      ; not-Camera -> read bSelected instead
+0x1003da7a  mov   eax, dword ptr [edi]            ; edi = Frame -> [edi] = Frame->Viewport
+0x1003da7c  xor   ecx, ecx
+0x1003da7e  cmp   esi, dword ptr [eax + 0x30]      ; esi (this actor) vs Viewport->Actor
+0x1003da81  setne cl                               ; ecx = 1 unless esi IS the possessed actor
+0x1003da84  jmp   0x1003da92
+0x1003da86  mov   ecx, dword ptr [esi + 0x11c]      ; not-Camera: ecx = bSelected bit (0x04),
+0x1003da8c  shr   ecx, 2                            ;   extracted via shr 2 & 1
+0x1003da8f  and   ecx, 1
+0x1003da92  test  ecx, ecx
+0x1003da94  je    0x1003e09e                        ; skip if the gate above says no
+```
+
+**The decisive, previously-unchecked fact**: `je 0x1003da60` is EXACTLY where the two gates
+guarding the whole preceding radii block (`ShowFlags & 2` at `0x1003d46b`, `bSelected` at
+`0x1003d478`) jump to on FAILURE — i.e. the arrow-gizmo test at `0x1003da60` runs whether or not
+"Show Radii" is on, and whether or not the actor is selected. **This is not a radii-view feature at
+all — it is evaluated for every actor in the level, every frame, gated only by its own three terms.**
+
+**Gate, confirmed exactly**: `bDirectional && (IsA(ACamera) ? (actor != Viewport->Actor) : bSelected)`.
+
+- **`bDirectional` = bit `0x02`** of the same `[actor+0x11c]` bitfield dword this doc's pivot-cross
+  Part 4 already mapped (`bHiddenEd 0x01 · bDirectional 0x02 · bSelected 0x04 · …`, from
+  `Engine.Actor`'s own stored `ScriptText` in `uned/UED22/Engine.u`) — a second, independent
+  confirmation of that bit layout (the property comment there reads "Actor shows direction arrow
+  during editing", matching this feature exactly).
+- **`IsA(ACamera)` — real function, real class, own binary.** The call at `0x10037600` is a generic
+  `IsA`-shaped walk (compares `esi->Class` up its `[+0x28]` SuperField chain against a target
+  `UClass*`), and the target comes from `call dword ptr [0x100ceeb8]` with NO `this` argument — an
+  IAT slot that resolves (by import name) to `Engine.dll`'s exported
+  `?StaticClass@ACamera@@SAPAVUClass@@XZ`, i.e. `ACamera::StaticClass()`. Confirms the board item's
+  `IsA(ACamera::StaticClass)` claim, independently, from our own binary.
+- **The Camera exclusion is NOT "always show" — it's "show unless this actor IS the viewport's own
+  possessed actor."** `eax = [edi]` (`edi` = the `Draw` call's `Frame` argument) dereferences to
+  `Frame->Viewport`, and `[eax+0x30]` is `Viewport->Actor` (the SAME `[viewport+0x30]` offset this
+  doc's "Radii overlay colors" section already pinned as the viewport's controlled actor). So a
+  Camera shows its arrow UNLESS it is the exact camera the viewport is currently looking through —
+  never fires in THIS GUI, whose viewports are always free-fly and never "possess" a level actor, so
+  every Camera-descendant actor's arrow shows unconditionally here.
+- **Non-Camera path reads `bSelected` (bit `0x04`) directly** — `shr ecx,2; and ecx,1` extracts
+  exactly that bit, matching `NoteSelectionChange`/`SetPivot`'s already-established use of the same
+  bit for the same meaning.
+- **No `IsOrtho`/`RendMap` test anywhere in the block** — confirmed by reading every instruction from
+  `0x1003da60` to `0x1003e098` (296 lines of disassembly); the board item's "gated `IsOrtho()`,
+  perspective unconfirmed" question is answered: **the arrow renders in every pane, perspective and
+  all three ortho, unconditionally** — same as this doc's light/sound radii, and for the same reason
+  (this code sits right alongside them with no viewport-kind branch of its own).
+
+**Geometry, corrected from the real constant pool (NOT the board item's third-party 48/16/16):**
+after the gate passes, `0x1003dac5`-`0x1003dae1` computes `C = GMath.UnitCoords / Actor->Rotation`
+(`Actor+0xdc` = `Rotation`, `FCoords::operator/(FRotator const&)` — IAT `0x100ce490` resolves to
+`Core.dll`'s `??KFCoords@@QBE?AV0@ABVFRotator@@@Z` — confirming the board item's
+`GMath.UnitCoords / Actor->Rotation` formula exactly), then builds three scaled axis vectors from
+constants read directly out of the binary (`harness-readmem.py` against `0x100de9c8`/`0x100de9cc`/
+`0x100de9dc`): **`38.0`** (shaft), **`16.0`** (fin-back distance), **`12.0`** (fin spread) — not
+48/16/16. Five `RenDev->DrawLine`-shaped calls follow (`call [eax+0x80]` at `0x1003dce5`/
+`0x1003ddbf`/`0x1003de9d`/`0x1003df93`/`0x1003e079`, the same render-device line-draw vtable slot
+this doc's "Mesh-actor wireframe rendering" section already established), each preceded by a fresh
+`FPlane`/`FColor::Plane()` copy of `GEditor + 0x1f8` = **`C_ActorArrow`** (the SAME member the radii
+overlay's ortho collision/light/sound draws already use, already pinned `(163,0,0)` in our own
+`uned/UED22/unrealtournament.ini`):
+
+- shaft: `Location` → `Tip = Location + XAxis*38`
+- 4 fins, all from `Tip` to `Anchor ± Axis*12`, where `Anchor = Tip − XAxis*16` (i.e. 16uu back from
+  the tip, 22uu out from `Location`): `Anchor − YAxis*12`, `Anchor + YAxis*12`, `Anchor − ZAxis*12`,
+  `Anchor + ZAxis*12`.
+
+A `PopHit` call follows the 5 draws (`0x1003e090`-`0x1003e096`, IAT `0x100cedc4` =
+`?PopHit@UViewport@@QAEXH@Z`), consistent with the arrow sharing the actor's own `HActor` hit-proxy
+push from `DrawActorSprite`'s function start (already documented under "Mesh-actor wireframe
+SELECTION") rather than pushing a new one of its own — not exercised further here (out of scope: no
+report asks whether the arrow itself is clickable).
+
+**Which classes set `bDirectional=True` — decoded from real compiled class defaults, not ScriptText
+text.** `u-format.md`'s own note that "UCC stores the source only up to (not including)
+`defaultproperties`" means a literal `bDirectional=True` never appears as ScriptText, even for a
+class that sets it — confirmed empirically (a raw regex scan of `Engine.u`/`DeusEx.u`'s ScriptText
+for `bDirectional\s*=\s*True` found zero hits, even though the binary tail decode below finds nine).
+So this needed a real UClass-tail defaults decoder, not a text search. Built one from scratch
+(`harness/upkg_min.py`, ported directly from `uedcli-native/src/package_read.rs`'s
+`read_compact_index`/`read_property_tags` and `uedcli/uprops/ufield.py`'s `_walk_expr` bytecode
+walker — this sandbox's rootless docker cannot bind-mount `/workspace` at all (confirmed: even a
+mount of a throwaway `/tmp` dir returns "no such file" inside the container — the daemon shares no
+filesystem with this session, the same wall the "Surface selection highlight"/"Mesh-actor wireframe
+SELECTION" sections hit), so `uedcli_native` cannot be built here and the project's own `uprops`
+module — which calls it for every package parse — is unusable; the minimal reader is READ FROM the
+already-documented format facts, not a new invention). Walked all 1254 classes across
+`uned/UED22/Engine.u` (88) + `DeusEx.u` (1166) with zero decode errors (matching this project's own
+"1914/1914 classes clean" walker-integrity bar for the same bytecode-walk mechanism):
+
+- **`Engine.Actor`'s own base default is explicitly `False`.**
+- **`Engine.Pawn` sets `bDirectional=True`** — inherited by EVERY Pawn descendant with no further
+  override anywhere in either package: `Engine.Camera` (extends `PlayerPawn` extends `Pawn`), every
+  DeusEx NPC/bot class, the player pawn itself.
+- Independently, in `Engine.u`: `InterpolationPoint`, `Projectile`, `Teleporter`, `PlayerStart`,
+  `PatrolPoint`, `Spotlight`, `AmbushPoint`.
+- Independently, in `DeusEx.u`: `ParticleGenerator`, `PawnGenerator`, `DeusExMover`, `WanderPoint`,
+  `SecurityCamera`, `HidePoint`, `ElectricityEmitter`, `DirectionalTrigger`, `LaserTrigger`,
+  `ProjectileGenerator`, `SpawnPoint`, `TrashGenerator`, `BeamTrigger`.
+- `Engine.Brush`/`Engine.Mover` do NOT override it (both inherit `Actor`'s `False`) — but
+  `DeusEx.DeusExMover` (the concrete Mover class every DX level actually places) DOES set it `True`,
+  confirming the disassembly's "no `IsBrush` gate" finding matters in practice: a selected DeusEx
+  Mover really does get an arrow in real UED22, and a plain `Engine.Mover`/generic brush does not.
+- No class anywhere resets an inherited `True` back to `False`.
+
+**Implemented.** Backend (`uedcli/serve/scene.py`): `DirectionalArrow` (`require_selection: bool`,
+`lines: tuple[float, ...]`) resolved by `_actor_directional_arrow` — instance-else-class-default
+`bDirectional` (same convention as `_is_hidden_ed`), `ClassIndex.descends_from(cls, "Engine.Camera")`
+for the Camera check (fails open/truncates, never raises — an unresolvable ancestor degrades to
+"not a Camera" the same way an unresolvable class degrades `_is_hidden_ed` to "not hidden"), and
+`_directional_arrow_lines` computing the 5 segments' WORLD-space endpoints server-side via
+`rotation.actor_matrix` (`GMath.UnitCoords / Rotation`'s own already-spike-verified convention,
+ROTATION ONLY — deliberately not `actor_linear`, which folds in MainScale/PostScale the real
+disassembly's formula has no scale term for at all). Runs for EVERY actor, brush included (unlike
+`ActorRadii`, which explicitly skips brush actors) — matching the "no `IsBrush` gate" finding above.
+Frontend (`web/src/scene/DirectionalArrows.tsx`): draws every visible actor's 5-segment dart as one
+batched `<lineSegments>` in `C_ActorArrow`, filtered by `require_selection` vs. the current
+selection — mounted unconditionally in both `Viewport3D.tsx` and `OrthoViewport.tsx` (never behind
+the `showRadii` toggle, matching the "not radii-view" finding above).
+
+**Verification — computed-geometry tier, not a live pixel A/B.** This sandbox has no runnable
+headless Chromium (missing shared libraries, no root, `apt-get` denied — the same repeated
+limitation on file for the "Surface selection highlight"/"Mesh-actor wireframe SELECTION"/"Radii
+light-radius shape" sections) and its docker daemon cannot mount this repo for a live UED22 capture
+either (confirmed above). Verified instead the way those sections' own fallback tier already
+establishes as accepted for this campaign: `DirectionalArrows.test.tsx`
+(`@react-three/test-renderer`) confirms the exact `C_ActorArrow` color, the require-selection gate,
+the Camera-always-shows exception, and that N visible arrows batch into one draw call; five new
+`uedcli/tests/test_serve_scene.py` cases (`test_actor_directional_arrow_*`,
+`test_directional_arrow_lines_identity_pose_matches_hand_computed_geometry`,
+`test_build_scene_payload_resolves_directional_arrow_from_real_class_defaults`) exercise the real
+server-side resolution — the last one against the REAL committed `uned/UED22/Engine.u` class
+defaults (`Engine.PatrolPoint`/`Engine.Camera`/`Engine.Light`), not a stub. The geometry test hand-
+verifies the 10-point shape at an identity pose (Location=(0,0,0), no Rotation) against the formula
+above. None of this is a live-rendered pixel — flagged honestly, same as the sections above.
 
 ## Testing
 

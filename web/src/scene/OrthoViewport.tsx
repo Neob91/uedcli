@@ -11,6 +11,7 @@ import * as THREE from 'three'
 
 import type { Vec3 } from './camera'
 import { BrushOutlines } from './BrushOutlines'
+import { DirectionalArrows } from './DirectionalArrows'
 import { useDragGesture } from './dragGesture'
 import type { DragGestureCallbacks } from './dragGesture'
 import type { FrameRequest } from './frame'
@@ -465,6 +466,9 @@ export function OrthoViewport({
         </lineSegments>
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={actors} selectedNames={selectedNames} />
+        {/* Directional-facing arrow gizmo (bDirectional) -- always on, every pane, never behind
+            the Radii toggle (GUI-PARITY.md "Directional arrow gizmo"). */}
+        <DirectionalArrows actors={actors} selectedNames={selectedNames} />
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current
             selection (owner ruling 2026-09-15) -- draws nothing when nothing is selected. */}
         {showRadii && <RadiiOverlays actors={actors} view={axis} selectedNames={selectedNames} />}

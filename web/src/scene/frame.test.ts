@@ -21,6 +21,7 @@ function actor(lo: [number, number, number], hi: [number, number, number]): Scen
     sprite: null,
     radii: null,
     is_mover: false,
+    directional_arrow: null,
   }
 }
 

@@ -32,6 +32,7 @@ function brush(name: string, location: [number, number, number]): SceneActor {
     sprite: null,
     radii: null,
     is_mover: false,
+    directional_arrow: null,
   }
 }
 

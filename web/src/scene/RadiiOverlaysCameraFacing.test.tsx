@@ -31,6 +31,7 @@ function actor(radii: SceneActor['radii']): SceneActor {
     sprite: null,
     radii,
     is_mover: false,
+    directional_arrow: null,
   }
 }
 

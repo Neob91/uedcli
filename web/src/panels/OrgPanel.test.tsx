@@ -24,6 +24,7 @@ function actor(name: string, folder: string | null): SceneActor {
     sprite: null,
     radii: null,
     is_mover: false,
+    directional_arrow: null,
   }
 }
 

@@ -438,6 +438,43 @@ def test_build_scene_payload_resolves_collision_and_light_radii(tmp_path):
     assert by_name["Room"].radii is None                          # a brush actor never carries radii
 
 
+def test_build_scene_payload_resolves_directional_arrow_from_real_class_defaults(tmp_path):
+    """`SceneActor.directional_arrow` against the REAL committed `uned/UED22/Engine.u` class
+    defaults (own-binary RE, `GUI-PARITY.md` "Directional arrow gizmo"): `Engine.PatrolPoint` sets
+    `bDirectional=True` on its own; `Engine.Camera` inherits it from `Engine.Pawn` and never
+    requires selection; `Engine.Light` inherits `Engine.Actor`'s own `False` and carries none."""
+    from uedcli.serve.scene import DirectionalArrow, build_scene_payload
+
+    root = tmp_path / "proj"
+    maps_dir = root / "maps" / "TestLevel"
+    maps_dir.mkdir(parents=True)
+    room = cube_room()
+    patrol = Actor(name="Patrol0", cls="Engine.PatrolPoint",
+                   location=(Decimal(0), Decimal(0), Decimal(0)), props=[])
+    camera = Actor(name="Camera0", cls="Engine.Camera",
+                   location=(Decimal(0), Decimal(0), Decimal(0)), props=[])
+    plain_light = Actor(name="Lamp0", cls="Engine.Light",
+                        location=(Decimal(0), Decimal(0), Decimal(0)), props=[])
+    level = Level(actors={room.name: room, patrol.name: patrol, camera.name: camera,
+                         plain_light.name: plain_light},
+                 order=[room.name, patrol.name, camera.name, plain_light.name])
+    trunk.write_level(maps_dir, level,
+                      {room.name: "m", patrol.name: "n", camera.name: "o", plain_light.name: "p"})
+    project = SimpleNamespace(root=str(root), maps=None)
+
+    index = _ued22_index()
+    trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    by_name = {a.name: a for a in payload.actors}
+
+    assert by_name["Patrol0"].directional_arrow == DirectionalArrow(
+        require_selection=True, lines=_IDENTITY_ARROW_LINES)
+    assert by_name["Camera0"].directional_arrow == DirectionalArrow(
+        require_selection=False, lines=_IDENTITY_ARROW_LINES)
+    assert by_name["Lamp0"].directional_arrow is None
+    assert by_name["Room"].directional_arrow is None    # Engine.Brush inherits Actor's own False
+
+
 def test_actor_radii_light_radius_zero_is_treated_as_unset():
     """`LightRadius=0` is a real, explicit value but `_actor_radii` treats it the same as unset —
     matching `cli/rendering.py::_resolve_point_render`'s own deliberate `and lr` check (not the
@@ -497,6 +534,108 @@ def test_actor_radii_degrades_to_none_on_unresolvable_class():
     radii, note = _actor_radii(unresolvable, failing_defaults)
     assert radii is None
     assert "X" in note and "schema unavailable" in note
+
+
+# The arrow's own geometry helper computes this for an actor with no Location/Rotation props (the
+# identity case every test below uses) -- computed via the real function, not hand-duplicated, so
+# these tests assert on the DirectionalArrow shape/gating and leave the geometry math itself to
+# `test_directional_arrow_lines_identity_pose_matches_hand_computed_geometry` below.
+def _identity_arrow_lines():
+    from uedcli.serve.scene import _directional_arrow_lines
+    return _directional_arrow_lines(Actor(name="_probe", cls="Engine.Actor", props=[]))
+
+
+_IDENTITY_ARROW_LINES = _identity_arrow_lines()
+
+
+def test_directional_arrow_lines_identity_pose_matches_hand_computed_geometry():
+    """At Location=(0,0,0)/identity Rotation, the world axes ARE the unit axes, so the dart's 10
+    points are exactly hand-computable: shaft tip at local +X*38; each fin from a point 16uu back
+    from the tip (local X*22) splayed +-12uu in local Y/Z."""
+    tip = (38.0, 0.0, 0.0)
+    anchor = (22.0, 0.0, 0.0)
+    expected = (
+        0.0, 0.0, 0.0, *tip,                    # shaft: Location -> Tip
+        *tip, 22.0, -12.0, 0.0,                 # fin: Tip -> Anchor - Y*12
+        *tip, 22.0, 12.0, 0.0,                  # fin: Tip -> Anchor + Y*12
+        *tip, 22.0, 0.0, -12.0,                 # fin: Tip -> Anchor - Z*12
+        *tip, 22.0, 0.0, 12.0,                  # fin: Tip -> Anchor + Z*12
+    )
+    assert _IDENTITY_ARROW_LINES == expected
+    assert anchor == (22.0, 0.0, 0.0)  # sanity: matches the fins' shared X coordinate above
+
+
+def test_actor_directional_arrow_instance_override_wins_over_class_default():
+    """An explicit instance `bDirectional=True` shows the arrow even if the class default is False
+    -- same instance-else-class-default precedence as `_is_hidden_ed`/`_actor_radii`."""
+    from uedcli.serve.scene import DirectionalArrow, _actor_directional_arrow
+
+    actor = Actor(name="Lamp0", cls="Engine.Light", props=[("bDirectional", "True")])
+    info = SimpleNamespace(defaults={("bdirectional", 0): "False"})
+    fake_defaults = SimpleNamespace(for_class=lambda cls: info)
+    fake_index = SimpleNamespace(descends_from=lambda cls, base: False)
+    arrow, note = _actor_directional_arrow(actor, fake_defaults, fake_index)
+    assert note is None
+    assert arrow == DirectionalArrow(require_selection=True, lines=_IDENTITY_ARROW_LINES)
+
+
+def test_actor_directional_arrow_class_default_true_needs_no_instance_override():
+    """`Engine.Pawn`'s own class default (`bDirectional=True`, RE'd from `uned/UED22/Engine.u`)
+    resolves the arrow with no instance override at all -- every Pawn descendant inherits it."""
+    from uedcli.serve.scene import DirectionalArrow, _actor_directional_arrow
+
+    actor = Actor(name="NPC0", cls="DeusEx.ScriptedPawn", props=[])
+    info = SimpleNamespace(defaults={("bdirectional", 0): "True"})
+    fake_defaults = SimpleNamespace(for_class=lambda cls: info)
+    fake_index = SimpleNamespace(descends_from=lambda cls, base: False)
+    arrow, note = _actor_directional_arrow(actor, fake_defaults, fake_index)
+    assert note is None
+    assert arrow == DirectionalArrow(require_selection=True, lines=_IDENTITY_ARROW_LINES)
+
+
+def test_actor_directional_arrow_camera_never_requires_selection():
+    """A `Engine.Camera` descendant's arrow never requires selection -- UED22's own exclusion clause
+    (skip only the viewport's OWN possessed actor) has no equivalent in this GUI's free-fly
+    viewports, so the client always shows a Camera's arrow unconditionally."""
+    from uedcli.serve.scene import DirectionalArrow, _actor_directional_arrow
+
+    actor = Actor(name="Camera0", cls="Engine.Camera", props=[])
+    info = SimpleNamespace(defaults={("bdirectional", 0): "True"})
+    fake_defaults = SimpleNamespace(for_class=lambda cls: info)
+    fake_index = SimpleNamespace(descends_from=lambda cls, base: base == "Engine.Camera")
+    arrow, note = _actor_directional_arrow(actor, fake_defaults, fake_index)
+    assert note is None
+    assert arrow == DirectionalArrow(require_selection=False, lines=_IDENTITY_ARROW_LINES)
+
+
+def test_actor_directional_arrow_false_default_is_no_arrow():
+    """A class whose effective `bDirectional` is False (the common case -- `Engine.Actor`'s own
+    base default) carries no `DirectionalArrow` at all."""
+    from uedcli.serve.scene import _actor_directional_arrow
+
+    actor = Actor(name="Prop0", cls="Engine.StaticMeshActor", props=[])
+    info = SimpleNamespace(defaults={})
+    fake_defaults = SimpleNamespace(for_class=lambda cls: info)
+    fake_index = SimpleNamespace(descends_from=lambda cls, base: False)
+    arrow, note = _actor_directional_arrow(actor, fake_defaults, fake_index)
+    assert arrow is None
+    assert note is None
+
+
+def test_actor_directional_arrow_degrades_to_none_on_unresolvable_class():
+    """An unresolvable class degrades to `(None, note)` -- fail open, mirroring `_actor_radii`'s
+    identical convention. `index.descends_from` is never even consulted."""
+    from uedcli.serve.scene import _actor_directional_arrow
+    from uedcli.uprops import SchemaError
+
+    unresolvable = Actor(name="Z", cls="Some.Missing", props=[])
+    failing_defaults = SimpleNamespace(
+        for_class=lambda cls: (_ for _ in ()).throw(SchemaError("no .u")))
+    fake_index = SimpleNamespace(descends_from=lambda cls, base: (_ for _ in ()).throw(
+        AssertionError("descends_from should not be reached")))
+    arrow, note = _actor_directional_arrow(unresolvable, failing_defaults, fake_index)
+    assert arrow is None
+    assert "Z" in note and "schema unavailable" in note
 
 
 def test_resolve_actor_radii_skips_a_bhiddened_actor_before_resolving_its_class():

@@ -13,6 +13,7 @@ import * as THREE from 'three'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
 import { BrushOutlines } from './BrushOutlines'
+import { DirectionalArrows } from './DirectionalArrows'
 import type { CameraPose, Vec3 } from './camera'
 import { cameraBasis, dollyAndTurn, flyInput, flyMove, look, orbit, pan, zoom } from './camera'
 import type { DragGestureCallbacks } from './dragGesture'
@@ -601,6 +602,9 @@ export function Viewport3D({
         </lineSegments>
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
         <SelectionMarkers actors={scene.actors} selectedNames={selectedNames} />
+        {/* Directional-facing arrow gizmo (bDirectional) -- always on, every pane, never behind
+            the Radii toggle (GUI-PARITY.md "Directional arrow gizmo"). */}
+        <DirectionalArrows actors={scene.actors} selectedNames={selectedNames} />
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current
             selection (owner ruling 2026-09-15) -- draws nothing when nothing is selected. */}
         {showRadii && <RadiiOverlays actors={scene.actors} view="perspective" selectedNames={selectedNames} />}

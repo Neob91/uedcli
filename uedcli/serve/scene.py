@@ -25,7 +25,7 @@ from ..model import Level
 from ..movers import is_mover
 from ..preview import _CSG_PALETTE, classify_brush, world_light_radius, world_sound_radius
 from ..preview_native import poly_blend, poly_two_sided, resolve_mesh_scene_polys
-from ..rotation import actor_linear, actor_prepivot, actor_rotation_uu, local_offset
+from ..rotation import actor_linear, actor_matrix, actor_prepivot, actor_rotation_uu, local_offset, rotate_local
 from ..writes import actor_bounds
 
 _ZERO3 = (Decimal(0), Decimal(0), Decimal(0))
@@ -137,6 +137,74 @@ class ActorRadii:
 
 
 @dataclass(frozen=True, kw_only=True)
+class DirectionalArrow:
+    """A directional-facing arrow gizmo (UED22 `AActor.bDirectional`, drawn in `C_ActorArrow` —
+    RE'd from our own `uned/UED22/Editor.dll`/`Engine.dll`, `GUI-PARITY.md` "Directional arrow
+    gizmo"). Present whenever the actor's effective `bDirectional` (instance-else-class-default,
+    same convention as `_is_hidden_ed`) resolves true — for ANY actor, brush included (the real
+    draw has no `IsBrush` gate, unlike the radii overlay's collision-shape dispatch; `DeusEx.
+    DeusExMover` sets `bDirectional=True` on its own, so a selected Mover gets an arrow).
+
+    `require_selection` is False ONLY for an `Engine.Camera`-descendant actor: real UED22 shows a
+    Camera's arrow unconditionally, except while that exact Camera is the viewport's own possessed
+    actor (`esi != Viewport->Actor`) — a distinction this GUI's free-fly viewports have no
+    equivalent of (no viewport is ever "looking through" a level actor), so the exclusion clause
+    never fires here and a Camera's arrow always shows. Every other directional actor needs
+    `require_selection=True`, matching UED22's own gate exactly (`bSelected`).
+
+    `lines` is the 5-segment dart's WORLD-space endpoints, flat (x,y,z) triples, 5 segments × 2
+    points × 3 floats = 30 floats, consecutive pairs forming one line each (shaft, then the four
+    fins) — same "flat world verts" convention as `BrushHighlight.polys`. Precomputed HERE, not
+    derived client-side from `SceneActor.rotation`: it needs the exact same `FRotator` matrix
+    (`rotation.actor_matrix`, `GMath.UnitCoords / Rotation`'s own convention) every brush/mesh
+    vertex is already transformed by, which the client has no equivalent of."""
+    require_selection: bool
+    lines: tuple[float, ...]
+
+
+# The dart's geometry, RE'd from `Editor.dll`'s `UEditorEngine::Draw` (own-binary disassembly, VA
+# 0x1003da60-0x1003e098 — GUI-PARITY.md "Directional arrow gizmo"): a shaft of this length along
+# the actor's local +X (facing) axis, with 4 fins meeting the shaft `_ARROW_FIN_BACK` uu back from
+# the TIP, splayed +-`_ARROW_FIN_SPREAD` uu in local Y and Z. NOT the third-party-sourced 48/16/16
+# the board item was filed with — these are the real values, read from the constant pool
+# (`0x100de9dc`/`0x100de9cc`/`0x100de9c8`).
+_ARROW_SHAFT = 38.0
+_ARROW_FIN_BACK = 16.0
+_ARROW_FIN_SPREAD = 12.0
+
+
+def _directional_arrow_lines(actor) -> tuple[float, ...]:
+    """The dart's 5 WORLD-space line segments (10 points, 30 floats) for `actor`'s current
+    Location + Rotation. `rotation.actor_matrix` — ROTATION ONLY, deliberately not `actor_linear`
+    (which folds in MainScale/PostScale) — matches the real formula exactly: `Actor->Rotation`,
+    with no scale term anywhere in the disassembly."""
+    loc = tuple(float(c) for c in (actor.location or _ZERO3))
+    R = actor_matrix(actor)
+
+    def axis(v: tuple[int, int, int]) -> tuple[float, float, float]:
+        return tuple(float(c) for c in rotate_local(R, v))
+
+    x_axis, y_axis, z_axis = axis((1, 0, 0)), axis((0, 1, 0)), axis((0, 0, 1))
+
+    def offset(base: tuple[float, float, float], vec: tuple[float, float, float],
+              scale: float) -> tuple[float, float, float]:
+        return tuple(base[i] + vec[i] * scale for i in range(3))
+
+    tip = offset(loc, x_axis, _ARROW_SHAFT)
+    anchor = offset(tip, x_axis, -_ARROW_FIN_BACK)
+    fins = [
+        offset(anchor, y_axis, -_ARROW_FIN_SPREAD),
+        offset(anchor, y_axis, _ARROW_FIN_SPREAD),
+        offset(anchor, z_axis, -_ARROW_FIN_SPREAD),
+        offset(anchor, z_axis, _ARROW_FIN_SPREAD),
+    ]
+    points = [loc, tip]
+    for fin in fins:
+        points += [tip, fin]
+    return tuple(c for p in points for c in p)
+
+
+@dataclass(frozen=True, kw_only=True)
 class SceneActor:
     """One actor's metadata for the inspector/organization panel — NOT its geometry (a brush
     actor's polys already ride in `ScenePayload.polys`, joined by CSG, not by actor). `csg_rank` is
@@ -156,7 +224,8 @@ class SceneActor:
     AUTHORITATIVE `movers.is_mover` answer (always `False` for a non-brush actor) — the client uses it
     to force wireframe-only rendering on a Mover regardless of the pane's shading mode (`GUI.md`
     "Movers"), rather than re-deriving mover-ness from `cls` client-side (which has no class-schema
-    access)."""
+    access). `directional_arrow` is None when the actor's effective `bDirectional` is false —
+    resolved for EVERY actor (brush or not), unlike `radii`/`sprite`."""
     name: str
     cls: str
     bbox_lo: tuple[float, float, float]
@@ -173,6 +242,7 @@ class SceneActor:
     sprite: ActorSprite | None
     radii: ActorRadii | None
     is_mover: bool
+    directional_arrow: DirectionalArrow | None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -416,6 +486,49 @@ def _resolve_actor_radii(level: Level, defaults,
     return radii
 
 
+def _actor_directional_arrow(actor, defaults, index) -> tuple[DirectionalArrow | None, str | None]:
+    """One actor's `DirectionalArrow`, else `(None, note)` — same instance-else-class-default
+    convention as `_is_hidden_ed`. Runs for EVERY actor (brush included, unlike `_actor_radii` —
+    the real draw has no `IsBrush` gate). `index.descends_from` never raises (fails open/truncates
+    to the actor's own class chain), so a Camera check can't itself fail the resolution the way
+    `defaults.for_class` can."""
+    instance = {k.casefold(): v for k, v in actor.props}
+    if "bdirectional" in instance:
+        directional = instance["bdirectional"].strip() == "True"
+    else:
+        try:
+            info = defaults.for_class(actor.cls)
+        except uprops.SchemaError as e:
+            return None, (f"actor {actor.name!r}: schema unavailable ({actor.cls}) — cannot check "
+                          f"its class-default bDirectional, assuming not directional ({e})")
+        directional = str(info.defaults.get(("bdirectional", 0), "False")).strip() == "True"
+    if not directional:
+        return None, None
+    is_camera = bool(actor.cls) and index.descends_from(actor.cls, "Engine.Camera")
+    return DirectionalArrow(require_selection=not is_camera,
+                            lines=_directional_arrow_lines(actor)), None
+
+
+def _resolve_directional_arrows(level: Level, defaults, index,
+                                hidden_ed: dict[str, bool]) -> dict[str, DirectionalArrow]:
+    """Every non-`bHiddenEd` actor's `DirectionalArrow` (`_actor_directional_arrow`), gathered once
+    per `level.order` walk — mirrors `_resolve_hidden_ed`/`_resolve_actor_radii`'s shape."""
+    arrows: dict[str, DirectionalArrow] = {}
+    notes: list[str] = []
+    for name in level.order:
+        actor = level.actors.get(name)
+        if actor is None or hidden_ed.get(name):
+            continue
+        resolved, note = _actor_directional_arrow(actor, defaults, index)
+        if resolved is not None:
+            arrows[name] = resolved
+        if note:
+            notes.append(note)
+    for line in notes:
+        print(line, file=sys.stderr)
+    return arrows
+
+
 def _class_category_map(fqcn: str, index) -> dict[str, str] | None:
     """`casefold(prop name) -> UnrealEd category` for `fqcn`'s full (own+inherited) schema, or None
     if the class's schema can't be resolved at all (offline index / missing package) — caller falls
@@ -457,13 +570,15 @@ def _with_synthetic_location(props: list[tuple[str, str]], categories: list[str]
 
 
 def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset: int,
-                  index, radii_map: dict[str, ActorRadii]) -> list[SceneActor]:
+                  index, radii_map: dict[str, ActorRadii],
+                  arrow_map: dict[str, DirectionalArrow]) -> list[SceneActor]:
     """The actor-metadata list (inspector/organization panel + selection highlight + sprite +
     collision/light radii), built from `trunk` alone -- shared by both `build_scene_payload`
     (geometry pinned, `tex_offset = len(geometry.texture_table)`) and `build_wireframe_payload` (no
     geometry, `tex_offset = 0`). `category_maps` memoizes `_class_category_map` per class for this
     call -- a level can have many actors of one class, so this avoids re-walking the Super chain per
-    actor. `radii_map` is `_resolve_actor_radii`'s own output, gathered once by the caller."""
+    actor. `radii_map`/`arrow_map` are `_resolve_actor_radii`/`_resolve_directional_arrows`'s own
+    output, gathered once by the caller."""
     level = trunk.level
     ranks = trunk.ranks
     actor_sprites = trunk.actor_sprites
@@ -496,7 +611,8 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
             csg_rank=csg_rank,
             props=props, categories=categories,
             brush=_brush_highlight(actor, is_mover_flag=is_mover_flag), sprite=sprite,
-            radii=radii_map.get(name), is_mover=is_mover_flag))
+            radii=radii_map.get(name), is_mover=is_mover_flag,
+            directional_arrow=arrow_map.get(name)))
     return actors
 
 
@@ -640,6 +756,7 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     level = trunk.level
     hidden_ed = _resolve_hidden_ed(level, defaults)
     radii_map = _resolve_actor_radii(level, defaults, hidden_ed)
+    arrow_map = _resolve_directional_arrows(level, defaults, index, hidden_ed)
     texture_table = geometry.texture_table
     filtered = filtered_geometry_polys(level, geometry, hidden_ed)
     scene_polys = [
@@ -655,7 +772,7 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     # `resolve_actor_sprites` result onto `geometry.texture_table` in the same order, so
     # `tex_offset + local_index` names the same atlas rect on both endpoints.
     actors = _build_actors(trunk, hidden_ed, tex_offset=len(texture_table), index=index,
-                           radii_map=radii_map)
+                           radii_map=radii_map, arrow_map=arrow_map)
     # Mesh-actor and Mover triangles: appended AFTER the filtered world/BSP polys above, never mixed
     # in or reordered among them -- `/lightmap`'s manifest indexes `filtered`'s polys by ARRAY
     # POSITION (`app.py`'s `/lightmap` route docstring), and neither a mesh nor a Mover poly ever
@@ -686,7 +803,9 @@ def build_wireframe_payload(trunk: _LoadedTrunk, index, defaults) -> ScenePayloa
     `build_scene_payload` uses."""
     hidden_ed = _resolve_hidden_ed(trunk.level, defaults)
     radii_map = _resolve_actor_radii(trunk.level, defaults, hidden_ed)
-    actors = _build_actors(trunk, hidden_ed, tex_offset=0, index=index, radii_map=radii_map)
+    arrow_map = _resolve_directional_arrows(trunk.level, defaults, index, hidden_ed)
+    actors = _build_actors(trunk, hidden_ed, tex_offset=0, index=index, radii_map=radii_map,
+                           arrow_map=arrow_map)
     polys = _wrap_mesh_scene_polys(trunk, tex_offset=len(trunk.sprite_table))
     polys += _wrap_mover_scene_polys(
         trunk, tex_offset=len(trunk.sprite_table) + len(trunk.mesh_texture_table))

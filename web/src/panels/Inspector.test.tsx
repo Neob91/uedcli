@@ -48,6 +48,7 @@ function fixtureActor(overrides: Partial<SceneActor> = {}): SceneActor {
     sprite: null,
     radii: null,
     is_mover: false,
+    directional_arrow: null,
     ...overrides,
   }
 }

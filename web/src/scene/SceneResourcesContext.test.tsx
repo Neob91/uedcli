@@ -102,6 +102,7 @@ function moverActor(name: string): SceneActor {
     name, cls: 'Engine.Mover', bbox_lo: [0, 0, 0], bbox_hi: [1, 1, 1], location: [0, 0, 0],
     rotation: [0, 0, 0], folder: null, labels: [], order_value: 'm', csg_rank: 1, props: [],
     categories: [], brush: null, sprite: null, radii: null, is_mover: true,
+    directional_arrow: null,
   }
 }
 
@@ -158,6 +159,7 @@ function meshActor(name: string): SceneActor {
     name, cls: 'DeusEx.OfficeChair', bbox_lo: [0, 0, 0], bbox_hi: [1, 1, 1], location: [0, 0, 0],
     rotation: [0, 0, 0], folder: null, labels: [], order_value: 'a', csg_rank: 1, props: [],
     categories: [], brush: null, sprite: null, radii: null, is_mover: false,
+    directional_arrow: null,
   }
 }
 

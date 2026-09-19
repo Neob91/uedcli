@@ -72,6 +72,21 @@ export interface ActorRadii {
   sound_radius: number | null // world units, already resolved server-side (preview.world_sound_radius)
 }
 
+/** UED22's directional-facing arrow gizmo (`AActor.bDirectional`, `C_ActorArrow` -- own-binary RE,
+ * `GUI-PARITY.md` "Directional arrow gizmo"). Present for ANY actor (brush included) whose
+ * effective `bDirectional` resolves true server-side. `require_selection` is false only for an
+ * `Engine.Camera`-descendant actor -- real UED22 shows a Camera's arrow unconditionally except
+ * while that Camera is the viewport's own possessed actor, a case this GUI's free-fly viewports
+ * never hit, so the client always shows a Camera's arrow unconditionally. */
+export interface DirectionalArrow {
+  require_selection: boolean
+  // 5-segment dart, WORLD-space, flat (x,y,z) triples: 5 segments * 2 points * 3 floats = 30
+  // numbers, consecutive pairs forming one line each (shaft, then 4 fins). Already resolved
+  // server-side from the actor's own Location/Rotation (`rotation.actor_matrix`) -- the client
+  // draws these verbatim, no rotation math of its own.
+  lines: number[]
+}
+
 export interface SceneActor {
   name: string
   cls: string
@@ -92,6 +107,9 @@ export interface SceneActor {
   // always wireframe-only rendering by default, see GUI.md "Movers". Never re-derived from `cls`
   // client-side: the client has no class-schema access to walk the descends-from-Engine.Mover chain.
   is_mover: boolean
+  // null when the actor's effective bDirectional is false. Resolved for EVERY actor server-side
+  // (brush included -- DeusEx.DeusExMover sets bDirectional=True), unlike `radii`/`sprite`.
+  directional_arrow: DirectionalArrow | null
 }
 
 export interface ScenePayload {

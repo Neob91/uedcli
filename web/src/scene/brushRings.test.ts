@@ -21,6 +21,7 @@ function brushActor(name: string, color: [number, number, number], isMover = fal
     sprite: null,
     radii: null,
     is_mover: isMover,
+    directional_arrow: null,
   }
 }
 
