@@ -73,3 +73,52 @@ Full frontend suite (`vitest run`): 416/416 passing, no regressions.
 - `web/src/scene/MoveJoystick.tsx` -- the fix (`stopPropagation()` in all five pointer handlers).
 - `web/src/scene/MoveJoystick.test.tsx` -- new regression tests (propagation to an ancestor
   container).
+
+## Follow-on (2026-09-19): the fix above broke mouse navigation
+
+Owner report: "did the joystick fix break normal mouse navigation in the 3d view?" Yes. The
+`stopPropagation()` fix above had no `pointerType` check -- it fired for ANY pointer, mouse
+included. `touchCapability.ts`'s `isTouchCapableDevice` (which gates whether the joystick renders at
+all) is a feature-detection check (`'ontouchstart' in window` / `navigator.maxTouchPoints > 0`) that
+false-positives on a hybrid touchscreen laptop that also has a mouse -- an explicit, intentional
+design constraint from the original board item (`mobile-3d-move-joystick-visual-design-pending`), not
+a bug on its own. But once the cluster renders there, a MOUSE click/drag landing in its corner of the
+perspective pane got fully swallowed: `stopPropagation()` stopped it from reaching
+`Viewport3D.tsx`'s own `onPointerDown`/`onPointerMove`/`onPointerUp`, which already correctly gates
+its OWN touch-specific capture-stealing logic on `e.pointerType === 'touch'` and falls through to
+normal `mouseDrag` handling for everything else -- so a mouse event was never reaching that fall-through at all.
+
+Fix: every one of `MoveJoystick.tsx`'s five pointer handlers now starts with
+`if (e.pointerType !== 'touch') return`, mirroring `Viewport3D.tsx`'s existing convention exactly.
+A non-touch pointer is now a complete no-op -- no `stopPropagation`, no `setPointerCapture`, no
+state change -- so it passes through untouched to the container's own mouse-drag handling. The
+`stopPropagation()` calls themselves are unchanged and still fire for real touch input.
+
+Verified with the same real-Chromium recipe as the original fix (`chromium_headless_shell-1243`, its
+14 missing shared libraries fetched as user-writable `.deb` extracts via a scratch `apt.conf` +
+`dpkg-deb -x`, no root), via a temporary Vite entry (`verifyJoystick.tsx`, not committed) mounting
+the REAL `MoveJoystick` inside a container mimicking `Viewport3D.tsx`'s own capturing handler, forcing
+`navigator.maxTouchPoints` so the cluster renders on a hybrid device. Real CDP-dispatched events, both
+pointer types, before pushing:
+
+| Gesture | Container saw it? | Joystick reacted? |
+|---|---|---|
+| real TOUCH drag on stick | no (0 calls) | yes -- `{forward:1,right:0}` then `{forward:0,right:0}` |
+| real TOUCH press+release on up button | no (0 calls) | yes -- `[1, 0]` |
+| real MOUSE drag on stick | yes (down/move/up all fired) | no -- empty, joystick ignored it |
+| real MOUSE press+release on up button | yes (down/up fired) | no -- empty, joystick ignored it |
+
+Touch behavior is unchanged (matches the original fix's own verification table); mouse now passes
+through fully, confirming the regression is closed. Unit tests updated
+(`MoveJoystick.test.tsx`): every existing touch-behavior test now passes `pointerType: 'touch'`
+explicitly (jsdom's synthetic `PointerEvent` defaults `pointerType` to `''`, not `'mouse'`, so this
+was needed to keep exercising the touch path); two new tests
+(`MoveJoystick ignores non-touch pointers entirely`) drive `pointerType: 'mouse'` and assert the
+event reaches an ancestor container and `setPointerCapture` is never called. Full frontend suite:
+424/424 passing.
+
+### Files (follow-on)
+
+- `web/src/scene/MoveJoystick.tsx` -- the `pointerType` gate on all five handlers.
+- `web/src/scene/MoveJoystick.test.tsx` -- `pointerType: 'touch'` added to existing tests; new
+  `MoveJoystick ignores non-touch pointers entirely` describe block.

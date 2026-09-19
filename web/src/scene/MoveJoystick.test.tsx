@@ -50,7 +50,7 @@ describe('MoveJoystick stick drag', () => {
     const onStickChange = vi.fn()
     render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
     const base = screen.getByTestId('move-joystick-base')
-    fireEvent.pointerDown(base, { pointerId: 1, clientX: 0, clientY: 0 })
+    fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
     // onStickChange isn't called on pointerdown itself (only on move/release) -- the dot state is
     // set directly, verified via the drag-then-release round trip below instead.
     expect(onStickChange).not.toHaveBeenCalled()
@@ -60,8 +60,8 @@ describe('MoveJoystick stick drag', () => {
     const onStickChange = vi.fn()
     render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
     const base = screen.getByTestId('move-joystick-base')
-    fireEvent.pointerDown(base, { pointerId: 1, clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, movementX: 0, movementY: -32 })
+    fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 0, movementY: -32 })
     expect(onStickChange).toHaveBeenLastCalledWith({ forward: 1, right: 0 })
   })
 
@@ -69,9 +69,9 @@ describe('MoveJoystick stick drag', () => {
     const onStickChange = vi.fn()
     render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
     const base = screen.getByTestId('move-joystick-base')
-    fireEvent.pointerDown(base, { pointerId: 1, clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, movementX: 100, movementY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, movementX: 100, movementY: 0 })
+    fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 100, movementY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 100, movementY: 0 })
     const last = onStickChange.mock.calls.at(-1)![0]
     expect(last.right).toBeCloseTo(1) // clamped -- far past the ring's radius
     expect(last.forward).toBeCloseTo(0)
@@ -81,8 +81,8 @@ describe('MoveJoystick stick drag', () => {
     const onStickChange = vi.fn()
     render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
     const base = screen.getByTestId('move-joystick-base')
-    fireEvent.pointerDown(base, { pointerId: 1, clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 2, movementX: 50, movementY: 0 })
+    fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 2, pointerType: 'touch', movementX: 50, movementY: 0 })
     expect(onStickChange).not.toHaveBeenCalled()
   })
 
@@ -90,12 +90,12 @@ describe('MoveJoystick stick drag', () => {
     const onStickChange = vi.fn()
     render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
     const base = screen.getByTestId('move-joystick-base')
-    fireEvent.pointerDown(base, { pointerId: 1, clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, movementX: 0, movementY: -32 })
-    fireEvent.pointerUp(base, { pointerId: 1 })
+    fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 0, movementY: -32 })
+    fireEvent.pointerUp(base, { pointerId: 1, pointerType: 'touch' })
     expect(onStickChange).toHaveBeenLastCalledWith({ forward: 0, right: 0 })
     onStickChange.mockClear()
-    fireEvent.pointerMove(base, { pointerId: 1, movementX: 100, movementY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 100, movementY: 0 })
     expect(onStickChange).not.toHaveBeenCalled()
   })
 
@@ -103,10 +103,47 @@ describe('MoveJoystick stick drag', () => {
     const onStickChange = vi.fn()
     render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
     const base = screen.getByTestId('move-joystick-base')
-    fireEvent.pointerDown(base, { pointerId: 1, clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, movementX: 0, movementY: -32 })
-    fireEvent(base, new window.PointerEvent('pointercancel', { pointerId: 1, bubbles: true }))
+    fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 0, movementY: -32 })
+    fireEvent(base, new window.PointerEvent('pointercancel', { pointerId: 1, pointerType: 'touch', bubbles: true }))
     expect(onStickChange).toHaveBeenLastCalledWith({ forward: 0, right: 0 })
+  })
+})
+
+// mobile-joystick-mouse-nav-regression: `isTouchCapableDevice` false-positives on a hybrid/
+// touchscreen laptop that also has a mouse, so the cluster can render there too (an explicit design
+// constraint -- see this file's own top comment). Before the `pointerType` gate, a MOUSE event
+// landing on the stick/buttons still unconditionally called `stopPropagation()`/`setPointerCapture`,
+// swallowing normal camera-navigation clicks/drags in that corner -- reproduced live (see
+// `dev/docs/board/done/mobile-joystick-non-functional-updown-stuck/overview.md`'s follow-on note).
+// These tests prove a mouse pointer is a complete no-op: it reaches the ancestor container
+// untouched, is never captured, and never changes the joystick's own reported state.
+describe('MoveJoystick ignores non-touch pointers entirely', () => {
+  beforeAll(() => setTouchCapable(true))
+
+  it('a mouse drag on the stick reaches the ancestor container and reports nothing', () => {
+    const onStickChange = vi.fn()
+    const { containerPointerDown, containerPointerMove } = renderInsideCapturingContainer(onStickChange)
+    const base = screen.getByTestId('move-joystick-base')
+    fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'mouse', clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'mouse', movementX: 0, movementY: -32 })
+    fireEvent.pointerUp(base, { pointerId: 1, pointerType: 'mouse' })
+    expect(containerPointerDown).toHaveBeenCalledTimes(1)
+    expect(containerPointerMove).toHaveBeenCalledTimes(1)
+    expect(onStickChange).not.toHaveBeenCalled()
+    expect(Element.prototype.setPointerCapture).not.toHaveBeenCalled()
+  })
+
+  it('a mouse press on the up button reaches the ancestor container and reports nothing', () => {
+    const onVerticalChange = vi.fn()
+    const { containerPointerDown } = renderInsideCapturingContainer(vi.fn(), onVerticalChange)
+    const up = screen.getByLabelText('Move up')
+    fireEvent.pointerDown(up, { pointerId: 9, pointerType: 'mouse' })
+    expect(containerPointerDown).toHaveBeenCalledTimes(1)
+    expect(onVerticalChange).not.toHaveBeenCalled()
+    fireEvent.pointerUp(up, { pointerId: 9, pointerType: 'mouse' })
+    expect(onVerticalChange).not.toHaveBeenCalled()
+    expect(Element.prototype.setPointerCapture).not.toHaveBeenCalled()
   })
 })
 
@@ -138,9 +175,9 @@ describe('MoveJoystick stops propagation (does not leak touches to an ancestor c
     const onStickChange = vi.fn()
     const { containerPointerDown, containerPointerMove } = renderInsideCapturingContainer(onStickChange)
     const base = screen.getByTestId('move-joystick-base')
-    fireEvent.pointerDown(base, { pointerId: 1, clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, movementX: 0, movementY: -32 })
-    fireEvent.pointerUp(base, { pointerId: 1 })
+    fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 0, movementY: -32 })
+    fireEvent.pointerUp(base, { pointerId: 1, pointerType: 'touch' })
     expect(containerPointerDown).not.toHaveBeenCalled()
     expect(containerPointerMove).not.toHaveBeenCalled()
     expect(onStickChange).toHaveBeenCalledWith({ forward: 1, right: 0 })
@@ -151,10 +188,10 @@ describe('MoveJoystick stops propagation (does not leak touches to an ancestor c
     const onVerticalChange = vi.fn()
     const { containerPointerDown } = renderInsideCapturingContainer(vi.fn(), onVerticalChange)
     const up = screen.getByLabelText('Move up')
-    fireEvent.pointerDown(up, { pointerId: 9 })
+    fireEvent.pointerDown(up, { pointerId: 9, pointerType: 'touch' })
     expect(containerPointerDown).not.toHaveBeenCalled()
     expect(onVerticalChange).toHaveBeenLastCalledWith(1)
-    fireEvent.pointerUp(up, { pointerId: 9 })
+    fireEvent.pointerUp(up, { pointerId: 9, pointerType: 'touch' })
     expect(onVerticalChange).toHaveBeenLastCalledWith(0)
   })
 })
@@ -166,9 +203,9 @@ describe('MoveJoystick up/down buttons', () => {
     const onVerticalChange = vi.fn()
     render(<MoveJoystick onStickChange={() => {}} onVerticalChange={onVerticalChange} />)
     const up = screen.getByLabelText('Move up')
-    fireEvent.pointerDown(up, { pointerId: 5 })
+    fireEvent.pointerDown(up, { pointerId: 5, pointerType: 'touch' })
     expect(onVerticalChange).toHaveBeenLastCalledWith(1)
-    fireEvent.pointerUp(up, { pointerId: 5 })
+    fireEvent.pointerUp(up, { pointerId: 5, pointerType: 'touch' })
     expect(onVerticalChange).toHaveBeenLastCalledWith(0)
   })
 
@@ -176,9 +213,9 @@ describe('MoveJoystick up/down buttons', () => {
     const onVerticalChange = vi.fn()
     render(<MoveJoystick onStickChange={() => {}} onVerticalChange={onVerticalChange} />)
     const down = screen.getByLabelText('Move down')
-    fireEvent.pointerDown(down, { pointerId: 6 })
+    fireEvent.pointerDown(down, { pointerId: 6, pointerType: 'touch' })
     expect(onVerticalChange).toHaveBeenLastCalledWith(-1)
-    fireEvent.pointerUp(down, { pointerId: 6 })
+    fireEvent.pointerUp(down, { pointerId: 6, pointerType: 'touch' })
     expect(onVerticalChange).toHaveBeenLastCalledWith(0)
   })
 
@@ -186,8 +223,8 @@ describe('MoveJoystick up/down buttons', () => {
     const onVerticalChange = vi.fn()
     render(<MoveJoystick onStickChange={() => {}} onVerticalChange={onVerticalChange} />)
     const up = screen.getByLabelText('Move up')
-    fireEvent.pointerDown(up, { pointerId: 7 })
-    fireEvent(up, new window.PointerEvent('pointercancel', { pointerId: 7, bubbles: true }))
+    fireEvent.pointerDown(up, { pointerId: 7, pointerType: 'touch' })
+    fireEvent(up, new window.PointerEvent('pointercancel', { pointerId: 7, pointerType: 'touch', bubbles: true }))
     expect(onVerticalChange).toHaveBeenLastCalledWith(0)
   })
 })

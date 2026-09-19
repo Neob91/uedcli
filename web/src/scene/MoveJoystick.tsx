@@ -61,7 +61,19 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
   // Confirmed live in a real Chromium (CDP-dispatched touch events): reproduced without this fix
   // (pose froze at its start position while pitch/yaw rotated instead; the up button's vertical
   // input never returned to 0 after touchend/touchcancel), fixed with it.
+  //
+  // ALL of that is gated on `e.pointerType === 'touch'` -- a genuine follow-on regression
+  // (mobile-joystick-mouse-nav-regression): `isTouchCapableDevice` (above) false-positives on a
+  // hybrid/touchscreen laptop that also has a mouse (a documented feature-detection limitation, and
+  // an explicit design constraint from the original board item -- see this file's own top comment),
+  // so the cluster can render even for a mouse-only user. Before this gate, a MOUSE event landing on
+  // the stick/buttons still unconditionally stopped propagation and stole pointer capture, silently
+  // swallowing normal camera-navigation clicks/drags in that screen corner. A non-touch pointer must
+  // be a complete no-op here -- no `stopPropagation`, no `setPointerCapture`, no state change -- so
+  // it passes through untouched to Viewport3D.tsx's own `mouseDrag` handling underneath, which
+  // already gates its OWN touch-specific logic on `pointerType === 'touch'` the same way.
   const onStickPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'touch') return
     e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
     dragPointerId.current = e.pointerId
@@ -71,6 +83,7 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
 
   const onStickPointerMove = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.pointerType !== 'touch') return
       if (dragPointerId.current !== e.pointerId) return
       e.stopPropagation()
       rawOffset.current.dx += e.movementX
@@ -84,6 +97,7 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
 
   const endStickDrag = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
+      if (e.pointerType !== 'touch') return
       if (dragPointerId.current !== e.pointerId) return
       e.stopPropagation()
       e.currentTarget.releasePointerCapture(e.pointerId)
@@ -96,6 +110,7 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
 
   const onVerticalPointerDown = useCallback(
     (direction: 1 | -1) => (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType !== 'touch') return
       e.stopPropagation()
       e.currentTarget.setPointerCapture(e.pointerId)
       onVerticalChange(direction)
@@ -104,6 +119,7 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
   )
   const onVerticalPointerUp = useCallback(
     (e: ReactPointerEvent<HTMLButtonElement>) => {
+      if (e.pointerType !== 'touch') return
       e.stopPropagation()
       e.currentTarget.releasePointerCapture(e.pointerId)
       onVerticalChange(0)
