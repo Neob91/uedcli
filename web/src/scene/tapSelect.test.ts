@@ -134,6 +134,7 @@ function baseParams(overrides: Partial<TapSelectParams>): TapSelectParams {
     actors: [],
     triangleOwners: [],
     trianglePolyIndex: [],
+    selectedNames: new Set(),
     ...overrides,
   }
 }
@@ -477,5 +478,39 @@ describe('click-on-a-selected-poly-does-not-deselect-it -- full resolveTapSelect
     if (action2.kind !== 'select-surface') throw new Error('expected a select-surface action')
     const afterSecondClick = applySurfaceSelect(afterFirstClick, action2.actor, action2.polyIndex, false)
     expect(afterSecondClick.size).toBe(0)
+  })
+})
+
+// ---------------------------------------------------------------------------------------------
+// Ctrl+LMB on an already actor-selected brush's poly deselects just that actor -- the full
+// resolveTapSelect wiring for `selection.ts`'s new `selectedActorNames` check (owner ruling
+// 2026-09-19, board `ctrl-click-on-selected-brush-poly-should-deselect`). Confirms `selectedNames`
+// actually reaches `resolveTapAction` through `TapSelectParams`, not just the unit-level check in
+// `selection.test.ts`.
+// ---------------------------------------------------------------------------------------------
+describe('resolveTapSelect -- Ctrl+click on an already-selected brush poly deselects that actor', () => {
+  const brush = actor('Brush1')
+  const { mesh, triangleOwners, trianglePolyIndex } = quadMesh(-1, -1, 1, 1, 0, 'Brush1', 0)
+
+  it('Ctrl (no Shift) on a poly of an actor already in selectedNames -> select-actor, additive', () => {
+    const { clientX, clientY } = worldToClient(0, 0)
+    const action = resolveTapSelect(
+      baseParams({
+        mode: 'lit', clientX, clientY, additive: true, meshObject: mesh,
+        triangleOwners, trianglePolyIndex, actors: [brush], selectedNames: new Set(['Brush1']),
+      }),
+    )
+    expect(action).toEqual({ kind: 'select-actor', name: 'Brush1', additive: true })
+  })
+
+  it('the same click with the actor NOT in selectedNames is unaffected (still select-surface)', () => {
+    const { clientX, clientY } = worldToClient(0, 0)
+    const action = resolveTapSelect(
+      baseParams({
+        mode: 'lit', clientX, clientY, additive: true, meshObject: mesh,
+        triangleOwners, trianglePolyIndex, actors: [brush], selectedNames: new Set(),
+      }),
+    )
+    expect(action).toEqual({ kind: 'select-surface', actor: 'Brush1', polyIndex: 0, additive: true })
   })
 })
