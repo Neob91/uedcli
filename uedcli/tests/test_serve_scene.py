@@ -377,12 +377,14 @@ def test_build_scene_payload_actor_sprite_none_without_dt_sprite(tmp_path):
 
 def test_build_scene_payload_resolves_collision_and_light_radii(tmp_path):
     """`SceneActor.radii` carries the collision cylinder (`CollisionRadius`/`CollisionHeight`, gated
-    on `bCollideActors`) and light reach (`preview.world_light_radius(LightRadius)`, gated on
-    `LightType`/`LightBrightness`/`LightRadius` all being real) — ported from `actor diagram --show
-    collision`/`--show light-range` (`cli/rendering.py::_resolve_point_render`). Unlike that CLI's
-    opt-in `--show` flag, the GUI wire payload resolves both unconditionally so the client's own
-    radii-overlay toggle decides what to draw."""
-    from uedcli.preview import world_light_radius
+    on `bCollideActors`), light reach (`preview.world_light_radius(LightRadius)`, gated on
+    `LightType`/`LightBrightness`/`LightRadius` all being real), and sound reach
+    (`preview.world_sound_radius(SoundRadius)`, gated on `AmbientSound` being set) — ported from
+    `actor diagram --show collision`/`--show light-range`/`--show sound-range`
+    (`cli/rendering.py::_resolve_point_render`). Unlike that CLI's opt-in `--show` flag, the GUI wire
+    payload resolves all three unconditionally so the client's own radii-overlay toggle decides what
+    to draw."""
+    from uedcli.preview import world_light_radius, world_sound_radius
     from uedcli.serve.scene import build_scene_payload
 
     root = tmp_path / "proj"
@@ -395,16 +397,20 @@ def test_build_scene_payload_resolves_collision_and_light_radii(tmp_path):
                      location=(Decimal(0), Decimal(0), Decimal(0)),
                      props=[("bCollideActors", "True"), ("CollisionRadius", "50.0"),
                            ("CollisionHeight", "80.0")])
+    noisy = Actor(name="Speaker0", cls="Engine.Actor",
+                 location=(Decimal(0), Decimal(0), Decimal(0)),
+                 props=[("AmbientSound", "Sound'AmbAtmo.Machine.Hum'"), ("SoundRadius", "5")])
     # `Engine.Light`'s own CLASS DEFAULT already clears the light gate (a bare placed Light has a
     # real default reach, matching the real editor) -- an explicit `LightType=LT_None` override is
     # what actually clears neither gate, not merely omitting every instance prop.
     plain = Actor(name="Deco0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)),
                  props=[("LightType", "LT_None")])
     level = Level(actors={room.name: room, lit.name: lit, collider.name: collider,
-                         plain.name: plain},
-                 order=[room.name, lit.name, collider.name, plain.name])
+                         noisy.name: noisy, plain.name: plain},
+                 order=[room.name, lit.name, collider.name, noisy.name, plain.name])
     trunk.write_level(maps_dir, level,
-                      {room.name: "m", lit.name: "n", collider.name: "o", plain.name: "p"})
+                      {room.name: "m", lit.name: "n", collider.name: "o", noisy.name: "q",
+                      plain.name: "p"})
     project = SimpleNamespace(root=str(root), maps=None)
 
     index = _ued22_index()
@@ -415,13 +421,20 @@ def test_build_scene_payload_resolves_collision_and_light_radii(tmp_path):
     assert by_name["Lamp0"].radii is not None
     assert by_name["Lamp0"].radii.light_radius == world_light_radius(8)
     assert by_name["Lamp0"].radii.collision_radius is None       # bCollideActors unset -> False
+    assert by_name["Lamp0"].radii.sound_radius is None           # AmbientSound unset
 
     assert by_name["Blocker0"].radii is not None
     assert by_name["Blocker0"].radii.collision_radius == 50.0
     assert by_name["Blocker0"].radii.collision_height == 80.0
     assert by_name["Blocker0"].radii.light_radius is None
+    assert by_name["Blocker0"].radii.sound_radius is None
 
-    assert by_name["Deco0"].radii is None                         # neither gate clears
+    assert by_name["Speaker0"].radii is not None
+    assert by_name["Speaker0"].radii.sound_radius == world_sound_radius(5)
+    assert by_name["Speaker0"].radii.collision_radius is None
+    assert by_name["Speaker0"].radii.light_radius is None
+
+    assert by_name["Deco0"].radii is None                         # no gate clears
     assert by_name["Room"].radii is None                          # a brush actor never carries radii
 
 
@@ -440,6 +453,36 @@ def test_actor_radii_light_radius_zero_is_treated_as_unset():
     radii, note = _actor_radii(zero_radius, fake_defaults)
     assert radii is None
     assert note is None
+
+
+def test_actor_radii_sound_radius_zero_is_not_treated_as_unset():
+    """Unlike `LightRadius=0`, `SoundRadius=0` with `AmbientSound` set DOES resolve a radius --
+    matching `cli/rendering.py::_resolve_point_render`'s own sound gate, which has no `and lr`-style
+    zero check. `world_sound_radius(0) == 25.0` UU (the `+1` in the real `AActor::WorldSoundRadius`
+    formula) is a real, drawn value here, not "unset noise" the way a zero light radius is."""
+    from uedcli.preview import world_sound_radius
+    from uedcli.serve.scene import _actor_radii
+
+    zero_radius = Actor(name="Speaker1", cls="Engine.Actor",
+                        props=[("AmbientSound", "Sound'AmbAtmo.Machine.Hum'"), ("SoundRadius", "0")])
+    info = SimpleNamespace(defaults={})
+    fake_defaults = SimpleNamespace(for_class=lambda cls: info)
+    radii, note = _actor_radii(zero_radius, fake_defaults)
+    assert note is None
+    assert radii is not None
+    assert radii.sound_radius == world_sound_radius(0)
+
+
+def test_actor_radii_no_ambientsound_means_no_sound_radius():
+    """An actor with no `AmbientSound` (and no other radius gate) clears no gate at all."""
+    from uedcli.serve.scene import _actor_radii
+
+    quiet = Actor(name="Prop0", cls="Engine.Actor", props=[])
+    info = SimpleNamespace(defaults={})
+    fake_defaults = SimpleNamespace(for_class=lambda cls: info)
+    radii, note = _actor_radii(quiet, fake_defaults)
+    assert note is None
+    assert radii is None
 
 
 def test_actor_radii_degrades_to_none_on_unresolvable_class():

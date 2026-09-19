@@ -82,6 +82,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Radii overlay colors | Collision cylinder vs. light-radius sphere: same color or distinct? | ✅ closed, implemented | ✅ binary (`Editor.dll`/`render.dll`/`Editor.u`, our own `uned/UED22/`) — distinct per PANE, and no alpha; a retracted third-party-sourced answer got this wrong, see Findings below |
 | Radii perspective cylinder | Does/should the collision cylinder render in the perspective pane? | ✅ closed, implemented | ✅ binary (`Editor.dll`'s non-ortho branch calls `URender::DrawCylinder`; no `IsOrtho` gate exists) — see Findings below |
 | Radii light-radius shape | Does the perspective-pane light radius render as a 3D sphere, or a camera-facing circle? | ✅ closed, implemented | ✅ binary (`render.dll`'s `DrawCircle`, our own `uned/UED22/`) — see Findings below |
+| Radii sound-radius rendering | The GUI drew no overlay at all for `AmbientSound`'s reach; what color/shape does UED22 use? | ✅ closed, implemented | ✅ ini (`uned/UED22/unrealtournament.ini` `C_GroundHighlight=(0,0,127)`), reusing the already-binary-confirmed `DrawCircle`/camera-facing-circle mechanism — see Findings below |
 | Radii cylinder/sphere shape | Wireframe rendering had a triangulation-diagonal artifact ("triangular faces") | ✅ closed, implemented | not an RE question — a `wireframe:true`-on-triangulated-geometry rendering bug, fixed with explicit line segments |
 | `C_ActorArrow` exact RGB | The radii overlay's real color value | ✅ closed, implemented | ✅ our own `uned/UED22/unrealtournament.ini` line 388, `(163,0,0)` — the member it fills is `UEditorEngine+0x1f8`, pinned by disassembly; see Findings below |
 | Brush wireframe selection color | What does UED22 actually do when a brush is selected/unselected? | ✅ closed, implemented | 📖 source-only, GUI-only scope (owner ruling) — see Findings below |
@@ -831,6 +832,75 @@ circle, not a degenerate shape). All four pass; the full frontend suite (390 tes
 
 Regression: `RadiiOverlaysCameraFacing.test.tsx`. `RadiiOverlays.test.tsx`'s existing color/no-blend
 tests are unaffected (still exactly one `<lineSegments>` for the light radius per pane, same color).
+
+*(2026-09-19: `RadiiOverlays.tsx`'s `LightRadiusCircle3D` is renamed `RadiusCircle3D` and takes a
+`color` prop, so the sound-radius overlay below can reuse the exact same camera-facing-circle
+mechanism instead of a second copy. No behavior change for light — its call site now passes
+`color={C_ACTOR_ARROW}` explicitly, same value as before.)*
+
+### Radii sound-radius rendering — C_GroundHighlight, reusing the light-radius mechanism (closed 2026-09-19)
+
+Board item `dev/docs/board/inbox/sound-radius-color-c-groundhighlight-unconfirmed/`. The "Radii
+overlay colors" pass above already binary-confirmed (from our own `Editor.dll`, no third-party
+source) that sound radius is drawn by the SAME `UEditorEngine::Draw` radii block, on the SAME
+`DrawCircle` call as light radius, gated on `AmbientSound != NULL` (`[actor+0x7c]`) with radius
+`SoundRadius * 25` scale (`[actor+0x184]`) — just reading a DIFFERENT color member,
+`C_GroundHighlight` (`UEditorEngine + 0x1a8`), at VA `0x1003da35`/`0x1003da4e`. What that pass never
+did was read `C_GroundHighlight`'s actual RGB value, or implement the overlay at all — this GUI drew
+no sound-radius overlay whatsoever until now.
+
+**`C_GroundHighlight`'s value: `(R=0, G=0, B=127)`** — a plain, direct read of our own
+`uned/UED22/unrealtournament.ini` line 374, `[Editor.EditorEngine]`:
+```
+C_GroundHighlight=(R=0,G=0,B=127,A=0)
+```
+Same file, same section, same read method already used for `C_BrushWire`/`C_ActorArrow` above — no
+disassembly needed for the value itself, only for the member's identity (already pinned). A plain
+dark navy blue — matching the owner's own recollection ("Didn't radii view show blue for sound
+radius?").
+
+**Backend** (`uedcli/serve/scene.py`): `ActorRadii` gains `sound_radius: float | None`. `_actor_radii`
+gates it on `AmbientSound` being set — mirroring `cli/rendering.py::_resolve_point_render`'s own
+`_strip_object_ref(field("AmbientSound")) is not None` check exactly (duplicated as a local
+`_strip_object_ref`, not cross-imported — the same leaf-helper convention this file already uses for
+`_to_float`/`_to_int`) — and computes the value with the already-existing `preview.world_sound_radius`
+(`25.0 * (SoundRadius + 1)`, the real `AActor::WorldSoundRadius` formula, RE'd 2026-07-21 and already
+used by `actor diagram --show sound-range`). Unlike light, there is no zero-radius "treat as unset"
+special case — `cli/rendering.py`'s own sound gate has no `and lr`-shaped check either, so
+`SoundRadius=0` with `AmbientSound` set legitimately resolves a 25-UU sphere, not nothing.
+
+**Frontend** (`web/src/scene/RadiiOverlays.tsx`, `radiiProjection.ts`, `api.ts`): the sound-radius
+overlay is drawn by the exact same `RadiusCircle3D` (perspective, camera-facing) / `OrthoShapeLine`
+(ortho, `sphereOrthoShape`) components the light radius already uses — a second color argument, not a
+second mechanism, matching the fact that both are the same real `DrawCircle` call in every pane.
+`selectedRadiiActors` (`radiiProjection.ts`) now includes an actor whose ONLY resolved radius is
+sound (previously such an actor would have been filtered out of the overlay entirely even though the
+server sent a resolved radius).
+
+🔬 **Verified the same way the "Radii light-radius shape" section above was** (this sandbox has no
+runnable headless Chromium — the same limitation on file for the "Surface selection highlight",
+"Mesh-actor wireframe SELECTION", and "Radii light-radius shape" topics — so a browser screenshot A/B
+was not attempted): `RadiiOverlays.test.tsx` renders the overlay through `@react-three/test-renderer`
+against a `sound_radius`-only `SceneActor` and reads the produced material back, confirming a single
+`<lineSegments>` colored exactly `#00007f` (`getHex(LinearSRGBColorSpace)`, no re-encoding) in EVERY
+pane (perspective, top, front, side) and `transparent=false`/`opacity=1` (no blend, matching every
+other radii draw). The backend gate/formula are verified directly against real content: a real
+`Engine.AmbientSound` actor from the NYC_Bar corpus
+(`dev/docs/spikes/2026-09-06-nycbar-n59-light-apply-movers/golden/subset/maps/02_nyc_bar/actors/
+AmbientSound0/actor.t3d`, `AmbientSound=Sound'Ambient.Ambient.EchoWaterDrips'`, `SoundRadius=6`) was
+parsed and run through `_actor_radii` — this sandbox's rootless docker cannot build the
+`uedcli_native` Rust extension (the same mount-permission limitation on file throughout this
+campaign), which blocks the real class-schema resolver `_actor_radii` needs, so the check used a
+stub `defaults.for_class` returning an empty defaults dict (the same pattern
+`test_actor_radii_light_radius_zero_is_treated_as_unset` already uses) rather than the full
+`ClassDefaults`/`ClassIndex` machinery — this exercises `_actor_radii`'s own gate/formula logic
+exactly, just not class-schema resolution (which this change doesn't touch). Result: `sound_radius ==
+world_sound_radius(6) == 175.0`, `collision_radius`/`light_radius` both `None`, no note. New
+regressions: `RadiiOverlays.test.tsx`'s "draws the sound radius in C_GroundHighlight in every pane"
+case, `radiiProjection.test.ts`'s "includes an actor whose ONLY resolved radius is sound",
+`test_serve_scene.py`'s `test_actor_radii_sound_radius_zero_is_not_treated_as_unset`/
+`test_actor_radii_no_ambientsound_means_no_sound_radius`, and an added `Speaker0` actor in
+`test_build_scene_payload_resolves_collision_and_light_radii`.
 
 ### Earlier pass (2026-09-16) — RETRACTED, third-party source
 

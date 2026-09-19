@@ -7,9 +7,10 @@ import { RadiiOverlays, type RadiiView } from './RadiiOverlays'
 
 // Regression for GUI-PARITY.md "Radii overlay colors" (✅ real `uned/UED22/Editor.dll` disassembly,
 // 2026-09-18). `UEditorEngine::Draw`'s radii block draws the collision shape in `C_BrushWire` in the
-// perspective pane (`Render->DrawCylinder`) but `C_ActorArrow` in the ortho panes, and the light
-// radius in `C_ActorArrow` everywhere -- one shared dark red for all four, at 0.55 alpha, is what
-// made the overlay hard to see. UED22 uses no alpha at all here.
+// perspective pane (`Render->DrawCylinder`) but `C_ActorArrow` in the ortho panes, the light radius
+// in `C_ActorArrow` everywhere, and the sound radius in `C_GroundHighlight` everywhere -- one shared
+// dark red for all four, at 0.55 alpha, is what made the overlay hard to see. UED22 uses no alpha at
+// all here.
 //
 // Read back with `LinearSRGBColorSpace` (three's working space, i.e. no conversion): the app's own
 // canvases run `legacy: true` (`viewportRender.ts`'s `CANVAS_COLOR_MANAGEMENT`) so a `THREE.Color`
@@ -17,6 +18,7 @@ import { RadiiOverlays, type RadiiView } from './RadiiOverlays'
 // `getHex()` would re-encode.
 const C_BRUSH_WIRE = 0xff3f3f
 const C_ACTOR_ARROW = 0xa30000
+const C_GROUND_HIGHLIGHT = 0x00007f
 
 function actor(radii: SceneActor['radii']): SceneActor {
   return {
@@ -51,8 +53,9 @@ async function materials(radii: SceneActor['radii'], view: RadiiView) {
   return found
 }
 
-const COLLISION = { collision_radius: 20, collision_height: 40, light_radius: null }
-const LIGHT = { collision_radius: null, collision_height: null, light_radius: 300 }
+const COLLISION = { collision_radius: 20, collision_height: 40, light_radius: null, sound_radius: null }
+const LIGHT = { collision_radius: null, collision_height: null, light_radius: 300, sound_radius: null }
+const SOUND = { collision_radius: null, collision_height: null, light_radius: null, sound_radius: 150 }
 
 describe('RadiiOverlays colors', () => {
   it('draws the perspective collision cylinder in C_BrushWire', async () => {
@@ -77,8 +80,16 @@ describe('RadiiOverlays colors', () => {
     }
   })
 
+  it('draws the sound radius in C_GroundHighlight in every pane', async () => {
+    for (const view of ['perspective', 'top', 'front', 'side'] as const) {
+      const found = await materials(SOUND, view)
+      expect(found).toHaveLength(1)
+      expect(found[0].color.getHex(THREE.LinearSRGBColorSpace)).toBe(C_GROUND_HIGHLIGHT)
+    }
+  })
+
   it('never blends -- UED22 draws these opaque', async () => {
-    for (const radii of [COLLISION, LIGHT]) {
+    for (const radii of [COLLISION, LIGHT, SOUND]) {
       for (const view of ['perspective', 'top'] as const) {
         for (const material of await materials(radii, view)) {
           expect(material.transparent).toBe(false)

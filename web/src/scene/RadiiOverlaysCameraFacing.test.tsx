@@ -11,7 +11,7 @@ import { RadiiOverlays } from './RadiiOverlays'
 // billboard), not a fixed world-plane sphere silhouette. This checks the actual geometry the
 // `LightRadiusCircle3D` component (RadiiOverlays.tsx) produces: its plane must track the camera's
 // forward direction across different camera poses, not sit fixed in world space.
-const LIGHT = { collision_radius: null, collision_height: null, light_radius: 300 }
+const LIGHT = { collision_radius: null, collision_height: null, light_radius: 300, sound_radius: null }
 
 function actor(radii: SceneActor['radii']): SceneActor {
   return {

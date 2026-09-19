@@ -11,7 +11,12 @@ export type OrthoShape = { kind: 'circle'; radius: number } | { kind: 'rect'; ha
  * whole scene (owner ruling 2026-09-15: scope radii to the current selection). Nothing selected ->
  * nothing drawn, a plain pure-filter pattern. */
 export function selectedRadiiActors(actors: SceneActor[], selectedNames: ReadonlySet<string>): SceneActor[] {
-  return actors.filter((a) => selectedNames.has(a.name) && a.radii && (a.radii.collision_radius != null || a.radii.light_radius != null))
+  return actors.filter(
+    (a) =>
+      selectedNames.has(a.name) &&
+      a.radii &&
+      (a.radii.collision_radius != null || a.radii.light_radius != null || a.radii.sound_radius != null),
+  )
 }
 
 /** Collision-cylinder ortho silhouette for one axis (`preview.py`'s `_draw_cylinder`): TOP looks

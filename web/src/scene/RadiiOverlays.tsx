@@ -36,11 +36,13 @@ import { toThreeColor } from './selectionColor'
 // The colors below are read from THIS project's own `uned/UED22` binary + config, not from any
 // third-party UE1 source (GUI-PARITY.md "Radii overlay colors", ✅ binary, 2026-09-18).
 // `Editor.dll`'s per-actor radii block (VA 0x1003d45b..0x1003da5a, inside `UEditorEngine::Draw`)
-// picks a DIFFERENT color per pane for the collision shape, and one shared color for light:
+// picks a DIFFERENT color per pane for the collision shape, and one shared color each for light
+// and sound:
 //
-//   perspective collision -> `Render->DrawCylinder` with `C_BrushWire`   (UEditorEngine + 0x1ac)
-//   ortho collision       -> `DrawCircle`/`DrawBox`  with `C_ActorArrow` (UEditorEngine + 0x1f8)
+//   perspective collision -> `Render->DrawCylinder` with `C_BrushWire`        (UEditorEngine + 0x1ac)
+//   ortho collision       -> `DrawCircle`/`DrawBox`  with `C_ActorArrow`      (UEditorEngine + 0x1f8)
 //   light radius, EVERY pane -> `DrawCircle`         with `C_ActorArrow`
+//   sound radius, EVERY pane -> `DrawCircle`         with `C_GroundHighlight` (UEditorEngine + 0x1a8)
 //
 // (Both collision branches pick that member only when the actor's `bCollideActors` is set; the
 // binary's other branch draws the SAME shape in a hard-coded `FPlane(0.3, 0.6, 1.0, 1.0)` instead.
@@ -50,6 +52,7 @@ import { toThreeColor } from './selectionColor'
 // The RGB values are our own substrate's `uned/UED22/unrealtournament.ini` `[Editor.EditorEngine]`.
 const C_BRUSH_WIRE = toThreeColor([255, 63, 63])
 const C_ACTOR_ARROW = toThreeColor([163, 0, 0])
+const C_GROUND_HIGHLIGHT = toThreeColor([0, 0, 127])
 // UED22 draws every one of these as plain `LINE_None` line draws with no blend stage at all, so
 // these materials carry no `transparent`/`opacity` at all either. The 0.55 alpha that used to be
 // here was an invention, and (with the too-dark perspective color above) what made the overlay
@@ -128,7 +131,9 @@ function CollisionCylinder3D({
 
 // A camera-facing circle (a billboard) -- GUI-PARITY.md "Radii overlay colors" divergence 1: real
 // UED22 builds the light-radius ring from the scene node's own CAMERA axes (`render.dll`'s
-// `DrawCircle`, RVA 0x1c590), not a world-plane-aligned shape. Recomputed every frame from the live
+// `DrawCircle`, RVA 0x1c590), not a world-plane-aligned shape -- and the sound-radius ring is the
+// SAME `DrawCircle` call, just with a different color member (`C_GroundHighlight` instead of
+// `C_ActorArrow`), so this one component (parametrized on `color`) serves both. Recomputed every frame from the live
 // camera orientation (`useFrame`), the same reason `SelectionMarkers.tsx`'s `PivotMarker`/`VertexDot`
 // rescale every frame -- a camera-facing shape can't be baked once into a static `useMemo` geometry.
 //
@@ -143,7 +148,15 @@ function CollisionCylinder3D({
 // `sprite.getWorldPosition()` (a real scene-graph transform); this component builds explicit line
 // geometry instead (matching every other radii overlay's `<lineSegments>` convention, no texture/
 // alpha), so the reflection is applied by hand here.
-function LightRadiusCircle3D({ position, radius }: { position: [number, number, number]; radius: number }) {
+function RadiusCircle3D({
+  position,
+  radius,
+  color,
+}: {
+  position: [number, number, number]
+  radius: number
+  color: THREE.Color
+}) {
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
     const positions = new Float32Array(CIRCLE_SEGMENTS * 2 * 3)
@@ -180,7 +193,7 @@ function LightRadiusCircle3D({ position, radius }: { position: [number, number, 
   })
   return (
     <lineSegments geometry={geometry}>
-      <lineBasicMaterial color={C_ACTOR_ARROW} depthTest={false} />
+      <lineBasicMaterial color={color} depthTest={false} />
     </lineSegments>
   )
 }
@@ -228,11 +241,13 @@ function OrthoShapeLine({
   center,
   right,
   up,
+  color,
 }: {
   shape: OrthoShape
   center: [number, number, number]
   right: [number, number, number]
   up: [number, number, number]
+  color: THREE.Color
 }) {
   const geometry = useMemo(() => {
     const ring = orthoShapeRing(shape, center, right, up)
@@ -245,7 +260,7 @@ function OrthoShapeLine({
   useEffect(() => () => geometry.dispose(), [geometry])
   return (
     <lineSegments geometry={geometry}>
-      <lineBasicMaterial color={C_ACTOR_ARROW} depthTest={false} />
+      <lineBasicMaterial color={color} depthTest={false} />
     </lineSegments>
   )
 }
@@ -264,7 +279,12 @@ export function RadiiOverlays({ actors, view, selectedNames }: RadiiOverlaysProp
               {radii.collision_radius != null && (
                 <CollisionCylinder3D position={actor.location} radius={radii.collision_radius} halfHeight={radii.collision_height ?? 0} />
               )}
-              {radii.light_radius != null && <LightRadiusCircle3D position={actor.location} radius={radii.light_radius} />}
+              {radii.light_radius != null && (
+                <RadiusCircle3D position={actor.location} radius={radii.light_radius} color={C_ACTOR_ARROW} />
+              )}
+              {radii.sound_radius != null && (
+                <RadiusCircle3D position={actor.location} radius={radii.sound_radius} color={C_GROUND_HIGHLIGHT} />
+              )}
             </group>
           )
         })}
@@ -285,10 +305,26 @@ export function RadiiOverlays({ actors, view, selectedNames }: RadiiOverlaysProp
                 center={actor.location}
                 right={right}
                 up={up}
+                color={C_ACTOR_ARROW}
               />
             )}
             {radii.light_radius != null && (
-              <OrthoShapeLine shape={sphereOrthoShape(radii.light_radius)} center={actor.location} right={right} up={up} />
+              <OrthoShapeLine
+                shape={sphereOrthoShape(radii.light_radius)}
+                center={actor.location}
+                right={right}
+                up={up}
+                color={C_ACTOR_ARROW}
+              />
+            )}
+            {radii.sound_radius != null && (
+              <OrthoShapeLine
+                shape={sphereOrthoShape(radii.sound_radius)}
+                center={actor.location}
+                right={right}
+                up={up}
+                color={C_GROUND_HIGHLIGHT}
+              />
             )}
           </group>
         )

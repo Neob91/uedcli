@@ -14,6 +14,7 @@ decision "Option A" 2026-09-18). Mover triangles are resolved the same way, via
 fix exactly)."""
 from __future__ import annotations
 
+import re
 import sys
 from dataclasses import dataclass
 from decimal import Decimal
@@ -22,7 +23,7 @@ from .. import typedprops, uprops
 from ..emit import fmt_loc
 from ..model import Level
 from ..movers import is_mover
-from ..preview import _CSG_PALETTE, classify_brush, world_light_radius
+from ..preview import _CSG_PALETTE, classify_brush, world_light_radius, world_sound_radius
 from ..preview_native import poly_blend, poly_two_sided, resolve_mesh_scene_polys
 from ..rotation import actor_linear, actor_prepivot, actor_rotation_uu, local_offset
 from ..writes import actor_bounds
@@ -125,10 +126,14 @@ class ActorRadii:
     spans `Location.Z ± half_h`). Unlike the CLI's `--show` flag (an opt-in per RENDER), this
     resolves unconditionally whenever the actor clears the real-engine gate — the GUI's radii
     overlay is a client-side visibility toggle (`dev/docs/GUI.md`), not a server-side filter, so the
-    wire payload carries whichever of these resolved and the client decides what to draw."""
+    wire payload carries whichever of these resolved and the client decides what to draw.
+    `sound_radius` mirrors `cli/rendering.py::_resolve_point_render`'s own sound gate: present
+    whenever `AmbientSound` is set (any `SoundRadius`, including 0 — unlike light, which treats
+    `LightRadius=0` as unset), value `preview.world_sound_radius`."""
     collision_radius: float | None = None
     collision_height: float | None = None
     light_radius: float | None = None
+    sound_radius: float | None = None
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -325,14 +330,26 @@ def _to_int(text, default: int) -> int:
         return default
 
 
+def _strip_object_ref(text: str | None) -> str | None:
+    """`Sound'Package.Group.Name'` (or `Class'…'`) → the bare ref; a plain `Package.Name` passes
+    through; `None`/`"None"`/empty → None. Mirrors `cli/rendering.py::_strip_object_ref` exactly
+    (duplicated, not imported — same leaf-helper convention as `_to_float`/`_to_int` above)."""
+    if not text:
+        return None
+    m = re.search(r"'([^']*)'", text)
+    ref = m.group(1) if m else text.strip()
+    return ref or None if ref and ref != "None" else None
+
+
 def _actor_radii(actor, defaults) -> tuple["ActorRadii | None", str | None]:
     """One actor's `ActorRadii`, else `(None, note)` for an unresolvable class — same
     instance-else-class-default convention and the same real-engine gates as
     `cli/rendering.py::_resolve_point_render`: collision needs `bCollideActors == "True"`; light
     needs `LightType != "LT_None"` and a nonzero `LightBrightness` AND `LightRadius` (a `LightRadius`
     of 0 is treated as "unset", not the pinned `world_light_radius(0) == 25` UU — see
-    `_resolve_point_render`'s own comment). Returns `(None, None)` when the actor clears neither
-    gate — no `ActorRadii` for an ordinary decorative actor."""
+    `_resolve_point_render`'s own comment); sound needs `AmbientSound` set (any `SoundRadius`).
+    Returns `(None, None)` when the actor clears none of the three gates — no `ActorRadii` for an
+    ordinary decorative actor."""
     instance = {k.casefold(): v for k, v in actor.props}
     try:
         info = defaults.for_class(actor.cls)
@@ -363,10 +380,13 @@ def _actor_radii(actor, defaults) -> tuple["ActorRadii | None", str | None]:
     if (str(field_or("LightType", "LT_None")).strip() != "LT_None"
             and _to_int(field("LightBrightness"), 0) and lr):
         light_radius = world_light_radius(lr)
-    if collision_radius is None and light_radius is None:
+    sound_radius = None
+    if _strip_object_ref(field("AmbientSound")) is not None:
+        sound_radius = world_sound_radius(_to_int(field("SoundRadius"), 0))
+    if collision_radius is None and light_radius is None and sound_radius is None:
         return None, None
     return ActorRadii(collision_radius=collision_radius, collision_height=collision_height,
-                      light_radius=light_radius), None
+                      light_radius=light_radius, sound_radius=sound_radius), None
 
 
 def _resolve_actor_radii(level: Level, defaults,

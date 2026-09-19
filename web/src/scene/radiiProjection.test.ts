@@ -47,10 +47,16 @@ function actorWithRadii(name: string, radii: SceneActor['radii']): SceneActor {
 }
 
 describe('selectedRadiiActors', () => {
-  const a = actorWithRadii('A', { collision_radius: 50, collision_height: 80, light_radius: null })
-  const b = actorWithRadii('B', { collision_radius: null, collision_height: null, light_radius: 200 })
+  const a = actorWithRadii('A', { collision_radius: 50, collision_height: 80, light_radius: null, sound_radius: null })
+  const b = actorWithRadii('B', { collision_radius: null, collision_height: null, light_radius: 200, sound_radius: null })
+  const c = actorWithRadii('E', { collision_radius: null, collision_height: null, light_radius: null, sound_radius: 150 })
   const noRadii = actorWithRadii('C', null)
-  const neitherGate = actorWithRadii('D', { collision_radius: null, collision_height: null, light_radius: null })
+  const neitherGate = actorWithRadii('D', {
+    collision_radius: null,
+    collision_height: null,
+    light_radius: null,
+    sound_radius: null,
+  })
 
   it('is empty when nothing is selected, even if every actor has radii', () => {
     expect(selectedRadiiActors([a, b], new Set())).toEqual([])
@@ -64,7 +70,11 @@ describe('selectedRadiiActors', () => {
     expect(selectedRadiiActors([a, b, noRadii], new Set(['A', 'B']))).toEqual([a, b])
   })
 
-  it('excludes a selected actor with radii resolved but both fields null (clears neither gate)', () => {
+  it('includes an actor whose ONLY resolved radius is sound', () => {
+    expect(selectedRadiiActors([c], new Set(['E']))).toEqual([c])
+  })
+
+  it('excludes a selected actor with radii resolved but all fields null (clears no gate)', () => {
     expect(selectedRadiiActors([neitherGate], new Set(['D']))).toEqual([])
   })
 
