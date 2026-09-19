@@ -44,6 +44,15 @@ interface DragTracker {
   // distance can only be measured by summing each move event's movementX/movementY).
   totalDx: number
   totalDy: number
+  // True from the moment requestPointerLock() is called until the first move event we see AFTER
+  // document.pointerLockElement actually flips to this element. Firefox reports a garbage
+  // recalibration movementX/movementY on that first post-lock move (live-confirmed against real
+  // Firefox: a huge, wrong delta appears right as pointerlockchange/lostpointercapture fire --
+  // matches Mozilla bug 1255338's documented "initial ... mousemove event right after the pointer
+  // was locked" class of quirk). Applying it as a real drag delta is what makes a Firefox drag
+  // jump/fling once and then read as frozen (the fling can throw the camera far enough that nothing
+  // is visible any more, however correctly later deltas behave) -- so that one frame is discarded.
+  awaitingLockSync: boolean
 }
 
 export function useDragGesture(callbacks: DragGestureCallbacks): DragGestureHandlers {
@@ -52,7 +61,7 @@ export function useDragGesture(callbacks: DragGestureCallbacks): DragGestureHand
 
   const onPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
     e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = { totalDx: 0, totalDy: 0 }
+    drag.current = { totalDx: 0, totalDy: 0, awaitingLockSync: false }
     // Pointer lock is requested lazily, on the first real MOVEMENT of a drag (onPointerMove below),
     // not here on plain pointerdown -- a tap that never moves (a selection click) never locks at
     // all, so the cursor stays visible and the browser's "has control of your pointer" banner never
@@ -65,10 +74,20 @@ export function useDragGesture(callbacks: DragGestureCallbacks): DragGestureHand
       if (!d) return
       const dx = e.movementX
       const dy = e.movementY
-      if (d.totalDx === 0 && d.totalDy === 0 && (dx !== 0 || dy !== 0) && !document.pointerLockElement) {
+      const isLocked = document.pointerLockElement === e.currentTarget
+      if (d.totalDx === 0 && d.totalDy === 0 && (dx !== 0 || dy !== 0) && !isLocked) {
         // First real movement of this drag: lock now (hides the cursor for the rest of the drag,
-        // with no screen-edge clamp on movementX/Y).
+        // with no screen-edge clamp on movementX/Y). requestPointerLock() is async, so the lock
+        // doesn't actually engage until a later move event -- flag that so the transition frame
+        // below can be caught and discarded.
         e.currentTarget.requestPointerLock?.()
+        d.awaitingLockSync = true
+      } else if (isLocked && d.awaitingLockSync) {
+        // The lock just engaged (see DragTracker.awaitingLockSync's doc comment for why this one
+        // frame's movementX/Y is untrustworthy on Firefox): drop it entirely, neither accumulating
+        // it into totalDx/totalDy nor firing onDrag, then resume trusting movement normally.
+        d.awaitingLockSync = false
+        return
       }
       d.totalDx += dx
       d.totalDy += dy
@@ -80,10 +99,20 @@ export function useDragGesture(callbacks: DragGestureCallbacks): DragGestureHand
 
   const onPointerUp = useCallback(
     (e: ReactPointerEvent<HTMLDivElement>) => {
-      e.currentTarget.releasePointerCapture(e.pointerId)
-      document.exitPointerLock?.()
+      // Clear drag state FIRST, before the fallible release/exit calls below -- Firefox already
+      // auto-releases pointer capture the moment pointer lock engages (spec-mandated: see
+      // DragTracker.awaitingLockSync's doc comment), so releasePointerCapture here is frequently a
+      // redundant no-op. Ordering it after the state clear means a browser quirk throwing out of
+      // either call can never leave drag.current stuck non-null, which would otherwise silently
+      // freeze every future onPointerMove for this gesture (onPointerMove's own `if (!d) return`).
       const d = drag.current
       drag.current = null
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId)
+      } catch {
+        // already released (e.g. implicitly, by pointer lock engaging) -- nothing to do
+      }
+      document.exitPointerLock?.()
       // Tap-suppression gate, replicated INTERNALLY (never delegated to the caller): an RMB release
       // or an Alt+LMB release never taps, even under the movement threshold.
       if (!d || e.button !== 0 || e.altKey) return
