@@ -148,46 +148,70 @@ function CollisionCylinder3D({
 // `sprite.getWorldPosition()` (a real scene-graph transform); this component builds explicit line
 // geometry instead (matching every other radii overlay's `<lineSegments>` convention, no texture/
 // alpha), so the reflection is applied by hand here.
-function RadiusCircle3D({
-  position,
-  radius,
-  color,
-}: {
+// One circle's world-space center + radius, batched into a `RadiusCircleGroup3D` below.
+interface RadiusCircleItem {
   position: [number, number, number]
   radius: number
-  color: THREE.Color
-}) {
+}
+
+// Perf note (board item gui-mouse-nav-jitter-ortho-radii-css, 2026-09-19): this used to be a
+// PER-ACTOR component (`RadiusCircle3D`), each instance running its own `useFrame` -- recomputing
+// the SAME camera-facing `right`/`up` basis independently (an identical `applyQuaternion` call per
+// instance, wasted work past the first) and issuing its own separate draw call, every rendered
+// frame, continuously, whether or not the camera has moved (react-three-fiber's default "always"
+// frameloop re-renders every mounted `<Canvas>` every animation frame regardless). All FOUR
+// quad-layout panes (perspective + 3 ortho) run this on the SAME single JS main thread, so this
+// per-frame cost is paid continuously no matter which pane the user is actually dragging in.
+// Landing the sound-radius overlay (this same component, reused for a second radius type) doubled
+// the instance count for any actor carrying both a light and a sound radius -- but the underlying
+// inefficiency (an O(N) redundant basis computation plus O(N) draw calls for what could be ONE)
+// already existed for light radius alone. Since every circle of the SAME radius type always shares
+// one fixed color (`C_ACTOR_ARROW` for light, `C_GROUND_HIGHLIGHT` for sound -- see the call sites
+// below), there's no need for N materials either: one `<lineSegments>` batches every same-colored
+// circle into a single geometry, one `useFrame` computes the camera basis ONCE per frame no matter
+// how many actors are selected, and the renderer has one object to cull/draw instead of up to 2N.
+function RadiusCircleGroup3D({ items, color }: { items: RadiusCircleItem[]; color: THREE.Color }) {
   const geometry = useMemo(() => {
     const geo = new THREE.BufferGeometry()
-    const positions = new Float32Array(CIRCLE_SEGMENTS * 2 * 3)
+    const positions = new Float32Array(items.length * CIRCLE_SEGMENTS * 2 * 3)
     geo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
     return geo
-  }, [])
+    // `items` is expected to be a stable array (memoized by the caller on the actual selection/
+    // radii data, not recreated fresh every render) -- see RadiiOverlays' `useMemo` below. Sizing
+    // only on `items.length`, not `items` itself, avoids rebuilding (and losing in-place mutation
+    // continuity for) the buffer on every render when the length hasn't actually changed.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items.length])
   useEffect(() => () => geometry.dispose(), [geometry])
   const { camera } = useThree()
   const right = useMemo(() => new THREE.Vector3(), [])
   const up = useMemo(() => new THREE.Vector3(), [])
   useFrame(() => {
+    // See RadiusCircleGroup3D's own doc comment for the coordinate-space hazard this Y-flip fixes.
     right.set(1, 0, 0).applyQuaternion(camera.quaternion)
     up.set(0, 1, 0).applyQuaternion(camera.quaternion)
     right.y *= -1
     up.y *= -1
-    const [cx, cy, cz] = position
     const arr = geometry.attributes.position.array as Float32Array
-    for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
-      const a = (i / CIRCLE_SEGMENTS) * Math.PI * 2
-      const b = ((i + 1) / CIRCLE_SEGMENTS) * Math.PI * 2
-      const ca = Math.cos(a) * radius
-      const sa = Math.sin(a) * radius
-      const cb = Math.cos(b) * radius
-      const sb = Math.sin(b) * radius
-      const o = i * 6
-      arr[o + 0] = cx + right.x * ca + up.x * sa
-      arr[o + 1] = cy + right.y * ca + up.y * sa
-      arr[o + 2] = cz + right.z * ca + up.z * sa
-      arr[o + 3] = cx + right.x * cb + up.x * sb
-      arr[o + 4] = cy + right.y * cb + up.y * sb
-      arr[o + 5] = cz + right.z * cb + up.z * sb
+    for (let n = 0; n < items.length; n++) {
+      const { position, radius } = items[n]
+      const [cx, cy, cz] = position
+      const base = n * CIRCLE_SEGMENTS * 2 * 3
+      for (let i = 0; i < CIRCLE_SEGMENTS; i++) {
+        const a = (i / CIRCLE_SEGMENTS) * Math.PI * 2
+        const b = ((i + 1) / CIRCLE_SEGMENTS) * Math.PI * 2
+        const ca = Math.cos(a) * radius
+        const sa = Math.sin(a) * radius
+        const cb = Math.cos(b) * radius
+        const sb = Math.sin(b) * radius
+        const o = base + i * 6
+        arr[o + 0] = cx + right.x * ca + up.x * sa
+        arr[o + 1] = cy + right.y * ca + up.y * sa
+        arr[o + 2] = cz + right.z * ca + up.z * sa
+        arr[o + 3] = cx + right.x * cb + up.x * sb
+        arr[o + 4] = cy + right.y * cb + up.y * sb
+        arr[o + 5] = cz + right.z * cb + up.z * sb
+      }
     }
     geometry.attributes.position.needsUpdate = true
   })
@@ -267,6 +291,22 @@ function OrthoShapeLine({
 
 export function RadiiOverlays({ actors, view, selectedNames }: RadiiOverlaysProps) {
   const withRadii = useMemo(() => selectedRadiiActors(actors, selectedNames), [actors, selectedNames])
+  // The perspective pane's light/sound circles are camera-facing billboards, rebuilt every rendered
+  // frame (RadiusCircleGroup3D's own doc comment) -- batched here into (at most) two arrays, one per
+  // fixed color, so N selected actors cost ONE `useFrame`/ONE draw call per radius type instead of up
+  // to 2N. Memoized on `withRadii` (itself only recomputed when the actual actor/selection data
+  // changes) so this array keeps a stable identity across unrelated re-renders (a camera drag's own
+  // `setPose`, e.g.) -- RadiusCircleGroup3D's geometry-sizing `useMemo` depends on `items.length`,
+  // not `items` itself, so a stable reference isn't strictly required for correctness, but avoids
+  // pointlessly re-deriving this array every frame during a drag.
+  const lightItems = useMemo<RadiusCircleItem[]>(
+    () => withRadii.filter((a) => a.radii!.light_radius != null).map((a) => ({ position: a.location, radius: a.radii!.light_radius! })),
+    [withRadii],
+  )
+  const soundItems = useMemo<RadiusCircleItem[]>(
+    () => withRadii.filter((a) => a.radii!.sound_radius != null).map((a) => ({ position: a.location, radius: a.radii!.sound_radius! })),
+    [withRadii],
+  )
   if (withRadii.length === 0) return null
 
   if (view === 'perspective') {
@@ -274,20 +314,12 @@ export function RadiiOverlays({ actors, view, selectedNames }: RadiiOverlaysProp
       <group>
         {withRadii.map((actor) => {
           const radii = actor.radii!
-          return (
-            <group key={actor.name}>
-              {radii.collision_radius != null && (
-                <CollisionCylinder3D position={actor.location} radius={radii.collision_radius} halfHeight={radii.collision_height ?? 0} />
-              )}
-              {radii.light_radius != null && (
-                <RadiusCircle3D position={actor.location} radius={radii.light_radius} color={C_ACTOR_ARROW} />
-              )}
-              {radii.sound_radius != null && (
-                <RadiusCircle3D position={actor.location} radius={radii.sound_radius} color={C_GROUND_HIGHLIGHT} />
-              )}
-            </group>
-          )
+          return radii.collision_radius != null ? (
+            <CollisionCylinder3D key={actor.name} position={actor.location} radius={radii.collision_radius} halfHeight={radii.collision_height ?? 0} />
+          ) : null
         })}
+        {lightItems.length > 0 && <RadiusCircleGroup3D items={lightItems} color={C_ACTOR_ARROW} />}
+        {soundItems.length > 0 && <RadiusCircleGroup3D items={soundItems} color={C_GROUND_HIGHLIGHT} />}
       </group>
     )
   }

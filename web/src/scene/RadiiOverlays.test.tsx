@@ -98,4 +98,50 @@ describe('RadiiOverlays colors', () => {
       }
     }
   })
+
+  // Regression for board item gui-mouse-nav-jitter-ortho-radii-css (2026-09-19): the perspective
+  // pane's light/sound circles used to be ONE `<lineSegments>` (one draw call, one `useFrame`
+  // camera-basis recompute) PER SELECTED ACTOR -- N actors meant N redundant per-frame camera-basis
+  // computations and N draw calls, continuously, in every mounted Canvas (react-three-fiber's
+  // default "always" frameloop), which measurably degraded pointer-drag responsiveness in BOTH the
+  // perspective and ortho panes (one shared JS main thread). Fixed by batching every actor's
+  // same-colored circle into ONE shared geometry per radius type -- this asserts that batching:
+  // multiple selected actors with a light radius must still produce exactly ONE lineSegments object
+  // for light (not one per actor), same for sound.
+  it('batches every selected actor\'s light circle into ONE draw call, not one per actor', async () => {
+    const actors: SceneActor[] = [
+      { ...actor(LIGHT), name: 'A', location: [0, 0, 0] },
+      { ...actor(LIGHT), name: 'B', location: [100, 0, 0] },
+      { ...actor(LIGHT), name: 'C', location: [200, 0, 0] },
+    ]
+    const renderer = await ReactThreeTestRenderer.create(
+      <RadiiOverlays actors={actors} view="perspective" selectedNames={new Set(['A', 'B', 'C'])} />,
+    )
+    const found: THREE.LineSegments[] = []
+    renderer.scene.children[0].instance.traverse((o: THREE.Object3D) => {
+      const line = o as THREE.LineSegments
+      if (line.isLineSegments) found.push(line)
+    })
+    expect(found).toHaveLength(1)
+    // 3 actors * CIRCLE_SEGMENTS(32) * 2 vertices-per-segment-line * 3 floats/vertex.
+    expect((found[0].geometry.attributes.position.array as Float32Array).length).toBe(3 * 32 * 2 * 3)
+  })
+
+  it('batches light and sound circles into two SEPARATE draw calls (different fixed colors)', async () => {
+    const actors: SceneActor[] = [
+      { ...actor(LIGHT), name: 'A', location: [0, 0, 0] },
+      { ...actor(SOUND), name: 'B', location: [100, 0, 0] },
+    ]
+    const renderer = await ReactThreeTestRenderer.create(
+      <RadiiOverlays actors={actors} view="perspective" selectedNames={new Set(['A', 'B'])} />,
+    )
+    const found: THREE.LineBasicMaterial[] = []
+    renderer.scene.children[0].instance.traverse((o: THREE.Object3D) => {
+      const line = o as THREE.LineSegments
+      if (line.isLineSegments) found.push(line.material as THREE.LineBasicMaterial)
+    })
+    expect(found).toHaveLength(2)
+    const hexes = found.map((m) => m.color.getHex(THREE.LinearSRGBColorSpace)).sort()
+    expect(hexes).toEqual([C_ACTOR_ARROW, C_GROUND_HIGHLIGHT].sort())
+  })
 })
