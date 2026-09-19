@@ -3,8 +3,9 @@
 // GUI: a small square dot at every poly vertex, in the brush's own brightened wire color. A second
 // dot, same square glyph, marks the brush's PrePivot-shifted "local origin"
 // (`BrushHighlight.local_origin`, `Location - R·PrePivot`, computed server-side the same way
-// `preview.py` does). It renders for at most ONE actor even under a multi-selection (see
-// `selectionSet.ts`'s `primarySelection`).
+// `preview.py` does). It renders once per selected brush, same as the vertex dots -- UED22's
+// `DrawLevelBrush` draws it for every highlighted brush, not just one (see `preview.py`'s
+// `_scene_geometry`, `is_hi_actor`).
 //
 // The pivot cross is a different thing entirely and is deliberately NOT per-brush: real UED22 draws
 // exactly ONE, from a single global pivot location, anchored to whichever actor was most recently
@@ -16,7 +17,7 @@ import * as THREE from 'three'
 
 import type { SceneActor } from '../api'
 import { worldUnitsPerPixelAt } from './markers'
-import { pivotAnchor, primarySelection } from './selectionSet'
+import { pivotAnchor } from './selectionSet'
 import { resolveWireColor, scaleColor, toThreeColor } from './selectionColor'
 
 // UED22 draws the global pivot cross in `C_BrushWire` -- the SAME FColor member (UEditorEngine
@@ -145,7 +146,6 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
     () => actors.filter((a): a is SceneActor & { brush: NonNullable<SceneActor['brush']> } => selectedNames.has(a.name) && a.brush != null),
     [actors, selectedNames],
   )
-  const primaryName = useMemo(() => primarySelection(selectedNames), [selectedNames])
   // The ONE global pivot cross. Anchor = the actor that was most recently the sole selection
   // (`pivotAnchor`). Shown only when that actor SNAPS TO THE GRID: UED22's own visibility test is
   // `GPivotShown = (SnapCount > 0) || (Count > 1)`, where `SnapCount` counts selected actors whose
@@ -180,9 +180,7 @@ export function SelectionMarkers({ actors, selectedNames }: SelectionMarkersProp
             {verts.map((v, i) => (
               <VertexDot key={i} position={v} color={color} renderOrder={VERTEX_DOT_RENDER_ORDER} />
             ))}
-            {actor.name === primaryName && (
-              <VertexDot position={actor.brush.local_origin} color={color} renderOrder={VERTEX_DOT_RENDER_ORDER} />
-            )}
+            <VertexDot position={actor.brush.local_origin} color={color} renderOrder={VERTEX_DOT_RENDER_ORDER} />
           </group>
         )
       })}
