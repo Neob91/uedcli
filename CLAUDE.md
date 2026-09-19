@@ -98,6 +98,9 @@ The detail and the rejected alternatives live in `dev/docs/direction/conventions
   - `find` vs `search`, never merged: `find` is a deterministic query over concrete T3D-tree state,
     producing an exact name/selector set to pipe onward; `search` is ranked/fuzzy discovery over a
     catalog or corpus (textures, the asset catalog, docs).
+- YAGNI on output surface — a new verb ships only the flags/formats/query modes its actual use case
+  needs, not every plausible one. `--json` is not a default add-on for a new producer verb; add it
+  once a real consumer needs to parse the output, not speculatively. *(Owner ruling, 2026-09-19.)*
 
 ## Keep it short and plain
 
