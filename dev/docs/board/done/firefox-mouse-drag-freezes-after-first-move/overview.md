@@ -112,7 +112,82 @@ Full frontend suite (`vitest run` in `web/`): 429/429 passing, no regressions. `
 on the touched files (the tree's existing `@types/node` `tsc` errors are pre-existing environment
 gaps, unrelated to this change).
 
+## Second, distinct robustness gap: unhandled pointer-lock rejection (2026-09-19)
+
+The fix above addressed a Firefox recalibration-delta bug on a lock that DOES engage. A second,
+separate report (real console capture) showed a lock that FAILS to engage at all:
+`requestPointerLock()`'s returned Promise rejecting with `DOMException: The document is not
+focused.`, uncaught -- followed on the next `pointerdown` by `setPointerCapture()` throwing
+`An attempt was made to use an object that is not, or is no longer, usable`. This is a real, spec-
+documented restriction (Pointer Lock refuses to engage when `document.hasFocus()` is false), not a
+bug in this code -- the bug was `dragGesture.ts` never handling that rejection, or the pointer/
+capture inconsistency it leaves behind.
+
+Follow-up owner report: this reproduces on Firefox on a Steam Deck (SteamOS) but not on Firefox on a
+Mac. SteamOS's compositor (gamescope) has documented non-standard window-focus behavior (e.g.
+ValveSoftware/gamescope#398 "Incorrect focus with windows inside gamescope", #636 "gamescope
+unfocused yet receiving gamepad input") -- consistent with `document.hasFocus()` flickering
+repeatedly during a session rather than failing once at page load. The fix below was designed for
+that: it retries on every subsequent move, not once.
+
+### Fix (`web/src/scene/dragGesture.ts`)
+
+- `onPointerDown`'s `setPointerCapture()` call is wrapped in try/catch. A prior drag's failed lock
+  can leave the pointer/capture state inconsistent; without this, that throw was uncaught and (since
+  it happened before `drag.current` was assigned) left the NEXT drag permanently dead until reload.
+- `onPointerMove`'s lock request is no longer gated to "only the first move of the drag" -- it now
+  fires on ANY move where the target isn't locked yet and no request is already in flight
+  (`DragTracker.lockRequestPending`, new field), so a failure doesn't strand the drag: it retries on
+  the very next real movement, and again after that, for as long as the drag continues without ever
+  locking. The returned Promise's rejection branch resets `lockRequestPending`/`awaitingLockSync` and
+  does nothing else -- the drag doesn't depend on the lock succeeding at all (`dx`/`dy` always come
+  straight off the `PointerEvent`'s own `movementX`/`movementY`), so a failed lock just means this
+  drag keeps the ordinary screen-edge-clamped semantics the lazy-lock design exists to avoid, not a
+  dead drag. Once the lock does engage (on this drag or, worst case, starting fresh on the next
+  pointerdown), the existing Firefox recalibration-frame handling above still applies unchanged.
+
+### Verification
+
+**Real browser, live.** Resolved the same missing-shared-library gap the prior fix's Firefox recipe
+hit, this time for the cached `chromium-1243` Playwright build already in this sandbox
+(`libglib-2.0`, `libnss3`, `libatk*`, `libdbus-1`, `libharfbuzz0b`, and ~20 others) via the same
+no-root recipe: a user-writable `apt-get -o Dir::State::lists=...` config to download `.deb`s,
+`dpkg-deb -x` into a scratch prefix, `LD_LIBRARY_PATH` pointed at it. Built a minimal DOM harness
+transcribing `dragGesture.ts`'s exact algorithm (both pre- and post-fix) onto a plain `<div>`, drove
+it with Playwright's `page.mouse` (genuine `isTrusted` events) against a real two-tab browser context
+(a background tab reliably triggers a real Pointer Lock rejection in this Chromium build --
+`WrongDocumentError`, not literally `NotFocusedError`, but the same code path: any rejected
+`requestPointerLock()` Promise). Confirmed:
+
+- **Pre-fix code, same environment**: `requestPointerLock()` with no `.catch` -- rejections were not
+  reliably observed as `unhandledrejection` in this exact harness/timing (Chromium's own microtask
+  timing didn't always surface it as unhandled in a plain non-React DOM harness), so this pass leans
+  on the fixed-code side for the definitive real-browser evidence and on the pre-existing regression
+  suite's mocked-rejection tests (below) for the precise "was it swallowed" assertion the live harness
+  couldn't pin down reliably.
+- **Fixed code, same environment, repeated runs**: every `requestPointerLock()` rejection was caught
+  (`lock rejected (handled): ...` logged, zero entries in `window.__unhandled`), `onDrag` kept firing
+  from ordinary `movementX`/`movementY` on every move despite the lock never engaging, and a second,
+  independent pointerdown/move/pointerup cycle right after the first also worked cleanly with no
+  thrown exception -- the exact "next click still works" property the report asked for.
+
+**Unit regressions** (`dragGesture.test.ts`, jsdom + mocked `requestPointerLock`, `vitest run`):
+a rejected lock Promise produces no unhandled rejection and the drag keeps calling `onDrag`; a
+SECOND move after a first rejection retries the lock (proves the no-give-up property, not just a
+single catch); a run of THREE consecutive rejections across one drag keeps retrying on every move
+with no cap, then locks cleanly on the fourth attempt and resumes the existing post-lock-transition
+handling unchanged; a throwing `setPointerCapture()` on `pointerdown` doesn't propagate and the new
+drag still starts and still drags/taps correctly. Full frontend suite: 433/433 passing (was
+429 before this fix's own +4 tests), `tsc -b`/`oxlint` clean on the touched files.
+
+**Not verified**: the literal `NotFocusedError` rejection reason, or gamescope/SteamOS itself --
+no SteamOS/gamescope environment was available in this sandbox. What's verified is the generic
+mechanism this fix targets (any `requestPointerLock()` rejection, any reason, handled without an
+unhandled rejection or a stuck subsequent drag) against a REAL browser's REAL Pointer Lock API, not
+a mock -- which is reason-agnostic by construction, so this should hold for `NotFocusedError` too
+without needing device-specific confirmation.
+
 ## Files
 
-- `web/src/scene/dragGesture.ts` -- the fix.
+- `web/src/scene/dragGesture.ts` -- both fixes.
 - `web/src/scene/dragGesture.test.ts` -- three new regression tests.

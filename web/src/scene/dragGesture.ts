@@ -53,6 +53,12 @@ interface DragTracker {
   // jump/fling once and then read as frozen (the fling can throw the camera far enough that nothing
   // is visible any more, however correctly later deltas behave) -- so that one frame is discarded.
   awaitingLockSync: boolean
+  // True from the moment requestPointerLock() is called until its returned Promise settles (either
+  // way). Chrome/Firefox both reject that Promise when document.hasFocus() is false at call time
+  // (spec-mandated -- observed for real right after a page load, before the document has fully
+  // received focus) -- a real, expected failure mode, not a bug. Gates against firing a second
+  // concurrent request while one is already in flight.
+  lockRequestPending: boolean
 }
 
 export function useDragGesture(callbacks: DragGestureCallbacks): DragGestureHandlers {
@@ -60,8 +66,16 @@ export function useDragGesture(callbacks: DragGestureCallbacks): DragGestureHand
   const drag = useRef<DragTracker | null>(null)
 
   const onPointerDown = useCallback((e: ReactPointerEvent<HTMLDivElement>) => {
-    e.currentTarget.setPointerCapture(e.pointerId)
-    drag.current = { totalDx: 0, totalDy: 0, awaitingLockSync: false }
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId)
+    } catch {
+      // A prior gesture can leave the pointer/capture state inconsistent (e.g. a failed
+      // requestPointerLock() below never re-established capture the browser auto-released) --
+      // don't let that throw here too and brick this NEW drag before it even starts. Losing
+      // capture only means the drag won't keep tracking if the cursor leaves the element bounds,
+      // the same tradeoff an already-lock-losing gesture has anyway.
+    }
+    drag.current = { totalDx: 0, totalDy: 0, awaitingLockSync: false, lockRequestPending: false }
     // Pointer lock is requested lazily, on the first real MOVEMENT of a drag (onPointerMove below),
     // not here on plain pointerdown -- a tap that never moves (a selection click) never locks at
     // all, so the cursor stays visible and the browser's "has control of your pointer" banner never
@@ -75,13 +89,45 @@ export function useDragGesture(callbacks: DragGestureCallbacks): DragGestureHand
       const dx = e.movementX
       const dy = e.movementY
       const isLocked = document.pointerLockElement === e.currentTarget
-      if (d.totalDx === 0 && d.totalDy === 0 && (dx !== 0 || dy !== 0) && !isLocked) {
-        // First real movement of this drag: lock now (hides the cursor for the rest of the drag,
-        // with no screen-edge clamp on movementX/Y). requestPointerLock() is async, so the lock
-        // doesn't actually engage until a later move event -- flag that so the transition frame
-        // below can be caught and discarded.
-        e.currentTarget.requestPointerLock?.()
+      const isRealMovement = dx !== 0 || dy !== 0
+      if (!isLocked && !d.lockRequestPending && isRealMovement) {
+        // Lock is requested lazily, on real MOVEMENT rather than on pointerdown (see
+        // onPointerDown's comment) -- first tried on this drag's first move, and retried on EVERY
+        // later move where it's still not locked and no request is already in flight (see the
+        // .catch below). This is deliberately not a one-shot attempt: "document is not focused" can
+        // recur repeatedly on the same drag, not just once at page load -- reported live on
+        // SteamOS/gamescope (a full-screen compositor with non-standard window-focus semantics
+        // built around cursor warping and controller input, not ordinary browser focus timing),
+        // where Firefox's document focus can flicker independently of user action. A one-shot
+        // attempt would strand the user in the degraded (unlocked, screen-edge-clamped) mode for
+        // the rest of that drag even after focus recovers a moment later; retrying every move costs
+        // nothing extra once locked (isLocked short-circuits this branch). requestPointerLock() is
+        // async, so the lock doesn't actually engage until a later move event -- flag that so the
+        // transition frame below can be caught and discarded.
+        const target = e.currentTarget
+        d.lockRequestPending = true
         d.awaitingLockSync = true
+        const lockResult = target.requestPointerLock?.()
+        if (lockResult && typeof lockResult.then === 'function') {
+          lockResult.then(
+            () => {
+              d.lockRequestPending = false
+            },
+            () => {
+              // A genuine, documented browser restriction (e.g. the document isn't focused yet) --
+              // not a bug here. The drag itself doesn't depend on the lock succeeding: dx/dy below
+              // always come from the PointerEvent's own movementX/movementY regardless of
+              // pointerLockElement, so a failed lock just means this drag keeps the ordinary
+              // screen-edge-clamped semantics the lazy-lock design was trying to avoid, rather than
+              // going dead. onPointerMove retries on the next real movement (above).
+              d.lockRequestPending = false
+              d.awaitingLockSync = false
+            },
+          )
+        } else {
+          // No Promise returned (older/non-conforming implementation) -- nothing to await or catch.
+          d.lockRequestPending = false
+        }
       } else if (isLocked && d.awaitingLockSync) {
         // The lock just engaged (see DragTracker.awaitingLockSync's doc comment for why this one
         // frame's movementX/Y is untrustworthy on Firefox): drop it entirely, neither accumulating

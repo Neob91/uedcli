@@ -160,4 +160,118 @@ describe('useDragGesture', () => {
     handlers.onPointerUp(pointerEvent({ currentTarget: target, clientX: 10, clientY: 20 }))
     expect(onTap).toHaveBeenCalledWith(10, 20, false, false)
   })
+
+  it('does not leave an unhandled rejection when requestPointerLock() rejects (e.g. "document is not focused"), and the drag keeps working', async () => {
+    const onUnhandledRejection = vi.fn()
+    process.on('unhandledRejection', onUnhandledRejection)
+    try {
+      const { handlers, onDrag } = setup()
+      const target = fakeCurrentTarget()
+      target.requestPointerLock = vi.fn(() =>
+        Promise.reject(new DOMException('The document is not focused.', 'NotAllowedError')),
+      )
+      // @ts-expect-error -- synthetic event shape
+      handlers.onPointerDown(pointerEvent({ currentTarget: target }))
+      // @ts-expect-error -- synthetic event shape
+      handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 5, movementY: 2 }))
+      // The drag doesn't depend on the lock succeeding -- onDrag still fires from the raw
+      // movementX/Y on the event that triggered the (still-pending) lock request.
+      expect(onDrag).toHaveBeenCalledWith(5, 2, 1, false)
+      // Let the rejected promise's microtask settle.
+      await Promise.resolve()
+      await Promise.resolve()
+      expect(onUnhandledRejection).not.toHaveBeenCalled()
+      // The drag keeps working (ordinary movementX/Y semantics) after the lock failure.
+      onDrag.mockClear()
+      // @ts-expect-error -- synthetic event shape
+      handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 3, movementY: -1 }))
+      expect(onDrag).toHaveBeenCalledWith(3, -1, 1, false)
+    } finally {
+      process.off('unhandledRejection', onUnhandledRejection)
+    }
+  })
+
+  it('retries requestPointerLock() on a later move after an earlier attempt rejected', async () => {
+    const { handlers, onDrag } = setup()
+    const target = fakeCurrentTarget()
+    let calls = 0
+    target.requestPointerLock = vi.fn(() => {
+      calls += 1
+      return calls === 1
+        ? Promise.reject(new DOMException('The document is not focused.', 'NotAllowedError'))
+        : Promise.resolve()
+    })
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerDown(pointerEvent({ currentTarget: target }))
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 5, movementY: 2 }))
+    expect(calls).toBe(1)
+    await Promise.resolve()
+    await Promise.resolve()
+    // Second move retries since the first attempt failed and isn't locked/pending any more.
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 1, movementY: 1 }))
+    expect(calls).toBe(2)
+    expect(onDrag).toHaveBeenCalledTimes(2) // both real moves still drove the camera
+  })
+
+  it('keeps retrying every move (never gives up) when the lock keeps failing intermittently across one drag, and locks on once it finally succeeds', async () => {
+    // Models a real-machine report: on SteamOS/gamescope, document focus can flicker
+    // repeatedly during a single drag, not just fail once at page load.
+    const { handlers, onDrag } = setup()
+    const target = fakeCurrentTarget()
+    let calls = 0
+    target.requestPointerLock = vi.fn(() => {
+      calls += 1
+      return calls < 4
+        ? Promise.reject(new DOMException('The document is not focused.', 'NotAllowedError'))
+        : Promise.resolve()
+    })
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerDown(pointerEvent({ currentTarget: target }))
+    for (let i = 0; i < 3; i++) {
+      // @ts-expect-error -- synthetic event shape
+      handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 1, movementY: 0 }))
+      // eslint-disable-next-line no-await-in-loop
+      await Promise.resolve()
+      // eslint-disable-next-line no-await-in-loop
+      await Promise.resolve()
+    }
+    expect(calls).toBe(3) // retried on every move so far, none succeeded yet
+    // The 4th attempt succeeds -- simulate the browser actually engaging the lock before the next move.
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 1, movementY: 0 }))
+    expect(calls).toBe(4)
+    await Promise.resolve()
+    await Promise.resolve()
+    Object.defineProperty(document, 'pointerLockElement', { value: target, writable: true, configurable: true })
+    onDrag.mockClear()
+    // Post-lock-engage transition frame is still discarded as usual, then movement resumes trusted.
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: -999, movementY: -999 }))
+    expect(onDrag).not.toHaveBeenCalled()
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 2, movementY: 0 }))
+    expect(onDrag).toHaveBeenCalledWith(2, 0, 1, false)
+    expect(calls).toBe(4) // no further (unneeded) requests once actually locked
+  })
+
+  it('a setPointerCapture() throw on pointerdown does not propagate, and the drag still starts', () => {
+    const { handlers, onDrag, onTap } = setup()
+    const target = fakeCurrentTarget()
+    target.setPointerCapture = vi.fn(() => {
+      throw new DOMException('object is not, or is no longer, usable', 'InvalidStateError')
+    })
+    expect(() => {
+      // @ts-expect-error -- synthetic event shape
+      handlers.onPointerDown(pointerEvent({ currentTarget: target }))
+    }).not.toThrow()
+    // The new drag still works: movement drives onDrag, and a real drag still suppresses onTap.
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 50, movementY: 0 }))
+    expect(onDrag).toHaveBeenCalledWith(50, 0, 1, false)
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerUp(pointerEvent({ currentTarget: target, clientX: 5, clientY: 5 }))
+    expect(onTap).not.toHaveBeenCalled() // moved past the tap threshold above
+  })
 })
