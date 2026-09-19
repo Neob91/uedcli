@@ -87,17 +87,37 @@ edge against another Add/Mover — never a `carved_by` endpoint in either direct
   ruling, 2026-09-19 — the earlier bounding-box-overlap `⚠ approximate` fallback is REMOVED, not kept
   as a cheaper option). SAT itself is only exact between two CONVEX shapes, so a non-convex brush is
   first decomposed into convex CELLS via a SELF-SPLIT: recursively partition the brush's own
-  `PolyList` by its own face planes — a BSP of just that one brush's own geometry, entirely
-  self-contained (no other brush, no native engine, no whole-level solve — the exact same "decoupled
-  from a native build" property the rest of this design already has) — until every leaf cell is
-  convex. An already-convex brush decomposes to exactly one cell, so this is ONE algorithm, not a
-  convex path plus a non-convex fallback. Two brushes then touch/overlap iff ANY convex cell of A and
-  any convex cell of B pass the exact pairwise SAT test above. The decomposition is computed ONCE per
-  brush and memoized/reused across every edge test that brush participates in — cost is bounded by
-  that brush's own face count, not recomputed per edge and not a function of level size.
+  `PolyList` by its own face planes — a solid-leaf BSP of just that one brush's own geometry, the same
+  primitive UE1's own CSG engine already applies at brush scale (`bspBrushCSG`'s `RebuildSimplePolys=1`
+  temp-brush BSP, `NATIVE-MATERIALIZE.md`) — entirely self-contained (no other brush, no native engine,
+  no whole-level solve — the exact same "decoupled from a native build" property the rest of this
+  design already has). Each leaf is classified solid or empty (a leaf with no remaining polygons on
+  its inside is solid; the reverse is empty) and ONLY THE SOLID LEAVES BECOME CELLS — discarding the
+  empty ones is what makes the surviving cells' union reconstruct the brush's exact volume, not some
+  larger bounding region. **A splitting plane's own coplanar/coincident polygons need a named,
+  documented classification rule** (send to the same side? split anyway?) — this codebase's own
+  history (`NATIVE-MATERIALIZE.md`'s repeated near-tie float-classification bugs at a splitting plane)
+  is exactly the failure class a silent, undocumented tie-break invites here; it gets the same
+  named-epsilon treatment the touching tolerance above already requires, not an implicit default.
+  An already-convex brush decomposes to exactly one cell, so this is ONE algorithm, not a convex path
+  plus a non-convex fallback. Two brushes then touch/overlap iff ANY convex cell of A and any convex
+  cell of B pass the exact pairwise SAT test above — a plain set-union identity
+  (`(∪Ai) ∩ (∪Bj) = ∪ (Ai ∩ Bj)`), true regardless of whether the touching point lands on either
+  brush's real outer boundary or on an internal wall the decomposition itself introduced, since every
+  surviving cell (pruning above) is entirely inside the real brush's true closed volume either way.
+  The decomposition is computed ONCE per brush and memoized/reused across every edge test that brush
+  participates in — cost is a function of that brush's own face count alone, never level size, though
+  BSP-style decomposition has a known worst-case super-linear (not strictly linear) cell count for
+  adversarial, reflex-edge-heavy geometry; ordinary level content doesn't hit this, but the guarantee
+  is "not level-size-dependent," not "linear in face count."
 - **Containment reuses the SAME decomposition, not a separate algorithm**: a point is inside the brush
   iff it's inside (or within tolerance of the boundary of) any ONE of its convex cells — a plain
-  half-space test per cell. One decomposition step now backs both edge kinds; there is no longer a
+  half-space test per cell. Containment is a boolean OR over cells, so a point sitting exactly on an
+  INTERNAL wall the decomposition itself introduced (shared by two cells of the SAME brush, not a real
+  outer surface) is harmless to double-report as contained by both — but the same shared touching
+  tolerance (above) must extend to these internal boundaries too, or float noise there could push a
+  genuinely-interior point outside every cell's tolerance band at once and produce a false NEGATIVE.
+  One decomposition step now backs both edge kinds; there is no longer a
   separate ray-cast/winding-number containment path to maintain alongside it.
 - **The one honest remaining edge case — a data-validity question, not an algorithm gap no more math
   can close**: a genuinely self-intersecting or non-manifold brush (faces that don't actually bound a
@@ -204,9 +224,14 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
   already rejected "reimplement full solid boolean intersection" as its own project-sized effort,
   independent of the native CSG engine. Convex decomposition avoids that cost specifically because a
   brush is ALWAYS a planar-face-bounded polyhedron (never an arbitrary mesh) — a self-split by its own
-  face planes is a small, well-understood, terminating computation on that specific kind of input, not
-  the general mesh-boolean problem. This gets full exactness at a fraction of the cost the general
-  case would need, precisely because it leans on what a brush actually is.
+  face planes is the SAME primitive UE1's own CSG engine already applies at brush scale (`bspBrushCSG`'s
+  temp-brush BSP, per `NATIVE-MATERIALIZE.md`), not a new kind of geometry problem. The cost this design
+  actually avoids isn't the underlying math — it's the CROSS-brush work (repartitioning across many
+  brushes, T-junction dedup, coupling to the native engine) that a whole-level CSG solve needs and this
+  design deliberately doesn't do. Worth being precise, not just optimistic: BSP-style decomposition has
+  a known worst-case super-linear cell count on adversarial geometry (not a strict bound on face count);
+  ordinary level content doesn't hit this, but the guarantee this buys is "self-contained, not
+  level-size-dependent," not "cheap in every case."
 - **The U/V-axis blindness and missing rotate-to-align primitive in `brush relation set`** (flagged
   earlier this session) are NOT addressed here. This design discovers structure; it doesn't move
   anything. Those remain open, separate gaps in a different sub-verb.
@@ -221,7 +246,9 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
   re-deriving actor-transform math.
 - A new small area-computation function, built the same way `classify_footprint_2d` computes area
   internally (see "Output format"), for the exact-case `touches` size annotation; a new helper for
-  the bounding-box-intersection fallback otherwise.
+  the bounding-box-intersection AREA ESTIMATE otherwise — an informational annotation only, not to be
+  confused with the (now-removed) detection-level approximate fallback above; the touch/overlap
+  DETECTION itself is exact everywhere, only this size NUMBER on the edge is ever an estimate.
 - `uedcli/cli/commands/level.py` is a single flat file (786 lines, a `run(args)` dispatcher + per-verb
   `_level_*` functions) — NOT a package the way `brush`'s command family is. This design adds a new
   `_level_graph` function there, matching the existing convention, not a new `level/` subpackage.
@@ -238,6 +265,12 @@ Add_FrontDesk         --carved_by-->       Subtract_DoorCutout
    L-shaped (non-convex) brush pair, decomposed and correctly found touching/not-touching with NO
    approximation flag anywhere in the result; a malformed self-intersecting brush reported as a named,
    skipped node rather than given a guessed answer.
+1a. **Decomposition correctness, specifically**: an L-shaped brush's self-split produces cells whose
+    union area/volume exactly matches the original brush (no over-large "outside" leaves leaked in);
+    a brush with a face lying exactly coplanar with a chosen splitting plane classifies deterministically
+    (regression-pin the tie-break, don't leave it to whatever the implementation happens to do); a
+    non-brush actor's Location sitting exactly on an INTERNAL cell boundary (not the brush's real outer
+    surface) is still correctly reported as contained, not a false negative from tolerance stacking.
 2. **Edge labeling**: Subtract-Subtract and Add-or-Mover-Add-or-Mover always `touches`, undirected;
    Subtract-then-Add is `contains`; Add-then-Subtract is `carved_by`; same geometry, label flips
    purely on CSG order.
