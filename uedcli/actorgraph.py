@@ -5,7 +5,8 @@ from __future__ import annotations
 import itertools
 from dataclasses import dataclass, field
 
-from . import polyalign
+from . import polyalign, query
+from .movers import is_mover
 from .texframe import newell
 
 Vec3 = tuple[float, float, float]
@@ -505,3 +506,48 @@ def point_in_brush(actor, point: Vec3, *, cache=None) -> bool:
         if all(_dot(n, point) <= d + _VERTEX_EPS for n, d in cell.half_spaces):
             return True
     return False
+
+
+@dataclass(frozen=True)
+class Edge:
+    src: str
+    dst: str
+    relation: str
+    directed: bool
+    matched_pair: tuple[int, int] | None = None
+    area_estimate: float | None = None
+
+
+def classify_pair(name_a, actor_a, name_b, actor_b, *, order_index: dict, class_index,
+                   cache=None) -> list[Edge]:
+    """Every edge between two BRUSH actors (both must have `.brush is not None`; a caller passing a
+    non-brush actor here is a bug in Task 6's dispatch, not something this function guards).
+    `cache`: see `decompose_convex` -- forwarded to `brush_overlap`."""
+    ov = brush_overlap(actor_a, actor_b, cache=cache)
+    if not ov.touches:
+        return []
+    a_is_sub = query.csg_is_subtract(actor_a)
+    b_is_sub = query.csg_is_subtract(actor_b)
+    edge_kwargs = dict(matched_pair=ov.matched_pair, area_estimate=ov.area_estimate)
+
+    if a_is_sub and b_is_sub:
+        return [Edge(src=name_a, dst=name_b, relation="touches", directed=False, **edge_kwargs)]
+    if not a_is_sub and not b_is_sub:      # both Add-or-Mover
+        return [Edge(src=name_a, dst=name_b, relation="touches", directed=False, **edge_kwargs)]
+
+    # exactly one is a Subtract: the other is Add-or-Mover. A Subtract itself is never a Mover (a
+    # Mover emits no CsgOper at all, so csg_is_subtract is always False for it) -- only the
+    # non-Subtract side ever needs a mover check, and only here, so a caller with no movers in
+    # play (class_index=None) never has to pay for one.
+    sub_name = name_a if a_is_sub else name_b
+    other_name, other_actor = (name_b, actor_b) if a_is_sub else (name_a, actor_a)
+    other_is_mover = class_index is not None and is_mover(other_actor, class_index)
+
+    if other_is_mover:
+        # Movers never carve or get carved -- always `contains`, Subtract -> Mover, regardless of
+        # level.order (a Mover generates no CsgOper at all; CSG order is meaningless for it).
+        return [Edge(src=sub_name, dst=other_name, relation="contains", directed=True, **edge_kwargs)]
+
+    if order_index[sub_name] < order_index[other_name]:
+        return [Edge(src=sub_name, dst=other_name, relation="contains", directed=True, **edge_kwargs)]
+    return [Edge(src=other_name, dst=sub_name, relation="carved_by", directed=True, **edge_kwargs)]

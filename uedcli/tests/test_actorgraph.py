@@ -2,6 +2,7 @@ from decimal import Decimal
 import pytest
 from uedcli import actorgraph, polyalign
 from uedcli.builders import cube, make_brush_actor
+from uedcli.tests.conftest import StubClassIndex
 
 
 def _brush(name, brush, loc=(0, 0, 0)):
@@ -334,3 +335,71 @@ def test_point_on_internal_decomposition_boundary_of_l_shape_still_contained():
     point_near_boundary = (32.0, 64.0005, 0.0)  # offset > _SPLIT_EPS, < _VERTEX_EPS
     assert actorgraph.point_in_brush(a_l_shape, point_near_boundary), \
         "Point within _VERTEX_EPS of boundary should be reported as contained"
+
+
+@pytest.fixture
+def mover_class_index():
+    """A `classindex.ClassIndex` stand-in for `movers.is_mover` -- same `StubClassIndex` the
+    offline suite uses everywhere else (`test_movers.py`, `conftest.py`'s own autouse dispatch
+    stub); its default `MOVER_CLASSES` already includes `Engine.Mover`."""
+    return StubClassIndex()
+
+
+def test_subtract_subtract_touching_gives_undirected_touches():
+    a = _brush("A", cube(64, 64, 64), loc=(0, 0, 0))
+    b = _brush("B", cube(64, 64, 64), loc=(64, 0, 0))
+    # make_brush_actor defaults csg="add"; both these need csg="subtract" explicitly:
+    a2 = make_brush_actor("A", a.brush, location=a.location, csg="subtract")
+    b2 = make_brush_actor("B", b.brush, location=b.location, csg="subtract")
+    edges = actorgraph.classify_pair("A", a2, "B", b2, order_index={"A": 0, "B": 1}, class_index=None)
+    assert len(edges) == 1
+    e = edges[0]
+    assert e.relation == "touches" and not e.directed
+    assert {e.src, e.dst} == {"A", "B"}
+
+
+def test_subtract_add_earlier_subtract_gives_contains():
+    sub = make_brush_actor("Room", cube(64, 64, 64), csg="subtract")
+    add = make_brush_actor("Furniture", cube(8, 8, 8), csg="add")
+    edges = actorgraph.classify_pair("Room", sub, "Furniture", add,
+                                      order_index={"Room": 0, "Furniture": 1}, class_index=None)
+    assert len(edges) == 1
+    assert edges[0].relation == "contains" and edges[0].directed
+    assert edges[0].src == "Room" and edges[0].dst == "Furniture"
+
+
+def test_subtract_add_later_subtract_gives_carved_by():
+    add = make_brush_actor("Wall", cube(64, 64, 64), csg="add")
+    sub = make_brush_actor("DoorCutout", cube(8, 8, 32), location=(0, 0, 0), csg="subtract")
+    edges = actorgraph.classify_pair("Wall", add, "DoorCutout", sub,
+                                      order_index={"Wall": 0, "DoorCutout": 1}, class_index=None)
+    assert len(edges) == 1
+    assert edges[0].relation == "carved_by" and edges[0].directed
+    assert edges[0].src == "Wall" and edges[0].dst == "DoorCutout"
+
+
+def test_no_overlap_gives_no_edges():
+    a = make_brush_actor("A", cube(8, 8, 8), location=(0, 0, 0))
+    b = make_brush_actor("B", cube(8, 8, 8), location=(1000, 0, 0))
+    edges = actorgraph.classify_pair("A", a, "B", b, order_index={"A": 0, "B": 1}, class_index=None)
+    assert edges == []
+
+
+def test_mover_touching_add_gives_touches_not_carved_by(mover_class_index):
+    add = make_brush_actor("Wall", cube(64, 64, 64), csg="add")
+    mover = make_brush_actor("Door", cube(32, 8, 64), location=(0, 28, 0), mover_class="Engine.Mover")
+    edges = actorgraph.classify_pair("Wall", add, "Door", mover,
+                                      order_index={"Wall": 0, "Door": 1}, class_index=mover_class_index)
+    assert len(edges) == 1
+    assert edges[0].relation == "touches" and not edges[0].directed
+
+
+def test_mover_inside_subtract_gives_contains_never_carved_by(mover_class_index):
+    room = make_brush_actor("Room", cube(128, 128, 128), csg="subtract")
+    mover = make_brush_actor("Door", cube(32, 8, 64), mover_class="Engine.Mover")
+    # Door built AFTER Room in level.order -- if the code wrongly treated Door like a later
+    # Subtract, this would misclassify as carved_by; it must not.
+    edges = actorgraph.classify_pair("Room", room, "Door", mover,
+                                      order_index={"Room": 0, "Door": 1}, class_index=mover_class_index)
+    assert len(edges) == 1
+    assert edges[0].relation == "contains" and edges[0].src == "Room" and edges[0].dst == "Door"
