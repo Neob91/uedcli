@@ -64,7 +64,8 @@ for `--tree`).
     (a `half_spaces` entry `(n, d)` means "inside" is `dot(n, p) <= d + _SPLIT_EPS`).
   - `class DegenerateBrushError(ValueError)` — raised naming the actor for a self-intersecting/
     non-manifold brush the self-split can't classify (the spec's "one honest remaining edge case").
-  - `decompose_convex(actor) -> list[ConvexCell]` — the brush's world-space volume as convex cells;
+  - `decompose_convex(actor, *, cache: dict | None = None) -> list[ConvexCell]` — the brush's
+    world-space volume as convex cells;
     an already-convex brush returns exactly one cell (same code path, not a branch). Later tasks
     consume this signature.
 
@@ -100,7 +101,8 @@ def test_convex_brush_decomposes_to_one_cell():
 
 def test_l_shaped_brush_decomposes_to_two_or_more_convex_cells():
     # An L-shape: a 64x64x64 cube union a 64x64x64 cube offset by (64,64,0) sharing one edge --
-    # built directly as a Brush with 10 faces (an L-shaped prism), not via two separate actors.
+    # built directly as a Brush with 8 faces (bottom+top+6 sides, an L-shaped prism), not via two
+    # separate actors.
     from uedcli.model import Brush, Polygon
     verts_bottom = [  # the L footprint at Z=-32/+32, CCW from +Z: (0,0)-(128,0)-(128,64)-(64,64)-(64,128)-(0,128)
         (0, 0), (128, 0), (128, 64), (64, 64), (64, 128), (0, 128),
@@ -128,6 +130,22 @@ def test_l_shaped_brush_decomposes_to_two_or_more_convex_cells():
     assert max(all_y) == pytest.approx(128.0, abs=0.01)
     assert min(all_x) == pytest.approx(0.0, abs=0.01)
     assert min(all_y) == pytest.approx(0.0, abs=0.01)
+
+    # Stronger regression pin (added in this plan's own self-review, after finding a real
+    # front/back-fragment swap bug in the "span" branch that these loose bbox checks alone did NOT
+    # catch): a point genuinely INSIDE the L (the lower-left arm) must be inside exactly one cell; a
+    # point in the NOTCH -- the missing upper-right quadrant this footprint carves away -- must be
+    # inside NO cell. `point_in_brush` doesn't exist until Task 4, so this checks `half_spaces`
+    # directly, the same way Task 4's own implementation will.
+    def _in_any_cell(cells, point):
+        return sum(1 for c in cells
+                   if all(_dp(n, point) <= d + 1e-2 for n, d in c.half_spaces))
+    def _dp(n, p):
+        return n[0] * p[0] + n[1] * p[1] + n[2] * p[2]
+    inside_point = (32.0, 32.0, 0.0)     # lower-left arm -- unambiguously part of the L
+    notch_point = (96.0, 96.0, 0.0)      # upper-right quadrant -- unambiguously NOT part of the L
+    assert _in_any_cell(cells, inside_point) == 1
+    assert _in_any_cell(cells, notch_point) == 0
 
 
 def test_coplanar_splitting_tie_break_is_deterministic():
@@ -257,16 +275,25 @@ class _BspNode:
 
 
 def _build_solid_bsp(polys: list[list[Vec3]], planes_so_far: list[tuple[Vec3, float]],
-                      *, inside: bool) -> _BspNode:
+                      *, inside: bool, ref: str) -> _BspNode:
     """Recursive solid-leaf BSP over `polys` (world-space polygons, initially a brush's own faces --
     each face's OWN outward normal, so 'front' of any one of them is genuinely outside the solid).
     A leaf (empty remaining poly set) is classified `inside` -- inherited from which side of its
     PARENT split it fell on, per the standard solid-leaf BSP construction this project's own native
-    engine already applies at brush scale (`bspBrushCSG`'s temp-brush BSP, NATIVE-MATERIALIZE.md)."""
+    engine already applies at brush scale (`bspBrushCSG`'s temp-brush BSP, NATIVE-MATERIALIZE.md).
+    `ref` (the owning actor's name) is threaded through purely so a degenerate face can be named in
+    `DegenerateBrushError` -- this function has no other actor context."""
     if not polys:
         return _BspNode(planes=list(planes_so_far), solid=inside)
     plane_poly = polys[0]
-    normal = _norm(newell(plane_poly))
+    raw_normal = newell(plane_poly)
+    if _len(raw_normal) < _SPLIT_EPS:
+        # A zero-area/collinear face: _norm would ZeroDivisionError. Caught in this plan's own
+        # self-review -- the pre-fix code had no guard here, so a genuinely malformed (but
+        # >=3-vertex, so not already filtered by decompose_convex's len() check) brush face would
+        # crash with a raw traceback instead of the spec-mandated named, skipped-node treatment.
+        raise DegenerateBrushError(f"{ref}: brush face is degenerate (zero-area or collinear)")
+    normal = _norm(raw_normal)
     d = _dot(normal, plane_poly[0])
     front_polys: list[list[Vec3]] = []
     back_polys: list[list[Vec3]] = []
@@ -280,24 +307,31 @@ def _build_solid_bsp(polys: list[list[Vec3]], planes_so_far: list[tuple[Vec3, fl
             # Named tie-break (spec-required): a coplanar face's OWN outward normal decides which
             # side it bounds -- agreeing with this plane's normal means it faces the same way as the
             # outside, so it belongs with the front (outside) branch; opposing means back (inside).
-            own_normal = _norm(newell(poly))
+            raw_own = newell(poly)
+            if _len(raw_own) < _SPLIT_EPS:
+                raise DegenerateBrushError(f"{ref}: brush face is degenerate (zero-area or collinear)")
+            own_normal = _norm(raw_own)
             (front_polys if _dot(own_normal, normal) > 0 else back_polys).append(poly)
         else:  # span
-            fp = _clip_polygon(poly, normal, d)
-            bp = _clip_polygon(list(reversed(poly)), _neg(normal), -d)
-            if len(fp) >= 3:
-                front_polys.append(fp)
-            if len(bp) >= 3:
-                back_polys.append(bp)
-    # NOTE the sign: the FRONT (outside-this-face) region satisfies dot(normal,p) >= d, which under
-    # the "(n,d): inside iff dot(n,p) <= d" convention is stored as the NEGATED tuple (-normal,-d) --
-    # not (normal,d). The BACK (inside-this-face) region satisfies dot(normal,p) <= d directly, so it
-    # gets the tuple UNNEGATED. (Caught in this plan's own self-review: swapping these two lines
-    # makes every downstream half-space describe the opposite of the intended region -- a plain cube
-    # would decompose to zero valid vertices and wrongly raise DegenerateBrushError. Trace it by hand
-    # on one face before touching this again if it ever looks wrong.)
-    front = _build_solid_bsp(front_polys, planes_so_far + [(_neg(normal), -d)], inside=False)
-    back = _build_solid_bsp(back_polys, planes_so_far + [(normal, d)], inside=True)
+            # `_clip_polygon(p, n, d)` keeps `dot(n,p) <= d` -- the BACK (inside-this-face) side,
+            # by this module's own convention -- regardless of variable name. `fp` is therefore the
+            # BACK fragment, WITH the original (correct) winding, since it's a plain sub-slice of
+            # `poly`. The FRONT fragment is obtained by clipping the SAME unreversed `poly` against
+            # the negated plane (`_neg(normal), -d` keeps `dot(normal,p) >= d`) -- never reverse the
+            # input polygon itself, which would corrupt its own outward-normal direction the next
+            # time this fragment is chosen as a splitting plane one level deeper. (Caught in this
+            # plan's own self-review: the pre-fix code both routed these two fragments to the WRONG
+            # lists and additionally reversed the front fragment's winding via `reversed(poly)` --
+            # either bug alone corrupts a non-convex decomposition; verified by hand-tracing the
+            # L-shaped fixture's own actual split sequence, where this exact branch fires.)
+            back_frag = _clip_polygon(poly, normal, d)
+            front_frag = _clip_polygon(poly, _neg(normal), -d)
+            if len(back_frag) >= 3:
+                back_polys.append(back_frag)
+            if len(front_frag) >= 3:
+                front_polys.append(front_frag)
+    front = _build_solid_bsp(front_polys, planes_so_far + [(_neg(normal), -d)], inside=False, ref=ref)
+    back = _build_solid_bsp(back_polys, planes_so_far + [(normal, d)], inside=True, ref=ref)
     return _BspNode(front=front, back=back)
 
 
@@ -337,13 +371,24 @@ def _cell_vertices(planes: list[tuple[Vec3, float]]) -> list[Vec3]:
     return out
 
 
-def decompose_convex(actor) -> list[ConvexCell]:
+def decompose_convex(actor, *, cache: dict[str, list[ConvexCell]] | None = None) -> list[ConvexCell]:
     """`actor`'s brush volume as a list of convex cells (world space). An already-convex brush
     decomposes to exactly ONE cell -- the trivial case of this same recursion, not a separate code
     path. Raises `DegenerateBrushError` naming the actor if no solid leaf survives (a malformed,
-    self-intersecting/non-manifold PolyList -- no well-defined 'inside' to decompose)."""
+    self-intersecting/non-manifold PolyList -- no well-defined 'inside' to decompose).
+
+    `cache`, when given, is a plain `{actor_name: cells}` dict the CALLER owns and reuses across every
+    call for the lifetime of one `build_graph` run (spec: "computed ONCE per brush and memoized ...
+    not a function of level size" -- caught missing in this plan's own self-review: without this,
+    `build_graph` was recomputing every brush's decomposition on EVERY pair it participates in,
+    O(N) -> O(N^2) recomputations for an N-brush level). `Actor` is an unfrozen dataclass (not
+    hashable), so this is a caller-supplied dict keyed by name, not `functools.lru_cache` on the
+    actor itself. A raised `DegenerateBrushError` is NOT cached -- `build_graph`'s own `_safe()`
+    wrapper (Task 6) is what remembers a bad brush so it isn't re-probed."""
+    if cache is not None and actor.name in cache:
+        return cache[actor.name]
     polys = [polyalign._world_verts(actor, p) for p in actor.brush.polys if len(p.vertices) >= 3]
-    tree = _build_solid_bsp(polys, [], inside=True)
+    tree = _build_solid_bsp(polys, [], inside=True, ref=actor.name)
     leaves = _collect_solid_leaves(tree)
     if not leaves:
         raise DegenerateBrushError(f"{actor.name}: brush does not bound a valid solid "
@@ -355,6 +400,8 @@ def decompose_convex(actor) -> list[ConvexCell]:
             raise DegenerateBrushError(f"{actor.name}: brush does not bound a valid solid "
                                         f"(a decomposed cell has no volume)")
         cells.append(ConvexCell(vertices=verts, half_spaces=planes))
+    if cache is not None:
+        cache[actor.name] = cells
     return cells
 ```
 
@@ -413,41 +460,96 @@ def test_overlapping_cells_touch():
 
 
 def test_edge_cross_axis_is_needed_for_two_rotated_convex_shapes():
-    # Two triangular prisms positioned so no face-normal axis separates them but a true polytope
-    # edge-cross axis does -- the exact case face-normal-only SAT (the rejected earlier design) gets
-    # wrong. Regression-pins the fix from the spec's own math review.
+    # Two OBLIQUE (non-parallel-axis) thin boxes -- see the implementer note below for why this
+    # must NOT be two prisms sharing one extrusion axis (the plan's own first draft used two
+    # Z-extruded triangular prisms, only rotated about Z; caught in this plan's self-review: for
+    # any two convex shapes sharing one common "long" axis, EVERY edge-cross candidate axis reduces
+    # to a multiple of an already-tested face normal -- cross(shared_axis, anything) and
+    # cross(anything_in_the_shared_axis's_perpendicular_plane, same) both land back on that shape's
+    # own face-normal set. Such a fixture can NEVER exercise a genuinely new edge-cross axis no
+    # matter how it's rotated/translated -- tuning it would have been chasing a test that cannot
+    # pass for the reason intended even in principle. Two boxes on genuinely different (skew) axes
+    # are required instead.
     from uedcli.model import Brush, Polygon
-    def prism(cx, cy, cz, angle_deg):
+    def box(center, long_axis_deg_from_y_toward_z, half_long=15.0, half_thin=1.0):
+        """A thin rectangular box: half_long along a LONG axis tilted `long_axis_deg_from_y_toward_z`
+        degrees from +Y toward +Z (0 -> long axis is +Y, i.e. this box's own axis choice; a second
+        box built with a different angle here is on a genuinely different, non-parallel axis from
+        one built at a different angle -- unlike the rejected prism fixture, these two boxes'
+        long axes are NOT forced to be parallel)."""
         import math
-        a = math.radians(angle_deg)
-        pts = [(0.0, 0.0), (40.0, 0.0), (20.0, 34.6)]     # equilateral-ish triangle, side 40
-        rot = [(x * math.cos(a) - y * math.sin(a), x * math.sin(a) + y * math.cos(a)) for x, y in pts]
-        def V(x, y, z):
-            return (Decimal(str(x + cx)), Decimal(str(y + cy)), Decimal(str(z + cz)))
-        bottom = Polygon(vertices=[V(x, y, -20) for x, y in reversed(rot)], normal=(0, 0, -1))
-        top = Polygon(vertices=[V(x, y, 20) for x, y in rot], normal=(0, 0, 1))
-        sides = []
-        n = len(rot)
-        for i in range(n):
-            x0, y0 = rot[i]
-            x1, y1 = rot[(i + 1) % n]
-            sides.append(Polygon(vertices=[V(x0, y0, -20), V(x1, y1, -20), V(x1, y1, 20), V(x0, y0, 20)]))
-        return Brush(model_name="Model_Prism", polys=[bottom, top] + sides)
-    a = _brush("A", prism(0, 0, 0, 0))
-    b = _brush("B", prism(45, 25, 0, 60))   # positioned/rotated to graze -- verify with a plain bbox
+        a = math.radians(long_axis_deg_from_y_toward_z)
+        long_dir = (0.0, math.cos(a), math.sin(a))
+        thin1 = (1.0, 0.0, 0.0)                                   # always perpendicular to long_dir
+        thin2 = _cross(long_dir, thin1)                           # actorgraph._cross -- also perp.
+        cx, cy, cz = center
+        def corner(u, v, w):  # u,v,w in {-1, 1}
+            return (Decimal(str(cx + u * half_long * long_dir[0] + v * half_thin * thin1[0]
+                                 + w * half_thin * thin2[0])),
+                    Decimal(str(cy + u * half_long * long_dir[1] + v * half_thin * thin1[1]
+                                 + w * half_thin * thin2[1])),
+                    Decimal(str(cz + u * half_long * long_dir[2] + v * half_thin * thin1[2]
+                                 + w * half_thin * thin2[2])))
+        # 8 corners of a parallelepiped, 6 quad faces (winding not asserted for outward-ness here --
+        # `decompose_convex` on a convex brush is order-tolerant per Task 1's own "already-convex
+        # decomposes to one cell" property regardless of which face happens to be `polys[0]`, since
+        # `newell()` derives each face's own outward normal from ITS OWN vertex winding; only the
+        # PER-FACE winding needs to be consistently outward, which building each face explicitly
+        # below (right-hand rule around its own outward direction) satisfies).
+        c = {(u, v, w): corner(u, v, w) for u in (-1, 1) for v in (-1, 1) for w in (-1, 1)}
+        faces = [
+            [c[(1, -1, -1)], c[(1, 1, -1)], c[(1, 1, 1)], c[(1, -1, 1)]],       # +long_dir cap
+            [c[(-1, -1, 1)], c[(-1, 1, 1)], c[(-1, 1, -1)], c[(-1, -1, -1)]],   # -long_dir cap
+            [c[(-1, 1, -1)], c[(1, 1, -1)], c[(1, 1, 1)], c[(-1, 1, 1)]],       # +thin1
+            [c[(-1, -1, 1)], c[(1, -1, 1)], c[(1, -1, -1)], c[(-1, -1, -1)]],   # -thin1
+            [c[(-1, -1, -1)], c[(1, -1, -1)], c[(1, 1, -1)], c[(-1, 1, -1)]],   # -thin2 -- wait,
+            [c[(-1, 1, 1)], c[(1, 1, 1)], c[(1, -1, 1)], c[(-1, -1, 1)]],       # +thin2
+        ]
+        return Brush(model_name="Model_Box", polys=[Polygon(vertices=v) for v in faces])
+    a = _brush("A", box((0, 0, 0), long_axis_deg_from_y_toward_z=0.0))
+    b = _brush("B", box((0, 0, 8), long_axis_deg_from_y_toward_z=45.0))
     ca, = actorgraph.decompose_convex(a)
     cb, = actorgraph.decompose_convex(b)
     result = actorgraph.cells_touch_or_overlap(ca, cb)
-    assert isinstance(result, bool)   # exactness sanity: doesn't crash, produces a definite answer
+    assert isinstance(result, bool)   # placeholder pending the implementer's own verified value --
+                                       # see the note below; DO NOT leave this as the final assertion
 ```
 
-Note for the implementer: the exact numeric placement of the two prisms in
-`test_edge_cross_axis_is_needed_for_two_rotated_convex_shapes` may need tuning once you have a
-working SAT to actually witness a face-normal-only false-positive vs. the edge-cross-corrected
-true-negative (or vice versa) -- the point of the test is pinning that SOME configuration exercises
-the edge-cross axes, not the specific numbers. Adjust `cx`/`cy`/`angle_deg` until you find a pair
-where commenting out the edge-cross loop in `cells_touch_or_overlap` changes the result, then assert
-the WITH-edge-cross-axes answer explicitly (`True` or `False`, not just `isinstance(..., bool)`).
+Note for the implementer -- this is real, required work, not a placeholder to skip, and it is
+GENUINELY HARD to get right by hand (this plan's own author tried and could not reach confident exact
+numbers without running code -- said so plainly rather than guessing):
+
+1. The face/winding sketch above (6 quad faces of an oblique box) needs its OWN outward-normal
+   verification first -- run `polyalign._world_normal` (or plain `newell`) on each face right after
+   building it and confirm all 6 point outward (away from the box's own center) before trusting
+   anything downstream. The `-thin2` face's vertex order above is marked with a `-- wait,` comment
+   deliberately: verify it, don't assume it's right.
+2. **Do not derive the expected touching/not-touching answer from `cells_touch_or_overlap` itself, or
+   from face-normal-only SAT, or from any variant of the code under test** -- that is exactly the
+   circularity this note exists to prevent. Instead, write a small, throwaway, fully independent
+   brute-force check: sample a dense grid of points across each box's own volume (trivial for a
+   parallelepiped: `center + u*half_long*long_dir + v*half_thin*thin1 + w*half_thin*thin2` for
+   `u,v,w` ranging over, say, 20 evenly-spaced steps in `[-1,1]` each -- ~9000 points per box) and
+   compute the minimum pairwise distance between any sampled point of A and any sampled point of B.
+   This uses no SAT/BSP machinery at all -- pure coordinate arithmetic -- so it is a genuinely
+   independent ground truth.
+3. Start from the `long_axis_deg_from_y_toward_z=0.0` / `45.0`, `center=(0,0,8)` configuration above,
+   but treat it as a STARTING POINT ONLY, not a verified answer -- run the brute-force check, and if
+   the two boxes turn out to be more than a couple of tolerance-widths apart (a clean "obviously not
+   touching" case) or badly overlapping (a clean "obviously touching" case) EITHER is fine, as long
+   as the SEPARATE follow-up check in step 4 shows face-normal-only SAT gets it wrong.
+4. With a brute-force verdict in hand, temporarily disable the edge-cross loop in
+   `cells_touch_or_overlap` (comment out the `for ea in ... for eb in ...` block in `_sat_axes`) and
+   re-run `cells_touch_or_overlap` on the same two cells. If face-normal-only SAT agrees with the
+   brute-force verdict, this configuration does NOT exercise the bug this test exists to pin --
+   adjust the angle/offset (try a larger tilt, a different `center` offset axis, or swapping which
+   perpendicular direction is `thin1` vs `thin2`) and repeat from step 2 until face-normal-only SAT
+   and the brute-force verdict DISAGREE. That disagreement is what proves this specific configuration
+   needs the edge-cross axes.
+5. Only then replace the placeholder `assert isinstance(result, bool)` with the real, brute-force-
+   verified expected value (`assert result is True` or `assert result is False`), and leave a comment
+   citing the brute-force distance that established it (e.g. "brute-force min sampled distance:
+   1.3uu, well under the 2*half_thin=2uu combined half-thickness -- these genuinely touch").
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -545,7 +647,7 @@ git commit -m "actorgraph: exact convex-convex SAT (face normals + edge-cross ax
                                               # overlap with no single shared flat boundary
       area_estimate: float | None            # exact area when matched_pair is set; a bounding-box
                                               # intersection estimate otherwise; None if not touching
-  def brush_overlap(actor_a, actor_b) -> BrushOverlap
+  def brush_overlap(actor_a, actor_b, *, cache: dict | None = None) -> BrushOverlap
   ```
 
 - [ ] **Step 1: Write the failing tests**
@@ -659,12 +761,13 @@ def _shoelace_area_3d(verts: list[Vec3], normal: Vec3) -> float:
     return abs(_dot(n, normal)) / 2.0 if _len(normal) > 1e-9 else abs(_len(n)) / 2.0
 
 
-def brush_overlap(actor_a, actor_b) -> BrushOverlap:
+def brush_overlap(actor_a, actor_b, *, cache=None) -> BrushOverlap:
     """Exact touch/overlap between two brushes' full volumes (via decomposition + SAT over every
     cell pair), plus a matched single face pair + exact area when one clean shared boundary exists,
-    else a bounding-box-intersection area ESTIMATE (informational only -- detection stays exact)."""
-    cells_a = decompose_convex(actor_a)
-    cells_b = decompose_convex(actor_b)
+    else a bounding-box-intersection area ESTIMATE (informational only -- detection stays exact).
+    `cache`: see `decompose_convex` -- pass the SAME dict `build_graph` uses for every brush pair."""
+    cells_a = decompose_convex(actor_a, cache=cache)
+    cells_b = decompose_convex(actor_b, cache=cache)
     touches = any(cells_touch_or_overlap(ca, cb) for ca in cells_a for cb in cells_b)
     if not touches:
         return BrushOverlap(touches=False, matched_pair=None, area_estimate=None)
@@ -708,7 +811,7 @@ git commit -m "actorgraph: brush-to-brush overlap with matched-face-pair drill-d
 
 **Interfaces:**
 - Consumes: `decompose_convex`, `ConvexCell`.
-- Produces: `point_in_brush(actor, point: Vec3) -> bool`.
+- Produces: `point_in_brush(actor, point: Vec3, *, cache: dict | None = None) -> bool`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -748,12 +851,13 @@ Expected: FAIL with `AttributeError: ... has no attribute 'point_in_brush'`
 ```python
 # appended to uedcli/actorgraph.py
 
-def point_in_brush(actor, point: Vec3) -> bool:
+def point_in_brush(actor, point: Vec3, *, cache=None) -> bool:
     """True iff `point` is inside (or within tolerance of the boundary of) ANY ONE of `actor`'s
     decomposed convex cells -- a plain OR over cells, so a point on a cell boundary the
     decomposition itself introduced (shared by two cells of the SAME brush) is safely reported as
-    contained by whichever cell's tolerance band it lands in, not double-penalised."""
-    for cell in decompose_convex(actor):
+    contained by whichever cell's tolerance band it lands in, not double-penalised.
+    `cache`: see `decompose_convex`."""
+    for cell in decompose_convex(actor, cache=cache):
         if all(_dot(n, point) <= d + _SPLIT_EPS * 10 for n, d in cell.half_spaces):
             return True
     return False
@@ -795,7 +899,8 @@ git commit -m "actorgraph: point-in-brush containment reusing the convex decompo
       directed: bool          # False for touches, True for contains/carved_by
       matched_pair: tuple[int, int] | None   # only for a brush-brush touches edge
       area_estimate: float | None            # only for touches
-  def classify_pair(name_a, actor_a, name_b, actor_b, *, order_index, class_index) -> list[Edge]
+  def classify_pair(name_a, actor_a, name_b, actor_b, *, order_index, class_index,
+                     cache: dict | None = None) -> list[Edge]
   ```
   `order_index: dict[str, int]` — each brush actor's position in `level.order`'s brush subsequence
   (LOWER = earlier/built first); callers build this once per level (Task 6), not per pair.
@@ -895,10 +1000,12 @@ class Edge:
     area_estimate: float | None = None
 
 
-def classify_pair(name_a, actor_a, name_b, actor_b, *, order_index: dict, class_index) -> list[Edge]:
+def classify_pair(name_a, actor_a, name_b, actor_b, *, order_index: dict, class_index,
+                   cache=None) -> list[Edge]:
     """Every edge between two BRUSH actors (both must have `.brush is not None`; a caller passing a
-    non-brush actor here is a bug in Task 6's dispatch, not something this function guards)."""
-    ov = brush_overlap(actor_a, actor_b)
+    non-brush actor here is a bug in Task 6's dispatch, not something this function guards).
+    `cache`: see `decompose_convex` -- forwarded to `brush_overlap`."""
+    ov = brush_overlap(actor_a, actor_b, cache=cache)
     if not ov.touches:
         return []
     a_is_sub = query.csg_is_subtract(actor_a)
@@ -977,6 +1084,18 @@ def test_build_graph_multi_edge_fanout_add_straddling_two_subtracts(mover_class_
     assert {e.src for e in contains} == {"Room1", "Room2"}   # BOTH, not just one
 
 
+def test_build_graph_multi_edge_fanout_subtract_carving_two_different_adds(mover_class_index):
+    # Spec Test Strategy item 3's third fan-out case (the other two are covered above/below): a
+    # Subtract carving through two different Adds gets a `carved_by` edge to BOTH, not just one.
+    wall1 = make_brush_actor("Wall1", cube(64, 64, 64), location=(0, 0, 0), csg="add")
+    wall2 = make_brush_actor("Wall2", cube(64, 64, 64), location=(64, 0, 0), csg="add")   # touches Wall1
+    door = make_brush_actor("Door", cube(16, 64, 64), location=(32, 0, 0), csg="subtract")  # straddles both
+    level = _level(wall1, wall2, door)   # Door is LATER in level.order than both walls
+    graph = actorgraph.build_graph(level, mover_class_index)
+    carved_by = [e for e in graph.edges if e.relation == "carved_by" and e.dst == "Door"]
+    assert {e.src for e in carved_by} == {"Wall1", "Wall2"}   # BOTH, not just one
+
+
 def test_build_graph_non_brush_actor_contains_from_every_containing_brush(mover_class_index):
     outer = make_brush_actor("Outer", cube(128, 128, 128), csg="subtract")
     inner = make_brush_actor("Inner", cube(64, 64, 64), csg="subtract")   # nested inside Outer
@@ -1023,21 +1142,32 @@ def build_graph(level, class_index) -> "ActorGraph":
     """Every actor is a node. Every BRUSH pair is tested via `classify_pair` (skipping any brush
     that raises `DegenerateBrushError`, recorded once in `skipped`, never re-attempted for other
     pairs it would have been in). Every non-brush actor gets a `contains` edge from EVERY brush
-    whose volume contains its Location -- the multi-edge fan-out rule, same as brush-brush pairs."""
+    whose volume contains its Location -- the multi-edge fan-out rule, same as brush-brush pairs.
+
+    Owns ONE `cache` dict for the whole call and threads it through every `classify_pair`/
+    `point_in_brush` call below -- per `decompose_convex`'s own docstring, this is what keeps
+    decomposition at O(N) (once per brush) instead of O(N^2) (recomputed on every pair a brush
+    participates in). Caught missing in this plan's own self-review: the pre-fix version called
+    `decompose_convex` with no cache at all, silently defeating the spec's explicit "computed ONCE
+    per brush" performance requirement -- exactly the case `--from`/`--hops` scoping exists to make
+    tolerable for a large level, undermined if the underlying detection itself is quadratic."""
     order_index = {name: i for i, name in enumerate(level.order) if level.actors[name].brush is not None}
     brush_names = list(order_index)
     point_names = [n for n in level.order if level.actors[n].brush is None]
 
     skipped: dict[str, str] = {}
     edges: list[Edge] = []
+    cache: dict[str, list[ConvexCell]] = {}
 
     def _safe(name):
         """Probe once whether `name`'s brush decomposes cleanly; cache the verdict so a later pair
-        involving the same bad brush doesn't re-raise (and re-append to `skipped`)."""
+        involving the same bad brush doesn't re-raise (and re-append to `skipped`). A CLEAN probe's
+        result lands in `cache` via `decompose_convex`'s own memoization, so this is also the one
+        and only time each good brush is ever decomposed."""
         if name in skipped:
             return False
         try:
-            decompose_convex(level.actors[name])
+            decompose_convex(level.actors[name], cache=cache)
             return True
         except DegenerateBrushError as e:
             skipped[name] = str(e)
@@ -1046,7 +1176,7 @@ def build_graph(level, class_index) -> "ActorGraph":
     ok_brushes = [n for n in brush_names if _safe(n)]
     for name_a, name_b in _itertools.combinations(ok_brushes, 2):
         edges.extend(classify_pair(name_a, level.actors[name_a], name_b, level.actors[name_b],
-                                    order_index=order_index, class_index=class_index))
+                                    order_index=order_index, class_index=class_index, cache=cache))
 
     for pname in point_names:
         loc = level.actors[pname].location
@@ -1054,7 +1184,7 @@ def build_graph(level, class_index) -> "ActorGraph":
             continue
         point = (float(loc[0]), float(loc[1]), float(loc[2]))
         for bname in ok_brushes:
-            if point_in_brush(level.actors[bname], point):
+            if point_in_brush(level.actors[bname], point, cache=cache):
                 edges.append(Edge(src=bname, dst=pname, relation="contains", directed=True))
 
     return ActorGraph(node_names=list(level.order), edges=edges,
@@ -1242,8 +1372,9 @@ Expected: FAIL with `AttributeError: ... has no attribute 'format_text'`
 # appended to uedcli/actorgraph.py
 
 def format_text(edges: list["Edge"]) -> str:
-    """Flat, one edge per line, subject-relation-object -- mirrors `eventgraph.format_text`'s exact
-    shape (spec 'Output format'). A `touches` edge with a matched face pair prints `Name:idx`
+    """Flat, one edge per line, subject-relation-object -- the same one-line-per-edge shape
+    `eventgraph.format_text` uses (minus its class annotations; spec 'Output format'). A `touches`
+    edge with a matched face pair prints `Name:idx`
     selectors so the line is directly pipeable into `brush relation measure`; a `touches` edge with
     an area estimate but no matched pair prints bare names with the size still shown."""
     lines = []
@@ -1319,6 +1450,16 @@ def test_level_graph_unknown_from_name_exits_2(scratch_project_with_two_touching
 
 
 def test_level_graph_tree_stash_analyzes_stash_not_live_level(scratch_project_with_a_stash):
+    ...
+
+
+def test_level_graph_unresolvable_class_exits_2_not_traceback(scratch_project_with_an_unresolvable_class):
+    # `movers.is_mover` can raise `ClassRefError` on ordinary content (found in this plan's own
+    # self-review, see "Deviations from the spec's own Module shape section"). `dispatch.py`'s
+    # existing top-level `except ClassRefError` handler should degrade this to a clean exit 2 --
+    # confirm it actually does for THIS verb, not just assume the generic handler covers it. Match
+    # whatever fixture `level doctor`'s own equivalent test already uses for this exact scenario
+    # (grep `uedcli/tests/test_cli_level_doctor.py` or its nearest analog) rather than inventing one.
     ...
 ```
 
@@ -1526,6 +1667,15 @@ author (this fork) didn't have that fixture's exact shape in hand.
   automatically by reusing `resources.mover_index`), never a silent "every brush is treated as
   static." This is a real, load-bearing dependency the spec's author didn't have in view when writing
   "Module shape," not a design gap — flagging it here per the task's own instruction.
+- **`movers.is_mover` can raise `ClassRefError`** on ordinary, realistic content (an unresolvable or
+  ambiguous class, a truncated ancestor chain) — `classify_pair`/`build_graph` do not catch this
+  themselves, relying on `dispatch.py`'s existing top-level `except ClassRefError` handler (verified:
+  it's already there, degrading to a clean exit 2). This is correct behavior, not a gap, but it means
+  `level graph` inherits a real failure mode with no test of its own in this plan — Task 9 should add
+  one CLI-level test confirming `level graph` exits 2 (not a traceback) on a level containing a brush
+  whose class can't be resolved, using whatever fixture `level doctor`'s own equivalent test already
+  uses for this (found in review — check `uedcli/tests/test_cli_level_doctor.py` or its nearest
+  analog for the pattern before writing a new one).
 - **`uedcli/cli/commands/level.py` is confirmed flat** (786 lines exactly), and `_level_graph`
   follows `_level_doctor`'s existing `(args, src)` shape precisely — the spec's own guess about this
   was already correct, no deviation needed there.
@@ -1539,3 +1689,39 @@ author (this fork) didn't have that fixture's exact shape in hand.
 - **The spec's `Deltas`/`classify_footprint_2d` "reuse" language was already corrected in the spec
   itself** during its own review pass (it now explicitly says a NEW area function is needed, not a
   call to the existing one) — Task 3 implements exactly that correction, no further deviation.
+
+## Requesting-code-review pass, round 2 (fixed inline, this commit)
+
+An independent reviewer (with real access to this repo's source, unlike the first self-review pass
+above) found and I fixed:
+
+- **A second bug in `_build_solid_bsp`'s "span" branch** (Task 1): the front/back polygon fragments
+  were routed to the wrong lists, and the front fragment's winding was corrupted by an unnecessary
+  `reversed(poly)` call — hand-traced against the L-shaped fixture's own real split sequence, where
+  this branch genuinely fires. Fixed; strengthened the L-shape test with known inside/notch points
+  (the loose bounding-box assertions alone would not have caught this).
+- **An unguarded `ZeroDivisionError`** on a genuinely degenerate (collinear/zero-area, but
+  `>= 3`-vertex) face in two `_norm(newell(...))` call sites — the plan's existing degenerate-brush
+  test used a *zero-vertex* polygon, which is filtered out before reaching this code, so it never
+  exercised this path. Fixed with an explicit length check raising `DegenerateBrushError`, threading
+  an actor-name `ref` through `_build_solid_bsp` for the message (it had no actor context before).
+- **Missing decomposition memoization**, contradicting the spec's explicit "computed ONCE per brush"
+  requirement — `build_graph` was calling `decompose_convex` fresh on every pair a brush appears in
+  (O(N²) instead of O(N) for N brushes). Fixed by threading an optional `cache` dict through
+  `decompose_convex`/`brush_overlap`/`point_in_brush`/`classify_pair`, owned and populated once by
+  `build_graph`.
+- **The edge-cross-axis SAT test could not fail even if the edge-cross code were missing entirely**,
+  and its underlying fixture (two prisms sharing one extrusion axis) turns out to be STRUCTURALLY
+  incapable of ever needing edge-cross axes, regardless of tuning (every edge-cross candidate for two
+  shapes on a shared axis reduces to an existing face normal — worked out by hand while fixing this).
+  Replaced with an oblique-box fixture on genuinely non-parallel axes, and rewrote the implementer
+  guidance to require an independent brute-force distance check (not the SAT code under test, and not
+  face-normal-only SAT either) before hardcoding an expected result — this plan's own author could
+  not derive exact verified numbers by hand and says so rather than guessing.
+- **Added the spec's third named fan-out case** (a Subtract carving two different Adds gets
+  `carved_by` to both) as its own Task 6 test — the other two fan-out cases already had one.
+- **Noted `movers.is_mover`'s `ClassRefError`** as a real, currently-untested failure mode `level
+  graph` inherits (correctly handled by `dispatch.py`'s existing generic handler, but with no
+  dedicated test) and added one to Task 9.
+- Two minor wording fixes (an overstated "exact shape" match to `eventgraph.format_text`, and a face
+  count off by one in a comment).
