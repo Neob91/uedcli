@@ -289,8 +289,15 @@ def _build_solid_bsp(polys: list[list[Vec3]], planes_so_far: list[tuple[Vec3, fl
                 front_polys.append(fp)
             if len(bp) >= 3:
                 back_polys.append(bp)
-    front = _build_solid_bsp(front_polys, planes_so_far + [(normal, d)], inside=False)
-    back = _build_solid_bsp(back_polys, planes_so_far + [(_neg(normal), -d)], inside=True)
+    # NOTE the sign: the FRONT (outside-this-face) region satisfies dot(normal,p) >= d, which under
+    # the "(n,d): inside iff dot(n,p) <= d" convention is stored as the NEGATED tuple (-normal,-d) --
+    # not (normal,d). The BACK (inside-this-face) region satisfies dot(normal,p) <= d directly, so it
+    # gets the tuple UNNEGATED. (Caught in this plan's own self-review: swapping these two lines
+    # makes every downstream half-space describe the opposite of the intended region -- a plain cube
+    # would decompose to zero valid vertices and wrongly raise DegenerateBrushError. Trace it by hand
+    # on one face before touching this again if it ever looks wrong.)
+    front = _build_solid_bsp(front_polys, planes_so_far + [(_neg(normal), -d)], inside=False)
+    back = _build_solid_bsp(back_polys, planes_so_far + [(normal, d)], inside=True)
     return _BspNode(front=front, back=back)
 
 
@@ -1472,6 +1479,20 @@ git commit -m "docs: level graph reference page + cross-links"
 ```
 
 ---
+
+## Coordinator's own self-review pass (separate from the drafting pass above), fixed inline
+
+Hand-traced `_build_solid_bsp` on a concrete cube example before accepting this plan: the front/back
+branches had their stored half-space tuples SWAPPED (`front` got `(normal, d)` and `back` got
+`(_neg(normal), -d)`, backwards from the `ConvexCell` docstring's own "inside iff dot(n,p) <= d"
+convention). Traced through: this would have made `_cell_vertices` find zero valid vertices for a
+plain cube (the six stored half-spaces would describe the cube's EXTERIOR, whose intersection is
+empty), failing `test_convex_brush_decomposes_to_one_cell` — the simplest possible case. Fixed in
+Task 1's code block; the fix is verified by the same hand-trace, re-run with the swap applied,
+landing on the cube's own natural 6 face planes. SAT (Task 2) turns out to be sign-invariant to this
+specific bug (a flipped axis gives the same overlap verdict) — only vertex extraction and point-in-
+cell containment were actually broken by it, which is why it's worth tracing by hand rather than
+trusting "SAT works so decomposition must be fine."
 
 ## Self-Review (performed while writing this plan, fixed inline)
 
