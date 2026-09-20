@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+# bin/test-standalone — smoke-tests bin/build-standalone's output directly (not the venv): runs
+# with no system Python/pip/node on PATH, checks a few representative verbs + a REAL serve boot
+# against the bundled frontend, and asserts startup is not slower than the source/venv baseline
+# (spec: no-regression, not a hard ms target). Run bin/build-standalone first.
+set -euo pipefail
+UEDCLI_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+cd "$UEDCLI_DIR"
+
+BIN="$UEDCLI_DIR/dist/standalone/uedcli.dist/uedcli"
+[ -x "$BIN" ] || { echo "bin/test-standalone: $BIN not found — run bin/build-standalone first" >&2; exit 1; }
+
+RUN() { env -i HOME="$HOME" PATH=/usr/bin:/bin "$BIN" "$@"; }
+
+# Shared shape for "this verb must fail with exit 2 and this exact message" (CLAUDE.md: no bare
+# Python traceback reaches the user) -- both project-less-checkout checks below hit the same path.
+_expect_project_error() {
+  local label="$1"; shift
+  local out code
+  set +e
+  out="$(RUN "$@" 2>&1)"
+  code=$?
+  set -e
+  if [ "$code" != "2" ] || ! grep -q "not in a uedcli project" <<<"$out"; then
+    echo "bin/test-standalone: '$label' did not fail the expected way (exit 2, 'not in a uedcli" \
+         "project') -- got exit $code:" >&2
+    echo "$out" >&2
+    exit 1
+  fi
+}
+
+echo "-- --help runs with no system python/pip/node on PATH --"
+RUN --help >/dev/null || { echo "bin/test-standalone: --help failed with a stripped PATH" >&2; exit 1; }
+
+echo "-- a plain query verb, no project configured --"
+_expect_project_error "class list --flat" class list --flat
+
+echo "-- serve, no project configured -- reaches real argparse/resource-resolution logic --"
+_expect_project_error "serve" serve --host 127.0.0.1 --port 18765 some-level
+
+echo "-- serve actually boots and serves the REAL bundled frontend (not just a mount unit test) --"
+TESTPROJECT="$(mktemp -d)"
+mkdir -p "$TESTPROJECT/maps/TestLevel"
+printf 'game = "deusex"\n' > "$TESTPROJECT/uedcli.toml"
+PORT=18781
+SERVE_PID=""
+_cleanup_serve() {
+  [ -n "$SERVE_PID" ] && kill "$SERVE_PID" 2>/dev/null || true
+  [ -n "$SERVE_PID" ] && wait "$SERVE_PID" 2>/dev/null || true
+  rm -rf "$TESTPROJECT"
+}
+trap _cleanup_serve EXIT
+
+# NOT `RUN ... &`: backgrounding a function call forks a subshell that then forks+execs env/$BIN
+# as a further CHILD, so `$!` would capture the subshell's PID, not the actual server's -- `kill`
+# on it would leave the real server running, leaked. `exec` inside an explicit `( ... )` subshell
+# replaces that subshell's own process image with $BIN in place, so `$!` IS the server's real PID.
+(exec env -i HOME="$HOME" PATH=/usr/bin:/bin "$BIN" --project "$TESTPROJECT" serve --host 127.0.0.1 --port "$PORT" TestLevel) &
+SERVE_PID=$!
+READY=0
+for _ in $(seq 1 40); do
+  if curl -sS -m 1 "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then READY=1; break; fi
+  sleep 0.25
+done
+[ "$READY" = 1 ] || { echo "bin/test-standalone: serve never came up on :$PORT" >&2; exit 1; }
+
+HEALTH="$(curl -sS -m 5 "http://127.0.0.1:$PORT/api/health")"
+[ "$HEALTH" = '{"status":"ok","level":"TestLevel"}' ] \
+  || { echo "bin/test-standalone: /api/health returned unexpected: $HEALTH" >&2; exit 1; }
+
+ROOT="$(curl -sS -m 5 "http://127.0.0.1:$PORT/")"
+grep -q "<title>uedcli</title>" <<<"$ROOT" \
+  || { echo "bin/test-standalone: GET / did not serve the real bundled frontend:" >&2; echo "$ROOT" >&2; exit 1; }
+
+kill "$SERVE_PID" 2>/dev/null || true
+wait "$SERVE_PID" 2>/dev/null || true
+SERVE_PID=""
+trap - EXIT
+rm -rf "$TESTPROJECT"
+
+echo "-- startup-time no-regression check (compiled vs. the dev venv launcher, best-of-3 each) --"
+# Warm up bin/uedcli's OWN venv (.venv, distinct from bin/build-standalone's .venv-standalone)
+# *outside* the timed loop -- on a fresh checkout its first-ever invocation bootstraps a venv +
+# pip install + a dockerized native-ext rebuild, which would otherwise get counted as "startup
+# time" and both slow down and destabilize the very check meant to catch a real regression.
+bin/uedcli --help >/dev/null 2>&1 || true
+# Best-of-3 wall-clock, not a single sample -- a lone `date` pair is noisy enough on a shared/loaded
+# CI runner to spuriously fail this on scheduling jitter alone, not a real regression.
+_min_ns() {
+  local best="" t0 t1 ns code
+  for _ in 1 2 3; do
+    t0=$(date +%s%N)
+    set +e
+    "$@" >/dev/null
+    code=$?
+    set -e
+    t1=$(date +%s%N)
+    # A crashing timed command must abort loudly here, not get silently absorbed: this whole
+    # function runs inside a `$(...)` command substitution at the call site, where a bare `false`/
+    # nonzero mid-loop does NOT reliably propagate through bash's errexit the way a top-level
+    # command would -- confirmed empirically (a failing iteration could otherwise report ITS OWN
+    # fast, broken timing as "best", passing the no-regression check while masking a real crash).
+    [ "$code" = 0 ] || { echo "bin/test-standalone: timed command '$*' failed (exit $code) --" \
+                              "not timing a crash" >&2; exit 1; }
+    ns=$((t1 - t0))
+    if [ -z "$best" ] || [ "$ns" -lt "$best" ]; then best=$ns; fi
+  done
+  echo "$best"
+}
+NUITKA_NS=$(_min_ns RUN --help)
+VENV_NS=$(_min_ns bin/uedcli --help)
+echo "compiled: $((NUITKA_NS / 1000000))ms   venv: $((VENV_NS / 1000000))ms"
+awk -v n="$NUITKA_NS" -v v="$VENV_NS" \
+  'BEGIN { if (n > v * 1.1) { print "bin/test-standalone: compiled startup is >10% slower than venv (" n/1e6 "ms vs " v/1e6 "ms)" > "/dev/stderr"; exit 1 } }'
+
+echo "bin/test-standalone: all checks passed"

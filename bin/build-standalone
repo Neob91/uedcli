@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# bin/build-standalone — builds uedcli as a Nuitka --mode=standalone directory: no system Python,
+# no pip install, no npm/node needed to RUN it (build-time only). Never --onefile (spec: zero
+# runtime extraction).
+#
+# The Nuitka compile itself runs inside dev-container/Dockerfile.nuitka, not on the host: static
+# linking (--static-libpython=yes) needs a Python built WITHOUT --enable-shared, which neither an
+# arbitrary host python3.12 nor the Rust-build image's python:3.12-bookworm base guarantees. Every
+# host therefore builds the identical artifact shape via this one container -- no --no fallback
+# (owner ruling, 2026-09-19: CLAUDE.md's no-environment-branching convention applies here; a build
+# that silently shipped a differently-linked binary depending on host toolchain capability was
+# flagged by two independent reviews and is not an approved exception).
+#   UEDCLI_SKIP_FRONTEND=1   skip the `npm run build` step (reuse an existing web/dist)
+set -euo pipefail
+UEDCLI_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+cd "$UEDCLI_DIR"
+
+VERSION="$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')"
+[ -n "$VERSION" ] || { echo "bin/build-standalone: could not read version from pyproject.toml" >&2; exit 1; }
+
+# --- native extension (uedcli_native): unchanged, the existing host-venv + Rust-build-image path ---
+export UEDCLI_VENV="$UEDCLI_DIR/.venv-standalone"
+# shellcheck source=bin/_venv.sh
+source "$UEDCLI_DIR/bin/_venv.sh"
+ensure_venv
+# A stale UEDCLI_NATIVE_EXT_FRESH=1 exported by an earlier, unrelated command in this same shell
+# (e.g. UEDCLI_SKIP_NATIVE=1 was set for that command, whose early return in ensure_native_ext
+# leaves this var untouched rather than clearing it) must not let the check below pass without
+# ensure_native_ext actually verifying/building anything for THIS run.
+unset UEDCLI_NATIVE_EXT_FRESH
+ensure_native_ext
+[ "${UEDCLI_NATIVE_EXT_FRESH:-}" = "1" ] \
+  || { echo "bin/build-standalone: uedcli_native did not build — refusing to ship a binary without" \
+            "it (see the 'uedcli:' message above)" >&2; exit 1; }
+WHL="$(ls -t "$UEDCLI_DIR/uedcli-native/target/wheels/"uedcli_native-*.whl 2>/dev/null | head -1 || true)"
+if [ -z "$WHL" ]; then
+  # ensure_native_ext's freshness cache can report "fresh" with no wheel FILE surviving on disk --
+  # if the marker already matched and `import uedcli_native` already worked in .venv-standalone
+  # (e.g. from a prior run), it skips rebuilding entirely and never touches target/wheels/ at all.
+  # This build needs an actual wheel to hand to the Nuitka container, so force one real rebuild.
+  echo "bin/build-standalone: uedcli_native is fresh but no wheel file survived -- forcing a" \
+       "rebuild to get one" >&2
+  rm -f "$UEDCLI_VENV/.uedcli-native"
+  unset UEDCLI_NATIVE_EXT_FRESH
+  ensure_native_ext
+  [ "${UEDCLI_NATIVE_EXT_FRESH:-}" = "1" ] \
+    || { echo "bin/build-standalone: forced uedcli_native rebuild failed -- refusing to ship a" \
+              "binary without it (see the 'uedcli:' message above)" >&2; exit 1; }
+  WHL="$(ls -t "$UEDCLI_DIR/uedcli-native/target/wheels/"uedcli_native-*.whl 2>/dev/null | head -1 || true)"
+fi
+[ -n "$WHL" ] || { echo "bin/build-standalone: no uedcli_native wheel found even after forcing a" \
+                        "rebuild -- this should not happen" >&2; exit 1; }
+
+# --- frontend: unchanged, host npm (no Python/static-linking concern here) ---
+if [ -z "${UEDCLI_SKIP_FRONTEND:-}" ]; then
+  ( cd "$UEDCLI_DIR/web" && npm ci && npm run build )
+fi
+[ -d "$UEDCLI_DIR/web/dist" ] \
+  || { echo "bin/build-standalone: web/dist missing — run \`npm run build\` in web/ first, or set" \
+            "UEDCLI_SKIP_FRONTEND=1 only if you intend an API-only serve" >&2; exit 1; }
+
+# --- Nuitka compile: dockerized (see header comment) ---
+_NUITKA_IMAGE="uedcli-nuitka-build"
+_NUITKA_DOCKERFILE="$UEDCLI_DIR/dev-container/Dockerfile.nuitka"
+_ensure_nuitka_build_image() {
+  command -v docker >/dev/null 2>&1 \
+    || { echo "bin/build-standalone: docker is required (the Nuitka build is dockerized for a" \
+              "consistent static-libpython-capable Python on every host)" >&2; return 1; }
+  local want have
+  want="$(sha256sum "$_NUITKA_DOCKERFILE" | cut -d' ' -f1)"
+  have="$(docker image inspect "$_NUITKA_IMAGE" --format '{{ index .Config.Labels "uedcli.dockerfile" }}' 2>/dev/null || true)"
+  [ "$want" = "$have" ] && return 0
+  echo "bin/build-standalone: building the Nuitka-build image $_NUITKA_IMAGE (one-time, compiles a" \
+       "static-libpython-capable Python from source -- several minutes)..." >&2
+  docker build --label "uedcli.dockerfile=$want" -t "$_NUITKA_IMAGE" -f "$_NUITKA_DOCKERFILE" \
+    "$UEDCLI_DIR/dev-container" >&2
+}
+_ensure_nuitka_build_image \
+  || { echo "bin/build-standalone: could not build the Nuitka Docker image" >&2; exit 1; }
+
+OUT_DIR="$UEDCLI_DIR/dist/standalone"
+rm -rf "$OUT_DIR"
+rm -rf "$UEDCLI_DIR/.venv-nuitka-docker"
+
+# `uedcli/__main__.py` uses a relative import (`from .cli.main import main`), which needs real
+# package/-m context to resolve -- the same reason `python uedcli/__main__.py` (as opposed to
+# `python -m uedcli`) fails in plain CPython too. `--python-flag=-m` on the package directory gives
+# Nuitka that same context (confirmed empirically:
+# dev/docs/spikes/2026-09-19-nuitka-standalone-native-ext/spike.md).
+#
+# Run as the invoking uid (outputs land uid-owned, same convention as bin/_venv.sh's own
+# _rust_build_run): the image's Python/Nuitka live under pyenv's root-owned tree, so the venv this
+# run creates is --system-site-packages (inherits the baked-in Nuitka) but writes project deps +
+# the uedcli_native wheel into $UEDCLI_DIR/.venv-nuitka-docker instead, on the bind-mounted (and so
+# uid-owned) filesystem, not into anything root-owned inside the image.
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -e WHL_PATH="uedcli-native/target/wheels/$(basename "$WHL")" \
+  -v "$UEDCLI_DIR":/io -w /io "$_NUITKA_IMAGE" bash -c '
+    set -euo pipefail
+    python3.12 -m venv --system-site-packages .venv-nuitka-docker
+    # Pinned to the same floors as pyproject.toml'\''s own `dependencies` (keep in sync) -- unpinned
+    # would let a future run silently resolve a newer major version into the shipped binary with
+    # neither this Dockerfile nor the source hash changing, undermining "every host builds the
+    # identical, tested artifact shape."
+    .venv-nuitka-docker/bin/pip install --quiet "Pillow>=11" "fastapi>=0.115" "uvicorn>=0.32" \
+      "watchfiles>=0.24" "httpx>=0.27" "websockets>=13"
+    .venv-nuitka-docker/bin/pip install --quiet --no-deps "$WHL_PATH"
+    # `nproc` inside a container reports the HOST'\''s core count, not this cgroup'\''s actual CPU
+    # quota -- Nuitka'\''s Scons backend uses nproc-style detection to size its parallel C-compile
+    # job pool, and over-parallelizing against a throttled cgroup thrashes hard enough to blow past
+    # any reasonable wall-clock budget (reproduced: a run that completes in ~90s unthrottled on the
+    # host stalled past 360s and was killed here before this fix). Compute the real quota instead --
+    # falling back to nproc on cgroup v1 hosts (no unified /sys/fs/cgroup/cpu.max there at all).
+    if [ -r /sys/fs/cgroup/cpu.max ]; then
+      read -r cpu_quota cpu_period < /sys/fs/cgroup/cpu.max
+    else
+      cpu_quota=max cpu_period=100000
+    fi
+    if [ "$cpu_quota" = "max" ]; then
+      jobs="$(nproc)"
+    else
+      jobs=$(( cpu_quota / cpu_period ))
+      [ "$jobs" -ge 1 ] || jobs=1
+    fi
+    echo "bin/build-standalone: capping Nuitka to --jobs=$jobs (this container'\''s real CPU quota)" >&2
+    PYTHONPATH=/io .venv-nuitka-docker/bin/python -m nuitka --mode=standalone --python-flag=-m \
+      --jobs="$jobs" --static-libpython=yes --output-dir=dist/standalone --output-filename=uedcli uedcli
+  '
+
+DIST_DIR="$OUT_DIR/uedcli.dist"
+[ -d "$DIST_DIR" ] || { echo "bin/build-standalone: expected $DIST_DIR — Nuitka output layout" \
+                              "changed, update this script" >&2; exit 1; }
+mkdir -p "$DIST_DIR/web"
+cp -r "$UEDCLI_DIR/web/dist" "$DIST_DIR/web/dist"
+
+TARBALL="$UEDCLI_DIR/dist/uedcli-$VERSION-linux-x86_64.tar.gz"
+tar -C "$OUT_DIR" -czf "$TARBALL" "uedcli.dist"
+echo "bin/build-standalone: built $TARBALL (standalone dir: $DIST_DIR)"

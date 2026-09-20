@@ -12,6 +12,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 
 from .. import config, packages, trunk
@@ -37,6 +38,16 @@ from .textures import build_atlas
 from .watch import TrunkWatcher
 
 logger = logging.getLogger(__name__)
+
+
+def _frontend_dist_dir() -> Path | None:
+    """A built `web/dist` next to this package -- same relative path whether this is a source
+    checkout (repo root's `web/dist`, once `npm run build` has run) or a Nuitka standalone binary
+    (`bin/build-standalone` copies `web/dist` to this same relative spot next to the compiled
+    package). Returns None if not built -- `serve` then stays API-only, exactly as it does today;
+    no binary-vs-source branch, one code path either way."""
+    candidate = Path(__file__).resolve().parents[2] / "web" / "dist"
+    return candidate if candidate.is_dir() else None
 
 
 def _scene_inputs(project):
@@ -682,5 +693,20 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
             pass
         finally:
             connections.discard(websocket)   # also drop on any other receive error, not just clean disconnect
+
+    frontend_dist = _frontend_dist_dir()
+    if frontend_dist is not None:
+        app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+    else:
+        # WARNING, not INFO: `uedcli serve`'s own uvicorn.run(..., log_level="info") only
+        # configures uvicorn's OWN namespaced loggers, not this module's -- an unconfigured
+        # `uedcli.serve.app` logger's effective level is Python's default WARNING, so an .info()
+        # call here would be silently dropped (verified live: isEnabledFor(INFO) is False under
+        # uvicorn's actual LOGGING_CONFIG). A plain dev checkout without `npm run build` hits this
+        # every time, which is expected and not alarming -- but it must actually reach the user,
+        # or a packaging drift (the standalone binary's web/dist copy landing somewhere this path
+        # doesn't check) silently serves API-only with no signal at all, the opposite of the point.
+        logger.warning("frontend_dist_not_found",
+                        extra={"checked_path": str(Path(__file__).resolve().parents[2] / "web" / "dist")})
 
     return app

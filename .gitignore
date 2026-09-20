@@ -2,6 +2,13 @@
 uedcli/game/staging/
 
 .venv/
+# bin/build-standalone's own venv (Nuitka + uedcli_native, never the dev .venv above) and any other
+# one-off build/spike venv, plus the standalone build's output -- the standalone directory + release
+# tarball, always reproducible, never committed. Anchored to the repo root (a leading slash) so this
+# doesn't also swallow an unrelated dist/ a future package or spike might legitimately want to
+# commit at some other depth -- web/dist is already covered by web/.gitignore's own entry.
+/.venv-*/
+/dist/
 __pycache__/
 *.pyc
 *.swp

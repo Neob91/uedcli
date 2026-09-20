@@ -1,0 +1,29 @@
+# uedcli Nuitka-build container — compiles the standalone binary (bin/build-standalone) with a
+# Python built WITHOUT --enable-shared, so Nuitka's --static-libpython=yes actually has something
+# to statically link against. The official python:3.12-bookworm image (dev-container/Dockerfile,
+# the Rust-build container) is built WITH --enable-shared for its own reasons and cannot do this —
+# a bare host's own python3.12 is equally unreliable (distro packaging choice, not ours to control).
+# Dockerizing this step means every host builds the identical artifact shape (owner ruling,
+# 2026-09-19: no environment branching -- CLAUDE.md conventions -- so --static-libpython=yes is
+# REQUIRED here, never a =no fallback).
+FROM debian:bookworm-slim
+
+# The standard CPython-from-source / pyenv build prerequisites, plus patchelf (Nuitka standalone
+# mode's own runtime need) and ccache (Nuitka's own build warns without it).
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      build-essential ca-certificates curl git patchelf ccache \
+      libssl-dev zlib1g-dev libbz2-dev libreadline-dev libsqlite3-dev \
+      libncursesw5-dev xz-utils tk-dev libxml2-dev libxmlsec1-dev libffi-dev liblzma-dev \
+ && rm -rf /var/lib/apt/lists/*
+
+ENV PYENV_ROOT=/opt/pyenv PATH=/opt/pyenv/bin:/opt/pyenv/shims:$PATH
+RUN curl -fsSL https://pyenv.run | bash
+# No --enable-shared here (pyenv's default build config doesn't pass it) -- this is exactly what
+# makes the resulting Python's libpython STATIC, the property this whole image exists for.
+RUN pyenv install 3.12.13 && pyenv global 3.12.13
+
+RUN pip install --no-cache-dir 'nuitka==4.2.1'
+
+# The crate/project is bind-mounted at /io at run time, same convention as dev-container/Dockerfile.
+WORKDIR /io

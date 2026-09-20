@@ -32,9 +32,9 @@ function brushActor(name: string, isMover: boolean): SceneActor {
 // into the raycast candidate set in every mode, not just wireframe) -- so a test must search both
 // roots, not just `renderer.scene.children[0]`.
 function allLines(renderer: Awaited<ReturnType<typeof ReactThreeTestRenderer.create>>) {
-  return renderer.scene.children.flatMap((root) => root.children).filter((c) => c.instance instanceof THREE.LineSegments) as {
-    instance: THREE.LineSegments
-  }[]
+  return renderer.scene.children
+    .flatMap((root) => root.children)
+    .filter((c): c is typeof c & { instance: THREE.LineSegments } => c.instance instanceof THREE.LineSegments)
 }
 
 // Board `mover-wireframe-occluded-by-geometry`: a Mover's wireframe must always composite on top of

@@ -1,0 +1,54 @@
+name: Build standalone binary
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch: {}
+
+jobs:
+  linux-x86_64:
+    runs-on: ubuntu-latest
+    # The "Attach to release" step needs write access to create/update the release and upload the
+    # asset -- GitHub's own default GITHUB_TOKEN permissions are read-only, which would otherwise
+    # 403 that step on every tag push.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Verify the pushed tag matches pyproject.toml's version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          tag_version="${GITHUB_REF_NAME#v}"
+          pkg_version="$(grep -m1 '^version = ' pyproject.toml | sed -E 's/version = "(.*)"/\1/')"
+          if [ "$tag_version" != "$pkg_version" ]; then
+            echo "tag $GITHUB_REF_NAME (version $tag_version) does not match pyproject.toml's" \
+                 "version $pkg_version -- the release asset would be named/tagged inconsistently" >&2
+            exit 1
+          fi
+
+      - name: Build + smoke-test the standalone binary
+        run: |
+          bin/build-standalone
+          bin/test-standalone
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: uedcli-linux-x86_64
+          path: dist/uedcli-*-linux-x86_64.tar.gz
+
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/uedcli-*-linux-x86_64.tar.gz

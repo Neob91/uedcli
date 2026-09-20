@@ -44,6 +44,28 @@ def test_health_reports_the_served_level(tmp_path):
     assert r.json() == {"status": "ok", "level": "TestLevel"}
 
 
+def test_frontend_static_files_served_when_dist_present(tmp_path, monkeypatch):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<html>uedcli frontend</html>")
+    monkeypatch.setattr("uedcli.serve.app._frontend_dist_dir", lambda: dist)
+    app = create_app(_project(tmp_path), "TestLevel")
+    c = TestClient(app)
+    r = c.get("/")
+    assert r.status_code == 200
+    assert "uedcli frontend" in r.text
+    # API routes still work alongside the static mount
+    assert c.get("/api/health").status_code == 200
+
+
+def test_frontend_static_files_absent_serve_stays_api_only(tmp_path, monkeypatch):
+    monkeypatch.setattr("uedcli.serve.app._frontend_dist_dir", lambda: None)
+    app = create_app(_project(tmp_path), "TestLevel")
+    c = TestClient(app)
+    assert c.get("/").status_code == 404
+    assert c.get("/api/health").status_code == 200
+
+
 def test_fault_route_is_absent_by_default(tmp_path):
     app = create_app(_project(tmp_path), "TestLevel")
     c = TestClient(app)
