@@ -167,6 +167,14 @@ describe('Sidebar selection strip', () => {
     expect(screen.getByTestId('selection-strip-surface').textContent).toBe('▦2 surfaces')
   })
 
+  it('renders a very long actor name in full as text (truncation is CSS-only -- jsdom does no layout, see sidebarOverflow.test.ts)', () => {
+    const longName = 'A'.repeat(200)
+    renderSidebar({ selectedActors: [actor(longName)] })
+    const strip = screen.getByTestId('selection-strip-actor')
+    expect(strip.textContent).toBe(`▣${longName} · Engine.Light`)
+    expect(strip.querySelector('.selection-strip-text')).not.toBeNull()
+  })
+
   it('renders both an actor line and a surface line when both kinds are selected', () => {
     const surface: SurfaceSelection = { actorName: 'Room', polyIndex: 4, poly: poly() }
     renderSidebar({ selectedActors: [actor('Room')], selectedSurfaces: [surface] })

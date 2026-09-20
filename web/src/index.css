@@ -286,9 +286,16 @@ body {
 
 /* The persistent "current selection" strip (spec's Decisions section): always visible above
    `.sidebar-body`, independent of which tab is showing AND independent of collapse state. Clicking
-   it switches to the Selection tab. */
+   it switches to the Selection tab.
+
+   Bug fix: no `min-width: 0` meant a long actor/surface name's unclamped text set this flex item's
+   automatic minimum width, which `.sidebar` (an auto-width flex column, same `min-width: 0` pattern
+   as `.sidebar-panel` below) then grew to fit -- the sidebar's WIDTH changed with the selected
+   name's length. `.sidebar-body`'s fixed-width children (36px rail + 280px panel) set the real
+   width; this lets the strip shrink to match instead of forcing it wider. */
 .selection-strip {
   flex: 0 0 auto;
+  min-width: 0;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   border-left: 1px solid var(--border);
@@ -327,6 +334,17 @@ body {
 .selection-strip-icon {
   flex: 0 0 auto;
   color: var(--accent);
+}
+
+/* The actor/surface name+class text, split from `.selection-strip-icon` so only the text truncates
+   -- `min-width: 0` lets this flex-row child (of `.selection-strip-line`) shrink below its own
+   content width instead of overflowing; the ellipsis then shows a long name was cut rather than
+   silently clipping it. */
+.selection-strip-text {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .selection-strip-empty {

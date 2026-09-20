@@ -56,3 +56,24 @@ describe('sidebar overflow CSS (board item sidebar-can-overflow-viewport-needs-s
     }
   })
 })
+
+describe('sidebar fixed-width CSS (bug: sidebar width changed with the selected name\'s length)', () => {
+  it('.selection-strip allows shrinking below its (unclamped) text content width', () => {
+    // Without this, a long actor/surface name's natural width set this flex item's automatic
+    // minimum width, and `.sidebar` (an auto-width flex column) grew to fit it -- the sidebar's
+    // rendered WIDTH changed depending on which item was selected, instead of staying the fixed
+    // ~280px `.sidebar-panel` (below) already establishes.
+    const body = ruleBody('.selection-strip')
+    expect(body).not.toBeNull()
+    expect(body).toMatch(/min-width:\s*0/)
+  })
+
+  it('.selection-strip-text truncates instead of overflowing or silently clipping', () => {
+    const body = ruleBody('.selection-strip-text')
+    expect(body).not.toBeNull()
+    expect(body).toMatch(/min-width:\s*0/)
+    expect(body).toMatch(/overflow:\s*hidden/)
+    expect(body).toMatch(/white-space:\s*nowrap/)
+    expect(body).toMatch(/text-overflow:\s*ellipsis/)
+  })
+})

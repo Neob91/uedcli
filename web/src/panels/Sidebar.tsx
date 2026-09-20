@@ -65,7 +65,7 @@ function SelectionStrip({
               <span className="selection-strip-icon" aria-hidden="true">
                 ▣
               </span>
-              {!collapsed && actorLineText(actors)}
+              {!collapsed && <span className="selection-strip-text">{actorLineText(actors)}</span>}
             </div>
           )}
           {surfaces.length > 0 && (
@@ -73,7 +73,7 @@ function SelectionStrip({
               <span className="selection-strip-icon" aria-hidden="true">
                 ▦
               </span>
-              {!collapsed && surfaceLineText(surfaces)}
+              {!collapsed && <span className="selection-strip-text">{surfaceLineText(surfaces)}</span>}
             </div>
           )}
         </>
