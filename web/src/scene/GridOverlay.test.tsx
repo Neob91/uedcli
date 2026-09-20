@@ -97,4 +97,288 @@ describe('GridOverlay', () => {
       expect(spacingPx).toBeGreaterThanOrEqual(4)
     }
   })
+
+  // Regression for a SEPARATE reported bug ("some lines render wider than others... when I move,
+  // they alternate") -- confirmed live (headless-Chromium pixel measurement of the real rendered
+  // canvas) to be sub-pixel antialiasing on `LineBasicMaterial`'s 1px GL_LINEs: a line's continuous
+  // world->device-pixel position rarely lands on a whole pixel, so it blurs across two at half
+  // strength; which lines are blurred shifts as you pan. Fixed by snapping each line's coordinate to
+  // the nearest device-pixel center before building geometry (`snapToDevicePixel`). These tests read
+  // the actual `BufferGeometry` position buffer back (not a screenshot) and assert every vertex's
+  // computed device-pixel coordinate lands within float32 rounding of a half-integer -- the exact
+  // property a live pixel probe confirmed eliminates the blur.
+  describe('pixel-snapped grid lines (sub-pixel antialiasing fix)', () => {
+    function devicePx(worldCoord: number, originWorld: number, pxPerUnit: number, axisSign: 1 | -1): number {
+      return axisSign * (worldCoord - originWorld) * pxPerUnit
+    }
+
+    function assertHalfIntegerAligned(value: number, label: string) {
+      const frac = value - Math.floor(value)
+      // float32 storage of a value on the order of a few hundred UU has ~1e-3 absolute precision at
+      // worst (Float32BufferAttribute) -- well inside this tolerance, so a genuine snap failure
+      // (e.g. reverting to the raw continuous coordinate) fails this by a wide margin, not a rounding
+      // hair.
+      expect(Math.abs(frac - 0.5), `${label}: expected device-px fractional part 0.5, got ${frac}`).toBeLessThan(1e-2)
+    }
+
+    it('snaps every u-axis (vertical) line to a device-pixel center, at an INTEGER pane width', async () => {
+      const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 0.0625 } // ~16px/UU, matches the live probe
+      const width = 360
+      const height = 428
+      const renderer = await ReactThreeTestRenderer.create(<GridOverlay pose={pose} axis="top" baseGridSize={1} />, {
+        width,
+        height,
+      })
+      await renderer.advanceFrames(1, 0.016)
+
+      let geometry: THREE.BufferGeometry | undefined
+      renderer.scene.children[0].instance.traverse((o: THREE.Object3D) => {
+        const line = o as THREE.LineSegments
+        if (line.isLineSegments) geometry = line.geometry
+      })
+      if (!geometry) throw new Error('no lineSegments found')
+
+      const { right, up } = orthoBasis('top')
+      const halfW = (width / 2) * pose.worldUnitsPerPixel
+      const halfH = (height / 2) * pose.worldUnitsPerPixel
+      const { bounds } = orthoGridWindow(pose.center, right, up, halfW, halfH)
+      const pxPerUnitU = width / (2 * halfW)
+      const { lines } = worldGridLines(1, width, pose.worldUnitsPerPixel, bounds)
+
+      // `worldGridLines` interleaves 'u' (vertical) and 'v' (horizontal) lines in one array, and
+      // `GridOverlay` appends 2 vertices per line in that same order -- only check the 'u' ones here
+      // (their constant coordinate is `pos.getX`, since `pose.center` is the origin so `planeOrigin`
+      // is exactly zero and 'top' maps world X straight onto the geometry's own X).
+      const pos = geometry.attributes.position
+      let checked = 0
+      for (let li = 0; li < lines.length; li++) {
+        if (lines[li].axis !== 'u') continue
+        const worldU = pos.getX(li * 2)
+        assertHalfIntegerAligned(devicePx(worldU, bounds.uMin, pxPerUnitU, 1), `line ${li}`)
+        checked++
+      }
+      expect(checked).toBeGreaterThan(10) // sanity: the sweep actually exercised real lines
+    })
+
+    it('snaps correctly at a FRACTIONAL pane width too (the exact drift this fix closes)', async () => {
+      // Reproduces the real quad-pane shape live-measured (360.5 CSS px) that exposed the
+      // gl.domElement.width-floors-but-viewport-rounds mismatch: using the floored value here left
+      // every line off by a small scale error, compounding to over half a device pixel of drift by
+      // the pane's far edge (crisp only near the snap origin, blurred toward the edges).
+      const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 0.0625 }
+      const width = 360.5
+      const height = 428.7
+      const renderer = await ReactThreeTestRenderer.create(<GridOverlay pose={pose} axis="top" baseGridSize={1} />, {
+        width,
+        height,
+      })
+      await renderer.advanceFrames(1, 0.016)
+
+      let geometry: THREE.BufferGeometry | undefined
+      renderer.scene.children[0].instance.traverse((o: THREE.Object3D) => {
+        const line = o as THREE.LineSegments
+        if (line.isLineSegments) geometry = line.geometry
+      })
+      if (!geometry) throw new Error('no lineSegments found')
+
+      const { right, up } = orthoBasis('top')
+      const halfW = (width / 2) * pose.worldUnitsPerPixel
+      const halfH = (height / 2) * pose.worldUnitsPerPixel
+      const { bounds } = orthoGridWindow(pose.center, right, up, halfW, halfH)
+      // The CORRECT denominator: three.js's real viewport rect (`Math.round(width*dpr)`), not the
+      // floored canvas backing-buffer size -- exactly what `GridOverlay` itself now computes.
+      const pxPerUnitU = Math.round(width) / (2 * halfW)
+      const { lines } = worldGridLines(1, width, pose.worldUnitsPerPixel, bounds)
+
+      const pos = geometry.attributes.position
+      let worstDrift = 0
+      let checked = 0
+      for (let li = 0; li < lines.length; li++) {
+        if (lines[li].axis !== 'u') continue
+        const worldU = pos.getX(li * 2)
+        const raw = devicePx(worldU, bounds.uMin, pxPerUnitU, 1)
+        const frac = raw - Math.floor(raw)
+        worstDrift = Math.max(worstDrift, Math.abs(frac - 0.5))
+        checked++
+      }
+      expect(checked).toBeGreaterThan(10)
+      // Every line, even the farthest from the pane's own snap origin, lands within float32
+      // precision of a half-integer device pixel -- no accumulated scale drift toward the edges.
+      expect(worstDrift).toBeLessThan(1e-2)
+    })
+
+    it('snaps v-axis (horizontal) lines too, in a DIFFERENT ortho pane (front) -- no u/v asymmetry', async () => {
+      const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 0.0625 }
+      const width = 360
+      const height = 428
+      const renderer = await ReactThreeTestRenderer.create(<GridOverlay pose={pose} axis="front" baseGridSize={1} />, {
+        width,
+        height,
+      })
+      await renderer.advanceFrames(1, 0.016)
+
+      let geometry: THREE.BufferGeometry | undefined
+      renderer.scene.children[0].instance.traverse((o: THREE.Object3D) => {
+        const line = o as THREE.LineSegments
+        if (line.isLineSegments) geometry = line.geometry
+      })
+      if (!geometry) throw new Error('no lineSegments found')
+
+      const { right, up } = orthoBasis('front')
+      const halfW = (width / 2) * pose.worldUnitsPerPixel
+      const halfH = (height / 2) * pose.worldUnitsPerPixel
+      const { bounds, planeOrigin } = orthoGridWindow(pose.center, right, up, halfW, halfH)
+      const pxPerUnitU = width / (2 * halfW)
+      const pxPerUnitV = height / (2 * halfH)
+      const { lines } = worldGridLines(1, width, pose.worldUnitsPerPixel, bounds)
+
+      const pos = geometry.attributes.position
+      let checkedU = 0
+      let checkedV = 0
+      for (let li = 0; li < lines.length; li++) {
+        const i = li * 2
+        const line = lines[li]
+        // Every vertex is `planeOrigin + right*u + up*v`; project out `planeOrigin` before reading
+        // back whichever coordinate (`u` via `right`, `v` via `up`) this line held constant --
+        // `right`/`up` are orthonormal, so a dot product recovers the exact scalar.
+        const rel: [number, number, number] = [pos.getX(i) - planeOrigin[0], pos.getY(i) - planeOrigin[1], pos.getZ(i) - planeOrigin[2]]
+        if (line.axis === 'u') {
+          const worldU = rel[0] * right[0] + rel[1] * right[1] + rel[2] * right[2]
+          assertHalfIntegerAligned(devicePx(worldU, bounds.uMin, pxPerUnitU, 1), `u-line ${li}`)
+          checkedU++
+        } else {
+          const worldV = rel[0] * up[0] + rel[1] * up[1] + rel[2] * up[2]
+          assertHalfIntegerAligned(devicePx(worldV, bounds.vMax, pxPerUnitV, -1), `v-line ${li}`)
+          checkedV++
+        }
+      }
+      expect(checkedU).toBeGreaterThan(5)
+      expect(checkedV).toBeGreaterThan(5)
+    })
+
+    it('snaps correctly with a PANNED pose.center (the exact scenario the bug report described)', async () => {
+      // Every other test here uses `center: [0,0,0]`, where `planeOrigin` happens to be zero -- this
+      // pans the camera so `originWorld` (`bounds.uMin`/`vMax`) is a nontrivial value too, directly
+      // covering "when I move, they alternate" rather than only a fixed pose.
+      const pose: OrthoPose = { center: [123.7, 0, -45.3], worldUnitsPerPixel: 0.0625 }
+      const width = 360
+      const height = 428
+      const renderer = await ReactThreeTestRenderer.create(<GridOverlay pose={pose} axis="top" baseGridSize={1} />, {
+        width,
+        height,
+      })
+      await renderer.advanceFrames(1, 0.016)
+
+      let geometry: THREE.BufferGeometry | undefined
+      renderer.scene.children[0].instance.traverse((o: THREE.Object3D) => {
+        const line = o as THREE.LineSegments
+        if (line.isLineSegments) geometry = line.geometry
+      })
+      if (!geometry) throw new Error('no lineSegments found')
+
+      const { right, up } = orthoBasis('top')
+      const halfW = (width / 2) * pose.worldUnitsPerPixel
+      const halfH = (height / 2) * pose.worldUnitsPerPixel
+      const { bounds, planeOrigin } = orthoGridWindow(pose.center, right, up, halfW, halfH)
+      const pxPerUnitU = width / (2 * halfW)
+      const { lines } = worldGridLines(1, width, pose.worldUnitsPerPixel, bounds)
+
+      const pos = geometry.attributes.position
+      let checked = 0
+      for (let li = 0; li < lines.length; li++) {
+        if (lines[li].axis !== 'u') continue
+        const i = li * 2
+        const rel: [number, number, number] = [pos.getX(i) - planeOrigin[0], pos.getY(i) - planeOrigin[1], pos.getZ(i) - planeOrigin[2]]
+        const worldU = rel[0] * right[0] + rel[1] * right[1] + rel[2] * right[2]
+        assertHalfIntegerAligned(devicePx(worldU, bounds.uMin, pxPerUnitU, 1), `panned line ${li}`)
+        checked++
+      }
+      expect(checked).toBeGreaterThan(10)
+    })
+
+    it('snaps correctly at dpr=2 with a fractional CSS width (the fix\'s real motivating case)', async () => {
+      // The whole fix is `Math.round(size.width * dpr)` vs. three.js's floored `gl.domElement.width`
+      // -- a plain `dpr=1` test can't tell those apart when `width` is already an integer. At `dpr=2`
+      // the two formulas diverge even further, so this is the sharpest test of the real mechanism.
+      const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel: 0.0625 }
+      const width = 360.5
+      const height = 428.7
+      const dpr = 2
+      const renderer = await ReactThreeTestRenderer.create(<GridOverlay pose={pose} axis="top" baseGridSize={1} />, {
+        width,
+        height,
+        dpr,
+      })
+      await renderer.advanceFrames(1, 0.016)
+
+      let geometry: THREE.BufferGeometry | undefined
+      renderer.scene.children[0].instance.traverse((o: THREE.Object3D) => {
+        const line = o as THREE.LineSegments
+        if (line.isLineSegments) geometry = line.geometry
+      })
+      if (!geometry) throw new Error('no lineSegments found')
+
+      const { right, up } = orthoBasis('top')
+      const halfW = (width / 2) * pose.worldUnitsPerPixel
+      const halfH = (height / 2) * pose.worldUnitsPerPixel
+      const { bounds } = orthoGridWindow(pose.center, right, up, halfW, halfH)
+      // The correct denominator at dpr=2: three.js's real viewport rect is `Math.round(width * dpr)`,
+      // NOT `Math.round(width) * dpr` -- rounding happens after scaling by dpr, same as `GridOverlay`.
+      const pxPerUnitU = Math.round(width * dpr) / (2 * halfW)
+      const { lines } = worldGridLines(1, width, pose.worldUnitsPerPixel, bounds)
+
+      const pos = geometry.attributes.position
+      let worstDrift = 0
+      let checked = 0
+      for (let li = 0; li < lines.length; li++) {
+        if (lines[li].axis !== 'u') continue
+        const worldU = pos.getX(li * 2)
+        const raw = devicePx(worldU, bounds.uMin, pxPerUnitU, 1)
+        const frac = raw - Math.floor(raw)
+        worstDrift = Math.max(worstDrift, Math.abs(frac - 0.5))
+        checked++
+      }
+      expect(checked).toBeGreaterThan(10)
+      expect(worstDrift).toBeLessThan(1e-2)
+    })
+
+    it('snaps v-axis lines in the front pane across MULTIPLE zoom levels, not just one', async () => {
+      const width = 360
+      const height = 428
+      for (const worldUnitsPerPixel of [0.25, 0.0625, 0.015625]) {
+        const pose: OrthoPose = { center: [0, 0, 0], worldUnitsPerPixel }
+        const renderer = await ReactThreeTestRenderer.create(<GridOverlay pose={pose} axis="front" baseGridSize={1} />, {
+          width,
+          height,
+        })
+        await renderer.advanceFrames(1, 0.016)
+
+        let geometry: THREE.BufferGeometry | undefined
+        renderer.scene.children[0].instance.traverse((o: THREE.Object3D) => {
+          const line = o as THREE.LineSegments
+          if (line.isLineSegments) geometry = line.geometry
+        })
+        if (!geometry) throw new Error('no lineSegments found')
+
+        const { right, up } = orthoBasis('front')
+        const halfW = (width / 2) * worldUnitsPerPixel
+        const halfH = (height / 2) * worldUnitsPerPixel
+        const { bounds, planeOrigin } = orthoGridWindow(pose.center, right, up, halfW, halfH)
+        const pxPerUnitV = height / (2 * halfH)
+        const { lines } = worldGridLines(1, width, worldUnitsPerPixel, bounds)
+
+        const pos = geometry.attributes.position
+        let checkedV = 0
+        for (let li = 0; li < lines.length; li++) {
+          if (lines[li].axis !== 'v') continue
+          const i = li * 2
+          const rel: [number, number, number] = [pos.getX(i) - planeOrigin[0], pos.getY(i) - planeOrigin[1], pos.getZ(i) - planeOrigin[2]]
+          const worldV = rel[0] * up[0] + rel[1] * up[1] + rel[2] * up[2]
+          assertHalfIntegerAligned(devicePx(worldV, bounds.vMax, pxPerUnitV, -1), `zoom=${worldUnitsPerPixel} v-line ${li}`)
+          checkedV++
+        }
+        expect(checkedV, `zoom=${worldUnitsPerPixel}`).toBeGreaterThan(5)
+      }
+    })
+  })
 })
