@@ -293,3 +293,199 @@ def cells_touch_or_overlap(cell_a: ConvexCell, cell_b: ConvexCell) -> bool:
         if a_hi < b_lo - _TOUCH_EPS or b_hi < a_lo - _TOUCH_EPS:
             return False
     return True
+
+
+@dataclass(frozen=True)
+class BrushOverlap:
+    touches: bool
+    matched_pair: tuple[int, int] | None
+    area_estimate: float | None
+
+
+def _bbox(cell: ConvexCell) -> tuple[Vec3, Vec3]:
+    xs = [v[0] for v in cell.vertices]; ys = [v[1] for v in cell.vertices]; zs = [v[2] for v in cell.vertices]
+    return (min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs))
+
+
+def _bbox_intersection_area(a_lo, a_hi, b_lo, b_hi) -> float:
+    """A rough overlap SIZE estimate: the intersection box's two smallest side lengths multiplied --
+    an informational annotation only (spec 'Output format'), never the touch/overlap DETECTION
+    itself, which is exact via SAT regardless of this number."""
+    lo = tuple(max(a_lo[i], b_lo[i]) for i in range(3))
+    hi = tuple(min(a_hi[i], b_hi[i]) for i in range(3))
+    sides = sorted(max(0.0, hi[i] - lo[i]) for i in range(3))
+    return sides[0] * sides[1]   # the two smallest dims approximate the touching cross-section
+
+
+def _plane_basis_2d(normal: Vec3) -> tuple[Vec3, Vec3]:
+    """An arbitrary, deterministic orthonormal (U, V) basis for the plane perpendicular to
+    `normal` -- same construction as `relation.py`'s own `_plane_basis`, not imported from it (this
+    module has no other dependency on `relation.py`'s internals). Only used to compare two faces'
+    OWN footprints against each other in a shared 2-D frame; not meaningful in isolation."""
+    helper = (0.0, 0.0, 1.0) if abs(normal[2]) < 0.9 else (1.0, 0.0, 0.0)
+    u = _norm(_cross(helper, normal))
+    v = _cross(normal, u)
+    return u, v
+
+
+def _footprints_overlap(wa: list[Vec3], wb: list[Vec3], normal: Vec3) -> bool:
+    """Round-2 review finding: two faces can be coplanar (same plane) without their FOOTPRINTS
+    (2-D extents within that plane) actually overlapping -- e.g. two rooms sharing a common floor
+    HEIGHT at opposite ends of a level. `_matched_face_pair` picking the largest-area coplanar face
+    ANYWHERE, with no overlap check, could report a physically unrelated pair as the 'exact' matched
+    boundary. Fixed with a projected-bounding-box overlap test in a shared (U,V) frame -- cheaper
+    than a full polygon clip and sufficient to reject a spatially-separate coincidental coplanar
+    pair, which is the actual failure mode found (not a hairline-adjacent-footprint edge case)."""
+    u, v = _plane_basis_2d(normal)
+    origin = wa[0]
+    proj_a = [(_dot(_sub(p, origin), u), _dot(_sub(p, origin), v)) for p in wa]
+    proj_b = [(_dot(_sub(p, origin), u), _dot(_sub(p, origin), v)) for p in wb]
+    a_lo = (min(p[0] for p in proj_a), min(p[1] for p in proj_a))
+    a_hi = (max(p[0] for p in proj_a), max(p[1] for p in proj_a))
+    b_lo = (min(p[0] for p in proj_b), min(p[1] for p in proj_b))
+    b_hi = (max(p[0] for p in proj_b), max(p[1] for p in proj_b))
+    return (a_lo[0] <= b_hi[0] + _TOUCH_EPS and b_lo[0] <= a_hi[0] + _TOUCH_EPS and
+            a_lo[1] <= b_hi[1] + _TOUCH_EPS and b_lo[1] <= a_hi[1] + _TOUCH_EPS)
+
+
+def _ensure_ccw_2d(poly: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    area2 = sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                for i in range(len(poly)))
+    return list(reversed(poly)) if area2 < 0 else poly
+
+
+def _clip_2d(subject: list[tuple[float, float]], clip: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Sutherland-Hodgman: clip `subject` (any simple polygon) against the CONVEX polygon `clip`
+    (every brush face is convex by construction), edge by edge. Both must be CCW-wound (caller's
+    job -- see `_ensure_ccw_2d`) for the half-plane test's sign to be consistent, same convention
+    `relation.py`'s own `classify_footprint_2d`/`_clip_2d` use for the identical problem in a
+    different module (round 3 review: no public function to call directly, see the module
+    docstring's "Output format" note -- this mirrors that approach rather than reusing it)."""
+    out = list(subject)
+    n = len(clip)
+    for i in range(n):
+        if not out:
+            return []
+        cx0, cy0 = clip[i]
+        cx1, cy1 = clip[(i + 1) % n]
+        ex, ey = cx1 - cx0, cy1 - cy0
+        def inside(px, py):
+            return (px - cx0) * ey - (py - cy0) * ex <= 1e-9
+        new_out = []
+        m = len(out)
+        for j in range(m):
+            cur = out[j]
+            prev = out[j - 1]
+            cur_in, prev_in = inside(*cur), inside(*prev)
+            if cur_in:
+                if not prev_in:
+                    new_out.append(_seg_intersect_2d(prev, cur, (cx0, cy0), ex, ey))
+                new_out.append(cur)
+            elif prev_in:
+                new_out.append(_seg_intersect_2d(prev, cur, (cx0, cy0), ex, ey))
+        out = new_out
+    return out
+
+
+def _seg_intersect_2d(p1, p2, edge_origin, ex, ey):
+    x1, y1 = p1
+    x2, y2 = p2
+    ox, oy = edge_origin
+    dx, dy = x2 - x1, y2 - y1
+    denom = dx * ey - dy * ex
+    if abs(denom) < 1e-12:
+        return p2
+    t = ((ox - x1) * ey - (oy - y1) * ex) / denom
+    return (x1 + t * dx, y1 + t * dy)
+
+
+def _shoelace_area_2d(poly: list[tuple[float, float]]) -> float:
+    if len(poly) < 3:
+        return 0.0
+    return abs(sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                    for i in range(len(poly)))) / 2.0
+
+
+def _footprint_overlap_area(wa: list[Vec3], wb: list[Vec3], normal: Vec3) -> float:
+    """The ACTUAL shared area between two coplanar faces' footprints -- round-3 review found
+    `_matched_face_pair` was reporting face A's OWN full area even for a PARTIAL overlap (the
+    footprint-overlap gate added in round 3 allows partial/bbox overlap through, not just
+    identical footprints), contradicting the 'exact area' claim in `BrushOverlap`'s docstring and
+    the spec's 'Output format' section. Projects both faces into the same (U,V) frame
+    `_footprints_overlap` already uses, CCW-normalizes each (a face's own winding faces ITS OWN
+    outward normal, which can project CW or CCW depending on the chosen (U,V) handedness -- same
+    reasoning `relation.py`'s `classify_footprint_2d` documents for the identical problem), clips
+    B against A, and shoelaces the result. Zero-vertex clip result (no overlap at all, despite
+    passing the cheaper bbox pre-check) returns 0.0, not an error -- a real, if rare, case for two
+    footprints whose bboxes touch but whose actual polygons don't (an L-shaped face's notch)."""
+    u, v = _plane_basis_2d(normal)
+    origin = wa[0]
+    proj_a = _ensure_ccw_2d([(_dot(_sub(p, origin), u), _dot(_sub(p, origin), v)) for p in wa])
+    proj_b = _ensure_ccw_2d([(_dot(_sub(p, origin), u), _dot(_sub(p, origin), v)) for p in wb])
+    clipped = _clip_2d(proj_b, proj_a)
+    return _shoelace_area_2d(clipped)
+
+
+def _matched_face_pair(actor_a, actor_b) -> tuple[int, int, float] | None:
+    """A SINGLE poly pair (one from each brush) whose planes are near-coincident AND whose
+    footprints actually overlap -- the 'clean shared flat boundary' case. Returns
+    (idx_a, idx_b, overlap_area) or None -- `overlap_area` is the ACTUAL shared footprint area
+    (`_footprint_overlap_area`), not either face's own full area, so a partial overlap reports the
+    true shared size, not an overstated one. Deliberately independent of ConvexCell decomposition:
+    this asks about the brushes' ORIGINAL faces, which is what a `Name:idx` drill-down selector
+    must name. Ranks candidates by this SAME overlap area (the pair sharing the most real area,
+    not the pair whose face-A happens to be biggest)."""
+    best = None
+    for ia, pa in enumerate(actor_a.brush.polys):
+        try:
+            na = polyalign._world_normal(actor_a, pa, ref=f"{actor_a.name}:{ia}")
+        except polyalign.PolyAlignError:
+            continue
+        wa = polyalign._world_verts(actor_a, pa)
+        for ib, pb in enumerate(actor_b.brush.polys):
+            try:
+                nb = polyalign._world_normal(actor_b, pb, ref=f"{actor_b.name}:{ib}")
+            except polyalign.PolyAlignError:
+                continue
+            if abs(abs(_dot(na, nb)) - 1.0) > 1e-3:      # not parallel/anti-parallel -> not coplanar
+                continue
+            wb = polyalign._world_verts(actor_b, pb)
+            if abs(_dot(_sub(wb[0], wa[0]), na)) > _TOUCH_EPS:   # not on the same plane
+                continue
+            if not _footprints_overlap(wa, wb, na):     # coplanar but spatially unrelated -- reject
+                continue
+            area = _footprint_overlap_area(wa, wb, na)
+            if area <= 0.0:      # bboxes touched but the real polygons don't (e.g. an L-shape notch)
+                continue
+            if best is None or area > best[2]:
+                best = (ia, ib, area)
+    return best
+
+
+
+def brush_overlap(actor_a, actor_b, *, cache=None) -> BrushOverlap:
+    """Exact touch/overlap between two brushes' full volumes (via decomposition + SAT over every
+    cell pair), plus a matched single face pair + exact area when one clean shared boundary exists,
+    else a bounding-box-intersection area ESTIMATE (informational only -- detection stays exact).
+    `cache`: see `decompose_convex` -- pass the SAME dict `build_graph` uses for every brush pair."""
+    cells_a = decompose_convex(actor_a, cache=cache)
+    cells_b = decompose_convex(actor_b, cache=cache)
+    touches = any(cells_touch_or_overlap(ca, cb) for ca in cells_a for cb in cells_b)
+    if not touches:
+        return BrushOverlap(touches=False, matched_pair=None, area_estimate=None)
+    matched = _matched_face_pair(actor_a, actor_b)
+    if matched is not None:
+        ia, ib, area = matched
+        return BrushOverlap(touches=True, matched_pair=(ia, ib), area_estimate=area)
+    a_lo, a_hi = None, None
+    for c in cells_a:
+        lo, hi = _bbox(c)
+        a_lo = lo if a_lo is None else tuple(min(a_lo[i], lo[i]) for i in range(3))
+        a_hi = hi if a_hi is None else tuple(max(a_hi[i], hi[i]) for i in range(3))
+    b_lo, b_hi = None, None
+    for c in cells_b:
+        lo, hi = _bbox(c)
+        b_lo = lo if b_lo is None else tuple(min(b_lo[i], lo[i]) for i in range(3))
+        b_hi = hi if b_hi is None else tuple(max(b_hi[i], hi[i]) for i in range(3))
+    return BrushOverlap(touches=True, matched_pair=None,
+                         area_estimate=_bbox_intersection_area(a_lo, a_hi, b_lo, b_hi))

@@ -229,3 +229,78 @@ def test_edge_cross_axis_is_needed_for_two_rotated_convex_shapes():
         < min(actorgraph._dot(ax, v) for v in ca.vertices) - actorgraph._TOUCH_EPS
         for ax in face_normals)
     assert separated_by_a_face is False
+
+
+def test_brush_overlap_touching_flat_face_gives_matched_pair_and_exact_area():
+    a = _brush("A", cube(64, 64, 8), loc=(0, 0, 0))     # top face at Z=4, area 64*64=4096
+    b = _brush("B", cube(64, 64, 8), loc=(0, 0, 8))     # bottom face at Z=4
+    ov = actorgraph.brush_overlap(a, b)
+    assert ov.touches
+    assert ov.matched_pair is not None
+    assert ov.area_estimate == pytest.approx(4096.0, rel=1e-3)
+
+
+def test_brush_overlap_partial_footprint_reports_actual_shared_area_not_full_face_area():
+    # Round-3 review finding: allowing a PARTIAL (not just identical) footprint overlap through
+    # `_footprints_overlap` without also fixing the reported area meant a partial match reported
+    # face A's own FULL area, contradicting `BrushOverlap`'s "exact area" claim. A: top face at
+    # Z=4, X,Y in [-32,32] (area 4096). B: bottom face at Z=4, X,Y in [0,64] (also area 4096, offset
+    # by (32,32) so only the X,Y in [0,32] quadrant genuinely overlaps -- area 32*32=1024).
+    a = _brush("A", cube(64, 64, 8), loc=(0, 0, 0))
+    b = _brush("B", cube(64, 64, 8), loc=(32, 32, 8))
+    ov = actorgraph.brush_overlap(a, b)
+    assert ov.touches
+    assert ov.matched_pair is not None
+    assert ov.area_estimate == pytest.approx(1024.0, rel=1e-3)   # the SHARED area, not either face's 4096
+
+
+def test_brush_overlap_no_touch():
+    a = _brush("A", cube(64, 64, 8), loc=(0, 0, 0))
+    b = _brush("B", cube(64, 64, 8), loc=(0, 0, 128))
+    ov = actorgraph.brush_overlap(a, b)
+    assert not ov.touches
+    assert ov.matched_pair is None
+    assert ov.area_estimate is None
+
+
+def test_brush_overlap_volume_overlap_no_matched_pair():
+    a = _brush("A", cube(64, 64, 64), loc=(0, 0, 0))
+    b = _brush("B", cube(64, 64, 64), loc=(32, 32, 32))   # genuine 3-D corner overlap, no shared flat face
+    ov = actorgraph.brush_overlap(a, b)
+    assert ov.touches
+    assert ov.matched_pair is None
+    assert ov.area_estimate is not None   # bounding-box-intersection estimate, not exact
+
+
+def test_footprints_overlap_rejects_coplanar_but_spatially_separate_faces():
+    # Round-2 review finding: `_matched_face_pair` used to accept ANY coplanar pair (same plane),
+    # with no check that their actual 2-D footprints overlap -- two rooms sharing a common floor
+    # HEIGHT at opposite ends of a level would wrongly "match." Direct unit test of the fix, not a
+    # full adversarial brush pair (simpler to get exactly right): two quads on the SAME plane
+    # (Z=0, normal (0,0,1)), disjoint in X by a clean 10-unit gap.
+    quad_a = [(Decimal(0), Decimal(0), Decimal(0)), (Decimal(10), Decimal(0), Decimal(0)),
+              (Decimal(10), Decimal(10), Decimal(0)), (Decimal(0), Decimal(10), Decimal(0))]
+    quad_b = [(Decimal(20), Decimal(0), Decimal(0)), (Decimal(30), Decimal(0), Decimal(0)),
+              (Decimal(30), Decimal(10), Decimal(0)), (Decimal(20), Decimal(10), Decimal(0))]
+    wa = [tuple(float(c) for c in v) for v in quad_a]
+    wb = [tuple(float(c) for c in v) for v in quad_b]
+    assert not actorgraph._footprints_overlap(wa, wb, (0.0, 0.0, 1.0))
+
+
+def test_footprints_overlap_accepts_genuinely_overlapping_coplanar_faces():
+    quad_a = [(Decimal(0), Decimal(0), Decimal(0)), (Decimal(10), Decimal(0), Decimal(0)),
+              (Decimal(10), Decimal(10), Decimal(0)), (Decimal(0), Decimal(10), Decimal(0))]
+    quad_b = [(Decimal(5), Decimal(5), Decimal(0)), (Decimal(15), Decimal(5), Decimal(0)),
+              (Decimal(15), Decimal(15), Decimal(0)), (Decimal(5), Decimal(15), Decimal(0))]
+    wa = [tuple(float(c) for c in v) for v in quad_a]
+    wb = [tuple(float(c) for c in v) for v in quad_b]
+    assert actorgraph._footprints_overlap(wa, wb, (0.0, 0.0, 1.0))
+
+
+def test_brush_overlap_degenerate_brush_reports_named_error_not_crash():
+    from uedcli.model import Brush, Polygon
+    bad = Brush(model_name="Model_Bad", polys=[Polygon(vertices=[])])   # no faces at all -> no solid
+    a = _brush("A", bad)
+    b = _brush("B", cube(64, 64, 64))
+    with pytest.raises(actorgraph.DegenerateBrushError, match="A"):
+        actorgraph.brush_overlap(a, b)
