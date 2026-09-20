@@ -1,33 +1,14 @@
 +++
 priority = "p2"
 kind = "investigate"
-summary = "joystick touch-detection is static/unreliable; owner wants Q/E replaced with a modifier+W/S/LMB vertical scheme -- needs a conflict-free modifier"
+summary = "Owner wants Q/E replaced with a modifier+W/S/LMB vertical-move scheme -- needs a conflict-free modifier, and RE against UED22's own bindings"
 +++
 
-# Joystick visibility detection + Q/E replacement
+# Replace Q/E with a modifier + W/S (and LMB) for vertical movement
 
-Two related owner questions, logged together (2026-09-19).
-
-## 1. Joystick touch detection: static capability check, possibly wrong approach
-
-`web/src/scene/touchCapability.ts`'s `isTouchCapableDevice()` is computed ONCE per mount via static
-feature detection (`'ontouchstart' in window || navigator.maxTouchPoints > 0`), gating whether
-`MoveJoystick` renders at all (`Viewport3D.tsx`). This is a known-unreliable heuristic -- it
-false-positives on hybrid/touchscreen laptops (and, per this session's own findings, Steam Deck)
-even when the device is only ever driven by a mouse, and it can never correct itself mid-session if
-wrong.
-
-Owner's question: should the joystick instead only appear once a REAL touch event actually fires
-(lazy, event-driven detection on the first genuine `pointerdown`/`touchstart` with
-`pointerType === 'touch'`), rather than sniffing capability up front? This would eliminate false
-positives entirely -- a device that merely CAN touch but is never touched would never show the
-control -- at the cost of the joystick not being visible from the very first frame on a genuinely
-touch-first device (it would pop in after the user's first real touch). Needs a design decision, not
-just an implementation swap: does "appears after first touch, not before" read as broken/missing on
-a real touchscreen, or is it an acceptable, even unnoticeable, tradeoff? Worth prototyping both to
-compare, or checking how other touch-aware web apps handle this same detection problem.
-
-## 2. Replace Q/E with a modifier + W/S (and LMB) for vertical movement
+Split out of `joystick-touch-detection-and-vertical-move` (that item's touch-detection half is done;
+see its `done/` record) -- this half is unrelated (a keyboard-binding question, not a detection
+question) and still open.
 
 Owner isn't sold on Q/E for up/down and would rather hold a modifier key that repurposes the
 EXISTING W/S keys (and LMB) for vertical movement instead of a dedicated key pair. Needs: which
@@ -64,10 +45,8 @@ not assumed safe just because the channels differ.
    already known.
 2. Cross-reference against this app's own already-claimed modifiers (listed above) and decide
    whether reuse is safe or a fresh modifier is needed.
-3. Separately, decide the touch-detection question (event-driven vs. static) -- unrelated to the
-   modifier-key question, bundled here only because both came from the same owner message.
 
 ## Where to look
 
-`web/src/scene/touchCapability.ts`, `web/src/scene/Viewport3D.tsx` (`FlyKeys`, `onDrag`, `FLY_KEYS`),
-`web/src/scene/dragGesture.ts`, `dev/docs/unrealed/commands.md`, `GUI-PARITY.md` (RE method).
+`web/src/scene/Viewport3D.tsx` (`FlyKeys`, `onDrag`, `FLY_KEYS`), `web/src/scene/dragGesture.ts`,
+`dev/docs/unrealed/commands.md`, `GUI-PARITY.md` (RE method).

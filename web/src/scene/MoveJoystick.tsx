@@ -7,9 +7,9 @@
 // ref Viewport3D.tsx applies with `flyMove` -- see `TouchFlyInput` there) -- it emits the same
 // `{forward,right,up}` shape the keyboard (`FlyKeys`) already produces, never a parallel movement
 // system. Rendered only inside Viewport3D.tsx (the perspective pane), so it never appears in an
-// ortho pane by construction; gated to touch-capable devices only (`touchCapability.ts`) -- a
-// touch-capable laptop with a keyboard still sees it (the board item's own constraint), but a
-// mouse-only desktop never does.
+// ortho pane by construction; gated on the LAST input actually used (`inputMode.ts`), not a one-time
+// device capability guess -- hidden until a real touch is seen, then hidden again the moment a real
+// keyboard or mouse input arrives (mirrors how games switch controller-vs-KBM prompts).
 //
 // Up/down icons: plain unicode chevrons (▲/▼), matching this app's existing toolbar icon
 // convention (QuadLayout.tsx's sidebar-collapse toggle uses ◀/▶ the same way) rather than an SVG --
@@ -17,9 +17,9 @@
 import { useCallback, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
+import { useInputMode } from './inputMode'
 import { joystickVector } from './joystick'
 import type { JoystickVector } from './joystick'
-import { isTouchCapableDevice } from './touchCapability'
 
 // The ring's visual radius, in CSS px -- both the drawn ring size and the drag-clamp radius
 // `joystickVector` normalizes against, so the dot never visually escapes its own ring.
@@ -36,8 +36,7 @@ export interface MoveJoystickProps {
 }
 
 export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickProps) {
-  // Computed once per mount, not per render -- a device's touch capability doesn't change mid-session.
-  const [touchCapable] = useState(isTouchCapableDevice)
+  const inputMode = useInputMode()
   const dragPointerId = useRef<number | null>(null)
   // The RAW (unclamped) accumulated drag offset -- accumulated via `movementX`/`movementY` (this
   // app's own pointer-drag convention, `dragGesture.ts`), not absolute screen coordinates, so no
@@ -63,10 +62,10 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
   // input never returned to 0 after touchend/touchcancel), fixed with it.
   //
   // ALL of that is gated on `e.pointerType === 'touch'` -- a genuine follow-on regression
-  // (mobile-joystick-mouse-nav-regression): `isTouchCapableDevice` (above) false-positives on a
-  // hybrid/touchscreen laptop that also has a mouse (a documented feature-detection limitation, and
-  // an explicit design constraint from the original board item -- see this file's own top comment),
-  // so the cluster can render even for a mouse-only user. Before this gate, a MOUSE event landing on
+  // (mobile-joystick-mouse-nav-regression), still relevant under `inputMode.ts`'s dynamic gating: a
+  // hybrid touchscreen+mouse device can legitimately be showing the cluster (it just saw a real
+  // touch) while the CURRENT event is a mouse/pen -- e.g. the same click that switches `inputMode`
+  // back to `'desktop'` still needs to land here first. Before this gate, a MOUSE event landing on
   // the stick/buttons still unconditionally stopped propagation and stole pointer capture, silently
   // swallowing normal camera-navigation clicks/drags in that screen corner. A non-touch pointer must
   // be a complete no-op here -- no `stopPropagation`, no `setPointerCapture`, no state change -- so
@@ -127,7 +126,7 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
     [onVerticalChange],
   )
 
-  if (!touchCapable) return null
+  if (inputMode !== 'touch') return null
 
   return (
     <div className="move-joystick-controls" data-testid="move-joystick-controls">

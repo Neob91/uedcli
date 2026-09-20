@@ -15,36 +15,50 @@ beforeAll(() => {
 
 afterEach(cleanup)
 
-// `isTouchCapableDevice` reads real browser globals (`touchCapability.ts`'s own impure half) --
-// mocked here the same way QuadLayout.test.tsx mocks a sibling module, so each test controls
-// gating directly instead of poking jsdom's `navigator`/`window`.
-vi.mock('./touchCapability', () => ({
-  isTouchCapableDevice: vi.fn(),
+// `useInputMode` reads real global `pointerdown`/`keydown` listeners + `localStorage` (`inputMode.ts`'s
+// own impure half) -- mocked here the same way QuadLayout.test.tsx mocks a sibling module, so each
+// test controls gating directly instead of dispatching real global events.
+vi.mock('./inputMode', () => ({
+  useInputMode: vi.fn(),
 }))
-import { isTouchCapableDevice } from './touchCapability'
+import { useInputMode } from './inputMode'
 
-function setTouchCapable(capable: boolean) {
-  vi.mocked(isTouchCapableDevice).mockReturnValue(capable)
+function setInputMode(mode: 'touch' | 'desktop') {
+  vi.mocked(useInputMode).mockReturnValue(mode)
 }
 
-describe('MoveJoystick touch gating', () => {
-  it('renders nothing on a non-touch-capable device', () => {
-    setTouchCapable(false)
+describe('MoveJoystick input-mode gating', () => {
+  it('renders nothing in desktop mode', () => {
+    setInputMode('desktop')
     render(<MoveJoystick onStickChange={() => {}} onVerticalChange={() => {}} />)
     expect(screen.queryByTestId('move-joystick-controls')).toBeNull()
   })
 
-  it('renders the cluster on a touch-capable device', () => {
-    setTouchCapable(true)
+  it('renders the cluster in touch mode', () => {
+    setInputMode('touch')
     render(<MoveJoystick onStickChange={() => {}} onVerticalChange={() => {}} />)
     expect(screen.getByTestId('move-joystick-controls')).toBeTruthy()
     expect(screen.getByLabelText('Move up')).toBeTruthy()
     expect(screen.getByLabelText('Move down')).toBeTruthy()
   })
+
+  it('mounts and unmounts as the reported input mode changes', () => {
+    setInputMode('desktop')
+    const { rerender } = render(<MoveJoystick onStickChange={() => {}} onVerticalChange={() => {}} />)
+    expect(screen.queryByTestId('move-joystick-controls')).toBeNull()
+
+    setInputMode('touch')
+    rerender(<MoveJoystick onStickChange={() => {}} onVerticalChange={() => {}} />)
+    expect(screen.getByTestId('move-joystick-controls')).toBeTruthy()
+
+    setInputMode('desktop')
+    rerender(<MoveJoystick onStickChange={() => {}} onVerticalChange={() => {}} />)
+    expect(screen.queryByTestId('move-joystick-controls')).toBeNull()
+  })
 })
 
 describe('MoveJoystick stick drag', () => {
-  beforeAll(() => setTouchCapable(true))
+  beforeAll(() => setInputMode('touch'))
 
   it('reports zero on pointerdown before any movement', () => {
     const onStickChange = vi.fn()
@@ -110,16 +124,17 @@ describe('MoveJoystick stick drag', () => {
   })
 })
 
-// mobile-joystick-mouse-nav-regression: `isTouchCapableDevice` false-positives on a hybrid/
-// touchscreen laptop that also has a mouse, so the cluster can render there too (an explicit design
-// constraint -- see this file's own top comment). Before the `pointerType` gate, a MOUSE event
-// landing on the stick/buttons still unconditionally called `stopPropagation()`/`setPointerCapture`,
+// mobile-joystick-mouse-nav-regression: the cluster can be showing (mode is `'touch'`, mocked here)
+// on a hybrid touchscreen+mouse device while the CURRENT event is a mouse pointer -- e.g. the same
+// click that will switch `inputMode` back to `'desktop'` still has to land here first. Before the
+// `pointerType` gate, a MOUSE event landing on the stick/buttons still unconditionally called
+// `stopPropagation()`/`setPointerCapture`,
 // swallowing normal camera-navigation clicks/drags in that corner -- reproduced live (see
 // `dev/docs/board/done/mobile-joystick-non-functional-updown-stuck/overview.md`'s follow-on note).
 // These tests prove a mouse pointer is a complete no-op: it reaches the ancestor container
 // untouched, is never captured, and never changes the joystick's own reported state.
 describe('MoveJoystick ignores non-touch pointers entirely', () => {
-  beforeAll(() => setTouchCapable(true))
+  beforeAll(() => setInputMode('touch'))
 
   it('a mouse drag on the stick reaches the ancestor container and reports nothing', () => {
     const onStickChange = vi.fn()
@@ -169,7 +184,7 @@ function renderInsideCapturingContainer(onStickChange = vi.fn(), onVerticalChang
 }
 
 describe('MoveJoystick stops propagation (does not leak touches to an ancestor container)', () => {
-  beforeAll(() => setTouchCapable(true))
+  beforeAll(() => setInputMode('touch'))
 
   it('a stick drag never reaches the ancestor container, and still reports the drag correctly', () => {
     const onStickChange = vi.fn()
@@ -197,7 +212,7 @@ describe('MoveJoystick stops propagation (does not leak touches to an ancestor c
 })
 
 describe('MoveJoystick up/down buttons', () => {
-  beforeAll(() => setTouchCapable(true))
+  beforeAll(() => setInputMode('touch'))
 
   it('pressing up reports 1, releasing reports 0', () => {
     const onVerticalChange = vi.fn()
