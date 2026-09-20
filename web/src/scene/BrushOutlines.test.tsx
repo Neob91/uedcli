@@ -23,6 +23,7 @@ function brushActor(name: string, isMover: boolean): SceneActor {
     sprite: null,
     radii: null,
     is_mover: isMover,
+    directional_arrow: null,
   }
 }
 

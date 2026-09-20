@@ -72,7 +72,7 @@ describe('DirectionalArrows', () => {
       new Set(['NPC0']),
     )
     expect(found).toHaveLength(1)
-    expect(found[0].material.color.getHex(THREE.LinearSRGBColorSpace)).toBe(C_ACTOR_ARROW)
+    expect((found[0].material as THREE.LineBasicMaterial).color.getHex(THREE.LinearSRGBColorSpace)).toBe(C_ACTOR_ARROW)
     expect(found[0].geometry.getAttribute('position').count).toBe(lines.length / 3)
   })
 
@@ -83,7 +83,7 @@ describe('DirectionalArrows', () => {
       new Set(),
     )
     expect(found).toHaveLength(1)
-    expect(found[0].material.color.getHex(THREE.LinearSRGBColorSpace)).toBe(C_ACTOR_ARROW)
+    expect((found[0].material as THREE.LineBasicMaterial).color.getHex(THREE.LinearSRGBColorSpace)).toBe(C_ACTOR_ARROW)
   })
 
   it('batches multiple visible arrows into ONE lineSegments draw call', async () => {
