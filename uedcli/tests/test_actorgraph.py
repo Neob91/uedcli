@@ -321,7 +321,16 @@ def test_point_on_internal_decomposition_boundary_of_l_shape_still_contained():
     # decomposition itself introduced (not a real outer surface). A point sitting exactly on that
     # internal wall, well inside the true L volume, must not false-negative from tolerance stacking
     # across two adjacent cells (spec 'Containment reuses the SAME decomposition').
+    # The real split is at y=64 (Cell 0: x∈[0,64], y∈[64,128]; Cell 1: x∈[0,128], y∈[0,64]).
     a_l_shape = _l_shaped_brush()
-    # A point on the shared internal wall at x=64 (the L's own inner corner), well inside in y/z:
-    point_on_internal_wall = (64.0, 32.0, 0.0)
+    # A point exactly on the shared internal wall at y=64, within both cells' x range [0,64]:
+    point_on_internal_wall = (32.0, 64.0, 0.0)
     assert actorgraph.point_in_brush(a_l_shape, point_on_internal_wall)
+
+    # Verify the tolerance is actually load-bearing: a point offset from the true boundary
+    # by more than _SPLIT_EPS but less than _VERTEX_EPS should still be reported as contained
+    # (proving the wider tolerance is genuinely needed, not decorative). The boundary is at y=64;
+    # offset by 0.0005 (between _SPLIT_EPS=1e-4 and _VERTEX_EPS=1e-3):
+    point_near_boundary = (32.0, 64.0005, 0.0)  # offset > _SPLIT_EPS, < _VERTEX_EPS
+    assert actorgraph.point_in_brush(a_l_shape, point_near_boundary), \
+        "Point within _VERTEX_EPS of boundary should be reported as contained"

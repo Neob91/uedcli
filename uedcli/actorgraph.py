@@ -502,6 +502,6 @@ def point_in_brush(actor, point: Vec3, *, cache=None) -> bool:
     contained by whichever cell's tolerance band it lands in, not double-penalised.
     `cache`: see `decompose_convex`."""
     for cell in decompose_convex(actor, cache=cache):
-        if all(_dot(n, point) <= d + _SPLIT_EPS * 10 for n, d in cell.half_spaces):
+        if all(_dot(n, point) <= d + _VERTEX_EPS for n, d in cell.half_spaces):
             return True
     return False
