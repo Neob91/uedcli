@@ -420,3 +420,53 @@ def test_mover_inside_subtract_gives_contains_never_carved_by(mover_class_index)
                                       order_index={"Room": 0, "Door": 1}, class_index=mover_class_index)
     assert len(edges) == 1
     assert edges[0].relation == "contains" and edges[0].src == "Room" and edges[0].dst == "Door"
+
+
+def _level(*actors):
+    from uedcli.model import Level
+    return Level(actors={a.name: a for a in actors}, order=[a.name for a in actors])
+
+
+def test_build_graph_multi_edge_fanout_add_straddling_two_subtracts(mover_class_index):
+    room1 = make_brush_actor("Room1", cube(64, 64, 64), location=(0, 0, 0), csg="subtract")
+    room2 = make_brush_actor("Room2", cube(64, 64, 64), location=(64, 0, 0), csg="subtract")
+    wall = make_brush_actor("Wall", cube(8, 128, 64), location=(32, 32, 0), csg="add")
+    level = _level(room1, room2, wall)
+    graph = actorgraph.build_graph(level, mover_class_index)
+    contains = [e for e in graph.edges if e.relation == "contains" and e.dst == "Wall"]
+    assert {e.src for e in contains} == {"Room1", "Room2"}   # BOTH, not just one
+
+
+def test_build_graph_multi_edge_fanout_subtract_carving_two_different_adds(mover_class_index):
+    # Spec Test Strategy item 3's third fan-out case (the other two are covered above/below): a
+    # Subtract carving through two different Adds gets a `carved_by` edge to BOTH, not just one.
+    wall1 = make_brush_actor("Wall1", cube(64, 64, 64), location=(0, 0, 0), csg="add")
+    wall2 = make_brush_actor("Wall2", cube(64, 64, 64), location=(64, 0, 0), csg="add")   # touches Wall1
+    door = make_brush_actor("Door", cube(16, 64, 64), location=(32, 0, 0), csg="subtract")  # straddles both
+    level = _level(wall1, wall2, door)   # Door is LATER in level.order than both walls
+    graph = actorgraph.build_graph(level, mover_class_index)
+    carved_by = [e for e in graph.edges if e.relation == "carved_by" and e.dst == "Door"]
+    assert {e.src for e in carved_by} == {"Wall1", "Wall2"}   # BOTH, not just one
+
+
+def test_build_graph_non_brush_actor_contains_from_every_containing_brush(mover_class_index):
+    outer = make_brush_actor("Outer", cube(128, 128, 128), csg="subtract")
+    inner = make_brush_actor("Inner", cube(64, 64, 64), csg="subtract")   # nested inside Outer
+    from uedcli.model import Actor
+    light = Actor(name="Light0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)))
+    level = _level(outer, inner, light)
+    graph = actorgraph.build_graph(level, mover_class_index)
+    contains = [e for e in graph.edges if e.dst == "Light0"]
+    assert {e.src for e in contains} == {"Outer", "Inner"}
+
+
+def test_build_graph_degenerate_brush_is_skipped_not_crashed(mover_class_index):
+    from uedcli.model import Brush, Polygon, Actor
+    good = make_brush_actor("Good", cube(64, 64, 64), csg="subtract")
+    bad_brush = Brush(model_name="Model_Bad", polys=[Polygon(vertices=[])])
+    bad = make_brush_actor("Bad", bad_brush, csg="subtract")
+    level = _level(good, bad)
+    graph = actorgraph.build_graph(level, mover_class_index)
+    assert ("Bad", ) in [(n,) for n, _ in graph.skipped] or any(n == "Bad" for n, _ in graph.skipped)
+    assert all(e.src != "Bad" and e.dst != "Bad" for e in graph.edges)
+    assert "Good" in graph.node_names and "Bad" in graph.node_names   # still a NODE, just no edges

@@ -561,3 +561,60 @@ def classify_pair(name_a, actor_a, name_b, actor_b, *, order_index: dict, class_
     if order_index[sub_name] < order_index[other_name]:
         return [Edge(src=sub_name, dst=other_name, relation="contains", directed=True, **edge_kwargs)]
     return [Edge(src=other_name, dst=sub_name, relation="carved_by", directed=True, **edge_kwargs)]
+
+
+@dataclass(frozen=True)
+class ActorGraph:
+    node_names: list[str]
+    edges: list[Edge]
+    skipped: list[tuple[str, str]]
+
+
+def build_graph(level, class_index) -> "ActorGraph":
+    """Every actor is a node. Every BRUSH pair is tested via `classify_pair` (skipping any brush
+    that raises `DegenerateBrushError`, recorded once in `skipped`, never re-attempted for other
+    pairs it would have been in). Every non-brush actor gets a `contains` edge from EVERY brush
+    whose volume contains its Location -- the multi-edge fan-out rule, same as brush-brush pairs.
+
+    Owns ONE `cache` dict for the whole call and threads it through every `classify_pair`/
+    `point_in_brush` call below -- per `decompose_convex`'s own docstring, this is what keeps
+    decomposition at O(N) (once per brush) instead of O(N^2) (recomputed on every pair a brush
+    participates in)."""
+    order_index = {name: i for i, name in enumerate(level.order) if level.actors[name].brush is not None}
+    brush_names = list(order_index)
+    point_names = [n for n in level.order if level.actors[n].brush is None]
+
+    skipped: dict[str, str] = {}
+    edges: list[Edge] = []
+    cache: dict[str, list[ConvexCell]] = {}
+
+    def _safe(name):
+        """Probe once whether `name`'s brush decomposes cleanly; cache the verdict so a later pair
+        involving the same bad brush doesn't re-raise (and re-append to `skipped`). A CLEAN probe's
+        result lands in `cache` via `decompose_convex`'s own memoization, so this is also the one
+        and only time each good brush is ever decomposed."""
+        if name in skipped:
+            return False
+        try:
+            decompose_convex(level.actors[name], cache=cache)
+            return True
+        except DegenerateBrushError as e:
+            skipped[name] = str(e)
+            return False
+
+    ok_brushes = [n for n in brush_names if _safe(n)]
+    for name_a, name_b in itertools.combinations(ok_brushes, 2):
+        edges.extend(classify_pair(name_a, level.actors[name_a], name_b, level.actors[name_b],
+                                    order_index=order_index, class_index=class_index, cache=cache))
+
+    for pname in point_names:
+        loc = level.actors[pname].location
+        if loc is None:
+            continue
+        point = (float(loc[0]), float(loc[1]), float(loc[2]))
+        for bname in ok_brushes:
+            if point_in_brush(level.actors[bname], point, cache=cache):
+                edges.append(Edge(src=bname, dst=pname, relation="contains", directed=True))
+
+    return ActorGraph(node_names=list(level.order), edges=edges,
+                       skipped=sorted(skipped.items()))
