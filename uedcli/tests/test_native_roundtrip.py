@@ -770,9 +770,21 @@ def test_native_ext_build_refreshes_crate_mtimes_before_cargo_sees_them():
     `uedcli_native` and produced a false UNATCO N=116 ladder bail — six builds of six different
     commits emitted one byte-identical package (board
     `native-ext-binary-not-stable-across-builds`). `ensure_native_ext` gates on a CONTENT hash, so
-    the mtimes must be made to agree with it before cargo runs."""
+    the mtimes must be made to agree with it before cargo runs.
+
+    `maturin build --release` itself moved out of `bin/_venv.sh` and into `dev-container/
+    build.Dockerfile` — the old `docker run -v host:/io` bind mount can't work against a
+    remote/sibling daemon with no shared filesystem (this sandbox: `DOCKER_HOST` pointing at a
+    separate `dind` container); `docker buildx build` uploads the crate as build context instead.
+    The invariant this test protects is unchanged — the mtime refresh must still run before the
+    command that actually starts the build that reads them — just checked across the two files
+    it now spans instead of one."""
     venv_sh = Path(__file__).resolve().parents[2] / "bin" / "_venv.sh"
     body = venv_sh.read_text()
     touch = body.index('-exec touch {} +')
-    assert touch < body.index("maturin build --release"), \
-        "the mtime refresh must run BEFORE the maturin build it protects"
+    assert touch < body.index('docker buildx build --target wheel-export'), \
+        "the mtime refresh must run BEFORE the wheel build it protects"
+
+    build_dockerfile = Path(__file__).resolve().parents[2] / "dev-container" / "build.Dockerfile"
+    assert "maturin build --release" in build_dockerfile.read_text(), \
+        "the actual maturin invocation this test protects moved — update the path above too"

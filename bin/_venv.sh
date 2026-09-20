@@ -5,8 +5,13 @@
 # the docker daemon directly to drive the editor/game runtime containers. What ISN'T on most hosts is
 # Rust, so the ONE thing that needs a container is building `uedcli_native`: `ensure_native_ext`
 # builds the abi3 wheel in a Docker image (Rust + libpython) and pip-installs it into the venv, and
-# `run_cargo_test` runs the goldens there. Requires `python3.12` on PATH and Docker. Owner ruling
-# 2026-08-06; `dev/docs/dev-runtime.md`. Sourced by bin/uedcli + bin/test.
+# `run_cargo_test` runs the goldens there. Requires `python3.12` on PATH and Docker with the
+# `buildx` plugin (bundled by default in Docker 23+/Desktop). The build goes through `docker
+# buildx build` (context upload + `RUN --mount=type=cache` + the local exporter, `dev-container/
+# build.Dockerfile`), never a bind mount — a bind mount needs the source path to exist on the
+# DAEMON's own filesystem, which a remote/sibling daemon (`DOCKER_HOST` pointing at a separate
+# container) has no way to see. Owner ruling 2026-08-06; `dev/docs/dev-runtime.md`. Sourced by
+# bin/uedcli + bin/test.
 #   UEDCLI_VENV=<dir>       venv location (default .venv)
 #   UEDCLI_VENV_REBUILD=1   force a dep reinstall
 #   UEDCLI_SKIP_NATIVE=1    skip the Rust ext build + cargo test
@@ -37,6 +42,7 @@ _NATIVE_DIR="$UEDCLI_DIR/uedcli-native"
 _NATIVE_MARKER="$VENV/.uedcli-native"
 _BUILD_IMAGE="uedcli-rust-build"
 _DOCKERFILE="$UEDCLI_DIR/dev-container/Dockerfile"
+_BUILD_DOCKERFILE="$UEDCLI_DIR/dev-container/build.Dockerfile"
 
 _ensure_build_image() {
   command -v docker >/dev/null 2>&1 || return 1
@@ -46,13 +52,6 @@ _ensure_build_image() {
   [ "$want" = "$have" ] && return 0
   echo "uedcli: building the Rust-build image $_BUILD_IMAGE (one-time)" >&2
   docker build --label "uedcli.dockerfile=$want" -t "$_BUILD_IMAGE" "$UEDCLI_DIR/dev-container" >&2
-}
-
-# Run cargo/maturin in the build image as the invoking uid (outputs land uid-owned; CARGO_HOME + the
-# target dir live under the bind-mounted crate so caches persist and nothing is left root-owned).
-_rust_build_run() {
-  docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e CARGO_HOME=/io/target/.cargo \
-    -v "$_NATIVE_DIR":/io -w /io "$_BUILD_IMAGE" "$@"
 }
 
 ensure_native_ext() {
@@ -86,11 +85,16 @@ ensure_native_ext() {
   # is taken as up to date and the wheel silently keeps the PREVIOUS build's code. That produced a
   # false UNATCO N=116 ladder bail on 2026-09-07 (board `native-ext-binary-not-stable-across-builds`:
   # six "different revision" builds all emitted one byte-identical package). The content hash above
-  # is the real freshness test; make the mtimes agree with it before cargo looks at them.
+  # is the real freshness test; make the mtimes agree with it before cargo looks at them. Still
+  # needed with the buildx cache mount below (`build.Dockerfile`'s comment): that mount persists
+  # Cargo's own incremental-build state across builds exactly like the old bind-mounted target dir
+  # did, so it inherits the same mtime hazard.
   find "$_NATIVE_DIR" -path "$_NATIVE_DIR/target" -prune -o -type f -exec touch {} + \
     || { echo "uedcli: cannot refresh uedcli-native source mtimes — refusing to build a wheel that" \
               "may be stale" >&2; return 0; }
-  _rust_build_run maturin build --release -o /io/target/wheels >&2 \
+  docker buildx build --target wheel-export \
+    --output "type=local,dest=$_NATIVE_DIR/target/wheels" \
+    -f "$_BUILD_DOCKERFILE" "$_NATIVE_DIR" >&2 \
     || { echo "uedcli: uedcli_native build failed — native materialize unavailable" >&2; return 0; }
   local whl; whl="$(ls -t "$_NATIVE_DIR"/target/wheels/uedcli_native-*.whl 2>/dev/null | head -1 || true)"
   [ -n "$whl" ] || { echo "uedcli: no wheel produced" >&2; return 0; }
@@ -105,5 +109,5 @@ run_cargo_test() {
   [ -n "${UEDCLI_SKIP_NATIVE:-}" ] && return 0
   [ -d "$_NATIVE_DIR" ] || return 0
   _ensure_build_image || { echo "bin/test: docker not available — skipped cargo test" >&2; return 0; }
-  _rust_build_run cargo test --quiet
+  docker buildx build --target test -f "$_BUILD_DOCKERFILE" "$_NATIVE_DIR"
 }
