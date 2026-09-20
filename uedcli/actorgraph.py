@@ -6,6 +6,7 @@ import itertools
 from dataclasses import dataclass, field
 
 from . import polyalign, query
+from .classindex import ClassRefError
 from .movers import is_mover
 from .texframe import newell
 
@@ -537,11 +538,20 @@ def classify_pair(name_a, actor_a, name_b, actor_b, *, order_index: dict, class_
 
     # exactly one is a Subtract: the other is Add-or-Mover. A Subtract itself is never a Mover (a
     # Mover emits no CsgOper at all, so csg_is_subtract is always False for it) -- only the
-    # non-Subtract side ever needs a mover check, and only here, so a caller with no movers in
-    # play (class_index=None) never has to pay for one.
+    # non-Subtract side ever needs a mover check, and only here. This is the ONE shape where
+    # mover-ness controls the answer (contains vs. carved_by), so a missing class_index here is not
+    # "assume not a Mover" -- it's "cannot know", and this module answers or raises, never guesses
+    # (the same convention `movers.is_mover` itself follows): silently defaulting to "not a Mover"
+    # could misclassify a real Mover as `carved_by`, the one relation this function must never
+    # produce for a Mover.
     sub_name = name_a if a_is_sub else name_b
     other_name, other_actor = (name_b, actor_b) if a_is_sub else (name_a, actor_a)
-    other_is_mover = class_index is not None and is_mover(other_actor, class_index)
+    if class_index is None:
+        raise ClassRefError(
+            f"cannot classify {name_a!r}/{name_b!r}: exactly one is a Subtract, so whether "
+            f"{other_name!r} is a Mover decides contains vs. carved_by, and no class_index was "
+            f"given to check it")
+    other_is_mover = is_mover(other_actor, class_index)
 
     if other_is_mover:
         # Movers never carve or get carved -- always `contains`, Subtract -> Mover, regardless of

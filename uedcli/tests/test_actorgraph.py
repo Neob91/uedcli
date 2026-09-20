@@ -358,24 +358,41 @@ def test_subtract_subtract_touching_gives_undirected_touches():
     assert {e.src, e.dst} == {"A", "B"}
 
 
-def test_subtract_add_earlier_subtract_gives_contains():
+def test_subtract_add_earlier_subtract_gives_contains(mover_class_index):
+    # A real class_index is required here (not None) -- whether the Add side is a Mover controls
+    # contains vs. carved_by, so this branch cannot answer without one (see
+    # test_subtract_add_pair_with_no_class_index_raises_clearly below).
     sub = make_brush_actor("Room", cube(64, 64, 64), csg="subtract")
     add = make_brush_actor("Furniture", cube(8, 8, 8), csg="add")
     edges = actorgraph.classify_pair("Room", sub, "Furniture", add,
-                                      order_index={"Room": 0, "Furniture": 1}, class_index=None)
+                                      order_index={"Room": 0, "Furniture": 1},
+                                      class_index=mover_class_index)
     assert len(edges) == 1
     assert edges[0].relation == "contains" and edges[0].directed
     assert edges[0].src == "Room" and edges[0].dst == "Furniture"
 
 
-def test_subtract_add_later_subtract_gives_carved_by():
+def test_subtract_add_later_subtract_gives_carved_by(mover_class_index):
+    # Same reason as above: needs a real class_index, not None.
     add = make_brush_actor("Wall", cube(64, 64, 64), csg="add")
     sub = make_brush_actor("DoorCutout", cube(8, 8, 32), location=(0, 0, 0), csg="subtract")
     edges = actorgraph.classify_pair("Wall", add, "DoorCutout", sub,
-                                      order_index={"Wall": 0, "DoorCutout": 1}, class_index=None)
+                                      order_index={"Wall": 0, "DoorCutout": 1},
+                                      class_index=mover_class_index)
     assert len(edges) == 1
     assert edges[0].relation == "carved_by" and edges[0].directed
     assert edges[0].src == "Wall" and edges[0].dst == "DoorCutout"
+
+
+def test_subtract_add_pair_with_no_class_index_raises_clearly():
+    # Exactly one Subtract, class_index=None: whether the other side is a Mover controls contains
+    # vs. carved_by, and there is no way to check it -- must raise (answer or raise, never guess),
+    # not silently default to "not a Mover" and risk a wrong carved_by naming a real Mover.
+    add = make_brush_actor("Wall", cube(64, 64, 64), csg="add")
+    sub = make_brush_actor("DoorCutout", cube(8, 8, 32), location=(0, 0, 0), csg="subtract")
+    with pytest.raises(actorgraph.ClassRefError, match="class_index"):
+        actorgraph.classify_pair("Wall", add, "DoorCutout", sub,
+                                  order_index={"Wall": 0, "DoorCutout": 1}, class_index=None)
 
 
 def test_no_overlap_gives_no_edges():
