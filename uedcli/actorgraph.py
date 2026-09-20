@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 from dataclasses import dataclass, field
+from typing import Literal
 
 from . import polyalign, query
 from .classindex import ClassRefError
@@ -630,8 +631,6 @@ def scoped_edges(graph: "ActorGraph", *, seed: str, hops: "int | Literal['all']"
     a `contains`/`carved_by` edge's direction doesn't limit which way a BFS may walk it, only what
     it prints later). `hops == 'all'` is unbounded. Raises `GraphError` if `seed` is not in
     `graph.node_names`."""
-    from typing import Literal
-
     if seed not in graph.node_names:
         raise GraphError(f"level graph: no such actor: {seed!r}")
 
