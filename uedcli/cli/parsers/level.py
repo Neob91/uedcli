@@ -1,6 +1,8 @@
 """`level` command-family parser registrar."""
 from __future__ import annotations
 
+import argparse
+
 from ._arguments import _tree_flag
 
 
@@ -197,3 +199,28 @@ def register(sub) -> None:
                            "case-insensitive. Filters DISPLAY only — the exit code always reflects "
                            "all findings. An unknown category exits 2, listing the valid categories.")
     _tree_flag(ldoc)      # lint a named tree explicitly instead of $UEDCLI_LEVEL
+
+    lgraph = lsub.add_parser(
+        "graph",
+        help="print the level's actor connectivity/containment graph — every brush and non-brush "
+             "actor as a node, touches/contains/carved_by edges from exact geometry + CSG order")
+
+    def _hops_arg(s: str):
+        if s == "all":
+            return "all"
+        try:
+            n = int(s)
+        except ValueError:
+            raise argparse.ArgumentTypeError(f"--hops must be a positive integer or 'all', got {s!r}")
+        if n < 1:
+            raise argparse.ArgumentTypeError(f"--hops must be a positive integer or 'all', got {s!r}")
+        return n
+
+    lgraph.add_argument("--from", dest="from_actor", default=None, metavar="NAME",
+                        help="scope the graph to the neighbourhood reachable from this actor "
+                             "(brush or non-brush) within --hops. Omit both --from and --hops for "
+                             "the whole level's graph")
+    lgraph.add_argument("--hops", type=_hops_arg, default=None, metavar="N|all",
+                        help="max hops from --from (required with --from; rejected without it). "
+                             "'all' means unbounded — mirrors --top N|all elsewhere in this CLI")
+    _tree_flag(lgraph)
