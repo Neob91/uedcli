@@ -156,6 +156,25 @@ def test_coplanar_splitting_tie_break_is_deterministic():
     cells2 = actorgraph.decompose_convex(a)
     assert [sorted(round(d, 6) for _, d in c.half_spaces) for c in cells1] == \
            [sorted(round(d, 6) for _, d in c.half_spaces) for c in cells2]
+
+
+def test_collinear_face_raises_named_error_not_zerodivisionerror():
+    # Round-2 review found the pre-fix code had NO guard on `_norm(newell(...))` for a genuinely
+    # degenerate (collinear, zero-area) face -- and found that the plan's EXISTING degenerate-brush
+    # tests (Task 3/6) use a zero-VERTEX polygon, which `decompose_convex`'s own `len(p.vertices) >=
+    # 3` filter removes before it ever reaches this code, so those tests exercise a completely
+    # different (already-safe) path and prove nothing about this guard. This fixture is deliberately
+    # different: THREE collinear points (len == 3, passes the filter) with zero actual area, placed
+    # FIRST in the poly list so it's picked as the very first splitting plane -- guaranteed to hit
+    # the exact `newell(plane_poly)` call site the guard protects, not the coplanar-branch one.
+    from uedcli.model import Brush, Polygon
+    collinear = Polygon(vertices=[(Decimal(0), Decimal(0), Decimal(0)),
+                                   (Decimal(1), Decimal(0), Decimal(0)),
+                                   (Decimal(2), Decimal(0), Decimal(0))])
+    brush = Brush(model_name="Model_Bad", polys=[collinear])
+    a = _brush("A", brush)
+    with pytest.raises(actorgraph.DegenerateBrushError, match="A"):
+        actorgraph.decompose_convex(a)
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -490,20 +509,25 @@ def test_edge_cross_axis_is_needed_for_two_rotated_convex_shapes():
                                  + w * half_thin * thin2[1])),
                     Decimal(str(cz + u * half_long * long_dir[2] + v * half_thin * thin1[2]
                                  + w * half_thin * thin2[2])))
-        # 8 corners of a parallelepiped, 6 quad faces (winding not asserted for outward-ness here --
-        # `decompose_convex` on a convex brush is order-tolerant per Task 1's own "already-convex
-        # decomposes to one cell" property regardless of which face happens to be `polys[0]`, since
-        # `newell()` derives each face's own outward normal from ITS OWN vertex winding; only the
-        # PER-FACE winding needs to be consistently outward, which building each face explicitly
-        # below (right-hand rule around its own outward direction) satisfies).
+        # 8 corners of a parallelepiped, 6 quad faces. `(long_dir, thin1, thin2)` is right-handed
+        # (thin2 = cross(long_dir, thin1)), so each face's winding below was hand-derived via the
+        # cross-product test itself (edge1 x edge2 must point along that face's own outward axis) --
+        # round 2 review found 4 of the original 6 faces backwards (this fixture's own first draft
+        # asserted "winding not asserted, order-tolerant," which was WRONG: an inward-pointing face
+        # picked as a splitting plane inverts the front/back labelling for whatever it splits,
+        # exactly the class of bug this whole detection algorithm exists to get right). Re-derived
+        # all 6 by hand for this fix; STILL run `newell`/`polyalign._world_normal` on each and
+        # confirm all 6 point outward before trusting anything downstream -- hand-derivation is not
+        # a substitute for checking against real code, only a starting point that is no longer
+        # blind guessing.
         c = {(u, v, w): corner(u, v, w) for u in (-1, 1) for v in (-1, 1) for w in (-1, 1)}
         faces = [
             [c[(1, -1, -1)], c[(1, 1, -1)], c[(1, 1, 1)], c[(1, -1, 1)]],       # +long_dir cap
             [c[(-1, -1, 1)], c[(-1, 1, 1)], c[(-1, 1, -1)], c[(-1, -1, -1)]],   # -long_dir cap
-            [c[(-1, 1, -1)], c[(1, 1, -1)], c[(1, 1, 1)], c[(-1, 1, 1)]],       # +thin1
-            [c[(-1, -1, 1)], c[(1, -1, 1)], c[(1, -1, -1)], c[(-1, -1, -1)]],   # -thin1
-            [c[(-1, -1, -1)], c[(1, -1, -1)], c[(1, 1, -1)], c[(-1, 1, -1)]],   # -thin2 -- wait,
-            [c[(-1, 1, 1)], c[(1, 1, 1)], c[(1, -1, 1)], c[(-1, -1, 1)]],       # +thin2
+            [c[(-1, 1, 1)], c[(1, 1, 1)], c[(1, 1, -1)], c[(-1, 1, -1)]],       # +thin1
+            [c[(-1, -1, -1)], c[(1, -1, -1)], c[(1, -1, 1)], c[(-1, -1, 1)]],   # -thin1
+            [c[(-1, 1, -1)], c[(1, 1, -1)], c[(1, -1, -1)], c[(-1, -1, -1)]],   # -thin2
+            [c[(-1, -1, 1)], c[(1, -1, 1)], c[(1, 1, 1)], c[(-1, 1, 1)]],       # +thin2
         ]
         return Brush(model_name="Model_Box", polys=[Polygon(vertices=v) for v in faces])
     a = _brush("A", box((0, 0, 0), long_axis_deg_from_y_toward_z=0.0))
@@ -520,10 +544,13 @@ GENUINELY HARD to get right by hand (this plan's own author tried and could not 
 numbers without running code -- said so plainly rather than guessing):
 
 1. The face/winding sketch above (6 quad faces of an oblique box) needs its OWN outward-normal
-   verification first -- run `polyalign._world_normal` (or plain `newell`) on each face right after
-   building it and confirm all 6 point outward (away from the box's own center) before trusting
-   anything downstream. The `-thin2` face's vertex order above is marked with a `-- wait,` comment
-   deliberately: verify it, don't assume it's right.
+   verification first -- run `polyalign._world_normal` (or plain `newell`) on each of the 6 faces
+   right after building one and confirm ALL SIX point outward (away from the box's own center)
+   before trusting anything downstream. These 6 windings were hand-re-derived in this plan's own
+   round-2 review after the original draft had 4 of 6 backwards (an inward-pointing face, if picked
+   as a splitting plane, inverts front/back for its whole subtree -- exactly the bug class this
+   algorithm exists to avoid) -- hand-derivation lowers the risk, it does not remove the need to
+   check against real code before relying on it.
 2. **Do not derive the expected touching/not-touching answer from `cells_touch_or_overlap` itself, or
    from face-normal-only SAT, or from any variant of the code under test** -- that is exactly the
    circularity this note exists to prevent. Instead, write a small, throwaway, fully independent
@@ -680,6 +707,31 @@ def test_brush_overlap_volume_overlap_no_matched_pair():
     assert ov.area_estimate is not None   # bounding-box-intersection estimate, not exact
 
 
+def test_footprints_overlap_rejects_coplanar_but_spatially_separate_faces():
+    # Round-2 review finding: `_matched_face_pair` used to accept ANY coplanar pair (same plane),
+    # with no check that their actual 2-D footprints overlap -- two rooms sharing a common floor
+    # HEIGHT at opposite ends of a level would wrongly "match." Direct unit test of the fix, not a
+    # full adversarial brush pair (simpler to get exactly right): two quads on the SAME plane
+    # (Z=0, normal (0,0,1)), disjoint in X by a clean 10-unit gap.
+    quad_a = [(Decimal(0), Decimal(0), Decimal(0)), (Decimal(10), Decimal(0), Decimal(0)),
+              (Decimal(10), Decimal(10), Decimal(0)), (Decimal(0), Decimal(10), Decimal(0))]
+    quad_b = [(Decimal(20), Decimal(0), Decimal(0)), (Decimal(30), Decimal(0), Decimal(0)),
+              (Decimal(30), Decimal(10), Decimal(0)), (Decimal(20), Decimal(10), Decimal(0))]
+    wa = [tuple(float(c) for c in v) for v in quad_a]
+    wb = [tuple(float(c) for c in v) for v in quad_b]
+    assert not actorgraph._footprints_overlap(wa, wb, (0.0, 0.0, 1.0))
+
+
+def test_footprints_overlap_accepts_genuinely_overlapping_coplanar_faces():
+    quad_a = [(Decimal(0), Decimal(0), Decimal(0)), (Decimal(10), Decimal(0), Decimal(0)),
+              (Decimal(10), Decimal(10), Decimal(0)), (Decimal(0), Decimal(10), Decimal(0))]
+    quad_b = [(Decimal(5), Decimal(5), Decimal(0)), (Decimal(15), Decimal(5), Decimal(0)),
+              (Decimal(15), Decimal(15), Decimal(0)), (Decimal(5), Decimal(15), Decimal(0))]
+    wa = [tuple(float(c) for c in v) for v in quad_a]
+    wb = [tuple(float(c) for c in v) for v in quad_b]
+    assert actorgraph._footprints_overlap(wa, wb, (0.0, 0.0, 1.0))
+
+
 def test_brush_overlap_degenerate_brush_reports_named_error_not_crash():
     from uedcli.model import Brush, Polygon
     bad = Brush(model_name="Model_Bad", polys=[Polygon(vertices=[])])   # no faces at all -> no solid
@@ -723,8 +775,39 @@ def _bbox_intersection_area(a_lo, a_hi, b_lo, b_hi) -> float:
     return sides[0] * sides[1]   # the two smallest dims approximate the touching cross-section
 
 
+def _plane_basis_2d(normal: Vec3) -> tuple[Vec3, Vec3]:
+    """An arbitrary, deterministic orthonormal (U, V) basis for the plane perpendicular to
+    `normal` -- same construction as `relation.py`'s own `_plane_basis`, not imported from it (this
+    module has no other dependency on `relation.py`'s internals). Only used to compare two faces'
+    OWN footprints against each other in a shared 2-D frame; not meaningful in isolation."""
+    helper = (0.0, 0.0, 1.0) if abs(normal[2]) < 0.9 else (1.0, 0.0, 0.0)
+    u = _norm(_cross(helper, normal))
+    v = _cross(normal, u)
+    return u, v
+
+
+def _footprints_overlap(wa: list[Vec3], wb: list[Vec3], normal: Vec3) -> bool:
+    """Round-2 review finding: two faces can be coplanar (same plane) without their FOOTPRINTS
+    (2-D extents within that plane) actually overlapping -- e.g. two rooms sharing a common floor
+    HEIGHT at opposite ends of a level. `_matched_face_pair` picking the largest-area coplanar face
+    ANYWHERE, with no overlap check, could report a physically unrelated pair as the 'exact' matched
+    boundary. Fixed with a projected-bounding-box overlap test in a shared (U,V) frame -- cheaper
+    than a full polygon clip and sufficient to reject a spatially-separate coincidental coplanar
+    pair, which is the actual failure mode found (not a hairline-adjacent-footprint edge case)."""
+    u, v = _plane_basis_2d(normal)
+    origin = wa[0]
+    proj_a = [(_dot(_sub(p, origin), u), _dot(_sub(p, origin), v)) for p in wa]
+    proj_b = [(_dot(_sub(p, origin), u), _dot(_sub(p, origin), v)) for p in wb]
+    a_lo = (min(p[0] for p in proj_a), min(p[1] for p in proj_a))
+    a_hi = (max(p[0] for p in proj_a), max(p[1] for p in proj_a))
+    b_lo = (min(p[0] for p in proj_b), min(p[1] for p in proj_b))
+    b_hi = (max(p[0] for p in proj_b), max(p[1] for p in proj_b))
+    return (a_lo[0] <= b_hi[0] + _TOUCH_EPS and b_lo[0] <= a_hi[0] + _TOUCH_EPS and
+            a_lo[1] <= b_hi[1] + _TOUCH_EPS and b_lo[1] <= a_hi[1] + _TOUCH_EPS)
+
+
 def _matched_face_pair(actor_a, actor_b) -> tuple[int, int, float] | None:
-    """A SINGLE poly pair (one from each brush) whose planes are near-coincident and whose
+    """A SINGLE poly pair (one from each brush) whose planes are near-coincident AND whose
     footprints actually overlap -- the 'clean shared flat boundary' case. Returns
     (idx_a, idx_b, area) or None. Deliberately independent of ConvexCell decomposition: this asks
     about the brushes' ORIGINAL faces, which is what a `Name:idx` drill-down selector must name."""
@@ -744,6 +827,8 @@ def _matched_face_pair(actor_a, actor_b) -> tuple[int, int, float] | None:
                 continue
             wb = polyalign._world_verts(actor_b, pb)
             if abs(_dot(_sub(wb[0], wa[0]), na)) > _TOUCH_EPS:   # not on the same plane
+                continue
+            if not _footprints_overlap(wa, wb, na):     # coplanar but spatially unrelated -- reject
                 continue
             area = _shoelace_area_3d(wa, na)
             if best is None or area > best[2]:
@@ -1272,7 +1357,7 @@ class GraphError(ValueError):
     pass
 
 
-def scoped_edges(graph: "ActorGraph", *, seed: str, hops) -> list["Edge"]:
+def scoped_edges(graph: "ActorGraph", *, seed: str, hops: "int | Literal['all']") -> list["Edge"]:
     """Every edge touching a node reachable from `seed` within `hops` (undirected reachability --
     a `contains`/`carved_by` edge's direction doesn't limit which way a BFS may walk it, only what
     it prints later). `hops == 'all'` is unbounded."""
@@ -1725,3 +1810,29 @@ above) found and I fixed:
   dedicated test) and added one to Task 9.
 - Two minor wording fixes (an overstated "exact shape" match to `eventgraph.format_text`, and a face
   count off by one in a comment).
+
+## Requesting-code-review pass, round 3 (fixed inline, this commit)
+
+A follow-up reviewer verifying round 2's fixes found round 2 had NOT fully closed two of its own
+findings, plus one new gap:
+
+- **The zero-normal guard (round 2) had no test actually exercising it** — the plan's existing
+  degenerate-brush tests use a zero-VERTEX polygon, filtered out before reaching the guarded code, so
+  they prove nothing about it. Added `test_collinear_face_raises_named_error_not_zerodivisionerror`
+  (Task 1): a genuine 3-vertex, zero-area (collinear) face, placed first so it's guaranteed to hit the
+  exact `newell(plane_poly)` call site the guard protects.
+- **The oblique-box fixture for the edge-cross-axis test (round 2) had 4 of its 6 faces wound
+  backwards** — confirmed by an independent hand-trace via the cross-product test on each face. An
+  inward-pointing face, if ever picked as a splitting plane, inverts front/back for its whole
+  subtree — as literally written, `decompose_convex` on this fixture would very likely raise
+  `DegenerateBrushError` before the test could even reach the SAT call it exists to exercise. Fixed
+  all 6 windings by hand (each re-derived via `edge1 x edge2` against that face's intended outward
+  axis) and reworded the implementer note, which had wrongly flagged only 1 of the 4 broken faces as
+  needing a second look.
+- **New finding: `_matched_face_pair` accepted any COPLANAR poly pair with no check that their
+  footprints actually overlap** — two brushes with an unrelated coincidentally-coplanar face pair
+  elsewhere (e.g. two rooms sharing a floor height) could be reported as the "exact" matched boundary
+  for the `Name:idx` drill-down, contradicting the docstring's own "footprints actually overlap"
+  claim. Fixed with `_footprints_overlap` (a projected-bounding-box check in a shared 2-D frame,
+  `_plane_basis_2d`) gating candidate selection in `_matched_face_pair`; added direct unit tests for
+  both the reject and accept cases.
