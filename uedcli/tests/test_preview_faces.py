@@ -14,7 +14,7 @@ import pytest
 from uedcli import preview
 from uedcli.cli import main as cli, dispatch
 from uedcli.cli import resources
-from uedcli.builders import cube, make_brush_actor, sheet
+from uedcli.builders import PF_NOTSOLID, cube, make_brush_actor, sheet
 from uedcli.model import Actor, Brush, Polygon
 from uedcli.preview import (
     BACK, BG, DEFAULT_GREY, FRAME_BORDER, FRONT, _CSG_PALETTE, _FRAME_PAD, AnnotationSpec,
@@ -340,7 +340,7 @@ def _sheet(name, at=(0.0, 0.0, 0.0)):
     self-occludes, so three of its six faces are hidden in any view and `Cube:0` is not reliably visible."""
     from uedcli.builders import sheet
     return make_brush_actor(name, sheet(256.0, 256.0, plane="xy"), location=at, csg="add",
-                            poly_flags=preview.PF_NOTSOLID)
+                            poly_flags=PF_NOTSOLID)
 
 
 def test_the_note_fires_when_FRAMING_and_not_depth_drew_nothing(tmp_path, capsys):

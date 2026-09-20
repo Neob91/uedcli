@@ -71,7 +71,8 @@ def test_level_graph_no_from_prints_whole_level_graph(tmp_path, monkeypatch, cap
     rc = dispatch.dispatch(_ns(proj))
     assert rc == 0
     out = capsys.readouterr().out
-    assert out.strip() == "A:0 --touches(4096uu^2)--> B:1"
+    assert out.strip() == (
+        "A:0 [Engine.Brush Subtract] --touches(4096uu^2)--> B:1 [Engine.Brush Subtract]")
 
 
 def test_level_graph_from_and_hops_scopes(tmp_path, monkeypatch, capsys):
@@ -80,7 +81,8 @@ def test_level_graph_from_and_hops_scopes(tmp_path, monkeypatch, capsys):
     assert rc == 0
     out = capsys.readouterr().out
     # Same A<->B edge as the two-brush case above; C is 2 hops from A -- excluded by --hops 1.
-    assert out.strip() == "A:0 --touches(4096uu^2)--> B:1"
+    assert out.strip() == (
+        "A:0 [Engine.Brush Subtract] --touches(4096uu^2)--> B:1 [Engine.Brush Subtract]")
 
 
 def test_level_graph_hops_without_from_exits_2(tmp_path, monkeypatch, capsys):

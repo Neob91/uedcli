@@ -607,10 +607,35 @@ def classify_pair(name_a, actor_a, name_b, actor_b, *, order_index: dict, class_
 
 
 @dataclass(frozen=True)
+class NodeTag:
+    """A node's display identity for `format_text` -- always a fully-qualified `Package.Class`
+    (trunk-committed actors are guaranteed already qualified: ingest itself refuses to commit an
+    unresolvable/ambiguous bare class, `apply.py`'s ingest-qualification check, so this module never
+    re-resolves `actor.cls` itself). `csg_kind` is `None` for a non-brush actor AND for a Mover --
+    a Mover carries no CsgOper at all (excluded from world CSG) and so has no solidity context to
+    report, never `"Add"` -- else one of `query.csg_kind`'s six brush kinds, capitalized for
+    display (`"Add"`/`"Subtract"`/`"Semisolid"`/`"Nonsolid"`/`"Intersect"`/`"Deintersect"`)."""
+    fqcn: str
+    csg_kind: str | None
+
+
+@dataclass(frozen=True)
 class ActorGraph:
     node_names: list[str]
+    nodes: dict[str, NodeTag]
     edges: list[Edge]
     skipped: list[tuple[str, str]]
+
+
+def _node_tag(actor, class_index) -> NodeTag:
+    """A single actor's `NodeTag` -- shared by every actor in `build_graph`, brush or not, skipped
+    or not, so every name in `node_names` has a matching entry in `nodes` regardless of whether it
+    ends up touching an edge."""
+    if actor.brush is None:
+        return NodeTag(fqcn=actor.cls, csg_kind=None)
+    if is_mover(actor, class_index):
+        return NodeTag(fqcn=actor.cls, csg_kind=None)
+    return NodeTag(fqcn=actor.cls, csg_kind=query.csg_kind(actor, is_mover=False).capitalize())
 
 
 def build_graph(level, class_index) -> "ActorGraph":
@@ -627,6 +652,7 @@ def build_graph(level, class_index) -> "ActorGraph":
     brush_names = list(order_index)
     point_names = [n for n in level.order if level.actors[n].brush is None]
 
+    nodes = {name: _node_tag(level.actors[name], class_index) for name in level.order}
     skipped: dict[str, str] = {}
     edges: list[Edge] = []
     cache: dict[str, list[ConvexCell]] = {}
@@ -659,7 +685,7 @@ def build_graph(level, class_index) -> "ActorGraph":
             if point_in_brush(level.actors[bname], point, cache=cache):
                 edges.append(Edge(src=bname, dst=pname, relation="contains", directed=True))
 
-    return ActorGraph(node_names=list(level.order), edges=edges,
+    return ActorGraph(node_names=list(level.order), nodes=nodes, edges=edges,
                        skipped=sorted(skipped.items()))
 
 
@@ -713,9 +739,20 @@ def scoped_edges(graph: "ActorGraph", *, seed: str, hops: "int | Literal['all']"
     return kept
 
 
-def format_text(edges: list["Edge"]) -> str:
+def _node_bracket(tag: "NodeTag") -> str:
+    """`[Package.Class]` for a non-brush actor or a Mover (no solidity context to report), else
+    `[Package.Class Kind]` -- space-separated, not colon-glued, so the `Name`/`Name:idx` token
+    right before it stays a clean whitespace-delimited copy-paste selector for
+    `brush relation measure`, and `[` never collides with the `touches(...)` size annotation's own
+    parens on the same line."""
+    return f"[{tag.fqcn} {tag.csg_kind}]" if tag.csg_kind else f"[{tag.fqcn}]"
+
+
+def format_text(edges: list["Edge"], nodes: dict[str, "NodeTag"]) -> str:
     """Flat, one edge per line, subject-relation-object -- the same one-line-per-edge shape
-    `eventgraph.format_text` uses (minus its class annotations; spec 'Output format'). A `touches`
+    `eventgraph.format_text` uses, extended with a `[Package.Class]`/`[Package.Class Kind]` node
+    tag after every name (see `_node_bracket`; unlike `eventgraph`'s own `(Class)`, always fully
+    qualified -- direction/asset-catalog.md's "class -> Package.Class" identity rule). A `touches`
     edge with a matched face pair prints `Name:idx` selectors so the line is directly pipeable into
     `brush relation measure`; a `touches` edge with an area estimate but no matched pair prints bare
     names with the size still shown. `contains`/`carved_by` edges never carry `matched_pair`/
@@ -731,5 +768,6 @@ def format_text(edges: list["Edge"]) -> str:
         rel = e.relation
         if e.relation == "touches" and e.area_estimate is not None:
             rel = f"touches({e.area_estimate:.4g}uu^2)"
-        lines.append(f"{src} --{rel}--> {dst}")
+        lines.append(f"{src} {_node_bracket(nodes[e.src])} --{rel}--> "
+                     f"{dst} {_node_bracket(nodes[e.dst])}")
     return "\n".join(lines)

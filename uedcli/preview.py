@@ -67,6 +67,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from .model import Actor
+from .query import csg_kind
 from .texframe import newell, poly_flags_int, world_uv_frame
 
 
@@ -109,8 +110,6 @@ MARKER = (185, 185, 185)  # point-actor marker + label — neutral grey (NOT a C
 # vs magenta (cool) stays distinct regardless; see spikes/2026-07-22-unrealed-brush-wire-colors.md.
 PF_INVISIBLE = 0x00000001
 PF_MASKED = 0x00000002
-PF_SEMISOLID = 0x00000020
-PF_NOTSOLID = 0x00000008
 PF_TWOSIDED = 0x00000100
 PF_PORTAL = 0x04000000
 # The exemption from the per-view backface cull below — the SAME mask `light::light_in_front`
@@ -120,11 +119,17 @@ PF_PORTAL = 0x04000000
 # default, `PF_TwoSided`/`PF_Portal` are the exemptions.
 _CULL_EXEMPT = PF_TWOSIDED | PF_PORTAL
 _CSG_PALETTE: dict[str, tuple[tuple[int, int, int], tuple[int, int, int]]] = {
-    "add":       ((70, 110, 255),  (35, 55, 130)),    # additive solid — blue (front lifted for the dark bg)
-    "subtract":  ((225, 170, 40),  (120, 90, 20)),    # subtracted — yellow / gold
-    "semisolid": ((235, 120, 80),  (125, 62, 40)),    # semi-solid — warm coral (distinct from mover)
-    "nonsolid":  ((60, 200, 60),   (30, 100, 30)),    # non-solid — green
-    "mover":     ((205, 70, 235),  (105, 35, 120)),   # mover — magenta / purple
+    "add":         ((70, 110, 255),  (35, 55, 130)),    # additive solid — blue (front lifted for the dark bg)
+    "subtract":    ((225, 170, 40),  (120, 90, 20)),    # subtracted — yellow / gold
+    "semisolid":   ((235, 120, 80),  (125, 62, 40)),    # semi-solid — warm coral (distinct from mover)
+    "nonsolid":    ((60, 200, 60),   (30, 100, 30)),    # non-solid — green
+    "mover":       ((205, 70, 235),  (105, 35, 120)),   # mover — magenta / purple
+    # Intersect/Deintersect never appear in trunk content (editor-only scaffolding, see
+    # surface.py/preview_native.py/query.py) but ARE reachable transiently via `brush intersect`/
+    # `deintersect`'s native scaffolding — reuse `add`'s colour rather than invent one: real UED22
+    # parity for these two is a tracked, still-open GUI-PARITY.md gap, not decided here.
+    "intersect":   ((70, 110, 255),  (35, 55, 130)),
+    "deintersect": ((70, 110, 255),  (35, 55, 130)),
 }
 
 # UED22's `GPivotShown` widget colour (`C_BrushWire.Plane()` in `UnEdCam.cpp`) — the actor's true,
@@ -334,10 +339,10 @@ def sprite_footprint(draw_scale: float, usize: int, vsize: int) -> tuple[float, 
 
 
 def classify_brush(actor: Actor, *, is_mover: bool | None = None) -> str:
-    """A brush actor's CSG palette key (`add`/`subtract`/`semisolid`/`nonsolid`/`mover`). A Mover →
-    magenta, tested FIRST; else `CsgOper` (subtract → gold) is refined by the actor-level solidity
-    `PolyFlags` on the additive side (PF_Semisolid → coral, PF_NotSolid → green). See the ergonomics
-    spec §4 legend.
+    """A brush actor's CSG palette key (`add`/`subtract`/`semisolid`/`nonsolid`/`intersect`/
+    `deintersect`/`mover`) — a thin wrapper around `query.csg_kind`, the classifier shared with
+    `level graph`'s node tags, adding only the mover-ness ergonomics below (which `csg_kind` takes
+    as a plain `is_mover: bool` it never guesses itself).
 
     **`is_mover` decides HOW mover-ness is answered, and the two answers are not interchangeable.**
 
@@ -354,23 +359,7 @@ def classify_brush(actor: Actor, *, is_mover: bool | None = None) -> str:
       camera-facing face and draw the door inside-out. One render never mixes the two answers — the
       key returned here feeds the fill colour, `is_solid` (hence `occluders`) and the cull alike."""
     mover = actor.cls.rpartition(".")[2].endswith("Mover") if is_mover is None else is_mover
-    if mover:
-        return "mover"
-    oper = next((v for k, v in actor.props if k == "CsgOper"), "CSG_Add")
-    if oper == "CSG_Subtract":
-        return "subtract"
-    pf = next((v for k, v in actor.props if k == "PolyFlags"), None)
-    flags = 0
-    if pf is not None:
-        try:
-            flags = int(pf)
-        except ValueError:
-            flags = 0
-    if flags & PF_SEMISOLID:
-        return "semisolid"
-    if flags & PF_NOTSOLID:
-        return "nonsolid"
-    return "add"
+    return csg_kind(actor, is_mover=mover)
 
 _FONT: dict[str, list[str]] = {
     "0": ["111", "101", "101", "101", "111"], "1": ["010", "110", "010", "010", "111"],

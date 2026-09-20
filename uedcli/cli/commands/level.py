@@ -819,7 +819,7 @@ def _level_graph(args, src) -> int:
     else:
         edges = graph.edges
 
-    text = actorgraph.format_text(edges)
+    text = actorgraph.format_text(edges, graph.nodes)
     if text:
         print(text)
     return 0

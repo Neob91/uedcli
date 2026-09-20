@@ -491,6 +491,27 @@ def test_build_graph_multi_edge_fanout_subtract_carving_two_different_adds(mover
     assert {e.src for e in carved_by} == {"Wall1", "Wall2"}   # BOTH, not just one
 
 
+def test_build_graph_nodes_carry_fqcn_and_csg_kind_for_every_actor_kind(mover_class_index):
+    """`.nodes` covers every actor in `level.order`, not just ones that end up in an edge, with the
+    right `NodeTag` per kind: a plain Subtract/Add get their CsgOper; a Mover and a non-brush actor
+    both show `csg_kind=None` (no solidity context to report, per the owner's ruling)."""
+    from uedcli.builders import PF_NOTSOLID
+    from uedcli.model import Actor
+    sub = make_brush_actor("Room", cube(128, 128, 128), csg="subtract")
+    add = make_brush_actor("Wall", cube(8, 8, 8), location=(1000, 0, 0), csg="add")
+    nonsolid = make_brush_actor("Grate", cube(8, 8, 8), location=(2000, 0, 0), csg="add",
+                                poly_flags=PF_NOTSOLID)
+    mover = make_brush_actor("Door", cube(32, 8, 64), location=(3000, 0, 0), mover_class="Engine.Mover")
+    light = Actor(name="Light0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)))
+    level = _level(sub, add, nonsolid, mover, light)
+    graph = actorgraph.build_graph(level, mover_class_index)
+    assert graph.nodes["Room"] == actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Subtract")
+    assert graph.nodes["Wall"] == actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Add")
+    assert graph.nodes["Grate"] == actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Nonsolid")
+    assert graph.nodes["Door"] == actorgraph.NodeTag(fqcn="Engine.Mover", csg_kind=None)
+    assert graph.nodes["Light0"] == actorgraph.NodeTag(fqcn="Engine.Light", csg_kind=None)
+
+
 def test_build_graph_non_brush_actor_contains_from_every_containing_brush(mover_class_index):
     outer = make_brush_actor("Outer", cube(128, 128, 128), csg="subtract")
     inner = make_brush_actor("Inner", cube(64, 64, 64), csg="subtract")   # nested inside Outer
@@ -547,14 +568,20 @@ def test_scoped_edges_unknown_seed_raises_graph_error(mover_class_index):
 def test_format_text_touches_with_matched_pair_and_area():
     e = actorgraph.Edge(src="Subtract_ConfMain", dst="Subtract_ConfBay", relation="touches",
                         directed=False, matched_pair=(5, 2), area_estimate=112.0)
-    line = actorgraph.format_text([e])
-    assert line == "Subtract_ConfMain:5 --touches(112uu^2)--> Subtract_ConfBay:2"
+    nodes = {"Subtract_ConfMain": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Subtract"),
+             "Subtract_ConfBay": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Subtract")}
+    line = actorgraph.format_text([e], nodes)
+    assert line == ("Subtract_ConfMain:5 [Engine.Brush Subtract] --touches(112uu^2)--> "
+                     "Subtract_ConfBay:2 [Engine.Brush Subtract]")
 
 
 def test_format_text_touches_no_matched_pair_no_selector():
     e = actorgraph.Edge(src="A", dst="B", relation="touches", directed=False,
                         matched_pair=None, area_estimate=50.0)
-    assert actorgraph.format_text([e]) == "A --touches(50uu^2)--> B"
+    nodes = {"A": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Add"),
+             "B": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Add")}
+    assert actorgraph.format_text([e], nodes) == (
+        "A [Engine.Brush Add] --touches(50uu^2)--> B [Engine.Brush Add]")
 
 
 def test_format_text_contains_no_size_no_selector():
@@ -564,15 +591,36 @@ def test_format_text_contains_no_size_no_selector():
     # pre-fix code (which always added the selector whenever matched_pair was set) and passes now.
     e = actorgraph.Edge(src="Room", dst="Add_FrontDesk", relation="contains", directed=True,
                         matched_pair=(5, 5), area_estimate=99.0)
-    assert actorgraph.format_text([e]) == "Room --contains--> Add_FrontDesk"
+    nodes = {"Room": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Subtract"),
+             "Add_FrontDesk": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Add")}
+    assert actorgraph.format_text([e], nodes) == (
+        "Room [Engine.Brush Subtract] --contains--> Add_FrontDesk [Engine.Brush Add]")
 
 
 def test_format_text_carved_by():
     e = actorgraph.Edge(src="Wall", dst="DoorCutout", relation="carved_by", directed=True)
-    assert actorgraph.format_text([e]) == "Wall --carved_by--> DoorCutout"
+    nodes = {"Wall": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Add"),
+             "DoorCutout": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Subtract")}
+    assert actorgraph.format_text([e], nodes) == (
+        "Wall [Engine.Brush Add] --carved_by--> DoorCutout [Engine.Brush Subtract]")
 
 
 def test_format_text_multiple_edges_one_per_line():
     e1 = actorgraph.Edge(src="A", dst="B", relation="touches", directed=False)
     e2 = actorgraph.Edge(src="A", dst="C", relation="contains", directed=True)
-    assert actorgraph.format_text([e1, e2]) == "A --touches--> B\nA --contains--> C"
+    nodes = {"A": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Subtract"),
+             "B": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Subtract"),
+             "C": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Add")}
+    assert actorgraph.format_text([e1, e2], nodes) == (
+        "A [Engine.Brush Subtract] --touches--> B [Engine.Brush Subtract]\n"
+        "A [Engine.Brush Subtract] --contains--> C [Engine.Brush Add]")
+
+
+def test_format_text_mover_and_non_brush_show_no_csg_kind():
+    """A Mover has no solidity context (excluded from world CSG entirely) and a non-brush actor
+    was never CSG-classified in the first place -- both print `[FQCN]` alone, no kind word."""
+    e = actorgraph.Edge(src="Brush663", dst="DeusExMover11", relation="contains", directed=True)
+    nodes = {"Brush663": actorgraph.NodeTag(fqcn="Engine.Brush", csg_kind="Subtract"),
+             "DeusExMover11": actorgraph.NodeTag(fqcn="DeusEx.DeusExMover", csg_kind=None)}
+    assert actorgraph.format_text([e], nodes) == (
+        "Brush663 [Engine.Brush Subtract] --contains--> DeusExMover11 [DeusEx.DeusExMover]")

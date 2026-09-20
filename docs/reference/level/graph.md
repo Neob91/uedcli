@@ -14,7 +14,9 @@ A node is every actor in the level — every brush (`CSG_Add`, `CSG_Subtract`, o
 non-brush actor (lights, pickups, triggers, NPCs, everything). There's no "just rooms" filtering; this
 is the full actor graph. `CSG_Intersect`/`CSG_Deintersect` brushes are bucketed as Add-like for edge
 classification (the same "not a Subtract" bucket as `CSG_Add` and Movers) — deliberate, not an
-oversight; there's no separate row for them in the table below.
+oversight; there's no separate row for them in the table below. That bucketing is about which EDGE
+they get, not what's DISPLAYED: each brush's node tag (see "Output format") always shows its true
+kind — `Intersect`/`Deintersect` included — never collapsed to `Add`.
 
 One geometric test decides every edge: does brush/actor A's volume touch or overlap brush/actor B's
 volume. What that edge is CALLED depends on the two nodes' kinds and, for two brushes, which one comes
@@ -71,18 +73,30 @@ structure.
 
 ```
 $ uedcli level graph
-Subtract_Lobby:0 --touches(1.638e+04uu^2)--> Subtract_Hallway:1
-Subtract_Lobby --contains--> Add_FrontDesk
-Subtract_Hallway --contains--> Mover_HallwayDoor
-Subtract_Lobby --contains--> NPC_Receptionist
+Subtract_Lobby:0 [Engine.Brush Subtract] --touches(1.638e+04uu^2)--> Subtract_Hallway:1 [Engine.Brush Subtract]
+Subtract_Lobby [Engine.Brush Subtract] --contains--> Add_FrontDesk [Engine.Brush Add]
+Subtract_Hallway [Engine.Brush Subtract] --contains--> Mover_HallwayDoor [DeusEx.DeusExMover]
+Subtract_Lobby [Engine.Brush Subtract] --contains--> NPC_Receptionist [DeusEx.ScriptedPawn]
 ```
 
+- Every name is followed by a `[Package.Class]` tag naming that actor's exact, fully-qualified class
+  — never a bare class name (`direction/asset-catalog.md`'s "class → `Package.Class`" identity rule).
+  For a brush, the tag also carries its flat CSG/solidity kind, space-separated:
+  `[Engine.Brush Subtract]`, `[Engine.Brush Add]`, `[Engine.Brush Semisolid]`, `[Engine.Brush
+  Nonsolid]`, `[Engine.Brush Intersect]`, or `[Engine.Brush Deintersect]` — the same six categories
+  classic UnrealEd's own brush CSG-operation choice has, mutually exclusive (never `[Engine.Brush
+  Add Semisolid]`; Semisolid/Nonsolid REPLACE Add as the shown kind, they don't modify it). **A Mover
+  shows no kind at all** — `[DeusEx.DeusExMover]`, class only — a Mover carries no `CsgOper` and
+  never participates in world CSG, so it has no solidity context to report. A non-brush actor also
+  shows class only, for the same reason (it was never CSG-classified in the first place). The tag is
+  space-separated from the name (not colon-glued), so `Name`/`Name:idx` right before it stays a clean
+  whitespace-delimited selector for `brush relation measure`.
 - A `touches` edge between two brushes carries a rough size in parentheses: `touches(1.638e+04uu^2)`.
   When the two brushes share a single, clean flat boundary (one matched face pair), the size is the
   EXACT shared footprint area, and each brush name also gets a `:idx` suffix naming that boundary poly
-  — e.g. `Subtract_Lobby:0 --touches(...)--> Subtract_Hallway:1` means poly 0 of `Subtract_Lobby` is
-  the matched face against poly 1 of `Subtract_Hallway`. That's the exact selector grammar
-  [`brush relation measure`](../brush/relation.md) takes, so you can drill straight in:
+  — e.g. `Subtract_Lobby:0 ... --touches(...)--> Subtract_Hallway:1 ...` means poly 0 of
+  `Subtract_Lobby` is the matched face against poly 1 of `Subtract_Hallway`. That's the exact selector
+  grammar [`brush relation measure`](../brush/relation.md) takes, so you can drill straight in:
   `uedcli brush relation measure Subtract_Lobby:0 Subtract_Hallway:1` for the full plane/normal/gap/
   footprint detail. When the two brushes overlap as a genuine 3-D volume with no single shared face
   (e.g. two Subtracts overlapping diagonally), the size is a bounding-box estimate and neither name
@@ -90,7 +104,8 @@ Subtract_Lobby --contains--> NPC_Receptionist
   ranks every poly pair.
 - `contains` and `carved_by` edges never carry a size or a `:idx` — containment is a yes/no fact, not
   a matter of degree, and there's no second face-to-face question to ask beyond "yes, it's inside."
-  `Subtract_Hallway --contains--> Mover_HallwayDoor` is the whole answer.
+  `Subtract_Hallway [Engine.Brush Subtract] --contains--> Mover_HallwayDoor [DeusEx.DeusExMover]` is
+  the whole answer.
 - A brush that's too malformed to test (self-intersecting, non-manifold, or a degenerate zero-area
   face) is reported as a skipped node on stderr instead of crashing or being silently dropped:
   `level graph: skipping Bad: brush does not bound a valid solid (a decomposed cell has no volume)`.
@@ -135,9 +150,9 @@ Worked example — the same level as above, scoped one hop out from `Subtract_Lo
 
 ```
 $ uedcli level graph --from Subtract_Lobby --hops 1
-Subtract_Lobby:0 --touches(1.638e+04uu^2)--> Subtract_Hallway:1
-Subtract_Lobby --contains--> Add_FrontDesk
-Subtract_Lobby --contains--> NPC_Receptionist
+Subtract_Lobby:0 [Engine.Brush Subtract] --touches(1.638e+04uu^2)--> Subtract_Hallway:1 [Engine.Brush Subtract]
+Subtract_Lobby [Engine.Brush Subtract] --contains--> Add_FrontDesk [Engine.Brush Add]
+Subtract_Lobby [Engine.Brush Subtract] --contains--> NPC_Receptionist [DeusEx.ScriptedPawn]
 ```
 
 An unknown `--from` name is a clean error naming the value: `level graph: no such actor: 'Nope'`.
