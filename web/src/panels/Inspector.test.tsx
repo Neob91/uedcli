@@ -170,10 +170,37 @@ describe('Inspector', () => {
     expect(screen.getByTestId('inspector-empty')).toBeTruthy()
   })
 
-  it('an actor selection takes priority over a (should-be-empty) stale surface selection', () => {
+  // The two kinds COEXIST -- UED22 keeps `AActor.bSelected` and `PF_Selected` as independent state
+  // (GUI-PARITY.md "Actor + surface selection coexist; only a plain click clears both"), so both
+  // props can be non-empty at once and BOTH sections must render. Replaces an earlier test that
+  // asserted the actor selection "takes priority over a (should-be-empty) stale surface selection".
+  it('renders BOTH an actor section and a surface section when both kinds are selected', () => {
     const surface: SurfaceSelection = { actorName: 'Room', polyIndex: 4, poly: fixturePoly() }
     render(<Inspector selected={[fixtureActor()]} selectedSurfaces={[surface]} />)
+    expect(screen.getByTestId('inspector-sections')).toBeTruthy()
     expect(screen.getByTestId('inspector')).toBeTruthy()
+    expect(screen.getByTestId('inspector-surface')).toBeTruthy()
+    expect(screen.getByRole('heading', { name: 'Room:4' })).toBeTruthy()
+    expect(screen.queryByTestId('inspector-empty')).toBeNull()
+  })
+
+  it('renders both MULTI summaries when 2+ actors and 2+ surfaces are selected together', () => {
+    const actors = [fixtureActor(), fixtureActor({ name: 'Hall' })]
+    const surfaces: SurfaceSelection[] = [
+      { actorName: 'Room', polyIndex: 1, poly: fixturePoly() },
+      { actorName: 'Room', polyIndex: 2, poly: fixturePoly() },
+    ]
+    render(<Inspector selected={actors} selectedSurfaces={surfaces} />)
+    expect(screen.getByTestId('inspector-multi')).toBeTruthy()
+    expect(screen.getByTestId('inspector-multi-surfaces')).toBeTruthy()
+    expect(screen.getByText('2 actors selected')).toBeTruthy()
+    expect(screen.getByText('2 surfaces selected')).toBeTruthy()
+  })
+
+  it('renders only the actor section when no surface is selected (no stray wrapper)', () => {
+    render(<Inspector selected={[fixtureActor()]} selectedSurfaces={[]} />)
+    expect(screen.getByTestId('inspector')).toBeTruthy()
+    expect(screen.queryByTestId('inspector-sections')).toBeNull()
     expect(screen.queryByTestId('inspector-surface')).toBeNull()
   })
 })

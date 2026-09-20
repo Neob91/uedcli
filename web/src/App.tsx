@@ -90,31 +90,40 @@ function App() {
   // Surface (single-polygon texture) selection is a SECOND, DISTINCT selection kind (GUI.md
   // "Selection & the Inspector"): a plain LMB-tap on a brush surface in a non-wireframe mode selects
   // just that one polygon's texture (highlight + inspect only); Shift+LMB on the same surface
-  // selects the whole brush instead. The two kinds are mutually exclusive at any moment -- switching
-  // which kind a click targets clears the OTHER kind's set, so "the current selection" (point 1 of
-  // the spec: a miss always clears it) reads as one selection, not two independently-surviving ones.
+  // selects the whole brush instead.
+  //
+  // The two kinds COEXIST, and only a PLAIN (non-additive) pick of either clears the other -- UED22's
+  // own mechanism, reproduced, not a convenience. Esc and a tap that hits nothing still clear both.
+  // Which branch clears what, and why: GUI-PARITY.md "Actor + surface selection coexist; only a plain
+  // click clears both".
   const [selectedNames, setSelectedNames] = useState<Set<string>>(() => new Set())
   const [selectedSurfaces, setSelectedSurfaces] = useState<Set<string>>(() => new Set())
   const onSelectActor = useCallback((name: string, additive: boolean) => {
     // deselectSole=true: re-tapping the one currently-selected actor clears it (bug report:
     // clicking an already-selected mesh actor did nothing) -- same fix as onSelectSurface below,
     // extended to actors. onSelectActor is the single shared path for every actor kind (mesh,
-    // point, brush, mover), so this applies uniformly, not just to mesh actors.
+    // point, brush, mover), so this applies uniformly, not just to mesh actors. (A knowing
+    // divergence from UED22, whose plain actor click is an unconditional select that never
+    // deselects -- recorded in GUI-PARITY.md, kept because the owner asked for it.)
     setSelectedNames((s) => toggleSelection(s, name, additive, true))
-    setSelectedSurfaces(clearSelection())
+    if (!additive) setSelectedSurfaces(clearSelection())
   }, [])
   const onSelectSurface = useCallback((actor: string, polyIndex: number, additive: boolean) => {
     // deselectSole=true: re-tapping the one currently-selected poly clears it (bug report: clicking
     // an already-selected poly did nothing).
     setSelectedSurfaces((s) => toggleSelection(s, surfaceKey(actor, polyIndex), additive, true))
-    setSelectedNames(clearSelection())
+    if (!additive) setSelectedNames(clearSelection())
   }, [])
   // OrgPanel's own batch-select shape (Task 23): a folder-node click replaces/adds a whole actor
   // set at once (mirrors a plain tap's replace / Ctrl+tap's additive semantics over a SET, not a
   // single name) -- a plain union/replace, not a second selection model.
+  //
+  // It never clears the surface selection, not even when replacing: UED22's actor BATCH verbs don't.
+  // `edactBoxSelect` in replace mode clears `bSelected` in its own inline loop and never goes near a
+  // surf, and `edactSelectAll`/`edactSelectOfClass`/`edactSelectInside`/`mapSelect*` contain no
+  // `PF_Selected` reference at all. `SelectNone`-before-select is specific to the per-CLICK handlers.
   const onSelectMany = useCallback((names: ReadonlySet<string>, additive: boolean) => {
     setSelectedNames((s) => (additive ? new Set([...s, ...names]) : new Set(names)))
-    setSelectedSurfaces(clearSelection())
   }, [])
   // `Esc` (SelectionKeys, Task 15) and a tap that hits empty space (owner ruling 2026-09-15): the
   // paths that clear BOTH selection kinds entirely.

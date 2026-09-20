@@ -38,7 +38,11 @@ without becoming cluttered.
   enough at-a-glance info. This is the one piece of "Selection" content that isn't gated behind the
   Selection tab.
   - Actor and surface selection are **not mutually exclusive** — both can be non-empty at once, and
-    the strip shows both when they are.
+    the strip shows both when they are. Since confirmed against UED22 by disassembly (GUI-PARITY.md
+    "Actor + surface selection coexist; only a plain click clears both"): the editor keeps the two as
+    independent state, and only a PLAIN (non-Ctrl) pick clears the other kind. So both lines appear
+    after a Ctrl+pick that crossed kinds, or a Shift+pick of a surface's owning brush — not after an
+    ordinary click. `App.tsx` already behaves this way; the strip needs no extra gating.
   - One line per non-empty kind (actor line, surface line), never joined with "+"/inline — each
     gets its own row so neither reads as a continuation of the other.
   - A single actor selected: `<name> · <class>`. Multiple: `<N> actors`.

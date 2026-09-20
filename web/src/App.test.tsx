@@ -1,14 +1,28 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
 
+/** The selection callbacks App hands the (stubbed) quad, captured so a test can drive App's own
+ * real handlers without a WebGL raycast. */
+interface QuadSelectionProps {
+  onSelectActor: (name: string, additive: boolean) => void
+  onSelectSurface: (actor: string, polyIndex: number, additive: boolean) => void
+  onSelectMany: (names: ReadonlySet<string>, additive: boolean) => void
+  onDeselect: () => void
+}
+const quadProps: { current: QuadSelectionProps | null } = { current: null }
+
 // QuadLayout (Perspective + 3 ortho panes) pulls in react-three-fiber's <Canvas> (WebGL) four times
 // over, which jsdom can't provide -- stub the whole quad so this file tests App's own state
 // management (the Load/Rebuild error-banner regression below), not the 3D scene itself (covered
-// separately by scene/*.test.ts).
+// separately by scene/*.test.ts). The stub also records the selection callbacks, so the
+// selection-coexistence tests below exercise the real `onSelectActor`/`onSelectSurface`.
 vi.mock('./scene/QuadLayout', () => ({
-  QuadLayout: () => <div data-testid="viewport-stub" />,
+  QuadLayout: (props: QuadSelectionProps) => {
+    quadProps.current = props
+    return <div data-testid="viewport-stub" />
+  },
 }))
 
 afterEach(cleanup)
@@ -181,5 +195,113 @@ describe('App: level switching', () => {
     await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
     await waitFor(() => expect(screen.getByText(/level not found/)).toBeTruthy())
     expect(screen.getByTestId('level-picker-select').hasAttribute('disabled')).toBe(false)
+  })
+})
+
+// An actor selection and a surface selection COEXIST, and only a PLAIN (non-additive) pick clears
+// the other kind -- UED22's own mechanism: `AActor.bSelected` and `FBspSurf.PolyFlags & PF_Selected`
+// are independent, and the single point where they meet is `UEditorEngine::SelectNone`, which the
+// plain-LMB branch of each click handler calls and the Ctrl branch of each skips (GUI-PARITY.md
+// "Actor + surface selection coexist; only a plain click clears both"). These drive App's real
+// handlers through the stubbed quad and read the result off the Inspector.
+describe('App: actor + surface selection coexistence', () => {
+  const ACTOR = {
+    name: 'Room',
+    cls: 'Engine.Brush',
+    bbox_lo: [-256, -256, -128],
+    bbox_hi: [256, 256, 128],
+    location: [0, 0, 0],
+    rotation: [0, 0, 0],
+    folder: null,
+    labels: [],
+    order_value: 'm',
+    csg_rank: 1,
+    props: [],
+    categories: [],
+    brush: null,
+    sprite: null,
+    radii: null,
+    is_mover: false,
+    directional_arrow: null,
+  }
+  const POLY = {
+    verts: [0, 0, 0, 1, 0, 0, 1, 1, 0],
+    base: [0, 0, 0],
+    tu: [1, 0, 0],
+    tv: [0, 1, 0],
+    pan: [0, 0],
+    tex_index: 3,
+    masked: false,
+    two_sided: false,
+    blend: 'opaque',
+    flags: 0,
+    lightmap: null,
+    owner: 'Room',
+    i_brush_poly: 4,
+  }
+
+  async function renderSelectable() {
+    quadProps.current = null
+    mockFetch((url) => (url.endsWith('/scene')
+      ? jsonResponse({ polys: [POLY], actors: [ACTOR], geometry_pinned: false })
+      : undefined))
+    render(<App />)
+    await waitFor(() => expect(quadProps.current).not.toBeNull())
+    return quadProps.current!
+  }
+
+  it('keeps an actor selected when a surface is added with Ctrl (additive)', async () => {
+    const quad = await renderSelectable()
+    act(() => quad.onSelectActor('Room', false))
+    act(() => quad.onSelectSurface('Room', 4, true))
+    expect(screen.getByTestId('inspector-sections')).toBeTruthy()
+    expect(screen.getByTestId('inspector')).toBeTruthy()
+    expect(screen.getByTestId('inspector-surface')).toBeTruthy()
+  })
+
+  it('keeps a surface selected when an actor is added with Ctrl (additive)', async () => {
+    const quad = await renderSelectable()
+    act(() => quad.onSelectSurface('Room', 4, false))
+    act(() => quad.onSelectActor('Room', true))
+    expect(screen.getByTestId('inspector-sections')).toBeTruthy()
+  })
+
+  it('a PLAIN surface pick clears the actor selection (the editor calls SelectNone first)', async () => {
+    const quad = await renderSelectable()
+    act(() => quad.onSelectActor('Room', false))
+    act(() => quad.onSelectSurface('Room', 4, false))
+    expect(screen.getByTestId('inspector-surface')).toBeTruthy()
+    expect(screen.queryByTestId('inspector')).toBeNull()
+    expect(screen.queryByTestId('inspector-sections')).toBeNull()
+  })
+
+  it('a PLAIN actor pick clears the surface selection (same SelectNone)', async () => {
+    const quad = await renderSelectable()
+    act(() => quad.onSelectSurface('Room', 4, false))
+    act(() => quad.onSelectActor('Room', false))
+    expect(screen.getByTestId('inspector')).toBeTruthy()
+    expect(screen.queryByTestId('inspector-surface')).toBeNull()
+  })
+
+  // A batch actor select never clears surfaces, additive or replacing: UED22's actor batch verbs
+  // don't -- `edactBoxSelect` clears `bSelected` in its own inline loop and never touches a surf,
+  // and `edactSelectAll`/`edactSelectOfClass`/`mapSelect*` never mention `PF_Selected` at all.
+  it('a batch actor select keeps surfaces, additive or replacing', async () => {
+    const quad = await renderSelectable()
+    act(() => quad.onSelectSurface('Room', 4, false))
+    act(() => quad.onSelectMany(new Set(['Room']), true))
+    expect(screen.getByTestId('inspector-sections')).toBeTruthy()
+
+    act(() => quad.onSelectMany(new Set(['Room']), false))
+    expect(screen.getByTestId('inspector-sections')).toBeTruthy()
+    expect(screen.getByTestId('inspector-surface')).toBeTruthy()
+  })
+
+  it('a miss/Esc still clears both kinds (the editor\'s own SELECT NONE)', async () => {
+    const quad = await renderSelectable()
+    act(() => quad.onSelectActor('Room', false))
+    act(() => quad.onSelectSurface('Room', 4, true))
+    act(() => quad.onDeselect())
+    expect(screen.getByTestId('inspector-empty')).toBeTruthy()
   })
 })

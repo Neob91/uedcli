@@ -715,6 +715,14 @@ body {
   box-sizing: border-box;
 }
 
+/* Both selection kinds held at once (GUI-PARITY.md "Actor + surface selection coexist"): the two
+   sections stack, with a rule between them so they don't read as one list. */
+.inspector-sections > * + * {
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
 .inspector dt {
   font-weight: 600;
   margin-top: 6px;

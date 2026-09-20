@@ -194,16 +194,25 @@ draw order among siblings is otherwise scene-graph/insertion order, not guarante
 
 ## Selection & the Inspector
 
-Two DISTINCT selection kinds exist, mutually exclusive at any moment (picking one clears the
-other): a **whole-actor selection** (`selectedNames`, a `Set` of actor names — the original kind)
-and a **surface (texture) selection** (`selectedSurfaces`, a `Set` of `selectionSet.ts`'s
-`surfaceKey(actor, polyIndex)` strings, `polyIndex = ScenePoly.i_brush_poly` — one specific
-AUTHORED polygon on a brush, `BRUSH:IDX` addressing (`uedcli/surface.py`), not a position in the
-CSG-solved/possibly-fragmented `ScenePoly` array: a click anywhere on a split authored face selects
-the whole face, all its solved fragments together). Selecting a texture is
-**highlight + inspect only** — there is no editing action for it yet (this GUI is P1, read-only, no
-write path).
+Two DISTINCT selection kinds exist, and they can be held at the same time (only a plain, unmodified
+pick clears the other — see the first bullet below): a **whole-actor selection** (`selectedNames`, a
+`Set` of actor names — the original kind) and a **surface (texture) selection** (`selectedSurfaces`,
+a `Set` of `selectionSet.ts`'s `surfaceKey(actor, polyIndex)` strings,
+`polyIndex = ScenePoly.i_brush_poly` — one specific AUTHORED polygon on a brush, `BRUSH:IDX`
+addressing (`uedcli/surface.py`), not a position in the CSG-solved/possibly-fragmented `ScenePoly`
+array: a click anywhere on a split authored face selects the whole face, all its solved fragments
+together). Selecting a texture is **highlight + inspect only** — there is no editing action for it
+yet (this GUI is P1, read-only, no write path).
 
+- **The two kinds coexist; only a plain pick clears the other.** A plain (unmodified) tap replaces
+  the selection and clears BOTH sets first; a Ctrl+tap — and a Shift+tap that selects a surface's
+  owning brush — clears neither, so an actor selection and a surface selection can stand together.
+  The Inspector then shows an actor section and a surface section, stacked, instead of one or the
+  other. This is UED22's own mechanism, RE'd from `Editor.dll`: actor selection is
+  `AActor.bSelected`, surface selection is `FBspSurf.PolyFlags & PF_Selected`, and the only code
+  that touches both is `UEditorEngine::SelectNone`, which each click handler calls on its plain-LMB
+  branch and skips on its Ctrl branch. Full disassembly: the repo-root `GUI-PARITY.md`, "Actor +
+  surface selection coexist; only a plain click clears both".
 - **A tap that hits nothing (no actor/brush/texture under the cursor) always clears BOTH selection
   sets, in every pane and every mode** (owner ruling 2026-09-15) — `resolveTapAction`'s `'deselect'`
   outcome, wired to `onDeselect` alongside `Esc` (`SelectionKeys.tsx`).

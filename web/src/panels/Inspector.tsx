@@ -28,10 +28,9 @@ export interface InspectorProps {
   // settled main-spec paragraph defines the N-selected view -- this is the simplest thing that
   // satisfies "highlighted ... + inspector" without guessing at a richer multi-actor rollup.
   selected: SceneActor[]
-  // The surface-selection counterpart of `selected` above. The two are mutually exclusive at any
-  // moment (App.tsx clears one kind's set whenever the other is selected), so at most one of these
-  // two props is ever non-empty; `selected` takes rendering priority if both somehow are. Defaults
-  // to empty so every existing actor-only call site (tests included) is unaffected.
+  // The surface-selection counterpart of `selected` above. Both can be non-empty at once (a Ctrl+tap
+  // that crossed kinds -- GUI-PARITY.md "Actor + surface selection coexist"), and then both sections
+  // render, actors first. Defaults to empty so every existing actor-only call site is unaffected.
   selectedSurfaces?: SurfaceSelection[]
 }
 
@@ -60,38 +59,30 @@ function SurfaceDetail({ actorName, polyIndex, poly }: SurfaceSelection) {
   )
 }
 
-export function Inspector({ selected, selectedSurfaces = [] }: InspectorProps) {
-  if (selected.length === 0 && selectedSurfaces.length === 1) {
-    return <SurfaceDetail {...selectedSurfaces[0]} />
-  }
+/** The surface half of the inspector: one surface's detail, or a list summary for 2+. Never called
+ * with an empty list. */
+function SurfaceSection({ surfaces }: { surfaces: SurfaceSelection[] }) {
+  if (surfaces.length === 1) return <SurfaceDetail {...surfaces[0]} />
+  return (
+    <div className="inspector inspector-multi" data-testid="inspector-multi-surfaces">
+      <h2>{surfaces.length} surfaces selected</h2>
+      <ul>
+        {surfaces.map(({ actorName, polyIndex }) => (
+          <li key={surfaceKey(actorName, polyIndex)}>{actorName}:{polyIndex}</li>
+        ))}
+      </ul>
+    </div>
+  )
+}
 
-  if (selected.length === 0 && selectedSurfaces.length > 1) {
-    return (
-      <div className="inspector inspector-multi" data-testid="inspector-multi-surfaces">
-        <h2>{selectedSurfaces.length} surfaces selected</h2>
-        <ul>
-          {selectedSurfaces.map(({ actorName, polyIndex }) => (
-            <li key={surfaceKey(actorName, polyIndex)}>{actorName}:{polyIndex}</li>
-          ))}
-        </ul>
-      </div>
-    )
-  }
-
-  if (selected.length === 0) {
-    return (
-      <div className="inspector inspector-empty" data-testid="inspector-empty">
-        No selection
-      </div>
-    )
-  }
-
-  if (selected.length > 1) {
+/** The actor half: one actor's full detail, or a name-list summary for 2+. Never called empty. */
+function ActorSection({ actors }: { actors: SceneActor[] }) {
+  if (actors.length > 1) {
     return (
       <div className="inspector inspector-multi" data-testid="inspector-multi">
-        <h2>{selected.length} actors selected</h2>
+        <h2>{actors.length} actors selected</h2>
         <ul>
-          {selected.map((a) => (
+          {actors.map((a) => (
             <li key={a.name}>{a.name}</li>
           ))}
         </ul>
@@ -99,7 +90,7 @@ export function Inspector({ selected, selectedSurfaces = [] }: InspectorProps) {
     )
   }
 
-  const actor = selected[0]
+  const actor = actors[0]
   return (
     <div className="inspector" data-testid="inspector">
       <h2>{actor.name}</h2>
@@ -132,6 +123,28 @@ export function Inspector({ selected, selectedSurfaces = [] }: InspectorProps) {
           </table>
         </details>
       ))}
+    </div>
+  )
+}
+
+export function Inspector({ selected, selectedSurfaces = [] }: InspectorProps) {
+  if (selected.length === 0 && selectedSurfaces.length === 0) {
+    return (
+      <div className="inspector inspector-empty" data-testid="inspector-empty">
+        No selection
+      </div>
+    )
+  }
+
+  if (selected.length === 0) return <SurfaceSection surfaces={selectedSurfaces} />
+  if (selectedSurfaces.length === 0) return <ActorSection actors={selected} />
+
+  // Both kinds at once -- a Ctrl+tap that crossed kinds, or Shift+tap on a surface while surfaces
+  // were selected (see InspectorProps above). Show both sections, actors first.
+  return (
+    <div className="inspector-sections" data-testid="inspector-sections">
+      <ActorSection actors={selected} />
+      <SurfaceSection surfaces={selectedSurfaces} />
     </div>
   )
 }

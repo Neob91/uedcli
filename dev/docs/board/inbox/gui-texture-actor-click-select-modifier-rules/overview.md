@@ -51,3 +51,14 @@ its VISIBLE POLY") rather than a live UED22 capture — so this settles the POLY
 question by decree, not evidence, and the "not RE-verified" caveat above still stands for everything
 else here (Ctrl multi-select semantics, the AABB-fallback Shift gate, and the poly-vs-actor fork
 itself). Still open.
+
+## Partially settled by disassembly (2026-09-20), not live
+
+A DIFFERENT investigation (actor+surface selection coexistence, `GUI-PARITY.md`'s "Actor + surface
+selection coexist; only a plain click clears both") disassembled `Editor.dll`'s click handlers as a
+side effect and found the real Ctrl-vs-plain modifier mechanism: `UEditorEngine::SelectNone` (RVA
+`0x45ee0`) is called on a plain-LMB click and skipped on a Ctrl-LMB click, in both the actor and
+surface handlers — confirming Ctrl genuinely means "don't clear the other selection kind," not just
+"add to this one." Confidence 📖 disassembly-only (the live-capture blocker above still applies —
+this session's sandbox also couldn't boot a UED22 container). This answers part of "Ctrl multi-select
+semantics" above; the AABB-fallback Shift gate and the poly-vs-actor fork itself remain open.

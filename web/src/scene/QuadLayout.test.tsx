@@ -79,15 +79,15 @@ const ATLAS: AtlasPayload = { width: 1, height: 1, manifest: {}, png_base64: '' 
 function Harness({ buildSolved = false }: { buildSolved?: boolean }) {
   const [selectedNames, setSelectedNames] = useState<Set<string>>(new Set())
   const [selectedSurfaces, setSelectedSurfaces] = useState<Set<string>>(new Set())
+  // Both mirror App.tsx's real wiring -- deselectSole=true, and the other kind is cleared only on a
+  // PLAIN (non-additive) pick (GUI-PARITY.md "Actor + surface selection coexist"). Keep in sync.
   const onSelectActor = (name: string, additive: boolean) => {
-    // deselectSole=true mirrors App.tsx's real onSelectActor wiring -- keep this in sync with it.
     setSelectedNames((s) => toggleSelection(s, name, additive, true))
-    setSelectedSurfaces(new Set())
+    if (!additive) setSelectedSurfaces(new Set())
   }
   const onSelectSurface = (actor: string, polyIndex: number, additive: boolean) => {
-    // deselectSole=true mirrors App.tsx's real onSelectSurface wiring -- keep this in sync with it.
     setSelectedSurfaces((s) => toggleSelection(s, surfaceKey(actor, polyIndex), additive, true))
-    setSelectedNames(new Set())
+    if (!additive) setSelectedNames(new Set())
   }
   return (
     <QuadLayout

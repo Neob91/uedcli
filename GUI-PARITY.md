@@ -72,7 +72,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Click/hit-detection algorithm | How does UED22 resolve a click to a surface/actor/brush when candidates overlap? | 🔶 investigating | `dev/docs/board/inbox/gui-click-detection-algorithm-not-re-d-against/` — see Findings below |
 | Sprite alpha picking | Does UED22's sprite click hit-test respect the icon's transparent padding? | ✅ closed, implemented | 📖 source (`SoftDrv/Src/{Hit,DrawTile}.cpp`) + 🔬 live (real clicks, A/B against the unfixed code) — see Findings below |
 | Vertex handle screen size | Does UED22 draw vertex/local-origin handles at a constant screen size, or a fixed world size that scales with zoom? | ✅ closed, implemented | 📖 source (`Editor/Src/UnEdRend.cpp`) + 🔬 live (real zoom/dolly sweeps, A/B against the unfixed code) — see Findings below |
-| Modifier-key click-select rules | Are the Shift/Ctrl select-surface-vs-actor rules real UED22 behavior? | ⬜ open | `dev/docs/board/inbox/gui-texture-actor-click-select-modifier-rules/` |
+| Modifier-key click-select rules | Are the Shift/Ctrl select-surface-vs-actor rules real UED22 behavior? | 🔶 half-answered — Shift-forks-to-the-owning-brush and Ctrl-is-additive are now disassembly-confirmed; the AABB-fallback Shift gate and the line-hit rule are not | `dev/docs/board/inbox/gui-texture-actor-click-select-modifier-rules/`, plus the "Actor + surface selection coexist" Findings below |
 | Marquee containment rule | Full-containment for brushes vs. pivot-in-box for point actors — confirmed fact, not yet wired into the (deferred) marquee feature | ⬜ open (marquee itself deferred) | `dev/docs/board/inbox/gui-ortho-marquee-spec-omits-unrealed-s-brush/` |
 | CSG brush coloring | Does UED22 give Intersect/Deintersect brushes a distinct color from Add? | ⬜ open | `dev/docs/board/inbox/gui-csg-brush-coloring-never-distinguishes/` |
 | Pan direction (perspective vs ortho) | Which convention (drag-follows-camera vs. content-follows-cursor) matches UED22, if either? | ⬜ open | `dev/docs/board/inbox/gui-perspective-pan-direction-vs-ortho/` |
@@ -91,6 +91,7 @@ CLOSED only when its own bar is met with live evidence, not string/disassembly a
 | Pivot-cross visibility toggle | Does UED22 have a manual way to toggle the pivot marker's visibility on/off? | ✅ closed — no toggle exists; visibility is `(SnapCount > 0) \|\| (Count > 1)`, latched | ✅ binary (`Editor.dll` disassembly, our own `uned/UED22/`) + 🔬 live capture — see Findings Part 2 + Part 4 |
 | Pivot-cross anchor under multi-select | Which selected actor's location does UED22's one global cross sit on? | ✅ closed — the actor that was most recently the SOLE selection (= first-clicked, in a click-built multi-select) | ✅ binary (`Editor.dll` disassembly, our own `uned/UED22/`) + 🔬 live capture + owner's own live test — see Findings Part 3 + Part 4 |
 | Directional arrow gizmo | Does UED22 draw a per-actor facing-direction arrow (`bDirectional`), what does it look like, and what gates it? | ✅ closed, implemented | ✅ binary (`Editor.dll`/`Engine.dll` disassembly, our own `uned/UED22/*.dll`/`*.u`) — see Findings below |
+| Actor + surface selection coexistence | Can an actor selection and a BSP-surface selection be held at the SAME time, or does picking one clear the other? | 🔶 answered + implemented — they coexist; only a PLAIN (no-Ctrl) click clears both. NOT closed by this doc's own bar: disassembly tier, a live confirmation is still owed | 📖 binary (`Editor.dll`/`WinDrv.dll`/`unrealed.exe`/`Engine.u` disassembly, our own `uned/UED22/`); no live capture possible this session — see Findings below |
 
 Legend: ⬜ open (not started) · 🔶 investigating · ✅ closed (bar met, live-verified).
 
@@ -1216,9 +1217,14 @@ bHighlighted 0x10 · bEdLocked 0x20 · bEdShouldSnap 0x40 · bEdSnap 0x80
 ```
 
 Two independent anchors in the binary land exactly on that layout: `SetPivot` and
-`NoteSelectionChange` both use bit `0x04` as "selected", and `Click@…HActor` tests bit `0x20` to SKIP
-an actor (`0x1004726b`, `0x10047347`, `0x1004739c`) — precisely what `bEdLocked` ("Locked in editor —
-no movement or rotation") means. So `SnapCount`'s bit `0x40` is `bEdShouldSnap`, measured rather than
+`NoteSelectionChange` both use bit `0x04` as "selected", and `Click@…HActor` tests bit `0x20` at four
+points (`0x1004726b`, `0x100472d2`, `0x10047347`, `0x1004739c`) — differing in polarity and in how
+much each skips, but all four deciding whether the clicked actor gets modified or selected, which is
+precisely what `bEdLocked` ("Locked in editor — no movement or rotation") means.
+*(That list read as three sites, all "to SKIP an actor", until the selection-coexistence pass below
+decoded them properly: there are four, and they are not all the same polarity or the same
+consequence — see its `bEdLocked` breakdown. Nothing here depends on which: the bit's identity is the
+anchor, and that is unaffected.)* So `SnapCount`'s bit `0x40` is `bEdShouldSnap`, measured rather than
 inferred.
 
 Decoding class defaults across every `uned/UED22/*.u`, exactly two classes default `bEdShouldSnap`
@@ -1530,6 +1536,448 @@ server-side resolution — the last one against the REAL committed `uned/UED22/E
 defaults (`Engine.PatrolPoint`/`Engine.Camera`/`Engine.Light`), not a stub. The geometry test hand-
 verifies the 10-point shape at an identity pose (Location=(0,0,0), no Rotation) against the formula
 above. None of this is a live-rendered pixel — flagged honestly, same as the sections above.
+
+### Actor + surface selection coexist; only a plain click clears both (answered 2026-09-19, disassembly tier)
+
+Owner ask: "disassemble UED22 and check whether an actor selection and a surface (BSP poly)
+selection can be held at the same time, or whether selecting one clears the other." This GUI made
+them mutually exclusive by construction — `App.tsx`'s `onSelectActor`/`onSelectSurface`/
+`onSelectMany` each called the OTHER kind's setter with `clearSelection()` unconditionally, a
+deliberate, documented decision ("so 'the current selection' reads as one selection, not two
+independently-surviving ones") that had never been checked against the editor.
+
+**📖 Disassembly-tier, from our own `uned/UED22/` files only — `Editor.dll`, `WinDrv.dll`,
+`unrealed.exe`, `Engine.u`, plus a completeness sweep over every other shipped module** — no
+third-party source anywhere in this pass (`pefile`+`capstone`, the `dev/docs/spikes/bspspike/pe.py`
+harness plus the `2026-09-18-pivot-cross-re` scripts). A live UED22 capture was attempted and is
+impossible in this session, same wall as several sections above: the host's dockerd is rootless and
+shares no filesystem with the session (`-v $PWD/...` → `mkdir /workspace: permission denied`;
+`-v $HOME/...` → `mkdir /home/agent: permission denied`; a `/tmp` mount "succeeds" but resolves to
+the daemon's own empty `/tmp`), and no `ued-x86-runtime` image is present to boot in the first place.
+
+**Answer: the two selections are INDEPENDENT state and they genuinely coexist. The only coupling is
+one shared clearing primitive, `UEditorEngine::SelectNone`, which wipes BOTH kinds. A PLAIN
+(unmodified) left-click of either kind calls it before selecting; a Ctrl+click of either kind skips
+it entirely, so both sets survive and grow independently. So does Shift+click-on-a-surface (which
+selects the owning brush) and a right-click on either. Every ACTOR batch select verb
+(`edactSelectAll`/`edactSelectOfClass`/`edactBoxSelect`/`mapSelect*`/…) goes nowhere near
+`SelectNone` at all, so a SURFACE selection always survives one — though several of them rewrite the
+actor set themselves, so the actor half does not.**
+
+That is the rule, and it is what the GUI now implements. It has edge cases — some clicks clear
+nothing rather than clearing both (a `bEdLocked` actor, and certain editor modes), and several other
+entry points call `SelectNone` as a "replace" step before selecting something of their own
+(`POLY SELECT ALL`, `EDIT PASTE`, `MAP IMPORT`, and `AddActor`, which an `'A'`- or `'L'`-chorded
+click reaches). Each is pinned below, at the code that decides it. They are deliberately NOT
+summarised here: six review passes over this section put an error into exactly this paragraph five
+separate times — the sixth pass narrowed "both sets survive" to the surface half only, since a batch
+verb like `edactBoxSelect` clears `bSelected` itself — every one of them an attempt to compress those
+branches into a sentence, while the rule above and the disassembly below never moved. Read the branch
+tables for anything finer than the rule.
+
+#### The two flags, and their offsets
+
+- **Actor selection** = bit `0x04` of the `AActor` editor bitfield dword at `[actor+0x11c]` — the
+  same bit/offset this doc's pivot-cross Part 2/3/4 and radii sections already pinned, and whose
+  layout (`bHiddenEd 0x01 · bDirectional 0x02 · bSelected 0x04 · …`) comes from `Engine.Actor`'s own
+  stored `ScriptText` in `uned/UED22/Engine.u`.
+- **Surface selection** = `PF_Selected` = `0x02000000` in `FBspSurf::PolyFlags` at `[surf+4]`. The
+  surf array is `[Model+0x98]` (data) / `[Model+0x9c]` (count), stride `0x40` (`shl reg,6`), and
+  `Model` is `[Level+0x98]`. Cross-confirmed two independent ways: `SelectNone` reaches it as
+  `[Level+0x98]` from its own `ULevel*` argument, and `Click(HBspSurf)` reaches the identical
+  `+0x98`/`shl 6` pair through a completely different chain —
+  `FHitCause->Viewport->[+0x30](Actor)->[+0x68](XLevel)->[+0x98](Model)` (VA `0x100477cf`-
+  `0x100477ed`). The 0x40 stride itself rests solely on that `shl reg,6`; three further `FBspSurf`
+  member accesses in the same function corroborate the LAYOUT (they are all at offsets below 0x40, so
+  they cannot confirm the stride), and the memorized-surf global at `0x10149278` mirrors the same
+  field offsets independently — it is read at `+0x4`/`+0xc`/`+0x10`/`+0x14`/`+0x20`/`+0x22`
+  (`0x1014927c`, `0x10149284`, `0x10149288`, `0x1014928c`, `0x10149298`, `0x1014929a`), i.e. a second
+  instance of the identical layout. What is MEASURED is the access shape: two 32-bit writes at `[surf+0x10]`/`[surf+0x14]`
+  (`0x10047ad8`/`0x10047ae0`), a 16-bit pair at `[surf+0x20]`/`[surf+0x22]` (`0x10047b0b`-`0x10047b1d`),
+  and a pointer read at `[surf+0x24]` that is then treated as an actor — `bEdLocked` is tested on it
+  and its `bSelected` set (`0x10047909`-`0x10047960`), so THAT one is identified from behaviour, not
+  from a layout table. The field NAMES for the first two (`vTextureU`/`vTextureV`, `PanU`/`PanV`) are
+  the conventional UE1 ones and are not themselves derived from our binary — only the offsets and
+  widths are (the stride comes from the `shl`, above). Nothing in this section rests on those names.
+
+#### `UEditorEngine::SelectNone(ULevel*, INT Notify)` — the ONE coupling point (export RVA `0x45ee0`)
+
+A mode-gated preamble, then two loops back to back with no condition between them (the first loop's
+exit `jge 0x10045fad` falls straight into the second). The preamble, `0x10045f17`:
+`cmp dword [ebx+0x118], 0x18; jne 0x10045f49` — in mode `0x18` (vertex-edit) only, it also empties a
+`TArray` at `[this+0x230]` via `FArray::Realloc` (IAT `0x100ce5f4`), i.e. a THIRD thing `SelectNone`
+clears, presumably the vertex-edit selection. The identical instruction SEQUENCE (different base
+register and spill slot) appears in `edactBoxSelect` at `0x10038070`, gated differently — there it
+hangs off Shift-not-held
+(`KeyDown(0x10)` at `0x10038061`, `jne 0x100380cc`) and runs in every mode; that function's own
+mode-`0x18` test comes AFTER it (`0x100380a2`, `je 0x100380d2`) and has the opposite effect, skipping
+its `bSelected` loop entirely. Inside `SelectNone`, neither the actor nor the surface loop is gated on
+the preamble:
+
+```
+; --- loop 1: every actor's bSelected
+0x10045f4e  mov  edx, [ebp+8]                 ; Level
+0x10045f51  cmp  esi, [edx+0x30]              ; Level->Actors.Num
+0x10045f56  mov  eax, [edx+0x2c]              ; Level->Actors.Data
+0x10045f59  mov  edi, [eax+esi*4]
+0x10045f60  test byte [edi+0x11c], 4          ; bSelected?
+0x10045f69  call [0x100cee08]                 ; IAT -> Engine.dll ?StaticClass@ABrush@@SAPAVUClass@@XZ
+0x10045f71  mov  ecx, [edi+0x24] … [ecx+0x28] ; Actor->Class, walked up SuperField  == IsA(ABrush)
+0x10045f8c  mov  eax, [ebx+0x118]             ; GEditor->Mode
+0x10045f92  cmp  eax, 0x17 / 0x19             ; a BRUSH in either mode -> skip (stays selected)
+0x10045fa0  call [[edi]+0x1c]                 ; UObject::Modify()
+0x10045fa3  and  dword [edi+0x11c], 0xfffffffb ; clears bSelected (0x04)
+; --- loop 2: every surface's PF_Selected   (unconditional, no mode/kind gate at all)
+0x10045fb2  mov  ebx, [0x100cede8]            ; IAT -> Engine.dll ?ModifySurf@UModel@@QAEXHH@Z
+0x10045fc0  mov  ecx, [edx+0x98]              ; Level->Model
+0x10045fc6  cmp  esi, [ecx+0x9c]              ; Model->Surfs.Num
+0x10045fd0  shl  edi, 6                       ; sizeof(FBspSurf) == 0x40
+0x10045fd3  add  edi, [ecx+0x98]              ; Model->Surfs.Data
+0x10045fd9  test dword [edi+4], 0x2000000     ; PF_Selected?
+0x10045fe2  push 0 ; push esi ; call ebx      ; Model->ModifySurf(iSurf, 0)
+0x10045fe7  and  dword [edi+4], 0xfdffffff    ; clears PF_Selected
+; --- tail
+0x10045ff7  cmp  dword [ebp+0xc], 0           ; Notify
+0x10046003  call [[this]+0xc4]                ; NoteSelectionChange(Level)
+```
+
+So one call flattens both kinds. (Aside, reported as found: the actor loop's `0x17`/`0x19` exception
+means a selected BRUSH is NOT deselected while `GEditor->Mode` is `0x17` or `0x19`. `0x18` is
+already established in this doc as vertex-edit mode; `0x17`/`0x19` are its two neighbours, and their
+names are NOT derivable from our substrate and are not asserted here. What the two `Click` handlers
+do in those modes is NOT symmetric, and an earlier draft of this aside got it wrong: `Click(HBspSurf)`
+bails out of both (`0x100477bd`-`0x100477c9`, straight to the epilogue), but `Click(HActor)` bails only
+on `0x19` (`0x100471fd`) — on `0x17` it takes the `AClipMarker` branch at `0x1004720f`, which for a
+`ClipMarker`, or for a non-`bEdLocked` `ABrush` under LMB (gated `test byte [edi+8],1` at
+`0x10047238`, then `0x1004723e`-`0x10047272`), falls through to `0x10047291` → `0x100473a5`, i.e. the
+ordinary Ctrl-toggle-or-`SelectNone`-and-set path. So a click in mode `0x17` CAN reach `SelectNone`.
+Every OTHER actor instead falls to `0x10047274` (`mov eax,[edi+8]; test al,2`) and, for a plain LMB,
+returns at `0x10047279` to the epilogue having cleared nothing — so mode `0x17` is a PARTIAL
+exception on the actor side, not a blanket one either way. Note also that the `0x17` route enters at
+`0x100473a5`, PAST the `0x1004739c` lock test, so a locked `ClipMarker` there is not an early
+return.)
+
+**Every call site of `SelectNone` inside `Editor.dll`** — enumerated as an encoding scan for both
+MSVC dispatch forms (`FF 9x 00 01 00 00` and `8B 8x 00 01 00 00 ; FF Dx`) over all of `Editor.dll`'s
+`.text`, since a linear sweep desyncs on data-in-text; vtable slot `+0x100` = `SelectNone` read out
+of the `UEditorEngine` vtable at RVA `0xcf5d4`. There are no direct (`E8`) calls. Each is named by
+the `Trans->Begin(...)` string or the exec-verb literal adjacent to it:
+
+| Site         | Caller                  | What it is |
+|--------------|-------------------------|---|
+| `0x1004733e` | `Click(…HActor&)`       | Alt-or-double-click on an actor (`"clicking on actors"`) |
+| `0x100473df` | `Click(…HActor&)`       | **plain LMB on an actor** |
+| `0x10047bd1` | `Click(…HBspSurf&)`     | **plain LMB on a surface** (`"select surfaces"`) |
+| `0x10047f6e` | `Click(…HGlobalPivot&)` | clicking the pivot cross (`"Select None"`) |
+| `0x10046df0` | `AddActor`              | `"Add Actor"` |
+| `0x10064de7` | `Exec`                  | `EDIT PASTE` |
+| `0x10064e37` | `Exec`                  | `EDIT PASTEPOS` |
+| `0x10066298` | `Exec`                  | `MAP IMPORT` / `IMPORTADD` |
+| `0x100663f1` | `Exec`                  | `MAP IMPORT` (`"Importing map"`) |
+| `0x100668f5` | `Exec`                  | **`SELECT NONE`** — `SelectNone(Level, 1)` (`"Select None"`) |
+| `0x10066d43` | `Exec`                  | `HIDE SELECTED` / `HIDE UNSELECTED` |
+| `0x10067a4b` | `Exec`                  | **`POLY SELECT ALL`** — `SelectNone(Level,0)` then `polySelectAll(Model)` then `NoteSelectionChange` |
+
+**And TWO more in the frontend, `unrealed.exe`** — an earlier draft of this section claimed the
+12 above were the complete set, reasoning that no other module imports the symbol. That reasoning is
+a non-sequitur (a caller holding `GEditor` can dispatch the vtable slot without importing
+`SelectNone` at all), and it is wrong here — exactly the gap this doc's own pivot-cross Part 4
+flagged as "not determined" for `SetPivot`. A brute-force decode of `unrealed.exe`'s whole `.text`
+finds exactly two `call [reg+0x100]` sites, both the same shape:
+
+```
+0x00426628  mov  eax, [0x48545c]        ; its IAT slot for Editor.dll ?GEditor@@3PAVUEditorEngine@@A
+0x0042662d  mov  ecx, [eax]             ; the UEditorEngine*
+0x0042662f  mov  eax, [ecx]             ; its vtable
+0x00426631  push 0                      ; Notify = 0
+0x00426633  push [ecx+0xa8]             ; UEditorEngine::Level (the offset SelectNone itself uses)
+0x00426639  call dword ptr [eax+0x100]  ; SelectNone(Level, 0)
+```
+
+and the second identically at `0x00444934`-`0x00444945`. Both are `WListBox` handlers (`Window.dll`
+imports, by name): the first follows its `SelectNone` with `WListBox::GetCurrent`/`GetString`, splits
+the row on a tab and `Printf`s `CAMERA ALIGN NAME=%ls` — a browser list that deselects everything and
+flies the camera to the picked name; the second with `GetSelectedCount`/`GetSelectedItems`/`GetCount`
+and a loop — a multi-select list pushing its own selection into the world. Which dialog owns each is
+NOT identified (`unrealed.exe` has no symbols). Neither changes the conclusion — both are
+`SelectNone(Level, 0)`, so both clear BOTH kinds — but the corrected total is **14**, not 12.
+
+That 14 carries its own scope, so as not to repeat the mistake it fixes. Across every shipped module
+(`uned/UED22/*.dll` + `*.exe`, 31 files — two of which, `nircmd.exe`/`nircmdc.exe`, are UPX-packed and
+so have no `.text` to scan; neither imports anything from `Editor.dll`): **`unrealed.exe` is the only one that imports
+`?GEditor@@3PAVUEditorEngine@@A` at all**, and **nothing imports `SelectNone`** — so no other module
+can even get hold of a `UEditorEngine*` to dispatch the slot on. The only other module with any
+`call [reg+0x100]` in its `.text` is `fmod.dll` (2 sites), a third-party audio library that imports
+nothing from `Editor.dll`; its `+0x100` is some unrelated object's vtable, not this one. No module has
+the two-instruction `mov reg,[reg+0x100]; call reg` form outside `Editor.dll`. What this does NOT rule
+out is a dispatch through a computed displacement, or `unrealed.exe` reaching the same behaviour via an
+exec verb instead (`SELECT NONE` is in the table above, and the frontend demonstrably does send exec
+verbs — this doc's pivot-cross Part 4 found its pivot menu items going that way).
+
+`POLY SELECT ALL` is worth its own line: even a pure SURFACE verb spells "replace the selection" as
+`SelectNone` first, i.e. it clears the actor selection too. And `SELECT NONE` — the editor's own
+deselect-all — is exactly one `SelectNone(Level, 1)` call, so it clears both kinds. Our GUI's
+Esc/empty-tap path (which already clears both) is faithful.
+
+#### `FEditorHitObserver::Click(const FHitCause&, const HActor&)` — export RVA `0x47160`
+
+`edi` = `FHitCause*` (`[ebp+8]`), `esi` = `HActor*` (`[ebp+0xc]`), `[esi+8]` = the clicked `AActor*`.
+`GEditor` is the exported global `?GEditor@@3PAVUEditorEngine@@A` at `0x101722f8`. Opens with
+`GEditor->Trans->Begin(TEXT("clicking on actors"))` (`0x100471a8`; `[GEditor+0xb8]` is the
+transactor, and slots `+0x58`/`+0x5c` of the `??_7UTransBuffer@@6B@` vtable at `0x100cf934` are
+`?Begin@UTransBuffer@@UAEXPBG@Z` / `?End@UTransBuffer@@UAEXXZ` by exported symbol name, not by
+inference), writes `Actor->Location` (`[actor+0xd0..0xd8]`) into
+`GEditor->ClickLocation` (`[GEditor+0x128]`, the offset `edSetClickLocation` pins) and zeroes
+`ClickPlane` (`[GEditor+0x134]`, one `movups`). Then, on `GEditor->Mode` (`[GEditor+0x118]`):
+`0x19` → do nothing; `0x17` → a clip-marker branch (`0x1004720f`, via IAT
+`?StaticClass@AClipMarker@@…`); otherwise the selection branch:
+
+| Condition on `FHitCause->Buttons` (`[hitcause+8]`) | Behaviour |
+|----------------------------------------------------|---|
+| `& 0x2` (RMB)                                      | `Modify()`, `bSelected \|= 4`, `NoteSelectionChange`, then `EdCallback(0x19, 0)` — **no `SelectNone`** |
+| `& 0x200` (Alt or double-click), no `0x80`         | `SelectNone(Level, 0)` (`0x1004733e`), then `bSelected \|= 4`, `NoteSelectionChange`, `Exec("HOOK ACTORPROPERTIES")` |
+| `& 0x80` (Ctrl), plain LMB                         | **TOGGLES** `bSelected` (`not/xor/and 4/xor` at `0x100473b0`-`0x100473c4`), `NoteSelectionChange` — **no `SelectNone`** |
+| plain LMB, no modifier                             | `SelectNone(Level, 0)` (`0x100473df`), then `bSelected \|= 4` (an unconditional SET, never a toggle), `NoteSelectionChange` |
+
+`bEdLocked` (`[actor+0x11c] & 0x20`) is tested four times, and NOT all four do the same thing — an
+earlier draft of this paragraph flattened them into one rule and was wrong:
+
+- `0x100472d2` (RMB branch) and `0x10047347` (Alt/double-click branch) are `jne`-to-skip past just
+  the `Modify()`+`bSelected |= 4` pair, landing at `0x100472f2` / `0x10047367`; the branch's own
+  `NoteSelectionChange` (`0x10047303` / `0x10047378`) still runs. On the Alt branch the
+  `SelectNone` at `0x1004733e` sits BEFORE this test, so it runs for a locked actor too.
+- `0x1004739c` guards the whole unmodified-click tail — it sits BEFORE the Ctrl test at `0x100473aa`,
+  so it covers the Ctrl-toggle path (`0x100473b0`) as well as the plain-LMB one (`0x100473cc`). It is
+  `jne 0x1004740e` — and `0x1004740e` is the function's
+  `Trans->End` + epilogue (`call [[GEditor+0xb8]+0x5c]`, `ret 8` at `0x10047437`). So clicking a
+  `bEdLocked` actor without Alt/RMB is an EARLY RETURN: it never reaches the `SelectNone` at
+  `0x100473df` nor the `NoteSelectionChange` at `0x10047408`, and therefore **clears nothing at
+  all** — neither kind, plain or Ctrl. One narrow gap: the mode-`0x17` route enters at `0x100473a5`,
+  PAST this test, so a locked `ClipMarker` in that mode is not an early return (`0x1004726b`, which
+  the branch does apply, only filters an `ABrush`).
+- `0x1004726b` is the opposite polarity: inside the mode-`0x17` clip-marker branch, `je`-to-continue,
+  routing a NOT-locked brush onward to the ordinary selection path.
+
+`Click(HBspSurf)`'s Shift branch has its own check on the owning brush at `0x1004792a`; its plain-LMB
+branch (from `0x10047ba2`) has NO lock guard before its `SelectNone` at `0x10047bd1`, so the surface
+side has no equivalent early-return case.
+
+#### `FEditorHitObserver::Click(const FHitCause&, const HBspSurf&)` — export RVA `0x47780`
+
+`HBspSurf` layout is named by the function's own assert strings: `[hit+4]` = `Parent`
+(`appFailAssert` messages `"Hit.Parent"` and `"Hit.Parent->IsA(TEXT(\"HCoords\"))"`, source file
+`C:\GameDev\UnrealTournament\Editor\Src\UnEdClick.cpp`), `[hit+8]` = the surf index. Bails entirely
+when `GEditor->Mode` is `0x17`/`0x19` (`0x100477bd`-`0x100477c9`). Sets `GEditor->ClickLocation`/
+`ClickPlane` from the clicked point, then dispatches on `Buttons`, in this order:
+
+| Condition                              | Behaviour |
+|----------------------------------------|---|
+| `(B & 0x101) == 0x101` (**Shift**+LMB) | `Trans->Begin("select brush for editing")`; `Surf->Actor` (`[surf+0x24]`, null → `Logf("Invalid surface or missing actor (maybe deleted brush?)")` and return); `Modify()`; **the BRUSH's** `bSelected \|= 4`; `NoteSelectionChange` — **no `SelectNone`** |
+| `B & 1` and `UInput::KeyDown(0x41)`    | `GEditor->Exec(FString::Printf(TEXT("ACTOR ADD CLASS=%s"), …), *GLog)` — 'A'+click adds the current class. **Reaches `SelectNone` indirectly**: that exec handler dispatches `AddActor` (vtable `+0xc0`, its only dispatch site, `0x10066b9a`), which calls `SelectNone(Level, 0)` at `0x10046df0` before selecting the new actor — so this chord DOES clear both kinds |
+| `B & 1` and `UInput::KeyDown(0x4c)`    | `GEditor->Exec(TEXT("ACTOR ADD CLASS=ENGINE.LIGHT"), *GLog)` — 'L'+click adds a light; same `AddActor` path, so it clears both kinds too |
+| `(B & 0x202) == 0x202` (Alt+RMB)       | picks the surface's texture into `GEditor->CurrentTexture` (`[GEditor+0xb0]`), copies the surf into the memorized-surf global at `0x10149278`, `EdCallback(0xa, 0)` |
+| `(B & 0x201) == 0x201` (Alt+LMB)       | `"apply texture to surface"`: `ModifySurf(iSurf, 1)`, `Surf->Texture = CurrentTexture`, optionally the memorized alignment (`+Ctrl`), then `polyUpdateMaster` (vtable `+0xf8`) |
+| `B & 2` (RMB)                          | `"select surface for editing"`: `ModifySurf(iSurf, 0)`, `Surf->PolyFlags \|= PF_Selected` (`0x10047b70`), `NoteSelectionChange`, `EdCallback(0x18, 0)` — **no `SelectNone`** |
+| plain LMB                              | `"select surfaces"`: save `was = PolyFlags & PF_Selected`; **if NOT Ctrl (`B & 0x80`), `SelectNone(Level, 0)`** (`0x10047bd1`); `ModifySurf(iSurf, 0)`; `PolyFlags = (PolyFlags & ~PF_Selected) \| (was ^ PF_Selected)` — i.e. set to `!was`; `NoteSelectionChange` |
+
+#### The modifier bits, pinned from our own binaries (not assumed)
+
+`UEditorEngine::Click(UViewport*, DWORD Buttons, FLOAT X, FLOAT Y)` (export RVA `0x3c200`, vtable
+`+0x84`) is where the keyboard modifiers enter the word both handlers above test. It:
+
+1. builds the hit box: `X' = X - 0.5` (the `0.5` at `0x100dcb10`), `Viewport->HitX = clamp(X'-2)`,
+   `HitY` likewise, `HitXL = clamp(X'+3) - HitX`, `HitYL` likewise (`[viewport+0xbc..0xc8]`) — the
+   5×5 px box this doc's "Click/hit-detection algorithm" section already reported, re-confirmed here;
+2. renders the hit pass: `this->Draw(Viewport, 0, HitData, &HitSize=0x400)` — dispatched on its own
+   `this` (spilled at `[ebp-0x420]`), which is the same object as the `GEditor` global in practice;
+   vtable `+0x78`, which the vtable read confirms is
+   `?Draw@UEditorEngine@@UAEXPAVUViewport@@HPAEPAH@Z`;
+3. **ORs the modifiers in** (`0x1003c328`-`0x1003c370`), each via
+   `UInput::KeyDown` (IAT `0x100cedf8` → `?KeyDown@UInput@@QAEEH@Z`) on `Viewport->Input`
+   (`[viewport+0x58]`):
+   ```
+   push 0x10 ; KeyDown -> or esi, 0x100      ; IK_Shift -> 0x100
+   push 0x11 ; KeyDown -> or esi, 0x80       ; IK_Ctrl  -> 0x80
+   push 0x12 ; KeyDown -> or esi, 0x200      ; IK_Alt   -> 0x200
+   ```
+4. constructs an `FEditorHitObserver` (its vtable `??_7FEditorHitObserver@@6B@` = `0x100cf540`, and
+   `FHitObserver`'s ctor via IAT `??0FHitObserver@@QAE@XZ`) and the `FHitCause` at `[ebp-0x438]`:
+   `+0 observer, +4 Viewport, +8 Buttons, +0xc MouseX, +0x10 MouseY` — **which is exactly the
+   `[edi+4]`/`[edi+8]` both `Click` handlers read**;
+5. `Viewport->ExecuteHits(HitCause, HitData, HitSize)` (IAT
+   `?ExecuteHits@UViewport@@QAEXABUFHitCause@@PAEH@Z`).
+
+`0x10`/`0x11`/`0x12` are `IK_Shift`/`IK_Ctrl`/`IK_Alt` by our own `uned/UED22/Engine.u`, which carries
+the whole `EInputKey` tag list as one contiguous, declaration-ordered run (its `UEnum`'s own `Names`
+array, not the package name table, which `USCRIPT-COMPILER.md` establishes is refcount-sorted) —
+`IK_None, IK_LeftMouse, IK_RightMouse,
+IK_Cancel, IK_MiddleMouse, IK_Unknown05, IK_Unknown06, IK_Unknown07, IK_Backspace, IK_Tab,
+IK_Unknown0A, IK_Unknown0B, IK_Unknown0C, IK_Enter, IK_Unknown0E, IK_Unknown0F, IK_Shift, IK_Ctrl,
+IK_Alt, IK_Pause, …` and later `IK_Unknown40, IK_A, IK_B, …`. The `IK_UnknownNN` placeholders encode
+their own hex index in their names (`IK_Unknown05` sits at position 5, `IK_Unknown0A` at 0xA,
+`IK_Unknown40` at 0x40), so the sequence is self-confirming — the same technique the
+`USCRIPT-COMPILER.md` campaign used to recover `ProbeMask`. It also lands `IK_A` at `0x41` and
+`IK_L` at `0x4c`, exactly the two codes the surface handler chords on above, which is an independent
+check that the ordinals are right.
+
+The MOUSE bits come from our own `WinDrv.dll`. `UWindowsViewport::ViewportWndProc`'s `WM_*BUTTONUP`
+arm builds the `Buttons` word literally — `WM_LBUTTONUP (0x202) → 1`, `WM_RBUTTONUP (0x205) → 2`,
+`WM_MBUTTONUP (0x208) → 4` (`0x1000b88c`/`0x1000b8d1`/`0x1000b8b0`) — and calls
+`Engine->Click(Viewport, that, X, Y)` at `0x1000ba0e`. So **an ordinary editor click is dispatched on
+button UP**, and `1`/`2`/`4` are left/right/middle.
+
+`ViewportWndProc` has exactly three `call [reg+0x84]` sites, and the other two are worth recording
+rather than leaving as "the button-up one":
+
+- `0x1000b688`, in the `WM_*BUTTONDOWN` arm — a click dispatched on PRESS, `Buttons = 1`, but gated
+  at `0x1000b629`-`0x1000b656` on `msg == 0x201` (WM_LBUTTONDOWN) **and** `GIsEditor` (IAT
+  `0x1001b084` → `Core.dll ?GIsEditor@@3HA`) **and** `KeyDown(0x11)` **and** `KeyDown(0x12)`. So only
+  a Ctrl+Alt+LMB press takes it — and since `UEditorEngine::Click` then ORs `0x80|0x200` in, it lands
+  in the `(B & 0x201) == 0x201` Alt+LMB texture-apply row of the `HBspSurf` table above.
+- `0x1000b560`, the `WM_LBUTTONDBLCLK` arm (message table at `0x1000c4dc`/`0x1000c4c0`, handler
+  `0x1000b50c`), which passes `0x200` — **the same bit Alt sets**, so UED22 cannot distinguish
+  Alt+LMB from a left double-click at any of the branch tables above. That is what the code does; no
+  intent is claimed for it.
+
+#### Nothing else couples the two kinds
+
+A whole-`.text` scan of `Editor.dll` for `0x02000000` as a real IMMEDIATE OPERAND — decoded at every
+candidate start byte, not a raw byte search, and attributed to the nearest preceding export — returns
+**25 owners**: `SelectNone`, `Click(HBspSurf)`, `MouseDelta`, `Exec`, `FixBrushLinks`,
+`bspBuildBounds`, `Snap`, `UMergeDXTCommandlet::StaticConstructor`, and **17 of the 26 `poly*`
+verbs** (the nine that never name the bit directly are `polyFindMaster`, `polyResetSelection`,
+`polySelectAdjacents`, `polySelectAdjacentFloors`/`Slants`/`Walls`, `polySelectCoplanars`,
+`polyUnionSet`, `polyUpdateMaster`) — and **no `edact*` or `mapSelect*` function at all**.
+
+*(A first version of this paragraph reported a raw 4-BYTE scan instead, which returns 30 owners —
+five spurious ones: `UFontFactory::FactoryCreateBinary`, `UTextureFactory::FactoryCreateBinary`,
+`UPackageDumpCommandlet::StaticConstructor`, `UMergeDXTCommandlet::Merge`, and four sites under
+`UEditInfo::StaticClass`. Every one of those is a false positive: the byte window `00 00 00 02`
+straddling a disp32/imm32 boundary, e.g. `mov dword ptr [esi+0x98], 2` at `0x1009a770` and
+`test dword ptr [eax+0x488], 0x200` at `0x1009ee6f`. None of them references `PF_Selected`. The
+operand-aware set above is the real one; the negative result is unchanged either way.)* (Same caveat as the actor-bit scan below: an immediate
+scan cannot see a WHOLESALE write of `PolyFlags` from a register, and one exists —
+`Click(HBspSurf)`'s Alt+Ctrl+LMB texture-apply copies the memorized surf's flags in with
+`mov [esi+4], eax` at `0x10047b08`. That one is surface→surface, so it does not affect the cross-kind
+conclusion, but the scan is not a proof about `PolyFlags` in general.)
+
+Conversely, `[reg+0x11c]` is written in three encodings, and the scan was run for all three: the
+`83 /n imm8` and `81 /n imm32` ALU forms, and `89 /r` (`mov [reg+0x11c], reg`, which is how both
+`Click` handlers' `|= 4` read-modify-writes land). Between them they cover `edactBoxSelect`,
+`edactSelectAll`, `edactSelectDeleted`, `edactSelectMatching`, `edactSelectOfClass`,
+`edactSelectSubclassOf`, `edactSelectInside`, `edactSelectInvert`, `edactDuplicateSelected`,
+`edactHideSelected`, `edactHideUnselected`, `edactHideInvert`, `edactUnHideAll`,
+`edactReplaceClassWithClass`, `edactReplaceSelectedBrush`, `edactReplaceSelectedWithClass`,
+`mapSelectFirst`, `mapSelectLast`, `NoteActorMovement`, `NoteSelectionChange`, `FinishAllSnaps`,
+`MouseDelta`, `Draw`, `AddActor`, `SetZClipping`, `FixBrushLinks`, `SelectNone`, both `Click`
+handlers, `Exec`, two `FactoryCreateText`s and two `UEditorEngine` ctor/assign bodies — and **no
+`poly*` verb at all, in any of the three forms**. That is the load-bearing negative, and it holds
+across all three forms rather than just the immediate ones. A fourth form does occur in this binary —
+`xor dword [ecx+0x11c], eax` at `0x1006c30f`, inside `Exec` (`31 /r`) — which none of the three
+catches, so "every encoding" would be too strong; a generic re-scan (every instruction anywhere in
+`.text` whose memory DESTINATION carries disp `0x11c`, any mnemonic) returns the same 34-function
+owner set with no `poly*`, so the negative survives the wider net. A write through a computed address,
+or via a pointer the compiler kept at a different displacement, would still escape even that; nothing
+observed suggests one.
+
+So: **every actor-selection batch verb (`edactSelectAll`, `edactBoxSelect`, `edactSelectOfClass`,
+`edactSelectInside`, `edactSelectInvert`, `edactSelectMatching`, `edactSelectSubclassOf`,
+`mapSelect*`) leaves surface selection untouched, and every surface verb (`polySelectAll`,
+`polySelectAdjacent*`, `polySelectMatching*`, `polySelectReverse`, `polySelectZone`, …) leaves actor
+selection untouched.** `polySelectAll` is literally one call:
+`polySetAndClearPolyFlags(Model, PF_Selected, 0, 0, 0)` (`0x1004ba92`, vtable `+0xfc`).
+
+`edactBoxSelect` (the marquee, export RVA `0x37fe0`) is worth recording exactly, because it does NOT
+go through `SelectNone`: it checks `KeyDown(0x10)` = **Shift** (`0x10038061`) and, when Shift is
+NOT held, clears `bSelected` in its own hand-rolled loop (`and dword [eax+0x11c], 0xfffffffb` at
+`0x100380c2`). So a replace-mode marquee clears actors and leaves every selected surface standing —
+and its additive modifier is Shift, not Ctrl.
+
+One dead-code oddity found on the way, reported rather than smoothed over: `polyResetSelection`
+(export RVA `0x4b720`, vtable `+0x104`) has **zero call sites** — no vtable dispatch anywhere in
+`Editor.dll`, no direct call, and no other module imports it — and its body is
+`PolyFlags |= 0xfcffffff` (`0d fffffffc`, an `OR EAX, imm32`, at `0x1004b770`), which SETS nearly
+every poly flag on every surf rather than clearing the two selection bits an `AND 0xfcffffff` would
+have cleared (`PF_Memorized`+`PF_Selected`). It looks like a genuine upstream bug in unreachable
+code; nothing relies on it, and it is not what clears surface selection.
+
+#### Divergences found, deliberately NOT fixed here (out of this item's scope, recorded so they are not lost)
+
+1. **Plain-clicking an already-selected ACTOR.** UED22's plain-LMB actor path ends in an
+   unconditional `bSelected |= 4` (`0x100473f1`) — it never deselects. This GUI passes
+   `deselectSole=true` (`selectionSet.ts`'s `toggleSelection`), so re-tapping the sole selected actor
+   clears it. That behaviour was an explicit owner-reported bug fix ("clicking an already-selected
+   mesh actor did nothing"), so it stands; it is a knowing divergence, not an oversight.
+2. **Plain-clicking one of SEVERAL selected surfaces.** UED22 computes the new flag as `!was`, and
+   `SelectNone` has already cleared everything — so clicking one of N selected surfaces ends with
+   **nothing** selected. This GUI ends with that one surface selected (`deselectSole` only fires at
+   `size === 1`). The single-selected-surface case does match UED22 exactly (both end empty).
+3. **Alt+LMB vs. double-click share bit `0x200`** (above). This GUI has no Alt-click or
+   double-click behaviour at all, so there is nothing to reproduce yet — noted for whoever adds one.
+4. **Shift on the GUI's own AABB-fallback path now also suppresses the cross-kind clear.**
+   `selection.ts`'s `resolveTapAction` forces `additive: true` for a non-wireframe hit that missed all
+   real geometry but landed inside a brush's bounding box, whenever Shift is held (`selection.ts:165`,
+   the pre-existing "absorbed rather than deselecting" rule). With the coexistence rule below, such a
+   click now leaves an existing surface selection standing. UED22 has no counterpart to that path at
+   all — its hit test is a rendered-pixel buffer scan, so a click that painted nothing is a genuine
+   miss (clear both) and a click that hit a surface is a plain select (also clear both). Left as is:
+   the fallback itself is an invented GUI affordance, and narrowing it is a separate question from
+   this one. The GENUINE-surface Shift path (`selection.ts:157`) is faithful — it maps exactly onto
+   `(Buttons & 0x101) == 0x101`, which really does skip `SelectNone`.
+
+This pass also answers half of the still-open "Modifier-key click-select rules" row above, and the
+answer is that this GUI's convention was already right: Shift+LMB on a surface selects the owning
+BRUSH (`(Buttons & 0x101) == 0x101`, `"select brush for editing"`), and Ctrl is the additive
+modifier for both kinds (`0x80`, the bit that skips `SelectNone` in both handlers). What is NEW is
+that neither of those paths clears the other kind. That row stays open for the rest of its
+scope (the AABB-fallback Shift gate, the line-hit rule).
+
+**Implemented** (`web/src/App.tsx`, `web/src/panels/Inspector.tsx`): the two per-CLICK handlers,
+`onSelectActor` and `onSelectSurface`, now clear the other kind's `Set` **only when the action is not
+additive** — a plain pick is UED22's `SelectNone`-then-select (which flattens both kinds), while a
+Ctrl/additive pick is the path that skips `SelectNone` and so touches only its own kind. The BATCH
+path, `onSelectMany` (the org panel's folder click), clears the other kind **never** — matching every
+actor batch verb above, which reach `bSelected` without going through `SelectNone` at all; a first
+version of this change had it clear on replace, which no UED22 verb does. `Esc` and an empty-space tap
+still clear both (`SELECT NONE` = one `SelectNone` call). `Inspector` no longer assumes at most one
+kind is non-empty: it renders an actor section AND a surface section together when both are, reusing
+its existing per-kind markup (`inspector-surface`/`inspector-multi-surfaces`/`inspector`/
+`inspector-multi`) inside a wrapper rather than inventing a new visual convention.
+
+**Verification, honestly scoped**: unit-level only. `App.test.tsx`'s new
+`App: actor + surface selection coexistence` block drives App's OWN `onSelectActor`/
+`onSelectSurface`/`onSelectMany`/`onDeselect` — the existing `vi.mock` of `QuadLayout` now records
+the props App hands it, so the tests call the real handlers and read the result off the real
+Inspector — covering all six cases (Ctrl-add either way keeps both; a plain pick either way clears
+the other; a batch actor select keeps surfaces whether additive or replacing; Esc/miss clears
+both). `QuadLayout.test.tsx`'s own harness, which advertises that it mirrors `App.tsx`, is resynced to
+the same rule. `Inspector.test.tsx` gains three cases (both single, both multi, and "no stray wrapper when
+only actors are selected"); its old `an actor selection takes priority over a (should-be-empty)
+stale surface selection` — which encoded the mutual-exclusivity assumption as correct — is replaced.
+Whole frontend suite green (50 files, 458 tests). `tsc -b` reports only the 15 pre-existing errors in
+files this change never touches. No live UED22 capture (impossible here, above) and no browser pixel A/B (this
+sandbox still has no runnable Chromium — the same missing-shared-library gap on file for several
+sections above).
+
+**Update, same review session: the first of two owed `dev/docs/GUI.md` edits is now DONE — with the
+owner's yes, obtained directly (`AskUserQuestion`), not just asserted in a commit message.** This
+campaign doc (`GUI-PARITY.md`) is exempt from `dev/docs/`'s per-edit approval gate; `GUI.md` is not
+(`CLAUDE.md`), so the drafted replacement text below was held back from the branch that found this
+finding, and applied only after the owner said yes in the reviewing session:
+
+- **Done.** `GUI.md:197` used to open the "Selection & the Inspector" section with "Two DISTINCT
+  selection kinds exist, mutually exclusive at any moment (picking one clears the other)" — the
+  sentence this finding overturns. It now opens with the coexistence wording this finding drafted,
+  plus a new first bullet stating the `SelectNone`/Ctrl mechanism and citing this section by name.
+  `GUI.md`'s own text is authoritative for the CURRENT sentence; this section is where the RE detail
+  behind it lives.
+- **Still owed** — not applied, no text drafted yet: the same section's closing "Not RE-verified
+  against a live UED22" paragraph says the click-target/modifier rules rest on "the owner's own spec
+  and the well-known general UnrealEd 1.x editing convention". Half of that is now
+  disassembly-confirmed against our own binary: Shift forking a surface click to the owning BRUSH is
+  `(Buttons & 0x101) == 0x101`, and Ctrl being the additive modifier is bit `0x80`, the bit that skips
+  `SelectNone`. The paragraph's heading claim (no LIVE verification) still stands; only its statement
+  of the basis is understated. This one is a genuine open TODO, not yet drafted or asked about.
 
 ## Testing
 
