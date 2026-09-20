@@ -249,6 +249,10 @@ def decompose_convex(actor, *, cache: dict[str, list[ConvexCell]] | None = None)
 # vertices"), so "touching" means within this band, not exact zero-gap contact.
 _TOUCH_EPS = 1e-3
 
+# Same constant/rationale as relation.py's own _PARALLEL_EPS: 1 - |n.n'| below this => same plane
+# orientation (parallel or anti-parallel normals), used to decide two faces are coplanar candidates.
+_PARALLEL_EPS = 1e-3
+
 
 def _cell_edge_directions(cell: ConvexCell) -> list[Vec3]:
     """Unit directions of the cell's true polytope EDGES (not merely its face normals): two
@@ -447,7 +451,7 @@ def _matched_face_pair(actor_a, actor_b) -> tuple[int, int, float] | None:
                 nb = polyalign._world_normal(actor_b, pb, ref=f"{actor_b.name}:{ib}")
             except polyalign.PolyAlignError:
                 continue
-            if abs(abs(_dot(na, nb)) - 1.0) > 1e-3:      # not parallel/anti-parallel -> not coplanar
+            if abs(abs(_dot(na, nb)) - 1.0) > _PARALLEL_EPS:   # not parallel/anti-parallel -> not coplanar
                 continue
             wb = polyalign._world_verts(actor_b, pb)
             if abs(_dot(_sub(wb[0], wa[0]), na)) > _TOUCH_EPS:   # not on the same plane
