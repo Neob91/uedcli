@@ -418,3 +418,120 @@ def test_load_pulls_in_a_new_actor_but_geometry_stays_pinned_until_a_separate_re
     assert c.post("/api/level/TestLevel/rebuild").status_code == 200
     scene_after_second_rebuild = c.get("/api/level/TestLevel/scene").json()
     assert {p["owner"] for p in scene_after_second_rebuild["polys"]} == {"Room", "Pillar"}
+
+
+def test_scene_route_reuses_load_s_scene_inputs_instead_of_rebuilding(tmp_path, monkeypatch):
+    """Board `gui-serve-rebuilds-classindex-on-every-request`: /scene must NOT rebuild
+    `(search_files, index, defaults)` once /load already built a trunk to pair them with -- a
+    plain Reload (POST /load then GET /scene+/atlas+/lightmap) used to call `_scene_inputs()` 4
+    times; after the fix it's called exactly once, by /load."""
+    _require_ued22()
+    index, defaults = _index_and_defaults()
+    calls = []
+
+    def _counting_scene_inputs(project):
+        calls.append(1)
+        return [], index, defaults
+
+    monkeypatch.setattr(serve_app, "_scene_inputs", _counting_scene_inputs)
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [cube_room()])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+
+    assert c.post("/api/level/TestLevel/load").status_code == 200
+    assert len(calls) == 1
+
+    assert c.get("/api/level/TestLevel/scene").status_code == 200
+    assert c.get("/api/level/TestLevel/scene").status_code == 200
+    assert c.get("/api/level/TestLevel/atlas").status_code == 200
+    assert c.get("/api/level/TestLevel/lightmap").status_code == 200
+
+    assert len(calls) == 1   # still just the one call /load made
+
+
+def test_scene_route_as_the_very_first_request_bootstraps_and_seeds_the_cache(tmp_path, monkeypatch):
+    """No /load or /rebuild has ever run -- /scene itself triggers `_get_trunk`'s once-only
+    bootstrap branch. That ONE call still rebuilds `_scene_inputs()` (nothing to reuse yet, not a
+    regression), but stashes its result so the immediately-following /atlas does NOT."""
+    _require_ued22()
+    index, defaults = _index_and_defaults()
+    calls = []
+
+    def _counting_scene_inputs(project):
+        calls.append(1)
+        return [], index, defaults
+
+    monkeypatch.setattr(serve_app, "_scene_inputs", _counting_scene_inputs)
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [cube_room()])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+
+    assert c.get("/api/level/TestLevel/scene").status_code == 200
+    assert len(calls) == 1
+
+    assert c.get("/api/level/TestLevel/atlas").status_code == 200
+    assert len(calls) == 1   # reused what /scene's own bootstrap just stashed
+
+
+def test_rebuild_route_always_calls_scene_inputs_fresh_not_cached(tmp_path, monkeypatch):
+    """Guards the deliberate exclusion the spec calls for: unlike /scene/atlas/lightmap, /rebuild
+    must keep calling `_scene_inputs()` fresh on every invocation -- it feeds `index`/`defaults`
+    straight into a real CSG/lighting solve (`_build_scene`), where a stale schema could silently
+    produce a wrong result, not just a slow one. A future change that accidentally routes /rebuild
+    through `_current_scene_inputs()` would fail this test."""
+    _require_ued22()
+    index, defaults = _index_and_defaults()
+    calls = []
+
+    def _counting_scene_inputs(project):
+        calls.append(1)
+        return [], index, defaults
+
+    monkeypatch.setattr(serve_app, "_scene_inputs", _counting_scene_inputs)
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [cube_room()])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+
+    assert c.post("/api/level/TestLevel/rebuild").status_code == 200
+    assert len(calls) == 1
+    assert c.post("/api/level/TestLevel/rebuild").status_code == 200
+    assert len(calls) == 2   # a second Rebuild calls it again -- never reused
+
+
+def test_switch_level_clears_the_scene_inputs_cache_too(tmp_path, monkeypatch):
+    """`_scene_inputs_ref` must be cleared alongside `_trunk_ref`/`_geometry_ref`/`_payload_ref` on
+    a level switch -- otherwise a stale pairing from the OLD level's trunk would leak into the new
+    one's first read (it would still be a HARMLESS reuse in practice -- see spec's "Not tied to
+    PUT /api/level" -- but this pins the simpler, obviously-correct behavior actually chosen)."""
+    _require_ued22()
+    index, defaults = _index_and_defaults()
+    calls = []
+
+    def _counting_scene_inputs(project):
+        calls.append(1)
+        return [], index, defaults
+
+    monkeypatch.setattr(serve_app, "_scene_inputs", _counting_scene_inputs)
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [cube_room()])
+    _write_fixture_trunk(root, "Other", [cube_room()])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+
+    assert c.post("/api/level/TestLevel/load").status_code == 200
+    assert len(calls) == 1
+
+    assert c.put("/api/level", json={"level": "Other"}).status_code == 200
+    assert c.get("/api/level/Other/scene").status_code == 200
+    assert len(calls) == 2   # the old level's cached pairing was cleared, not reused for the new one

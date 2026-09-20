@@ -154,6 +154,16 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
     _trunk_lock = threading.Lock()
     _payload_lock = threading.Lock()
     _trunk_ref: list[_LoadedTrunk | None] = [None]
+    # `_scene_inputs_ref` caches `(search_files, index, defaults)` for the THREE READ ROUTES ONLY
+    # (`/scene`, `/atlas`, `/lightmap`) -- board `gui-serve-rebuilds-classindex-on-every-request`
+    # spec's "Proposed fix". Its lifetime is tied to `_trunk_ref`'s, not the process's: stashed
+    # only where `_trunk_ref[0]` itself gets (re)assigned (`/load`'s handler, `_get_trunk`'s
+    # once-only bootstrap branch below), read by `_current_scene_inputs()`. `/load` and `/rebuild`
+    # deliberately do NOT read from this slot -- they call `_scene_inputs()` fresh every time,
+    # unchanged, because they genuinely consume a fresh `index`/`defaults` to re-derive real state
+    # (the trunk itself; the CSG/lighting solve) where a stale one could silently produce a
+    # different, wrong result -- not merely a slower-but-correct one (spec §3).
+    _scene_inputs_ref: list[tuple | None] = [None]
     _geometry_ref: list[_BuiltGeometry | None] = [None]
     # `_payload_ref` caches `build_scene_payload`/`build_wireframe_payload`'s output as
     # `(trunk_state, geometry, payload)` -- `_get_payload` below compares the first two by identity
@@ -199,6 +209,32 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                                           texture_table=texture_table, owners=owners)
         _build_status[0] = "built"
 
+    def _current_scene_inputs():
+        """`(search_files, index, defaults)` for `/scene`/`/atlas`/`/lightmap` only -- reuses
+        whatever was built alongside the CURRENT `_trunk_ref[0]` instead of rebuilding a fresh,
+        memo-less `ClassIndex`/`ClassDefaults` on every read (board
+        `gui-serve-rebuilds-classindex-on-every-request`). Safe because these three routes only
+        ever CONSUME the trunk `_scene_inputs_ref` was seeded alongside: on a `_get_payload` cache
+        HIT, `index`/`defaults` are never even touched; on a MISS (a fresh trunk with no cached
+        payload yet -- always true right after a Load), `build_scene_payload`/
+        `build_wireframe_payload` DO consume them, but they get exactly the same `index`/`defaults`
+        that Load itself just resolved the trunk's own actors with (both writes happen together,
+        see the two `_scene_inputs_ref[0] = ...` call sites) -- reusing that pairing is exactly as
+        fresh as what these routes already effectively run against today. `/load`/`/rebuild` never
+        call this -- they call `_scene_inputs()` directly, unconditionally (see the
+        `_scene_inputs_ref` cache-slot comment above).
+
+        Cold path (`_trunk_ref[0]` still `None` -- nothing to pair with yet, e.g. the very first
+        request in the process is one of these three routes, before any `/load`): builds fresh via
+        `_scene_inputs()`, same cost as today; not a regression, since there is nothing to reuse
+        yet. `_get_trunk`'s own bootstrap branch stashes ITS result into `_scene_inputs_ref` once
+        it wins `_trunk_lock`, so a second read route racing behind it reuses that instead of also
+        building its own."""
+        cached = _scene_inputs_ref[0]
+        if cached is not None and _trunk_ref[0] is not None:
+            return cached
+        return _scene_inputs(project)
+
     def _get_trunk(level_name: str, search_files, index, defaults) -> _LoadedTrunk:
         # NOTE on parameters: the plan's own illustrative pseudocode named this `_get_trunk(search_files,
         # index)` and called `resolve_actor_sprites(lvl, index, search_files)` -- but the REAL
@@ -239,6 +275,15 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                                      mesh_texture_table=mesh_texture_table,
                                      mover_polys=mover_polys, mover_owners=mover_owners,
                                      mover_texture_table=mover_texture_table)
+                # Written BEFORE `_trunk_ref[0]` (review finding): `_current_scene_inputs()` gates
+                # solely on `_trunk_ref[0] is not None`, unsynchronized -- if `_trunk_ref[0]` were
+                # set first, a concurrent reader could observe the NEW trunk paired with the
+                # PREVIOUS `_scene_inputs_ref[0]` (a real race, not a benign one: `_get_payload`'s
+                # own identity check misses on the new trunk and builds+caches a payload from that
+                # stale index/defaults, persisting until the next Load/Rebuild). Writing this first
+                # makes "trunk populated" always imply "matching scene-inputs already populated"
+                # for a lock-free reader, same reasoning `_read_geometry`'s own comment relies on.
+                _scene_inputs_ref[0] = (search_files, index, defaults)   # seeds _current_scene_inputs too
                 _trunk_ref[0] = built
                 # The AUTOMATIC INITIAL LOAD (spec §"Two independent axes"): this branch only ever
                 # runs once per process (gated by `_trunk_ref[0] is None` above), exactly the "first
@@ -440,6 +485,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         _trunk_ref[0] = None
         _geometry_ref[0] = None
         _payload_ref[0] = None
+        _scene_inputs_ref[0] = None
         _changes_available[0] = False
         _build_status[0] = "no_build"
 
@@ -495,12 +541,20 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
             lvl, index, search_files)
         mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
             lvl, index, search_files)
-        _trunk_ref[0] = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
-                                     sprite_table=sprite_table, actor_sprites=actor_sprites,
-                                     mesh_polys=mesh_polys, mesh_owners=mesh_owners,
-                                     mesh_texture_table=mesh_texture_table,
-                                     mover_polys=mover_polys, mover_owners=mover_owners,
-                                     mover_texture_table=mover_texture_table)
+        loaded = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
+                              sprite_table=sprite_table, actor_sprites=actor_sprites,
+                              mesh_polys=mesh_polys, mesh_owners=mesh_owners,
+                              mesh_texture_table=mesh_texture_table,
+                              mover_polys=mover_polys, mover_owners=mover_owners,
+                              mover_texture_table=mover_texture_table)
+        # Written BEFORE `_trunk_ref[0]` (review finding, same reasoning as `_get_trunk`'s bootstrap
+        # branch): `_current_scene_inputs()` gates solely on `_trunk_ref[0] is not None`, so a
+        # concurrent `/scene`/`/atlas`/`/lightmap` must never be able to observe the NEW trunk
+        # paired with the PREVIOUS `_scene_inputs_ref[0]` -- that would feed a stale index/defaults
+        # into `_get_payload`'s payload-cache-miss branch (trunk identity just changed, so it always
+        # misses right after a Load) and cache a wrong payload until the next Load/Rebuild.
+        _scene_inputs_ref[0] = (search_files, index, defaults)   # seeds /scene, /atlas, /lightmap
+        _trunk_ref[0] = loaded
         _changes_available[0] = False
         # Bootstrap-from-disk-pointer: a no-op if a Rebuild already populated the slot this session
         # (spec §1's last bullet -- an on-disk pointer must never overwrite an in-memory pin a
@@ -532,7 +586,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
     @app.get("/api/level/{level_name}/scene")
     def scene(level_name: str) -> dict:
         _require_level(level_name)
-        search_files, index, defaults = _scene_inputs(project)
+        search_files, index, defaults = _current_scene_inputs()
         # `_get_payload` internally picks `build_wireframe_payload` (cold-open / no Rebuild yet --
         # genuinely no solved geometry, not an error; every actor's own AUTHORED brush shape still
         # rides on `SceneActor.brush`, spec §4) vs `build_scene_payload`, the same way this route's
@@ -568,7 +622,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # way, matching this — boards `mesh-actors-should-render-independent-of-geometry-build`/
         # `mover-triangles-not-build-state-independent`).
         _require_level(level_name)
-        search_files, index, defaults = _scene_inputs(project)
+        search_files, index, defaults = _current_scene_inputs()
         _payload, geometry, trunk_state = _get_payload(level_name, search_files, index, defaults)
         texture_table = ((geometry.texture_table if geometry is not None else [])
                          + trunk_state.sprite_table + trunk_state.mesh_texture_table
@@ -596,7 +650,7 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # returns a valid degenerate response (1x1 PNG, empty manifest, intensity 1.0 — the same
         # shape a solved-but-unlit level gets), so no special-casing is needed here.
         _require_level(level_name)
-        search_files, index, defaults = _scene_inputs(project)
+        search_files, index, defaults = _current_scene_inputs()
         _payload, geometry, trunk_state = _get_payload(level_name, search_files, index, defaults)
         if geometry is None:
             polys: list[tuple] = []
