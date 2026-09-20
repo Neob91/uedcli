@@ -319,7 +319,31 @@ not assumed from general knowledge.
 
 - **P2 — editing.** Human edits via the model-side write path, under the standing **flock +
   refuse-same-actor-edit** rule (`safety.md`); no GUI-specific concurrency. AI edits stay instant.
-  Human editing model (staging + explicit Save vs. instant) and the atomic-chained-commands idea are
-  open — see `questions/`.
+
+  **Persistence: staged + explicit Save (ruled 2026-09-14).** A human edit is not written to the
+  trunk directly. It stages into the same audit-snapshot store this spec's "Snapshots" section
+  already defines (content-addressed dedup blobs + manifest, under the gitignored `.uedcli/`) — not
+  the `stash` porcelain (`stash_register.py`), which stays a separate, user-facing, manually-named
+  register. Save applies the staged actors into the trunk via the model-side write path. Later:
+  disaster recovery from this store (e.g. the GUI crashing mid-edit) is a natural extension, not
+  built now.
+
+  **Save/Load conflict handling (ruled 2026-09-14, symmetric both directions; merge mechanic ruled
+  2026-09-20).** If the trunk changed for an actor also touched by a staged edit since staging
+  began, neither Save nor an explicit Load proceeds silently: both name exactly which actors changed
+  underneath and require explicit user confirmation before merging — never a silent overwrite in
+  either direction. The merge mechanic is **per-property, with mandatory explicit resolution
+  required on a real same-property conflict** — a trunk-side change to a DIFFERENT property than the
+  staged edit merges in automatically, no prompt; a trunk-side change to the SAME property blocks
+  that actor's Save until the user explicitly picks staged-or-trunk (never a default/auto-pick, and
+  never a blanket confirm-and-overwrite). First built by `gui-p2-actor-translate-ctrl-drag`.
+
+  **Does not shift `direction/trunk-and-editor.md` (ruled 2026-09-20).** See
+  `dev/docs/rationale/gui-editing.md` for the engineering reasoning — staging is one more writer
+  reaching the same trunk write path every other verb already uses, not a change to what the trunk
+  is or how it is merged.
+
+  The atomic-chained-commands idea (a transaction verb spanning multiple mutations, all-or-nothing
+  under one flock hold) stays open — see `questions/atomic-chained-verb-transaction.md`.
 - **P3 — git-feature layer / heavy editing.** Only read-only git remains permitted (owner ruling);
   branch/worktree/merge orchestration is rejected. Vertex/CSG/texture-align editing lives here.
