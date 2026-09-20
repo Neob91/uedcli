@@ -500,3 +500,32 @@ def test_scoped_edges_unknown_seed_raises_graph_error(mover_class_index):
     graph = actorgraph.build_graph(level, mover_class_index)
     with pytest.raises(actorgraph.GraphError, match="Nope"):
         actorgraph.scoped_edges(graph, seed="Nope", hops=1)
+
+
+def test_format_text_touches_with_matched_pair_and_area():
+    e = actorgraph.Edge(src="Subtract_ConfMain", dst="Subtract_ConfBay", relation="touches",
+                        directed=False, matched_pair=(5, 2), area_estimate=112.0)
+    line = actorgraph.format_text([e])
+    assert line == "Subtract_ConfMain:5 --touches(112uu^2)--> Subtract_ConfBay:2"
+
+
+def test_format_text_touches_no_matched_pair_no_selector():
+    e = actorgraph.Edge(src="A", dst="B", relation="touches", directed=False,
+                        matched_pair=None, area_estimate=50.0)
+    assert actorgraph.format_text([e]) == "A --touches(50uu^2)--> B"
+
+
+def test_format_text_contains_no_size_no_selector():
+    e = actorgraph.Edge(src="Room", dst="Add_FrontDesk", relation="contains", directed=True)
+    assert actorgraph.format_text([e]) == "Room --contains--> Add_FrontDesk"
+
+
+def test_format_text_carved_by():
+    e = actorgraph.Edge(src="Wall", dst="DoorCutout", relation="carved_by", directed=True)
+    assert actorgraph.format_text([e]) == "Wall --carved_by--> DoorCutout"
+
+
+def test_format_text_multiple_edges_one_per_line():
+    e1 = actorgraph.Edge(src="A", dst="B", relation="touches", directed=False)
+    e2 = actorgraph.Edge(src="A", dst="C", relation="contains", directed=True)
+    assert actorgraph.format_text([e1, e2]) == "A --touches--> B\nA --contains--> C"

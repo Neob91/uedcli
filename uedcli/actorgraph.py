@@ -665,3 +665,20 @@ def scoped_edges(graph: "ActorGraph", *, seed: str, hops: "int | Literal['all']"
         depth += 1
 
     return kept
+
+
+def format_text(edges: list["Edge"]) -> str:
+    """Flat, one edge per line, subject-relation-object -- the same one-line-per-edge shape
+    `eventgraph.format_text` uses (minus its class annotations; spec 'Output format'). A `touches`
+    edge with a matched face pair prints `Name:idx` selectors so the line is directly pipeable into
+    `brush relation measure`; a `touches` edge with an area estimate but no matched pair prints bare
+    names with the size still shown."""
+    lines = []
+    for e in edges:
+        src = f"{e.src}:{e.matched_pair[0]}" if e.matched_pair is not None else e.src
+        dst = f"{e.dst}:{e.matched_pair[1]}" if e.matched_pair is not None else e.dst
+        rel = e.relation
+        if e.relation == "touches" and e.area_estimate is not None:
+            rel = f"touches({e.area_estimate:.4g}uu^2)"
+        lines.append(f"{src} --{rel}--> {dst}")
+    return "\n".join(lines)
