@@ -16,6 +16,14 @@ Vec3 = tuple[float, float, float]
 # and it also bounds the vertex-triple-intersection tolerance in _cell_vertices below).
 _SPLIT_EPS = 1e-4
 
+# Tolerance for singular/degenerate 3x3 linear system detection in _intersect_three_planes.
+_SINGULAR_EPS = 1e-9
+
+# Tolerance for vertex extraction from half-space constraints. Looser than _SPLIT_EPS because
+# vertex extraction (plane triple intersection + half-space validation) accumulates more float
+# error than a single plane classification.
+_VERTEX_EPS = _SPLIT_EPS * 10
+
 
 class DegenerateBrushError(ValueError):
     """A brush whose PolyList doesn't bound a valid closed solid (self-intersecting/non-manifold) --
@@ -180,7 +188,7 @@ def _intersect_three_planes(pl1, pl2, pl3) -> Vec3 | None:
     n3, d3 = pl3
     c23, c31, c12 = _cross(n2, n3), _cross(n3, n1), _cross(n1, n2)
     det = _dot(n1, c23)
-    if abs(det) < 1e-9:
+    if abs(det) < _SINGULAR_EPS:
         return None
     return tuple(
         (d1 * c23[i] + d2 * c31[i] + d3 * c12[i]) / det for i in range(3)
@@ -196,8 +204,8 @@ def _cell_vertices(planes: list[tuple[Vec3, float]]) -> list[Vec3]:
         p = _intersect_three_planes(planes[i], planes[j], planes[k])
         if p is None:
             continue
-        if all(_dot(n, p) <= d + _SPLIT_EPS * 10 for n, d in planes):
-            if not any(_len(_sub(p, q)) < _SPLIT_EPS * 10 for q in out):
+        if all(_dot(n, p) <= d + _VERTEX_EPS for n, d in planes):
+            if not any(_len(_sub(p, q)) < _VERTEX_EPS for q in out):
                 out.append(p)
     return out
 
@@ -218,7 +226,11 @@ def decompose_convex(actor, *, cache: dict[str, list[ConvexCell]] | None = None)
     wrapper (Task 6) is what remembers a bad brush so it isn't re-probed."""
     if cache is not None and actor.name in cache:
         return cache[actor.name]
-    polys = [polyalign._world_verts(actor, p) for p in actor.brush.polys if len(p.vertices) >= 3]
+    try:
+        polys = [polyalign._world_verts(actor, p) for p in actor.brush.polys if len(p.vertices) >= 3]
+    except polyalign.PolyAlignError as e:
+        raise DegenerateBrushError(f"{actor.name}: brush does not bound a valid solid "
+                                    f"(degenerate actor transform)") from e
     tree = _build_solid_bsp(polys, [], inside=True, ref=actor.name)
     leaves = _collect_solid_leaves(tree)
     if not leaves:

@@ -100,3 +100,25 @@ def test_collinear_face_raises_named_error_not_zerodivisionerror():
     a = _brush("A", brush)
     with pytest.raises(actorgraph.DegenerateBrushError, match="A"):
         actorgraph.decompose_convex(a)
+
+
+def test_degenerate_actor_transform_raises_named_error_not_polyalignerror():
+    # decompose_convex calls polyalign._world_verts, which can raise PolyAlignError if the actor's
+    # transform is degenerate (zero/singular scale). This must be caught and re-raised as
+    # DegenerateBrushError, never propagated as a bare PolyAlignError (violates the project rule
+    # "no exception ever reaches the user"). This test creates an actor with a zero MainScale to
+    # trigger the error.
+    from uedcli.model import Actor
+    from uedcli.transform import FScale
+    from decimal import Decimal as D
+
+    cube_brush = cube(64, 64, 64)
+    actor = Actor(
+        name="DegenerateActor",
+        cls="Engine.Brush",
+        brush=cube_brush,
+        location=(D(0), D(0), D(0)),
+        main_scale=FScale(scale=(D(0), D(1), D(1))),  # zero scale on X axis
+    )
+    with pytest.raises(actorgraph.DegenerateBrushError, match="DegenerateActor"):
+        actorgraph.decompose_convex(actor)
