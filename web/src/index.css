@@ -101,11 +101,11 @@ body,
   padding: 0;
   width: 100%;
   height: 100%;
-  /* Bug fix: a non-shrinking sidebar (.org-panel-wrapper/.inspector-pane-wrapper, flex: 0 0 auto)
-     could force #app-root's flex row wider than the viewport, and with no overflow-x set anywhere
-     in this chain the browser scrolled the WHOLE PAGE horizontally instead of clipping/scrolling
-     just the sidebar. The page itself must never need horizontal scroll -- each sidebar handles its
-     own overflow (see .org-panel/.inspector-pane's own overflow-x below). */
+  /* Bug fix: a non-shrinking sidebar (.sidebar, flex: 0 0 auto) could force #app-root's flex row
+     wider than the viewport, and with no overflow-x set anywhere in this chain the browser scrolled
+     the WHOLE PAGE horizontally instead of clipping/scrolling just the sidebar. The page itself must
+     never need horizontal scroll -- the sidebar handles its own overflow internally (see
+     .sidebar-panel-body's own overflow-x below). */
   overflow-x: hidden;
 }
 
@@ -205,55 +205,151 @@ body {
   cursor: row-resize;
 }
 
-/* Collapsible sidebar wrapper (mobile/laptop layout spec, owner-approved 2026-09-18): shared shape
-   for the org-panel wrapper here and `.inspector-pane`'s own wrapper in App.tsx -- a toggle button
-   docked at the sidebar's edge, always rendered, plus the panel's own content when expanded. Only
-   `flex: 0 0 auto` sizing and `height: 100%` are shared; each wrapper's toggle sits at whichever edge
-   faces the viewport (see `.org-panel-wrapper .sidebar-toggle` / `.inspector-pane-wrapper
-   .sidebar-toggle` below). */
-.org-panel-wrapper,
-.inspector-pane-wrapper {
+/* The unified sidebar (icon rail + one active panel), replacing the old org-panel/inspector-pane
+   double sidebar (unified-sidebar spec). `.sidebar` is a non-shrinking flex COLUMN child of
+   `#app-root` (same role `.org-panel-wrapper`/`.inspector-pane-wrapper` used to have): the
+   persistent selection strip spans its full width on top, with `.sidebar-body` (a flex row: the
+   rail, then the active panel) filling the rest. `.sidebar-rail` is always rendered (the "small
+   margin" the viewport gives up even fully collapsed); `.sidebar-panel` (the active registry entry's
+   content) only mounts while expanded -- the strip does NOT depend on it (spec's Decisions: "the
+   strip stays visible even when the sidebar is collapsed"). */
+.sidebar {
   display: flex;
+  flex-direction: column;
   flex: 0 0 auto;
   height: 100%;
 }
 
-.sidebar-toggle {
-  flex: 0 0 auto;
-  width: 20px;
-  font: inherit;
-  font-size: 11px;
-  border: none;
+.sidebar-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.sidebar-rail {
+  display: flex;
+  flex: 0 0 36px;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
   border-left: 1px solid var(--border);
   background: var(--surface-1);
+}
+
+.sidebar-rail-button {
+  position: relative;
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
   color: var(--fg-muted);
   cursor: pointer;
 }
 
-.sidebar-toggle:hover {
-  color: var(--fg);
+.sidebar-rail-button:hover {
   background: var(--surface-2-hover);
+  color: var(--fg);
 }
 
-/* The inspector pane sits on the far right, so its toggle -- the sidebar's own left edge -- comes
-   BEFORE its content in the wrapper's flex row; the org panel's toggle does too (see the JSX order
-   in QuadLayout.tsx), since it also sits to the right of the quad. Both share the same visual result:
-   a thin always-visible strip at the boundary between the sidebar and the rest of the layout. */
+.sidebar-rail-button[aria-pressed='true'] {
+  background: var(--surface-2);
+  color: var(--fg);
+}
 
-/* Org panel sidebar (Part 6, Task 23): folder tree + label facets + find. */
-.org-panel {
-  flex: 0 0 220px;
+/* The Selection tab's discoverability dot (spec's Decisions section): unseen selection content
+   while a different tab is active. Generic -- any panel's `hasIndicator` draws this same dot, not
+   just Selection's. */
+.sidebar-rail-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sem-selection);
+}
+
+.sidebar-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 280px;
   min-width: 0;
   height: 100%;
-  overflow-y: auto;
-  /* Bug fix: a long unwrapped folder/actor name could overflow the sidebar's own fixed width --
-     scroll it internally rather than letting it escape into the page (see #app-root's overflow-x
-     above for why that used to scroll the whole page). */
-  overflow-x: auto;
-  padding: 8px;
   border-left: 1px solid var(--border);
   background: var(--surface-1);
   color: var(--fg);
+  box-sizing: border-box;
+}
+
+/* The persistent "current selection" strip (spec's Decisions section): always visible above
+   `.sidebar-body`, independent of which tab is showing AND independent of collapse state. Clicking
+   it switches to the Selection tab. */
+.selection-strip {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  border-left: 1px solid var(--border);
+  cursor: pointer;
+}
+
+.selection-strip:hover {
+  background: var(--overlay-fg-hover);
+}
+
+/* Collapsed sidebar (spec's Decisions section): no room for name/class/texture-ref text in the
+   ~36px rail width once `.sidebar-panel` is gone -- Sidebar.tsx renders icon tokens only (no text
+   children) in this state; this class just centers/tightens the container to match. */
+.selection-strip-collapsed {
+  padding: 6px 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.selection-strip-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.selection-strip-collapsed .selection-strip-line {
+  justify-content: center;
+}
+
+.selection-strip-line + .selection-strip-line {
+  margin-top: 4px;
+}
+
+.selection-strip-icon {
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+
+.selection-strip-empty {
+  color: var(--fg-muted);
+}
+
+/* The active registry panel's own content -- the ONE scroll region for whichever panel is showing
+   (org tree or inspector), replacing the two separate per-panel scroll areas `.org-panel`/
+   `.inspector-pane` used to each own. */
+.sidebar-panel-body {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  padding: 8px 12px;
+  box-sizing: border-box;
+}
+
+/* Org panel content (Part 6, Task 23): folder tree + label facets + find. Box sizing (width,
+   scrolling, border, background) now lives on the shared `.sidebar-panel`/`.sidebar-panel-body`
+   (unified-sidebar spec) -- only this panel's own smaller font size stays here. */
+.org-panel {
   font-size: 12px;
 }
 
@@ -700,20 +796,6 @@ body {
   font-weight: 600;
 }
 
-.inspector-pane {
-  flex: 0 0 280px;
-  /* Bug fix: matches .org-panel's min-width: 0 -- without it, a flex item's automatic minimum
-     width defaults to its content's min-content size, which can force the pane wider than its
-     280px flex-basis (e.g. a long unbroken inspector value). */
-  min-width: 0;
-  overflow-y: auto;
-  /* Bug fix: a wide inspector table/value could overflow the sidebar's own fixed width -- scroll
-     it internally rather than letting it escape into the page (see #app-root's overflow-x above). */
-  overflow-x: auto;
-  border-left: 1px solid var(--border);
-  padding: 8px 12px;
-  box-sizing: border-box;
-}
 
 /* Both selection kinds held at once (GUI-PARITY.md "Actor + surface selection coexist"): the two
    sections stack, with a rule between them so they don't read as one list. */

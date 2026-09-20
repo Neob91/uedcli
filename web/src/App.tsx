@@ -1,13 +1,17 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload, ScenePoly, StatusPayload } from './api'
 import { fetchLevelState, fetchStatus, postLoad, postRebuild, switchLevel } from './api'
-import { useCollapsiblePanel } from './layout/useCollapsiblePanel'
-import { Inspector } from './panels/Inspector'
+import { useHasUnseenSelection } from './layout/useSelectionSeen'
+import { useSidebar } from './layout/useSidebar'
 import type { SurfaceSelection } from './panels/Inspector'
 import { LevelPicker } from './panels/LevelPicker'
+import { Sidebar } from './panels/Sidebar'
+import { buildSidebarPanels } from './panels/sidebarRegistry'
 import { subscribeChangesAvailable } from './reload'
 import { resolveBuildSolved } from './scene/buildStatus'
+import type { FrameRequest } from './scene/frame'
+import { unionBBox } from './scene/frame'
 import { QuadLayout } from './scene/QuadLayout'
 import { clearSelection, parseSurfaceKey, surfaceKey, toggleSelection } from './scene/selectionSet'
 import { useTheme } from './theme/useTheme'
@@ -131,6 +135,32 @@ function App() {
     setSelectedNames(clearSelection())
     setSelectedSurfaces(clearSelection())
   }, [])
+  // Frame-on-select (quad-layout Task 15/23): lifted here from QuadLayout so the org panel -- now
+  // hosted by Sidebar, a sibling of QuadLayout rather than its child -- can still trigger the same
+  // camera-framing QuadLayout's own `F` key uses (SelectionKeys' onFrame). One shared frameRequest,
+  // threaded down into QuadLayout as a controlled prop.
+  const frameSeq = useRef(0)
+  const [frameRequest, setFrameRequest] = useState<FrameRequest | null>(null)
+  const frameActors = useCallback(
+    (names: ReadonlySet<string>) => {
+      if (!scene) return
+      const bbox = unionBBox(scene.actors.filter((a) => names.has(a.name)))
+      if (!bbox) return // nothing to frame -- unionBBox's own no-op signal (frame.ts)
+      frameSeq.current += 1
+      setFrameRequest({ bbox, seq: frameSeq.current })
+    },
+    [scene],
+  )
+  // OrgPanel's own batch-select shape: a folder-node click replaces/adds a whole actor set at once
+  // AND frames the camera onto it -- mirrors QuadLayout's own former handleOrgSelect exactly.
+  const handleOrgSelect = useCallback(
+    (names: string[], additive: boolean) => {
+      const nameSet = new Set(names)
+      onSelectMany(nameSet, additive)
+      frameActors(nameSet)
+    },
+    [onSelectMany, frameActors],
+  )
   const [reloading, setReloading] = useState(false)
   const [busy, setBusy] = useState<'load' | 'rebuild' | null>(null)
   // Level switching (owner ruling): unload the OLD level's state the instant a switch starts, and
@@ -140,10 +170,20 @@ function App() {
   // load) does the actual blocking -- unmounting the whole app is the most thorough "block all UI".
   const [levelSwitching, setLevelSwitching] = useState(false)
   const [levelSwitchError, setLevelSwitchError] = useState<string | null>(null)
-  // Collapsible inspector sidebar (mobile/laptop layout spec, owner-approved 2026-09-18) -- see
-  // QuadLayout.tsx's identical org-panel wiring and useCollapsiblePanel's own doc comment. A
-  // separate storage key: the two sidebars toggle independently, per the owner's spec.
-  const { collapsed: inspectorCollapsed, toggle: toggleInspector } = useCollapsiblePanel('uedcli-inspector-pane-collapsed')
+  // The unified sidebar's own collapse/active-tab state (spec's Architecture -> Components) --
+  // owned HERE, not inside Sidebar.tsx, because the Selection tab's discoverability dot (below)
+  // needs `activeTabId` too (spec's "Selection strip data"). Sidebar.tsx receives all three as
+  // plain props, same as any other panel-agnostic piece of its own state.
+  const { collapsed: sidebarCollapsed, activeTabId: sidebarActiveTabId, setActiveTab: setSidebarActiveTab } = useSidebar()
+  // A stable string that changes iff the actor+surface selection ITSELF changes -- a fresh Set
+  // every render must not itself register as a change (useSelectionSeen.ts's own doc comment).
+  const selectionIdentity = useMemo(
+    () => `${[...selectedNames].sort().join(',')}|${[...selectedSurfaces].sort().join(',')}`,
+    [selectedNames, selectedSurfaces],
+  )
+  // The Selection rail icon's discoverability dot (spec's Decisions section) -- the ONLY thing that
+  // computes `hasIndicator` for the `selection` registry entry; Sidebar.tsx never computes it.
+  const hasUnseenSelection = useHasUnseenSelection(selectionIdentity, sidebarActiveTabId)
 
   useEffect(() => {
     fetch('/api/health')
@@ -291,6 +331,23 @@ function App() {
     return infos
   }, [polyByKey, selectedSurfaces])
 
+  // The unified sidebar's registry (Selection + Org/Search launch panels) -- rebuilt each render
+  // from the current selection/actor props, same cost class as selectedActors/polyByKey above.
+  // `hasUnseenSelection` (Step 10) is the ONLY thing that sets the `selection` entry's indicator --
+  // buildSidebarPanels itself has no notion of "which tab was active when".
+  const sidebarPanels = useMemo(
+    () =>
+      buildSidebarPanels({
+        selectedActors,
+        selectedSurfaces: selectedSurfaceInfos,
+        hasUnseenSelection,
+        orgActors: scene?.actors ?? [],
+        selectedNames,
+        onSelectOrgBatch: handleOrgSelect,
+      }),
+    [selectedActors, selectedSurfaceInfos, hasUnseenSelection, scene, selectedNames, handleOrgSelect],
+  )
+
   // The real shading-mode gating signal (Task 19) -- derived from the /status polling this toolbar
   // already does, not a second fetch.
   const buildSolved = resolveBuildSolved(status)
@@ -337,31 +394,25 @@ function App() {
             onSelectActor={onSelectActor}
             selectedSurfaces={selectedSurfaces}
             onSelectSurface={onSelectSurface}
-            onSelectMany={onSelectMany}
             onDeselect={onDeselect}
             buildSolved={buildSolved}
+            frameRequest={frameRequest}
+            frameActors={frameActors}
           />
         </div>
       </div>
-      {/* Collapsible sidebar (mobile/laptop layout spec) -- see QuadLayout.tsx's identical org-panel
-          wrapper for the shared shape/rationale. */}
-      <div className="inspector-pane-wrapper">
-        <button
-          type="button"
-          className="sidebar-toggle"
-          onClick={toggleInspector}
-          aria-pressed={inspectorCollapsed}
-          aria-label={inspectorCollapsed ? 'Show inspector panel' : 'Hide inspector panel'}
-          title={inspectorCollapsed ? 'Show inspector panel' : 'Hide inspector panel'}
-        >
-          {inspectorCollapsed ? '◀' : '▶'}
-        </button>
-        {!inspectorCollapsed && (
-          <div className="inspector-pane">
-            <Inspector selected={selectedActors} selectedSurfaces={selectedSurfaceInfos} />
-          </div>
-        )}
-      </div>
+      {/* The unified sidebar (icon rail + one active panel) -- replaces the old org-panel/
+          inspector-pane double sidebar (unified-sidebar spec). Sidebar itself is purely
+          presentational; collapse/active-tab state and each panel's `hasIndicator` are all owned
+          here (Step 10/12 above) and passed down as plain props. */}
+      <Sidebar
+        panels={sidebarPanels}
+        collapsed={sidebarCollapsed}
+        activeTabId={sidebarActiveTabId}
+        setActiveTab={setSidebarActiveTab}
+        selectedActors={selectedActors}
+        selectedSurfaces={selectedSurfaceInfos}
+      />
     </div>
   )
 }

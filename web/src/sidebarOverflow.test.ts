@@ -23,31 +23,32 @@ function ruleBody(selector: string): string | null {
 
 describe('sidebar overflow CSS (board item sidebar-can-overflow-viewport-needs-scroll)', () => {
   it('the page root chain clips horizontal overflow instead of letting the whole page scroll', () => {
-    // .org-panel-wrapper/.inspector-pane-wrapper are non-shrinking flex children (flex: 0 0 auto) of
-    // #app-root/.quad-layout-root -- without overflow-x: hidden somewhere in this chain, a narrow
-    // viewport (or a manually-reopened sidebar below the responsive breakpoint) forces the whole
-    // page wider than the viewport and the PAGE scrolls, instead of each sidebar handling its own
-    // overflow internally.
+    // `.sidebar` is a non-shrinking flex child (flex: 0 0 auto) of #app-root, same role
+    // `.org-panel-wrapper`/`.inspector-pane-wrapper` used to have (unified-sidebar spec) -- without
+    // overflow-x: hidden somewhere in this chain, a narrow viewport (or a manually-reopened sidebar
+    // below the responsive breakpoint) forces the whole page wider than the viewport and the PAGE
+    // scrolls, instead of the sidebar handling its own overflow internally.
     const body = ruleBody('html,\nbody,\n#root,\n#app-root')
     expect(body).not.toBeNull()
     expect(body).toMatch(/overflow-x:\s*hidden/)
   })
 
-  it('.org-panel scrolls its own horizontal overflow (long folder/actor names) instead of escaping the sidebar', () => {
-    const body = ruleBody('.org-panel')
+  it('.sidebar stays a non-shrinking flex child, same as the old per-panel wrappers', () => {
+    const body = ruleBody('.sidebar')
     expect(body).not.toBeNull()
-    expect(body).toMatch(/min-width:\s*0/)
-    expect(body).toMatch(/overflow-x:\s*auto/)
+    expect(body).toMatch(/flex:\s*0 0 auto/)
   })
 
-  it('.inspector-pane scrolls its own horizontal overflow (wide inspector values/tables) instead of escaping the sidebar', () => {
-    const body = ruleBody('.inspector-pane')
-    expect(body).not.toBeNull()
-    expect(body).toMatch(/min-width:\s*0/)
-    expect(body).toMatch(/overflow-x:\s*auto/)
+  it('.sidebar-panel-body scrolls its own horizontal overflow (long folder/actor names, wide inspector values) instead of escaping the sidebar', () => {
+    const panel = ruleBody('.sidebar-panel')
+    expect(panel).not.toBeNull()
+    expect(panel).toMatch(/min-width:\s*0/)
+    const panelBody = ruleBody('.sidebar-panel-body')
+    expect(panelBody).not.toBeNull()
+    expect(panelBody).toMatch(/overflow-x:\s*auto/)
   })
 
-  it('the flex chain down to each sidebar allows shrinking below content size (min-width: 0), so overflow is handled by the sidebar itself, not by growing an ancestor', () => {
+  it('the flex chain down to the sidebar allows shrinking below content size (min-width: 0), so overflow is handled by the sidebar itself, not by growing an ancestor', () => {
     for (const selector of ['.viewport-pane', '.viewport-content', '.quad-layout-root', '.quad-layout']) {
       const body = ruleBody(selector)
       expect(body, `${selector} rule should exist`).not.toBeNull()

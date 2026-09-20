@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
 
@@ -8,7 +8,6 @@ import App from './App'
 interface QuadSelectionProps {
   onSelectActor: (name: string, additive: boolean) => void
   onSelectSurface: (actor: string, polyIndex: number, additive: boolean) => void
-  onSelectMany: (names: ReadonlySet<string>, additive: boolean) => void
   onDeselect: () => void
 }
 const quadProps: { current: QuadSelectionProps | null } = { current: null }
@@ -205,6 +204,13 @@ describe('App: level switching', () => {
 // "Actor + surface selection coexist; only a plain click clears both"). These drive App's real
 // handlers through the stubbed quad and read the result off the Inspector.
 describe('App: actor + surface selection coexistence', () => {
+  // The unified sidebar persists its active-tab/collapse choice to localStorage (useSidebar.ts) --
+  // clear it so the batch-select test's tab switching below can't leak into another test's default
+  // "Selection tab active" assumption, regardless of file execution order.
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
   const ACTOR = {
     name: 'Room',
     cls: 'Engine.Brush',
@@ -286,13 +292,26 @@ describe('App: actor + surface selection coexistence', () => {
   // A batch actor select never clears surfaces, additive or replacing: UED22's actor batch verbs
   // don't -- `edactBoxSelect` clears `bSelected` in its own inline loop and never touches a surf,
   // and `edactSelectAll`/`edactSelectOfClass`/`mapSelect*` never mention `PF_Selected` at all.
+  //
+  // `QuadLayout` no longer hosts the org panel (unified-sidebar migration: `OrgPanel` moved into
+  // `Sidebar`, a sibling of `QuadLayout` in `App.tsx`), so it no longer receives `onSelectMany` as a
+  // prop at all -- the batch-select control this test needs to drive now lives in the real
+  // `Sidebar`'s Org panel (rendered for real here, same as `Inspector` already is; only the WebGL
+  // quad is stubbed). Switch to the Org tab, click the "no folder" bucket (Room has `folder: null`)
+  // the same way `sidebarRegistry.test.ts` already does, then switch back to the Selection tab to
+  // read the result off the Inspector.
   it('a batch actor select keeps surfaces, additive or replacing', async () => {
     const quad = await renderSelectable()
     act(() => quad.onSelectSurface('Room', 4, false))
-    act(() => quad.onSelectMany(new Set(['Room']), true))
+
+    fireEvent.click(screen.getByTestId('sidebar-rail-org'))
+    fireEvent.click(screen.getByTestId('org-folder-no-folder'), { ctrlKey: true }) // additive
+    fireEvent.click(screen.getByTestId('sidebar-rail-selection'))
     expect(screen.getByTestId('inspector-sections')).toBeTruthy()
 
-    act(() => quad.onSelectMany(new Set(['Room']), false))
+    fireEvent.click(screen.getByTestId('sidebar-rail-org'))
+    fireEvent.click(screen.getByTestId('org-folder-no-folder')) // replacing
+    fireEvent.click(screen.getByTestId('sidebar-rail-selection'))
     expect(screen.getByTestId('inspector-sections')).toBeTruthy()
     expect(screen.getByTestId('inspector-surface')).toBeTruthy()
   })

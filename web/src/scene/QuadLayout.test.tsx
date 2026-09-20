@@ -98,12 +98,13 @@ function Harness({ buildSolved = false }: { buildSolved?: boolean }) {
       onSelectActor={onSelectActor}
       selectedSurfaces={selectedSurfaces}
       onSelectSurface={onSelectSurface}
-      onSelectMany={(names, additive) => setSelectedNames((s) => (additive ? new Set([...s, ...names]) : new Set(names)))}
       onDeselect={() => {
         setSelectedNames(new Set())
         setSelectedSurfaces(new Set())
       }}
       buildSolved={buildSolved}
+      frameRequest={null}
+      frameActors={() => {}}
     />
   )
 }

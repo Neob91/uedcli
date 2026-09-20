@@ -9,10 +9,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PointerEvent as ReactPointerEvent } from 'react'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
-import { useCollapsiblePanel } from '../layout/useCollapsiblePanel'
-import { OrgPanel } from '../panels/OrgPanel'
 import type { FrameRequest } from './frame'
-import { unionBBox } from './frame'
 import { DEFAULT_GRID_SIZE, GRID_SIZE_OPTIONS } from './grid'
 import { ModeSelector } from './ModeSelector'
 import { OrthoViewport } from './OrthoViewport'
@@ -34,13 +31,15 @@ export interface QuadLayoutProps {
   // full model. A distinct set from `selectedNames`, threaded to every pane the same way.
   selectedSurfaces: ReadonlySet<string>
   onSelectSurface: (actor: string, polyIndex: number, additive: boolean) => void
-  // OrgPanel's own batch-select shape (Task 23): a folder-node click replaces/adds a whole actor
-  // set at once -- distinct from the single-name onSelectActor above, which selectionSet.ts's
-  // toggleSelection doesn't need to grow a bulk form to cover.
-  onSelectMany: (names: ReadonlySet<string>, additive: boolean) => void
   onDeselect: () => void
   // The real shading-mode gating signal (Task 19, buildStatus.ts's resolveBuildSolved).
   buildSolved: boolean
+  // Lifted to App.tsx (unified-sidebar migration): the org panel that used to live inside this
+  // component now renders from Sidebar.tsx, a sibling of QuadLayout in App.tsx -- so the `F`-key
+  // framing mechanism SelectionKeys already used here (frameActors/frameRequest) is a controlled
+  // prop instead of local state, the one shared instance App's org-panel entry drives too.
+  frameRequest: FrameRequest | null
+  frameActors: (names: ReadonlySet<string>) => void
 }
 
 // Real UnrealEd's classic default arrangement (dev/docs/unrealed/rendering.md: bottom-left is the
@@ -72,29 +71,12 @@ export function QuadLayout({
   onSelectActor,
   selectedSurfaces,
   onSelectSurface,
-  onSelectMany,
   onDeselect,
   buildSolved,
+  frameRequest,
+  frameActors,
 }: QuadLayoutProps) {
   const [maximized, setMaximized] = useState<PaneId | null>(null)
-  const [frameRequest, setFrameRequest] = useState<FrameRequest | null>(null)
-  // A plain counter, not React state, so pressing `F` on the SAME selection twice still produces a
-  // distinct `seq` each time (FrameRequest's own doc comment) without needing frameRequest itself
-  // in this callback's dependency array (which would race a rapid double-press against the state
-  // update it triggers).
-  const frameSeq = useRef(0)
-
-  // Reused, not re-specified, by Part 6's org panel (Task 23): folder-node selection frames its
-  // actor set through this SAME callback, not a second framing mechanism.
-  const frameActors = useCallback(
-    (names: ReadonlySet<string>) => {
-      const bbox = unionBBox(scene.actors.filter((a) => names.has(a.name)))
-      if (!bbox) return // nothing to frame -- unionBBox's own no-op signal (frame.ts)
-      frameSeq.current += 1
-      setFrameRequest({ bbox, seq: frameSeq.current })
-    },
-    [scene.actors],
-  )
 
   // Focused pane (Task 20): set on a pointerdown anywhere inside a pane, via bubbling -- no per-pane
   // component change needed, since neither Viewport3D nor OrthoViewport calls stopPropagation on
@@ -115,11 +97,6 @@ export function QuadLayout({
   // mirroring showRadii's convention. Only the perspective pane reads it (ortho panes are always
   // wireframe, so it has no visible effect there -- expected, not wired to be disabled for it).
   const [showMoverSolid, setShowMoverSolid] = useState(false)
-
-  // Collapsible org-panel sidebar (mobile/laptop layout spec, owner-approved 2026-09-18): defaults
-  // open above the responsive breakpoint / collapsed below it, overridden permanently once the user
-  // manually toggles it (persisted in localStorage) -- see useCollapsiblePanel's own doc comment.
-  const { collapsed: orgPanelCollapsed, toggle: toggleOrgPanel } = useCollapsiblePanel('uedcli-org-panel-collapsed')
 
   // Resizable panes (bug report item 3): the column/row split as a fraction (0..1) of the quad's
   // own box, in plain component state per the ask -- no persistence needed. `MIN_FRAC`/`MAX_FRAC`
@@ -166,18 +143,6 @@ export function QuadLayout({
       setModes((cur) => applyModeKey(cur, pane, keyForMode(mode), buildSolved))
     },
     [buildSolved],
-  )
-
-  // OrgPanel's folder-node/find-result selection reuses BOTH mechanisms this plan already built --
-  // selectedNames (via onSelectMany, not a second selection model) and frameActors (Task 15,
-  // verbatim, not a second framing mechanism) -- spec §5's own requirement.
-  const handleOrgSelect = useCallback(
-    (names: string[], additive: boolean) => {
-      const nameSet = new Set(names)
-      onSelectMany(nameSet, additive)
-      frameActors(nameSet)
-    },
-    [onSelectMany, frameActors],
   )
 
   return (
@@ -323,24 +288,6 @@ export function QuadLayout({
         )}
       </div>
       </SceneResourcesProvider>
-      {/* Collapsible sidebar (mobile/laptop layout spec): the toggle itself always renders, so a
-          collapsed panel can always be reopened; the panel's own (potentially heavy) content only
-          mounts while expanded. */}
-      <div className="org-panel-wrapper">
-        <button
-          type="button"
-          className="sidebar-toggle"
-          onClick={toggleOrgPanel}
-          aria-pressed={orgPanelCollapsed}
-          aria-label={orgPanelCollapsed ? 'Show folders panel' : 'Hide folders panel'}
-          title={orgPanelCollapsed ? 'Show folders panel' : 'Hide folders panel'}
-        >
-          {orgPanelCollapsed ? '◀' : '▶'}
-        </button>
-        {!orgPanelCollapsed && (
-          <OrgPanel actors={scene.actors} selectedNames={selectedNames} onSelectActor={handleOrgSelect} />
-        )}
-      </div>
     </div>
   )
 }
