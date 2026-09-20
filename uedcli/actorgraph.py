@@ -493,3 +493,15 @@ def brush_overlap(actor_a, actor_b, *, cache=None) -> BrushOverlap:
         b_hi = hi if b_hi is None else tuple(max(b_hi[i], hi[i]) for i in range(3))
     return BrushOverlap(touches=True, matched_pair=None,
                          area_estimate=_bbox_intersection_area(a_lo, a_hi, b_lo, b_hi))
+
+
+def point_in_brush(actor, point: Vec3, *, cache=None) -> bool:
+    """True iff `point` is inside (or within tolerance of the boundary of) ANY ONE of `actor`'s
+    decomposed convex cells -- a plain OR over cells, so a point on a cell boundary the
+    decomposition itself introduced (shared by two cells of the SAME brush) is safely reported as
+    contained by whichever cell's tolerance band it lands in, not double-penalised.
+    `cache`: see `decompose_convex`."""
+    for cell in decompose_convex(actor, cache=cache):
+        if all(_dot(n, point) <= d + _SPLIT_EPS * 10 for n, d in cell.half_spaces):
+            return True
+    return False

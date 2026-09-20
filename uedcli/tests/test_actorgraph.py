@@ -16,18 +16,10 @@ def _cell_volume(cell: "actorgraph.ConvexCell") -> float:
     return sorted(round(d, 3) for _, d in cell.half_spaces)
 
 
-def test_convex_brush_decomposes_to_one_cell():
-    a = _brush("A", cube(64, 64, 64))
-    cells = actorgraph.decompose_convex(a)
-    assert len(cells) == 1
-    assert len(cells[0].half_spaces) == 6          # a cube's own 6 faces, nothing invented
-    assert len(cells[0].vertices) == 8              # a cube's 8 corners, no duplicates
-
-
-def test_l_shaped_brush_decomposes_to_two_or_more_convex_cells():
-    # An L-shape: a 64x64x64 cube union a 64x64x64 cube offset by (64,64,0) sharing one edge --
-    # built directly as a Brush with 8 faces (bottom+top+6 sides, an L-shaped prism), not via two
-    # separate actors.
+def _l_shaped_brush():
+    """An L-shape: a 64x64x64 cube union a 64x64x64 cube offset by (64,64,0) sharing one edge --
+    built directly as a Brush with 8 faces (bottom+top+6 sides, an L-shaped prism), not via two
+    separate actors. Returns the actor."""
     from uedcli.model import Brush, Polygon
     verts_bottom = [  # the L footprint at Z=-32/+32, CCW from +Z: (0,0)-(128,0)-(128,64)-(64,64)-(64,128)-(0,128)
         (0, 0), (128, 0), (128, 64), (64, 64), (64, 128), (0, 128),
@@ -43,7 +35,19 @@ def test_l_shaped_brush_decomposes_to_two_or_more_convex_cells():
         x1, y1 = verts_bottom[(i + 1) % n]
         sides.append(Polygon(vertices=[V(x0, y0, -32), V(x1, y1, -32), V(x1, y1, 32), V(x0, y0, 32)]))
     brush = Brush(model_name="Model_L", polys=[bottom, top] + sides)
-    a = _brush("L", brush)
+    return _brush("L", brush)
+
+
+def test_convex_brush_decomposes_to_one_cell():
+    a = _brush("A", cube(64, 64, 64))
+    cells = actorgraph.decompose_convex(a)
+    assert len(cells) == 1
+    assert len(cells[0].half_spaces) == 6          # a cube's own 6 faces, nothing invented
+    assert len(cells[0].vertices) == 8              # a cube's 8 corners, no duplicates
+
+
+def test_l_shaped_brush_decomposes_to_two_or_more_convex_cells():
+    a = _l_shaped_brush()
     cells = actorgraph.decompose_convex(a)
     assert len(cells) >= 2
     # Union sanity: every cell's vertices lie within the L's own bounding box, and at least one
@@ -304,3 +308,20 @@ def test_brush_overlap_degenerate_brush_reports_named_error_not_crash():
     b = _brush("B", cube(64, 64, 64))
     with pytest.raises(actorgraph.DegenerateBrushError, match="A"):
         actorgraph.brush_overlap(a, b)
+
+
+def test_point_inside_convex_brush():
+    a = _brush("A", cube(64, 64, 64), loc=(0, 0, 0))
+    assert actorgraph.point_in_brush(a, (0.0, 0.0, 0.0))
+    assert not actorgraph.point_in_brush(a, (1000.0, 0.0, 0.0))
+
+
+def test_point_on_internal_decomposition_boundary_of_l_shape_still_contained():
+    # The L-shape from Task 1's test, decomposed into >= 2 cells sharing an INTERNAL wall the
+    # decomposition itself introduced (not a real outer surface). A point sitting exactly on that
+    # internal wall, well inside the true L volume, must not false-negative from tolerance stacking
+    # across two adjacent cells (spec 'Containment reuses the SAME decomposition').
+    a_l_shape = _l_shaped_brush()
+    # A point on the shared internal wall at x=64 (the L's own inner corner), well inside in y/z:
+    point_on_internal_wall = (64.0, 32.0, 0.0)
+    assert actorgraph.point_in_brush(a_l_shape, point_on_internal_wall)
