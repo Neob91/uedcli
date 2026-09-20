@@ -764,7 +764,6 @@ Expected: FAIL with `AttributeError: ... has no attribute 'brush_overlap'`
 
 ```python
 # appended to uedcli/actorgraph.py
-from dataclasses import dataclass as _dc  # (already imported above; shown for clarity)
 
 
 @dataclass(frozen=True)
