@@ -689,6 +689,20 @@ def test_brush_overlap_touching_flat_face_gives_matched_pair_and_exact_area():
     assert ov.area_estimate == pytest.approx(4096.0, rel=1e-3)
 
 
+def test_brush_overlap_partial_footprint_reports_actual_shared_area_not_full_face_area():
+    # Round-3 review finding: allowing a PARTIAL (not just identical) footprint overlap through
+    # `_footprints_overlap` without also fixing the reported area meant a partial match reported
+    # face A's own FULL area, contradicting `BrushOverlap`'s "exact area" claim. A: top face at
+    # Z=4, X,Y in [-32,32] (area 4096). B: bottom face at Z=4, X,Y in [0,64] (also area 4096, offset
+    # by (32,32) so only the X,Y in [0,32] quadrant genuinely overlaps -- area 32*32=1024).
+    a = _brush("A", cube(64, 64, 8), loc=(0, 0, 0))
+    b = _brush("B", cube(64, 64, 8), loc=(32, 32, 8))
+    ov = actorgraph.brush_overlap(a, b)
+    assert ov.touches
+    assert ov.matched_pair is not None
+    assert ov.area_estimate == pytest.approx(1024.0, rel=1e-3)   # the SHARED area, not either face's 4096
+
+
 def test_brush_overlap_no_touch():
     a = _brush("A", cube(64, 64, 8), loc=(0, 0, 0))
     b = _brush("B", cube(64, 64, 8), loc=(0, 0, 128))
@@ -806,11 +820,93 @@ def _footprints_overlap(wa: list[Vec3], wb: list[Vec3], normal: Vec3) -> bool:
             a_lo[1] <= b_hi[1] + _TOUCH_EPS and b_lo[1] <= a_hi[1] + _TOUCH_EPS)
 
 
+def _ensure_ccw_2d(poly: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    area2 = sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                for i in range(len(poly)))
+    return list(reversed(poly)) if area2 < 0 else poly
+
+
+def _clip_2d(subject: list[tuple[float, float]], clip: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    """Sutherland-Hodgman: clip `subject` (any simple polygon) against the CONVEX polygon `clip`
+    (every brush face is convex by construction), edge by edge. Both must be CCW-wound (caller's
+    job -- see `_ensure_ccw_2d`) for the half-plane test's sign to be consistent, same convention
+    `relation.py`'s own `classify_footprint_2d`/`_clip_2d` use for the identical problem in a
+    different module (round 3 review: no public function to call directly, see the module
+    docstring's "Output format" note -- this mirrors that approach rather than reusing it)."""
+    out = list(subject)
+    n = len(clip)
+    for i in range(n):
+        if not out:
+            return []
+        cx0, cy0 = clip[i]
+        cx1, cy1 = clip[(i + 1) % n]
+        ex, ey = cx1 - cx0, cy1 - cy0
+        def inside(px, py):
+            return (px - cx0) * ey - (py - cy0) * ex <= 1e-9
+        new_out = []
+        m = len(out)
+        for j in range(m):
+            cur = out[j]
+            prev = out[j - 1]
+            cur_in, prev_in = inside(*cur), inside(*prev)
+            if cur_in:
+                if not prev_in:
+                    new_out.append(_seg_intersect_2d(prev, cur, (cx0, cy0), ex, ey))
+                new_out.append(cur)
+            elif prev_in:
+                new_out.append(_seg_intersect_2d(prev, cur, (cx0, cy0), ex, ey))
+        out = new_out
+    return out
+
+
+def _seg_intersect_2d(p1, p2, edge_origin, ex, ey):
+    x1, y1 = p1
+    x2, y2 = p2
+    ox, oy = edge_origin
+    dx, dy = x2 - x1, y2 - y1
+    denom = dx * ey - dy * ex
+    if abs(denom) < 1e-12:
+        return p2
+    t = ((ox - x1) * ey - (oy - y1) * ex) / denom
+    return (x1 + t * dx, y1 + t * dy)
+
+
+def _shoelace_area_2d(poly: list[tuple[float, float]]) -> float:
+    if len(poly) < 3:
+        return 0.0
+    return abs(sum(poly[i][0] * poly[(i + 1) % len(poly)][1] - poly[(i + 1) % len(poly)][0] * poly[i][1]
+                    for i in range(len(poly)))) / 2.0
+
+
+def _footprint_overlap_area(wa: list[Vec3], wb: list[Vec3], normal: Vec3) -> float:
+    """The ACTUAL shared area between two coplanar faces' footprints -- round-3 review found
+    `_matched_face_pair` was reporting face A's OWN full area even for a PARTIAL overlap (the
+    footprint-overlap gate added in round 3 allows partial/bbox overlap through, not just
+    identical footprints), contradicting the 'exact area' claim in `BrushOverlap`'s docstring and
+    the spec's 'Output format' section. Projects both faces into the same (U,V) frame
+    `_footprints_overlap` already uses, CCW-normalizes each (a face's own winding faces ITS OWN
+    outward normal, which can project CW or CCW depending on the chosen (U,V) handedness -- same
+    reasoning `relation.py`'s `classify_footprint_2d` documents for the identical problem), clips
+    B against A, and shoelaces the result. Zero-vertex clip result (no overlap at all, despite
+    passing the cheaper bbox pre-check) returns 0.0, not an error -- a real, if rare, case for two
+    footprints whose bboxes touch but whose actual polygons don't (an L-shaped face's notch)."""
+    u, v = _plane_basis_2d(normal)
+    origin = wa[0]
+    proj_a = _ensure_ccw_2d([(_dot(_sub(p, origin), u), _dot(_sub(p, origin), v)) for p in wa])
+    proj_b = _ensure_ccw_2d([(_dot(_sub(p, origin), u), _dot(_sub(p, origin), v)) for p in wb])
+    clipped = _clip_2d(proj_b, proj_a)
+    return _shoelace_area_2d(clipped)
+
+
 def _matched_face_pair(actor_a, actor_b) -> tuple[int, int, float] | None:
     """A SINGLE poly pair (one from each brush) whose planes are near-coincident AND whose
     footprints actually overlap -- the 'clean shared flat boundary' case. Returns
-    (idx_a, idx_b, area) or None. Deliberately independent of ConvexCell decomposition: this asks
-    about the brushes' ORIGINAL faces, which is what a `Name:idx` drill-down selector must name."""
+    (idx_a, idx_b, overlap_area) or None -- `overlap_area` is the ACTUAL shared footprint area
+    (`_footprint_overlap_area`), not either face's own full area, so a partial overlap reports the
+    true shared size, not an overstated one. Deliberately independent of ConvexCell decomposition:
+    this asks about the brushes' ORIGINAL faces, which is what a `Name:idx` drill-down selector
+    must name. Ranks candidates by this SAME overlap area (the pair sharing the most real area,
+    not the pair whose face-A happens to be biggest)."""
     best = None
     for ia, pa in enumerate(actor_a.brush.polys):
         try:
@@ -830,20 +926,13 @@ def _matched_face_pair(actor_a, actor_b) -> tuple[int, int, float] | None:
                 continue
             if not _footprints_overlap(wa, wb, na):     # coplanar but spatially unrelated -- reject
                 continue
-            area = _shoelace_area_3d(wa, na)
+            area = _footprint_overlap_area(wa, wb, na)
+            if area <= 0.0:      # bboxes touched but the real polygons don't (e.g. an L-shape notch)
+                continue
             if best is None or area > best[2]:
                 best = (ia, ib, area)
     return best
 
-
-def _shoelace_area_3d(verts: list[Vec3], normal: Vec3) -> float:
-    """A planar polygon's area via Newell's identity: 0.5*|sum of cross products| projected onto
-    its own normal -- `texframe.newell`'s magnitude IS twice the planar area, reused directly rather
-    than re-deriving a 2-D projection (relation.classify_footprint_2d's own area math is private and
-    2-D-projection-based; this is a small, independent function built for this module, per the spec's
-    explicit correction that no public reuse exists)."""
-    n = newell(verts)
-    return abs(_dot(n, normal)) / 2.0 if _len(normal) > 1e-9 else abs(_len(n)) / 2.0
 
 
 def brush_overlap(actor_a, actor_b, *, cache=None) -> BrushOverlap:
@@ -1836,3 +1925,21 @@ findings, plus one new gap:
   claim. Fixed with `_footprints_overlap` (a projected-bounding-box check in a shared 2-D frame,
   `_plane_basis_2d`) gating candidate selection in `_matched_face_pair`; added direct unit tests for
   both the reject and accept cases.
+
+## Requesting-code-review pass, round 4 (fixed inline, this commit)
+
+Round 3's own verification pass confirmed all of round 3's fixes correct by independently running
+the real `texframe.newell` against the fixtures, but surfaced one more real gap, directly adjacent
+to round 3's own footprint-overlap fix:
+
+- **`BrushOverlap.area_estimate` reported face A's own FULL area for a matched pair, even when the
+  two footprints only PARTIALLY overlap** — contradicting the "exact area" claim once round 3's
+  `_footprints_overlap` started correctly allowing partial (not just identical) overlaps through.
+  Fixed with `_footprint_overlap_area` (a real 2-D polygon clip — `_clip_2d`/`_ensure_ccw_2d`/
+  `_shoelace_area_2d`, mirroring `relation.py`'s `classify_footprint_2d` approach for the same
+  problem in a different module) computing the ACTUAL shared area, not either face's own area;
+  `_matched_face_pair` now also ranks candidates by this real overlap area rather than face A's
+  size. Removed `_shoelace_area_3d`, now dead code. Added a partial-overlap regression test
+  (`test_brush_overlap_partial_footprint_reports_actual_shared_area_not_full_face_area`) alongside
+  the existing full-overlap one, so both are pinned, not just the symmetric case that happened to
+  hide this bug.
