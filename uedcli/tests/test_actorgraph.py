@@ -470,3 +470,33 @@ def test_build_graph_degenerate_brush_is_skipped_not_crashed(mover_class_index):
     assert ("Bad", ) in [(n,) for n, _ in graph.skipped] or any(n == "Bad" for n, _ in graph.skipped)
     assert all(e.src != "Bad" and e.dst != "Bad" for e in graph.edges)
     assert "Good" in graph.node_names and "Bad" in graph.node_names   # still a NODE, just no edges
+
+
+def test_scoped_edges_one_hop(mover_class_index):
+    a = make_brush_actor("A", cube(64, 64, 64), location=(0, 0, 0), csg="subtract")
+    b = make_brush_actor("B", cube(64, 64, 64), location=(64, 0, 0), csg="subtract")
+    c = make_brush_actor("C", cube(64, 64, 64), location=(128, 0, 0), csg="subtract")   # touches B, not A
+    level = _level(a, b, c)
+    graph = actorgraph.build_graph(level, mover_class_index)
+    edges = actorgraph.scoped_edges(graph, seed="A", hops=1)
+    names = {e.src for e in edges} | {e.dst for e in edges}
+    assert names == {"A", "B"}   # C is 2 hops away, excluded
+
+
+def test_scoped_edges_all_hops_reaches_transitively(mover_class_index):
+    a = make_brush_actor("A", cube(64, 64, 64), location=(0, 0, 0), csg="subtract")
+    b = make_brush_actor("B", cube(64, 64, 64), location=(64, 0, 0), csg="subtract")
+    c = make_brush_actor("C", cube(64, 64, 64), location=(128, 0, 0), csg="subtract")
+    level = _level(a, b, c)
+    graph = actorgraph.build_graph(level, mover_class_index)
+    edges = actorgraph.scoped_edges(graph, seed="A", hops="all")
+    names = {e.src for e in edges} | {e.dst for e in edges}
+    assert names == {"A", "B", "C"}
+
+
+def test_scoped_edges_unknown_seed_raises_graph_error(mover_class_index):
+    a = make_brush_actor("A", cube(64, 64, 64), csg="subtract")
+    level = _level(a)
+    graph = actorgraph.build_graph(level, mover_class_index)
+    with pytest.raises(actorgraph.GraphError, match="Nope"):
+        actorgraph.scoped_edges(graph, seed="Nope", hops=1)

@@ -618,3 +618,51 @@ def build_graph(level, class_index) -> "ActorGraph":
 
     return ActorGraph(node_names=list(level.order), edges=edges,
                        skipped=sorted(skipped.items()))
+
+
+class GraphError(ValueError):
+    """Raised when an operation on a graph encounters an unknown or invalid node."""
+    pass
+
+
+def scoped_edges(graph: "ActorGraph", *, seed: str, hops: "int | Literal['all']") -> list["Edge"]:
+    """Every edge touching a node reachable from `seed` within `hops` (undirected reachability --
+    a `contains`/`carved_by` edge's direction doesn't limit which way a BFS may walk it, only what
+    it prints later). `hops == 'all'` is unbounded. Raises `GraphError` if `seed` is not in
+    `graph.node_names`."""
+    from typing import Literal
+
+    if seed not in graph.node_names:
+        raise GraphError(f"level graph: no such actor: {seed!r}")
+
+    # Build undirected adjacency list: for each node, store all edges touching it
+    adjacency: dict[str, list["Edge"]] = {n: [] for n in graph.node_names}
+    for e in graph.edges:
+        adjacency[e.src].append(e)
+        adjacency[e.dst].append(e)
+
+    # BFS with hop limit
+    limit = float("inf") if hops == "all" else hops
+    visited = {seed}
+    frontier = {seed}
+    depth = 0
+    kept: list["Edge"] = []
+    seen_edges: set[int] = set()
+
+    while frontier and depth < limit:
+        next_frontier = set()
+        for node in frontier:
+            for e in adjacency[node]:
+                # Use id() to deduplicate edges (avoid returning the same edge twice)
+                if id(e) not in seen_edges:
+                    seen_edges.add(id(e))
+                    kept.append(e)
+                # Walk the undirected edge: get the "other" node
+                other = e.dst if e.src == node else e.src
+                if other not in visited:
+                    visited.add(other)
+                    next_frontier.add(other)
+        frontier = next_frontier
+        depth += 1
+
+    return kept
