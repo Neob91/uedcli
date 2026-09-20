@@ -529,3 +529,191 @@ describe('resolveTapSelect -- wireframe-mode Ctrl+click on an already-selected b
     expect(afterCtrlClick.size).toBe(0)
   })
 })
+
+// ---------------------------------------------------------------------------------------------
+// Board `masked-poly-transparent-area-click-should-fall`: a click landing on a masked/alpha poly's
+// fully-transparent texel must act as though that poly wasn't there -- falling through to whatever
+// real geometry is behind it, or a genuine miss. Mirrors Scenario 6's sprite-alpha coverage above,
+// generalized to the merged scene mesh's own atlas-backed multi-material groups
+// (`isMeshHitTransparent`, `tapSelect.ts`).
+// ---------------------------------------------------------------------------------------------
+describe('resolveTapSelect -- masked-poly alpha-aware picking on the merged mesh', () => {
+  // A minimal fake canvas: transparent for x < splitX, opaque everywhere else -- same convention as
+  // Scenario 6's `fakeIconCanvas` (`getContext`/`getImageData` only, no real `HTMLCanvasElement`
+  // needed under jsdom).
+  function fakeSplitCanvas(size: number, splitX: number) {
+    return {
+      width: size,
+      height: size,
+      getContext: () => ({
+        getImageData: (x: number) => ({ data: [0, 0, 0, x < splitX ? 0 : 255] }),
+      }),
+    }
+  }
+
+  function maskedMaterial(canvas: unknown): THREE.MeshBasicMaterial {
+    const map = new THREE.Texture()
+    ;(map as unknown as { image: unknown }).image = canvas
+    return new THREE.MeshBasicMaterial({ map, alphaTest: 0.5, side: THREE.DoubleSide })
+  }
+
+  function unmaskedMaterial(): THREE.MeshBasicMaterial {
+    return new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })
+  }
+
+  // A masked decal quad (owner `Brush100`, in front, at `frontZ`) merged with an unmasked wall quad
+  // (owner `Brush98`, behind, at `backZ`) into ONE mesh with an array `material` + explicit
+  // `bufferGeometry.groups` -- the real shape `sceneResources.ts`/`geometry.ts` always produce (a
+  // single non-array material, as `quadMesh` above builds, never carries a resolvable
+  // `face.materialIndex` against an array, so `isMeshHitTransparent` always bails false on it --
+  // this is why none of this file's other scenarios needed any change).
+  // `decalUvOffset` shifts the decal's U coordinate (the only one the opaque/transparent split
+  // below depends on) by a constant (e.g. +1 or -1) to exercise the mod-1 wrap `polyUVs`'
+  // un-normalized tile-space UVs need -- the SAME world click still must resolve the same way
+  // regardless of the offset.
+  function maskedScene(decalUvOffset = 0, frontZ = 0, backZ = -0.5) {
+    const decalPositions = [
+      -1, -1, frontZ, 1, -1, frontZ, 1, 1, frontZ,
+      -1, -1, frontZ, 1, 1, frontZ, -1, 1, frontZ,
+    ]
+    // u = (x+1)/2 -- 0 at the decal's left edge, 1 at its right edge -- offset by `decalUvOffset`.
+    const decalUvs = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1].map((v, i) => (i % 2 === 0 ? v + decalUvOffset : v))
+    const wallPositions = [
+      -5, -5, backZ, 5, -5, backZ, 5, 5, backZ,
+      -5, -5, backZ, 5, 5, backZ, -5, 5, backZ,
+    ]
+    const wallUvs = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] // unused -- Brush98's material is unmasked
+
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([...decalPositions, ...wallPositions]), 3))
+    geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array([...decalUvs, ...wallUvs]), 2))
+    geometry.addGroup(0, 6, 0) // decal triangles -> material 0 (masked)
+    geometry.addGroup(6, 6, 1) // wall triangles -> material 1 (unmasked)
+
+    const materials = [maskedMaterial(fakeSplitCanvas(10, 5)), unmaskedMaterial()]
+    const mesh = new THREE.Mesh(geometry, materials)
+    const triangleOwners: (string | null)[] = ['Brush100', 'Brush100', 'Brush98', 'Brush98']
+    const trianglePolyIndex: (number | null)[] = [0, 0, 0, 0]
+    return { mesh, triangleOwners, trianglePolyIndex }
+  }
+
+  const wall = actor('Brush98')
+  const decal = actor('Brush100')
+
+  it('clicking the OPAQUE half of the masked decal selects it', () => {
+    const { mesh, triangleOwners, trianglePolyIndex } = maskedScene()
+    const { clientX, clientY } = worldToClient(0.9, 0) // u = 0.95 -> canvas x=9 -> opaque
+    const action = resolveTapSelect(
+      baseParams({ mode: 'lit', clientX, clientY, meshObject: mesh, triangleOwners, trianglePolyIndex, actors: [wall, decal] }),
+    )
+    expect(action).toEqual({ kind: 'select-surface', actor: 'Brush100', polyIndex: 0, additive: false })
+  })
+
+  it('clicking the TRANSPARENT half of the masked decal falls through to the wall behind it', () => {
+    const { mesh, triangleOwners, trianglePolyIndex } = maskedScene()
+    const { clientX, clientY } = worldToClient(-0.9, 0) // u = 0.05 -> canvas x=0 -> transparent
+    const action = resolveTapSelect(
+      baseParams({ mode: 'lit', clientX, clientY, meshObject: mesh, triangleOwners, trianglePolyIndex, actors: [wall, decal] }),
+    )
+    expect(action).toEqual({ kind: 'select-surface', actor: 'Brush98', polyIndex: 0, additive: false })
+  })
+
+  it('clicking the transparent half where NOTHING resolvable is behind it is a genuine miss, not a silent select', () => {
+    const { mesh, triangleOwners, trianglePolyIndex } = maskedScene()
+    // Same transparent click, but `Brush98` (the wall) isn't in `actors` at all -- the raycast still
+    // geometrically hits the wall's real triangle behind the rejected decal hit, but `resolveHitSurface`
+    // can't resolve it to an actor, so this falls all the way to the AABB fallback (also a miss, since
+    // the only actor present, `decal`, keeps its default far-away bbox) -- a genuine `deselect`, not a
+    // silent re-select of whatever the rejected hit happened to reveal.
+    const { clientX, clientY } = worldToClient(-0.9, 0)
+    const action = resolveTapSelect(
+      baseParams({ mode: 'lit', clientX, clientY, meshObject: mesh, triangleOwners, trianglePolyIndex, actors: [decal] }),
+    )
+    expect(action).toEqual({ kind: 'deselect' })
+  })
+
+  it('a click well outside both quads is a genuine miss', () => {
+    const { mesh, triangleOwners, trianglePolyIndex } = maskedScene()
+    const { clientX, clientY } = worldToClient(8, 8)
+    const action = resolveTapSelect(
+      baseParams({ mode: 'lit', clientX, clientY, meshObject: mesh, triangleOwners, trianglePolyIndex, actors: [wall, decal] }),
+    )
+    expect(action).toEqual({ kind: 'deselect' })
+  })
+
+  it('an UNMASKED poly (no map, alphaTest 0) is never sampled -- clicking the wall always selects it', () => {
+    const { mesh, triangleOwners, trianglePolyIndex } = maskedScene()
+    const { clientX, clientY } = worldToClient(4, 4) // on the wall, off the decal entirely
+    const action = resolveTapSelect(
+      baseParams({ mode: 'lit', clientX, clientY, meshObject: mesh, triangleOwners, trianglePolyIndex, actors: [wall, decal] }),
+    )
+    expect(action).toEqual({ kind: 'select-surface', actor: 'Brush98', polyIndex: 0, additive: false })
+  })
+
+  it('a UV shifted by +1 (tile-space wrap, positive direction) resolves identically to the unshifted case', () => {
+    const { mesh, triangleOwners, trianglePolyIndex } = maskedScene(1)
+    const opaqueClick = worldToClient(0.9, 0)
+    const opaqueAction = resolveTapSelect(
+      baseParams({ mode: 'lit', clientX: opaqueClick.clientX, clientY: opaqueClick.clientY, meshObject: mesh, triangleOwners, trianglePolyIndex, actors: [wall, decal] }),
+    )
+    expect(opaqueAction).toEqual({ kind: 'select-surface', actor: 'Brush100', polyIndex: 0, additive: false })
+
+    const transparentClick = worldToClient(-0.9, 0)
+    const transparentAction = resolveTapSelect(
+      baseParams({ mode: 'lit', clientX: transparentClick.clientX, clientY: transparentClick.clientY, meshObject: mesh, triangleOwners, trianglePolyIndex, actors: [wall, decal] }),
+    )
+    expect(transparentAction).toEqual({ kind: 'select-surface', actor: 'Brush98', polyIndex: 0, additive: false })
+  })
+
+  it('a UV shifted by -1 (tile-space wrap, negative direction) resolves identically to the unshifted case', () => {
+    const { mesh, triangleOwners, trianglePolyIndex } = maskedScene(-1)
+    const opaqueClick = worldToClient(0.9, 0)
+    const opaqueAction = resolveTapSelect(
+      baseParams({ mode: 'lit', clientX: opaqueClick.clientX, clientY: opaqueClick.clientY, meshObject: mesh, triangleOwners, trianglePolyIndex, actors: [wall, decal] }),
+    )
+    expect(opaqueAction).toEqual({ kind: 'select-surface', actor: 'Brush100', polyIndex: 0, additive: false })
+
+    const transparentClick = worldToClient(-0.9, 0)
+    const transparentAction = resolveTapSelect(
+      baseParams({ mode: 'lit', clientX: transparentClick.clientX, clientY: transparentClick.clientY, meshObject: mesh, triangleOwners, trianglePolyIndex, actors: [wall, decal] }),
+    )
+    expect(transparentAction).toEqual({ kind: 'select-surface', actor: 'Brush98', polyIndex: 0, additive: false })
+  })
+
+  it('the SAME masked mechanism applies to `moverMeshObject` (a Mover\'s own solid geometry)', () => {
+    // A standalone single-quad masked mesh owned by the Mover -- NOT `maskedScene()`'s decal+wall
+    // pair (whose owner arrays name `Brush100`/`Brush98`, not a Mover) -- so a rejected transparent
+    // hit here has nothing else drawn behind it and falls all the way through to a genuine miss.
+    const positions = [-1, -1, 0, 1, -1, 0, 1, 1, 0, -1, -1, 0, 1, 1, 0, -1, 1, 0]
+    const uvs = [0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 1]
+    const geometry = new THREE.BufferGeometry()
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
+    geometry.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(uvs), 2))
+    geometry.addGroup(0, 6, 0)
+    const mesh = new THREE.Mesh(geometry, [maskedMaterial(fakeSplitCanvas(10, 5))])
+    const triangleOwners: (string | null)[] = ['DeusExMover4', 'DeusExMover4']
+    const trianglePolyIndex: (number | null)[] = [2, 2]
+    const mover = actor('DeusExMover4', { is_mover: true })
+
+    const opaqueClick = worldToClient(0.9, 0)
+    const opaqueAction = resolveTapSelect(
+      baseParams({
+        mode: 'lit', clientX: opaqueClick.clientX, clientY: opaqueClick.clientY,
+        moverMeshObject: mesh, moverTriangleOwners: triangleOwners, moverTrianglePolyIndex: trianglePolyIndex,
+        actors: [mover],
+      }),
+    )
+    expect(opaqueAction).toEqual({ kind: 'select-surface', actor: 'DeusExMover4', polyIndex: 2, additive: false })
+
+    const transparentClick = worldToClient(-0.9, 0)
+    const transparentAction = resolveTapSelect(
+      baseParams({
+        mode: 'lit', clientX: transparentClick.clientX, clientY: transparentClick.clientY,
+        moverMeshObject: mesh, moverTriangleOwners: triangleOwners, moverTrianglePolyIndex: trianglePolyIndex,
+        actors: [mover],
+      }),
+    )
+    // Nothing else is mounted behind the Mover's own mesh in this scene -- a genuine miss.
+    expect(transparentAction).toEqual({ kind: 'deselect' })
+  })
+})

@@ -32,6 +32,37 @@ function isSpriteHitTransparent(hit: THREE.Intersection): boolean {
   return isTransparentPixel(alpha)
 }
 
+/** Whether a raycast hit on the merged scene mesh (`meshObject`/`moverMeshObject`) landed on a
+ * transparent texel of a MASKED poly -- the same idea as `isSpriteHitTransparent` above,
+ * generalized from a point-actor sprite's own texture to the atlas-backed multi-material merged
+ * geometry (board `masked-poly-transparent-area-click-should-fall`: a fully see-through area of a
+ * masked/alpha texture must act as though the poly wasn't there, falling through to whatever's
+ * behind it). Differs from the sprite case in the two ways `sceneResources.ts` documents: the atlas
+ * texture sets `flipY = false` (`geometry.ts`'s `polyUVs` already writes v in image-row/top-down
+ * order, so no `1 - uv.y` flip here), and UVs aren't normalized to [0,1] -- `polyUVs` computes them
+ * in texture-TILE space under `RepeatWrapping`, so a poly spanning multiple tiles can carry a UV
+ * outside [0,1] in either direction, wrapped mod 1 here the same way `RepeatWrapping` itself would.
+ * Only ever narrows an already-accepted hit -- bails `false` (never rejects) for anything that isn't
+ * a `THREE.Mesh` with an array `.material`, a resolvable `face.materialIndex`, a `map`, or an
+ * UNMASKED material (`alphaTest <= 0`, true of the overwhelming majority of polys) -- so this can't
+ * change behavior for an ordinary opaque surface. */
+function isMeshHitTransparent(hit: THREE.Intersection): boolean {
+  if (!(hit.object instanceof THREE.Mesh) || !hit.uv || !hit.face) return false
+  const material = hit.object.material
+  if (!Array.isArray(material)) return false
+  const mat = material[hit.face.materialIndex] as THREE.MeshBasicMaterial | undefined
+  if (!mat?.map || !((mat.alphaTest ?? 0) > 0)) return false
+  const canvas = mat.map.image as HTMLCanvasElement | undefined
+  if (!canvas || typeof canvas.getContext !== 'function') return false
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return false
+  const wrap = (v: number) => ((v % 1) + 1) % 1
+  const x = Math.min(canvas.width - 1, Math.max(0, Math.floor(wrap(hit.uv.x) * canvas.width)))
+  const y = Math.min(canvas.height - 1, Math.max(0, Math.floor(wrap(hit.uv.y) * canvas.height)))
+  const alpha = ctx.getImageData(x, y, 1, 1).data[3] / 255
+  return isTransparentPixel(alpha)
+}
+
 export interface TapSelectParams {
   camera: THREE.Camera
   rect: DOMRect
@@ -89,8 +120,10 @@ export interface TapSelectParams {
  * drawn geometry (main scene mesh, a Movers:on Mover's own solid mesh, point-actor marker sprites, a
  * Mover's own always-visible outline, and, in wireframe mode, every brush's outline) together --
  * dropping any marker-sprite hit that lands on the icon's transparent padding
- * (`isSpriteHitTransparent`) -- and picks the winner among every remaining hit via `selection.ts`'s
- * `pickHit` (see its doc comment for the precise-vs-line/always-on-top ranking rule). Falls back to
+ * (`isSpriteHitTransparent`), and any merged-mesh/Mover-solid hit that lands on a masked poly's
+ * transparent texel (`isMeshHitTransparent`) -- and picks the winner among every remaining hit via
+ * `selection.ts`'s `pickHit` (see its doc comment for the precise-vs-line/always-on-top ranking
+ * rule). Falls back to
  * ray-vs-AABB on a genuine miss (never for a brush actor in wireframe mode; a point actor's own AABB
  * is a zero-size point at its Location, so this fallback can't re-select it through a transparent
  * sprite pixel the raycast just rejected).
@@ -129,10 +162,11 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
     ...moverOutlineObjects,
   ]
   if (candidates.length > 0) {
-    // A marker sprite hit landing on its icon's transparent padding is dropped before ranking --
-    // exactly like a genuine raycast miss on that candidate, so a click there falls through to
-    // whatever else is actually drawn underneath (`isSpriteHitTransparent`'s doc comment).
-    const hits = raycaster.intersectObjects(candidates, false).filter((h) => !isSpriteHitTransparent(h))
+    // A marker sprite hit landing on its icon's transparent padding, or a merged-mesh/Mover-solid
+    // hit landing on a masked poly's transparent texel, is dropped before ranking -- exactly like a
+    // genuine raycast miss on that candidate, so a click there falls through to whatever else is
+    // actually drawn underneath (`isSpriteHitTransparent`/`isMeshHitTransparent`'s doc comments).
+    const hits = raycaster.intersectObjects(candidates, false).filter((h) => !isSpriteHitTransparent(h) && !isMeshHitTransparent(h))
     if (hits.length > 0) {
       // `hits` is already PRECISE-hits-first-by-real-depth (intersectObjects' own ascending-distance
       // sort) -- `pickHit` (selection.ts) decides the winner: `Line`/`LineSegments`/`LineLoop` hits
