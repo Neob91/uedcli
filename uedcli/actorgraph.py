@@ -630,7 +630,14 @@ class ActorGraph:
 def _node_tag(actor, class_index) -> NodeTag:
     """A single actor's `NodeTag` -- shared by every actor in `build_graph`, brush or not, skipped
     or not, so every name in `node_names` has a matching entry in `nodes` regardless of whether it
-    ends up touching an edge."""
+    ends up touching an edge.
+
+    Widens `is_mover`'s call surface vs. `classify_pair`: every brush now gets checked (needed for
+    its own tag), not just the one side of an ambiguous Subtract/non-Subtract pair -- so a brush
+    whose class can't be resolved (unknown/ambiguous/truncated ancestry) now raises `ClassRefError`
+    even if that brush would never have paired with a Subtract at all. Degrades cleanly to exit 2
+    via dispatch.py's existing handler (this module's standing "answer or raise, never guess"
+    convention), just for a broader set of levels than before this tag existed."""
     if actor.brush is None:
         return NodeTag(fqcn=actor.cls, csg_kind=None)
     if is_mover(actor, class_index):
