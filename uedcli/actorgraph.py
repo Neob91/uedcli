@@ -258,14 +258,14 @@ def _cell_edge_directions(cell: ConvexCell) -> list[Vec3]:
     on_planes = []
     for v in cell.vertices:
         on_planes.append(frozenset(
-            i for i, (n, d) in enumerate(cell.half_spaces) if abs(_dot(n, v) - d) <= _SPLIT_EPS * 10))
+            i for i, (n, d) in enumerate(cell.half_spaces) if abs(_dot(n, v) - d) <= _VERTEX_EPS))
     dirs = []
     n = len(cell.vertices)
     for i in range(n):
         for j in range(i + 1, n):
             if len(on_planes[i] & on_planes[j]) >= 2:
                 delta = _sub(cell.vertices[j], cell.vertices[i])
-                if _len(delta) > 1e-9:
+                if _len(delta) > _SINGULAR_EPS:
                     dirs.append(_norm(delta))
     return dirs
 
@@ -277,7 +277,7 @@ def _sat_axes(cell_a: ConvexCell, cell_b: ConvexCell) -> list[Vec3]:
     for ea in _cell_edge_directions(cell_a):
         for eb in _cell_edge_directions(cell_b):
             cr = _cross(ea, eb)
-            if _len(cr) > 1e-9:
+            if _len(cr) > _SINGULAR_EPS:
                 axes.append(_norm(cr))
     return axes
 
