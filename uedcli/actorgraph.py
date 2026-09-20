@@ -226,11 +226,7 @@ def decompose_convex(actor, *, cache: dict[str, list[ConvexCell]] | None = None)
     wrapper (Task 6) is what remembers a bad brush so it isn't re-probed."""
     if cache is not None and actor.name in cache:
         return cache[actor.name]
-    try:
-        polys = [polyalign._world_verts(actor, p) for p in actor.brush.polys if len(p.vertices) >= 3]
-    except polyalign.PolyAlignError as e:
-        raise DegenerateBrushError(f"{actor.name}: brush does not bound a valid solid "
-                                    f"(degenerate actor transform)") from e
+    polys = [polyalign._world_verts(actor, p) for p in actor.brush.polys if len(p.vertices) >= 3]
     tree = _build_solid_bsp(polys, [], inside=True, ref=actor.name)
     leaves = _collect_solid_leaves(tree)
     if not leaves:
