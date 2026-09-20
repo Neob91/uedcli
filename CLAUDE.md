@@ -101,6 +101,8 @@ The detail and the rejected alternatives live in `dev/docs/direction/conventions
 - YAGNI on output surface — the `--json` line above is when to add it; the other half is not adding
   it (or any other flag/format/query mode) speculatively. A new verb ships only what its actual use
   case needs. *(Owner ruling, 2026-09-19.)*
+- New logic defaults to Rust (`uedcli-native`), not Python — except a minor change or addition, and
+  except where reaching Rust would need a major refactor. *(Owner ruling, 2026-09-20.)*
 
 ## Keep it short and plain
 
