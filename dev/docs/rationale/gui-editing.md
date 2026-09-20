@@ -36,5 +36,5 @@ describes folding into the item's own `spec.md` instead.
 **Refs.** `dev/docs/direction/trunk-and-editor.md`; `dev/docs/direction/safety.md` (flock +
 refuse-same-actor-edit; the GUI audit-snapshot-store exemption); `dev/docs/architecture.md` (D1/D2
 write pattern); `dev/docs/board/to-plan/uedcli-human-gui/spec.md` "Deferred" (the P2 persistence
-ruling this reasons about); `dev/docs/board/to-plan/gui-p2-actor-translate-ctrl-drag/` (P2's first
+ruling this reasons about); `dev/docs/board/done/gui-p2-actor-translate-ctrl-drag/` (P2's first
 slice, built on this).

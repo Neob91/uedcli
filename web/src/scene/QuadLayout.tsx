@@ -6,9 +6,10 @@
 // pane identically, so Ctrl+tap/Ctrl+click in ANY pane composes onto the SAME lifted state (spec
 // §9's cross-pane consistency requirement) -- one selection model, not four independent ones.
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { PointerEvent as ReactPointerEvent } from 'react'
+import type { MutableRefObject, PointerEvent as ReactPointerEvent } from 'react'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
+import type { Vec3 } from './camera'
 import type { FrameRequest } from './frame'
 import { DEFAULT_GRID_SIZE, GRID_SIZE_OPTIONS } from './grid'
 import { ModeSelector } from './ModeSelector'
@@ -22,6 +23,10 @@ import type { ShadingMode } from './shadingMode'
 import { Viewport3D } from './Viewport3D'
 
 export interface QuadLayoutProps {
+  // Threaded straight to Viewport3D's `postStage` call (Ctrl/Cmd-drag actor translation, Task 8) --
+  // the level name the currently-shown scene/atlas/lightmap were fetched for (App.tsx's own `level`
+  // state, non-null by the time this component ever renders).
+  level: string
   scene: ScenePayload
   atlas: AtlasPayload
   lightmap: LightmapPayload | null
@@ -32,6 +37,18 @@ export interface QuadLayoutProps {
   selectedSurfaces: ReadonlySet<string>
   onSelectSurface: (actor: string, polyIndex: number, additive: boolean) => void
   onDeselect: () => void
+  // Threaded to every pane's own `onStaged` (Task 10) -- fires once a Ctrl/Cmd-drag gesture's
+  // `postStage` call resolves, so App.tsx's `stagedNames` (SaveBar's gate) stays current. See
+  // Viewport3D.tsx's identical prop doc.
+  onStaged?: (names: string[]) => void
+  // The shared "confirmed staged" visual position store, App.tsx-owned (Critical 2, final review
+  // fix wave) -- forwarded verbatim to BOTH Viewport3D and every OrthoViewport, so every pane reads/
+  // writes the SAME state (see Viewport3D.tsx's identical prop doc for the full picture).
+  stagedOffsets: Record<string, Vec3>
+  stagedOffsetsRef: MutableRefObject<Record<string, Vec3>>
+  setStagedOffsets: (next: Record<string, Vec3>) => void
+  // Surfaces a failed `postStage` call -- see Viewport3D.tsx's identical prop doc (Important 3).
+  onStageError?: (message: string) => void
   // The real shading-mode gating signal (Task 19, buildStatus.ts's resolveBuildSolved).
   buildSolved: boolean
   // Lifted to App.tsx (unified-sidebar migration): the org panel that used to live inside this
@@ -64,6 +81,7 @@ function isTypingTarget(t: EventTarget | null): boolean {
 const MODE_KEYS = new Set(['1', '2', '3', '4'])
 
 export function QuadLayout({
+  level,
   scene,
   atlas,
   lightmap,
@@ -72,6 +90,11 @@ export function QuadLayout({
   selectedSurfaces,
   onSelectSurface,
   onDeselect,
+  onStaged,
+  stagedOffsets,
+  stagedOffsetsRef,
+  setStagedOffsets,
+  onStageError,
   buildSolved,
   frameRequest,
   frameActors,
@@ -227,6 +250,7 @@ export function QuadLayout({
             </div>
             {pane === 'perspective' ? (
               <Viewport3D
+                level={level}
                 scene={scene}
                 atlas={atlas}
                 lightmap={lightmap}
@@ -235,6 +259,11 @@ export function QuadLayout({
                 selectedSurfaces={selectedSurfaces}
                 onSelectSurface={onSelectSurface}
                 onDeselect={onDeselect}
+                onStaged={onStaged}
+                stagedOffsets={stagedOffsets}
+                stagedOffsetsRef={stagedOffsetsRef}
+                setStagedOffsets={setStagedOffsets}
+                onStageError={onStageError}
                 frameRequest={frameRequest}
                 mode={resolveEffectiveMode(modes[pane], buildSolved)}
                 showRadii={showRadii}
@@ -242,12 +271,18 @@ export function QuadLayout({
               />
             ) : (
               <OrthoViewport
+                level={level}
                 axis={pane}
                 selectedNames={selectedNames}
                 onSelectActor={onSelectActor}
                 selectedSurfaces={selectedSurfaces}
                 onSelectSurface={onSelectSurface}
                 onDeselect={onDeselect}
+                onStaged={onStaged}
+                stagedOffsets={stagedOffsets}
+                stagedOffsetsRef={stagedOffsetsRef}
+                setStagedOffsets={setStagedOffsets}
+                onStageError={onStageError}
                 frameRequest={frameRequest}
                 mode={resolveEffectiveMode(modes[pane], buildSolved)}
                 showGrid={showGrid}

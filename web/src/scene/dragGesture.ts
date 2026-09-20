@@ -19,8 +19,9 @@ export interface DragGestureCallbacks {
   /** Fires on EVERY pointer move during a drag, regardless of whether the gesture turns out to be
    * a tap on release -- matches today's behavior (camera callbacks fire live, tap/drag is decided
    * only at pointerup). `buttons`/`altKey` are the raw `PointerEvent` fields, so the caller can pick
-   * dolly+turn/look/pan/orbit (Perspective) or pan (ortho) exactly as it does today. */
-  onDrag: (dx: number, dy: number, buttons: number, altKey: boolean) => void
+   * dolly+turn/look/pan/orbit (Perspective) or pan (ortho) exactly as it does today. `additive` is
+   * `ctrlKey || metaKey` at move-event time, threaded through for Ctrl+drag actor translation. */
+  onDrag: (dx: number, dy: number, buttons: number, altKey: boolean, additive: boolean) => void
   /** Fires on pointerup ONLY when the accumulated movement stayed within the tap threshold AND the
    * button/altKey gate below passed. `additive` is `ctrlKey || metaKey` at release, threaded through
    * for Part 3's Ctrl+click multi-select. `shiftKey` is the raw release-time Shift state, threaded
@@ -138,7 +139,7 @@ export function useDragGesture(callbacks: DragGestureCallbacks): DragGestureHand
       d.totalDx += dx
       d.totalDy += dy
       if (dx === 0 && dy === 0) return
-      callbacks.onDrag(dx, dy, e.buttons, e.altKey)
+      callbacks.onDrag(dx, dy, e.buttons, e.altKey, e.ctrlKey || e.metaKey)
     },
     [callbacks],
   )

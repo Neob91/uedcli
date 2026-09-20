@@ -91,6 +91,7 @@ function Harness({ buildSolved = false }: { buildSolved?: boolean }) {
   }
   return (
     <QuadLayout
+      level="test-level"
       scene={SCENE}
       atlas={ATLAS}
       lightmap={null}
@@ -102,6 +103,9 @@ function Harness({ buildSolved = false }: { buildSolved?: boolean }) {
         setSelectedNames(new Set())
         setSelectedSurfaces(new Set())
       }}
+      stagedOffsets={{}}
+      stagedOffsetsRef={{ current: {} }}
+      setStagedOffsets={() => {}}
       buildSolved={buildSolved}
       frameRequest={null}
       frameActors={() => {}}

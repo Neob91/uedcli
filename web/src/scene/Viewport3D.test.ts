@@ -48,6 +48,109 @@ describe('Viewport3D -- mover-poly selection highlight (mover-poly-select-in-mov
   })
 })
 
+// Ctrl/Cmd-drag actor translation (Task 8, spec "Interaction design"): the branch-selection logic
+// itself (does an additive drag with a mapped button resolve to a move, and does the accumulator
+// math work) is pure and unit-tested directly in `dragStage.test.ts` -- these two source-text checks
+// pin the WIRING facts that can't be exercised without a real `<Canvas>` (this file's own established
+// pattern, see the top-of-file comment): the actor-move branch runs and returns BEFORE the camera
+// dispatch (never falls through to also move the camera), and `postStage` fires from the existing
+// onPointerUp boundary, not a second pointerup listener.
+describe('Viewport3D -- Ctrl/Cmd-drag actor translation wiring', () => {
+  it('resolves the actor-move axis and returns BEFORE the camera setPose dispatch in onDrag', () => {
+    const onDragBody = /onDrag: \(dx, dy, buttons, altKey, additive\) => \{([\s\S]*?)\n      \},/.exec(
+      VIEWPORT3D_SOURCE,
+    )?.[1]
+    expect(onDragBody).toBeDefined()
+    const axisIdx = onDragBody!.indexOf('resolveActorMoveAxis')
+    const setPoseIdx = onDragBody!.indexOf('setPose((prev) => {')
+    expect(axisIdx).toBeGreaterThanOrEqual(0)
+    expect(setPoseIdx).toBeGreaterThan(axisIdx) // the move branch is checked, and returns, first
+    // The move branch's own `if (axis) { ... return }` sits entirely before setPose is ever reached.
+    const returnIdx = onDragBody!.indexOf('return', axisIdx)
+    expect(returnIdx).toBeGreaterThan(axisIdx)
+    expect(returnIdx).toBeLessThan(setPoseIdx)
+  })
+
+  it('calls postStage exactly once, from the existing mouse onPointerUp boundary (no second pointerup listener)', () => {
+    expect((VIEWPORT3D_SOURCE.match(/postStage\(/g) ?? []).length).toBe(1)
+    expect((VIEWPORT3D_SOURCE.match(/onPointerUp = useCallback/g) ?? []).length).toBe(1)
+    const onPointerUpBody = /const onPointerUp = useCallback\(\s*\(e: ReactPointerEvent<HTMLDivElement>\) => \{([\s\S]*?)\n    \},/.exec(
+      VIEWPORT3D_SOURCE,
+    )?.[1]
+    expect(onPointerUpBody).toBeDefined()
+    expect(onPointerUpBody).toContain('postStage(level, locations)')
+  })
+
+  // Review finding: BrushOutlines/SelectionMarkers/DirectionalArrows/RadiiOverlays were fed
+  // `actors={scene.actors}` directly, so a selected BRUSH (or its arrow/radii gizmos) got no visual
+  // feedback at all during a Ctrl-drag -- only the point-actor marker sprite (patched inline, a
+  // separate `stagedOffsets[actor.name] ?? actor.location` lookup, tested by the "position-driven
+  // overlays" check below) moved. `effectiveActors` (`dragStage.ts`'s `applyStagedOffsets`) is the
+  // fix: the SAME derived, staged-offset-aware actor list must reach all four.
+  it('feeds effectiveActors (not the raw scene.actors) to every position-driven overlay consumer', () => {
+    expect(VIEWPORT3D_SOURCE).toMatch(/<BrushOutlines\s+actors=\{effectiveActors\}/)
+    expect(VIEWPORT3D_SOURCE).toMatch(/<SelectionMarkers actors=\{effectiveActors\}/)
+    expect(VIEWPORT3D_SOURCE).toMatch(/<DirectionalArrows actors=\{effectiveActors\}/)
+    expect(VIEWPORT3D_SOURCE).toMatch(/<RadiiOverlays actors=\{effectiveActors\}/)
+    // None of the four still reads directly off scene.actors.
+    expect(VIEWPORT3D_SOURCE).not.toMatch(/<BrushOutlines\s+actors=\{scene\.actors\}/)
+    expect(VIEWPORT3D_SOURCE).not.toMatch(/<SelectionMarkers actors=\{scene\.actors\}/)
+    expect(VIEWPORT3D_SOURCE).not.toMatch(/<DirectionalArrows actors=\{scene\.actors\}/)
+    expect(VIEWPORT3D_SOURCE).not.toMatch(/<RadiiOverlays actors=\{scene\.actors\}/)
+  })
+
+  it('derives effectiveActors from applyStagedOffsets(scene.actors, stagedOffsets)', () => {
+    expect(VIEWPORT3D_SOURCE).toContain('applyStagedOffsets(scene.actors, stagedOffsets)')
+  })
+
+  // Critical 2, final review fix wave: `stagedOffsets` used to be a private `useState` INSIDE this
+  // component, so Discard/Save-success/Load-accept (App.tsx) could never actually clear what was
+  // rendered here, and a drag in this pane was invisible in the other three. Fixed by lifting
+  // ownership to App.tsx and threading it down as props -- pinned here since a regression (a local
+  // `useState<Record<string, Vec3>>` creeping back in) can't be caught by any prop-shape check alone.
+  it('does not own a private useState for stagedOffsets any more -- it is a prop', () => {
+    expect(VIEWPORT3D_SOURCE).not.toMatch(/const \[stagedOffsets, setStagedOffsets\] = useState/)
+    expect(VIEWPORT3D_SOURCE).toMatch(/stagedOffsets,\s*\n\s*stagedOffsetsRef,\s*\n\s*setStagedOffsets,/)
+  })
+})
+
+// Final review fix wave, Critical 1: onDrag fired on every pointer-move unconditionally, with no
+// tap-vs-drag threshold of its own -- see OrthoViewport.test.ts's identical describe block for the
+// full rationale (this pane's own move branch has the SAME bug/fix, just gated by
+// `resolveActorMoveAxis`+a `buttons`-keyed combo instead of ortho's single `additive` gate).
+describe('Viewport3D -- Ctrl/Cmd-drag tap-vs-drag threshold gating (Critical 1)', () => {
+  it('gates the move branch on accumulateMoveDragFrame before applying any delta', () => {
+    const onDragBody = /onDrag: \(dx, dy, buttons, altKey, additive\) => \{([\s\S]*?)\n      \},/.exec(
+      VIEWPORT3D_SOURCE,
+    )?.[1]
+    expect(onDragBody).toBeDefined()
+    const frameIdx = onDragBody!.indexOf('accumulateMoveDragFrame(moveDragAccRef.current, dx, dy)')
+    const moveIdx = onDragBody!.indexOf('moveAlongAxis(')
+    expect(frameIdx).toBeGreaterThanOrEqual(0)
+    expect(moveIdx).toBeGreaterThan(frameIdx) // the threshold check happens BEFORE any move is applied
+    expect(VIEWPORT3D_SOURCE).toMatch(/if \(camera && rect && primarySelectedActor\) \{[\s\S]*?dragMovedRef\.current = true[\s\S]*?\}/)
+  })
+
+  it('resets the threshold accumulator AND snapshots the pre-gesture offsets fresh at every pointerdown', () => {
+    expect(VIEWPORT3D_SOURCE).toContain('moveDragAccRef.current = freshMoveDragAccumulator()')
+    expect(VIEWPORT3D_SOURCE).toContain('preGestureOffsetsRef.current = stagedOffsetsRef.current')
+  })
+})
+
+// Important 3, final review fix wave: postStage had no .catch() at all.
+describe('Viewport3D -- postStage error handling (Important 3)', () => {
+  it('chains a .catch() off the SAME postStage call that reverts the offset and surfaces the error', () => {
+    const postStageIdx = VIEWPORT3D_SOURCE.indexOf('postStage(level, locations)')
+    expect(postStageIdx).toBeGreaterThanOrEqual(0)
+    const catchIdx = VIEWPORT3D_SOURCE.indexOf('.catch(', postStageIdx)
+    expect(catchIdx).toBeGreaterThan(postStageIdx)
+    const revertIdx = VIEWPORT3D_SOURCE.indexOf('setStagedOffsets(preGestureOffsetsRef.current)', catchIdx)
+    const errorIdx = VIEWPORT3D_SOURCE.indexOf('onStageError?.(String(e2))', catchIdx)
+    expect(revertIdx).toBeGreaterThan(catchIdx)
+    expect(errorIdx).toBeGreaterThan(catchIdx)
+  })
+})
+
 // Widened hit-test tolerance (owner report, live testing: brush-outline selection in wireframe mode
 // needed near-pixel-exact clicks) -- pins the value so a future edit can't silently narrow it back.
 describe('WIREFRAME_LINE_HIT_WORLD_UNITS', () => {

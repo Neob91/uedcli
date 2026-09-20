@@ -1,9 +1,133 @@
+/// <reference types="node" />
+import { readFileSync } from 'node:fs'
+import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
 import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 
 import { applyOrthoCameraPose } from './viewportRender'
 import { orthoBasis, orthoPan } from './orthoCamera'
 import type { OrthoAxis, OrthoPose } from './orthoCamera'
+
+// See Viewport3D.test.ts's identical top-of-file comment: this repo has no Canvas-in-test pattern,
+// so wiring facts that can't be exercised without a real <Canvas> are pinned as source-text
+// assertions instead.
+const ORTHOVIEWPORT_SOURCE = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'OrthoViewport.tsx'), 'utf8')
+
+// Ctrl/Cmd-drag actor translation (Task 9, ortho counterpart of Task 8's Viewport3D.tsx mechanism):
+// the pure math (`moveInPlane`, `applyDelta`, `stagedLocationsFor`, `applyStagedOffsets`) is already
+// unit-tested directly (`actorMove.test.ts`, `dragStage.test.ts`) -- these pin the WIRING facts
+// specific to this pane: the move branch is checked and returns BEFORE the existing pan/zoom
+// dispatch (an actor-move drag must never also move the camera), it uses `moveInPlane` (both of the
+// pane's visible axes, via its own `axis` prop) rather than `moveAlongAxis`, `postStage` fires once
+// from the existing onPointerUp boundary, and `effectiveActors` (not raw `actors`) reaches every
+// position-driven overlay consumer -- mirroring the fix Task 8's review round landed, from the start.
+describe('OrthoViewport -- Ctrl/Cmd-drag actor translation wiring', () => {
+  it('resolves the actor-move branch and returns BEFORE the camera setPose dispatch in onDrag', () => {
+    const onDragBody = /onDrag: \(dx, dy, buttons, _altKey, additive\) => \{([\s\S]*?)\n      \},/.exec(
+      ORTHOVIEWPORT_SOURCE,
+    )?.[1]
+    expect(onDragBody).toBeDefined()
+    const moveIdx = onDragBody!.indexOf('moveInPlane')
+    const setPoseIdx = onDragBody!.indexOf('setPose((prev) => {')
+    expect(moveIdx).toBeGreaterThanOrEqual(0)
+    expect(setPoseIdx).toBeGreaterThan(moveIdx) // the move branch is checked, and returns, first
+    const returnIdx = onDragBody!.indexOf('return', moveIdx)
+    expect(returnIdx).toBeGreaterThan(moveIdx)
+    expect(returnIdx).toBeLessThan(setPoseIdx)
+  })
+
+  it('gates the move branch on additive + a non-empty selection -- no buttons-keyed lookup (ortho has one combo)', () => {
+    expect(ORTHOVIEWPORT_SOURCE).toContain('additive && selectedNames.size > 0')
+    expect(ORTHOVIEWPORT_SOURCE).not.toContain('resolveActorMoveAxis')
+  })
+
+  it("uses moveInPlane with this pane's own axis and pose.worldUnitsPerPixel, not moveAlongAxis", () => {
+    // `frame.dx`/`frame.dy` (not raw `dx`/`dy`): the tap-vs-drag threshold gate (Critical 1, final
+    // review fix wave) -- see the describe block below.
+    expect(ORTHOVIEWPORT_SOURCE).toContain('moveInPlane(frame.dx, frame.dy, axis, pose.worldUnitsPerPixel)')
+    expect(ORTHOVIEWPORT_SOURCE).not.toContain('moveAlongAxis')
+  })
+
+  it('calls postStage exactly once, from the existing mouse onPointerUp boundary (no second pointerup listener)', () => {
+    expect((ORTHOVIEWPORT_SOURCE.match(/postStage\(/g) ?? []).length).toBe(1)
+    expect((ORTHOVIEWPORT_SOURCE.match(/onPointerUp = useCallback/g) ?? []).length).toBe(1)
+    const onPointerUpBody = /const onPointerUp = useCallback\(\s*\(e: ReactPointerEvent<HTMLDivElement>\) => \{([\s\S]*?)\n    \},/.exec(
+      ORTHOVIEWPORT_SOURCE,
+    )?.[1]
+    expect(onPointerUpBody).toBeDefined()
+    expect(onPointerUpBody).toContain('postStage(level, locations)')
+  })
+
+  // Review finding this task must NOT repeat (Task 8's own history): BrushOutlines/SelectionMarkers/
+  // DirectionalArrows/RadiiOverlays fed raw actors directly would give a selected brush (or its
+  // arrow/radii gizmos) no visual feedback during a Ctrl-drag, only the point-actor marker sprite.
+  it('feeds effectiveActors (not the raw actors) to every position-driven overlay consumer', () => {
+    expect(ORTHOVIEWPORT_SOURCE).toMatch(/<BrushOutlines\s+actors=\{effectiveActors\}/)
+    expect(ORTHOVIEWPORT_SOURCE).toMatch(/<SelectionMarkers actors=\{effectiveActors\}/)
+    expect(ORTHOVIEWPORT_SOURCE).toMatch(/<DirectionalArrows actors=\{effectiveActors\}/)
+    expect(ORTHOVIEWPORT_SOURCE).toMatch(/<RadiiOverlays actors=\{effectiveActors\}/)
+    // None of the four still reads directly off the raw (non-offset-aware) actors array.
+    expect(ORTHOVIEWPORT_SOURCE).not.toMatch(/<BrushOutlines\s+actors=\{actors\}/)
+    expect(ORTHOVIEWPORT_SOURCE).not.toMatch(/<SelectionMarkers actors=\{actors\}/)
+    expect(ORTHOVIEWPORT_SOURCE).not.toMatch(/<DirectionalArrows actors=\{actors\}/)
+    expect(ORTHOVIEWPORT_SOURCE).not.toMatch(/<RadiiOverlays actors=\{actors\}/)
+  })
+
+  it('derives effectiveActors from applyStagedOffsets(actors, stagedOffsets)', () => {
+    expect(ORTHOVIEWPORT_SOURCE).toContain('applyStagedOffsets(actors, stagedOffsets)')
+  })
+
+  it('also moves the point-actor marker sprite position, mirroring Viewport3D.tsx', () => {
+    expect((ORTHOVIEWPORT_SOURCE.match(/stagedOffsets\[actor\.name\] \?\? actor\.location/g) ?? []).length).toBe(1)
+    expect((ORTHOVIEWPORT_SOURCE.match(/position=\{markerPosition\}/g) ?? []).length).toBe(2)
+  })
+})
+
+// Final review fix wave, Critical 1: onDrag fired on every pointer-move unconditionally, with no
+// tap-vs-drag threshold of its own -- a Ctrl+click with a few pixels of ordinary jitter both fired
+// the (correctly-suppressed) multi-select tap AND staged an unintended tiny move. Fixed by gating
+// the move branch on `moveDragThreshold.ts`'s `accumulateMoveDragFrame`, which mirrors
+// `dragGesture.ts`'s own `isTap` threshold. The pure accumulator logic itself is unit-tested
+// directly (`moveDragThreshold.test.ts`) -- these pin the WIRING fact that can't be exercised
+// without a real <Canvas>: the branch is actually gated on it, not applying every frame's raw delta.
+describe('OrthoViewport -- Ctrl/Cmd-drag tap-vs-drag threshold gating (Critical 1)', () => {
+  it('gates the move branch on accumulateMoveDragFrame before applying any delta', () => {
+    const onDragBody = /onDrag: \(dx, dy, buttons, _altKey, additive\) => \{([\s\S]*?)\n      \},/.exec(
+      ORTHOVIEWPORT_SOURCE,
+    )?.[1]
+    expect(onDragBody).toBeDefined()
+    const frameIdx = onDragBody!.indexOf('accumulateMoveDragFrame(moveDragAccRef.current, dx, dy)')
+    const moveIdx = onDragBody!.indexOf('moveInPlane(')
+    expect(frameIdx).toBeGreaterThanOrEqual(0)
+    expect(moveIdx).toBeGreaterThan(frameIdx) // the threshold check happens BEFORE any move is applied
+    // `dragMovedRef.current = true` only fires inside the `if (frame)` gate, never unconditionally.
+    expect(ORTHOVIEWPORT_SOURCE).toMatch(/if \(frame\) \{[\s\S]*?dragMovedRef\.current = true[\s\S]*?\}/)
+  })
+
+  it('resets the threshold accumulator AND snapshots the pre-gesture offsets fresh at every pointerdown', () => {
+    expect(ORTHOVIEWPORT_SOURCE).toContain('moveDragAccRef.current = freshMoveDragAccumulator()')
+    expect(ORTHOVIEWPORT_SOURCE).toContain('preGestureOffsetsRef.current = stagedOffsetsRef.current')
+  })
+})
+
+// Important 3, final review fix wave: postStage had no .catch() at all -- an unhandled promise
+// rejection, no error surfaced, and (worse, given Critical 2) the client kept showing the move as
+// staged even though nothing was staged server-side.
+describe('OrthoViewport -- postStage error handling (Important 3)', () => {
+  it('chains a .catch() off the SAME postStage call that reverts the offset and surfaces the error', () => {
+    const postStageIdx = ORTHOVIEWPORT_SOURCE.indexOf('postStage(level, locations)')
+    expect(postStageIdx).toBeGreaterThanOrEqual(0)
+    const catchIdx = ORTHOVIEWPORT_SOURCE.indexOf('.catch(', postStageIdx)
+    expect(catchIdx).toBeGreaterThan(postStageIdx)
+    // The revert + error-surface both happen inside THAT catch, not somewhere unrelated.
+    const revertIdx = ORTHOVIEWPORT_SOURCE.indexOf('setStagedOffsets(preGestureOffsetsRef.current)', catchIdx)
+    const errorIdx = ORTHOVIEWPORT_SOURCE.indexOf('onStageError?.(String(e2))', catchIdx)
+    expect(revertIdx).toBeGreaterThan(catchIdx)
+    expect(errorIdx).toBeGreaterThan(catchIdx)
+  })
+})
 
 // Regression for the Front/Side blank-pane bug (owner report, live browser + headless repro):
 // `OrthoCameraRig` used to build its rotation via `Matrix4.makeBasis(right, up, -forward)`, which

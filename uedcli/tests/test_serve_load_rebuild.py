@@ -51,7 +51,7 @@ def test_load_with_no_pointer_and_no_rebuild_leaves_geometry_unpinned(tmp_path, 
     c = TestClient(app)
 
     r = c.post("/api/level/TestLevel/load")
-    assert r.status_code == 200 and r.json() == {"status": "ok"}
+    assert r.status_code == 200 and r.json() == {"status": "ok", "conflicts": []}
 
     assert c.get("/api/level/TestLevel/status").json()["build_status"] == "no_build"
     assert c.get("/api/level/TestLevel/scene").json()["geometry_pinned"] is False

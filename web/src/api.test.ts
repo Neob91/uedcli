@@ -1,6 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { fetchAtlas, fetchLevels, fetchLightmap, fetchScene, fetchStatus, postLoad, postRebuild, switchLevel } from './api'
+import {
+  fetchAtlas,
+  fetchLevels,
+  fetchLightmap,
+  fetchScene,
+  fetchStaged,
+  fetchStatus,
+  postDiscard,
+  postLoad,
+  postRebuild,
+  postSave,
+  postStage,
+  switchLevel,
+} from './api'
 
 describe('fetchScene', () => {
   it('returns the typed payload from /api/level/<level>/scene', async () => {
@@ -108,15 +121,126 @@ describe('fetchStatus', () => {
 })
 
 describe('postLoad', () => {
-  it('POSTs to the load route', async () => {
-    globalThis.fetch = vi.fn(
-      async () => new Response(JSON.stringify({ status: 'ok' }), { status: 200 }),
-    ) as unknown as typeof fetch
+  it('POSTs a JSON body {resolutions: {}} to the load route by default', async () => {
+    const payload = { status: 'ok', conflicts: [] }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
 
     const got = await postLoad('TestLevel')
 
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolutions: {} }),
+    })
+  })
+
+  it('serializes resolutions and returns conflicts', async () => {
+    const payload = {
+      status: 'ok',
+      conflicts: [{ name: 'Light0', staged_location: [1, 2, 3], trunk_location: [4, 5, 6] }],
+    }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
+
+    const got = await postLoad('TestLevel', { Light0: 'accept-load' })
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolutions: { Light0: 'accept-load' } }),
+    })
+  })
+})
+
+describe('postStage', () => {
+  it('POSTs a JSON body {actors} to the stage route', async () => {
+    const payload = { staged: ['Light0', 'Light1'] }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
+
+    const got = await postStage('TestLevel', { Light0: [1, 2, 3], Light1: [4, 5, 6] })
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/stage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actors: { Light0: [1, 2, 3], Light1: [4, 5, 6] } }),
+    })
+  })
+})
+
+describe('postDiscard', () => {
+  it('POSTs an empty JSON body to the discard route with no actors', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ status: 'ok' }), { status: 200 })) as unknown as typeof fetch
+
+    const got = await postDiscard('TestLevel')
+
     expect(got).toEqual({ status: 'ok' })
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/load', { method: 'POST' })
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/discard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+  })
+
+  it('POSTs {actors} to the discard route for a subset discard', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ status: 'ok' }), { status: 200 })) as unknown as typeof fetch
+
+    const got = await postDiscard('TestLevel', ['Light0'])
+
+    expect(got).toEqual({ status: 'ok' })
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/discard', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actors: ['Light0'] }),
+    })
+  })
+})
+
+describe('postSave', () => {
+  it('POSTs a JSON body {resolutions: {}} to the save route by default', async () => {
+    const payload = { applied: ['Light0'], conflicts: [] }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
+
+    const got = await postSave('TestLevel')
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolutions: {} }),
+    })
+  })
+
+  it('serializes resolutions and returns applied + conflicts', async () => {
+    const payload = {
+      applied: [],
+      conflicts: [{ name: 'Light0', staged_location: [1, 2, 3], trunk_location: [4, 5, 6] }],
+    }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
+
+    const got = await postSave('TestLevel', { Light0: 'trunk' })
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ resolutions: { Light0: 'trunk' } }),
+    })
+  })
+})
+
+describe('fetchStaged', () => {
+  it('returns the typed staged-actors payload from /api/level/<level>/staged', async () => {
+    const payload = {
+      Light0: { staged_location: [1, 2, 3], baseline_location: [0, 0, 0] },
+    }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
+
+    const got = await fetchStaged('TestLevel')
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/staged')
   })
 })
 

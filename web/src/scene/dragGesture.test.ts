@@ -55,7 +55,7 @@ describe('useDragGesture', () => {
     const move = pointerEvent({ movementX: 1, movementY: -1 })
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerMove(move)
-    expect(onDrag).toHaveBeenCalledWith(1, -1, 1, false)
+    expect(onDrag).toHaveBeenCalledWith(1, -1, 1, false, false)
     const up = pointerEvent({ clientX: 10, clientY: 20 })
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerUp(up)
@@ -80,13 +80,31 @@ describe('useDragGesture', () => {
     expect(onTap).toHaveBeenCalledWith(0, 0, false, true)
   })
 
+  it('threads ctrlKey into onDrag\'s additive flag', () => {
+    const { handlers, onDrag } = setup()
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerDown(pointerEvent())
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerMove(pointerEvent({ movementX: 1, movementY: 1, ctrlKey: true }))
+    expect(onDrag).toHaveBeenCalledWith(1, 1, 1, false, true)
+  })
+
+  it('threads metaKey into onDrag\'s additive flag', () => {
+    const { handlers, onDrag } = setup()
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerDown(pointerEvent())
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerMove(pointerEvent({ movementX: 1, movementY: 1, metaKey: true }))
+    expect(onDrag).toHaveBeenCalledWith(1, 1, 1, false, true)
+  })
+
   it('suppresses onTap when the accumulated movement exceeds the tap threshold (a real drag)', () => {
     const { handlers, onDrag, onTap } = setup()
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerDown(pointerEvent())
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerMove(pointerEvent({ movementX: 50, movementY: 0 }))
-    expect(onDrag).toHaveBeenCalledWith(50, 0, 1, false)
+    expect(onDrag).toHaveBeenCalledWith(50, 0, 1, false, false)
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerUp(pointerEvent())
     expect(onTap).not.toHaveBeenCalled()
@@ -118,7 +136,7 @@ describe('useDragGesture', () => {
     // First real movement: not locked yet, so this delta is genuine and requests the lock.
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 5, movementY: 2 }))
-    expect(onDrag).toHaveBeenCalledWith(5, 2, 1, false)
+    expect(onDrag).toHaveBeenCalledWith(5, 2, 1, false, false)
     onDrag.mockClear()
     // The lock engages asynchronously; simulate the browser flipping pointerLockElement before the
     // next move event fires -- exactly the event whose movementX/Y is untrustworthy on real Firefox.
@@ -129,7 +147,7 @@ describe('useDragGesture', () => {
     // Movement resumes being trusted normally on the very next event.
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 3, movementY: 1 }))
-    expect(onDrag).toHaveBeenCalledWith(3, 1, 1, false)
+    expect(onDrag).toHaveBeenCalledWith(3, 1, 1, false, false)
   })
 
   it('does not accumulate the discarded lock-transition delta into the tap/drag distance total', () => {
@@ -177,7 +195,7 @@ describe('useDragGesture', () => {
       handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 5, movementY: 2 }))
       // The drag doesn't depend on the lock succeeding -- onDrag still fires from the raw
       // movementX/Y on the event that triggered the (still-pending) lock request.
-      expect(onDrag).toHaveBeenCalledWith(5, 2, 1, false)
+      expect(onDrag).toHaveBeenCalledWith(5, 2, 1, false, false)
       // Let the rejected promise's microtask settle.
       await Promise.resolve()
       await Promise.resolve()
@@ -186,7 +204,7 @@ describe('useDragGesture', () => {
       onDrag.mockClear()
       // @ts-expect-error -- synthetic event shape
       handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 3, movementY: -1 }))
-      expect(onDrag).toHaveBeenCalledWith(3, -1, 1, false)
+      expect(onDrag).toHaveBeenCalledWith(3, -1, 1, false, false)
     } finally {
       process.off('unhandledRejection', onUnhandledRejection)
     }
@@ -253,7 +271,7 @@ describe('useDragGesture', () => {
     expect(onDrag).not.toHaveBeenCalled()
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 2, movementY: 0 }))
-    expect(onDrag).toHaveBeenCalledWith(2, 0, 1, false)
+    expect(onDrag).toHaveBeenCalledWith(2, 0, 1, false, false)
     expect(calls).toBe(4) // no further (unneeded) requests once actually locked
   })
 
@@ -270,7 +288,7 @@ describe('useDragGesture', () => {
     // The new drag still works: movement drives onDrag, and a real drag still suppresses onTap.
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerMove(pointerEvent({ currentTarget: target, movementX: 50, movementY: 0 }))
-    expect(onDrag).toHaveBeenCalledWith(50, 0, 1, false)
+    expect(onDrag).toHaveBeenCalledWith(50, 0, 1, false, false)
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerUp(pointerEvent({ currentTarget: target, clientX: 5, clientY: 5 }))
     expect(onTap).not.toHaveBeenCalled() // moved past the tap threshold above

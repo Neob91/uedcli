@@ -12,15 +12,20 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber'
 import * as THREE from 'three'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
+import { postStage } from '../api'
 import { BrushOutlines } from './BrushOutlines'
 import { DirectionalArrows } from './DirectionalArrows'
+import { moveAlongAxis } from './actorMove'
 import type { CameraPose, Vec3 } from './camera'
 import { cameraBasis, dollyAndTurn, flyInput, flyMove, look, orbit, pan, zoom } from './camera'
 import type { DragGestureCallbacks } from './dragGesture'
 import { useDragGesture } from './dragGesture'
+import { applyDelta, applyStagedOffsets, resolveActorMoveAxis, stagedLocationsFor } from './dragStage'
+import type { MoveDragAccumulator } from './moveDragThreshold'
+import { accumulateMoveDragFrame, freshMoveDragAccumulator } from './moveDragThreshold'
 import type { FrameRequest } from './frame'
 import { bboxCenter, bboxMaxExtent } from './frame'
-import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR, MARKER_RENDER_ORDER } from './markers'
+import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR, MARKER_RENDER_ORDER, worldUnitsPerPixelAt } from './markers'
 import { MeshWireframe, SelectedMeshWireframe } from './MeshWireframe'
 import { MoveJoystick } from './MoveJoystick'
 import type { JoystickVector } from './joystick'
@@ -121,6 +126,7 @@ function TouchFlyInput({
 const MARKER_COLOR_THREE = new THREE.Color(...MARKER_COLOR)
 
 export interface Viewport3DProps {
+  level: string
   scene: ScenePayload
   atlas: AtlasPayload
   lightmap: LightmapPayload | null
@@ -136,6 +142,23 @@ export interface Viewport3DProps {
   // callback QuadLayout already wires to SelectionKeys' `Esc` handler, so a miss and `Esc` land on
   // one shared deselect path rather than two.
   onDeselect: () => void
+  // Fires once a Ctrl/Cmd-drag gesture's `postStage` call resolves (Task 10) -- the staged actor
+  // names, so App.tsx's own `stagedNames` bookkeeping (SaveBar's gate) stays current without this
+  // component (or App) re-deriving the full staging state on every drag. Optional: a caller that
+  // doesn't care about the Save/Discard bar (e.g. a future embedding) can omit it.
+  onStaged?: (names: string[]) => void
+  // The shared "confirmed staged" visual position store (final review fix wave, Critical 2) --
+  // owned by App.tsx (plan.md's File Structure table), not a private copy of this component. Every
+  // pane reads/writes the SAME `stagedOffsets`/`stagedOffsetsRef`/`setStagedOffsets`, so a drag in
+  // one pane previews live in the others too, and App's Discard/Save-success/Load-accept handlers
+  // can actually clear what's on screen. `stagedOffsetsRef` mirrors `stagedOffsets` synchronously
+  // (React state is async) for the same-callback read/write pattern `onDrag`/`onPointerUp` need.
+  stagedOffsets: Record<string, Vec3>
+  stagedOffsetsRef: MutableRefObject<Record<string, Vec3>>
+  setStagedOffsets: (next: Record<string, Vec3>) => void
+  // Surfaces a failed `postStage` call (final review fix wave, Important 3) -- App.tsx shows it the
+  // same way it already shows a failed Load/Rebuild. Optional, matching `onStaged`'s convention.
+  onStageError?: (message: string) => void
   // `F`-frame (Part 3, Task 15): a new (higher `seq`) request retargets the camera to fit `bbox`,
   // keeping the current viewing angle (pitch/yaw) and backing the position off far enough along it.
   frameRequest?: FrameRequest | null
@@ -166,12 +189,18 @@ interface TouchTapTracker {
 // `atlas`/`lightmap` stay in Viewport3DProps for API stability, but the built geometry/textures
 // they used to drive locally now come from SceneResourcesContext (Task 3) -- unused here directly.
 export function Viewport3D({
+  level,
   scene,
   selectedNames,
   onSelectActor,
   selectedSurfaces,
   onSelectSurface,
   onDeselect,
+  onStaged,
+  stagedOffsets,
+  stagedOffsetsRef,
+  setStagedOffsets,
+  onStageError,
   frameRequest = null,
   mode = 'lit',
   showRadii = false,
@@ -272,6 +301,29 @@ export function Viewport3D({
     ]
   }, [primarySelectedActor])
 
+  // `stagedOffsets`/`stagedOffsetsRef`/`setStagedOffsets` are now App-owned props (Critical 2, final
+  // review fix wave) -- see Viewport3DProps' own doc comment. `dragMovedRef` tracks whether the
+  // CURRENT gesture actually displaced anything, so a plain Ctrl+click with no real movement doesn't
+  // fire a no-op `postStage`. `moveDragAccRef` gates the move branch on the SAME tap-vs-drag
+  // threshold `onTap` already respects (Critical 1) -- reset fresh at every pointerdown, below.
+  // `preGestureOffsetsRef` snapshots `stagedOffsetsRef.current` at the same reset point, so a failed
+  // `postStage` (Important 3) can revert exactly THIS gesture's own displacement without clobbering
+  // an earlier, already-staged move.
+  const dragMovedRef = useRef(false)
+  const moveDragAccRef = useRef<MoveDragAccumulator>(freshMoveDragAccumulator())
+  const preGestureOffsetsRef = useRef<Record<string, Vec3>>({})
+
+  // `scene.actors`, with every staged actor's world-space fields (location/bbox/brush polys+
+  // local_origin/directional_arrow lines) translated to its current staged position -- the single
+  // derived array fed to every position-driven overlay below (BrushOutlines, SelectionMarkers,
+  // DirectionalArrows, RadiiOverlays) so a Ctrl/Cmd-drag move is reflected consistently across all
+  // of them, not just the point-actor marker sprite (which patches `.location` inline below, since
+  // it reads from the separately-sourced `markerActors` context list, not this array). A brush/mesh
+  // actor's own BAKED CSG solid mesh (`bufferGeometry`) is the one thing this can't move -- see
+  // `applyStagedOffset`'s own doc comment for why, and Viewport3D's mesh `<mesh ref={meshRef} .../>`
+  // below (unchanged, still reads `scene.actors`-derived geometry, not this array).
+  const effectiveActors = useMemo(() => applyStagedOffsets(scene.actors, stagedOffsets), [scene.actors, stagedOffsets])
+
   // Selected non-brush (sprite/mesh) actor names -- drives the UED22-matched color-tint highlight
   // below (GUI-PARITY.md "Selection highlight rendering"), which replaced the plain cyan AABB box
   // this codebase used before that RE finding: UED22 has no generic selection bounding box by
@@ -336,7 +388,44 @@ export function Viewport3D({
   // Mouse-only pointer-lock/capture/tap-vs-drag plumbing, shared with ortho panes (Part 0, Task 4).
   const dragCallbacks = useMemo<DragGestureCallbacks>(
     () => ({
-      onDrag: (dx, dy, buttons, altKey) => {
+      onDrag: (dx, dy, buttons, altKey, additive) => {
+        // Ctrl/Cmd-drag actor translation (spec "Interaction design") -- resolved BEFORE the camera
+        // dispatch below, and returns unconditionally once resolved: an actor-move gesture must
+        // never also move the camera. `selectedNames.size > 0` is baked into `resolveActorMoveAxis`
+        // itself, so Ctrl held with nothing selected correctly falls through to the camera dispatch.
+        const axis = resolveActorMoveAxis(additive, buttons, selectedNames)
+        if (axis) {
+          // Critical 1 (final review fix wave): apply no move while this gesture's CUMULATIVE
+          // movement is still within the tap-vs-drag threshold -- and, since `axis` is truthy
+          // (Ctrl/Cmd held over a non-empty selection), still `return` unconditionally either way,
+          // never falling through to the camera dispatch below (Ctrl/Cmd stays a multi-select
+          // gesture-in-progress, not a camera move, until it's resolved as one or the other).
+          const frame = accumulateMoveDragFrame(moveDragAccRef.current, dx, dy)
+          if (frame) {
+            const camera = cameraRef.current
+            const rect = containerRef.current?.getBoundingClientRect()
+            if (camera && rect && primarySelectedActor) {
+              // Constant-screen-size scale factor, the SAME mechanism `SelectionMarkers.tsx`'s
+              // `VertexDot`/`PivotMarker` use (`markers.ts`'s `worldUnitsPerPixelAt`) -- anchored on
+              // the primary selected actor's location, reflected into three.js's world space (the
+              // content group applies `scale={[1,-1,1]}`; the camera is posed in that SAME reflected
+              // space by `applyCameraPose`, see its own doc comment) so the distance-to-camera term is
+              // correct, not mixing reflected-camera against unreflected-actor coordinates.
+              const worldPos = new THREE.Vector3(
+                primarySelectedActor.location[0],
+                -primarySelectedActor.location[1],
+                primarySelectedActor.location[2],
+              )
+              const worldUnitsPerPixel = worldUnitsPerPixelAt(camera, worldPos, rect.height)
+              const delta = moveAlongAxis(frame.dx, axis, worldUnitsPerPixel)
+              const next = applyDelta(stagedOffsetsRef.current, selectedNames, delta, scene.actors)
+              stagedOffsetsRef.current = next
+              setStagedOffsets(next) // local preview only -- no network call per pointer-move frame
+              dragMovedRef.current = true
+            }
+          }
+          return
+        }
         setPose((prev) => {
           if (altKey && (buttons & 1) !== 0) return orbit(prev, orbitPivot, dx, dy)
           if ((buttons & 1) !== 0 && (buttons & 2) !== 0) return pan(prev, dx, dy)
@@ -348,7 +437,7 @@ export function Viewport3D({
       onTap: (clientX, clientY, additive, shiftKey) => performTapSelect(clientX, clientY, additive, shiftKey),
       onWheel: (deltaY) => setPose((prev) => zoom(prev, deltaY)),
     }),
-    [orbitPivot, performTapSelect],
+    [orbitPivot, performTapSelect, selectedNames, primarySelectedActor, scene.actors, stagedOffsetsRef, setStagedOffsets],
   )
   const mouseDrag = useDragGesture(dragCallbacks)
   const containerRef = mouseDrag.containerRef
@@ -364,9 +453,14 @@ export function Viewport3D({
         touchTap.current = isFirstContact ? { pointerId: e.pointerId, totalDx: 0, totalDy: 0 } : null
         return
       }
+      // Reset the actor-move gesture trackers fresh for this NEW gesture (Critical 1's threshold
+      // accumulator must not carry over from a previous drag; Important 3's revert-on-failure
+      // snapshot must reflect what was staged BEFORE this gesture, not some earlier one).
+      moveDragAccRef.current = freshMoveDragAccumulator()
+      preGestureOffsetsRef.current = stagedOffsetsRef.current
       mouseDrag.onPointerDown(e)
     },
-    [mouseDrag],
+    [mouseDrag, stagedOffsetsRef],
   )
 
   const onPointerMove = useCallback(
@@ -422,9 +516,31 @@ export function Viewport3D({
         if (isTap(0, 0, tap.totalDx, tap.totalDy)) performTapSelect(e.clientX, e.clientY, false, false) // touch has no Ctrl/Shift-equivalent
         return
       }
+      // Ctrl/Cmd-drag actor translation, drag-end (spec "Interaction design"): the existing tap-vs-
+      // drag boundary this hook already has, not a second pointerup listener. `postStage` fires
+      // exactly ONCE here, with the gesture's final computed position(s) -- never per pointer-move
+      // frame (those only update local preview state, see dragCallbacks.onDrag above). A plain
+      // Ctrl+click with no horizontal movement never set dragMovedRef, so this is a no-op then.
+      if (dragMovedRef.current) {
+        dragMovedRef.current = false
+        const locations = stagedLocationsFor(stagedOffsetsRef.current, selectedNames)
+        if (Object.keys(locations).length > 0) {
+          postStage(level, locations)
+            .then((result) => onStaged?.(result.staged))
+            .catch((e2: unknown) => {
+              // Important 3 (final review fix wave): a stage call CAN fail for real reasons (the
+              // actor was deleted externally, a level switch mid-flight) -- revert exactly THIS
+              // gesture's own displacement (an earlier, already-staged move survives) and surface
+              // the failure the same way App.tsx already shows a Load/Rebuild failure.
+              setStagedOffsets(preGestureOffsetsRef.current)
+              stagedOffsetsRef.current = preGestureOffsetsRef.current
+              onStageError?.(String(e2))
+            })
+        }
+      }
       mouseDrag.onPointerUp(e)
     },
-    [mouseDrag, performTapSelect],
+    [mouseDrag, performTapSelect, level, selectedNames, onStaged, stagedOffsetsRef, setStagedOffsets, onStageError],
   )
 
   const onContextMenu = mouseDrag.onContextMenu
@@ -527,11 +643,16 @@ export function Viewport3D({
             // coincident-depth surface highlight regardless of the transparent-sort tiebreak.
             const spriteTex = actor.sprite ? textures.sprite.get(actor.sprite.tex_index) : undefined
             const isSelected = selectedNames.has(actor.name)
+            // A staged (not-yet-saved) Ctrl/Cmd-drag move -- "confirmed staged" visual state until
+            // Save/Discard (Task 10's own scope clears it). Only the marker position moves this way;
+            // a brush/mesh actor's baked CSG geometry stays at its trunk position until a Rebuild
+            // (see stagedOffsets's own doc comment above).
+            const markerPosition = stagedOffsets[actor.name] ?? actor.location
             if (actor.sprite && spriteTex) {
               return (
                 <PointActorMarker
                   key={actor.name}
-                  position={actor.location}
+                  position={markerPosition}
                   width={actor.sprite.width}
                   height={actor.sprite.height}
                   userData={{ actorName: actor.name }}
@@ -550,7 +671,7 @@ export function Viewport3D({
             return (
               <PointActorMarker
                 key={actor.name}
-                position={actor.location}
+                position={markerPosition}
                 width={DEFAULT_MARKER_FOOTPRINT_UU}
                 height={DEFAULT_MARKER_FOOTPRINT_UU}
                 userData={{ actorName: actor.name }}
@@ -572,7 +693,7 @@ export function Viewport3D({
             still needed on top of it (Part 4, Task 20 -- supersedes the old `geometry_pinned`-based
             branching, which is now exactly what `mode` itself decides). */}
         <BrushOutlines
-          actors={scene.actors}
+          actors={effectiveActors}
           selectedNames={selectedNames}
           mode={mode === 'wireframe' ? 'csg-all' : 'selected-only'}
           groupRef={brushGroupRef}
@@ -601,13 +722,13 @@ export function Viewport3D({
           <lineBasicMaterial visible={false} />
         </lineSegments>
         {/* Vertex + pivot markers for a selected brush (bug report item 7). */}
-        <SelectionMarkers actors={scene.actors} selectedNames={selectedNames} />
+        <SelectionMarkers actors={effectiveActors} selectedNames={selectedNames} />
         {/* Directional-facing arrow gizmo (bDirectional) -- always on, every pane, never behind
             the Radii toggle (GUI-PARITY.md "Directional arrow gizmo"). */}
-        <DirectionalArrows actors={scene.actors} selectedNames={selectedNames} />
+        <DirectionalArrows actors={effectiveActors} selectedNames={selectedNames} />
         {/* Collision-cylinder / light-radius overlays, toggled globally but scoped to the current
             selection (owner ruling 2026-09-15) -- draws nothing when nothing is selected. */}
-        {showRadii && <RadiiOverlays actors={scene.actors} view="perspective" selectedNames={selectedNames} />}
+        {showRadii && <RadiiOverlays actors={effectiveActors} view="perspective" selectedNames={selectedNames} />}
         </group>
       </Canvas>
       {/* Touch-only virtual joystick + up/down buttons (board item

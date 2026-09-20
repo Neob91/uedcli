@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import type { AtlasPayload, LightmapPayload, ScenePayload, ScenePoly, StatusPayload } from './api'
-import { fetchLevelState, fetchStatus, postLoad, postRebuild, switchLevel } from './api'
+import type { AtlasPayload, ConflictPayload, LightmapPayload, ScenePayload, ScenePoly, StatusPayload } from './api'
+import { fetchLevelState, fetchStaged, fetchStatus, postLoad, postRebuild, switchLevel } from './api'
 import { useHasUnseenSelection } from './layout/useSelectionSeen'
 import { useSidebar } from './layout/useSidebar'
+import { ConflictResolver } from './panels/ConflictResolver'
 import type { SurfaceSelection } from './panels/Inspector'
 import { LevelPicker } from './panels/LevelPicker'
+import { SaveBar } from './panels/SaveBar'
 import { Sidebar } from './panels/Sidebar'
 import { buildSidebarPanels } from './panels/sidebarRegistry'
 import { subscribeChangesAvailable } from './reload'
+import type { Vec3 } from './scene/camera'
 import { resolveBuildSolved } from './scene/buildStatus'
 import type { FrameRequest } from './scene/frame'
 import { unionBBox } from './scene/frame'
@@ -16,6 +19,19 @@ import { QuadLayout } from './scene/QuadLayout'
 import { clearSelection, parseSurfaceKey, surfaceKey, toggleSelection } from './scene/selectionSet'
 import { useTheme } from './theme/useTheme'
 import type { ThemePreference } from './theme/useTheme'
+
+/** Load's own resolutionLabels/mapping (Task 10) -- 'mine' is a no-op (declining to resolve
+ * already keeps the staged edit, `check_load_conflicts`'s own deliberate simplification); only a
+ * 'theirs' pick produces a real resolution value, `"accept-load"`. Filters the resolver's generic
+ * `Record<string, 'mine'|'theirs'>` down to just the theirs-picked names. */
+function mapToAcceptLoadOnly(picks: Record<string, 'mine' | 'theirs'>): Record<string, 'accept-load'> {
+  const out: Record<string, 'accept-load'> = {}
+  for (const [name, pick] of Object.entries(picks)) {
+    if (pick === 'theirs') out[name] = 'accept-load'
+  }
+  return out
+}
+const LOAD_RESOLUTION_LABELS = { mine: 'Keep my move', theirs: 'Accept trunk' }
 
 const THEME_CYCLE: ThemePreference[] = ['dark', 'light', 'system']
 
@@ -161,6 +177,59 @@ function App() {
     },
     [onSelectMany, frameActors],
   )
+  // Staged actor moves (Task 10; the staging itself is Tasks 8/9's per-viewport Ctrl/Cmd-drag).
+  // Deliberately approximate, per plan: "a simple hasStaged / stagedNames Set<string> piece of
+  // state is enough -- do not duplicate the backend's full staged-actor bookkeeping client-side".
+  // `onStaged` (wired to every pane's own `postStage` call, via QuadLayout) unions in newly staged
+  // names; SaveBar's `onSaved`/`onDiscarded` clear it outright once IT confirms (from the server's
+  // own `postSave`/`postDiscard` responses) the level's whole stage is empty -- see SaveBar.tsx's
+  // own doc comment for why a flat clear is correct there, not just convenient.
+  const [stagedNames, setStagedNames] = useState<Set<string>>(() => new Set())
+  const onStaged = useCallback((names: string[]) => {
+    setStagedNames((s) => new Set([...s, ...names]))
+  }, [])
+  // The shared "confirmed staged" visual position store every pane reads/writes (Critical 2, final
+  // review fix wave) -- lifted here from Viewport3D.tsx/OrthoViewport.tsx's own private copies per
+  // plan.md's File Structure table ("Staged-position override state" -> App.tsx). `stagedOffsetsRef`
+  // mirrors `stagedOffsets` synchronously (React state is async) so a pane's onDrag/onPointerUp can
+  // read the just-applied value without waiting on a re-render -- both are always updated together,
+  // only through `setStagedOffsets`/`clearStagedOffsetNames` below, never independently.
+  const [stagedOffsets, setStagedOffsetsState] = useState<Record<string, Vec3>>(() => ({}))
+  const stagedOffsetsRef = useRef<Record<string, Vec3>>({})
+  const setStagedOffsets = useCallback((next: Record<string, Vec3>) => {
+    stagedOffsetsRef.current = next
+    setStagedOffsetsState(next)
+  }, [])
+  // Drops just the named actors' staged offsets, leaving every other staged actor's visual position
+  // untouched -- used wherever the BACKEND clears a subset of the stage (a Save's "trunk" pick, a
+  // Load's "accept-load" pick, the per-actor conflict-discard escape hatch) so the client never keeps
+  // showing a staged position the trunk write already superseded.
+  const clearStagedOffsetNames = useCallback((names: readonly string[]) => {
+    if (names.length === 0) return
+    const drop = new Set(names)
+    const next: Record<string, Vec3> = {}
+    for (const [name, loc] of Object.entries(stagedOffsetsRef.current)) {
+      if (!drop.has(name)) next[name] = loc
+    }
+    setStagedOffsets(next)
+  }, [setStagedOffsets])
+  // Surfaces a failed `postStage` call (Important 3, final review fix wave) -- the same dismissable-
+  // banner pattern `buildError`/`levelSwitchError` below already use, not a new mechanism.
+  const [stageError, setStageError] = useState<string | null>(null)
+  const onStageError = useCallback((message: string) => setStageError(message), [])
+  const onDiscarded = useCallback(() => {
+    setStagedNames(new Set())
+    setStagedOffsets({})
+  }, [setStagedOffsets])
+  // The per-actor conflict-discard escape hatch (SaveBar's own "discard just this one" button) --
+  // NOT the whole-level Discard above: only that ONE actor's staged offset is dropped, since the
+  // others may still be legitimately staged.
+  const onActorDiscarded = useCallback((name: string) => clearStagedOffsetNames([name]), [clearStagedOffsetNames])
+  // Load's own conflict set (Task 10, symmetric with Save's): populated from the extended
+  // `postLoad` response's `conflicts` field. Load never blocks on a conflict (the refresh below
+  // always completes) -- this just surfaces the SAME shared ConflictResolver so the user can
+  // optionally accept the trunk's value for a conflicting actor, clearing its stage.
+  const [loadConflicts, setLoadConflicts] = useState<ConflictPayload[]>([])
   const [reloading, setReloading] = useState(false)
   const [busy, setBusy] = useState<'load' | 'rebuild' | null>(null)
   // Level switching (owner ruling): unload the OLD level's state the instant a switch starts, and
@@ -207,6 +276,27 @@ function App() {
       .finally(() => setLevelSwitching(false))
   }, [level])
 
+  // Staged edits survive a page refresh (a `POST /stage` writes through immediately -- only the
+  // in-progress drag PREVIEW is refresh-lost, plan's own "Known limitations") -- so `stagedNames`
+  // must be re-derived from `GET /staged` on every level (re)load, not start empty and silently
+  // hide an already-staged edit until the next drag. `stagedOffsets` is seeded the same way
+  // (Critical 2, final review fix wave): a refresh must recover the staged edit's VISUAL state too,
+  // not just its count -- previously only `stagedNames` was recovered here, so a refreshed page
+  // showed the Save bar but rendered every actor at its un-staged trunk position until the next drag.
+  useEffect(() => {
+    if (!level) return
+    fetchStaged(level)
+      .then((staged) => {
+        setStagedNames(new Set(Object.keys(staged)))
+        const offsets: Record<string, Vec3> = {}
+        for (const [name, entry] of Object.entries(staged)) offsets[name] = entry.staged_location
+        setStagedOffsets(offsets)
+      })
+      .catch(() => {
+        // Same tolerance as refreshStatus below -- not worth a page-level error.
+      })
+  }, [level, setStagedOffsets])
+
   const refreshStatus = useCallback((lvl: string) => {
     fetchStatus(lvl)
       .then(setStatus)
@@ -234,15 +324,20 @@ function App() {
 
   // Shared by Load and Rebuild: run the POST, then refetch scene+atlas+lightmap and /status --
   // both actions change what the server has to hand back (Load: the trunk view; Rebuild: the
-  // solved geometry), so both need the same full refresh afterward.
+  // solved geometry), so both need the same full refresh afterward. `onResult` (Task 10) lets a
+  // caller inspect the POST's own response (Load's `conflicts` field) before that refresh fires --
+  // it must run first, not after, since a slow refresh must not delay showing the conflict UI.
   const runBuildAction = useCallback(
-    (which: 'load' | 'rebuild', post: (lvl: string) => Promise<unknown>) => {
+    <T,>(which: 'load' | 'rebuild', post: (lvl: string) => Promise<T>, onResult?: (result: T) => void) => {
       if (!level || busy) return
       setBusy(which)
       setReloading(true)
       setBuildError(null)   // clear any previous failure banner -- this attempt gets a fresh verdict
       post(level)
-        .then(() => fetchLevelState(level))
+        .then((result) => {
+          onResult?.(result)
+          return fetchLevelState(level)
+        })
         .then(({ scene: s, atlas: a, lightmap: l }) => {
           setScene(s)
           setAtlas(a)
@@ -257,8 +352,60 @@ function App() {
     },
     [level, busy, refreshStatus],
   )
-  const handleLoad = useCallback(() => runBuildAction('load', postLoad), [runBuildAction])
+  const handleLoad = useCallback(
+    () => runBuildAction('load', (lvl) => postLoad(lvl), (result) => setLoadConflicts(result.conflicts)),
+    [runBuildAction],
+  )
   const handleRebuild = useCallback(() => runBuildAction('rebuild', postRebuild), [runBuildAction])
+  // Save success (Important 5, final review fix wave): route through the SAME refresh path Load/
+  // Rebuild already use, so the Inspector and every non-dragged pane pick up the newly-committed
+  // trunk state instead of showing the pre-Save Location until the user manually clicks Load.
+  // Reusing an actual Load (not just `fetchLevelState`) matters: `serve`'s `_trunk_ref` is a
+  // per-process cache that only Load/Rebuild ever invalidate, so a bare `fetchLevelState` after a
+  // Save would still read the STALE cached trunk -- only `POST /load` forces the re-read. This also
+  // re-clears the server's `changes_available` flag, which the Save's own trunk write would
+  // otherwise leave set (Save doesn't touch it) and show as a spurious "reload available" banner.
+  // KNOWN RESIDUAL (documented, not silently left out): `TrunkWatcher` debounces its own filesystem
+  // watch by ~0.4s, so if that debounced callback fires AFTER this auto-Load already re-cleared the
+  // flag, it can set `changes_available` back to true moments later, observing our own already-
+  // loaded write as if it were external -- closing that fully needs a backend change (e.g. the
+  // watcher suppressing its own write) that is out of scope for this fix wave.
+  const onSaved = useCallback(() => {
+    setStagedNames(new Set())
+    setStagedOffsets({})
+    runBuildAction('load', (lvl) => postLoad(lvl), (result) => setLoadConflicts(result.conflicts))
+  }, [runBuildAction, setStagedOffsets])
+  // Load conflict resolution (Task 10, fixed -- Important 4, final review fix wave): a 'theirs' pick
+  // means "accept the trunk's value", POSTed as `check_load_conflicts`'s own `"accept-load"`. A
+  // 'mine' pick ("Keep my move") is a no-op SERVER-side (declining to resolve already keeps the
+  // staged edit) -- but it used to be a dead end CLIENT-side too: `mapToAcceptLoadOnly` dropped every
+  // 'mine' pick, so an all-'mine' Confirm posted an EMPTY `resolutions`, `check_load_conflicts`
+  // re-reported the identical unresolved conflict, and the banner reappeared unchanged with no way to
+  // dismiss it short of picking "Accept trunk" (abandoning the very edit the user just said to keep).
+  // Fixed: a 'mine' pick is dismissed LOCALLY, no network call needed for it either way -- when every
+  // pick is 'mine', skip the POST entirely; when picks are mixed, still POST only the 'theirs' ones,
+  // and additionally drop the 'mine'-picked names from the POST response's own `conflicts` (which
+  // `check_load_conflicts` will otherwise keep re-reporting them in forever, since there is no
+  // acknowledge-only signal to send it).
+  const handleResolveLoadConflicts = useCallback(
+    (picks: Record<string, 'mine' | 'theirs'>) => {
+      const resolutions = mapToAcceptLoadOnly(picks)
+      const mineNames = Object.entries(picks).filter(([, p]) => p === 'mine').map(([name]) => name)
+      if (Object.keys(resolutions).length === 0) {
+        setLoadConflicts((prev) => prev.filter((c) => !mineNames.includes(c.name)))
+        return
+      }
+      runBuildAction(
+        'load',
+        (lvl) => postLoad(lvl, resolutions),
+        (result) => {
+          setLoadConflicts(result.conflicts.filter((c) => !mineNames.includes(c.name)))
+          clearStagedOffsetNames(Object.keys(resolutions))
+        },
+      )
+    },
+    [runBuildAction, clearStagedOffsetNames],
+  )
 
   // Level switch (LevelPicker's own PUT /api/level call site -- moved here since a switch
   // invalidates far more of App's own state than LevelPicker owns).
@@ -276,8 +423,12 @@ function App() {
       setStatus(null)
       setSelectedNames(clearSelection())
       setSelectedSurfaces(clearSelection())
+      setStagedNames(clearSelection())
+      setStagedOffsets({}) // a different level's staged positions must not linger into the new one
+      setStageError(null)
+      setLoadConflicts([])
       switchLevel(name)
-        .then(() => setLevel(name)) // drives the fetch-on-level-change effect above
+        .then(() => setLevel(name)) // drives the fetch-on-level-change effect above (scene + staged)
         .catch((e: unknown) => {
           // The switch itself failed server-side -- `level` never changed, so restore its state
           // instead of leaving the app blocked on nothing.
@@ -289,11 +440,18 @@ function App() {
               setAtlas(a)
               setLightmap(l)
             })
+            .then(() => fetchStaged(level))
+            .then((staged) => {
+              setStagedNames(new Set(Object.keys(staged)))
+              const offsets: Record<string, Vec3> = {}
+              for (const [n, entry] of Object.entries(staged)) offsets[n] = entry.staged_location
+              setStagedOffsets(offsets)
+            })
             .then(() => refreshStatus(level))
         })
         .catch((e: unknown) => setError(String(e))) // the restore itself failed -- nothing left to show
     },
-    [level, levelSwitching, refreshStatus],
+    [level, levelSwitching, refreshStatus, setStagedOffsets],
   )
 
   // Every selected actor, in scene.actors order -- Inspector's own prop (Task 16: 0/1/2+ selected).
@@ -365,6 +523,13 @@ function App() {
               (bug fix: it used to sit at the row's right end, crowding that cluster below it). */}
           <ThemeToggle preference={themePreference} onChange={setThemePreference} />
           <BuildToolbar status={status} busy={busy} onLoad={handleLoad} onRebuild={handleRebuild} />
+          <SaveBar
+            level={level}
+            stagedNames={stagedNames}
+            onSaved={onSaved}
+            onDiscarded={onDiscarded}
+            onActorDiscarded={onActorDiscarded}
+          />
           <LevelPicker
             currentLevel={level}
             disabled={levelSwitching}
@@ -385,8 +550,33 @@ function App() {
               </button>
             </div>
           )}
+          {/* A failed Ctrl/Cmd-drag `postStage` (Important 3, final review fix wave) -- same
+              dismissable-banner pattern as buildError above, not a new mechanism. */}
+          {stageError && (
+            <div className="build-error-banner">
+              {stageError}
+              <button type="button" onClick={() => setStageError(null)}>
+                Dismiss
+              </button>
+            </div>
+          )}
           {reloading && <div className="updating-badge">updating…</div>}
+          {/* Load's own conflict UI (Task 10) -- the SAME shared ConflictResolver SaveBar mounts,
+              with Load's own labels/mapping. Load never blocks on a conflict (the refresh above
+              already completed by the time this can even be non-empty), so this is a follow-up
+              prompt, not a gate -- but it's still non-dismissible: no close button, only resolving
+              every row (or leaving the tab, same as any other unsaved-state exit). */}
+          {loadConflicts.length > 0 && (
+            <div className="load-conflict-banner">
+              <ConflictResolver
+                conflicts={loadConflicts}
+                resolutionLabels={LOAD_RESOLUTION_LABELS}
+                onResolve={handleResolveLoadConflicts}
+              />
+            </div>
+          )}
           <QuadLayout
+            level={level}
             scene={scene}
             atlas={atlas}
             lightmap={lightmap}
@@ -395,6 +585,11 @@ function App() {
             selectedSurfaces={selectedSurfaces}
             onSelectSurface={onSelectSurface}
             onDeselect={onDeselect}
+            onStaged={onStaged}
+            stagedOffsets={stagedOffsets}
+            stagedOffsetsRef={stagedOffsetsRef}
+            setStagedOffsets={setStagedOffsets}
+            onStageError={onStageError}
             buildSolved={buildSolved}
             frameRequest={frameRequest}
             frameActors={frameActors}

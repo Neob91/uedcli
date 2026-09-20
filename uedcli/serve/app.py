@@ -8,6 +8,7 @@ import logging
 import threading
 from contextlib import asynccontextmanager
 from dataclasses import asdict
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -21,7 +22,7 @@ from ..cli import resources
 from ..cli.errors import CommandError
 from ..preview_native import build_scene as _build_scene
 from ..preview_native import resolve_actor_sprites, resolve_mesh_scene_polys, resolve_mover_scene_polys
-from . import build_pin
+from . import build_pin, edits
 from .errors import error_to_status
 from .levels import levels_payload
 from .lightmap import build_lightmap_atlas
@@ -34,6 +35,7 @@ from .scene import (
     build_wireframe_payload,
     filtered_geometry_polys,
 )
+from .snapshots import StagingStore
 from .textures import build_atlas
 from .watch import TrunkWatcher
 
@@ -93,6 +95,11 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
     solve_lock = threading.Lock()
 
     maps_root = Path(config.project_maps_dir(project))
+    # One StagingStore per app (plan Task 3), not per-request -- same "construct once, cache on the
+    # closure" convention as every other per-project state above/below (`_trunk_ref` et al.). Its
+    # root is the project's own machine-local state dir (`config.state_subdir`, `create=True` so the
+    # first stage/save of a session doesn't need a separate bootstrap step).
+    _staging_store = StagingStore(config.state_subdir(project.root, "snapshots", create=True))
 
     # The level this app currently serves (quad-layout Part 7, Task 25) — a single-element list
     # mutated BY INDEX (`_current_level[0] = ...`) in `PUT /api/level`'s closure, the same holder-
@@ -535,8 +542,12 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         }
 
     @app.post("/api/level/{level_name}/load")
-    def load(level_name: str) -> dict:
-        # The explicit Load action (spec §2, P1: a plain refresh, no staging to conflict with).
+    def load(level_name: str, body: dict | None = None) -> dict:
+        # The explicit Load action (spec §2). Plan Task 4: symmetric with Save's staged-edit
+        # conflict check, in the reverse direction -- `edits.check_load_conflicts` reports (never
+        # blocks) when an external trunk change collides with a staged edit. Load carries no
+        # data-loss risk (nothing is written to the trunk here), so the refresh below always
+        # completes regardless of what the check finds.
         # Re-reads the trunk UNCONDITIONALLY (unlike `_get_trunk`'s own double-checked-lock gate,
         # which only populates an EMPTY slot) -- an explicit Load must see a change even when the
         # slot is already warm. `resolve_actor_sprites`/`resolve_mesh_scene_polys`/
@@ -545,8 +556,11 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # independence: boards `mesh-actors-should-render-independent-of-geometry-build`/
         # `mover-triangles-not-build-state-independent`).
         _require_level(level_name)
+        resolutions = (body or {}).get("resolutions") or {}
         search_files, index, defaults = _scene_inputs(project)
         lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level_name)
+        conflicts = edits.check_load_conflicts(
+            level_name, lvl, store=_staging_store, resolutions=resolutions)
         sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
         mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
             lvl, index, search_files, defaults)
@@ -572,7 +586,17 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         # Rebuild already set), otherwise the same "unlock all modes with no Rebuild needed" check
         # the automatic initial Load already runs (spec test #8).
         _bootstrap_geometry_if_empty(level_name)
-        return {"status": "ok"}
+        return {
+            "status": "ok",
+            "conflicts": [
+                {
+                    "name": c.name,
+                    "staged_location": _serialize_location(c.staged_location),
+                    "trunk_location": _serialize_location(c.trunk_location),
+                }
+                for c in conflicts
+            ],
+        }
 
     # Sync `def` (NOT async): the blocking ~24s CSG+lighting solve runs in Starlette's threadpool,
     # not the event loop -- WS pushes, /health, and every other viewer stay responsive during it.
@@ -675,6 +699,71 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
             "intensity": intensity,
             "manifest": manifest,
             "png_base64": base64.b64encode(png_bytes).decode("ascii"),
+        }
+
+    # Plan Task 3: thin HTTP adapters over `edits.py`'s stage/discard/save (Task 2) and
+    # `StagingStore.read_staged` (Task 1) -- no business logic here, matching every route above.
+    # Sync `def`, like every route in this file except `switch_level`/`ws_endpoint`: none of these
+    # four does a slow CSG solve, but a trunk load/save is still blocking file I/O, so it belongs in
+    # Starlette's threadpool, not the event loop.
+    #
+    # The Decimal/JSON boundary lives ONLY here: JSON has no `Decimal` type, so every incoming
+    # `[x, y, z]` array is parsed via `Decimal(str(v))` -- never `Decimal(v)` on the already-lossy
+    # parsed float -- before it reaches `edits.py`/`snapshots.py`, and every outgoing `Decimal`
+    # tuple is serialized back to `[float(d) for d in loc]`. Neither of those two modules ever sees
+    # a `float`.
+    def _parse_location(arr) -> tuple[Decimal, Decimal, Decimal]:
+        return tuple(Decimal(str(v)) for v in arr)
+
+    def _serialize_location(loc: tuple[Decimal, Decimal, Decimal]) -> list[float]:
+        return [float(d) for d in loc]
+
+    @app.post("/api/level/{level_name}/stage")
+    def stage(level_name: str, body: dict) -> dict:
+        _require_level(level_name)
+        actors = body.get("actors") or {}
+        moves = {name: _parse_location(loc) for name, loc in actors.items()}
+        staged = edits.stage_locations(project, level_name, moves, store=_staging_store)
+        return {"staged": staged}
+
+    @app.post("/api/level/{level_name}/discard")
+    def discard(level_name: str, body: dict | None = None) -> dict:
+        # `actors` (Task 10 extension, plan Task 3 didn't originally call for this): an optional
+        # subset of staged actor names to discard, leaving every other staged actor's edit in
+        # place -- lets the Save conflict-resolution UI drop one conflicting actor's stage without
+        # discarding unrelated staged work. Omitted/`None` -> the original whole-level discard.
+        _require_level(level_name)
+        actors = (body or {}).get("actors")
+        edits.discard_staged(project, level_name, store=_staging_store, actors=actors)
+        return {"status": "ok"}
+
+    @app.post("/api/level/{level_name}/save")
+    def save(level_name: str, body: dict) -> dict:
+        _require_level(level_name)
+        resolutions = body.get("resolutions") or {}
+        result = edits.save_staged(project, level_name, store=_staging_store,
+                                   resolutions=resolutions)
+        return {
+            "applied": result.applied,
+            "conflicts": [
+                {
+                    "name": c.name,
+                    "staged_location": _serialize_location(c.staged_location),
+                    "trunk_location": _serialize_location(c.trunk_location),
+                }
+                for c in result.conflicts
+            ],
+        }
+
+    @app.get("/api/level/{level_name}/staged")
+    def staged(level_name: str) -> dict:
+        _require_level(level_name)
+        return {
+            name: {
+                "staged_location": _serialize_location(entry.staged_location),
+                "baseline_location": _serialize_location(entry.baseline_location),
+            }
+            for name, entry in _staging_store.read_staged(level_name).items()
         }
 
     if fault_route:

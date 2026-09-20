@@ -42,13 +42,25 @@ not per edit-kind.
   this SAME store rather than `stash` (`stash_register.py`, a separate, user-facing, manually-named
   register) — but this item's plan must budget real work for the store's base mechanics (or wait on
   a Slice-3 dependency), not treat it as importable infrastructure.
-- **The model-side write path** (`dev/docs/architecture.md` D1/D2): every CLI mutation verb is
-  delete-then-readd-with-rollback — capture the actor's real block, delete, re-add, and on any
-  failure restore the original plus swept neighbors. `level` only advances on success. This is the
-  ONLY path a trunk write goes through, GUI included — no GUI-specific write mechanism.
-- **Concurrency** (`dev/docs/direction/safety.md`): per-level `flock` around saves, plus
-  detect-and-refuse (never silent loss) of a same-actor concurrent edit. The owner's principle: GUI
-  and CLI share ONE concurrency behavior.
+- **Corrected 2026-09-20 (plan-time research): the write path for a `Location` move is NOT D1/D2.**
+  D1/D2 (`dev/docs/architecture.md`) is specifically for LIVE-EDITOR-driving verbs (brush/vertex/poly
+  edits that round-trip through a running UED22 process, `uedcli/apply.py`) — delete-then-readd is
+  how you safely re-place something the editor itself must rebuild. `actor move`
+  (`uedcli/cli/commands/actor/edit.py`'s `_move`) is a **pure model-side** verb: no editor involved,
+  no delete/re-add — it loads the trunk, sets `level.actors[name].location` directly, and calls
+  `TrunkLevelSource.save(...)` (`uedcli/cli/level_sources.py`). This item's Save path reuses THAT
+  pattern (load → mutate `.location` → save), not D1/D2. Every trunk write still goes through this
+  ONE path, GUI included — no GUI-specific write mechanism — the correction is which existing path,
+  not whether one exists.
+- **Concurrency — corrected 2026-09-20.** `dev/docs/direction/safety.md`'s "same-actor concurrent
+  edits are detected and refused" describes a **not-yet-built** mechanism (the actual code, spec'd
+  separately at `dev/docs/board/inbox/trunk-save-lost-update-detection-aborts/`, is not implemented
+  — today's `TrunkLevelSource.save` is last-write-wins under a per-level `fcntl.flock` that guards
+  only the final write, with no read-compare-abort). This item's own Save conflict check (baseline
+  Location captured at staging time, compared against the trunk's current Location at Save time) is
+  NOT reusing existing safety infrastructure — it is new code providing, for Location specifically,
+  the guarantee `safety.md` describes in general. The per-level flock itself IS real and reused
+  as-is (inline inside `TrunkLevelSource.save`, `level_sources.py`).
 - **Why staging doesn't need a `direction/` change**: `dev/docs/rationale/gui-editing.md`.
 
 ## Interaction design
@@ -92,7 +104,8 @@ semantics below.
 
 **Save (explicit action) — per-property merge, mandatory explicit resolution on a real conflict
 (owner ruling, 2026-09-20).** Applies every currently-staged actor into the trunk via the
-model-side write path (D1/D2 — delete-then-readd-with-rollback). Before applying, `serve` re-reads
+model-side write path — `actor move`'s own load → mutate `.location` → `TrunkLevelSource.save`
+pattern (see "Background" above), not D1/D2. Before applying, `serve` re-reads
 each touched actor's CURRENT trunk state and compares it PROPERTY BY PROPERTY against the state the
 staged edit was based on — for this slice, the only staged property is `Location`:
 
@@ -104,17 +117,20 @@ staged edit was based on — for this slice, the only staged property is `Locati
   began) → Save does NOT proceed automatically and does NOT offer a blanket confirm-and-overwrite.
   It presents the conflicting actor(s) with BOTH values (the staged `Location` and the current trunk
   `Location`) and **requires the user to explicitly pick a resolution for each conflicting actor**
-  (keep the staged move, or keep the trunk-side value) — there is no default/auto-pick. Whether a
-  Save covering multiple actors applies the non-conflicting ones immediately while conflicting ones
-  wait, or holds the whole batch until every conflict is resolved, is left open (see "Open" below;
-  the per-actor wording in "Data flow" below describes the single-actor case only).
+  (keep the staged move, or keep the trunk-side value) — there is no default/auto-pick. **Resolved
+  at plan time (2026-09-20): a Save applies each non-conflicting or explicitly-resolved actor
+  immediately and independently; a still-unresolved conflicting actor stays staged and blocked, with
+  no effect on the others in the same Save call.** This falls directly out of `save_staged`'s
+  per-actor apply loop (`plan.md` Task 2) — there is no batch-atomicity concept to hold back the rest
+  of the selection.
 
-  **The per-property comparison itself is not yet a real mechanism.** This slice only ever stages
-  one property (`Location`), so its "compare property by property" reduces to one field check — but
-  no general property-diff/merge code exists yet (the closest existing building block, the semantic
-  diff module, is `uedcli-human-gui/plan.md` Slice 3, also not built). Whether that narrower scope
-  makes a Location-only comparison trivial to write directly, or whether it should reuse/anticipate
-  the Slice-3 diff module, is a plan-time question — not decided here.
+  **The per-property comparison needs no general diff engine — it falls out of the write path
+  itself.** Because `actor move`'s own pattern (see "Background") always re-loads the trunk fresh and
+  writes ONLY the field being changed, doing that at Save time IS the per-property merge: a same-Save
+  re-read that finds `Location` unchanged writes the staged `Location` and nothing else; any other
+  property the trunk-side change made was never touched, so it survives automatically. No general
+  property-diff/merge module (the Slice-3 semantic-diff work, still unbuilt) is needed for a
+  Location-only slice — only a Location-vs-baseline equality check.
 
 **Discard (explicit action).** Drops the staged snapshot without touching the trunk; the client
 reverts the affected actors to the last-loaded trunk state.
@@ -160,8 +176,8 @@ actor. A trunk-side change to any OTHER property merges in automatically, same a
   per-property merge exists to prevent, so it must be asserted explicitly, not just "Save applies
   cleanly"; a same-property (`Location`) conflict is reported, not auto-resolved, and does not apply
   until an explicit resolution is supplied; Discard clears the stage without touching the trunk;
-  Load's symmetric no-overlap-merges / same-property-blocks behavior. Reuses the existing D1/D2
-  rollback test pattern the CLI verbs already have — no second write-path implementation to test.
+  Load's symmetric no-overlap-merges / same-property-blocks behavior. Reuses `actor move`'s existing
+  load-mutate-save pattern — no second write-path implementation to test.
 - **Frontend**: modifier detection (`ctrlKey || metaKey`) for the 3 perspective combos and the 1
   ortho combo; drag-to-preview math for a known input in each pane kind; the tap-vs-drag threshold
   correctly separates a Ctrl-held click (multi-select) from a Ctrl-held drag (move); Save/Discard UI
@@ -170,21 +186,27 @@ actor. A trunk-side change to any OTHER property merges in automatically, same a
 - Scope tests to the touched module while iterating (`bin/test -k serve`, `web/`'s vitest run); full
   suite once before merge, per `dev/docs/rules/tests.md`.
 
-## Open (resolve at plan time, not blocking this spec)
+## Resolved at plan time (2026-09-20, `plan.md`)
 
-- Exact staged-snapshot manifest shape distinguishing a staged edit from an audit snapshot in the
-  same store — plus, since the store itself isn't built yet (see "Background" above), whether this
-  item's plan builds its base mechanics or the plan waits on that as a real dependency.
-- Which perspective button combo (LMB/RMB/LMB+RMB) maps to which world axis — a build-time choice,
-  document once picked.
+- **Staged-snapshot store scope**: `plan.md` builds a real, genuinely content-addressed staging
+  store (`uedcli/serve/snapshots.py`) NOW — same manifest/blob file layout the eventual Slice-3
+  audit store would use, so it is literally the "same store" reused, not a parallel mechanism — but
+  implements only what Slice 1 needs (stage/read/discard one level's staged actors). No LRU pruning,
+  no audit timeline/diff UI, no cross-snapshot history browsing — those stay Slice 3's job, built on
+  top of the same primitives later.
+- **Perspective axis mapping**: LMB → X, RMB → Y, LMB+RMB → Z (arbitrary but documented; matches
+  button-count order to axis-letter order). Each combo's drag scalar is the pointer's horizontal
+  delta (`dx`) only — a one-axis-per-combo control is inherently 1-D, so `dy` is unused in
+  perspective (ortho's single combo uses both `dx`/`dy`, one per visible axis, since it moves in a
+  plane).
+- **Multi-actor Save timing**: resolved above under "Persistence" — per-actor, not batch-atomic.
+
+## Open (resolve during build, not blocking this plan)
+
 - The existing camera-nav has a 4th combo, `Alt+LMB` = orbit-around-selection (`Viewport3D.tsx`),
-  not covered by the owner's 3-combo decision. What `Ctrl/Cmd+Alt+LMB` does (nothing? a 4th
-  axis-adjacent behavior?) is undecided — resolve at plan time, defaulting to "no special behavior,
-  falls through to whichever of Ctrl+LMB or Alt+LMB the input layer checks first" unless that reads
-  as broken in practice.
-- A Save covering a multi-actor selection where only SOME actors conflict: does the non-conflicting
-  subset apply immediately while the conflicting ones wait on resolution, or does the whole batch
-  hold until every conflict is resolved? Not specified by the owner's ruling — resolve at plan time.
+  not covered by the owner's 3-combo decision. `Ctrl/Cmd+Alt+LMB` defaults to no special behavior
+  (falls through to whichever of the Ctrl-drag-move or Alt-orbit branches the input dispatch checks
+  first) unless that reads as broken when built.
 
 ## Refs
 
@@ -194,8 +216,11 @@ actor. A trunk-side change to any OTHER property merges in automatically, same a
   out of scope here).
 - `dev/docs/rationale/gui-editing.md` (why P2 doesn't need a `direction/trunk-and-editor.md`
   amendment).
-- `dev/docs/architecture.md` (D1/D2 write pattern); `dev/docs/direction/safety.md` (flock +
-  refuse-same-actor rule; the GUI's audit-snapshot-store exemption).
+- `uedcli/cli/commands/actor/edit.py`'s `_move`, `uedcli/cli/level_sources.py`'s
+  `TrunkLevelSource.load`/`.save` (the real write path this item reuses); `dev/docs/direction/
+  safety.md` (flock; the "refuse-same-actor" rule this item's own conflict check newly provides for
+  `Location`, ahead of the general, not-yet-built mechanism); the GUI's audit-snapshot-store
+  exemption.
 - `web/src/scene/dragGesture.ts`, `web/src/scene/selection.ts`, `web/src/panels/OrgPanel.tsx`
   (existing modifier-key + tap-vs-drag conventions this slice reuses).
 - `uedcli-human-gui/plan.md`'s Slice 3 table (the audit-snapshot store's design — not yet built;

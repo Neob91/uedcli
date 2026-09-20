@@ -796,6 +796,155 @@ body {
   font-weight: 600;
 }
 
+/* Save/Discard bar for staged actor moves (Task 10) -- sits in the same toolbar row as
+   BuildToolbar/LevelPicker; renders nothing (no space taken) until something is staged. */
+.save-bar {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.save-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.save-bar-count {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.save-bar-actions button {
+  font: inherit;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.save-bar-actions button:hover:not(:disabled) {
+  background: var(--surface-2-hover);
+}
+
+.save-bar-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.save-bar-error {
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.save-bar-conflict {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 2;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  box-shadow: 0 4px 12px var(--overlay-bg);
+}
+
+.save-bar-conflict-discard-list {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg-muted);
+}
+
+.save-bar-conflict-discard-list button {
+  font: inherit;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+/* Shared conflict-resolution UI (Task 10) -- mounted both inside `.save-bar-conflict` (Save's own
+   conflict) and as `.load-conflict-banner`'s child (Load's own conflict, below). */
+.conflict-resolver {
+  font-size: 12px;
+  max-width: 420px;
+}
+
+.conflict-resolver-intro {
+  margin: 0 0 8px;
+  color: var(--fg-muted);
+}
+
+.conflict-resolver-rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.conflict-resolver-row {
+  padding: 6px 8px;
+  border-radius: 4px;
+  background: var(--surface-2);
+}
+
+.conflict-resolver-row-name {
+  font-weight: 600;
+}
+
+.conflict-resolver-row-locations {
+  display: flex;
+  flex-direction: column;
+  color: var(--fg-muted);
+  margin: 2px 0 4px;
+}
+
+.conflict-resolver-row-choices {
+  display: flex;
+  gap: 12px;
+}
+
+.conflict-resolver-confirm {
+  margin-top: 8px;
+  font: inherit;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.conflict-resolver-confirm:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* Load's own conflict UI (Task 10) -- App-owned, positioned like `.build-error-banner` just below
+   the toolbar row. */
+.load-conflict-banner {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
+  padding: 8px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  box-shadow: 0 4px 12px var(--overlay-bg);
+}
 
 /* Both selection kinds held at once (GUI-PARITY.md "Actor + surface selection coexist"): the two
    sections stack, with a rule between them so they don't read as one list. */

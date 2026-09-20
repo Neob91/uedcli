@@ -4,11 +4,17 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import App from './App'
 
 /** The selection callbacks App hands the (stubbed) quad, captured so a test can drive App's own
- * real handlers without a WebGL raycast. */
+ * real handlers without a WebGL raycast. Extended (final review fix wave) with the Critical 2
+ * staged-offset props -- a test can call `setStagedOffsets` directly, exactly the way a real
+ * viewport's own Ctrl/Cmd-drag would, and read back `stagedOffsets`/`onStaged` to prove App.tsx's
+ * shared state actually propagates and actually clears. */
 interface QuadSelectionProps {
   onSelectActor: (name: string, additive: boolean) => void
   onSelectSurface: (actor: string, polyIndex: number, additive: boolean) => void
   onDeselect: () => void
+  onStaged?: (names: string[]) => void
+  stagedOffsets: Record<string, [number, number, number]>
+  setStagedOffsets: (next: Record<string, [number, number, number]>) => void
 }
 const quadProps: { current: QuadSelectionProps | null } = { current: null }
 
@@ -48,6 +54,7 @@ function mockFetch(extra?: (url: string, init?: RequestInit) => Response | undef
     if (url.endsWith('/atlas')) return jsonResponse(ATLAS)
     if (url.endsWith('/lightmap')) return jsonResponse(LIGHTMAP)
     if (url.endsWith('/status')) return jsonResponse(STATUS_UNBUILT)
+    if (url.endsWith('/staged')) return jsonResponse({})
     throw new Error(`unexpected fetch: ${url}`)
   }) as unknown as typeof fetch
 }
@@ -124,6 +131,81 @@ describe('App: Reload button visibility', () => {
   })
 })
 
+// Task 10: Load's conflict check (uedcli/serve/edits.py `check_load_conflicts`) surfaces through
+// the extended `POST /load` response's `conflicts` field -- this drives the SAME shared
+// `ConflictResolver` SaveBar mounts, with Load's own "Accept trunk" label and its accept-load-only
+// resolution mapping.
+describe('App: Load conflict resolution', () => {
+  const LOAD_CONFLICT = { name: 'Light0', staged_location: [10, 0, 0], trunk_location: [20, 0, 0] }
+
+  it('a postLoad response with conflicts mounts ConflictResolver; picking "Accept trunk" and confirming calls postLoad again with {name: "accept-load"}', async () => {
+    let loadCallCount = 0
+    const loadCalls: unknown[] = []
+    mockFetch((url, init) => {
+      if (url.endsWith('/status')) {
+        return jsonResponse({ ...STATUS_UNBUILT, changes_available: true })
+      }
+      if (url.endsWith('/load') && init?.method === 'POST') {
+        loadCallCount += 1
+        loadCalls.push(init.body ? JSON.parse(String(init.body)) : null)
+        const conflicts = loadCallCount === 1 ? [LOAD_CONFLICT] : []
+        return jsonResponse({ status: 'ok', conflicts })
+      }
+      return undefined
+    })
+
+    render(<App />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+
+    await waitFor(() => expect(screen.getByText('Light0')).toBeTruthy())
+    expect(screen.getByText('Accept trunk')).toBeTruthy()
+
+    fireEvent.click(screen.getByLabelText('Accept trunk'))
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }))
+
+    await waitFor(() => expect(loadCallCount).toBe(2))
+    expect(loadCalls[1]).toEqual({ resolutions: { Light0: 'accept-load' } })
+    await waitFor(() => expect(screen.queryByText('Light0')).toBeNull())
+  })
+
+  // Important 4, final review fix wave: `mapToAcceptLoadOnly` used to drop every "mine" pick
+  // entirely, so choosing "Keep my move" for every conflicting actor and clicking Confirm posted an
+  // EMPTY `resolutions` -- the backend re-reported the identical unresolved conflict, and the banner
+  // reappeared with no way to dismiss it short of abandoning the edit via "Accept trunk". Fixed: an
+  // all-"mine" resolution is now a pure client-side dismiss, no network call at all.
+  it('picking "Keep my move" for every conflict dismisses the banner locally, with NO second /load call', async () => {
+    let loadCallCount = 0
+    mockFetch((url, init) => {
+      if (url.endsWith('/status')) {
+        return jsonResponse({ ...STATUS_UNBUILT, changes_available: true })
+      }
+      if (url.endsWith('/load') && init?.method === 'POST') {
+        loadCallCount += 1
+        return jsonResponse({ status: 'ok', conflicts: [LOAD_CONFLICT] })
+      }
+      return undefined
+    })
+
+    render(<App />)
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+    await waitFor(() => expect(screen.getByText('Light0')).toBeTruthy())
+    expect(loadCallCount).toBe(1)
+
+    fireEvent.click(screen.getByLabelText('Keep my move'))
+    fireEvent.click(screen.getByRole('button', { name: /apply/i }))
+
+    // The banner clears -- this used to re-show the IDENTICAL conflict, a dead end.
+    await waitFor(() => expect(screen.queryByText('Light0')).toBeNull())
+    // ...without ever posting a second /load -- declining to resolve already keeps the staged edit
+    // server-side, so there is nothing to tell the backend.
+    expect(loadCallCount).toBe(1)
+  })
+})
+
 describe('App: level switching', () => {
   const LEVELS_PAYLOAD = {
     levels: [
@@ -145,6 +227,7 @@ describe('App: level switching', () => {
       if (url.endsWith('/atlas')) return jsonResponse(ATLAS)
       if (url.endsWith('/lightmap')) return jsonResponse(LIGHTMAP)
       if (url.endsWith('/status')) return jsonResponse(STATUS_UNBUILT)
+      if (url.endsWith('/staged')) return jsonResponse({})
       throw new Error(`unexpected fetch: ${url}`)
     }) as unknown as typeof fetch
   }
@@ -322,5 +405,99 @@ describe('App: actor + surface selection coexistence', () => {
     act(() => quad.onSelectSurface('Room', 4, true))
     act(() => quad.onDeselect())
     expect(screen.getByTestId('inspector-empty')).toBeTruthy()
+  })
+})
+
+// Critical 2, final review fix wave: `stagedOffsets` (the Ctrl/Cmd-drag "confirmed staged" visual
+// position) used to be a private useState INSIDE each of Viewport3D.tsx/OrthoViewport.tsx, so
+// Discard could never actually clear what was rendered, and a drag in one pane was invisible in the
+// others. Fixed by lifting ownership here (App.tsx) and threading it down as props -- these tests
+// drive App's real setter (exactly what a real viewport's own drag-end does) and its real SaveBar
+// (not mocked, unlike QuadLayout) to prove the state is genuinely shared and genuinely clearable.
+describe('App: staged Ctrl/Cmd-drag position ownership (Critical 2)', () => {
+  it('threads ONE shared stagedOffsets/setStagedOffsets to QuadLayout, not a per-pane copy', async () => {
+    mockFetch()
+    render(<App />)
+    await waitFor(() => expect(quadProps.current).not.toBeNull())
+
+    // Mirrors what a real Viewport3D/OrthoViewport's own Ctrl/Cmd-drag onDrag does at every frame --
+    // writing through the SAME prop-passed setter every pane shares. Re-applied on every poll (not
+    // a one-shot `act()` before a single `waitFor`): the mount-time `GET /staged` effect resolves
+    // asynchronously to `{}` and would otherwise race a single write, occasionally clobbering it
+    // right back to `{}` depending on exactly when that fetch settles.
+    await waitFor(() => {
+      act(() => quadProps.current!.setStagedOffsets({ Light0: [10, 0, 0] }))
+      expect(quadProps.current!.stagedOffsets).toEqual({ Light0: [10, 0, 0] })
+    })
+  })
+
+  it("Discard clears the shared stagedOffsets state, reverting every pane's rendered position", async () => {
+    mockFetch((url, init) => {
+      if (url.endsWith('/discard') && init?.method === 'POST') return jsonResponse({ status: 'ok' })
+      return undefined
+    })
+    render(<App />)
+    await waitFor(() => expect(quadProps.current).not.toBeNull())
+
+    // Simulate a completed Ctrl/Cmd-drag: `onStaged` (stagedNames bookkeeping, what makes SaveBar
+    // render) + `setStagedOffsets` (the visual position, this fix's own subject) -- re-applied on
+    // every poll for the same mount-effect-race reason as the test above, until BOTH have visibly
+    // taken (the Save bar is up AND stagedOffsets reads back what was just written).
+    await waitFor(() => {
+      act(() => {
+        quadProps.current!.onStaged?.(['Light0'])
+        quadProps.current!.setStagedOffsets({ Light0: [10, 0, 0] })
+      })
+      expect(screen.getByRole('button', { name: 'Discard' })).toBeTruthy()
+      expect(quadProps.current!.stagedOffsets).toEqual({ Light0: [10, 0, 0] })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull())
+    // This is the regression: before the fix, nothing ever called setStagedOffsets on Discard, so
+    // the pane kept drawing the actor at the abandoned position indefinitely.
+    expect(quadProps.current!.stagedOffsets).toEqual({})
+  })
+})
+
+// Important 5, final review fix wave: a successful Save only cleared `stagedNames` -- the Inspector
+// and any non-dragged pane kept showing the PRE-SAVE Location until the user manually clicked Load,
+// and the GUI's own trunk write could trip its own file-watcher into a spurious "reload available"
+// prompt. Fixed by routing Save's success through the SAME `runBuildAction('load', ...)` path the
+// Load button itself uses.
+describe('App: Save success refreshes the trunk view (Important 5)', () => {
+  it('a clean Save triggers an actual Load afterward (not just a local state clear)', async () => {
+    let loadCallCount = 0
+    let saveCallCount = 0
+    mockFetch((url, init) => {
+      if (url.endsWith('/save') && init?.method === 'POST') {
+        saveCallCount += 1
+        return jsonResponse({ applied: ['Light0'], conflicts: [] })
+      }
+      if (url.endsWith('/load') && init?.method === 'POST') {
+        loadCallCount += 1
+        return jsonResponse({ status: 'ok', conflicts: [] })
+      }
+      return undefined
+    })
+
+    render(<App />)
+    await waitFor(() => expect(quadProps.current).not.toBeNull())
+
+    // Re-applied on every poll -- see the Critical 2 tests above for why a one-shot `act()` races
+    // the mount-time `GET /staged` effect.
+    await waitFor(() => {
+      act(() => quadProps.current!.onStaged?.(['Light0']))
+      expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(saveCallCount).toBe(1))
+    // The regression: `onSaved` used to only call `setStagedNames(new Set())` -- no network call at
+    // all, so the scene/atlas/lightmap/status stayed exactly as they were before the Save.
+    await waitFor(() => expect(loadCallCount).toBe(1))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Save' })).toBeNull())
   })
 })

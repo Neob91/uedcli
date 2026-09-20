@@ -226,16 +226,89 @@ export function switchLevel(name: string): Promise<{ level: string }> {
   })
 }
 
+/** One `POST /save` (or `/load`) conflict entry: a staged actor move whose baseline trunk location
+ * no longer matches the trunk's current on-disk location for that actor (uedcli/serve/app.py's
+ * `_serialize_location` -- both locations are the raw `[x, y, z]` floats). */
+export interface ConflictPayload {
+  name: string
+  staged_location: [number, number, number]
+  trunk_location: [number, number, number]
+}
+
+/** `POST /api/level/{level}/save`'s result (uedcli/serve/app.py `save`): `applied` is the list of
+ * actor names actually written to the trunk; `conflicts` is empty unless a staged move's baseline
+ * disagreed with the trunk and no resolution for it was supplied. */
+export interface SaveResult {
+  applied: string[]
+  conflicts: ConflictPayload[]
+}
+
+/** One entry of `GET /api/level/{level}/staged` (uedcli/serve/app.py `staged`). */
+export interface StagedActorPayload {
+  staged_location: [number, number, number]
+  baseline_location: [number, number, number]
+}
+
 /** The explicit Load action (gui-explicit-rebuild spec §2): re-reads the trunk and clears the
- * server's `changes_available` flag. Does NOT solve geometry -- see `postRebuild`. */
-export function postLoad(level: string): Promise<{ status: string }> {
-  return request(`/api/level/${encodeURIComponent(level)}/load`, { method: 'POST' })
+ * server's `changes_available` flag. Does NOT solve geometry -- see `postRebuild`. `resolutions`
+ * answers a load-conflict entry ("accept-load" is the only verdict this direction supports) --
+ * default `{}` matches the backend's own default (uedcli/serve/app.py `load`). */
+export function postLoad(
+  level: string,
+  resolutions: Record<string, 'accept-load'> = {},
+): Promise<{ status: string; conflicts: ConflictPayload[] }> {
+  return request(`/api/level/${encodeURIComponent(level)}/load`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ resolutions }),
+  })
 }
 
 /** The explicit Rebuild action (spec §3): the only thing that ever runs the ~24s CSG+lighting
  * solve. Resolves once the new geometry is pinned server-side. */
 export function postRebuild(level: string): Promise<{ status: string; geom_hash: string | null; light_hash: string | null }> {
   return request(`/api/level/${encodeURIComponent(level)}/rebuild`, { method: 'POST' })
+}
+
+/** Stages a batch of actor moves (uedcli/serve/app.py `stage`) -- not written to the trunk until
+ * `postSave`. `actors` maps actor name -> new `[x, y, z]` location. Returns the names actually
+ * staged. */
+export function postStage(level: string, actors: Record<string, [number, number, number]>): Promise<{ staged: string[] }> {
+  return request(`/api/level/${encodeURIComponent(level)}/stage`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ actors }),
+  })
+}
+
+/** Discards staged moves for this level (uedcli/serve/app.py `discard`) -- no trunk write. With no
+ * `actors`, discards EVERY staged move for the level (the original whole-level behavior). With an
+ * `actors` subset, discards only those actors' staged moves, leaving every other staged actor's
+ * move in place -- lets the Save conflict-resolution UI drop one conflicting actor's stage without
+ * losing unrelated staged work (Task 10's extension to Task 3's route). */
+export function postDiscard(level: string, actors?: string[]): Promise<{ status: string }> {
+  return request(`/api/level/${encodeURIComponent(level)}/discard`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(actors ? { actors } : {}),
+  })
+}
+
+/** Writes staged moves to the trunk (uedcli/serve/app.py `save`). `resolutions` answers a
+ * save-conflict entry (staged vs. trunk) by actor name; default `{}` matches the backend's own
+ * default. */
+export function postSave(level: string, resolutions: Record<string, 'staged' | 'trunk'> = {}): Promise<SaveResult> {
+  return request(`/api/level/${encodeURIComponent(level)}/save`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ resolutions }),
+  })
+}
+
+/** The current staging state (uedcli/serve/app.py `staged`) -- maps actor name -> its staged and
+ * pre-stage baseline locations. */
+export function fetchStaged(level: string): Promise<Record<string, StagedActorPayload>> {
+  return request(`/api/level/${encodeURIComponent(level)}/staged`)
 }
 
 export interface LevelState {
