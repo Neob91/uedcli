@@ -395,6 +395,48 @@ def test_subtract_add_pair_with_no_class_index_raises_clearly():
                                   order_index={"Wall": 0, "DoorCutout": 1}, class_index=None)
 
 
+def test_classify_pair_contains_never_carries_matched_pair_or_area_even_with_real_face_contact(
+        mover_class_index):
+    # The real regression for the "edge_kwargs splatted into every branch" bug: `Room`/`Shelf`
+    # share a flat face exactly (same geometry shape as
+    # test_brush_overlap_touching_flat_face_gives_matched_pair_and_exact_area), so `brush_overlap`
+    # itself DOES compute a real matched_pair/area for this pair -- confirmed below. A `contains`
+    # edge must still come out with neither, which only holds if `classify_pair` itself drops the
+    # annotation for contains/carved_by, not because the geometry happens to produce no match.
+    room = make_brush_actor("Room", cube(64, 64, 8), location=(0, 0, 0), csg="subtract")
+    shelf = make_brush_actor("Shelf", cube(64, 64, 8), location=(0, 0, 8), csg="add")
+
+    ov = actorgraph.brush_overlap(room, shelf)
+    assert ov.matched_pair is not None and ov.area_estimate is not None   # the geometry IS a real match
+
+    edges = actorgraph.classify_pair("Room", room, "Shelf", shelf,
+                                      order_index={"Room": 0, "Shelf": 1}, class_index=mover_class_index)
+    assert len(edges) == 1
+    e = edges[0]
+    assert e.relation == "contains" and e.src == "Room" and e.dst == "Shelf"
+    assert e.matched_pair is None
+    assert e.area_estimate is None
+
+
+def test_classify_pair_carved_by_never_carries_matched_pair_or_area_even_with_real_face_contact(
+        mover_class_index):
+    # Same regression, the carved_by direction: Wall placed BEFORE DoorCutout in level.order, so a
+    # later Subtract carving it produces carved_by -- same flat-face-contact geometry.
+    wall = make_brush_actor("Wall", cube(64, 64, 8), location=(0, 0, 0), csg="add")
+    cutout = make_brush_actor("DoorCutout", cube(64, 64, 8), location=(0, 0, 8), csg="subtract")
+
+    ov = actorgraph.brush_overlap(wall, cutout)
+    assert ov.matched_pair is not None and ov.area_estimate is not None
+
+    edges = actorgraph.classify_pair("Wall", wall, "DoorCutout", cutout,
+                                      order_index={"Wall": 0, "DoorCutout": 1}, class_index=mover_class_index)
+    assert len(edges) == 1
+    e = edges[0]
+    assert e.relation == "carved_by" and e.src == "Wall" and e.dst == "DoorCutout"
+    assert e.matched_pair is None
+    assert e.area_estimate is None
+
+
 def test_no_overlap_gives_no_edges():
     a = make_brush_actor("A", cube(8, 8, 8), location=(0, 0, 0))
     b = make_brush_actor("B", cube(8, 8, 8), location=(1000, 0, 0))
@@ -516,7 +558,12 @@ def test_format_text_touches_no_matched_pair_no_selector():
 
 
 def test_format_text_contains_no_size_no_selector():
-    e = actorgraph.Edge(src="Room", dst="Add_FrontDesk", relation="contains", directed=True)
+    # Deliberately constructed WITH matched_pair set (unlike a real classify_pair-produced contains
+    # edge, which never carries one) -- format_text must gate the `:idx` selector on
+    # relation == "touches" itself, not just trust matched_pair being non-None, so this fails on the
+    # pre-fix code (which always added the selector whenever matched_pair was set) and passes now.
+    e = actorgraph.Edge(src="Room", dst="Add_FrontDesk", relation="contains", directed=True,
+                        matched_pair=(5, 5), area_estimate=99.0)
     assert actorgraph.format_text([e]) == "Room --contains--> Add_FrontDesk"
 
 

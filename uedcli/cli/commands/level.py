@@ -807,7 +807,9 @@ def _level_graph(args, src) -> int:
     index = resources.mover_index(args, "level graph")
     graph = actorgraph.build_graph(level, index)
     for name, reason in graph.skipped:
-        print(f"level graph: skipping {name} — {reason}", file=sys.stderr)
+        # `reason` (from DegenerateBrushError) already starts with "{name}: " -- don't repeat the
+        # name here too, or the line stutters ("skipping Bad — Bad: brush does not bound...").
+        print(f"level graph: skipping {reason}", file=sys.stderr)
 
     if from_actor is not None:
         try:

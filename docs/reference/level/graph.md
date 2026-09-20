@@ -12,7 +12,9 @@ geometry and CSG order.
 
 A node is every actor in the level — every brush (`CSG_Add`, `CSG_Subtract`, or a Mover) and every
 non-brush actor (lights, pickups, triggers, NPCs, everything). There's no "just rooms" filtering; this
-is the full actor graph.
+is the full actor graph. `CSG_Intersect`/`CSG_Deintersect` brushes are bucketed as Add-like for edge
+classification (the same "not a Subtract" bucket as `CSG_Add` and Movers) — deliberate, not an
+oversight; there's no separate row for them in the table below.
 
 One geometric test decides every edge: does brush/actor A's volume touch or overlap brush/actor B's
 volume. What that edge is CALLED depends on the two nodes' kinds and, for two brushes, which one comes
@@ -70,7 +72,7 @@ structure.
 ```
 $ uedcli level graph
 Subtract_Lobby:0 --touches(1.638e+04uu^2)--> Subtract_Hallway:1
-Subtract_Lobby:5 --contains--> Add_FrontDesk:5
+Subtract_Lobby --contains--> Add_FrontDesk
 Subtract_Hallway --contains--> Mover_HallwayDoor
 Subtract_Lobby --contains--> NPC_Receptionist
 ```
@@ -91,9 +93,8 @@ Subtract_Lobby --contains--> NPC_Receptionist
   `Subtract_Hallway --contains--> Mover_HallwayDoor` is the whole answer.
 - A brush that's too malformed to test (self-intersecting, non-manifold, or a degenerate zero-area
   face) is reported as a skipped node on stderr instead of crashing or being silently dropped:
-  `level graph: skipping Bad — Bad: brush does not bound a valid solid (a decomposed cell has no
-  volume)`. It still appears in the graph as a node with no edges; every OTHER brush is still tested
-  normally.
+  `level graph: skipping Bad: brush does not bound a valid solid (a decomposed cell has no volume)`.
+  It still appears in the graph as a node with no edges; every OTHER brush is still tested normally.
 
 There is no `--json` output for `level graph` — the flat text format above is the only one, at least
 for now (unlike most other producer verbs in this CLI, which pair a human `--json`-free default with
@@ -101,15 +102,21 @@ a `--json` structured form).
 
 ## `--from` / `--hops` — scoping to one neighborhood
 
-With no flags, `level graph` prints the WHOLE level's graph — every node, every edge. That's also the
-expensive case: detection tests every brush against every other brush, so on a level with hundreds of
-actors, printing the whole thing every time is wasteful when you only care about one area.
+With no flags, `level graph` prints the WHOLE level's graph — every node, every edge.
 
-`--from NAME --hops N|all` scopes the output to the connected neighborhood reachable from `NAME`
-within `N` hops (or unboundedly, with `--hops all`) — a breadth-first walk over the graph treating
-every edge as undirected for reachability purposes (a `contains` edge's direction doesn't limit which
-way the walk can follow it, only how the edge itself prints). `NAME` can be any node, brush or
-non-brush; there's no privileged "room" node type.
+`--from`/`--hops` filter the PRINTED output only — the full graph is still computed regardless of
+scope. Detection tests every brush against every other brush up front, before any scoping is
+applied, so a very large level pays the same compute cost whether or not `--from`/`--hops` are
+given; they narrow what you have to read, not how long the command takes.
+
+`--from NAME --hops N|all` scopes the output to `NAME`'s neighborhood: an edge prints if at least one
+of its two ends is reachable from `NAME` in FEWER than `N` hops (or unboundedly, with `--hops all`) —
+a breadth-first walk over the graph treating every edge as undirected for reachability purposes (a
+`contains` edge's direction doesn't limit which way the walk can follow it, only how the edge itself
+prints). This is an ego-network view, not a full induced subgraph on the reachable node set: an edge
+between two nodes that are BOTH exactly `N` hops out is dropped, since neither end is close enough to
+have its own edges expanded. `NAME` can be any node, brush or non-brush; there's no privileged "room"
+node type.
 
 The two flags are a pair: `--hops` is required whenever `--from` is given (an omitted count is
 ambiguous — one hop, or unbounded? — and this CLI never silently guesses), and `--hops` given without
@@ -129,7 +136,7 @@ Worked example — the same level as above, scoped one hop out from `Subtract_Lo
 ```
 $ uedcli level graph --from Subtract_Lobby --hops 1
 Subtract_Lobby:0 --touches(1.638e+04uu^2)--> Subtract_Hallway:1
-Subtract_Lobby:5 --contains--> Add_FrontDesk:5
+Subtract_Lobby --contains--> Add_FrontDesk
 Subtract_Lobby --contains--> NPC_Receptionist
 ```
 

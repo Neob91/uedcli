@@ -257,11 +257,25 @@ _TOUCH_EPS = 1e-3
 _PARALLEL_EPS = 1e-3
 
 
+# Per-cell cache for `_cell_edge_directions`: a cell's own edge directions are a pure function of
+# that cell ALONE, not the pair being tested -- yet the pre-fix code recomputed it (including a
+# fresh `frozenset` per vertex) on every single cell-pair SAT call, even though cells are already
+# memoized per actor via `decompose_convex`'s own `cache` param. Keyed by `id(cell)` since
+# `ConvexCell` has list fields and so isn't hashable (can't be a plain dict key directly); each
+# cache entry ALSO holds a strong reference to the cell itself, so its id can never be reused by an
+# unrelated cell while the entry is still live -- the standard hazard with `id()`-keyed caches.
+_edge_dirs_cache: dict[int, tuple[ConvexCell, list[Vec3]]] = {}
+
+
 def _cell_edge_directions(cell: ConvexCell) -> list[Vec3]:
     """Unit directions of the cell's true polytope EDGES (not merely its face normals): two
     vertices lying on >= 2 common bounding planes share an edge, since in 3-D an edge is exactly
     the intersection of two faces. Needed for SAT's edge-cross candidate axes -- face-normal-only
-    SAT is NOT exact for two general convex polytopes (spec 'Detection algorithm')."""
+    SAT is NOT exact for two general convex polytopes (spec 'Detection algorithm'). Memoized per
+    cell -- see `_edge_dirs_cache` above."""
+    cached = _edge_dirs_cache.get(id(cell))
+    if cached is not None and cached[0] is cell:
+        return cached[1]
     on_planes = []
     for v in cell.vertices:
         on_planes.append(frozenset(
@@ -274,6 +288,7 @@ def _cell_edge_directions(cell: ConvexCell) -> list[Vec3]:
                 delta = _sub(cell.vertices[j], cell.vertices[i])
                 if _len(delta) > _SINGULAR_EPS:
                     dirs.append(_norm(delta))
+    _edge_dirs_cache[id(cell)] = (cell, dirs)
     return dirs
 
 
@@ -291,7 +306,15 @@ def _sat_axes(cell_a: ConvexCell, cell_b: ConvexCell) -> list[Vec3]:
 
 def cells_touch_or_overlap(cell_a: ConvexCell, cell_b: ConvexCell) -> bool:
     """SAT: the two convex cells are DISJOINT iff some candidate axis separates their projected
-    intervals by more than `_TOUCH_EPS`. True (touching or overlapping) otherwise."""
+    intervals by more than `_TOUCH_EPS`. True (touching or overlapping) otherwise. Broad-phase: an
+    AABB overlap test (world X/Y/Z axes, same `_TOUCH_EPS` tolerance) is a NECESSARY condition for
+    two convex bodies to touch (each body lies inside its own AABB), so a disjoint-AABB pair can
+    reject before ever building `_sat_axes` -- O(vertices) instead of O(faces x edges), and the
+    common non-touching case for a level with many far-apart brushes."""
+    a_lo, a_hi = _bbox(cell_a)
+    b_lo, b_hi = _bbox(cell_b)
+    if any(a_hi[i] < b_lo[i] - _TOUCH_EPS or b_hi[i] < a_lo[i] - _TOUCH_EPS for i in range(3)):
+        return False
     for axis in _sat_axes(cell_a, cell_b):
         a_vals = [_dot(axis, v) for v in cell_a.vertices]
         b_vals = [_dot(axis, v) for v in cell_b.vertices]
@@ -309,9 +332,20 @@ class BrushOverlap:
     area_estimate: float | None
 
 
+# Per-cell cache for `_bbox`, same idiom/rationale as `_edge_dirs_cache` above: a cell's AABB is a
+# pure function of itself alone, and `cells_touch_or_overlap`'s new broad-phase check now calls it
+# on every cell pair, so it's worth memoizing rather than re-scanning all vertices every call.
+_bbox_cache: dict[int, tuple[ConvexCell, tuple[Vec3, Vec3]]] = {}
+
+
 def _bbox(cell: ConvexCell) -> tuple[Vec3, Vec3]:
+    cached = _bbox_cache.get(id(cell))
+    if cached is not None and cached[0] is cell:
+        return cached[1]
     xs = [v[0] for v in cell.vertices]; ys = [v[1] for v in cell.vertices]; zs = [v[2] for v in cell.vertices]
-    return (min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs))
+    result = (min(xs), min(ys), min(zs)), (max(xs), max(ys), max(zs))
+    _bbox_cache[id(cell)] = (cell, result)
+    return result
 
 
 def _bbox_intersection_area(a_lo, a_hi, b_lo, b_hi) -> float:
@@ -377,6 +411,9 @@ def _clip_2d(subject: list[tuple[float, float]], clip: list[tuple[float, float]]
         cx1, cy1 = clip[(i + 1) % n]
         ex, ey = cx1 - cx0, cy1 - cy0
         def inside(px, py):
+            # Bare literal, deliberately: mirrors relation.py's own analogous clip-guard tolerance
+            # (`_clip_2d`'s `inside`) -- numerical-robustness noise floor, not a named semantic
+            # tolerance like the module's _SPLIT_EPS/_TOUCH_EPS constants above.
             return (px - cx0) * ey - (py - cy0) * ex <= 1e-9
         new_out = []
         m = len(out)
@@ -400,6 +437,9 @@ def _seg_intersect_2d(p1, p2, edge_origin, ex, ey):
     ox, oy = edge_origin
     dx, dy = x2 - x1, y2 - y1
     denom = dx * ey - dy * ex
+    # Bare literal, deliberately: mirrors relation.py's own analogous near-zero-denominator guard
+    # (`_seg_intersect`'s `seg_len` check) -- numerical-robustness noise floor, not a named semantic
+    # tolerance.
     if abs(denom) < 1e-12:
         return p2
     t = ((ox - x1) * ey - (oy - y1) * ex) / denom
@@ -469,7 +509,6 @@ def _matched_face_pair(actor_a, actor_b) -> tuple[int, int, float] | None:
     return best
 
 
-
 def brush_overlap(actor_a, actor_b, *, cache=None) -> BrushOverlap:
     """Exact touch/overlap between two brushes' full volumes (via decomposition + SAT over every
     cell pair), plus a matched single face pair + exact area when one clean shared boundary exists,
@@ -530,12 +569,15 @@ def classify_pair(name_a, actor_a, name_b, actor_b, *, order_index: dict, class_
         return []
     a_is_sub = query.csg_is_subtract(actor_a)
     b_is_sub = query.csg_is_subtract(actor_b)
-    edge_kwargs = dict(matched_pair=ov.matched_pair, area_estimate=ov.area_estimate)
+    # Only `touches` edges carry the geometric-match annotation (a `:idx` selector into
+    # `brush relation measure`, plus its size) -- `contains`/`carved_by` are a yes/no containment
+    # fact with nothing to drill into (spec "Output format"), so they must NOT inherit this.
+    touch_kwargs = dict(matched_pair=ov.matched_pair, area_estimate=ov.area_estimate)
 
     if a_is_sub and b_is_sub:
-        return [Edge(src=name_a, dst=name_b, relation="touches", directed=False, **edge_kwargs)]
+        return [Edge(src=name_a, dst=name_b, relation="touches", directed=False, **touch_kwargs)]
     if not a_is_sub and not b_is_sub:      # both Add-or-Mover
-        return [Edge(src=name_a, dst=name_b, relation="touches", directed=False, **edge_kwargs)]
+        return [Edge(src=name_a, dst=name_b, relation="touches", directed=False, **touch_kwargs)]
 
     # exactly one is a Subtract: the other is Add-or-Mover. A Subtract itself is never a Mover (a
     # Mover emits no CsgOper at all, so csg_is_subtract is always False for it) -- only the
@@ -557,11 +599,11 @@ def classify_pair(name_a, actor_a, name_b, actor_b, *, order_index: dict, class_
     if other_is_mover:
         # Movers never carve or get carved -- always `contains`, Subtract -> Mover, regardless of
         # level.order (a Mover generates no CsgOper at all; CSG order is meaningless for it).
-        return [Edge(src=sub_name, dst=other_name, relation="contains", directed=True, **edge_kwargs)]
+        return [Edge(src=sub_name, dst=other_name, relation="contains", directed=True)]
 
     if order_index[sub_name] < order_index[other_name]:
-        return [Edge(src=sub_name, dst=other_name, relation="contains", directed=True, **edge_kwargs)]
-    return [Edge(src=other_name, dst=sub_name, relation="carved_by", directed=True, **edge_kwargs)]
+        return [Edge(src=sub_name, dst=other_name, relation="contains", directed=True)]
+    return [Edge(src=other_name, dst=sub_name, relation="carved_by", directed=True)]
 
 
 @dataclass(frozen=True)
@@ -627,9 +669,13 @@ class GraphError(ValueError):
 
 
 def scoped_edges(graph: "ActorGraph", *, seed: str, hops: "int | Literal['all']") -> list["Edge"]:
-    """Every edge touching a node reachable from `seed` within `hops` (undirected reachability --
-    a `contains`/`carved_by` edge's direction doesn't limit which way a BFS may walk it, only what
-    it prints later). `hops == 'all'` is unbounded. Raises `GraphError` if `seed` is not in
+    """An EGO-NETWORK view around `seed`, not the full induced subgraph on the reachable node set:
+    every edge with AT LEAST ONE endpoint reachable from `seed` in fewer than `hops` hops (BFS,
+    undirected reachability -- a `contains`/`carved_by` edge's direction doesn't limit which way the
+    BFS may walk it, only what it prints later). A node reachable in EXACTLY `hops` hops (the
+    boundary) is never itself expanded, so an edge between two such boundary nodes is dropped even
+    though both endpoints are "within" `hops` -- a defensible reading, just distinct from a plain
+    induced subgraph. `hops == 'all'` is unbounded. Raises `GraphError` if `seed` is not in
     `graph.node_names`."""
     if seed not in graph.node_names:
         raise GraphError(f"level graph: no such actor: {seed!r}")
@@ -672,11 +718,16 @@ def format_text(edges: list["Edge"]) -> str:
     `eventgraph.format_text` uses (minus its class annotations; spec 'Output format'). A `touches`
     edge with a matched face pair prints `Name:idx` selectors so the line is directly pipeable into
     `brush relation measure`; a `touches` edge with an area estimate but no matched pair prints bare
-    names with the size still shown."""
+    names with the size still shown. `contains`/`carved_by` edges never carry `matched_pair`/
+    `area_estimate` (`classify_pair` never sets them for those relations) -- and this function ALSO
+    gates the `:idx` selector on `relation == "touches"` itself (defense in depth, not just trusting
+    the caller's invariant), so they always print bare names with no size and no `:idx` --
+    containment is a yes/no fact, nothing to drill into."""
     lines = []
     for e in edges:
-        src = f"{e.src}:{e.matched_pair[0]}" if e.matched_pair is not None else e.src
-        dst = f"{e.dst}:{e.matched_pair[1]}" if e.matched_pair is not None else e.dst
+        has_selector = e.relation == "touches" and e.matched_pair is not None
+        src = f"{e.src}:{e.matched_pair[0]}" if has_selector else e.src
+        dst = f"{e.dst}:{e.matched_pair[1]}" if has_selector else e.dst
         rel = e.relation
         if e.relation == "touches" and e.area_estimate is not None:
             rel = f"touches({e.area_estimate:.4g}uu^2)"
