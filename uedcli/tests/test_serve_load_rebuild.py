@@ -535,3 +535,37 @@ def test_switch_level_clears_the_scene_inputs_cache_too(tmp_path, monkeypatch):
     assert c.put("/api/level", json={"level": "Other"}).status_code == 200
     assert c.get("/api/level/Other/scene").status_code == 200
     assert len(calls) == 2   # the old level's cached pairing was cleared, not reused for the new one
+
+
+def test_load_resolves_mesh_class_defaults_through_the_shared_memo(tmp_path, monkeypatch):
+    """Board `load-resolves-mesh-class-defaults-and-texture`: /load must pass its own already-built
+    `defaults` into resolve_mesh_scene_polys/resolve_mover_scene_polys, not let them go without --
+    a spy on `ClassDefaults.for_class` proves the SHARED instance actually gets used, not just that
+    /load succeeds (which it would even with the old, unfixed signature erroring differently)."""
+    from uedcli.classdefaults import ClassDefaults
+    _require_ued22()
+    index, defaults = _index_and_defaults()
+    calls = []
+    real_for_class = ClassDefaults.for_class
+    def _spy(self, fqcn):
+        if self is defaults:
+            calls.append(fqcn)
+        return real_for_class(self, fqcn)
+    monkeypatch.setattr(serve_app, "_scene_inputs", lambda p: ([], index, defaults))
+    monkeypatch.setattr(ClassDefaults, "for_class", _spy)
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [cube_room()])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+
+    assert c.post("/api/level/TestLevel/load").status_code == 200
+    # `calls` stays empty here, and NOT because cube_room() has no mesh/mover actors -- the mocked
+    # `_scene_inputs` above returns `search_files=[]`, and `resolve_mesh_scene_polys`/
+    # `resolve_mover_scene_polys` both short-circuit to `return [], [], []` BEFORE their per-actor
+    # loop whenever `search_files` is falsy (`preview_native.py:514`/`295`) -- so
+    # `class_defaults.for_class` is never reached regardless of what actors the level has. The real
+    # assertion this test makes is that /load's now-required `class_defaults` argument is actually
+    # wired at both call sites (app.py:277-280/551-554) -- a TypeError there would 500, not 200,
+    # and the domain-error handler would report it, not silently succeed.

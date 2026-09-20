@@ -275,9 +275,9 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                 lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level_name)
                 sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
                 mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
-                    lvl, index, search_files)
+                    lvl, index, search_files, defaults)
                 mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
-                    lvl, index, search_files)
+                    lvl, index, search_files, defaults)
                 if _generation[0] != gen_before:
                     continue    # invalidated mid-build: discard, loop back and retry from the top
                 built = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
@@ -549,9 +549,9 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level_name)
         sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
         mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
-            lvl, index, search_files)
+            lvl, index, search_files, defaults)
         mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
-            lvl, index, search_files)
+            lvl, index, search_files, defaults)
         loaded = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
                               sprite_table=sprite_table, actor_sprites=actor_sprites,
                               mesh_polys=mesh_polys, mesh_owners=mesh_owners,

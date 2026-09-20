@@ -84,9 +84,10 @@ def _load_and_build_for(project, level_name, index, defaults, search_files):
                                                visibility="editor", include_meshes=False,
                                                include_movers=False)
     sprite_table, actor_sprites = resolve_actor_sprites(level, search_files, defaults)
-    mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(level, index, search_files)
+    mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
+        level, index, search_files, defaults)
     mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
-        level, index, search_files)
+        level, index, search_files, defaults)
     trunk_state = _LoadedTrunk(level=level, ranks=ranks, folders=folders,
                                sprite_table=sprite_table, actor_sprites=actor_sprites,
                                mesh_polys=mesh_polys, mesh_owners=mesh_owners,

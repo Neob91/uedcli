@@ -845,7 +845,7 @@ def test_mesh_skins_resolve_over_full_search_files_not_u_only(monkeypatch):
     index = _ued22_index()
     seen: dict = {}
 
-    def spy(mesh, pkg, defaults, search_files, *, class_fqcn, class_index=None):
+    def spy(mesh, pkg, defaults, search_files, *, class_fqcn, class_index=None, resolver=None):
         seen["sf"] = search_files
         return {}
 
@@ -1487,3 +1487,90 @@ def test_poly_blend_matches_render_rs_blend_mode_precedence():
     assert poly_blend(PF_MODULATED) == "modulated"
     assert poly_blend(PF_TRANSLUCENT | PF_MODULATED) == "translucent"  # translucent wins
     assert poly_blend(PF_MASKED) == "opaque"           # masked alone composites opaque
+
+
+# --------------------------------------------------------------- shared class-defaults/resolver
+# (board `load-resolves-mesh-class-defaults-and-texture`)
+
+def test_mesh_actor_polys_reuses_a_shared_class_defaults_when_given():
+    """`_mesh_actor_polys` must resolve through the caller's `ClassDefaults` memo when given one,
+    not re-derive its own -- the exact substitution `resolve_actor_sprites` already makes."""
+    from uedcli import uprops
+    index = _ued22_index()
+    fresh_defaults = ClassDefaults(_defaults_resolver)
+    crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    tris, _skins, _mesh, _ref, defaults = pn._mesh_actor_polys(
+        crate, index, _mesh_sf(index), class_defaults=fresh_defaults)
+    assert tris
+    assert fresh_defaults.resolutions == 1
+    # a second actor of the SAME class reuses the memo -- resolutions stays at 1
+    crate2 = Actor(name="Crate2", cls=MESH_CLASS, location=(Decimal(200), Decimal(0), Decimal(0)))
+    pn._mesh_actor_polys(crate2, index, _mesh_sf(index), class_defaults=fresh_defaults)
+    assert fresh_defaults.resolutions == 1
+    # the returned defaults dict is the SAME shape resolve_class_defaults returns directly
+    assert defaults == uprops.resolve_class_defaults(MESH_CLASS, resolver=index.resolver())
+
+
+def test_mesh_actor_polys_reuses_a_shared_texture_resolver_when_given():
+    """A shared `TextureResolver` passed in must be the one `resolve_skins` actually uses, not
+    discarded in favor of building its own -- proven by a spy on `TextureResolver.resolve`."""
+    from uedcli import utexture
+    index = _ued22_index()
+    resolver = utexture.TextureResolver(_mesh_sf(index), class_index=index)
+    calls = []
+    real_resolve = utexture.TextureResolver.resolve
+    def _spy(self, ref):
+        if self is resolver:
+            calls.append(ref)
+        return real_resolve(self, ref)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(utexture.TextureResolver, "resolve", _spy)
+        crate = Actor(name="Crate", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+        _tris, skins, _mesh, _ref, _defaults = pn._mesh_actor_polys(
+            crate, index, _mesh_sf(index), texture_resolver=resolver)
+    assert skins            # sanity: the crate really has a resolvable skin
+    assert calls            # the SHARED resolver's own .resolve was actually hit
+
+
+def test_resolve_mesh_actor_polys_decodes_a_shared_skin_once_not_per_actor():
+    """The whole point of the fix: TWO actors of the same class/mesh in ONE
+    `resolve_mesh_actor_polys` call must decode the shared skin texture once, not twice."""
+    from collections import Counter
+    from uedcli import utexture
+    index = _ued22_index()
+    calls: list[str] = []
+    real_decode = utexture.TextureResolver._decode_ref
+    def _counting_decode(self, ref):
+        calls.append(ref)
+        return real_decode(self, ref)
+    textures = pn._TextureTable(resolver=None)
+    one = Actor(name="Crate1", cls=MESH_CLASS, location=(Decimal(0), Decimal(0), Decimal(0)))
+    two = Actor(name="Crate2", cls=MESH_CLASS, location=(Decimal(200), Decimal(0), Decimal(0)))
+    level = _level(one, two)
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(utexture.TextureResolver, "_decode_ref", _counting_decode)
+        resolved = pn.resolve_mesh_actor_polys(level, index, _mesh_sf(index),
+                                               hidden_prop="bhiddened", textures=textures)
+    assert resolved                              # sanity: both actors actually contributed triangles
+    counts = Counter(calls)
+    assert counts and max(counts.values()) == 1  # every distinct ref decoded exactly once
+
+
+def test_resolve_mover_actor_polys_reuses_a_shared_class_defaults_for_hidden_check():
+    """Two Movers of the same class must resolve that class's defaults once, not once per Mover,
+    when a shared `ClassDefaults` is given -- `_hidden` computes `defaults` unconditionally for
+    EVERY actor it's asked about, whether or not that actor ends up actually hidden (its own
+    instance-vs-class-default check happens after, `preview_native.py:252-253`), so this holds even
+    though both Movers here are hidden via an INSTANCE override, never touching the class default's
+    own value."""
+    index = _ued22_index()
+    fresh_defaults = ClassDefaults(_defaults_resolver)
+    m1 = make_brush_actor("Mover1", cube(64.0, 64.0, 64.0), mover_class="Engine.Mover")
+    set_prop(m1, "bHiddenEd", "True")
+    m2 = make_brush_actor("Mover2", cube(64.0, 64.0, 64.0), mover_class="Engine.Mover")
+    set_prop(m2, "bHiddenEd", "True")
+    level = _level(m1, m2)
+    textures = pn._TextureTable(resolver=None)
+    pn.resolve_mover_actor_polys(level, index, textures=textures, hidden_prop="bhiddened",
+                                 class_defaults=fresh_defaults)
+    assert fresh_defaults.resolutions == 1

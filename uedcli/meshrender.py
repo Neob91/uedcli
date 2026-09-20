@@ -103,7 +103,8 @@ PROCEDURAL_RED = (utexture.PROCEDURAL_RED.width, utexture.PROCEDURAL_RED.height,
                    utexture.PROCEDURAL_RED.mask)
 
 
-def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_index=None) -> dict:
+def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_index=None,
+                  resolver=None) -> dict:
     """`material index -> (w, h, rgb bytes, b_masked, mask bytes)` for the mesh, decoded through
     `utexture`.
 
@@ -138,6 +139,10 @@ def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_i
     WIDENS the resolver from the exact `Texture` class to every `Engine.Texture` descendant, so a
     procedural skin (a FireTexture etc.) resolves to `no-mip-data` rather than `unknown-texture`.
 
+    `resolver`, if given, is used AS-IS instead of building a new one — the caller's own shared
+    `TextureResolver` across a whole mesh-actor loop, so N actors referencing the same texture
+    decode it once, not once per actor (board `load-resolves-mesh-class-defaults-and-texture`).
+
     A procedural (`no-mip-data`) skin renders as solid RED (`PROCEDURAL_RED`) — the draft rasterizer
     has no bitmap to sample. Any OTHER undecodable ref still raises `PreviewError` naming it
     (spec §4); a ref with no package/name simply leaves that material flat grey.
@@ -147,7 +152,8 @@ def resolve_skins(mesh, pkg, defaults, search_files, *, class_fqcn: str, class_i
     it is applied to, so a bMasked skin masks even with no PF_Masked triangle flag. `mask` is the
     decoded per-texel mask (`DecodedTexture.mask`, `width*height` bytes, 1=opaque/0=transparent) —
     the real alpha data the rasterizer's mask test needs, not a synthesized stand-in."""
-    resolver = utexture.TextureResolver(list(search_files), class_index=class_index)
+    if resolver is None:
+        resolver = utexture.TextureResolver(list(search_files), class_index=class_index)
 
     def skin_tuple(got, what: str):
         """`got` → the skin tuple. `got` has already had `utexture.resolve_or_procedural_red`

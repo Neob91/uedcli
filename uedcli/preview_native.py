@@ -220,7 +220,7 @@ def _mover_world_polys(level, index, *, skip=None) -> list[tuple[list, object, o
 
 
 def resolve_mover_actor_polys(level, index, *, textures: _TextureTable,
-                              hidden_prop: str | None = None
+                              hidden_prop: str | None = None, class_defaults=None
                               ) -> list[tuple[tuple, tuple[str, int]]]:
     """Every Mover's own brush polys, world-transformed at the base pose -> `[(poly_tuple,
     (actor.name, i_brush_poly)), ...]`, `poly_tuple` the same 8-tuple `resolve_mesh_actor_polys`
@@ -236,15 +236,20 @@ def resolve_mover_actor_polys(level, index, *, textures: _TextureTable,
     independent path (`resolve_mover_scene_polys`) passes `"bhiddened"`. `None` (this function's own
     default, `build_scene`'s call) skips no actor -- unchanged behavior: `build_scene`'s own callers
     rely on `serve/scene.py::filtered_geometry_polys`'s downstream hidden-owner drop instead, and
-    `level photo --native` has never filtered a hidden Mover at all."""
+    `level photo --native` has never filtered a hidden Mover at all.
+
+    `class_defaults`, if given, resolves a hidden Mover's class default through the shared memo
+    instead of a fresh `resolve_class_defaults` call per Mover — `build_scene`'s own call passes
+    none (board `load-resolves-mesh-class-defaults-and-texture`)."""
     from .uprops import resolve_class_defaults
 
     def _hidden(actor) -> bool:
         if hidden_prop is None:
             return False
-        class_defaults = resolve_class_defaults(actor.cls, resolver=index.resolver())
+        defaults = (class_defaults.for_class(actor.cls).defaults if class_defaults is not None
+                   else resolve_class_defaults(actor.cls, resolver=index.resolver()))
         instance = {k.casefold(): v for k, v in actor.props}
-        value = instance[hidden_prop] if hidden_prop in instance else class_defaults.get(
+        value = instance[hidden_prop] if hidden_prop in instance else defaults.get(
             (hidden_prop, 0))
         return str(value or "False").strip() == "True"
 
@@ -265,7 +270,8 @@ def resolve_mover_actor_polys(level, index, *, textures: _TextureTable,
     return out
 
 
-def resolve_mover_scene_polys(level, index, search_files, *, hidden_prop: str = "bhiddened"
+def resolve_mover_scene_polys(level, index, search_files, class_defaults, *,
+                              hidden_prop: str = "bhiddened"
                               ) -> tuple[list[tuple], list[tuple[str, int]], list[tuple]]:
     """`uedcli serve`'s Load-owned, build-state-independent Mover resolution entry point (mirrors
     `resolve_mesh_scene_polys`): every Mover's world-space triangles + a PRIVATE texture table, from
@@ -281,17 +287,23 @@ def resolve_mover_scene_polys(level, index, search_files, *, hidden_prop: str = 
     `"bhiddened"` (EDITOR visibility, owner ruling 2026-09-14) -- unconditionally drops a hidden
     Mover's own triangles, the same disposition its own surfaces got when they still rode in
     `geometry.polys` (a Mover has no `CsgOper`, defaults to `CSG_Add`, always safe to drop whole --
-    see `serve/scene.py::filtered_geometry_polys`'s docstring)."""
+    see `serve/scene.py::filtered_geometry_polys`'s docstring). `class_defaults` (a `ClassDefaults`)
+    is REQUIRED -- the caller's own shared memo, threaded down to `resolve_mover_actor_polys` so a
+    hidden Mover's class default resolves once per distinct class, not once per Mover (board
+    `load-resolves-mesh-class-defaults-and-texture`); required rather than optional so a future
+    caller can't silently forget to pass it."""
     if not search_files:
         return [], [], []
     textures = _TextureTable(TextureResolver(search_files, class_index=index))
-    resolved = resolve_mover_actor_polys(level, index, textures=textures, hidden_prop=hidden_prop)
+    resolved = resolve_mover_actor_polys(level, index, textures=textures, hidden_prop=hidden_prop,
+                                         class_defaults=class_defaults)
     polys = [poly for poly, _owner in resolved]
     owners = [owner for _poly, owner in resolved]
     return polys, owners, textures.table
 
 
-def _mesh_actor_polys(actor, index, search_files, *, hidden_prop: str = "bhidden"
+def _mesh_actor_polys(actor, index, search_files, *, hidden_prop: str = "bhidden",
+                      class_defaults=None, texture_resolver=None
                       ) -> tuple[list, dict, object, tuple[str, str] | None, dict]:
     """One DT_Mesh actor's frame-0 triangles (mesh-local, NOT yet world-transformed -- the caller
     does that after computing the actor's winding/degenerate check once) plus its resolved skins,
@@ -318,13 +330,23 @@ def _mesh_actor_polys(actor, index, search_files, *, hidden_prop: str = "bhidden
     `"bhiddened"` (EDITOR visibility, `uedcli serve`'s GUI: owner ruling 2026-09-14 — the GUI hides
     `bHiddenEd` actors and ignores `bHidden`). Either way the resolution itself (instance override
     else class default) is the SAME convention `cli/rendering.py::_is_hidden_ed` uses for `bHiddenEd`
-    on point actors, just reused here via `field()` below rather than duplicated."""
+    on point actors, just reused here via `field()` below rather than duplicated.
+
+    `class_defaults`, if given (a `classdefaults.ClassDefaults`), resolves this actor's class
+    defaults through its shared per-class memo instead of a fresh `resolve_class_defaults` call —
+    the same substitution `resolve_actor_sprites` already makes (`preview_native.py:653`).
+    `texture_resolver`, if given, is forwarded to `resolve_skins` as its own new `resolver` param —
+    one `TextureResolver` shared across every actor `resolve_mesh_actor_polys` calls this for,
+    instead of a fresh one per actor. Both default to `None` (today's per-actor-fresh behavior) for
+    `build_scene`'s own callers, which pass neither (board
+    `load-resolves-mesh-class-defaults-and-texture`)."""
     from collections import ChainMap
 
     from . import meshfacts, meshrender, typedprops
     from .uprops import resolve_class_defaults
 
-    defaults = resolve_class_defaults(actor.cls, resolver=index.resolver())
+    defaults = (class_defaults.for_class(actor.cls).defaults if class_defaults is not None
+               else resolve_class_defaults(actor.cls, resolver=index.resolver()))
     instance = {k.casefold(): v for k, v in actor.props}
     # The actor's own MultiSkins(N)=/Skin= (if it states them) ahead of its class defaults, per
     # index -- board item `per-actor-skins-override-in-native-mesh-render`. `resolve_skins` only
@@ -358,7 +380,8 @@ def _mesh_actor_polys(actor, index, search_files, *, hidden_prop: str = "bhidden
         # (`.u` only): a mesh skin can live in a `.utx` (e.g. `Effects.BioCell_SFX`), which is never
         # on the `.u` set. `search_files` is a superset, so deco-`.u` skins still resolve.
         skins = meshrender.resolve_skins(mesh, pkg, skin_defaults, search_files,
-                                         class_fqcn=actor.cls, class_index=index)
+                                         class_fqcn=actor.cls, class_index=index,
+                                         resolver=texture_resolver)
     except meshfacts.MeshFactError as e:
         raise NativePreviewError(str(e)) from e
     except meshrender.PreviewError as e:
@@ -367,7 +390,8 @@ def _mesh_actor_polys(actor, index, search_files, *, hidden_prop: str = "bhidden
 
 
 def resolve_mesh_actor_polys(level, index, search_files, *, hidden_prop: str, textures: _TextureTable,
-                             in_solid=None) -> list[tuple[tuple, tuple[str, None]]]:
+                             in_solid=None, class_defaults=None
+                             ) -> list[tuple[tuple, tuple[str, None]]]:
     """Every non-brush actor's DT_Mesh triangles -> `[(poly_tuple, (actor.name, None)), ...]`, where
     `poly_tuple` is the 8-tuple `(verts_flat, base, axis_u, axis_v, pan, tex_index, masked,
     poly_flags)` -- the same shape `build_scene`'s own `add_poly` appends to `polys_no_light`. Built
@@ -390,16 +414,28 @@ def resolve_mesh_actor_polys(level, index, search_files, *, hidden_prop: str, te
     filtering happens, because there is no CSG model to test solid-space against before a Rebuild,
     and Option A's ruling ("mesh rendering never depends on build state") means the SAME actor must
     render the same way after one too — a deliberate, noted divergence from `level photo --native`'s
-    behavior, not an oversight."""
+    behavior, not an oversight.
+
+    Builds ONE shared `TextureResolver` for the whole call (when `search_files` is non-empty),
+    matching `resolve_actor_sprites`'s own one-resolver-per-call pattern (`preview_native.py:643`)
+    instead of `resolve_skins` building a fresh one per actor — applies to EVERY caller
+    unconditionally (`build_scene` included), since this needs no external dependency beyond
+    `search_files`, which this function already takes. `class_defaults`, if given, forwards into
+    every `_mesh_actor_polys` call — `build_scene`'s own calls pass none, keeping today's per-actor
+    `resolve_class_defaults` behavior there (board
+    `load-resolves-mesh-class-defaults-and-texture`)."""
     from . import meshworld, typedprops
     from .transform import DegenerateTransformError, flip_winding, reject_degenerate
 
+    shared_resolver = (TextureResolver(list(search_files), class_index=index)
+                      if search_files else None)
     out: list[tuple[tuple, tuple[str, None]]] = []
     for actor in level.actors.values():
         if actor.brush is not None:
             continue                                     # brushes/movers handled by the caller
         tris, skins, mesh, mesh_ref, mesh_class_defaults = _mesh_actor_polys(
-            actor, index, search_files, hidden_prop=hidden_prop)
+            actor, index, search_files, hidden_prop=hidden_prop, class_defaults=class_defaults,
+            texture_resolver=shared_resolver)
         if not tris:
             continue
         if in_solid is not None and in_solid(actor):
@@ -454,7 +490,8 @@ def resolve_mesh_actor_polys(level, index, search_files, *, hidden_prop: str, te
     return out
 
 
-def resolve_mesh_scene_polys(level, index, search_files, *, hidden_prop: str = "bhiddened"
+def resolve_mesh_scene_polys(level, index, search_files, class_defaults, *,
+                             hidden_prop: str = "bhiddened"
                              ) -> tuple[list[tuple], list[tuple[str, None]], list[tuple]]:
     """`uedcli serve`'s Load-owned, build-state-independent mesh-actor resolution entry point
     (mirrors `resolve_actor_sprites`'s existing independence for point-actor icons): every DT_Mesh
@@ -469,12 +506,16 @@ def resolve_mesh_scene_polys(level, index, search_files, *, hidden_prop: str = "
     `TextureResolver` is possible) -- matches `resolve_actor_sprites`'s own degrade disposition for
     the same condition, never a crash. `hidden_prop` defaults to `"bhiddened"` (EDITOR visibility —
     the GUI hides `bHiddenEd` actors and ignores `bHidden`, owner ruling 2026-09-14), matching every
-    other GUI-facing resolver in this codebase (`build_scene`'s own `visibility="editor"` mode)."""
+    other GUI-facing resolver in this codebase (`build_scene`'s own `visibility="editor"` mode).
+    `class_defaults` (a `ClassDefaults`) is REQUIRED -- the caller's own shared memo, threaded down
+    to `resolve_mesh_actor_polys` so each distinct class/skin resolves once per call, not once per
+    actor referencing it (board `load-resolves-mesh-class-defaults-and-texture`); required rather
+    than optional so a future caller can't silently forget to pass it."""
     if not search_files:
         return [], [], []
     textures = _TextureTable(TextureResolver(search_files, class_index=index))
     resolved = resolve_mesh_actor_polys(level, index, search_files, hidden_prop=hidden_prop,
-                                        textures=textures)
+                                        textures=textures, class_defaults=class_defaults)
     polys = [poly for poly, _owner in resolved]
     owners = [owner for _poly, owner in resolved]
     return polys, owners, textures.table
