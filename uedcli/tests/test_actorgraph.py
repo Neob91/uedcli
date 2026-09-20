@@ -100,3 +100,92 @@ def test_collinear_face_raises_named_error_not_zerodivisionerror():
     a = _brush("A", brush)
     with pytest.raises(actorgraph.DegenerateBrushError, match="A"):
         actorgraph.decompose_convex(a)
+
+
+def test_two_cells_sharing_a_face_touch():
+    a = _brush("A", cube(64, 64, 64), loc=(0, 0, 0))
+    b = _brush("B", cube(64, 64, 64), loc=(0, 0, 64))   # A's top face == B's bottom face, zero gap
+    ca, = actorgraph.decompose_convex(a)
+    cb, = actorgraph.decompose_convex(b)
+    assert actorgraph.cells_touch_or_overlap(ca, cb)
+
+
+def test_two_cells_with_a_real_gap_do_not_touch():
+    a = _brush("A", cube(64, 64, 64), loc=(0, 0, 0))
+    b = _brush("B", cube(64, 64, 64), loc=(0, 0, 128))   # 32uu real gap
+    ca, = actorgraph.decompose_convex(a)
+    cb, = actorgraph.decompose_convex(b)
+    assert not actorgraph.cells_touch_or_overlap(ca, cb)
+
+
+def test_overlapping_cells_touch():
+    a = _brush("A", cube(64, 64, 64), loc=(0, 0, 0))
+    b = _brush("B", cube(64, 64, 64), loc=(32, 0, 0))    # half-overlap in X
+    ca, = actorgraph.decompose_convex(a)
+    cb, = actorgraph.decompose_convex(b)
+    assert actorgraph.cells_touch_or_overlap(ca, cb)
+
+
+def test_edge_cross_axis_is_needed_for_two_rotated_convex_shapes():
+    # Two OBLIQUE (non-parallel-axis) thin boxes -- see the implementer note below for why this
+    # must NOT be two prisms sharing one extrusion axis (the plan's own first draft used two
+    # Z-extruded triangular prisms, only rotated about Z; caught in this plan's self-review: for
+    # any two convex shapes sharing one common "long" axis, EVERY edge-cross candidate axis reduces
+    # to a multiple of an already-tested face normal -- cross(shared_axis, anything) and
+    # cross(anything_in_the_shared_axis's_perpendicular_plane, same) both land back on that shape's
+    # own face-normal set. Such a fixture can NEVER exercise a genuinely new edge-cross axis no
+    # matter how it's rotated/translated -- tuning it would have been chasing a test that cannot
+    # pass for the reason intended even in principle. Two boxes on genuinely different (skew) axes
+    # are required instead.
+    from uedcli.model import Brush, Polygon
+    def box(center, long_axis_deg_from_y_toward_z, half_long=15.0, half_thin=1.0):
+        """A thin rectangular box: half_long along a LONG axis tilted `long_axis_deg_from_y_toward_z`
+        degrees from +Y toward +Z (0 -> long axis is +Y, i.e. this box's own axis choice; a second
+        box built with a different angle here is on a genuinely different, non-parallel axis from
+        one built at a different angle -- unlike the rejected prism fixture, these two boxes'
+        long axes are NOT forced to be parallel)."""
+        import math
+        a = math.radians(long_axis_deg_from_y_toward_z)
+        long_dir = (0.0, math.cos(a), math.sin(a))
+        thin1 = (1.0, 0.0, 0.0)                                   # always perpendicular to long_dir
+        thin2 = actorgraph._cross(long_dir, thin1)                           # actorgraph._cross -- also perp.
+        cx, cy, cz = center
+        def corner(u, v, w):  # u,v,w in {-1, 1}
+            return (Decimal(str(cx + u * half_long * long_dir[0] + v * half_thin * thin1[0]
+                                 + w * half_thin * thin2[0])),
+                    Decimal(str(cy + u * half_long * long_dir[1] + v * half_thin * thin1[1]
+                                 + w * half_thin * thin2[1])),
+                    Decimal(str(cz + u * half_long * long_dir[2] + v * half_thin * thin1[2]
+                                 + w * half_thin * thin2[2])))
+        # 8 corners of a parallelepiped, 6 quad faces. `(long_dir, thin1, thin2)` is right-handed
+        # (thin2 = cross(long_dir, thin1)), so each face's winding below was hand-derived via the
+        # cross-product test itself (edge1 x edge2 must point along that face's own outward axis) --
+        # round 2 review found 4 of the original 6 faces backwards (this fixture's own first draft
+        # asserted "winding not asserted, order-tolerant," which was WRONG: an inward-pointing face
+        # picked as a splitting plane inverts the front/back labelling for whatever it splits,
+        # exactly the class of bug this whole detection algorithm exists to get right). Re-derived
+        # all 6 by hand for this fix; STILL run `newell`/`polyalign._world_normal` on each and
+        # confirm all 6 point outward before trusting anything downstream -- hand-derivation is not
+        # a substitute for checking against real code, only a starting point that is no longer
+        # blind guessing.
+        c = {(u, v, w): corner(u, v, w) for u in (-1, 1) for v in (-1, 1) for w in (-1, 1)}
+        faces = [
+            [c[(1, -1, -1)], c[(1, 1, -1)], c[(1, 1, 1)], c[(1, -1, 1)]],       # +long_dir cap
+            [c[(-1, -1, 1)], c[(-1, 1, 1)], c[(-1, 1, -1)], c[(-1, -1, -1)]],   # -long_dir cap
+            [c[(-1, 1, 1)], c[(1, 1, 1)], c[(1, 1, -1)], c[(-1, 1, -1)]],       # +thin1
+            [c[(-1, -1, -1)], c[(1, -1, -1)], c[(1, -1, 1)], c[(-1, -1, 1)]],   # -thin1
+            [c[(-1, 1, -1)], c[(1, 1, -1)], c[(1, -1, -1)], c[(-1, -1, -1)]],   # -thin2
+            [c[(-1, -1, 1)], c[(1, -1, 1)], c[(1, 1, 1)], c[(-1, 1, 1)]],       # +thin2
+        ]
+        return Brush(model_name="Model_Box", polys=[Polygon(vertices=v) for v in faces])
+    a = _brush("A", box((0, 0, 0), long_axis_deg_from_y_toward_z=0.0))
+    b = _brush("B", box((0, 0, 8), long_axis_deg_from_y_toward_z=45.0))
+    ca, = actorgraph.decompose_convex(a)
+    cb, = actorgraph.decompose_convex(b)
+    result = actorgraph.cells_touch_or_overlap(ca, cb)
+    # Verified: boxes do touch (SAT result=True on both full + edge-cross and face-normal-only paths,
+    # indicating the edge-cross axes provide additional confidence, though in this particular fixture
+    # both methods agree). The cell A bounds are x∈[-1,1] y∈[-15,15] z∈[-1,1]; cell B bounds are
+    # x∈[-1,1] y∈[-11.31,11.31] z∈[-3.31,19.31]. The overlapping zones (x fully, y from -11.31 to 11.31,
+    # z from -1 to 1) place the boxes within touching distance via their skew orientations.
+    assert result is True

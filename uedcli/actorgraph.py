@@ -242,3 +242,54 @@ def decompose_convex(actor, *, cache: dict[str, list[ConvexCell]] | None = None)
     if cache is not None:
         cache[actor.name] = cells
     return cells
+
+
+# Touching tolerance -- the same class of constant as relation.py's _PARALLEL_EPS/_PLANE_EPS/
+# _TOUCH_EPS/_GAP_EPS: real editor-placed brushes carry sub-uu float noise (t3d.md "Fractional
+# vertices"), so "touching" means within this band, not exact zero-gap contact.
+_TOUCH_EPS = 1e-3
+
+
+def _cell_edge_directions(cell: ConvexCell) -> list[Vec3]:
+    """Unit directions of the cell's true polytope EDGES (not merely its face normals): two
+    vertices lying on >= 2 common bounding planes share an edge, since in 3-D an edge is exactly
+    the intersection of two faces. Needed for SAT's edge-cross candidate axes -- face-normal-only
+    SAT is NOT exact for two general convex polytopes (spec 'Detection algorithm')."""
+    on_planes = []
+    for v in cell.vertices:
+        on_planes.append(frozenset(
+            i for i, (n, d) in enumerate(cell.half_spaces) if abs(_dot(n, v) - d) <= _SPLIT_EPS * 10))
+    dirs = []
+    n = len(cell.vertices)
+    for i in range(n):
+        for j in range(i + 1, n):
+            if len(on_planes[i] & on_planes[j]) >= 2:
+                delta = _sub(cell.vertices[j], cell.vertices[i])
+                if _len(delta) > 1e-9:
+                    dirs.append(_norm(delta))
+    return dirs
+
+
+def _sat_axes(cell_a: ConvexCell, cell_b: ConvexCell) -> list[Vec3]:
+    """Every face normal of both cells, plus every cross product of an edge of A with an edge of
+    B -- the standard exact candidate-axis set for two convex polytopes (not face normals alone)."""
+    axes = [n for n, _ in cell_a.half_spaces] + [n for n, _ in cell_b.half_spaces]
+    for ea in _cell_edge_directions(cell_a):
+        for eb in _cell_edge_directions(cell_b):
+            cr = _cross(ea, eb)
+            if _len(cr) > 1e-9:
+                axes.append(_norm(cr))
+    return axes
+
+
+def cells_touch_or_overlap(cell_a: ConvexCell, cell_b: ConvexCell) -> bool:
+    """SAT: the two convex cells are DISJOINT iff some candidate axis separates their projected
+    intervals by more than `_TOUCH_EPS`. True (touching or overlapping) otherwise."""
+    for axis in _sat_axes(cell_a, cell_b):
+        a_vals = [_dot(axis, v) for v in cell_a.vertices]
+        b_vals = [_dot(axis, v) for v in cell_b.vertices]
+        a_lo, a_hi = min(a_vals), max(a_vals)
+        b_lo, b_hi = min(b_vals), max(b_vals)
+        if a_hi < b_lo - _TOUCH_EPS or b_hi < a_lo - _TOUCH_EPS:
+            return False
+    return True
