@@ -123,13 +123,6 @@ export interface RawTapHit {
  *   SAME click target between texture-select (unmodified) and actor-select (shifted): unmodified ->
  *   `'select-surface'` (additive = Ctrl, "multi-selects textures"); Shift held -> `'select-actor'`,
  *   ALWAYS additive (repeated Shift+LMB accumulates multiple brush selections, no Ctrl needed).
- *   Ctrl (no Shift) on a poly whose actor is ALREADY in `selectedActorNames` is a third fork of this
- *   same click: `'select-actor'`, additive -- i.e. a deselect of just that one actor, reached via
- *   Ctrl instead of Shift because the actor is already selected (owner ruling 2026-09-19,
- *   `ctrl-click-on-selected-brush-poly-should-deselect`: "ctrl+LMB on a selected brush should
- *   deselect it. With multiple selected brushes, only the one clicked should be deselected"). A
- *   plain click (no Ctrl) on that same already-selected actor's poly is UNCHANGED -- still
- *   `'select-surface'`, non-additive, same as any other poly.
  * - A genuine LINE hit (`isLineHit`, e.g. a Mover's always-visible outline) never needs a modifier,
  *   in ANY shading mode -- same rule as wireframe mode's own outline click, since a line click has no
  *   competing poly/texture-select interpretation to disambiguate from a camera-fly drag (owner
@@ -146,7 +139,6 @@ export function resolveTapAction(
   mode: ShadingMode,
   shiftKey: boolean,
   additive: boolean,
-  selectedActorNames: ReadonlySet<string>,
 ): TapAction {
   if (!rawHit) return { kind: 'deselect' }
   const { actor, polyIndex, isLineHit } = rawHit
@@ -155,7 +147,6 @@ export function resolveTapAction(
 
   if (polyIndex != null && mode !== 'wireframe') {
     if (shiftKey) return { kind: 'select-actor', name: actor.name, additive: true }
-    if (additive && selectedActorNames.has(actor.name)) return { kind: 'select-actor', name: actor.name, additive: true }
     return { kind: 'select-surface', actor: actor.name, polyIndex, additive }
   }
 

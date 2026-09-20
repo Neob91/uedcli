@@ -83,10 +83,6 @@ export interface TapSelectParams {
   // Same per-triangle indexing as `triangleOwners` -- resolves a mesh hit to the specific polygon
   // clicked (surface/texture selection), not just its owning actor.
   trianglePolyIndex: (number | null)[]
-  // The current actor-selection set -- `selection.ts`'s `resolveTapAction` needs it to tell a
-  // Ctrl+click on an ALREADY-selected brush's poly (deselect that one actor, owner ruling
-  // 2026-09-19) apart from one on an unselected brush's poly (unchanged surface/texture multiselect).
-  selectedNames: ReadonlySet<string>
 }
 
 /** Runs the raycast-then-AABB-fallback hit-test and resolves it to a `TapAction`: raycast the real
@@ -107,7 +103,7 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
     meshPickObject, meshTriangleOwners, meshTrianglePolyIndex,
     meshEdgePickObject, meshEdgeOwners, meshEdgePolyIndex,
     markerObjects, brushObjects, moverOutlineObjects,
-    actors, triangleOwners, trianglePolyIndex, selectedNames,
+    actors, triangleOwners, trianglePolyIndex,
   } = params
   const ndcX = ((clientX - rect.left) / rect.width) * 2 - 1
   const ndcY = -((clientY - rect.top) / rect.height) * 2 + 1
@@ -231,5 +227,5 @@ export function resolveTapSelect(params: TapSelectParams): TapAction {
     const actor = pickActor(ray, aabbCandidates)
     hit = actor ? { actor, polyIndex: null, isLineHit: false } : null
   }
-  return resolveTapAction(hit, mode, shiftKey, additive, selectedNames)
+  return resolveTapAction(hit, mode, shiftKey, additive)
 }

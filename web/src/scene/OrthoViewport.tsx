@@ -201,13 +201,12 @@ export function OrthoViewport({
         actors,
         triangleOwners,
         trianglePolyIndex,
-        selectedNames,
       })
       if (action.kind === 'select-actor') onSelectActor(action.name, action.additive)
       else if (action.kind === 'select-surface') onSelectSurface(action.actor, action.polyIndex, action.additive)
       else if (action.kind === 'deselect') onDeselect()
     },
-    [actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex, meshEdgeOwners, meshEdgePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode, pose.worldUnitsPerPixel, selectedNames],
+    [actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex, meshEdgeOwners, meshEdgePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode, pose.worldUnitsPerPixel],
   )
 
   const dragCallbacks = useMemo<DragGestureCallbacks>(

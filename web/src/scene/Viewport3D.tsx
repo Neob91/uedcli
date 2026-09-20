@@ -321,7 +321,6 @@ export function Viewport3D({
         actors: scene.actors,
         triangleOwners,
         trianglePolyIndex,
-        selectedNames,
       })
       if (action.kind === 'select-actor') onSelectActor(action.name, action.additive)
       else if (action.kind === 'select-surface') onSelectSurface(action.actor, action.polyIndex, action.additive)
@@ -331,7 +330,6 @@ export function Viewport3D({
       scene.actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex,
       meshEdgeOwners, meshEdgePolyIndex,
       moverTriangleOwners, moverTrianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode,
-      selectedNames,
     ],
   )
 

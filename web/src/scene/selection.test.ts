@@ -171,13 +171,12 @@ describe('resolveEdgeHitSurface', () => {
 describe('resolveTapAction', () => {
   const brush = actor('Brush1', [-1, -1, -1], [1, 1, 1])
   const point = actor('Light1', [-1, -1, -1], [1, 1, 1], { brush: null })
-  const NONE_SELECTED: ReadonlySet<string> = new Set()
 
   // Point actors are always plain-tap-selectable everywhere, unaffected by Shift or shading mode.
   it('a point-actor hit always selects the actor, Shift/mode irrelevant', () => {
     for (const mode of ['wireframe', 'unlit', 'flat', 'lit'] as const) {
       for (const shiftKey of [false, true]) {
-        expect(resolveTapAction({ actor: point, polyIndex: null, isLineHit: false }, mode, shiftKey, false, NONE_SELECTED)).toEqual({
+        expect(resolveTapAction({ actor: point, polyIndex: null, isLineHit: false }, mode, shiftKey, false)).toEqual({
           kind: 'select-actor', name: 'Light1', additive: false,
         })
       }
@@ -185,7 +184,7 @@ describe('resolveTapAction', () => {
   })
 
   it('a point-actor hit threads the Ctrl-driven additive flag through unchanged', () => {
-    expect(resolveTapAction({ actor: point, polyIndex: null, isLineHit: false }, 'lit', false, true, NONE_SELECTED)).toEqual({
+    expect(resolveTapAction({ actor: point, polyIndex: null, isLineHit: false }, 'lit', false, true)).toEqual({
       kind: 'select-actor', name: 'Light1', additive: true,
     })
   })
@@ -193,87 +192,61 @@ describe('resolveTapAction', () => {
   // The core of the new model: a genuine surface hit (polyIndex set) in a non-wireframe mode.
   describe('a surface hit on a brush, non-wireframe mode', () => {
     it('unmodified -> selects the TEXTURE, non-additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', false, false, NONE_SELECTED)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', false, false)).toEqual({
         kind: 'select-surface', actor: 'Brush1', polyIndex: 4, additive: false,
       })
     })
 
     it('Ctrl -> selects the TEXTURE, additively (multi-selects textures)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'unlit', false, true, NONE_SELECTED)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'unlit', false, true)).toEqual({
         kind: 'select-surface', actor: 'Brush1', polyIndex: 4, additive: true,
       })
     })
 
     it('Shift -> forks the SAME click to the whole BRUSH actor instead, always additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', true, false, NONE_SELECTED)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', true, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
       })
     })
 
     it('Shift+Ctrl -> still the whole-actor fork, additive (Ctrl adds nothing new here)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'flat', true, true, NONE_SELECTED)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'flat', true, true)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
       })
     })
 
-    // Owner ruling 2026-09-19 (`ctrl-click-on-selected-brush-poly-should-deselect`): "ctrl+LMB on a
-    // selected brush should deselect it. With multiple selected brushes, only the one clicked
-    // should be deselected."
-    describe('when the poly\'s owning actor is already actor-selected', () => {
-      const ALREADY_SELECTED: ReadonlySet<string> = new Set(['Brush1'])
-
-      it('Ctrl (no Shift) -> deselects just that actor (select-actor, additive)', () => {
-        expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', false, true, ALREADY_SELECTED)).toEqual({
-          kind: 'select-actor', name: 'Brush1', additive: true,
-        })
-      })
-
-      it('plain click (no Ctrl) -> UNCHANGED, still selects the texture (the new check only fires for Ctrl/additive)', () => {
-        expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', false, false, ALREADY_SELECTED)).toEqual({
-          kind: 'select-surface', actor: 'Brush1', polyIndex: 4, additive: false,
-        })
-      })
-
-      it('Shift -> UNCHANGED, still the whole-actor additive fork regardless of prior selection state', () => {
-        expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', true, false, ALREADY_SELECTED)).toEqual({
-          kind: 'select-actor', name: 'Brush1', additive: true,
-        })
-      })
-
-      it('Shift+Ctrl -> UNCHANGED, still the whole-actor additive fork', () => {
-        expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', true, true, ALREADY_SELECTED)).toEqual({
-          kind: 'select-actor', name: 'Brush1', additive: true,
-        })
-      })
-    })
-
-    // Regression guard: Ctrl+click on a poly whose actor is NOT already selected keeps today's
-    // behavior (texture multiselect), even when SOME other actor is selected.
-    it('Ctrl on a poly of an UNSELECTED actor -> unaffected, still selects the texture', () => {
-      const otherSelected: ReadonlySet<string> = new Set(['SomeOtherBrush'])
-      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', false, true, otherSelected)).toEqual({
+    // Owner correction 2026-09-19 (`ctrl-poly-deselect-should-be-wireframe-only-not`), reverting the
+    // same-day `ctrl-click-on-selected-brush-poly-should-deselect` fix: Ctrl+click on a POLY must
+    // NEVER deselect the owning brush, even when it's already actor-selected -- select-surface only.
+    // Poly-click select/deselect of a whole brush is Shift+LMB only; Ctrl-deselect of a brush is only
+    // ever reached by clicking its own WIREFRAME line (see the wireframe describe block below).
+    it('Ctrl on a poly whose actor is ALREADY actor-selected -> still select-surface, not a deselect', () => {
+      expect(resolveTapAction({ actor: brush, polyIndex: 4, isLineHit: false }, 'lit', false, true)).toEqual({
         kind: 'select-surface', actor: 'Brush1', polyIndex: 4, additive: true,
       })
     })
   })
 
   // A wireframe outline-LINE hit (polyIndex null, mode 'wireframe') -- the EXISTING, unchanged rule:
-  // no modifier needed, Ctrl still multi-selects, Shift plays no special role.
+  // no modifier needed, Ctrl still multi-selects, Shift plays no special role. This is the ONLY path
+  // that can deselect an already-selected brush via Ctrl (`toggleSelection`'s additive branch), and
+  // it was never touched by the deselect-via-poly fix or this revert -- pinned explicitly here so a
+  // future change can't accidentally couple the two decisions again.
   describe('a line hit on a brush, wireframe mode', () => {
     it('unmodified -> selects the actor, non-additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', false, false, NONE_SELECTED)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', false, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: false,
       })
     })
 
-    it('Ctrl -> selects the actor, additive (existing multi-select convention)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', false, true, NONE_SELECTED)).toEqual({
+    it('Ctrl -> selects the actor, additive (existing multi-select convention, toggles off if already selected)', () => {
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', false, true)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
       })
     })
 
     it('Shift has no effect on the resulting additive flag (unlike the non-wireframe surface fork)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', true, false, NONE_SELECTED)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'wireframe', true, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: false,
       })
     })
@@ -284,11 +257,11 @@ describe('resolveTapAction', () => {
   // always has been: Shift required, a rejected hit absorbed rather than deselecting.
   describe('a non-wireframe fallback hit on a brush with no resolved surface', () => {
     it('unmodified -> absorbed (hit something, but not selectable without Shift)', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'lit', false, false, NONE_SELECTED)).toEqual({ kind: 'none' })
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'lit', false, false)).toEqual({ kind: 'none' })
     })
 
     it('Shift -> selects the whole actor, additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'unlit', true, false, NONE_SELECTED)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: false }, 'unlit', true, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
       })
     })
@@ -302,19 +275,19 @@ describe('resolveTapAction', () => {
   // AABB-fallback hit (which GUI.md's rationale still gates behind Shift).
   describe('a genuine line hit on a brush, NON-wireframe mode (e.g. a Mover outline)', () => {
     it('unmodified -> selects the actor, non-additive -- no Shift needed', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'lit', false, false, NONE_SELECTED)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'lit', false, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: false,
       })
     })
 
     it('Ctrl -> selects the actor, additive', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'unlit', false, true, NONE_SELECTED)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'unlit', false, true)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: true,
       })
     })
 
     it('Shift is not required (unlike the AABB-fallback case) and changes nothing', () => {
-      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'flat', true, false, NONE_SELECTED)).toEqual({
+      expect(resolveTapAction({ actor: brush, polyIndex: null, isLineHit: true }, 'flat', true, false)).toEqual({
         kind: 'select-actor', name: 'Brush1', additive: false,
       })
     })
@@ -326,7 +299,7 @@ describe('resolveTapAction', () => {
     for (const mode of ['wireframe', 'unlit', 'flat', 'lit'] as const) {
       for (const shiftKey of [false, true]) {
         for (const additive of [false, true]) {
-          expect(resolveTapAction(null, mode, shiftKey, additive, NONE_SELECTED)).toEqual({ kind: 'deselect' })
+          expect(resolveTapAction(null, mode, shiftKey, additive)).toEqual({ kind: 'deselect' })
         }
       }
     }
