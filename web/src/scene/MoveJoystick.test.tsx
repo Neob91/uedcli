@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 
 import { MoveJoystick } from './MoveJoystick'
+import { joystickVector } from './joystick'
 
 // jsdom doesn't implement `Element.setPointerCapture`/`releasePointerCapture` (confirmed: both are
 // `undefined` on a real jsdom element) -- the same class of gap `dragGesture.test.ts` already notes
@@ -57,6 +58,9 @@ describe('MoveJoystick input-mode gating', () => {
   })
 })
 
+// Must match MoveJoystick.tsx's own (unexported) `STICK_RADIUS_PX`.
+const STICK_RADIUS_PX = 32
+
 describe('MoveJoystick stick drag', () => {
   beforeAll(() => setInputMode('touch'))
 
@@ -75,17 +79,17 @@ describe('MoveJoystick stick drag', () => {
     render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
     const base = screen.getByTestId('move-joystick-base')
     fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 0, movementY: -32 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: -32 })
     expect(onStickChange).toHaveBeenLastCalledWith({ forward: 1, right: 0 })
   })
 
-  it('accumulates movement across multiple move events, clamped to the ring radius', () => {
+  it('multiple move events converge on the final absolute position, clamped to the ring radius', () => {
     const onStickChange = vi.fn()
     render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
     const base = screen.getByTestId('move-joystick-base')
     fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 100, movementY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 100, movementY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', clientX: 200, clientY: 0 })
     const last = onStickChange.mock.calls.at(-1)![0]
     expect(last.right).toBeCloseTo(1) // clamped -- far past the ring's radius
     expect(last.forward).toBeCloseTo(0)
@@ -96,7 +100,7 @@ describe('MoveJoystick stick drag', () => {
     render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
     const base = screen.getByTestId('move-joystick-base')
     fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 2, pointerType: 'touch', movementX: 50, movementY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 2, pointerType: 'touch', clientX: 50, clientY: 0 })
     expect(onStickChange).not.toHaveBeenCalled()
   })
 
@@ -105,11 +109,11 @@ describe('MoveJoystick stick drag', () => {
     render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
     const base = screen.getByTestId('move-joystick-base')
     fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 0, movementY: -32 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: -32 })
     fireEvent.pointerUp(base, { pointerId: 1, pointerType: 'touch' })
     expect(onStickChange).toHaveBeenLastCalledWith({ forward: 0, right: 0 })
     onStickChange.mockClear()
-    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 100, movementY: 0 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 0 })
     expect(onStickChange).not.toHaveBeenCalled()
   })
 
@@ -118,9 +122,74 @@ describe('MoveJoystick stick drag', () => {
     render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
     const base = screen.getByTestId('move-joystick-base')
     fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 0, movementY: -32 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: -32 })
     fireEvent(base, new window.PointerEvent('pointercancel', { pointerId: 1, pointerType: 'touch', bubbles: true }))
     expect(onStickChange).toHaveBeenLastCalledWith({ forward: 0, right: 0 })
+  })
+
+  // Real-device regression: a touch-sourced PointerEvent's `movementX`/`movementY` is a documented
+  // cross-browser trouble spot (see MoveJoystick.tsx's `dragStart` doc comment) -- a real Steam Deck
+  // report ("direction doesn't follow my finger" / "sticks to the left") is consistent with it. These
+  // two tests would have FAILED under the old movementX/movementY-accumulation code; they pass under
+  // the new clientX/clientY-diffing code because it never reads movementX/movementY at all.
+  it('a browser that never populates movementX/movementY still reports correct deflection from clientX/clientY', () => {
+    const onStickChange = vi.fn()
+    render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
+    const base = screen.getByTestId('move-joystick-base')
+    fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
+    // Every move reports a real finger position but movementX/movementY stuck at 0 -- the old code
+    // (accumulating movementX/movementY) would report {forward:0, right:0} forever regardless of the
+    // actual drag; the new code reads the real position and reports real deflection.
+    fireEvent.pointerMove(base, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 10,
+      clientY: -10,
+      movementX: 0,
+      movementY: 0,
+    })
+    fireEvent.pointerMove(base, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 20,
+      clientY: -20,
+      movementX: 0,
+      movementY: 0,
+    })
+    const expected = joystickVector(20, -20, STICK_RADIUS_PX)
+    expect(onStickChange).toHaveBeenLastCalledWith(expected)
+    expect(onStickChange).not.toHaveBeenLastCalledWith({ forward: 0, right: 0 })
+  })
+
+  it('reproduces the "sticks to the left" symptom: a wrong/constant movementX no longer drives the reported direction', () => {
+    const onStickChange = vi.fn()
+    render(<MoveJoystick onStickChange={onStickChange} onVerticalChange={() => {}} />)
+    const base = screen.getByTestId('move-joystick-base')
+    fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 100, clientY: 100 })
+    // The finger genuinely drags a little to the RIGHT (clientX increases), but the browser reports a
+    // large, wrong, constant NEGATIVE movementX on every event -- exactly the "stuck to the left"
+    // shape of bug. Trusting movementX (the old code) would accumulate to a strongly negative,
+    // clamped-left `right`; reading clientX (the new code) reports the finger's real small rightward
+    // deflection instead.
+    fireEvent.pointerMove(base, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 105,
+      clientY: 100,
+      movementX: -50,
+      movementY: 0,
+    })
+    fireEvent.pointerMove(base, {
+      pointerId: 1,
+      pointerType: 'touch',
+      clientX: 110,
+      clientY: 100,
+      movementX: -50,
+      movementY: 0,
+    })
+    const last = onStickChange.mock.calls.at(-1)![0]
+    expect(last.right).toBeGreaterThan(0) // real finger travel is rightward
+    expect(last.right).not.toBe(-1) // the old code would clamp hard left here
   })
 })
 
@@ -191,7 +260,7 @@ describe('MoveJoystick stops propagation (does not leak touches to an ancestor c
     const { containerPointerDown, containerPointerMove } = renderInsideCapturingContainer(onStickChange)
     const base = screen.getByTestId('move-joystick-base')
     fireEvent.pointerDown(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 })
-    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', movementX: 0, movementY: -32 })
+    fireEvent.pointerMove(base, { pointerId: 1, pointerType: 'touch', clientX: 0, clientY: -32 })
     fireEvent.pointerUp(base, { pointerId: 1, pointerType: 'touch' })
     expect(containerPointerDown).not.toHaveBeenCalled()
     expect(containerPointerMove).not.toHaveBeenCalled()

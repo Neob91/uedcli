@@ -38,10 +38,18 @@ export interface MoveJoystickProps {
 export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickProps) {
   const inputMode = useInputMode()
   const dragPointerId = useRef<number | null>(null)
-  // The RAW (unclamped) accumulated drag offset -- accumulated via `movementX`/`movementY` (this
-  // app's own pointer-drag convention, `dragGesture.ts`), not absolute screen coordinates, so no
-  // `getBoundingClientRect` call is needed to find the stick's on-screen center.
-  const rawOffset = useRef({ dx: 0, dy: 0 })
+  // The drag's START point (absolute `clientX`/`clientY` at pointerdown). Deliberately NOT
+  // `movementX`/`movementY` accumulation (this component's original approach, matching
+  // `dragGesture.ts`'s convention there): `PointerEvent.movementX`/`movementY` for a TOUCH-sourced
+  // pointer is a documented cross-browser trouble spot, and this codebase already has a live
+  // instance of it biting -- `dragGesture.ts`'s `awaitingLockSync` doc comment records Firefox
+  // returning a garbage recalibration delta right after pointer lock engages. A real Steam Deck
+  // report ("direction doesn't follow my finger" / "sticks to the left") is consistent with the
+  // same class of bug in a mobile browser's touch delta reporting. Diffing the CURRENT absolute
+  // position against the drag's start point sidesteps the whole class of bug: it never reads
+  // `movementX`/`movementY` at all, so a browser's delta semantics (missing, wrong, or drifting)
+  // can't corrupt the result.
+  const dragStart = useRef({ x: 0, y: 0 })
   // The CLAMPED vector, used both to report movement and to place the dot -- null while not dragging
   // (dot centered, no movement reported beyond the release's own zero).
   const [stickVector, setStickVector] = useState<JoystickVector | null>(null)
@@ -76,7 +84,7 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
     e.stopPropagation()
     e.currentTarget.setPointerCapture(e.pointerId)
     dragPointerId.current = e.pointerId
-    rawOffset.current = { dx: 0, dy: 0 }
+    dragStart.current = { x: e.clientX, y: e.clientY }
     setStickVector({ forward: 0, right: 0 })
   }, [])
 
@@ -85,9 +93,9 @@ export function MoveJoystick({ onStickChange, onVerticalChange }: MoveJoystickPr
       if (e.pointerType !== 'touch') return
       if (dragPointerId.current !== e.pointerId) return
       e.stopPropagation()
-      rawOffset.current.dx += e.movementX
-      rawOffset.current.dy += e.movementY
-      const v = joystickVector(rawOffset.current.dx, rawOffset.current.dy, STICK_RADIUS_PX)
+      const dx = e.clientX - dragStart.current.x
+      const dy = e.clientY - dragStart.current.y
+      const v = joystickVector(dx, dy, STICK_RADIUS_PX)
       setStickVector(v)
       onStickChange(v)
     },
