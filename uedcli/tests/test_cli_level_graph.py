@@ -13,7 +13,8 @@ import pytest
 from uedcli import stash_register, trunk
 from uedcli.builders import cube, make_brush_actor
 from uedcli.cli import dispatch, resources
-from uedcli.model import Level
+from uedcli.cli.main import build_parser
+from uedcli.model import Brush, Level, Polygon
 from uedcli.normalize import canonical_actor_t3d
 from uedcli.tests.conftest import StubClassIndex
 
@@ -70,8 +71,7 @@ def test_level_graph_no_from_prints_whole_level_graph(tmp_path, monkeypatch, cap
     rc = dispatch.dispatch(_ns(proj))
     assert rc == 0
     out = capsys.readouterr().out
-    assert "touches" in out
-    assert "A" in out and "B" in out
+    assert out.strip() == "A:0 --touches(4096uu^2)--> B:1"
 
 
 def test_level_graph_from_and_hops_scopes(tmp_path, monkeypatch, capsys):
@@ -79,8 +79,8 @@ def test_level_graph_from_and_hops_scopes(tmp_path, monkeypatch, capsys):
     rc = dispatch.dispatch(_ns(proj, from_actor="A", hops=1))
     assert rc == 0
     out = capsys.readouterr().out
-    assert "A" in out and "B" in out
-    assert "C" not in out       # 2 hops away from A -- excluded by --hops 1
+    # Same A<->B edge as the two-brush case above; C is 2 hops from A -- excluded by --hops 1.
+    assert out.strip() == "A:0 --touches(4096uu^2)--> B:1"
 
 
 def test_level_graph_hops_without_from_exits_2(tmp_path, monkeypatch, capsys):
@@ -150,3 +150,33 @@ def test_level_graph_unresolvable_class_exits_2_not_traceback(tmp_path, monkeypa
     err = capsys.readouterr().err
     assert "SomeMod.Unresolvable" in err
     assert "Traceback" not in err
+
+
+def test_hops_flag_parses_through_the_real_parser():
+    # `_hops_arg`'s validation (positive int, or the literal 'all') is argparse-level, not
+    # application-level -- pin it against the REAL parser, mirroring test_cli.py's
+    # `build_parser().parse_args(...)` + `pytest.raises(SystemExit)` convention (e.g.
+    # test_clip_offset_flag_rejects_bad_values_cleanly).
+    p = build_parser()
+    assert p.parse_args(["level", "graph", "--from", "A", "--hops", "3"]).hops == 3
+    assert p.parse_args(["level", "graph", "--from", "A", "--hops", "all"]).hops == "all"
+    for bad in ("0", "-2", "x"):
+        with pytest.raises(SystemExit):
+            p.parse_args(["level", "graph", "--from", "A", "--hops", bad])
+
+
+def test_level_graph_skipped_degenerate_brush_reported_not_crashed(tmp_path, monkeypatch, capsys):
+    # The design spec's own test strategy names this case explicitly: a degenerate brush is a
+    # reported, skipped node, never a crash. `_level_graph`'s `for name, reason in graph.skipped`
+    # stderr loop is the CLI-level surface for
+    # test_actorgraph.py::test_build_graph_degenerate_brush_is_skipped_not_crashed's module-level
+    # guarantee -- untested at the CLI layer before this.
+    good = _brush("Good", cube(64, 64, 64), csg="subtract")
+    bad_brush = Brush(model_name="Model_Bad", polys=[Polygon(vertices=[])])
+    bad = make_brush_actor("Bad", bad_brush, csg="subtract")
+    proj = _project(tmp_path, monkeypatch, [good, bad])
+    rc = dispatch.dispatch(_ns(proj))
+    assert rc == 0                          # a skipped brush is reported, not a failure
+    cap = capsys.readouterr()
+    assert "Bad" in cap.err                 # names the skipped actor
+    assert cap.out == ""                    # no edges (only one good, unpaired brush) -> no stdout

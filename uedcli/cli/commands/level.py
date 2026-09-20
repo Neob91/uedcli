@@ -1,7 +1,7 @@
 """`level` command family — operations over a project's levels.
 
 `cli.dispatch` enters through `run(args)`, which routes the subverb: `list`/`create`/`import`/
-`reimport`/`materialize`/`photo`/`status`/`doctor`. Ordering the reorg must preserve:
+`reimport`/`materialize`/`photo`/`status`/`doctor`/`graph`. Ordering the reorg must preserve:
 
 - `level import` resolves its destination and runs the overwrite/path-safety guard BEFORE reading the
   map file (`_resolve_import_dest`);
@@ -817,5 +817,7 @@ def _level_graph(args, src) -> int:
     else:
         edges = graph.edges
 
-    print(actorgraph.format_text(edges))
+    text = actorgraph.format_text(edges)
+    if text:
+        print(text)
     return 0

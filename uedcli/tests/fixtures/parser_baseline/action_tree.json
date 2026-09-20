@@ -74,7 +74,7 @@
         "actor": "actor query/mutate verbs",
         "brush": "brush geometry verbs",
         "mover": "mover (animated brush actor) keyframe verbs",
-        "level": "level lifecycle verbs (create/import/reimport/list/materialize/photo/status/doctor)",
+        "level": "level lifecycle verbs (create/import/reimport/list/materialize/photo/status/doctor/graph)",
         "event": "analyse the level's Tag<->Event trigger wiring (who-triggers-whom). Offline, model-side, no editor. Sub-verbs: graph",
         "project": "inspect the resolved uedcli project",
         "class": "discover the substrate's actor classes and their property schemas (offline; reads the game's own .u packages — no editor, no level needed)",

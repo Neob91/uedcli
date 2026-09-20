@@ -9,7 +9,7 @@ from ._arguments import _tree_flag
 def register(sub) -> None:
     level = sub.add_parser("level",
                            help="level lifecycle verbs "
-                                "(create/import/reimport/list/materialize/photo/status/doctor)")
+                                "(create/import/reimport/list/materialize/photo/status/doctor/graph)")
     lsub = level.add_subparsers(dest="sub", required=True)
     llist = lsub.add_parser(
         "list",
