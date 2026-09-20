@@ -1,6 +1,6 @@
 from decimal import Decimal
 import pytest
-from uedcli import actorgraph
+from uedcli import actorgraph, polyalign
 from uedcli.builders import cube, make_brush_actor
 
 
@@ -126,66 +126,106 @@ def test_overlapping_cells_touch():
     assert actorgraph.cells_touch_or_overlap(ca, cb)
 
 
-def test_edge_cross_axis_is_needed_for_two_rotated_convex_shapes():
-    # Two OBLIQUE (non-parallel-axis) thin boxes -- see the implementer note below for why this
-    # must NOT be two prisms sharing one extrusion axis (the plan's own first draft used two
-    # Z-extruded triangular prisms, only rotated about Z; caught in this plan's self-review: for
-    # any two convex shapes sharing one common "long" axis, EVERY edge-cross candidate axis reduces
-    # to a multiple of an already-tested face normal -- cross(shared_axis, anything) and
-    # cross(anything_in_the_shared_axis's_perpendicular_plane, same) both land back on that shape's
-    # own face-normal set. Such a fixture can NEVER exercise a genuinely new edge-cross axis no
-    # matter how it's rotated/translated -- tuning it would have been chasing a test that cannot
-    # pass for the reason intended even in principle. Two boxes on genuinely different (skew) axes
-    # are required instead.
+def _oblique_box(center, axes, half=(15.0, 1.0, 1.0)):
+    """A thin rectangular rod: `half` extents along the orthonormal right-handed frame
+    `axes = (long, thin1, thin2)` (`long x thin1 == thin2`), centred at `center`.
+
+    The 6 quad windings below run counterclockwise seen from OUTSIDE, so every face's Newell normal
+    points away from the box centre -- asserted directly in the test that uses this, since an
+    inward-pointing face chosen as a splitting plane would invert front/back for its whole subtree.
+    """
     from uedcli.model import Brush, Polygon
-    def box(center, long_axis_deg_from_y_toward_z, half_long=15.0, half_thin=1.0):
-        """A thin rectangular box: half_long along a LONG axis tilted `long_axis_deg_from_y_toward_z`
-        degrees from +Y toward +Z (0 -> long axis is +Y, i.e. this box's own axis choice; a second
-        box built with a different angle here is on a genuinely different, non-parallel axis from
-        one built at a different angle -- unlike the rejected prism fixture, these two boxes'
-        long axes are NOT forced to be parallel)."""
-        import math
-        a = math.radians(long_axis_deg_from_y_toward_z)
-        long_dir = (0.0, math.cos(a), math.sin(a))
-        thin1 = (1.0, 0.0, 0.0)                                   # always perpendicular to long_dir
-        thin2 = actorgraph._cross(long_dir, thin1)                           # actorgraph._cross -- also perp.
-        cx, cy, cz = center
-        def corner(u, v, w):  # u,v,w in {-1, 1}
-            return (Decimal(str(cx + u * half_long * long_dir[0] + v * half_thin * thin1[0]
-                                 + w * half_thin * thin2[0])),
-                    Decimal(str(cy + u * half_long * long_dir[1] + v * half_thin * thin1[1]
-                                 + w * half_thin * thin2[1])),
-                    Decimal(str(cz + u * half_long * long_dir[2] + v * half_thin * thin1[2]
-                                 + w * half_thin * thin2[2])))
-        # 8 corners of a parallelepiped, 6 quad faces. `(long_dir, thin1, thin2)` is right-handed
-        # (thin2 = cross(long_dir, thin1)), so each face's winding below was hand-derived via the
-        # cross-product test itself (edge1 x edge2 must point along that face's own outward axis) --
-        # round 2 review found 4 of the original 6 faces backwards (this fixture's own first draft
-        # asserted "winding not asserted, order-tolerant," which was WRONG: an inward-pointing face
-        # picked as a splitting plane inverts the front/back labelling for whatever it splits,
-        # exactly the class of bug this whole detection algorithm exists to get right). Re-derived
-        # all 6 by hand for this fix; STILL run `newell`/`polyalign._world_normal` on each and
-        # confirm all 6 point outward before trusting anything downstream -- hand-derivation is not
-        # a substitute for checking against real code, only a starting point that is no longer
-        # blind guessing.
-        c = {(u, v, w): corner(u, v, w) for u in (-1, 1) for v in (-1, 1) for w in (-1, 1)}
-        faces = [
-            [c[(1, -1, -1)], c[(1, 1, -1)], c[(1, 1, 1)], c[(1, -1, 1)]],       # +long_dir cap
-            [c[(-1, -1, 1)], c[(-1, 1, 1)], c[(-1, 1, -1)], c[(-1, -1, -1)]],   # -long_dir cap
-            [c[(-1, 1, 1)], c[(1, 1, 1)], c[(1, 1, -1)], c[(-1, 1, -1)]],       # +thin1
-            [c[(-1, -1, -1)], c[(1, -1, -1)], c[(1, -1, 1)], c[(-1, -1, 1)]],   # -thin1
-            [c[(-1, 1, -1)], c[(1, 1, -1)], c[(1, -1, -1)], c[(-1, -1, -1)]],   # -thin2
-            [c[(-1, -1, 1)], c[(1, -1, 1)], c[(1, 1, 1)], c[(-1, 1, 1)]],       # +thin2
-        ]
-        return Brush(model_name="Model_Box", polys=[Polygon(vertices=v) for v in faces])
-    a = _brush("A", box((0, 0, 0), long_axis_deg_from_y_toward_z=0.0))
-    b = _brush("B", box((0, 0, 8), long_axis_deg_from_y_toward_z=45.0))
+    (lg, t1, t2), (hl, h1, h2) = axes, half
+    cx, cy, cz = center
+
+    def corner(u, v, w):    # u, v, w in {-1, 1}
+        return tuple(Decimal(repr(c + u * hl * lg[i] + v * h1 * t1[i] + w * h2 * t2[i]))
+                     for i, c in enumerate((cx, cy, cz)))
+
+    c = {(u, v, w): corner(u, v, w) for u in (-1, 1) for v in (-1, 1) for w in (-1, 1)}
+    faces = [
+        [c[(1, -1, -1)], c[(1, 1, -1)], c[(1, 1, 1)], c[(1, -1, 1)]],       # +long cap
+        [c[(-1, -1, 1)], c[(-1, 1, 1)], c[(-1, 1, -1)], c[(-1, -1, -1)]],   # -long cap
+        [c[(-1, 1, 1)], c[(1, 1, 1)], c[(1, 1, -1)], c[(-1, 1, -1)]],       # +thin1
+        [c[(-1, -1, -1)], c[(1, -1, -1)], c[(1, -1, 1)], c[(-1, -1, 1)]],   # -thin1
+        [c[(-1, 1, -1)], c[(1, 1, -1)], c[(1, -1, -1)], c[(-1, -1, -1)]],   # -thin2
+        [c[(-1, -1, 1)], c[(1, -1, 1)], c[(1, 1, 1)], c[(-1, 1, 1)]],       # +thin2
+    ]
+    return Brush(model_name="Model_Box", polys=[Polygon(vertices=v) for v in faces])
+
+
+def test_edge_cross_axis_is_needed_for_two_rotated_convex_shapes():
+    # Two thin rods passing each other in a SKEW crossing. Face-normal-only SAT wrongly calls this
+    # touching; only an edge(A) x edge(B) axis separates it.
+    #
+    # Why the fixture is shaped exactly this way -- two earlier fixtures could not exhibit the
+    # phenomenon AT ALL, for the same structural reason at three different depths:
+    #   * two Z-extruded prisms rotated only about Z (the plan's first draft): both share the
+    #     extrusion axis, so every edge-cross lands back on an existing face normal.
+    #   * two boxes whose `thin1` is hardcoded to world X and whose long axes rotate within the Y-Z
+    #     plane (the committed fixture this replaces): the shared axis is now the THIN one, but every
+    #     edge still lies along X or inside the Y-Z plane, so cross(X, yz) is in the Y-Z plane
+    #     (parallel to a face normal) and cross(yz, yz) is parallel to X (also a face normal). A
+    #     63-configuration sweep over that fixture's angle/offset found zero divergence, as it must.
+    #   * a compound Rz-then-Rx rotation ALONE is still degenerate: whichever order it composes in,
+    #     one of B's own axes stays perpendicular to A's long axis, so cross(A.long, B.long) is
+    #     again just a face normal.
+    # The degree of freedom all three lack is ROLL about B's own long axis. Here B's long axis is
+    # tilted out of the X-Y plane AND then rolled about itself, so its thin axes no longer line up
+    # with cross(A.long, B.long) -- that cross product becomes a genuinely new candidate axis.
+    import math
+    phi, rho, gap_along_n = math.radians(60.0), math.radians(30.0), 4.0
+
+    a_axes = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))     # A: long along world X
+    long_b = (0.0, math.cos(phi), math.sin(phi))                      # tilted phi from +Y toward +Z
+    q = (0.0, math.sin(phi), -math.cos(phi))                          # long_b x X; (X, q, long_b) RH
+    thin1 = tuple(math.cos(rho) * x + math.sin(rho) * qi              # X, rolled rho about long_b
+                  for x, qi in zip((1.0, 0.0, 0.0), q))
+    thin2 = tuple(math.cos(rho) * qi - math.sin(rho) * x              # == long_b x thin1
+                  for x, qi in zip((1.0, 0.0, 0.0), q))
+    b_axes = (long_b, thin1, thin2)
+    n = actorgraph._norm(actorgraph._cross(a_axes[0], long_b))        # the edge-cross axis at issue
+    b_center = tuple(gap_along_n * ni for ni in n)                    # push B apart along exactly it
+
+    # Non-degenerate by construction: no axis of A is parallel to any axis of B (a shared axis is
+    # what collapsed all three earlier fixtures).
+    assert max(abs(actorgraph._dot(u, v)) for u in a_axes for v in b_axes) < 0.95
+    # ...and the axis at issue is not a face normal of either box, so it is reachable ONLY as an
+    # edge-cross product.
+    assert all(abs(actorgraph._dot(n, v)) < 0.95 for v in a_axes + b_axes)
+
+    a = _brush("A", _oblique_box((0.0, 0.0, 0.0), a_axes))
+    b = _brush("B", _oblique_box(b_center, b_axes))
+
+    # Every face of both fixtures must point OUTWARD before anything downstream can be trusted.
+    from uedcli.texframe import newell
+    for actor, center in ((a, (0.0, 0.0, 0.0)), (b, b_center)):
+        for poly in actor.brush.polys:
+            verts = polyalign._world_verts(actor, poly)
+            normal = actorgraph._norm(newell(verts))
+            outward = actorgraph._sub(verts[0], center)
+            assert actorgraph._dot(normal, outward) > 0, f"{actor.name}: inward-pointing face"
+
     ca, = actorgraph.decompose_convex(a)
     cb, = actorgraph.decompose_convex(b)
-    result = actorgraph.cells_touch_or_overlap(ca, cb)
-    # Verified: boxes do touch (SAT result=True on both full + edge-cross and face-normal-only paths,
-    # indicating the edge-cross axes provide additional confidence, though in this particular fixture
-    # both methods agree). The cell A bounds are x∈[-1,1] y∈[-15,15] z∈[-1,1]; cell B bounds are
-    # x∈[-1,1] y∈[-11.31,11.31] z∈[-3.31,19.31]. The overlapping zones (x fully, y from -11.31 to 11.31,
-    # z from -1 to 1) place the boxes within touching distance via their skew orientations.
-    assert result is True
+
+    # Ground truth, from an oracle that shares no code with SAT: the rods are 1.267949uu apart.
+    # Established by closest-feature enumeration (every vertex-face and edge-edge pair, plain
+    # coordinate arithmetic) and cross-checked by dense volume sampling (18^3 points per rod, which
+    # bounds it at 1.463176uu -- a sampled minimum is always an upper bound). That is ~1268x
+    # `_TOUCH_EPS`, nowhere near the tolerance band.
+    assert actorgraph.cells_touch_or_overlap(ca, cb) is False
+
+    # ...and this is the configuration's whole point: dropping the edge-cross axes makes SAT get it
+    # WRONG. Face-normal-only SAT finds no separating axis here (all 6 overlap -- each rod is 30
+    # long and 2 thick, so every face projection of one straddles the other's), so it reports a
+    # touch that isn't there. Measured: all 16 separating axes the full test finds are the single
+    # edge-cross direction cross(A.long, B.long), with a projection gap of 1.267949uu.
+    face_normals = [nn for nn, _ in ca.half_spaces] + [nn for nn, _ in cb.half_spaces]
+    separated_by_a_face = any(
+        max(actorgraph._dot(ax, v) for v in ca.vertices)
+        < min(actorgraph._dot(ax, v) for v in cb.vertices) - actorgraph._TOUCH_EPS
+        or max(actorgraph._dot(ax, v) for v in cb.vertices)
+        < min(actorgraph._dot(ax, v) for v in ca.vertices) - actorgraph._TOUCH_EPS
+        for ax in face_normals)
+    assert separated_by_a_face is False
