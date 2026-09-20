@@ -1,7 +1,7 @@
 """`level` command family — operations over a project's levels.
 
 `cli.dispatch` enters through `run(args)`, which routes the subverb: `list`/`create`/`import`/
-`reimport`/`materialize`/`photo`/`status`/`doctor`. Ordering the reorg must preserve:
+`reimport`/`materialize`/`photo`/`status`/`doctor`/`graph`. Ordering the reorg must preserve:
 
 - `level import` resolves its destination and runs the overwrite/path-safety guard BEFORE reading the
   map file (`_resolve_import_dest`);
@@ -44,6 +44,8 @@ def run(args) -> int:
         return _level_preview(args)
     if args.sub == "doctor":
         return _level_doctor(args, level_sources.resolve_level_source(args))
+    if args.sub == "graph":
+        return _level_graph(args, level_sources.resolve_level_source(args))
     if args.sub == "create":
         return _level_create(args)
     if args.sub == "import":
@@ -784,3 +786,40 @@ def _level_doctor(args, src) -> int:
     else:
         print(doctor.format_report(shown, level_name))
     return 1 if exit_severity is doctor.Severity.ERROR else 0
+
+
+def _level_graph(args, src) -> int:
+    """`level graph` — print the level's actor connectivity/containment graph. Pure, model-side (no
+    editor, no native CSG). Default: the whole level's graph, one edge per line to stdout.
+    `--from NAME --hops N|all`: scoped to the reachable neighbourhood. No `--json` in v1 (YAGNI —
+    CLAUDE.md)."""
+    from ... import actorgraph
+
+    from_actor = getattr(args, "from_actor", None)
+    hops = getattr(args, "hops", None)
+    if from_actor is not None and hops is None:
+        raise CommandError("level graph: --hops is required when --from is given "
+                            "(N, or 'all' for unbounded)")
+    if from_actor is None and hops is not None:
+        raise CommandError("level graph: --hops has nothing to scope without --from")
+
+    level = src.load()
+    index = resources.mover_index(args, "level graph")
+    graph = actorgraph.build_graph(level, index)
+    for name, reason in graph.skipped:
+        # `reason` (from DegenerateBrushError) already starts with "{name}: " -- don't repeat the
+        # name here too, or the line stutters ("skipping Bad — Bad: brush does not bound...").
+        print(f"level graph: skipping {reason}", file=sys.stderr)
+
+    if from_actor is not None:
+        try:
+            edges = actorgraph.scoped_edges(graph, seed=from_actor, hops=hops)
+        except actorgraph.GraphError as e:
+            raise CommandError(str(e))
+    else:
+        edges = graph.edges
+
+    text = actorgraph.format_text(edges, graph.nodes)
+    if text:
+        print(text)
+    return 0

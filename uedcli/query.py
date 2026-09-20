@@ -10,7 +10,7 @@ from typing import Literal
 
 from .model import Actor, Level
 from .normalize import canonical_actor_t3d
-from .texframe import newell
+from .texframe import newell, poly_flags_int
 
 # PolyFlags bit → name (verify against the editor's Surface-Flags ref before relying on
 # the higher bits). The CLI uses these names so the LLM never sees raw bit values.
@@ -306,6 +306,47 @@ def csg_is_subtract(actor) -> bool:
     """True iff the brush's CsgOper is CSG_Subtract (value matched case-insensitively — an imported
     map may spell it `csg_subtract`). Add/Intersect/Deintersect and non-CSG actors → False."""
     return _csg_oper(actor).casefold() == "csg_subtract"
+
+
+_CSG_KINDS = frozenset({"add", "subtract", "semisolid", "nonsolid", "intersect", "deintersect", "mover"})
+
+
+def csg_kind(actor: Actor, *, is_mover: bool) -> str:
+    """The actor's flat CSG/solidity kind, one of `_CSG_KINDS` — the shared classifier behind
+    `preview.classify_brush`'s brush colouring AND `level graph`'s node tags, so the two never
+    drift apart. `is_mover` is the CALLER's own authoritative answer (`movers.is_mover`), never
+    guessed here — a Mover carries no CsgOper at all (excluded from world CSG), so `is_mover=True`
+    short-circuits before any CsgOper/PolyFlags read and returns `"mover"` outright, never `"add"`
+    plus a modifier: a Mover has no solidity context to report.
+
+    Semisolid/Nonsolid are a PolyFlags refinement of an Add-like brush (CsgOper unset/`CSG_Add`),
+    not a value of CsgOper itself — checked only once CsgOper has ruled out Subtract/Intersect/
+    Deintersect, and the return is always ONE flat string (never `"add:semisolid"`), matching
+    classic UnrealEd's own single CSG-operation choice for a brush.
+
+    PolyFlags is read at the ACTOR level only (`texframe.poly_flags_int`), matching what
+    `preview.classify_brush` already does for brush colouring — not a per-poly OR (which
+    `doctor._brush_polyflags` does for a different purpose, catching a poly-level-only flag a
+    diagram's brush-wide colour key was never meant to represent)."""
+    if is_mover:
+        return "mover"
+    # Deferred: keeps builders.py (and its own emit/geometry/profile chain) out of the
+    # parser-build-time import closure for every OTHER query.py caller that never needs a brush's
+    # solidity kind (test_parser_baseline.py's import_closure.json fixture pins this).
+    from .builders import PF_NOTSOLID, PF_SEMISOLID
+    oper = _csg_oper(actor).casefold()
+    if oper == "csg_subtract":
+        return "subtract"
+    if oper == "csg_intersect":
+        return "intersect"
+    if oper == "csg_deintersect":
+        return "deintersect"
+    flags = poly_flags_int(dict(actor.props))
+    if flags & PF_SEMISOLID:
+        return "semisolid"
+    if flags & PF_NOTSOLID:
+        return "nonsolid"
+    return "add"
 
 
 def resolve_actor_names(level: Level, names: Sequence[str]) -> list[str]:

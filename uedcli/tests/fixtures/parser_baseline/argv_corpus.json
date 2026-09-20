@@ -299,7 +299,7 @@
     "exit_code": 2,
     "namespace": null,
     "stdout": "",
-    "stderr": "usage: uedcli level [-h]\n                    {list,create,import,reimport,materialize,photo,status,doctor}\n                    ...\nuedcli level: error: argument sub: invalid choice: 'prev' (choose from list, create, import, reimport, materialize, photo, status, doctor)\n"
+    "stderr": "usage: uedcli level [-h]\n                    {list,create,import,reimport,materialize,photo,status,doctor,graph}\n                    ...\nuedcli level: error: argument sub: invalid choice: 'prev' (choose from list, create, import, reimport, materialize, photo, status, doctor, graph)\n"
   },
   {
     "argv": [

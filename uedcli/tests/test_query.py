@@ -7,7 +7,8 @@ from uedcli.model import Actor, Level, parse_t3d
 from uedcli.query import (list_actors, show_actor, describe,
                           decode_flags, list_polys, format_polys,
                           list_vertices, format_vertices,
-                          _class_matches, resolve_actor_name, resolve_actor_names)
+                          _class_matches, resolve_actor_name, resolve_actor_names,
+                          csg_kind)
 from uedcli.tests.conftest import read_fixture
 
 
@@ -473,3 +474,64 @@ def test_show_actor_does_not_glob():
         with pytest.raises(KeyError) as ei:
             show_actor(lv, pattern)
         assert "Actor not found" in ei.value.args[0]
+
+
+# ── csg_kind: the shared 6-way brush classifier (level graph node tags, preview.classify_brush) ──
+
+
+def _with_csg_oper(actor: Actor, oper: str) -> Actor:
+    """Swap in a CsgOper `make_brush_actor` can't express directly (only add/subtract) — used only
+    to reach the Intersect/Deintersect branches, which real trunk content never carries (they're
+    editor-only scaffolding) but which `csg_kind` must still classify correctly rather than
+    silently falling through to `"add"`."""
+    from dataclasses import replace
+    props = [p for p in actor.props if p[0] != "CsgOper"] + [("CsgOper", oper)]
+    return replace(actor, props=props)
+
+
+def test_csg_kind_add():
+    a = make_brush_actor("A", cube(64, 64, 64), csg="add")
+    assert csg_kind(a, is_mover=False) == "add"
+
+
+def test_csg_kind_subtract():
+    a = make_brush_actor("A", cube(64, 64, 64), csg="subtract")
+    assert csg_kind(a, is_mover=False) == "subtract"
+
+
+def test_csg_kind_semisolid():
+    from uedcli.builders import PF_SEMISOLID
+    a = make_brush_actor("A", cube(64, 64, 64), csg="add", poly_flags=PF_SEMISOLID)
+    assert csg_kind(a, is_mover=False) == "semisolid"
+
+
+def test_csg_kind_nonsolid():
+    from uedcli.builders import PF_NOTSOLID
+    a = make_brush_actor("A", cube(64, 64, 64), csg="add", poly_flags=PF_NOTSOLID)
+    assert csg_kind(a, is_mover=False) == "nonsolid"
+
+
+def test_csg_kind_intersect():
+    a = _with_csg_oper(make_brush_actor("A", cube(64, 64, 64), csg="add"), "CSG_Intersect")
+    assert csg_kind(a, is_mover=False) == "intersect"
+
+
+def test_csg_kind_deintersect():
+    a = _with_csg_oper(make_brush_actor("A", cube(64, 64, 64), csg="add"), "CSG_Deintersect")
+    assert csg_kind(a, is_mover=False) == "deintersect"
+
+
+def test_csg_kind_mover_short_circuits_before_any_csgoper_or_polyflags_read():
+    """A Mover carries no CsgOper at all -- is_mover=True must win outright, even over a Subtract
+    CsgOper or a Semisolid/Nonsolid PolyFlags that would otherwise classify it differently. Movers
+    never have a solidity context to report."""
+    from uedcli.builders import PF_SEMISOLID
+    a = make_brush_actor("A", cube(64, 64, 64), csg="subtract", poly_flags=PF_SEMISOLID)
+    assert csg_kind(a, is_mover=True) == "mover"
+
+
+def test_csg_kind_case_insensitive_csgoper():
+    # An imported map may spell CsgOper differently -- csg_is_subtract already matches
+    # case-insensitively (query._csg_oper); csg_kind must too.
+    a = _with_csg_oper(make_brush_actor("A", cube(64, 64, 64), csg="add"), "csg_subtract")
+    assert csg_kind(a, is_mover=False) == "subtract"

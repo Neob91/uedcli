@@ -2,6 +2,10 @@
 
 measure / find / set
 
+For connectivity/containment discovery across MULTIPLE brushes — which brushes touch, contain, or
+are carved by which — see [`level graph`](../level/graph.md); `brush relation` answers questions about
+a pair of faces you already know.
+
 **`brush relation measure REF TARGET...`** reports the exact geometric relationship between a
 reference face selector and one or more target selectors — replaces eyeballing a render with
 computed facts: whether the planes are coplanar or parallel, both normals, the signed distance

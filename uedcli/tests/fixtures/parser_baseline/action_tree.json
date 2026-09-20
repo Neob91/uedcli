@@ -74,7 +74,7 @@
         "actor": "actor query/mutate verbs",
         "brush": "brush geometry verbs",
         "mover": "mover (animated brush actor) keyframe verbs",
-        "level": "level lifecycle verbs (create/import/reimport/list/materialize/photo/status/doctor)",
+        "level": "level lifecycle verbs (create/import/reimport/list/materialize/photo/status/doctor/graph)",
         "event": "analyse the level's Tag<->Event trigger wiring (who-triggers-whom). Offline, model-side, no editor. Sub-verbs: graph",
         "project": "inspect the resolved uedcli project",
         "class": "discover the substrate's actor classes and their property schemas (offline; reads the game's own .u packages — no editor, no level needed)",
@@ -8735,7 +8735,8 @@
             "materialize",
             "photo",
             "status",
-            "doctor"
+            "doctor",
+            "graph"
           ],
           "subparser_help": {
             "list": "list the project's levels (trunk dirs under <maps>), one name per line to stdout (pipe-friendly, e.g. `level list | ...`); a count and the active level go to stderr",
@@ -8745,7 +8746,8 @@
             "materialize": "build $UEDCLI_LEVEL's trunk into a .dx/.unr map file (pure build; no merge)",
             "photo": "render freely-posed still shots of $UEDCLI_LEVEL. The default --game backend is the faithful lit in-game tier: a warm reused headless-game container renders truly-lit first-person frames (first batch ~1-3 min: boot + travel; later batches reuse the warm container). --native is the opt-in offline draft rasterizer (no editor, no container, no game): textured + flat-shaded, seconds per batch, but no lighting/meshes/sky.",
             "status": "thin read-only dashboard for $UEDCLI_LEVEL (or a --tree box): actor counts, duplicate order_values, git state",
-            "doctor": "detect MECHANICAL defects — BSP/geometry (holes, solidity, CSG order), zoning, and objectively-wrong footguns — static, offline, no editor. Does NOT judge gameplay or style: a clean report says nothing about whether the level is passable, well placed, detailed or good"
+            "doctor": "detect MECHANICAL defects — BSP/geometry (holes, solidity, CSG order), zoning, and objectively-wrong footguns — static, offline, no editor. Does NOT judge gameplay or style: a clean report says nothing about whether the level is passable, well placed, detailed or good",
+            "graph": "print the level's actor connectivity/containment graph — every brush and non-brush actor as a node, touches/contains/carved_by edges from exact geometry + CSG order"
           }
         }
       ],
@@ -9487,6 +9489,81 @@
               "metavar": "NAME",
               "converter": null,
               "help": "show ONLY findings in this category (degenerate, watertight, convex, planar, solidity, csg_order, scale); repeat to OR several. Exact, case-insensitive. Filters DISPLAY only — the exit code always reflects all findings. An unknown category exits 2, listing the valid categories.",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--tree"
+              ],
+              "dest": "tree",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "KIND/NAME",
+              "converter": null,
+              "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
+        },
+        "graph": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli level graph",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--from"
+              ],
+              "dest": "from_actor",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "NAME",
+              "converter": null,
+              "help": "scope the graph to the neighbourhood reachable from this actor (brush or non-brush) within --hops. Omit both --from and --hops for the whole level's graph",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--hops"
+              ],
+              "dest": "hops",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "N|all",
+              "converter": "_hops_arg",
+              "help": "max hops from --from (required with --from; rejected without it). 'all' means unbounded — mirrors --top N|all elsewhere in this CLI",
               "mutex_group": null
             },
             {
