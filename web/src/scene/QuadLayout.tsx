@@ -170,7 +170,7 @@ export function QuadLayout({
 
   return (
     <div className="quad-layout-root">
-      <SceneResourcesProvider scene={scene} atlas={atlas} lightmap={lightmap}>
+      <SceneResourcesProvider scene={scene} atlas={atlas} lightmap={lightmap} stagedOffsets={stagedOffsets}>
         <SelectionKeys selectedNames={selectedNames} onFrame={frameActors} onDeselect={onDeselect} />
         <div
           className="quad-layout"

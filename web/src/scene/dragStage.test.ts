@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'vitest'
 
-import type { BrushHighlight, DirectionalArrow, SceneActor } from '../api'
-import { applyDelta, applyStagedOffset, applyStagedOffsets, resolveActorMoveAxis, stagedLocationsFor } from './dragStage'
+import type { BrushHighlight, DirectionalArrow, ScenePoly, SceneActor } from '../api'
+import {
+  applyDelta,
+  applyStagedOffset,
+  applyStagedOffsets,
+  applyStagedOffsetsToPolys,
+  resolveActorMoveAxis,
+  stagedLocationsFor,
+} from './dragStage'
 
 function actor(name: string, location: [number, number, number], overrides: Partial<SceneActor> = {}): SceneActor {
   return {
@@ -176,5 +183,64 @@ describe('applyStagedOffsets', () => {
     const [nextA, nextB] = applyStagedOffsets([a, b], { ActorA: [5, 0, 0] })
     expect(nextA.location).toEqual([5, 0, 0])
     expect(nextB).toBe(b) // untouched, same reference
+  })
+})
+
+function poly(owner: string | null, overrides: Partial<ScenePoly> = {}): ScenePoly {
+  return {
+    verts: [0, 0, 0, 10, 0, 0, 10, 10, 0],
+    base: [0, 0, 0],
+    tu: [1, 0, 0],
+    tv: [0, 1, 0],
+    pan: [0, 0],
+    tex_index: -1,
+    masked: false,
+    two_sided: false,
+    blend: 'opaque',
+    flags: 0,
+    lightmap: null,
+    owner,
+    i_brush_poly: null,
+    ...overrides,
+  }
+}
+
+describe('applyStagedOffsetsToPolys', () => {
+  it('returns the SAME array reference, unchanged, when nothing is staged', () => {
+    const polys = [poly('MeshA')]
+    expect(applyStagedOffsetsToPolys(polys, [actor('MeshA', [0, 0, 0])], {})).toBe(polys)
+  })
+
+  it('leaves each poly the SAME reference when the staged actor owns no polys here', () => {
+    const p = poly('MeshA')
+    const actors = [actor('MeshA', [0, 0, 0]), actor('Other', [0, 0, 0])]
+    const [next] = applyStagedOffsetsToPolys([p], actors, { Other: [5, 0, 0] })
+    expect(next).toBe(p)
+  })
+
+  it("translates a staged mesh actor's own polys' verts and base by its delta, leaving tu/tv untouched", () => {
+    const polys = [poly('MeshA', { verts: [0, 0, 0, 10, 0, 0, 10, 10, 0], base: [1, 2, 3] })]
+    const actors = [actor('MeshA', [0, 0, 0])]
+    const [next] = applyStagedOffsetsToPolys(polys, actors, { MeshA: [5, 0, 0] }) // delta = [5, 0, 0]
+    expect(next.verts).toEqual([5, 0, 0, 15, 0, 0, 15, 10, 0])
+    expect(next.base).toEqual([6, 2, 3])
+    expect(next.tu).toEqual([1, 0, 0])
+    expect(next.tv).toEqual([0, 1, 0])
+  })
+
+  it('leaves an unstaged poly (owned by a different actor) untouched, same reference', () => {
+    const staged = poly('MeshA')
+    const untouched = poly('MeshB')
+    const actors = [actor('MeshA', [0, 0, 0]), actor('MeshB', [0, 0, 0])]
+    const result = applyStagedOffsetsToPolys([staged, untouched], actors, { MeshA: [1, 0, 0] })
+    expect(result[1]).toBe(untouched)
+    expect(result[0]).not.toBe(staged)
+  })
+
+  it('leaves an ownerless poly (a CSG join with no source actor) untouched', () => {
+    const orphan = poly(null)
+    const actors = [actor('MeshA', [0, 0, 0])]
+    const result = applyStagedOffsetsToPolys([orphan], actors, { MeshA: [1, 0, 0] })
+    expect(result[0]).toBe(orphan)
   })
 })

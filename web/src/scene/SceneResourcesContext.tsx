@@ -12,6 +12,8 @@ import type { ReactNode } from 'react'
 import * as THREE from 'three'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
+import type { Vec3 } from './camera'
+import { applyStagedOffsetsToPolys } from './dragStage'
 import { buildEdgePickData, buildGeometryData } from './geometry'
 import { actorsNeedingMarkers } from './markers'
 import { useBuiltGeometry, useLightmapTexture, useMarkerTexture, useTextures } from './sceneResources'
@@ -22,16 +24,56 @@ export function SceneResourcesProvider({
   scene,
   atlas,
   lightmap,
+  stagedOffsets,
   children,
 }: {
   scene: ScenePayload
   atlas: AtlasPayload
   lightmap: LightmapPayload | null
+  // Bug fix (reported live, post-merge): a Ctrl/Cmd-drag staged move only ever reached the
+  // overlay layers (`applyStagedOffsets` over `scene.actors` -- marker, brush outline, vertex/pivot
+  // dots, directional arrow, radii) -- a MESH actor's own rendered body (solid triangles in the
+  // shared `bufferGeometry` below, plus its wireframe/pick geometry) kept showing the pre-move
+  // position, since its polys live in `scene.polys` (a flat, owner-tagged array), never reachable
+  // from an actor object the way a brush's own `brush.polys` are. Unlike a BRUSH's CSG-solved
+  // surfaces (which genuinely can't cheaply re-transform -- see `dragStage.ts`'s own doc comment),
+  // a mesh actor's triangles are a rigid, independently-addressable-by-owner asset with no CSG
+  // involved, so this is a real, closeable gap, not the same accepted carve-out. Defaults to `{}`
+  // (every non-Viewport/OrthoViewport test-only caller of this provider) so this stays additive.
+  stagedOffsets?: Readonly<Record<string, Vec3>>
   children: ReactNode
 }) {
   const textures = useTextures(atlas)
   const lightmapTexture = useLightmapTexture(lightmap)
   const markerTexture = useMarkerTexture()
+
+  // Mesh actors (GUI.md "Shading modes"): every non-brush actor (`SceneActor.brush === null`) --
+  // covers a resolved DT_Mesh actor, and harmlessly a point actor that owns no polys at all.
+  // Computed before `effectivePolys` below, which needs it to scope the staged-offset translation
+  // to exactly this set (never a brush's CSG-solved polys -- see `dragStage.ts`'s own doc comment
+  // on why that would produce WRONG, not just stale, geometry).
+  const meshActorNames = useMemo(
+    () => new Set(scene.actors.filter((a) => !a.brush).map((a) => a.name)),
+    [scene.actors],
+  )
+  // Narrowed to just the staged names that are ALSO mesh actors -- `applyStagedOffsetsToPolys`
+  // would happily translate any owner it's given a delta for, so this is what actually keeps a
+  // staged BRUSH move from ever reaching (and corrupting) this provider's CSG-solved polys; a
+  // Mover is excluded too, since a Mover's own `brush` field is set (it IS brush-derived), so
+  // `meshActorNames` never contains one -- unverified whether a staged Mover move has the same
+  // gap; flagged, not fixed here.
+  const meshStagedOffsets = useMemo(() => {
+    const out: Record<string, Vec3> = {}
+    for (const name of meshActorNames) {
+      const staged = stagedOffsets?.[name]
+      if (staged) out[name] = staged
+    }
+    return out
+  }, [meshActorNames, stagedOffsets])
+  const effectivePolys = useMemo(
+    () => applyStagedOffsetsToPolys(scene.polys, scene.actors, meshStagedOffsets),
+    [scene.polys, scene.actors, meshStagedOffsets],
+  )
 
   // Movers always render wireframe-outline-only by default (GUI.md "Movers"), so their solid polys
   // are split OUT of the default geometry into their own built resources -- `Viewport3D` draws
@@ -43,12 +85,12 @@ export function SceneResourcesProvider({
     [scene.actors],
   )
   const nonMoverPolys = useMemo(
-    () => scene.polys.filter((p) => p.owner == null || !moverNames.has(p.owner)),
-    [scene.polys, moverNames],
+    () => effectivePolys.filter((p) => p.owner == null || !moverNames.has(p.owner)),
+    [effectivePolys, moverNames],
   )
   const moverPolys = useMemo(
-    () => scene.polys.filter((p) => p.owner != null && moverNames.has(p.owner)),
-    [scene.polys, moverNames],
+    () => effectivePolys.filter((p) => p.owner != null && moverNames.has(p.owner)),
+    [effectivePolys, moverNames],
   )
   const { bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex } =
     useBuiltGeometry(nonMoverPolys, atlas, lightmap, textures, lightmapTexture)
@@ -60,18 +102,13 @@ export function SceneResourcesProvider({
     trianglePolyIndex: moverTrianglePolyIndex,
   } = useBuiltGeometry(moverPolys, atlas, lightmap, textures, lightmapTexture)
 
-  // Mesh actors (GUI.md "Shading modes"): every non-brush actor (`SceneActor.brush === null`) --
-  // covers a resolved DT_Mesh actor, and harmlessly a point actor that owns no polys at all. Their
-  // solid polys stay in `bufferGeometry`/`materials` above (solid rendering is unchanged); this only
+  // Their solid polys stay in `bufferGeometry`/`materials` above (solid rendering shares the same
+  // buffer as brush surfaces, now staged-offset-aware too, per `effectivePolys` above); this only
   // builds the WIREFRAME overlay, from the SAME triangle positions `buildGeometryData` already
   // extracts for solid rendering (no UVs/lightmap/materials needed for a plain line overlay).
-  const meshActorNames = useMemo(
-    () => new Set(scene.actors.filter((a) => !a.brush).map((a) => a.name)),
-    [scene.actors],
-  )
   const meshPolys = useMemo(
-    () => scene.polys.filter((p) => p.owner != null && meshActorNames.has(p.owner)),
-    [scene.polys, meshActorNames],
+    () => effectivePolys.filter((p) => p.owner != null && meshActorNames.has(p.owner)),
+    [effectivePolys, meshActorNames],
   )
   const meshGeoData = useMemo(() => buildGeometryData(meshPolys, atlas), [meshPolys, atlas])
   const meshWireframeGeometry = useMemo(() => {

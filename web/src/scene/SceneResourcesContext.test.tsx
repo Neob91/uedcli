@@ -214,3 +214,62 @@ describe('SceneResourcesProvider -- mesh actor wireframe geometry', () => {
     expect(screen.getByTestId('mesh-wireframe-position-count').textContent).toBe('0')
   })
 })
+
+// Bug fix (reported live, post-merge): a staged Ctrl/Cmd-drag move only ever reached the overlay
+// layers (marker/brush outline/vertex dots), never a mesh actor's own rendered BODY -- its polys
+// live in `scene.polys`, not on the actor object `applyStagedOffsets` (dragStage.ts) translates.
+// `stagedOffsets` threads into the shared default solid buffer AND the mesh wireframe, scoped to
+// mesh-actor owners only (never a brush's CSG-solved polys -- see dragStage.ts's own doc comment).
+function BodyPositionProbe() {
+  const { bufferGeometry, meshWireframeGeometry } = useSceneResourcesContext()
+  const solidX = Array.from(bufferGeometry.getAttribute('position').array as Float32Array).filter((_, i) => i % 3 === 0)
+  const wireX = Array.from(meshWireframeGeometry.getAttribute('position').array as Float32Array).filter((_, i) => i % 3 === 0)
+  return (
+    <div>
+      <span data-testid="solid-x">{solidX.join(',')}</span>
+      <span data-testid="wire-x">{wireX.join(',')}</span>
+    </div>
+  )
+}
+
+describe('SceneResourcesProvider -- stagedOffsets moves a mesh actor\'s own rendered body', () => {
+  it("translates a staged mesh actor's solid triangles AND its wireframe by the staged delta", () => {
+    const scene: ScenePayload = { polys: [triangle({ owner: 'Statue1' })], actors: [meshActor('Statue1')], geometry_pinned: true }
+    render(
+      <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null} stagedOffsets={{ Statue1: [10, 0, 0] }}>
+        <BodyPositionProbe />
+      </SceneResourcesProvider>,
+    )
+    // triangle()'s verts are x=[0,1,0] -- staged +10 on x -> [10,11,10]. Solid triangle order is
+    // stable; the wireframe's edge order is an internal three.js extraction detail, so compare
+    // its x-values as a set (each of the 3 edges' 2 endpoints is one of the same 3 translated verts).
+    expect(screen.getByTestId('solid-x').textContent).toBe('10,11,10')
+    const wireX = (screen.getByTestId('wire-x').textContent ?? '').split(',').map(Number).sort()
+    expect(wireX).toEqual([10, 10, 10, 10, 11, 11])
+  })
+
+  it('leaves the body untouched when no offset is staged for it', () => {
+    const scene: ScenePayload = { polys: [triangle({ owner: 'Statue1' })], actors: [meshActor('Statue1')], geometry_pinned: true }
+    render(
+      <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null} stagedOffsets={{}}>
+        <BodyPositionProbe />
+      </SceneResourcesProvider>,
+    )
+    expect(screen.getByTestId('solid-x').textContent).toBe('0,1,0')
+  })
+
+  it("never translates a BRUSH actor's own polys, even if (by caller mistake) staged -- the CSG safety net", () => {
+    const scene: ScenePayload = {
+      polys: [triangle({ owner: 'Wall1' })],
+      actors: [brushActor('Wall1')],
+      geometry_pinned: true,
+    }
+    render(
+      <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null} stagedOffsets={{ Wall1: [10, 0, 0] }}>
+        <BodyPositionProbe />
+      </SceneResourcesProvider>,
+    )
+    // Wall1 is a brush -- meshActorNames excludes it, so its solved polys stay put despite the offset.
+    expect(screen.getByTestId('solid-x').textContent).toBe('0,1,0')
+  })
+})

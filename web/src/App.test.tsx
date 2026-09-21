@@ -406,6 +406,20 @@ describe('App: actor + surface selection coexistence', () => {
     act(() => quad.onDeselect())
     expect(screen.getByTestId('inspector-empty')).toBeTruthy()
   })
+
+  // Bug fix (reported live, post-merge): the Inspector kept showing an actor's PRE-move Location
+  // after a Ctrl/Cmd-drag staged a new one, because `selectedActors` (App.tsx) filtered raw
+  // `scene.actors` directly instead of the staged-offset-applied array the viewports already draw
+  // from. `ACTOR.location` is `[0,0,0]`; staging `[10,0,0]` (the same call a real viewport's
+  // drag-end makes) must move what the Inspector shows too, not just what's drawn in the 3D pane.
+  it('the Inspector reflects a staged move, not the pre-move trunk Location', async () => {
+    const quad = await renderSelectable()
+    act(() => quad.onSelectActor('Room', false))
+    expect(screen.getByText('0.00, 0.00, 0.00')).toBeTruthy()
+    act(() => quad.setStagedOffsets({ Room: [10, 0, 0] }))
+    expect(screen.getByText('10.00, 0.00, 0.00')).toBeTruthy()
+    expect(screen.queryByText('0.00, 0.00, 0.00')).toBeNull()
+  })
 })
 
 // Critical 2, final review fix wave: `stagedOffsets` (the Ctrl/Cmd-drag "confirmed staged" visual

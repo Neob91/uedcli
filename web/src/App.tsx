@@ -15,6 +15,7 @@ import type { Vec3 } from './scene/camera'
 import { resolveBuildSolved } from './scene/buildStatus'
 import type { FrameRequest } from './scene/frame'
 import { unionBBox } from './scene/frame'
+import { applyStagedOffsets } from './scene/dragStage'
 import { QuadLayout } from './scene/QuadLayout'
 import { clearSelection, parseSurfaceKey, surfaceKey, toggleSelection } from './scene/selectionSet'
 import { useTheme } from './theme/useTheme'
@@ -454,10 +455,20 @@ function App() {
     [level, levelSwitching, refreshStatus, setStagedOffsets],
   )
 
-  // Every selected actor, in scene.actors order -- Inspector's own prop (Task 16: 0/1/2+ selected).
+  // Every selected actor's CURRENT (staged-offset-applied) state, in scene.actors order --
+  // Inspector's own prop (Task 16: 0/1/2+ selected). Bug fix: this used to filter raw `scene.actors`
+  // directly, so the Inspector kept showing an actor's pre-move Location even after a Ctrl/Cmd-drag
+  // staged a new one -- the SAME `applyStagedOffsets` pure function the viewports already use for
+  // their own rendering (Viewport3D.tsx/OrthoViewport.tsx `effectiveActors`), so this can never
+  // show a different position than what's actually drawn: both derive from the identical
+  // (scene.actors, stagedOffsets) inputs through the identical pure function.
+  const effectiveActorsForInspector = useMemo(
+    () => (scene ? applyStagedOffsets(scene.actors, stagedOffsets) : []),
+    [scene, stagedOffsets],
+  )
   const selectedActors = useMemo(
-    () => scene?.actors.filter((a) => selectedNames.has(a.name)) ?? [],
-    [scene, selectedNames],
+    () => effectiveActorsForInspector.filter((a) => selectedNames.has(a.name)),
+    [effectiveActorsForInspector, selectedNames],
   )
 
   // `surfaceKey(owner, i_brush_poly) -> one representative ScenePoly` -- CSG can split one authored

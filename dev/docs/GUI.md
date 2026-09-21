@@ -332,3 +332,10 @@ at the wire boundary, never in the frontend — the Inspector's whole design poi
 Owner note: the Inspector should be able to show **effective** props (own + inherited class
 defaults resolved), let the user hide a prop whose value equals its class default, and visually
 flag a shown value that IS the class default. Not built, no spec yet — noted here so it isn't lost.
+
+Owner note: Rebuild should be able to solve against a GUI session's staged-but-unsaved edits, not
+only the trunk — scoped PER GUI SESSION, so two sessions editing the same trunk concurrently each
+get their own independent staged-build view, never seeing each other's unsaved work. The underlying
+storage should deduplicate content across sessions the way git deduplicates blobs (unchanged
+actors/geometry chunks shared, not copied per session) rather than each session paying the full
+solve/storage cost independently. Not built, no spec yet — noted here so it isn't lost.

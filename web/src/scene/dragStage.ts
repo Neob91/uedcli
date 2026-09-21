@@ -5,7 +5,7 @@
 // of Viewport3D.tsx itself: that file mixes a component export with value exports would break Vite's
 // react-refresh (see viewportRender.ts's own doc comment for the same reasoning), and out of
 // actorMove.ts (Task 6, already reviewed/complete) so this task's own new logic stays in its own file.
-import type { SceneActor } from '../api'
+import type { ScenePoly, SceneActor } from '../api'
 import type { Vec3 } from './camera'
 import type { MoveAxis } from './actorMove'
 import { PERSPECTIVE_AXIS_BY_BUTTONS } from './actorMove'
@@ -85,12 +85,16 @@ function translateFlat(flat: readonly number[], delta: Vec3): number[] {
  * world-space by the server from the actor's ORIGINAL (unstaged) location/rotation, so a uniform
  * translate keeps them internally consistent with the new position without re-deriving anything.
  *
- * Deliberately does NOT and cannot translate the actor's baked CSG solid mesh
- * (`ScenePayload.polys`, built server-side from committed geometry) -- that has no per-actor
- * transform to apply (it's one shared merged buffer, not addressable per actor) and can only be
- * correct again after a server Rebuild; this stays the one documented carve-out (see
- * `Viewport3D.tsx`'s own `stagedOffsets` doc comment). `radii`/`sprite` carry no vector fields of
- * their own to translate (their overlays derive position from `actor.location`, already covered).
+ * Deliberately does NOT and cannot translate a BRUSH actor's baked CSG solid mesh
+ * (`ScenePayload.polys` entries owned by a brush) -- a CSG result depends on every brush's position
+ * relative to every other one, so translating one brush's own solved polys by a delta does not
+ * reproduce what a real re-solve would produce; it can only be correct again after a server
+ * Rebuild (`dev/docs/GUI.md`'s "Future direction" tracks closing this gap with a session-scoped
+ * Rebuild against staged state). A MESH actor's own `ScenePayload.polys` entries have no such
+ * constraint (they're independently addressable by owner, not CSG-composited) and DO move --
+ * see `applyStagedOffsetsToPolys` below, which `SceneResourcesContext.tsx` applies to exactly the
+ * mesh-actor-owned subset. `radii`/`sprite` carry no vector fields of their own to translate (their
+ * overlays derive position from `actor.location`, already covered).
  *
  * Returns `actor` itself, unchanged, when it has no staged offset -- cheap for the (overwhelmingly
  * common) unmoved case, and lets a caller cheaply detect "did anything change" via reference
@@ -123,4 +127,51 @@ export function applyStagedOffset(actor: SceneActor, offsets: Readonly<Record<st
  * consistently across all of them (not just the point-actor marker sprite). */
 export function applyStagedOffsets(actors: readonly SceneActor[], offsets: Readonly<Record<string, Vec3>>): SceneActor[] {
   return actors.map((a) => applyStagedOffset(a, offsets))
+}
+
+/** Translates each `ScenePoly` OWNED BY A STAGED ACTOR by that owner's staged delta -- `verts`
+ * (the poly's own world-space ring) and `base` (its UV-frame origin point); `tu`/`tv` are direction
+ * covectors, unaffected by a pure translation, left untouched.
+ *
+ * A mesh actor's own triangles ARE independently addressable by `owner` (unlike a CSG brush's,
+ * which are one shared solve result across every brush in the level) -- `SceneResourcesContext.tsx`
+ * already partitions `scene.polys` by owner name to build the mesh-actor wireframe/pick geometries,
+ * so translating just the staged subset here is correct, not an approximation: this is a genuine
+ * rigid transform of an unrelated-to-CSG asset, the same class of cheap, exact move
+ * `applyStagedOffset` already does for a directional arrow's `lines`.
+ *
+ * The caller is responsible for excluding brush-owned/CSG-solved polys before calling this (or for
+ * only ever calling it against an already brush-filtered poly list) -- translating a CSG result by
+ * a delta does NOT reproduce what a real re-solve against the new brush position would produce
+ * (the CSG boundary depends on every brush's position relative to every other one), so doing that
+ * would silently produce WRONG geometry, not just stale geometry. That case has no cheap fix; it
+ * needs a real solve (`dev/docs/GUI.md`'s "Future direction" -- a session-scoped Rebuild against
+ * staged state).
+ *
+ * Returns `polys` itself, unchanged, when nothing is staged or none of `polys`' owners are staged --
+ * cheap for the common case, same reference-equality convention as `applyStagedOffset`. */
+export function applyStagedOffsetsToPolys(
+  polys: readonly ScenePoly[],
+  actors: readonly SceneActor[],
+  offsets: Readonly<Record<string, Vec3>>,
+): ScenePoly[] {
+  const stagedNames = Object.keys(offsets)
+  if (stagedNames.length === 0) return polys as ScenePoly[]
+  const deltaByOwner = new Map<string, Vec3>()
+  for (const actor of actors) {
+    const staged = offsets[actor.name]
+    if (!staged) continue
+    deltaByOwner.set(actor.name, [
+      staged[0] - actor.location[0],
+      staged[1] - actor.location[1],
+      staged[2] - actor.location[2],
+    ])
+  }
+  if (deltaByOwner.size === 0) return polys as ScenePoly[]
+  return polys.map((p) => {
+    if (p.owner == null) return p
+    const delta = deltaByOwner.get(p.owner)
+    if (!delta) return p
+    return { ...p, verts: translateFlat(p.verts, delta), base: addDelta(p.base as Vec3, delta) }
+  })
 }
