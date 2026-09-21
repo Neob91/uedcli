@@ -14,6 +14,9 @@ __pycache__/
 *.swp
 _scratch/
 
+# bin/serve-gui-autoreload's own state dir (last-build marker + child-process logs).
+/.serve-gui-autoreload/
+
 # Feature worktrees live here — a worktree is a full second checkout, so leaving
 # it visible would let `git add` stage a duplicate tree and would double every
 # ripgrep hit and pytest collection. Precise, not blanket `.claude/`, so

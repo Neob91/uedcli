@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# bin/serve-gui-autoreload — runs `uedcli serve` behind a cloudflared quick tunnel, watching this
+# checkout's own uedcli/ + web/src for changes and rebuilding+restarting on any. Git-agnostic: it
+# doesn't know or care about commits, so a `git reset --hard` (or any other tool touching those
+# paths) triggers the same rebuild a manual edit would.
+#
+#   bin/serve-gui-autoreload [level] [port]
+#     level   the level to serve (a trunk under the project's maps dir), default showcase_bar
+#     port    local bind port, also what cloudflared tunnels to; default 8765
+#
+#   UEDCLI_GUI_POLL_INTERVAL=N   seconds between change checks (default 5)
+#
+# One cloudflared process for the script's whole life: its *.trycloudflare.com URL stays stable
+# across every GUI restart (fixed port, a new backend process behind it each time — cloudflared
+# just proxies, same trick as dev/evals/scripts/serve.py). A build failure or a backend that dies
+# immediately (bad level, port taken, ...) retries with capped exponential backoff rather than
+# taking the whole script down — the tunnel must survive a bad edit, not just a good one.
+#
+# `uedcli serve` binds 127.0.0.1 with no auth (a local single-user tool by design) and now has
+# staged actor edits + Save, not just viewing — so the tunnel URL is a bearer secret: anyone who
+# has it can edit the trunk. Treat it like one.
+set -euo pipefail
+
+command -v cloudflared >/dev/null 2>&1 \
+  || { echo "serve-gui-autoreload: cloudflared is required on PATH" >&2; exit 1; }
+
+UEDCLI_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+PROJECT_DIR="$UEDCLI_DIR/dev/games"   # this repo's own project root (docs/README.md "A project is...")
+LEVEL="${1:-showcase_bar}"
+PORT="${2:-8765}"
+
+# dev/games/ is gitignored (holds local, per-checkout game assets) -- a fresh checkout/worktree may
+# not have it provisioned. Fail once, clearly, rather than retrying a build forever against a
+# project that can never resolve (this repo's own CLAUDE.md: no silent half-answers).
+[ -f "$PROJECT_DIR/uedcli.toml" ] || {
+  echo "serve-gui-autoreload: no project at $PROJECT_DIR (uedcli.toml not found) -- set up dev/games/ in this checkout first" >&2
+  exit 1
+}
+POLL_INTERVAL="${UEDCLI_GUI_POLL_INTERVAL:-5}"
+MAX_BACKOFF=60
+STATE_DIR="$UEDCLI_DIR/.serve-gui-autoreload"
+MARKER="$STATE_DIR/.last-build"
+TUNNEL_LOG="$STATE_DIR/cloudflared.log"
+BUILD_LOG="$STATE_DIR/build.log"
+SERVE_LOG="$STATE_DIR/uedcli-serve.log"
+
+mkdir -p "$STATE_DIR"
+cd "$UEDCLI_DIR"
+
+SERVE_PID=""
+TUNNEL_PID=""
+
+cleanup() {
+  # Each kill gets its own `|| true` -- under `set -e`, a `[ -n "$X" ] && kill "$X"` list aborts
+  # the whole function right there if `kill` fails (e.g. the process already died on its own),
+  # which would skip killing the SECOND child. That's exactly the leak this trap exists to avoid.
+  [ -n "$SERVE_PID" ] && kill "$SERVE_PID" 2>/dev/null || true
+  [ -n "$TUNNEL_PID" ] && kill "$TUNNEL_PID" 2>/dev/null || true
+  wait 2>/dev/null || true
+}
+# EXIT alone would leave INT/TERM's handler returning into the middle of whatever the script was
+# doing (a `sleep`, the main loop) instead of ending it -- confirmed live: sending TERM ran cleanup
+# but the loop then kept going and respawned a fresh cloudflared. INT/TERM must actually `exit`;
+# the EXIT trap then fires cleanup for real (and is what the ordinary end-of-script path uses too).
+trap cleanup EXIT
+trap 'exit 0' INT TERM
+
+start_tunnel() {
+  : > "$TUNNEL_LOG"
+  cloudflared tunnel --url "http://127.0.0.1:$PORT" >"$TUNNEL_LOG" 2>&1 &
+  TUNNEL_PID=$!
+  # cloudflared prints its assigned URL once the tunnel is up; poll the log rather than guessing
+  # a fixed startup delay.
+  for _ in $(seq 1 30); do
+    url="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$TUNNEL_LOG" | head -1 || true)"
+    if [ -n "$url" ]; then
+      echo "serve-gui-autoreload: tunnel up: $url" >&2
+      return 0
+    fi
+    kill -0 "$TUNNEL_PID" 2>/dev/null \
+      || { echo "serve-gui-autoreload: cloudflared exited before printing a URL (see $TUNNEL_LOG)" >&2; return 1; }
+    sleep 1
+  done
+  echo "serve-gui-autoreload: cloudflared didn't print a URL within 30s (see $TUNNEL_LOG)" >&2
+  return 1
+}
+
+port_in_use() {
+  (exec 3<>"/dev/tcp/127.0.0.1/$PORT") 2>/dev/null
+}
+
+# Builds web/dist and starts `uedcli serve`. Touches $MARKER at the START, not after the build, so
+# a source file saved WHILE this build is running is still newer than the marker and gets caught
+# by the next change check, instead of silently landing inside the build it's older than.
+build_and_start() {
+  touch "$MARKER"
+  echo "serve-gui-autoreload: building web/dist..." >&2
+  if ! ( cd "$UEDCLI_DIR/web" && npm install --no-audit --no-fund --quiet && npm run build ) >"$BUILD_LOG" 2>&1; then
+    echo "serve-gui-autoreload: web build failed (see $BUILD_LOG)" >&2
+    return 1
+  fi
+  if port_in_use; then
+    echo "serve-gui-autoreload: port $PORT is already in use -- not starting uedcli serve" >&2
+    return 1
+  fi
+  echo "serve-gui-autoreload: starting uedcli serve $LEVEL --port $PORT" >&2
+  "$UEDCLI_DIR/bin/uedcli" --project "$PROJECT_DIR" serve "$LEVEL" --port "$PORT" >"$SERVE_LOG" 2>&1 &
+  SERVE_PID=$!
+}
+
+# Retries build_and_start with capped exponential backoff instead of failing outright -- a
+# transient build error or a still-occupied port shouldn't take the whole watcher (tunnel
+# included) down, just slow the retries so it isn't hammering npm/the port every poll interval.
+build_and_start_with_backoff() {
+  local delay=$POLL_INTERVAL
+  until build_and_start; do
+    echo "serve-gui-autoreload: retrying in ${delay}s" >&2
+    sleep "$delay"
+    delay=$(( delay * 2 > MAX_BACKOFF ? MAX_BACKOFF : delay * 2 ))
+  done
+}
+
+changed_since_marker() {
+  # NOT web/package-lock.json: `npm install` itself rewrites it (re-sorted keys, refreshed
+  # `resolved`/`integrity` fields) even when nothing actually changed, which self-triggers an
+  # infinite rebuild loop against a marker touched at build start (confirmed live: the lockfile's
+  # mtime landed exactly at the marker's touch time, and every following poll saw it as "changed").
+  find "$UEDCLI_DIR/uedcli" "$UEDCLI_DIR/web/src" "$UEDCLI_DIR/web/package.json" -newer "$MARKER" \
+       -not -path '*/__pycache__/*' -not -path '*/node_modules/*' -print -quit 2>/dev/null
+}
+
+start_tunnel || true   # keep serving even if URL-detection timed out -- cloudflared may still be fine
+build_and_start_with_backoff
+
+while true; do
+  sleep "$POLL_INTERVAL"
+
+  if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
+    echo "serve-gui-autoreload: cloudflared died -- restarting (URL will change)" >&2
+    start_tunnel || true
+  fi
+
+  if ! kill -0 "$SERVE_PID" 2>/dev/null; then
+    echo "serve-gui-autoreload: uedcli serve died (see $SERVE_LOG) -- restarting" >&2
+    build_and_start_with_backoff
+    continue
+  fi
+
+  if [ -n "$(changed_since_marker)" ]; then
+    echo "serve-gui-autoreload: change detected -- rebuilding" >&2
+    kill "$SERVE_PID" 2>/dev/null || true
+    wait "$SERVE_PID" 2>/dev/null || true
+    build_and_start_with_backoff
+  fi
+done
