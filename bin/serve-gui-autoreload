@@ -50,6 +50,8 @@ cd "$UEDCLI_DIR"
 SERVE_PID=""
 TUNNEL_PID=""
 
+log() { echo "$(date -Is) serve-gui-autoreload: $*" >&2; }
+
 cleanup() {
   # Each kill gets its own `|| true` -- under `set -e`, a `[ -n "$X" ] && kill "$X"` list aborts
   # the whole function right there if `kill` fails (e.g. the process already died on its own),
@@ -74,14 +76,14 @@ start_tunnel() {
   for _ in $(seq 1 30); do
     url="$(grep -oE 'https://[a-z0-9-]+\.trycloudflare\.com' "$TUNNEL_LOG" | head -1 || true)"
     if [ -n "$url" ]; then
-      echo "serve-gui-autoreload: tunnel up: $url" >&2
+      log "tunnel up: $url"
       return 0
     fi
     kill -0 "$TUNNEL_PID" 2>/dev/null \
-      || { echo "serve-gui-autoreload: cloudflared exited before printing a URL (see $TUNNEL_LOG)" >&2; return 1; }
+      || { log "cloudflared exited before printing a URL (see $TUNNEL_LOG)"; return 1; }
     sleep 1
   done
-  echo "serve-gui-autoreload: cloudflared didn't print a URL within 30s (see $TUNNEL_LOG)" >&2
+  log "cloudflared didn't print a URL within 30s (see $TUNNEL_LOG)"
   return 1
 }
 
@@ -94,16 +96,16 @@ port_in_use() {
 # by the next change check, instead of silently landing inside the build it's older than.
 build_and_start() {
   touch "$MARKER"
-  echo "serve-gui-autoreload: building web/dist..." >&2
+  log "building web/dist..."
   if ! ( cd "$UEDCLI_DIR/web" && npm install --no-audit --no-fund --quiet && npm run build ) >"$BUILD_LOG" 2>&1; then
-    echo "serve-gui-autoreload: web build failed (see $BUILD_LOG)" >&2
+    log "web build failed (see $BUILD_LOG)"
     return 1
   fi
   if port_in_use; then
-    echo "serve-gui-autoreload: port $PORT is already in use -- not starting uedcli serve" >&2
+    log "port $PORT is already in use -- not starting uedcli serve"
     return 1
   fi
-  echo "serve-gui-autoreload: starting uedcli serve $LEVEL --port $PORT" >&2
+  log "starting uedcli serve $LEVEL --port $PORT"
   "$UEDCLI_DIR/bin/uedcli" --project "$PROJECT_DIR" serve "$LEVEL" --port "$PORT" >"$SERVE_LOG" 2>&1 &
   SERVE_PID=$!
 }
@@ -114,40 +116,77 @@ build_and_start() {
 build_and_start_with_backoff() {
   local delay=$POLL_INTERVAL
   until build_and_start; do
-    echo "serve-gui-autoreload: retrying in ${delay}s" >&2
+    log "retrying in ${delay}s"
     sleep "$delay"
     delay=$(( delay * 2 > MAX_BACKOFF ? MAX_BACKOFF : delay * 2 ))
   done
 }
 
-changed_since_marker() {
-  # NOT web/package-lock.json: `npm install` itself rewrites it (re-sorted keys, refreshed
-  # `resolved`/`integrity` fields) even when nothing actually changed, which self-triggers an
-  # infinite rebuild loop against a marker touched at build start (confirmed live: the lockfile's
-  # mtime landed exactly at the marker's touch time, and every following poll saw it as "changed").
-  find "$UEDCLI_DIR/uedcli" "$UEDCLI_DIR/web/src" "$UEDCLI_DIR/web/package.json" -newer "$MARKER" \
+# NOT web/package-lock.json: `npm install` itself rewrites it (re-sorted keys, refreshed
+# `resolved`/`integrity` fields) even when nothing actually changed, which self-triggers an
+# infinite rebuild loop against a marker touched at build start (confirmed live: the lockfile's
+# mtime landed exactly at the marker's touch time, and every following poll saw it as "changed").
+paths_changed_since() {
+  find "$UEDCLI_DIR/uedcli" "$UEDCLI_DIR/web/src" "$UEDCLI_DIR/web/package.json" -newer "$1" \
        -not -path '*/__pycache__/*' -not -path '*/node_modules/*' -print -quit 2>/dev/null
 }
 
 start_tunnel || true   # keep serving even if URL-detection timed out -- cloudflared may still be fine
 build_and_start_with_backoff
 
-while true; do
-  sleep "$POLL_INTERVAL"
-
+# Restarts cloudflared if it died; leaves TUNNEL_PID alone otherwise. Called on every poll,
+# including from inside the debounce wait below -- a tunnel crash during a long settle shouldn't
+# go unnoticed until the rebuild that follows it.
+check_tunnel() {
   if ! kill -0 "$TUNNEL_PID" 2>/dev/null; then
-    echo "serve-gui-autoreload: cloudflared died -- restarting (URL will change)" >&2
+    log "cloudflared died -- restarting (URL will change)"
     start_tunnel || true
   fi
+}
 
-  if ! kill -0 "$SERVE_PID" 2>/dev/null; then
-    echo "serve-gui-autoreload: uedcli serve died (see $SERVE_LOG) -- restarting" >&2
+serve_alive() {
+  kill -0 "$SERVE_PID" 2>/dev/null
+}
+
+MAX_SETTLE_EXTENSIONS=12   # ~1 minute at the default poll interval, matching MAX_BACKOFF's cap
+
+while true; do
+  sleep "$POLL_INTERVAL"
+  check_tunnel
+
+  if ! serve_alive; then
+    log "uedcli serve died (see $SERVE_LOG) -- restarting"
     build_and_start_with_backoff
     continue
   fi
 
-  if [ -n "$(changed_since_marker)" ]; then
-    echo "serve-gui-autoreload: change detected -- rebuilding" >&2
+  if [ -n "$(paths_changed_since "$MARKER")" ]; then
+    # Debounce: a `git reset --hard` (the expected trigger, via a separate sync process) touches
+    # many files at once and can still be writing them out when this first check fires -- act only
+    # once the tree has been quiet for a full poll interval, not on the first file seen. Confirmed
+    # live: without this, a single reset produced two back-to-back rebuilds instead of one. Capped
+    # (MAX_SETTLE_EXTENSIONS) and still checks tunnel/serve liveness each round -- an unbounded wait
+    # with health checks paused would widen exactly the kind of outage this fix exists to shrink.
+    log "change detected -- waiting for it to settle"
+    settle="$STATE_DIR/.settle"
+    touch "$settle"
+    extensions=0
+    while true; do
+      sleep "$POLL_INTERVAL"
+      check_tunnel
+      if ! serve_alive; then
+        log "uedcli serve died while settling -- rebuilding now"
+        break
+      fi
+      [ -n "$(paths_changed_since "$settle")" ] || break
+      touch "$settle"
+      extensions=$(( extensions + 1 ))
+      if [ "$extensions" -ge "$MAX_SETTLE_EXTENSIONS" ]; then
+        log "still changing after $extensions extensions -- rebuilding anyway"
+        break
+      fi
+    done
+    log "rebuilding"
     kill "$SERVE_PID" 2>/dev/null || true
     wait "$SERVE_PID" 2>/dev/null || true
     build_and_start_with_backoff
