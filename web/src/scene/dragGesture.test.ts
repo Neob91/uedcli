@@ -1,6 +1,6 @@
 /// <reference types="node" />
 import { renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { useDragGesture } from './dragGesture'
 import type { DragGestureCallbacks } from './dragGesture'
@@ -37,6 +37,15 @@ beforeEach(() => {
   Object.defineProperty(document, 'pointerLockElement', { value: null, writable: true, configurable: true })
   document.exitPointerLock = vi.fn()
 })
+afterEach(() => vi.unstubAllGlobals())
+
+// `isAdditiveModifier` (`../platform.ts`) reads jsdom's own `navigator.platform`/`userAgent`, which
+// report Linux by default (confirmed against a fresh jsdom instance) -- so every test below that
+// doesn't call this runs as "non-Mac: only ctrlKey counts" for free, matching the suite's existing
+// baseline. This stubs Mac specifically for the tests that need it.
+function mockMac() {
+  vi.stubGlobal('navigator', { platform: 'MacIntel', userAgent: 'Macintosh' })
+}
 
 function setup(overrides: Partial<DragGestureCallbacks> = {}) {
   const onDrag = vi.fn()
@@ -62,13 +71,37 @@ describe('useDragGesture', () => {
     expect(onTap).toHaveBeenCalledWith(10, 20, false, false)
   })
 
-  it('threads ctrlKey/metaKey into onTap\'s additive flag', () => {
+  it('threads ctrlKey into onTap\'s additive flag (non-Mac: metaKey alone does NOT count)', () => {
     const { handlers, onTap } = setup()
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerDown(pointerEvent())
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerUp(pointerEvent({ ctrlKey: true }))
     expect(onTap).toHaveBeenCalledWith(0, 0, true, false)
+
+    const { handlers: h2, onTap: onTap2 } = setup()
+    // @ts-expect-error -- synthetic event shape
+    h2.onPointerDown(pointerEvent())
+    // @ts-expect-error -- synthetic event shape
+    h2.onPointerUp(pointerEvent({ metaKey: true }))
+    expect(onTap2).toHaveBeenCalledWith(0, 0, false, false)
+  })
+
+  it('on a Mac, threads metaKey (not ctrlKey) into onTap\'s additive flag -- macOS remaps Ctrl+click to a right-click, so Ctrl never actually reaches a real gesture there', () => {
+    mockMac()
+    const { handlers, onTap } = setup()
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerDown(pointerEvent())
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerUp(pointerEvent({ metaKey: true }))
+    expect(onTap).toHaveBeenCalledWith(0, 0, true, false)
+
+    const { handlers: h2, onTap: onTap2 } = setup()
+    // @ts-expect-error -- synthetic event shape
+    h2.onPointerDown(pointerEvent())
+    // @ts-expect-error -- synthetic event shape
+    h2.onPointerUp(pointerEvent({ ctrlKey: true }))
+    expect(onTap2).toHaveBeenCalledWith(0, 0, false, false)
   })
 
   it('threads shiftKey into onTap\'s 4th argument', () => {
@@ -89,13 +122,30 @@ describe('useDragGesture', () => {
     expect(onDrag).toHaveBeenCalledWith(1, 1, 1, false, true)
   })
 
-  it('threads metaKey into onDrag\'s additive flag', () => {
+  it('non-Mac: metaKey alone does NOT thread into onDrag\'s additive flag', () => {
+    const { handlers, onDrag } = setup()
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerDown(pointerEvent())
+    // @ts-expect-error -- synthetic event shape
+    handlers.onPointerMove(pointerEvent({ movementX: 1, movementY: 1, metaKey: true }))
+    expect(onDrag).toHaveBeenCalledWith(1, 1, 1, false, false)
+  })
+
+  it('on a Mac, threads metaKey (not ctrlKey) into onDrag\'s additive flag', () => {
+    mockMac()
     const { handlers, onDrag } = setup()
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerDown(pointerEvent())
     // @ts-expect-error -- synthetic event shape
     handlers.onPointerMove(pointerEvent({ movementX: 1, movementY: 1, metaKey: true }))
     expect(onDrag).toHaveBeenCalledWith(1, 1, 1, false, true)
+
+    const { handlers: h2, onDrag: onDrag2 } = setup()
+    // @ts-expect-error -- synthetic event shape
+    h2.onPointerDown(pointerEvent())
+    // @ts-expect-error -- synthetic event shape
+    h2.onPointerMove(pointerEvent({ movementX: 1, movementY: 1, ctrlKey: true }))
+    expect(onDrag2).toHaveBeenCalledWith(1, 1, 1, false, false)
   })
 
   it('suppresses onTap when the accumulated movement exceeds the tap threshold (a real drag)', () => {

@@ -4,7 +4,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SceneActor } from '../api'
 import { OrgPanel } from './OrgPanel'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.unstubAllGlobals()
+})
+
+// jsdom reports Linux by default (`../platform.test.ts`'s own confirmed baseline), so every test
+// below that doesn't call this runs as "non-Mac: only ctrlKey counts" for free.
+function mockMac() {
+  vi.stubGlobal('navigator', { platform: 'MacIntel', userAgent: 'Macintosh' })
+}
 
 function actor(name: string, folder: string | null): SceneActor {
   return {
@@ -54,6 +63,27 @@ describe('OrgPanel folder-node selection', () => {
     expect(onSelectActor).toHaveBeenCalledWith(['Torch1', 'Torch2'], true)
   })
 
+  it('non-Mac: Cmd(metaKey)-clicking a folder node is NOT additive', () => {
+    const onSelectActor = vi.fn()
+    render(<OrgPanel actors={ACTORS} selectedNames={new Set()} onSelectActor={onSelectActor} />)
+
+    fireEvent.click(screen.getByTestId('org-folder-castle.tower'), { metaKey: true })
+
+    expect(onSelectActor).toHaveBeenCalledWith(['Torch1', 'Torch2'], false)
+  })
+
+  it('on a Mac, Cmd(metaKey)-clicking a folder node IS additive, but Ctrl-clicking is not (owner ruling: macOS remaps Ctrl+click to a right-click, so only Cmd works there)', () => {
+    mockMac()
+    const onSelectActor = vi.fn()
+    render(<OrgPanel actors={ACTORS} selectedNames={new Set()} onSelectActor={onSelectActor} />)
+
+    fireEvent.click(screen.getByTestId('org-folder-castle.tower'), { metaKey: true })
+    expect(onSelectActor).toHaveBeenLastCalledWith(['Torch1', 'Torch2'], true)
+
+    fireEvent.click(screen.getByTestId('org-folder-castle.tower'), { ctrlKey: true })
+    expect(onSelectActor).toHaveBeenLastCalledWith(['Torch1', 'Torch2'], false)
+  })
+
   it('the "(no folder)" bucket selects every folder===null actor', () => {
     const onSelectActor = vi.fn()
     render(<OrgPanel actors={ACTORS} selectedNames={new Set()} onSelectActor={onSelectActor} />)
@@ -83,6 +113,19 @@ describe('OrgPanel focus-search keybinding', () => {
 
     expect(document.activeElement).toBe(findInput)
     expect(notCancelled).toBe(false) // dispatchEvent returns false when preventDefault was called
+  })
+
+  it('on a Mac, Cmd+F (not Ctrl+F) focuses the find input', () => {
+    mockMac()
+    render(<OrgPanel actors={ACTORS} selectedNames={new Set()} onSelectActor={vi.fn()} />)
+    const findInput = screen.getByTestId('org-find')
+
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: true })
+    expect(document.activeElement).not.toBe(findInput) // Ctrl+F does nothing on a Mac
+
+    const notCancelled = fireEvent.keyDown(window, { key: 'f', metaKey: true })
+    expect(document.activeElement).toBe(findInput)
+    expect(notCancelled).toBe(false)
   })
 
   it("pressing '/' while a DIFFERENT text input already has focus does not move focus (keeps typing '/' there)", () => {

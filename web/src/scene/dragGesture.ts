@@ -13,6 +13,7 @@ import type {
   PointerEvent as ReactPointerEvent,
 } from 'react'
 
+import { isAdditiveModifier } from '../platform'
 import { isTap } from './selection'
 
 export interface DragGestureCallbacks {
@@ -20,11 +21,12 @@ export interface DragGestureCallbacks {
    * a tap on release -- matches today's behavior (camera callbacks fire live, tap/drag is decided
    * only at pointerup). `buttons`/`altKey` are the raw `PointerEvent` fields, so the caller can pick
    * dolly+turn/look/pan/orbit (Perspective) or pan (ortho) exactly as it does today. `additive` is
-   * `ctrlKey || metaKey` at move-event time, threaded through for Ctrl+drag actor translation. */
+   * `isAdditiveModifier(e)` (`../platform.ts`) at move-event time -- Cmd on a Mac, Ctrl elsewhere,
+   * never both -- threaded through for Ctrl/Cmd-drag actor translation. */
   onDrag: (dx: number, dy: number, buttons: number, altKey: boolean, additive: boolean) => void
   /** Fires on pointerup ONLY when the accumulated movement stayed within the tap threshold AND the
-   * button/altKey gate below passed. `additive` is `ctrlKey || metaKey` at release, threaded through
-   * for Part 3's Ctrl+click multi-select. `shiftKey` is the raw release-time Shift state, threaded
+   * button/altKey gate below passed. `additive` is `isAdditiveModifier(e)` at release, threaded
+   * through for Part 3's Ctrl/Cmd+click multi-select. `shiftKey` is the raw release-time Shift state, threaded
    * through for the 3D-perspective brush-selection gate (`selection.ts`'s `canSelectBrushTap`) --
    * callers may ignore either flag until they need it. */
   onTap: (clientX: number, clientY: number, additive: boolean, shiftKey: boolean) => void
@@ -139,7 +141,7 @@ export function useDragGesture(callbacks: DragGestureCallbacks): DragGestureHand
       d.totalDx += dx
       d.totalDy += dy
       if (dx === 0 && dy === 0) return
-      callbacks.onDrag(dx, dy, e.buttons, e.altKey, e.ctrlKey || e.metaKey)
+      callbacks.onDrag(dx, dy, e.buttons, e.altKey, isAdditiveModifier(e))
     },
     [callbacks],
   )
@@ -164,7 +166,7 @@ export function useDragGesture(callbacks: DragGestureCallbacks): DragGestureHand
       // or an Alt+LMB release never taps, even under the movement threshold.
       if (!d || e.button !== 0 || e.altKey) return
       if (!isTap(0, 0, d.totalDx, d.totalDy)) return // a real drag, not a selection tap
-      callbacks.onTap(e.clientX, e.clientY, e.ctrlKey || e.metaKey, e.shiftKey)
+      callbacks.onTap(e.clientX, e.clientY, isAdditiveModifier(e), e.shiftKey)
     },
     [callbacks],
   )

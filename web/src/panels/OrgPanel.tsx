@@ -1,12 +1,14 @@
 // Organization panel (quad-layout Part 6, Task 23): folder tree + label facets + a find box
 // mirroring `actor find`. Folder-node selection is a REAL multi-actor selection (spec §5, reconciled
 // with Part 3's selectedNames model) -- a plain click REPLACES the selection with the folder's full
-// actor set (mirrors a viewport tap's replace semantics), Ctrl-click ADDS it (mirrors Ctrl+tap's
-// additive semantics). `onSelectActor` here is intentionally a DIFFERENT shape than Viewport3D's/
+// actor set (mirrors a viewport tap's replace semantics), a Ctrl/Cmd-click ADDS it (mirrors a
+// Ctrl/Cmd-tap's additive semantics, via `../platform.ts`'s `isAdditiveModifier`). `onSelectActor`
+// here is intentionally a DIFFERENT shape than Viewport3D's/
 // OrthoViewport's own `onSelectActor(name, additive)` -- this component always selects a BATCH.
 import { useEffect, useMemo, useRef, useState } from 'react'
 
 import type { SceneActor } from '../api'
+import { isAdditiveModifier } from '../platform'
 import type { FolderNode } from '../scene/orgFilter'
 import { buildFolderTree, matchesFind, matchesLabelFacets } from '../scene/orgFilter'
 
@@ -45,7 +47,7 @@ function FolderTreeNode({
       <button
         type="button"
         data-testid={`org-folder-${path}`}
-        onClick={(e) => onSelect(names, e.ctrlKey || e.metaKey)}
+        onClick={(e) => onSelect(names, isAdditiveModifier(e))}
       >
         {leafLabel(path)} ({names.length})
       </button>
@@ -65,14 +67,15 @@ export function OrgPanel({ actors, selectedNames, onSelectActor }: OrgPanelProps
   const [findText, setFindText] = useState('')
   const findRef = useRef<HTMLInputElement | null>(null)
 
-  // `/`/`Ctrl+F` focus-search (main spec's "Keybindings", folded in here per the org panel's own
-  // find box): `/` types normally once a DIFFERENT text input already has focus (never steals it,
-  // and never calls preventDefault -- only Ctrl+F needs that, to stop the browser's own
-  // find-in-page). Same isTypingTarget guard pattern as SelectionKeys/FlyKeys.
+  // `/`/`Ctrl+F` (Cmd+F on a Mac) focus-search (main spec's "Keybindings", folded in here per the
+  // org panel's own find box): `/` types normally once a DIFFERENT text input already has focus
+  // (never steals it, and never calls preventDefault -- only the Ctrl/Cmd+F chord needs that, to
+  // stop the browser's own find-in-page). Same isTypingTarget guard pattern as SelectionKeys/
+  // FlyKeys.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return
-      const isCtrlF = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f'
+      const isCtrlF = isAdditiveModifier(e) && e.key.toLowerCase() === 'f'
       if (e.key !== '/' && !isCtrlF) return
       if (isCtrlF) e.preventDefault()
       findRef.current?.focus()
@@ -137,7 +140,7 @@ export function OrgPanel({ actors, selectedNames, onSelectActor }: OrgPanelProps
         <ul className="org-results" data-testid="org-results">
           {findResults.map((a) => (
             <li key={a.name} className={selectedNames.has(a.name) ? 'selected' : ''}>
-              <button type="button" onClick={(e) => onSelectActor([a.name], e.ctrlKey || e.metaKey)}>
+              <button type="button" onClick={(e) => onSelectActor([a.name], isAdditiveModifier(e))}>
                 {a.name}
               </button>
             </li>
@@ -149,7 +152,7 @@ export function OrgPanel({ actors, selectedNames, onSelectActor }: OrgPanelProps
             <button
               type="button"
               data-testid="org-folder-no-folder"
-              onClick={(e) => onSelectActor(noFolderNames, e.ctrlKey || e.metaKey)}
+              onClick={(e) => onSelectActor(noFolderNames, isAdditiveModifier(e))}
             >
               (no folder) ({noFolderNames.length})
             </button>
