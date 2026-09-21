@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
-import type { BrushHighlight, DirectionalArrow, ScenePoly, SceneActor } from '../api'
+import type { BrushHighlight, DirectionalArrow, SceneActor } from '../api'
 import {
   addVec3,
   anySelectedIsBrush,
   applyDelta,
   applyStagedOffset,
   applyStagedOffsets,
-  applyStagedOffsetsToPolys,
+  computeOwnerDeltas,
   resolveActorMoveAxis,
   snapVecToGrid,
   stagedLocationsFor,
@@ -236,61 +236,30 @@ describe('applyStagedOffsets', () => {
   })
 })
 
-function poly(owner: string | null, overrides: Partial<ScenePoly> = {}): ScenePoly {
-  return {
-    verts: [0, 0, 0, 10, 0, 0, 10, 10, 0],
-    base: [0, 0, 0],
-    tu: [1, 0, 0],
-    tv: [0, 1, 0],
-    pan: [0, 0],
-    tex_index: -1,
-    masked: false,
-    two_sided: false,
-    blend: 'opaque',
-    flags: 0,
-    lightmap: null,
-    owner,
-    i_brush_poly: null,
-    ...overrides,
-  }
-}
+describe('computeOwnerDeltas', () => {
+  const actors = [actor('MeshA', [10, 20, 30]), actor('MeshB', [0, 0, 0])]
 
-describe('applyStagedOffsetsToPolys', () => {
-  it('returns the SAME array reference, unchanged, when nothing is staged', () => {
-    const polys = [poly('MeshA')]
-    expect(applyStagedOffsetsToPolys(polys, [actor('MeshA', [0, 0, 0])], {})).toBe(polys)
+  it('returns an empty map when nothing is staged', () => {
+    expect(computeOwnerDeltas(actors, {})).toEqual(new Map())
   })
 
-  it('leaves each poly the SAME reference when the staged actor owns no polys here', () => {
-    const p = poly('MeshA')
-    const actors = [actor('MeshA', [0, 0, 0]), actor('Other', [0, 0, 0])]
-    const [next] = applyStagedOffsetsToPolys([p], actors, { Other: [5, 0, 0] })
-    expect(next).toBe(p)
+  it("computes each staged actor's own delta (staged - trunk location)", () => {
+    const deltas = computeOwnerDeltas(actors, { MeshA: [15, 20, 30] })
+    expect(deltas.get('MeshA')).toEqual([5, 0, 0])
   })
 
-  it("translates a staged mesh actor's own polys' verts and base by its delta, leaving tu/tv untouched", () => {
-    const polys = [poly('MeshA', { verts: [0, 0, 0, 10, 0, 0, 10, 10, 0], base: [1, 2, 3] })]
-    const actors = [actor('MeshA', [0, 0, 0])]
-    const [next] = applyStagedOffsetsToPolys(polys, actors, { MeshA: [5, 0, 0] }) // delta = [5, 0, 0]
-    expect(next.verts).toEqual([5, 0, 0, 15, 0, 0, 15, 10, 0])
-    expect(next.base).toEqual([6, 2, 3])
-    expect(next.tu).toEqual([1, 0, 0])
-    expect(next.tv).toEqual([0, 1, 0])
+  it('omits an unstaged actor entirely -- no zero-delta entry', () => {
+    const deltas = computeOwnerDeltas(actors, { MeshA: [15, 20, 30] })
+    expect(deltas.has('MeshB')).toBe(false)
   })
 
-  it('leaves an unstaged poly (owned by a different actor) untouched, same reference', () => {
-    const staged = poly('MeshA')
-    const untouched = poly('MeshB')
-    const actors = [actor('MeshA', [0, 0, 0]), actor('MeshB', [0, 0, 0])]
-    const result = applyStagedOffsetsToPolys([staged, untouched], actors, { MeshA: [1, 0, 0] })
-    expect(result[1]).toBe(untouched)
-    expect(result[0]).not.toBe(staged)
+  it('handles multiple staged actors independently', () => {
+    const deltas = computeOwnerDeltas(actors, { MeshA: [15, 20, 30], MeshB: [0, 0, 5] })
+    expect(deltas.get('MeshA')).toEqual([5, 0, 0])
+    expect(deltas.get('MeshB')).toEqual([0, 0, 5])
   })
 
-  it('leaves an ownerless poly (a CSG join with no source actor) untouched', () => {
-    const orphan = poly(null)
-    const actors = [actor('MeshA', [0, 0, 0])]
-    const result = applyStagedOffsetsToPolys([orphan], actors, { MeshA: [1, 0, 0] })
-    expect(result[0]).toBe(orphan)
+  it('ignores a staged name absent from the actor list', () => {
+    expect(computeOwnerDeltas(actors, { Ghost: [1, 2, 3] }).has('Ghost')).toBe(false)
   })
 })

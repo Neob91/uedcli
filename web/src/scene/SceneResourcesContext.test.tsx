@@ -273,3 +273,45 @@ describe('SceneResourcesProvider -- stagedOffsets moves a mesh actor\'s own rend
     expect(screen.getByTestId('solid-x').textContent).toBe('0,1,0')
   })
 })
+
+// Perf fix (live report: "moving actors is super jittery and slow") -- the FIRST version of the
+// mesh-body-move fix above applied the staged translation by rebuilding a brand-new poly array and
+// feeding it back through the whole geometry-build pipeline, which for a real level meant
+// re-triangulating, rebuilding every material, and reallocating the GPU buffer on every single
+// pointer-move frame. This test is the actual performance regression guard: across a staged-offset
+// change (simulating consecutive drag frames), `bufferGeometry`/`meshPickGeometry`/
+// `meshEdgePickGeometry` must stay the SAME object (an in-place patch, per `usePatchedMeshPositions`),
+// not a freshly rebuilt one -- the correctness tests above already prove the positions end up right;
+// this proves they get there cheaply.
+function GeometryIdentityProbe({ seen }: { seen: { current: { buf: unknown[]; pick: unknown[]; edge: unknown[] } } }) {
+  const { bufferGeometry, meshPickGeometry, meshEdgePickGeometry } = useSceneResourcesContext()
+  seen.current.buf.push(bufferGeometry)
+  seen.current.pick.push(meshPickGeometry)
+  seen.current.edge.push(meshEdgePickGeometry)
+  return null
+}
+
+describe('SceneResourcesProvider -- a staged mesh-actor move does NOT rebuild the geometry objects', () => {
+  it('bufferGeometry/meshPickGeometry/meshEdgePickGeometry keep the SAME identity across a staged-offset change', () => {
+    const scene: ScenePayload = { polys: [triangle({ owner: 'Statue1' })], actors: [meshActor('Statue1')], geometry_pinned: true }
+    const seen = { current: { buf: [] as unknown[], pick: [] as unknown[], edge: [] as unknown[] } }
+    const { rerender } = render(
+      <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null} stagedOffsets={{}}>
+        <GeometryIdentityProbe seen={seen} />
+      </SceneResourcesProvider>,
+    )
+    // Simulate several drag frames: the staged position changes every time, same as a real
+    // Ctrl/Cmd-drag's per-pointermove `setStagedOffsets` calls.
+    for (const x of [1, 2, 3, 4, 5]) {
+      rerender(
+        <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null} stagedOffsets={{ Statue1: [x, 0, 0] }}>
+          <GeometryIdentityProbe seen={seen} />
+        </SceneResourcesProvider>,
+      )
+    }
+    expect(seen.current.buf.length).toBe(6) // 1 initial + 5 staged-offset changes
+    expect(new Set(seen.current.buf).size).toBe(1) // every one is the SAME object
+    expect(new Set(seen.current.pick).size).toBe(1)
+    expect(new Set(seen.current.edge).size).toBe(1)
+  })
+})

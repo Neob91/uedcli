@@ -10,6 +10,7 @@
 import { useEffect, useMemo } from 'react'
 import * as THREE from 'three'
 
+import type { Vec3 } from './camera'
 import { SELECTED_MESH_WIRE_COLOR, UNSELECTED_MESH_WIRE_COLOR } from './selectionColor'
 
 export function MeshWireframe({ geometry }: { geometry: THREE.BufferGeometry }) {
@@ -31,9 +32,23 @@ export interface SelectedMeshWireframeProps {
   positions: Float32Array
   triangleOwners: (string | null)[]
   selectedActorNames: ReadonlySet<string>
+  // Perf fix's own follow-on correctness fix: `positions` is `meshPickGeometry`'s LIVE position
+  // buffer, now live-PATCHED in place for a staged mesh-actor move (`usePatchedMeshPositions`) rather
+  // than replaced with a new array each frame -- so `positions`' own REFERENCE never changes during a
+  // drag, even though its CONTENT does, and this component's memo below would never re-run without
+  // some OTHER trigger. `stagedOffsets` (unused inside the memo body -- it exists purely as an
+  // invalidation signal) is that trigger: a genuinely new object every frame a staged move is active,
+  // forcing a re-read of `positions`' current (patched) values. Rebuilding this SMALL geometry every
+  // such frame is cheap (bounded by selection size, per this component's own doc comment above).
+  stagedOffsets: Readonly<Record<string, Vec3>>
 }
 
-export function SelectedMeshWireframe({ positions, triangleOwners, selectedActorNames }: SelectedMeshWireframeProps) {
+export function SelectedMeshWireframe({
+  positions,
+  triangleOwners,
+  selectedActorNames,
+  stagedOffsets,
+}: SelectedMeshWireframeProps) {
   const geometry = useMemo(() => {
     if (selectedActorNames.size === 0) return null
     const filtered: number[] = []
@@ -49,7 +64,10 @@ export function SelectedMeshWireframe({ positions, triangleOwners, selectedActor
     const wire = new THREE.WireframeGeometry(trianglesGeo)
     trianglesGeo.dispose()
     return wire
-  }, [positions, triangleOwners, selectedActorNames])
+    // stagedOffsets is deliberately listed but not read: see this prop's own doc comment above (a
+    // pure invalidation trigger, since `positions`' own reference never changes from an in-place patch).
+    // oxlint-disable-next-line react-hooks/exhaustive-deps
+  }, [positions, triangleOwners, selectedActorNames, stagedOffsets])
   useEffect(() => () => geometry?.dispose(), [geometry])
 
   if (!geometry) return null

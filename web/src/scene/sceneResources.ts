@@ -6,8 +6,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as THREE from 'three'
 
 import type { AtlasPayload, LightmapPayload, ScenePoly } from '../api'
+import type { Vec3 } from './camera'
 import type { GeometryGroup } from './geometry'
-import { buildGeometryData } from './geometry'
+import { buildGeometryData, buildOwnerVertexRanges, patchOwnerPositions } from './geometry'
 
 const UNTEXTURED_GREY = 0x808080
 
@@ -334,4 +335,61 @@ export function useBuiltGeometry(
   }, [bufferGeometry, materials, unlitMaterials])
 
   return { bufferGeometry, materials, unlitMaterials, triangleOwners, trianglePolyIndex }
+}
+
+/** Live-patches `geometry`'s OWN position buffer in place for every currently-staged mesh actor it
+ * owns primitives for, instead of rebuilding `geometry` itself -- the perf fix for "moving actors is
+ * super jittery and slow" (live report): dragging a mesh actor used to make its staged offset flow
+ * into a brand-new translated poly array fed straight back through `buildGeometryData`, so EVERY
+ * pointer-move frame re-triangulated, re-UV'd, and rebuilt materials for the geometry's ENTIRE
+ * content (not just the moved actor) and disposed+reallocated the GPU buffer. `owners` is that same
+ * geometry's own per-primitive owner array (`triangleOwners`/`meshEdgeOwners`, whichever this
+ * `geometry` was built from) and `vertsPerPrimitive` is 3 for a triangle buffer, 2 for an edge
+ * (line-segment) buffer -- see `geometry.ts`'s `buildOwnerVertexRanges`/`patchOwnerPositions`, the
+ * pure mechanics this wraps.
+ *
+ * `deltas` is `dragStage.ts`'s `computeOwnerDeltas(scene.actors, meshStagedOffsets)` -- already
+ * scoped to mesh-actor names only by the caller (`SceneResourcesContext.tsx`'s `meshStagedOffsets`).
+ * `patchableNames` (also mesh-actor names, same set) is a SEPARATE filter on `ranges` itself, not
+ * just `deltas`: for the MAIN solid buffer, `owners` mixes brush AND mesh-actor names, and walking
+ * (and no-op-patching) every BRUSH's own range every render would silently reintroduce a smaller
+ * version of the exact per-frame cost this fix removes. Filtering `ranges` down to `patchableNames`
+ * up front means the render-body loop below only ever visits mesh-actor ranges, never brush ones.
+ *
+ * Deliberately does the patch work directly in the render body, not inside a `useEffect`/
+ * `useLayoutEffect`: `patchOwnerPositions` is a pure function of `basePositions`+`delta` (never
+ * incremental), so re-running it -- including React 18 Strict Mode's deliberate double-invocation in
+ * dev -- always converges on the identical byte state; doing it synchronously during render (rather
+ * than after commit) also guarantees a SIBLING/CHILD component reading this same geometry's position
+ * array during the SAME render pass (`SelectedMeshWireframe`'s own rebuild, gated on `deltas` too)
+ * sees the patched values, not last frame's, without relying on cross-component effect ordering. */
+export function usePatchedMeshPositions(
+  geometry: THREE.BufferGeometry,
+  owners: readonly (string | null)[],
+  vertsPerPrimitive: number,
+  patchableNames: ReadonlySet<string>,
+  deltas: ReadonlyMap<string, Vec3>,
+): void {
+  const ranges = useMemo(() => {
+    const all = buildOwnerVertexRanges(owners, vertsPerPrimitive)
+    const filtered = new Map<string, number[]>()
+    for (const [name, starts] of all) if (patchableNames.has(name)) filtered.set(name, starts)
+    return filtered
+  }, [owners, vertsPerPrimitive, patchableNames])
+  // A snapshot of the geometry's OWN static/unstaged positions, taken once right after it's built
+  // (or rebuilt) -- `patchOwnerPositions` always patches FROM this, never from `positions`' own
+  // current (possibly already-patched) values, so a changing or zeroed-out delta is always correct.
+  const basePositions = useMemo(() => {
+    const attr = geometry.getAttribute('position') as THREE.BufferAttribute
+    return (attr.array as Float32Array).slice()
+  }, [geometry])
+
+  if (ranges.size > 0) {
+    const attr = geometry.getAttribute('position') as THREE.BufferAttribute
+    const positions = attr.array as Float32Array
+    for (const [name, starts] of ranges) {
+      patchOwnerPositions(positions, basePositions, starts, vertsPerPrimitive, deltas.get(name) ?? [0, 0, 0])
+    }
+    attr.needsUpdate = true
+  }
 }

@@ -3,8 +3,9 @@ import { describe, expect, it } from 'vitest'
 import * as THREE from 'three'
 
 import type { AtlasPayload, LightmapPayload, ScenePayload, ScenePoly } from '../api'
+import type { Vec3 } from './camera'
 import { buildGeometryData } from './geometry'
-import { useBuiltGeometry } from './sceneResources'
+import { useBuiltGeometry, usePatchedMeshPositions } from './sceneResources'
 
 function quad(overrides: Partial<ScenePoly> = {}): ScenePoly {
   return {
@@ -72,5 +73,80 @@ describe('useBuiltGeometry', () => {
     expect(unlitMat.lightMap).toBeNull()
 
     unmount()
+  })
+})
+
+// Perf fix (live report: "moving actors is super jittery and slow") -- the hook that replaced a
+// full per-frame geometry rebuild with an in-place position-buffer patch. `SceneResourcesContext.test.tsx`
+// already covers this end-to-end (staged move -> correct final positions); these tests isolate the
+// hook itself: does it actually avoid replacing the geometry, and does re-staging/un-staging behave.
+describe('usePatchedMeshPositions', () => {
+  function geometryWithPositions(positions: number[]): THREE.BufferGeometry {
+    const geo = new THREE.BufferGeometry()
+    geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(positions), 3))
+    return geo
+  }
+
+  it('never replaces the position attribute or its underlying array -- patches in place', () => {
+    const geo = geometryWithPositions([0, 0, 0, 1, 0, 0, 1, 1, 0])
+    const attrBefore = geo.getAttribute('position')
+    const arrayBefore = attrBefore.array
+
+    const { rerender } = renderHook(
+      ({ deltas }) => usePatchedMeshPositions(geo, ['MeshA'], 3, new Set(['MeshA']), deltas),
+      { initialProps: { deltas: new Map<string, Vec3>([['MeshA', [5, 0, 0]]]) } },
+    )
+    rerender({ deltas: new Map([['MeshA', [10, 0, 0]]]) })
+
+    expect(geo.getAttribute('position')).toBe(attrBefore) // same BufferAttribute object
+    expect(geo.getAttribute('position').array).toBe(arrayBefore) // same underlying Float32Array
+  })
+
+  it("patches an owner's own vertices by its delta, computed from the ORIGINAL (pre-patch) snapshot, and bumps the attribute's GPU-upload version", () => {
+    const geo = geometryWithPositions([0, 0, 0, 1, 0, 0, 1, 1, 0])
+    const versionBefore = (geo.getAttribute('position') as THREE.BufferAttribute).version
+    renderHook(() => usePatchedMeshPositions(geo, ['MeshA'], 3, new Set(['MeshA']), new Map([['MeshA', [5, 0, 0]]])))
+    const positions = geo.getAttribute('position').array as Float32Array
+    expect(Array.from(positions)).toEqual([5, 0, 0, 6, 0, 0, 6, 1, 0])
+    // `needsUpdate` is write-only (three.js exposes no readable getter) -- setting it to `true`
+    // increments `.version`, which IS readable, so that's what proves the setter actually fired.
+    expect((geo.getAttribute('position') as THREE.BufferAttribute).version).toBeGreaterThan(versionBefore)
+  })
+
+  it('un-staging (delta removed) resets the owner back to its original snapshot exactly', () => {
+    const geo = geometryWithPositions([0, 0, 0, 1, 0, 0, 1, 1, 0])
+    const { rerender } = renderHook(
+      ({ deltas }) => usePatchedMeshPositions(geo, ['MeshA'], 3, new Set(['MeshA']), deltas),
+      { initialProps: { deltas: new Map<string, Vec3>([['MeshA', [5, 5, 5]]]) } },
+    )
+    rerender({ deltas: new Map() }) // MeshA no longer staged
+    expect(Array.from(geo.getAttribute('position').array as Float32Array)).toEqual([0, 0, 0, 1, 0, 0, 1, 1, 0])
+  })
+
+  it('never touches an owner outside patchableNames, even if a caller mistakenly staged it (the brush-safety net)', () => {
+    // Two triangles: MeshA (patchable) then BrushA (not -- simulates the MAIN buffer, which mixes
+    // brush and mesh-actor owners; only meshActorNames is ever passed as patchableNames for it).
+    const geo = geometryWithPositions([0, 0, 0, 1, 0, 0, 1, 1, 0, 10, 10, 10, 11, 10, 10, 11, 11, 10])
+    renderHook(() =>
+      usePatchedMeshPositions(
+        geo,
+        ['MeshA', 'BrushA'],
+        3,
+        new Set(['MeshA']), // patchableNames excludes BrushA
+        new Map([
+          ['MeshA', [5, 0, 0]],
+          ['BrushA', [5, 0, 0]], // present in deltas, but not patchable here
+        ]),
+      ),
+    )
+    const positions = Array.from(geo.getAttribute('position').array as Float32Array)
+    expect(positions.slice(0, 9)).toEqual([5, 0, 0, 6, 0, 0, 6, 1, 0]) // MeshA patched
+    expect(positions.slice(9, 18)).toEqual([10, 10, 10, 11, 10, 10, 11, 11, 10]) // BrushA untouched
+  })
+
+  it('a null owner (an out-of-range CSG join) is never patched', () => {
+    const geo = geometryWithPositions([0, 0, 0, 1, 0, 0, 1, 1, 0])
+    renderHook(() => usePatchedMeshPositions(geo, [null], 3, new Set(['MeshA']), new Map([['MeshA', [5, 0, 0]]])))
+    expect(Array.from(geo.getAttribute('position').array as Float32Array)).toEqual([0, 0, 0, 1, 0, 0, 1, 1, 0])
   })
 })

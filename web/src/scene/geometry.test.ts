@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { AtlasPayload, LightmapPayload, ScenePoly } from '../api'
-import { buildEdgePickData, buildGeometryData } from './geometry'
+import { buildEdgePickData, buildGeometryData, buildOwnerVertexRanges, patchOwnerPositions } from './geometry'
 
 function quad(overrides: Partial<ScenePoly> = {}): ScenePoly {
   return {
@@ -193,5 +193,74 @@ describe('buildEdgePickData', () => {
     const got = buildEdgePickData(geo)
     expect(got.edgeOwners).toEqual([null, null, null, null, null, null])
     expect(got.edgePolyIndex).toEqual([null, null, null, null, null, null])
+  })
+})
+
+// Perf fix (live report: "moving actors is super jittery and slow"): dragging a mesh actor used to
+// rebuild an entire level's geometry every pointer-move frame. These two functions live-patch an
+// already-built geometry's position buffer in place instead.
+describe('buildOwnerVertexRanges', () => {
+  it('maps each owner to the flat float offset of each of its own primitives (3 floats/vertex)', () => {
+    // 2 triangles (owned by A, then B), vertsPerPrimitive=3 -> 9 floats each.
+    const owners = ['A', 'B']
+    expect(buildOwnerVertexRanges(owners, 3)).toEqual(
+      new Map([
+        ['A', [0]],
+        ['B', [9]],
+      ]),
+    )
+  })
+
+  it("scatters one owner's primitives across non-contiguous starts, in source order", () => {
+    const owners = ['A', 'B', 'A', 'B']
+    expect(buildOwnerVertexRanges(owners, 3)).toEqual(
+      new Map([
+        ['A', [0, 18]],
+        ['B', [9, 27]],
+      ]),
+    )
+  })
+
+  it('a null owner (an out-of-range CSG join) contributes no range', () => {
+    expect(buildOwnerVertexRanges([null, 'A', null], 3)).toEqual(new Map([['A', [9]]]))
+  })
+
+  it('vertsPerPrimitive=2 (edges) uses a 6-float stride', () => {
+    expect(buildOwnerVertexRanges(['A', 'A'], 2)).toEqual(new Map([['A', [0, 6]]]))
+  })
+})
+
+describe('patchOwnerPositions', () => {
+  it("translates one owner's triangle by delta, computed from basePositions, leaving other vertices untouched", () => {
+    const base = new Float32Array([0, 0, 0, 10, 0, 0, 10, 10, 0, /* second (untouched) triangle */ 100, 100, 100, 101, 100, 100, 101, 101, 100])
+    const positions = base.slice()
+    patchOwnerPositions(positions, base, [0], 3, [5, 0, 0])
+    expect(Array.from(positions.slice(0, 9))).toEqual([5, 0, 0, 15, 0, 0, 15, 10, 0])
+    expect(Array.from(positions.slice(9, 18))).toEqual(Array.from(base.slice(9, 18))) // untouched
+  })
+
+  it('re-applying with a DIFFERENT delta recomputes from basePositions, never compounding on the previous patch', () => {
+    const base = new Float32Array([0, 0, 0, 10, 0, 0, 10, 10, 0])
+    const positions = base.slice()
+    patchOwnerPositions(positions, base, [0], 3, [5, 0, 0])
+    patchOwnerPositions(positions, base, [0], 3, [1, 0, 0]) // NOT 5+1
+    expect(Array.from(positions.slice(0, 3))).toEqual([1, 0, 0])
+  })
+
+  it('delta [0, 0, 0] resets a previously-patched primitive back to basePositions exactly (un-staging)', () => {
+    const base = new Float32Array([0, 0, 0, 10, 0, 0, 10, 10, 0])
+    const positions = base.slice()
+    patchOwnerPositions(positions, base, [0], 3, [5, 5, 5])
+    patchOwnerPositions(positions, base, [0], 3, [0, 0, 0])
+    expect(Array.from(positions)).toEqual(Array.from(base))
+  })
+
+  it('patches every start in a multi-range (scattered) owner', () => {
+    const base = new Float32Array(36) // 4 triangles' worth, all zeros
+    const positions = base.slice()
+    patchOwnerPositions(positions, base, [0, 18], 3, [1, 2, 3])
+    expect(Array.from(positions.slice(0, 9))).toEqual([1, 2, 3, 1, 2, 3, 1, 2, 3])
+    expect(Array.from(positions.slice(9, 18))).toEqual([0, 0, 0, 0, 0, 0, 0, 0, 0]) // untouched
+    expect(Array.from(positions.slice(18, 27))).toEqual([1, 2, 3, 1, 2, 3, 1, 2, 3])
   })
 })

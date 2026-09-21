@@ -757,6 +757,7 @@ export function Viewport3D({
             positions={meshPickGeometry.attributes.position.array as Float32Array}
             triangleOwners={meshTriangleOwners}
             selectedActorNames={selectedNonBrushNames}
+            stagedOffsets={stagedOffsets}
           />
         )}
         {/* Invisible raycast target for mesh actors in SOLID modes -- material.visible=false draws

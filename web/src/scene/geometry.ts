@@ -5,6 +5,7 @@
 // `level photo --native`'s render.rs: a lightmapped world surf is base*lumel; everything else is
 // base*flatShade. Pure and framework-free so it's testable without a WebGL context.
 import type { AtlasPayload, LightmapPayload, ScenePoly } from '../api'
+import type { Vec3 } from './camera'
 
 /** The fixed key-light direction render.rs shades unlit faces against (render.rs `KEY_LIGHT`). */
 const KEY_LIGHT: [number, number, number] = [-0.408, -0.577, 0.707]
@@ -272,4 +273,62 @@ export function buildEdgePickData(geo: GeometryData): EdgePickData {
     }
   }
   return { positions, edgeOwners, edgePolyIndex }
+}
+
+// Live position-patching for a staged mesh-actor move (perf fix: dragging a mesh actor used to
+// rebuild an ENTIRE level's solid geometry -- re-triangulating every poly, rebuilding every
+// material, disposing+reallocating the GPU buffer -- on every single pointer-move frame, because the
+// staged translation was applied by producing a brand-new poly array and feeding it back through
+// `buildGeometryData`. For a real level (thousands of polys) that is the actual cause of "jittery and
+// slow" mesh-actor dragging. These two functions instead mutate an ALREADY-BUILT geometry's position
+// buffer in place, touching only the moved actor's own vertices -- see `sceneResources.ts`'s
+// `usePatchedMeshPositions`, the hook that wires them in.
+
+/** Maps each triangle/edge-owning actor name to the flat position-array float offsets (one entry per
+ * primitive, `vertsPerPrimitive * 3` floats starting there) its own primitives occupy in a built
+ * geometry's position array. Triangles sharing one material get bucketed together by
+ * `buildGeometryData` (`groups`), NOT grouped by owner, so one actor's own primitives are scattered
+ * through the buffer, not contiguous -- this is what makes a per-owner RANGE list (not a single
+ * start/end pair) necessary. Built once per geometry build (`owners`' own array identity is stable
+ * across a drag -- only a real scene/geometry rebuild changes it), reused every frame a staged move
+ * needs to patch just that actor's own vertices. */
+export function buildOwnerVertexRanges(
+  owners: readonly (string | null)[],
+  vertsPerPrimitive: number,
+): Map<string, number[]> {
+  const map = new Map<string, number[]>()
+  owners.forEach((owner, i) => {
+    if (owner == null) return
+    let starts = map.get(owner)
+    if (!starts) {
+      starts = []
+      map.set(owner, starts)
+    }
+    starts.push(i * vertsPerPrimitive * 3)
+  })
+  return map
+}
+
+/** Mutates `positions` IN PLACE, translating each of `starts`' primitives (`vertsPerPrimitive`
+ * vertices each) by `delta` -- always computed FRESH from `basePositions` (the geometry's own
+ * STATIC/unstaged snapshot, never itself mutated), never incrementally on top of `positions`' own
+ * current (possibly already-patched) values. That is what makes re-applying with a DIFFERENT delta,
+ * or `delta = [0, 0, 0]` to un-stage an actor back to its trunk position, always correct rather than
+ * cumulative/compounding. A pure translation never changes a triangle's normal, so nothing else
+ * (UVs, colors, normals) needs to move. */
+export function patchOwnerPositions(
+  positions: Float32Array,
+  basePositions: Float32Array,
+  starts: readonly number[],
+  vertsPerPrimitive: number,
+  delta: Vec3,
+): void {
+  for (const start of starts) {
+    for (let v = 0; v < vertsPerPrimitive; v++) {
+      const i = start + v * 3
+      positions[i] = basePositions[i] + delta[0]
+      positions[i + 1] = basePositions[i + 1] + delta[1]
+      positions[i + 2] = basePositions[i + 2] + delta[2]
+    }
+  }
 }
