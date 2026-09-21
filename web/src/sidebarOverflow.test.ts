@@ -16,7 +16,10 @@ const CSS = readFileSync(join(dirname(fileURLToPath(import.meta.url)), 'index.cs
 
 /** The declaration block for one CSS selector, or null if the selector isn't found. */
 function ruleBody(selector: string): string | null {
-  const escaped = selector.replace(/[.[\]]/g, '\\$&')
+  // Bug fix: this used to escape only `.[]`, so a selector with parens (e.g. `:not(...)`) left them
+  // as regex GROUPING syntax -- the group's own closing `)` doesn't consume the CSS text's literal
+  // `)`, so the match silently failed. Escape every regex metacharacter, not a hand-picked subset.
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   const match = new RegExp(`(?<![\\w-])${escaped}\\s*\\{([^}]*)\\}`).exec(CSS)
   return match ? match[1] : null
 }
@@ -75,5 +78,38 @@ describe('sidebar fixed-width CSS (bug: sidebar width changed with the selected 
     expect(body).toMatch(/overflow:\s*hidden/)
     expect(body).toMatch(/white-space:\s*nowrap/)
     expect(body).toMatch(/text-overflow:\s*ellipsis/)
+  })
+})
+
+describe('sidebar fixed-width CSS, part 2 (bug: a "separate desktop jump" survived the fix above)', () => {
+  // The fix above constrains `.selection-strip` so it CAN shrink -- but `.sidebar` itself
+  // (flex: 0 0 auto, flex-shrink: 0) never had anything forcing it to use that shrunk size: with no
+  // `width` of its own, its flex-basis fell back to its own max-content (content-based) size, which
+  // still includes a descendant's unwrapped text even when that descendant has min-width: 0. Giving
+  // `.sidebar` an explicit `width` removes content from its sizing equation entirely.
+  it('.sidebar has a fixed, non-content-derived width for the collapsed (rail-only) case', () => {
+    const body = ruleBody('.sidebar')
+    expect(body).not.toBeNull()
+    expect(body).toMatch(/width:\s*var\(--sidebar-rail-width\)/)
+  })
+
+  it('.sidebar widens to rail + panel only when NOT collapsed, keyed off data-collapsed (not content)', () => {
+    const body = ruleBody(".sidebar:not([data-collapsed='true'])")
+    expect(body).not.toBeNull()
+    expect(body).toMatch(/width:\s*calc\(var\(--sidebar-rail-width\)\s*\+\s*var\(--sidebar-panel-max-width\)\)/)
+  })
+
+  it('.sidebar-panel and the expanded .sidebar width share the SAME --sidebar-panel-max-width token (one source of truth)', () => {
+    const panel = ruleBody('.sidebar-panel')
+    expect(panel).not.toBeNull()
+    expect(panel).toMatch(/flex:\s*0 0 var\(--sidebar-panel-max-width\)/)
+  })
+})
+
+describe('sidebar mobile width CSS (bug: sidebar super wide on mobile for any tab)', () => {
+  it('--sidebar-panel-max-width caps the panel to a fraction of the viewport width, not just a fixed px', () => {
+    const root = ruleBody(':root')
+    expect(root).not.toBeNull()
+    expect(root).toMatch(/--sidebar-panel-max-width:\s*min\(var\(--sidebar-panel-width\),\s*calc\(80vw - var\(--sidebar-rail-width\)\)\)/)
   })
 })

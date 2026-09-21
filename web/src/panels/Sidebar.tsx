@@ -94,7 +94,7 @@ export function Sidebar({ panels, collapsed, activeTabId, setActiveTab, selected
   }
 
   return (
-    <div className="sidebar" data-testid="sidebar">
+    <div className="sidebar" data-testid="sidebar" data-collapsed={collapsed}>
       <SelectionStrip actors={selectedActors} surfaces={selectedSurfaces} collapsed={collapsed} onClick={onStripClick} />
       <div className="sidebar-body">
         <div className="sidebar-rail">

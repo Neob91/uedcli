@@ -45,6 +45,14 @@
   --sem-label: #e879f9;
   --sem-other: #9ca3af;
   --sem-selection: #22d3ee;
+
+  /* Sidebar width, one source of truth for both `.sidebar` (below) and `.sidebar-panel`: capped to
+     80% of the viewport so an expanded tab never dominates a narrow/mobile screen (bug:
+     sidebar-super-wide-on-mobile). On any viewport wider than ~395px this clamps back to the plain
+     280px desktop width -- the min() is a no-op there, not a shrink. */
+  --sidebar-rail-width: 36px;
+  --sidebar-panel-width: 280px;
+  --sidebar-panel-max-width: min(var(--sidebar-panel-width), calc(80vw - var(--sidebar-rail-width)));
 }
 
 :root[data-theme='light'] {
@@ -213,11 +221,26 @@ body {
    margin" the viewport gives up even fully collapsed); `.sidebar-panel` (the active registry entry's
    content) only mounts while expanded -- the strip does NOT depend on it (spec's Decisions: "the
    strip stays visible even when the sidebar is collapsed"). */
+/* Bug fix: `.sidebar` had no `width`, so `flex: 0 0 auto` resolved its flex-basis from its own
+   CONTENT (max-content size) -- and that computation includes a descendant's unwrapped text width
+   even when that descendant has `min-width: 0` (min-width:0 only lets an item SHRINK once something
+   else constrains the container; it doesn't cap the container's own content-based size when nothing
+   does). A long selected name, or wide org-tree/inspector content, could still grow `.sidebar` itself
+   even with `.selection-strip`'s min-width:0 fix (above -- that fix still matters, for truncating the
+   text itself, just not for `.sidebar`'s outer width). Giving `.sidebar` an
+   explicit `width` here removes content from the equation entirely: a flex item's `flex-basis: auto`
+   resolves to its `width` property when that's a definite length, so this is authoritative, not just
+   another shrink target. */
 .sidebar {
   display: flex;
   flex-direction: column;
   flex: 0 0 auto;
+  width: var(--sidebar-rail-width);
   height: 100%;
+}
+
+.sidebar:not([data-collapsed='true']) {
+  width: calc(var(--sidebar-rail-width) + var(--sidebar-panel-max-width));
 }
 
 .sidebar-body {
@@ -228,13 +251,18 @@ body {
 
 .sidebar-rail {
   display: flex;
-  flex: 0 0 36px;
+  flex: 0 0 var(--sidebar-rail-width);
   flex-direction: column;
   align-items: center;
   gap: 4px;
   padding: 6px 0;
   border-left: 1px solid var(--border);
   background: var(--surface-1);
+  /* Without this, the 1px border-left renders OUTSIDE the var(--sidebar-rail-width) content box
+     (default content-box), so the rail's real width is 37px against `.sidebar`'s now-explicit
+     rail-width + panel-max-width formula above -- border-box makes the border part of the same
+     36px the formula already accounts for, same convention `.sidebar-panel` already uses below. */
+  box-sizing: border-box;
 }
 
 .sidebar-rail-button {
@@ -275,7 +303,7 @@ body {
 .sidebar-panel {
   display: flex;
   flex-direction: column;
-  flex: 0 0 280px;
+  flex: 0 0 var(--sidebar-panel-max-width);
   min-width: 0;
   height: 100%;
   border-left: 1px solid var(--border);

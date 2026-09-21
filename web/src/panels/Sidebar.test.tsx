@@ -105,6 +105,14 @@ describe('Sidebar collapse', () => {
     expect(screen.getByTestId('selection-strip')).toBeTruthy()
   })
 
+  it('the root element carries data-collapsed reflecting the prop (CSS keys .sidebar\'s own width off this, not content -- see sidebarOverflow.test.ts)', () => {
+    renderSidebar({ collapsed: true })
+    expect(screen.getByTestId('sidebar').getAttribute('data-collapsed')).toBe('true')
+    cleanup()
+    renderSidebar({ collapsed: false })
+    expect(screen.getByTestId('sidebar').getAttribute('data-collapsed')).toBe('false')
+  })
+
   it('clicking a rail icon always calls setActiveTab with that panel id -- the hook (Task 2) decides collapse-vs-switch', () => {
     const { setActiveTab } = renderSidebar({ activeTabId: 'selection', collapsed: false })
     fireEvent.click(screen.getByTestId('sidebar-rail-selection'))
