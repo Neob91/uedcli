@@ -182,9 +182,33 @@ function App() {
   // only through `setStagedOffsets`/`clearStagedOffsetNames` below, never independently.
   const [stagedOffsets, setStagedOffsetsState] = useState<Record<string, Vec3>>(() => ({}))
   const stagedOffsetsRef = useRef<Record<string, Vec3>>({})
+  // Perf fix (live report: "moving actors is still jittery -- can we recompute/rewrite the position
+  // less often?"): a Ctrl/Cmd-drag calls `setStagedOffsets` from `onDrag`, which fires on EVERY
+  // native `pointermove` event -- a rate that can genuinely exceed the display's own refresh rate
+  // (a high-poll-rate mouse, or a browser that doesn't coalesce pointermove to the compositor's own
+  // frame timing). Committing straight to React state on every one of those forces a full synchronous
+  // re-render cascade (every pane's own `effectiveActors` actor-array rebuild, the Inspector, the
+  // sidebar panels, `SceneResourcesContext`'s mesh-position patch -- see that file's own "Perf fix"
+  // comment for the geometry-rebuild half of this bug, already fixed) MORE OFTEN than a browser could
+  // ever actually paint the result, which is pure wasted, jank-causing work.
+  //
+  // `stagedOffsetsRef.current` still updates SYNCHRONOUSLY on every call, exactly as before (nothing
+  // that reads the ref -- `postStage`'s payload, a new gesture's `preGestureOffsetsRef` snapshot --
+  // ever sees a stale value). Only the REACT STATE commit (`setStagedOffsetsState`, the expensive
+  // part) is coalesced: at most one per animation frame, always flushing whatever is the FRESHEST
+  // ref value at the moment the frame actually fires, never a value captured back when the frame was
+  // scheduled. `rafPendingRef` is a plain bookkeeping ref (not React state), so reading/writing it
+  // during a callback is the normal, safe use of a ref -- unrelated to (and not the same anti-pattern
+  // as) reading a ref during a component's RENDER body.
+  const rafPendingRef = useRef(false)
   const setStagedOffsets = useCallback((next: Record<string, Vec3>) => {
     stagedOffsetsRef.current = next
-    setStagedOffsetsState(next)
+    if (rafPendingRef.current) return
+    rafPendingRef.current = true
+    requestAnimationFrame(() => {
+      rafPendingRef.current = false
+      setStagedOffsetsState(stagedOffsetsRef.current)
+    })
   }, [])
   // `frameActors`/`handleOrgSelect` (declared just above `stagedOffsets`'s state, above) need it in
   // scope -- see that comment for why. Frames on the STAGED-offset-applied bbox, the same

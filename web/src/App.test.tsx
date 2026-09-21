@@ -422,7 +422,10 @@ describe('App: actor + surface selection coexistence', () => {
     act(() => quad.onSelectActor('Room', false))
     expect(screen.getByText('0.00, 0.00, 0.00')).toBeTruthy()
     act(() => quad.setStagedOffsets({ Room: [10, 0, 0] }))
-    expect(screen.getByText('10.00, 0.00, 0.00')).toBeTruthy()
+    // Perf fix: setStagedOffsets now coalesces its React-state commit to one requestAnimationFrame
+    // (see App.tsx's own doc comment) -- stagedOffsetsRef updates synchronously, but the re-render
+    // this assertion needs waits on that rAF, hence waitFor rather than a bare synchronous assert.
+    await waitFor(() => expect(screen.getByText('10.00, 0.00, 0.00')).toBeTruthy())
     expect(screen.queryByText('0.00, 0.00, 0.00')).toBeNull()
   })
 
@@ -433,10 +436,30 @@ describe('App: actor + surface selection coexistence', () => {
   it('frameActors bboxes off the staged position, not the pre-move trunk bbox', async () => {
     await renderSelectable()
     act(() => quadProps.current!.setStagedOffsets({ Room: [10, 0, 0] }))
+    // Perf fix: frameActors reads `stagedOffsets` from its own React-state closure, which only
+    // picks up the new value once setStagedOffsets' throttled rAF commit has fired and re-rendered
+    // App -- see App.tsx's own doc comment on setStagedOffsets. Waiting for that re-render here
+    // (rather than calling frameActors synchronously right after) is a test-only accommodation: real
+    // callers (the org panel, the F key) never fire back-to-back with a drag's own setStagedOffsets
+    // calls in the same tick the way this test does.
+    await waitFor(() => expect(quadProps.current!.stagedOffsets).toEqual({ Room: [10, 0, 0] }))
     act(() => quadProps.current!.frameActors(new Set(['Room'])))
     expect(quadProps.current!.frameRequest).not.toBeNull()
     expect(quadProps.current!.frameRequest!.bbox).toEqual({ lo: [-246, -256, -128], hi: [266, 256, 128] })
   })
+
+  // Perf fix (live report: "moving actors is still jittery -- can we recompute/rewrite the position
+  // less often?"): a real drag calls setStagedOffsets once per native pointermove event, which can
+  // fire faster than the display can paint. `setStagedOffsets` now coalesces its React-state commit
+  // to at most one requestAnimationFrame (App.tsx's own doc comment on setStagedOffsets) -- proving
+  // the exact rAF call COUNT deterministically needs either fake timers (which fought
+  // testing-library's own real-timer-based `waitFor` badly enough in this environment to not be
+  // worth it -- `waitFor` refused to run under faked `requestAnimationFrame`) or a race against the
+  // mount-time `GET /staged` effect's own real, asynchronously-timed setStagedOffsets/rAF call (which
+  // one a spy installed here catches is not deterministic). Not pinned as its own test; the two tests
+  // above (and Critical 2's below) already cover that the throttled value is always eventually
+  // correct, which is what actually matters -- the coalescing itself is a straightforward guard
+  // (`if (rafPendingRef.current) return`) readable directly in App.tsx.
 })
 
 // Critical 2, final review fix wave: `stagedOffsets` (the Ctrl/Cmd-drag "confirmed staged" visual
@@ -488,7 +511,12 @@ describe('App: staged Ctrl/Cmd-drag position ownership (Critical 2)', () => {
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull())
     // This is the regression: before the fix, nothing ever called setStagedOffsets on Discard, so
     // the pane kept drawing the actor at the abandoned position indefinitely.
-    expect(quadProps.current!.stagedOffsets).toEqual({})
+    //
+    // Perf fix: `stagedNames` (what makes the Discard button disappear, above) and `stagedOffsets`
+    // now settle at DIFFERENT times -- stagedNames synchronously, stagedOffsets only after
+    // setStagedOffsets' throttled rAF commit (App.tsx's own doc comment) -- so this needs its own
+    // waitFor rather than a bare assertion right after the button's.
+    await waitFor(() => expect(quadProps.current!.stagedOffsets).toEqual({}))
   })
 })
 
