@@ -24,6 +24,41 @@ export function resolveActorMoveAxis(
   return PERSPECTIVE_AXIS_BY_BUTTONS[buttons] ?? null
 }
 
+/** Whether the CURRENT drag gesture should move in grid-size increments (owner ruling): brush
+ * movement snaps to grid; non-brush actors move continuously; a MIXED selection with ANY brush
+ * present snaps the WHOLE selection together (so the group doesn't visibly drift apart relative to
+ * each other mid-drag -- every selected actor gets the SAME delta either way, per `applyDelta`
+ * below, so snapping is an all-or-nothing choice for the gesture, not a per-actor one). `Mover`s
+ * count as brushes here (`SceneActor.brush != null`, the same test `SceneResourcesContext.tsx`'s
+ * `meshActorNames` already uses to mean "not a mesh actor") -- a Mover IS a moving brush. */
+export function anySelectedIsBrush(selectedNames: ReadonlySet<string>, actors: readonly SceneActor[]): boolean {
+  return actors.some((a) => a.brush != null && selectedNames.has(a.name))
+}
+
+/** Component-wise vector addition -- accumulates one frame's raw move delta onto the running
+ * per-gesture total (Viewport3D.tsx's/OrthoViewport.tsx's `moveDeltaAccRef`), which `snapVecToGrid`
+ * below quantizes BEFORE it's applied to the gesture-START base position via `applyDelta`. Snapping
+ * the ACCUMULATED total (not each small per-frame delta) is what lets sub-grid mouse motion build up
+ * instead of rounding to zero every single frame. */
+export function addVec3(a: Vec3, b: Vec3): Vec3 {
+  return [a[0] + b[0], a[1] + b[1], a[2] + b[2]]
+}
+
+/** Rounds each component of `delta` to the nearest multiple of `gridSize` -- "brush movement should
+ * move in grid-size increments, not continuously" (owner ruling). Snaps the drag's own MOVEMENT
+ * amount, not the actor's final world coordinate: an actor that didn't start grid-aligned doesn't
+ * jump onto one, but every increment it moves by is still an exact multiple of the grid. `gridSize`
+ * of 0 or less returns `delta` unchanged (defensive only -- the GUI's own grid-size dropdown,
+ * `grid.ts`'s `GRID_SIZE_OPTIONS`, never offers a non-positive value). */
+export function snapVecToGrid(delta: Vec3, gridSize: number): Vec3 {
+  if (gridSize <= 0) return delta
+  return [
+    Math.round(delta[0] / gridSize) * gridSize,
+    Math.round(delta[1] / gridSize) * gridSize,
+    Math.round(delta[2] / gridSize) * gridSize,
+  ]
+}
+
 /** Accumulates `delta` onto every selected actor's running staged position: starting from its
  * PREVIOUS staged position if this selection already has one (a second drag gesture on the same
  * actor continues from where the first left off, rather than re-basing off the original trunk

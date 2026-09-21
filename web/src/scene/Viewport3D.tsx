@@ -20,7 +20,16 @@ import type { CameraPose, Vec3 } from './camera'
 import { cameraBasis, dollyAndTurn, flyInput, flyMove, look, orbit, pan, zoom } from './camera'
 import type { DragGestureCallbacks } from './dragGesture'
 import { useDragGesture } from './dragGesture'
-import { applyDelta, applyStagedOffsets, resolveActorMoveAxis, stagedLocationsFor } from './dragStage'
+import {
+  addVec3,
+  anySelectedIsBrush,
+  applyDelta,
+  applyStagedOffsets,
+  resolveActorMoveAxis,
+  snapVecToGrid,
+  stagedLocationsFor,
+} from './dragStage'
+import { DEFAULT_GRID_SIZE } from './grid'
 import type { MoveDragAccumulator } from './moveDragThreshold'
 import { accumulateMoveDragFrame, freshMoveDragAccumulator } from './moveDragThreshold'
 import type { FrameRequest } from './frame'
@@ -175,6 +184,13 @@ export interface Viewport3DProps {
   // of the outline when true; false (default) leaves it outline-only. No effect in 'wireframe' mode
   // (nothing solid draws there regardless).
   showMoverSolid?: boolean
+  // Grid-increment movement (owner ruling): a brush-containing selection's Ctrl/Cmd-drag snaps to
+  // multiples of this, instead of moving continuously -- see `dragStage.ts`'s `anySelectedIsBrush`/
+  // `snapVecToGrid`. The SAME value QuadLayout's grid-size dropdown already drives for the ortho
+  // grid overlay (`OrthoViewport`'s own `baseGridSize` prop), so a brush snaps to whatever grid the
+  // user is currently looking at, in every pane -- this perspective pane draws no grid overlay of
+  // its own, but shares the setting for movement.
+  baseGridSize?: number
 }
 
 // Which single touch contact is the tap-selection candidate: the FIRST finger down, tracked only
@@ -205,6 +221,7 @@ export function Viewport3D({
   mode = 'lit',
   showRadii = false,
   showMoverSolid = false,
+  baseGridSize = DEFAULT_GRID_SIZE,
 }: Viewport3DProps) {
   const [pose, setPose] = useState<CameraPose>(INITIAL_POSE)
 
@@ -282,14 +299,29 @@ export function Viewport3D({
   const activeMaterials = usesUnlitMaterials(mode) ? unlitMaterials : materials
   const activeMoverMaterials = usesUnlitMaterials(mode) ? moverUnlitMaterials : moverMaterials
 
+  // `scene.actors`, with every staged actor's world-space fields (location/bbox/brush polys+
+  // local_origin/directional_arrow lines) translated to its current staged position -- the single
+  // derived array fed to every position-driven overlay below (BrushOutlines, SelectionMarkers,
+  // DirectionalArrows, RadiiOverlays) so a Ctrl/Cmd-drag move is reflected consistently across all
+  // of them, not just the point-actor marker sprite (which patches `.location` inline below, since
+  // it reads from the separately-sourced `markerActors` context list, not this array). A brush/mesh
+  // actor's own BAKED CSG solid mesh (`bufferGeometry`) is the one thing this can't move -- see
+  // `applyStagedOffset`'s own doc comment for why, and Viewport3D's mesh `<mesh ref={meshRef} .../>`
+  // below (unchanged, still reads `scene.actors`-derived geometry, not this array).
+  //
+  // Declared before `primarySelectedActor` below (bug fix, found auditing for more of the same
+  // Inspector/mesh-body divergence class): the orbit pivot used to bbox off raw `scene.actors`, so
+  // Alt-drag orbit on a staged-moved actor pivoted around its PRE-move position.
+  const effectiveActors = useMemo(() => applyStagedOffsets(scene.actors, stagedOffsets), [scene.actors, stagedOffsets])
+
   // A single "primary" selected actor (the first, by scene.actors order, whose name is in the set)
   // -- ONLY for the camera orbit pivot (Alt-drag), which stays single-target; Task 15's frame/`F`
   // key is the real multi-actor camera mechanism, out of this task's scope. Highlight rendering
   // below (BrushOutlines, ActorSelectionHighlight) draws one per SELECTED actor, not just this
   // one (Task 14).
   const primarySelectedActor = useMemo(
-    () => scene.actors.find((a) => selectedNames.has(a.name)) ?? null,
-    [scene.actors, selectedNames],
+    () => effectiveActors.find((a) => selectedNames.has(a.name)) ?? null,
+    [effectiveActors, selectedNames],
   )
 
   const orbitPivot: Vec3 = useMemo(() => {
@@ -312,17 +344,17 @@ export function Viewport3D({
   const dragMovedRef = useRef(false)
   const moveDragAccRef = useRef<MoveDragAccumulator>(freshMoveDragAccumulator())
   const preGestureOffsetsRef = useRef<Record<string, Vec3>>({})
-
-  // `scene.actors`, with every staged actor's world-space fields (location/bbox/brush polys+
-  // local_origin/directional_arrow lines) translated to its current staged position -- the single
-  // derived array fed to every position-driven overlay below (BrushOutlines, SelectionMarkers,
-  // DirectionalArrows, RadiiOverlays) so a Ctrl/Cmd-drag move is reflected consistently across all
-  // of them, not just the point-actor marker sprite (which patches `.location` inline below, since
-  // it reads from the separately-sourced `markerActors` context list, not this array). A brush/mesh
-  // actor's own BAKED CSG solid mesh (`bufferGeometry`) is the one thing this can't move -- see
-  // `applyStagedOffset`'s own doc comment for why, and Viewport3D's mesh `<mesh ref={meshRef} .../>`
-  // below (unchanged, still reads `scene.actors`-derived geometry, not this array).
-  const effectiveActors = useMemo(() => applyStagedOffsets(scene.actors, stagedOffsets), [scene.actors, stagedOffsets])
+  // Grid-increment movement (owner ruling): `moveDeltaAccRef` is the RAW (un-snapped) total move
+  // delta since this gesture started -- summed every qualifying frame via `addVec3`, then (only when
+  // `gestureSnapRef` says the selection contains a brush) quantized to `baseGridSize` by
+  // `snapVecToGrid` before being applied to `preGestureOffsetsRef`'s gesture-start base. Snapping the
+  // ACCUMULATED total rather than each small per-frame delta is what lets sub-grid mouse motion build
+  // up instead of rounding to zero every frame. Both reset alongside `moveDragAccRef`/
+  // `preGestureOffsetsRef` at gesture start, below -- `gestureSnapRef` is decided ONCE there (from the
+  // selection at drag-start), not re-evaluated per frame, so a gesture's snap behavior can't flicker
+  // mid-drag from an unrelated selection change.
+  const moveDeltaAccRef = useRef<Vec3>([0, 0, 0])
+  const gestureSnapRef = useRef(false)
 
   // Selected non-brush (sprite/mesh) actor names -- drives the UED22-matched color-tint highlight
   // below (GUI-PARITY.md "Selection highlight rendering"), which replaced the plain cyan AABB box
@@ -370,7 +402,10 @@ export function Viewport3D({
         brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
         // Not gated to wireframe mode -- see `TapSelectParams.moverOutlineObjects`' doc comment.
         moverOutlineObjects: moverOutlineGroupRef.current?.children ?? [],
-        actors: scene.actors,
+        // Bug fix (found auditing for more of the Inspector/mesh-body divergence class): see
+        // OrthoViewport.tsx's identical comment -- the AABB miss-fallback tests raw `.bbox_lo`/
+        // `.bbox_hi`, so it needs the staged-offset-applied array, not `scene.actors` directly.
+        actors: effectiveActors,
         triangleOwners,
         trianglePolyIndex,
       })
@@ -379,7 +414,7 @@ export function Viewport3D({
       else if (action.kind === 'deselect') onDeselect()
     },
     [
-      scene.actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex,
+      effectiveActors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex,
       meshEdgeOwners, meshEdgePolyIndex,
       moverTriangleOwners, moverTrianglePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode,
     ],
@@ -417,8 +452,18 @@ export function Viewport3D({
                 primarySelectedActor.location[2],
               )
               const worldUnitsPerPixel = worldUnitsPerPixelAt(camera, worldPos, rect.height)
-              const delta = moveAlongAxis(frame.dx, axis, worldUnitsPerPixel)
-              const next = applyDelta(stagedOffsetsRef.current, selectedNames, delta, scene.actors)
+              const frameDelta = moveAlongAxis(frame.dx, axis, worldUnitsPerPixel)
+              // Grid-increment movement (owner ruling): accumulate the RAW total since gesture
+              // start, snap the TOTAL (not the small per-frame delta) when the selection contains a
+              // brush, then recompute every selected actor's staged position from its gesture-start
+              // base (`preGestureOffsetsRef`) plus that total -- see `moveDeltaAccRef`'s own doc
+              // comment above for why this is a recompute, not `stagedOffsetsRef.current`'s previous
+              // frame.
+              moveDeltaAccRef.current = addVec3(moveDeltaAccRef.current, frameDelta)
+              const totalDelta = gestureSnapRef.current
+                ? snapVecToGrid(moveDeltaAccRef.current, baseGridSize)
+                : moveDeltaAccRef.current
+              const next = applyDelta(preGestureOffsetsRef.current, selectedNames, totalDelta, scene.actors)
               stagedOffsetsRef.current = next
               setStagedOffsets(next) // local preview only -- no network call per pointer-move frame
               dragMovedRef.current = true
@@ -437,7 +482,7 @@ export function Viewport3D({
       onTap: (clientX, clientY, additive, shiftKey) => performTapSelect(clientX, clientY, additive, shiftKey),
       onWheel: (deltaY) => setPose((prev) => zoom(prev, deltaY)),
     }),
-    [orbitPivot, performTapSelect, selectedNames, primarySelectedActor, scene.actors, stagedOffsetsRef, setStagedOffsets],
+    [orbitPivot, performTapSelect, selectedNames, primarySelectedActor, scene.actors, stagedOffsetsRef, setStagedOffsets, baseGridSize],
   )
   const mouseDrag = useDragGesture(dragCallbacks)
   const containerRef = mouseDrag.containerRef
@@ -458,9 +503,13 @@ export function Viewport3D({
       // snapshot must reflect what was staged BEFORE this gesture, not some earlier one).
       moveDragAccRef.current = freshMoveDragAccumulator()
       preGestureOffsetsRef.current = stagedOffsetsRef.current
+      // Grid-increment movement (owner ruling): decided ONCE per gesture, from the selection at
+      // drag-start -- see `moveDeltaAccRef`'s own doc comment above for why.
+      moveDeltaAccRef.current = [0, 0, 0]
+      gestureSnapRef.current = anySelectedIsBrush(selectedNames, scene.actors)
       mouseDrag.onPointerDown(e)
     },
-    [mouseDrag, stagedOffsetsRef],
+    [mouseDrag, stagedOffsetsRef, selectedNames, scene.actors],
   )
 
   const onPointerMove = useCallback(

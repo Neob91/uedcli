@@ -227,3 +227,35 @@ describe('orthoPan (rendered)', () => {
     }
   })
 })
+
+// Bug fix (see Viewport3D.test.ts's identical describe block): the AABB miss-fallback pick used to
+// read raw `actors` -- a near-miss click near a staged-moved actor's NEW position could miss/hit the
+// wrong actor, since `pickActor` tests `.bbox_lo`/`.bbox_hi` directly. Now derives from
+// `effectiveActors`, the same staged-offset-applied array every position-driven overlay already uses.
+describe('OrthoViewport -- AABB-fallback pick uses staged (effectiveActors), not raw actors', () => {
+  it('performTapSelect passes effectiveActors (not raw actors) as the fallback-pick actors', () => {
+    expect(ORTHOVIEWPORT_SOURCE).toMatch(/actors:\s*effectiveActors,\s*\n\s*triangleOwners,/)
+  })
+})
+
+// Grid-increment movement (owner ruling) -- mirrors Viewport3D.test.ts's identical describe block.
+describe('OrthoViewport -- grid-increment movement wiring', () => {
+  it('gestureSnapRef is decided from the selection ONCE at pointerdown, via anySelectedIsBrush', () => {
+    const onPointerDownBody = /const onPointerDown = useCallback\(\s*\(e: ReactPointerEvent<HTMLDivElement>\) => \{([\s\S]*?)\n    \},\n    \[/.exec(
+      ORTHOVIEWPORT_SOURCE,
+    )?.[1]
+    expect(onPointerDownBody).toBeDefined()
+    expect(onPointerDownBody).toMatch(/moveDeltaAccRef\.current = \[0, 0, 0\]/)
+    expect(onPointerDownBody).toMatch(/gestureSnapRef\.current = anySelectedIsBrush\(selectedNames, actors\)/)
+  })
+
+  it('the move branch accumulates the RAW total, snaps only when gestureSnapRef says so, and recomputes from preGestureOffsetsRef (not stagedOffsetsRef)', () => {
+    expect(ORTHOVIEWPORT_SOURCE).toMatch(/moveDeltaAccRef\.current = addVec3\(moveDeltaAccRef\.current, frameDelta\)/)
+    expect(ORTHOVIEWPORT_SOURCE).toMatch(
+      /const totalDelta = gestureSnapRef\.current\s*\n\s*\? snapVecToGrid\(moveDeltaAccRef\.current, baseGridSize\)\s*\n\s*: moveDeltaAccRef\.current/,
+    )
+    expect(ORTHOVIEWPORT_SOURCE).toMatch(
+      /applyDelta\(preGestureOffsetsRef\.current, selectedNames, totalDelta, actors\)/,
+    )
+  })
+})

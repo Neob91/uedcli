@@ -156,28 +156,13 @@ function App() {
   // hosted by Sidebar, a sibling of QuadLayout rather than its child -- can still trigger the same
   // camera-framing QuadLayout's own `F` key uses (SelectionKeys' onFrame). One shared frameRequest,
   // threaded down into QuadLayout as a controlled prop.
+  //
+  // `frameActors`'s own definition is BELOW `stagedOffsets` (moved there, bug fix: it used to bbox
+  // off raw `scene.actors`, so pressing F on a staged-moved actor flew the camera to its PRE-move
+  // position, diverging from what's actually drawn -- same divergence class the Inspector/mesh-body
+  // fixes above closed, found auditing for more of it, not separately reported).
   const frameSeq = useRef(0)
   const [frameRequest, setFrameRequest] = useState<FrameRequest | null>(null)
-  const frameActors = useCallback(
-    (names: ReadonlySet<string>) => {
-      if (!scene) return
-      const bbox = unionBBox(scene.actors.filter((a) => names.has(a.name)))
-      if (!bbox) return // nothing to frame -- unionBBox's own no-op signal (frame.ts)
-      frameSeq.current += 1
-      setFrameRequest({ bbox, seq: frameSeq.current })
-    },
-    [scene],
-  )
-  // OrgPanel's own batch-select shape: a folder-node click replaces/adds a whole actor set at once
-  // AND frames the camera onto it -- mirrors QuadLayout's own former handleOrgSelect exactly.
-  const handleOrgSelect = useCallback(
-    (names: string[], additive: boolean) => {
-      const nameSet = new Set(names)
-      onSelectMany(nameSet, additive)
-      frameActors(nameSet)
-    },
-    [onSelectMany, frameActors],
-  )
   // Staged actor moves (Task 10; the staging itself is Tasks 8/9's per-viewport Ctrl/Cmd-drag).
   // Deliberately approximate, per plan: "a simple hasStaged / stagedNames Set<string> piece of
   // state is enough -- do not duplicate the backend's full staged-actor bookkeeping client-side".
@@ -201,6 +186,29 @@ function App() {
     stagedOffsetsRef.current = next
     setStagedOffsetsState(next)
   }, [])
+  // `frameActors`/`handleOrgSelect` (declared just above `stagedOffsets`'s state, above) need it in
+  // scope -- see that comment for why. Frames on the STAGED-offset-applied bbox, the same
+  // `applyStagedOffsets` pure function `effectiveActorsForInspector` below uses.
+  const frameActors = useCallback(
+    (names: ReadonlySet<string>) => {
+      if (!scene) return
+      const bbox = unionBBox(applyStagedOffsets(scene.actors, stagedOffsets).filter((a) => names.has(a.name)))
+      if (!bbox) return // nothing to frame -- unionBBox's own no-op signal (frame.ts)
+      frameSeq.current += 1
+      setFrameRequest({ bbox, seq: frameSeq.current })
+    },
+    [scene, stagedOffsets],
+  )
+  // OrgPanel's own batch-select shape: a folder-node click replaces/adds a whole actor set at once
+  // AND frames the camera onto it -- mirrors QuadLayout's own former handleOrgSelect exactly.
+  const handleOrgSelect = useCallback(
+    (names: string[], additive: boolean) => {
+      const nameSet = new Set(names)
+      onSelectMany(nameSet, additive)
+      frameActors(nameSet)
+    },
+    [onSelectMany, frameActors],
+  )
   // Drops just the named actors' staged offsets, leaving every other staged actor's visual position
   // untouched -- used wherever the BACKEND clears a subset of the stage (a Save's "trunk" pick, a
   // Load's "accept-load" pick, the per-actor conflict-discard escape hatch) so the client never keeps

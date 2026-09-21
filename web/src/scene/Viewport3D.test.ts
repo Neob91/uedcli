@@ -219,3 +219,61 @@ describe('applyCameraPose', () => {
     expect(lookDir.z).toBeCloseTo(forward[2], 5)
   })
 })
+
+// Bug fix (reported live, post-merge; found auditing for more of the same Inspector/mesh-body
+// divergence class the Ctrl/Cmd-drag feature already had two fixes for): `primarySelectedActor` (the
+// Alt-drag orbit pivot's target) and the AABB miss-fallback pick both used to read raw `scene.actors`
+// -- a staged-moved actor's Alt-drag orbit pivoted around its PRE-move position, and a near-miss
+// click near its NEW position could miss/hit the wrong actor, since `pickActor` tests
+// `.bbox_lo`/`.bbox_hi` directly. Both now derive from `effectiveActors` (the same staged-offset-
+// applied array every position-driven overlay already uses) -- pinned as source-text, the same
+// no-Canvas-in-test pattern this file's other wiring tests already use.
+describe('Viewport3D -- orbit pivot and AABB-fallback pick use staged (effectiveActors), not raw scene.actors', () => {
+  it('primarySelectedActor searches effectiveActors, not scene.actors', () => {
+    const match = /const primarySelectedActor = useMemo\(\s*\(\) => (\w+)\.find/.exec(VIEWPORT3D_SOURCE)
+    expect(match).toBeDefined()
+    expect(match![1]).toBe('effectiveActors')
+  })
+
+  it('effectiveActors is declared BEFORE primarySelectedActor (so it can depend on it)', () => {
+    const effIdx = VIEWPORT3D_SOURCE.indexOf('const effectiveActors = useMemo(')
+    const primaryIdx = VIEWPORT3D_SOURCE.indexOf('const primarySelectedActor = useMemo(')
+    expect(effIdx).toBeGreaterThan(0)
+    expect(primaryIdx).toBeGreaterThan(effIdx)
+  })
+
+  it('performTapSelect passes effectiveActors (not scene.actors) as the fallback-pick actors', () => {
+    expect(VIEWPORT3D_SOURCE).toMatch(/actors:\s*effectiveActors,\s*\n\s*triangleOwners,/)
+  })
+})
+
+// Grid-increment movement (owner ruling): "brush movement should move in grid-size increments, not
+// continuously. Non-brush actors are fine to move continuously... When multiple actors are selected,
+// and some of them are brush actors, they should always move in grid-size increments." The pure
+// mechanism (`anySelectedIsBrush`, `snapVecToGrid`, `addVec3`) is unit-tested directly in
+// dragStage.test.ts -- these pin the WIRING facts specific to this pane, the same no-Canvas-in-test
+// pattern this file's other wiring tests already use.
+describe('Viewport3D -- grid-increment movement wiring', () => {
+  it('gestureSnapRef is decided from the selection ONCE at pointerdown, via anySelectedIsBrush', () => {
+    const onPointerDownBody = /const onPointerDown = useCallback\(\s*\(e: ReactPointerEvent<HTMLDivElement>\) => \{([\s\S]*?)\n    \},\n    \[/.exec(
+      VIEWPORT3D_SOURCE,
+    )?.[1]
+    expect(onPointerDownBody).toBeDefined()
+    expect(onPointerDownBody).toMatch(/moveDeltaAccRef\.current = \[0, 0, 0\]/)
+    expect(onPointerDownBody).toMatch(/gestureSnapRef\.current = anySelectedIsBrush\(selectedNames, scene\.actors\)/)
+  })
+
+  it('the move branch accumulates the RAW total, snaps only when gestureSnapRef says so, and recomputes from preGestureOffsetsRef (not stagedOffsetsRef)', () => {
+    expect(VIEWPORT3D_SOURCE).toMatch(/moveDeltaAccRef\.current = addVec3\(moveDeltaAccRef\.current, frameDelta\)/)
+    expect(VIEWPORT3D_SOURCE).toMatch(
+      /const totalDelta = gestureSnapRef\.current\s*\n\s*\? snapVecToGrid\(moveDeltaAccRef\.current, baseGridSize\)\s*\n\s*: moveDeltaAccRef\.current/,
+    )
+    expect(VIEWPORT3D_SOURCE).toMatch(
+      /applyDelta\(preGestureOffsetsRef\.current, selectedNames, totalDelta, scene\.actors\)/,
+    )
+  })
+
+  it('baseGridSize defaults to DEFAULT_GRID_SIZE (the same value the ortho grid dropdown defaults to)', () => {
+    expect(VIEWPORT3D_SOURCE).toMatch(/baseGridSize = DEFAULT_GRID_SIZE,/)
+  })
+})

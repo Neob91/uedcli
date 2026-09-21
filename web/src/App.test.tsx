@@ -15,6 +15,11 @@ interface QuadSelectionProps {
   onStaged?: (names: string[]) => void
   stagedOffsets: Record<string, [number, number, number]>
   setStagedOffsets: (next: Record<string, [number, number, number]>) => void
+  // Bug fix (found auditing for more of the Inspector/mesh-body divergence class): `frameActors`
+  // (the `F`-key/org-panel camera-framing trigger, a real QuadLayout prop) used to bbox off raw
+  // scene.actors, so framing a staged-moved actor flew the camera to its pre-move position.
+  frameActors: (names: ReadonlySet<string>) => void
+  frameRequest: { bbox: { lo: [number, number, number]; hi: [number, number, number] }; seq: number } | null
 }
 const quadProps: { current: QuadSelectionProps | null } = { current: null }
 
@@ -419,6 +424,18 @@ describe('App: actor + surface selection coexistence', () => {
     act(() => quad.setStagedOffsets({ Room: [10, 0, 0] }))
     expect(screen.getByText('10.00, 0.00, 0.00')).toBeTruthy()
     expect(screen.queryByText('0.00, 0.00, 0.00')).toBeNull()
+  })
+
+  // Bug fix (found auditing for more of the same divergence class): frameActors used to bbox off
+  // raw scene.actors -- ACTOR's own bbox_lo/bbox_hi are [-256,-256,-128]/[256,256,128], so framing
+  // it after staging a [10,0,0] move must produce a bbox shifted by that same delta, not the
+  // original one.
+  it('frameActors bboxes off the staged position, not the pre-move trunk bbox', async () => {
+    await renderSelectable()
+    act(() => quadProps.current!.setStagedOffsets({ Room: [10, 0, 0] }))
+    act(() => quadProps.current!.frameActors(new Set(['Room'])))
+    expect(quadProps.current!.frameRequest).not.toBeNull()
+    expect(quadProps.current!.frameRequest!.bbox).toEqual({ lo: [-246, -256, -128], hi: [266, 256, 128] })
   })
 })
 

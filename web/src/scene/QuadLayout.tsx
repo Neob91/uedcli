@@ -268,6 +268,7 @@ export function QuadLayout({
                 mode={resolveEffectiveMode(modes[pane], buildSolved)}
                 showRadii={showRadii}
                 showMoverSolid={showMoverSolid}
+                baseGridSize={baseGridSize}
               />
             ) : (
               <OrthoViewport

@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import type { BrushHighlight, DirectionalArrow, ScenePoly, SceneActor } from '../api'
 import {
+  addVec3,
+  anySelectedIsBrush,
   applyDelta,
   applyStagedOffset,
   applyStagedOffsets,
   applyStagedOffsetsToPolys,
   resolveActorMoveAxis,
+  snapVecToGrid,
   stagedLocationsFor,
 } from './dragStage'
 
@@ -68,6 +71,53 @@ describe('resolveActorMoveAxis', () => {
   it('returns null for an unmapped button combo (e.g. no buttons down, or a 4th/5th button)', () => {
     expect(resolveActorMoveAxis(true, 0, new Set(['ActorA']))).toBeNull()
     expect(resolveActorMoveAxis(true, 4, new Set(['ActorA']))).toBeNull()
+  })
+})
+
+describe('anySelectedIsBrush', () => {
+  const brush: BrushHighlight = { csg_class: 'add', color: [1, 1, 1], polys: [], local_origin: [0, 0, 0] }
+  const brushActor = actor('BrushA', [0, 0, 0], { brush })
+  const meshActor = actor('MeshA', [0, 0, 0])
+
+  it('false when nothing selected is a brush', () => {
+    expect(anySelectedIsBrush(new Set(['MeshA']), [brushActor, meshActor])).toBe(false)
+  })
+
+  it('true when the sole selected actor is a brush', () => {
+    expect(anySelectedIsBrush(new Set(['BrushA']), [brushActor, meshActor])).toBe(true)
+  })
+
+  it('true when a MIXED selection has any brush in it (owner ruling: the whole selection snaps)', () => {
+    expect(anySelectedIsBrush(new Set(['BrushA', 'MeshA']), [brushActor, meshActor])).toBe(true)
+  })
+
+  it('false for an empty selection', () => {
+    expect(anySelectedIsBrush(new Set(), [brushActor, meshActor])).toBe(false)
+  })
+})
+
+describe('addVec3', () => {
+  it('adds component-wise', () => {
+    expect(addVec3([1, 2, 3], [10, -5, 0])).toEqual([11, -3, 3])
+  })
+})
+
+describe('snapVecToGrid', () => {
+  it('rounds each component to the nearest multiple of gridSize', () => {
+    expect(snapVecToGrid([17, -17, 8], 16)).toEqual([16, -16, 16])
+  })
+
+  it('rounds down when exactly halfway is not reached, per Math.round convention', () => {
+    expect(snapVecToGrid([7.9, 8.1, -8.1], 16)).toEqual([0, 16, -16])
+  })
+
+  it('a zero delta stays zero', () => {
+    expect(snapVecToGrid([0, 0, 0], 16)).toEqual([0, 0, 0])
+  })
+
+  it('returns delta unchanged for a non-positive gridSize (defensive)', () => {
+    expect(snapVecToGrid([3, -4, 5], 0)).toEqual([3, -4, 5])
+    expect(snapVecToGrid([3, -4, 5], -16)).toEqual([3, -4, 5])
   })
 })
 

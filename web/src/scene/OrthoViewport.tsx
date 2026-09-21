@@ -16,7 +16,7 @@ import { DirectionalArrows } from './DirectionalArrows'
 import { moveInPlane } from './actorMove'
 import { useDragGesture } from './dragGesture'
 import type { DragGestureCallbacks } from './dragGesture'
-import { applyDelta, applyStagedOffsets, stagedLocationsFor } from './dragStage'
+import { addVec3, anySelectedIsBrush, applyDelta, applyStagedOffsets, snapVecToGrid, stagedLocationsFor } from './dragStage'
 import type { MoveDragAccumulator } from './moveDragThreshold'
 import { accumulateMoveDragFrame, freshMoveDragAccumulator } from './moveDragThreshold'
 import type { FrameRequest } from './frame'
@@ -166,6 +166,10 @@ export function OrthoViewport({
   const dragMovedRef = useRef(false)
   const moveDragAccRef = useRef<MoveDragAccumulator>(freshMoveDragAccumulator())
   const preGestureOffsetsRef = useRef<Record<string, Vec3>>({})
+  // Grid-increment movement (owner ruling): mirrors Viewport3D.tsx's identical `moveDeltaAccRef`/
+  // `gestureSnapRef` -- see its own doc comment.
+  const moveDeltaAccRef = useRef<Vec3>([0, 0, 0])
+  const gestureSnapRef = useRef(false)
 
   // `actors`, with every staged actor's world-space fields translated to its current staged
   // position -- the single derived array fed to every position-driven overlay below (BrushOutlines,
@@ -240,7 +244,14 @@ export function OrthoViewport({
         markerObjects: markerGroupRef.current?.children ?? [],
         brushObjects: mode === 'wireframe' ? (brushGroupRef.current?.children ?? []) : [],
         moverOutlineObjects: moverOutlineGroupRef.current?.children ?? [],
-        actors,
+        // Bug fix (found auditing for more of the Inspector/mesh-body divergence class): the AABB
+        // MISS-fallback (`pickActor` in selection.ts) tests a click against `.bbox_lo`/`.bbox_hi`
+        // directly, unlike every raycast-hit branch above (which only looks an actor up BY NAME --
+        // position-independent, since the underlying three.js geometry it hit is already staged-
+        // offset-aware). Passing raw `actors` here left the fallback box at a staged-moved actor's
+        // PRE-move location, so a near-miss click in its new vicinity could miss or hit the wrong
+        // actor. `effectiveActors` is the same staged-offset-applied array the overlays below use.
+        actors: effectiveActors,
         triangleOwners,
         trianglePolyIndex,
       })
@@ -248,7 +259,7 @@ export function OrthoViewport({
       else if (action.kind === 'select-surface') onSelectSurface(action.actor, action.polyIndex, action.additive)
       else if (action.kind === 'deselect') onDeselect()
     },
-    [actors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex, meshEdgeOwners, meshEdgePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode, pose.worldUnitsPerPixel],
+    [effectiveActors, triangleOwners, trianglePolyIndex, meshTriangleOwners, meshTrianglePolyIndex, meshEdgeOwners, meshEdgePolyIndex, onSelectActor, onSelectSurface, onDeselect, mode, pose.worldUnitsPerPixel],
   )
 
   const dragCallbacks = useMemo<DragGestureCallbacks>(
@@ -267,8 +278,15 @@ export function OrthoViewport({
           // Viewport3D.tsx's identical comment for the full rationale.
           const frame = accumulateMoveDragFrame(moveDragAccRef.current, dx, dy)
           if (frame) {
-            const delta = moveInPlane(frame.dx, frame.dy, axis, pose.worldUnitsPerPixel)
-            const next = applyDelta(stagedOffsetsRef.current, selectedNames, delta, actors)
+            const frameDelta = moveInPlane(frame.dx, frame.dy, axis, pose.worldUnitsPerPixel)
+            // Grid-increment movement (owner ruling): see Viewport3D.tsx's identical comment --
+            // accumulate the RAW total since gesture start, snap the TOTAL when the selection
+            // contains a brush, then recompute from the gesture-start base.
+            moveDeltaAccRef.current = addVec3(moveDeltaAccRef.current, frameDelta)
+            const totalDelta = gestureSnapRef.current
+              ? snapVecToGrid(moveDeltaAccRef.current, baseGridSize)
+              : moveDeltaAccRef.current
+            const next = applyDelta(preGestureOffsetsRef.current, selectedNames, totalDelta, actors)
             stagedOffsetsRef.current = next
             setStagedOffsets(next) // local preview only -- no network call per pointer-move frame
             dragMovedRef.current = true
@@ -288,7 +306,7 @@ export function OrthoViewport({
       onTap: (clientX, clientY, additive, shiftKey) => performTapSelect(clientX, clientY, additive, shiftKey),
       onWheel: (deltaY) => setPose((prev) => orthoZoom(prev, deltaY)),
     }),
-    [axis, performTapSelect, pose.worldUnitsPerPixel, selectedNames, actors, stagedOffsetsRef, setStagedOffsets],
+    [axis, performTapSelect, pose.worldUnitsPerPixel, selectedNames, actors, stagedOffsetsRef, setStagedOffsets, baseGridSize],
   )
   const mouseDrag = useDragGesture(dragCallbacks)
 
@@ -342,9 +360,13 @@ export function OrthoViewport({
       // identical comment.
       moveDragAccRef.current = freshMoveDragAccumulator()
       preGestureOffsetsRef.current = stagedOffsetsRef.current
+      // Grid-increment movement (owner ruling): decided ONCE per gesture -- see Viewport3D.tsx's
+      // identical comment.
+      moveDeltaAccRef.current = [0, 0, 0]
+      gestureSnapRef.current = anySelectedIsBrush(selectedNames, actors)
       mouseDrag.onPointerDown(e)
     },
-    [mouseDrag, stagedOffsetsRef],
+    [mouseDrag, stagedOffsetsRef, selectedNames, actors],
   )
 
   // Cursor UU coordinate readout (Task 28): tracks EVERY pointer move inside the pane, not just
