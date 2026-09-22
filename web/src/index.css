@@ -637,16 +637,25 @@ body {
   position: absolute;
   bottom: 26px;
   left: 8px;
-  z-index: 2;
+  /* Higher than .control-cluster's z-index (2): .misc-options sits directly below it with only a
+     4px-scale gap, and a tooltip rising from a misc-options button (bottom: calc(100% + 6px)) can
+     reach into that space. At equal z-index the two would fall back to DOM order, where
+     .control-cluster (nested inside Viewport3D, itself deep inside QuadLayout's pane tree) paints
+     ABOVE .misc-options (a QuadLayout-level sibling rendered earlier in the document) -- found live
+     as a misc-options tooltip rendering underneath .control-cluster's buttons. */
+  z-index: 3;
 }
 
 .misc-options-flyout {
   gap: 4px;
-  /* Narrow-pane fallback (spec): wrap onto a second row rather than clip a control off-screen when
-     there isn't room to the right (a portrait/mobile quad view can put the perspective pane well
-     under 200px wide). */
-  flex-wrap: wrap;
-  max-width: min(200px, calc(100vw - 50px));
+  /* Always a single horizontal row -- flex-wrap here was wrapping onto a second row under normal
+     (non-narrow) widths too, breaking the "stays the trigger's own height" requirement outright.
+     Narrow-pane safety is handled by max-width + overflow-x scroll instead, which never changes
+     the tray's height. */
+  flex-wrap: nowrap;
+  max-width: calc(100vw - 50px);
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 .misc-options-toggle {
@@ -706,8 +715,11 @@ body {
   content: attr(data-tip);
   position: absolute;
   bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
+  /* Left-aligned to the button, not centered: every button this applies to sits within 8px of the
+     pane's left edge (found live -- a centered tooltip pushes roughly half its own width past the
+     left edge, off-screen). Left-aligning keeps it growing rightward, same direction the trays
+     already expand, so it never has less room than they do. */
+  left: 0;
   background: var(--surface-3);
   color: var(--fg);
   font-size: 10px;

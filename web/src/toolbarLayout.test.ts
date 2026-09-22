@@ -47,3 +47,45 @@ describe('toolbar layout CSS (dev/docs/GUI.md toolbar bug fixes)', () => {
     expect(body).toMatch(/flex-direction:\s*column/)
   })
 })
+
+/** All declaration blocks for one selector (a plain `ruleBody` only finds the first — some
+ * selectors here, like `.misc-options-flyout`, have a second block layered on top). */
+function allRuleBodies(selector: string): string[] {
+  const escaped = selector.replace(/[.[\]]/g, '\\$&')
+  const re = new RegExp(`(?<![\\w-])${escaped}\\s*\\{([^}]*)\\}`, 'g')
+  return [...CSS.matchAll(re)].map((m) => m[1])
+}
+
+describe('control-cluster/misc-options live bugs found after ship (owner report)', () => {
+  it('.misc-options-flyout never wraps onto a second row -- it broke the "stays the trigger\'s own height" requirement outright, not just in the narrow-pane case', () => {
+    const bodies = allRuleBodies('.misc-options-flyout')
+    const combined = bodies.join('\n')
+    expect(combined).toMatch(/flex-wrap:\s*nowrap/)
+    expect(combined).not.toMatch(/flex-wrap:\s*wrap\b/)
+  })
+
+  it('.misc-options-flyout allows horizontal scroll instead, for the genuine narrow-pane case', () => {
+    const combined = allRuleBodies('.misc-options-flyout').join('\n')
+    expect(combined).toMatch(/overflow-x:\s*auto/)
+  })
+
+  it('.misc-options paints above .control-cluster (a rising tooltip must never render underneath it)', () => {
+    const misc = ruleBody('.misc-options')
+    const cluster = ruleBody('.control-cluster')
+    expect(misc).not.toBeNull()
+    expect(cluster).not.toBeNull()
+    const miscZ = Number(/z-index:\s*(\d+)/.exec(misc!)?.[1])
+    const clusterZ = Number(/z-index:\s*(\d+)/.exec(cluster!)?.[1])
+    expect(Number.isNaN(miscZ)).toBe(false)
+    expect(Number.isNaN(clusterZ)).toBe(false)
+    expect(miscZ).toBeGreaterThan(clusterZ)
+  })
+
+  it('[data-tip]::after is left-aligned to its button, not centered -- every button this applies to sits within 8px of the pane edge, and a centered tooltip pushes off-screen', () => {
+    const body = ruleBody('[data-tip]::after')
+    expect(body).not.toBeNull()
+    expect(body).toMatch(/left:\s*0\b/)
+    expect(body).not.toMatch(/left:\s*50%/)
+    expect(body).not.toMatch(/transform:\s*translateX/)
+  })
+})
