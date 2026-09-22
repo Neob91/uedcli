@@ -17,7 +17,9 @@ import { BrushOutlines } from './BrushOutlines'
 import { DirectionalArrows } from './DirectionalArrows'
 import { moveAlongAxis } from './actorMove'
 import type { CameraPose, Vec3 } from './camera'
-import { cameraBasis, dollyAndTurn, flyInput, flyMove, look, orbit, pan, zoom } from './camera'
+import { cameraBasis, flyInput, flyMove, look, resolveDrag, resolveTwoFingerDrag, zoom } from './camera'
+import { ControlCluster } from './ControlCluster'
+import type { ActiveTray } from './ControlCluster'
 import type { DragGestureCallbacks } from './dragGesture'
 import { useDragGesture } from './dragGesture'
 import {
@@ -36,8 +38,8 @@ import type { FrameRequest } from './frame'
 import { bboxCenter, bboxMaxExtent } from './frame'
 import { DEFAULT_MARKER_FOOTPRINT_UU, MARKER_COLOR, MARKER_RENDER_ORDER, worldUnitsPerPixelAt } from './markers'
 import { MeshWireframe, SelectedMeshWireframe } from './MeshWireframe'
-import { MoveJoystick } from './MoveJoystick'
-import type { JoystickVector } from './joystick'
+import { cycleMoveMode } from './moveMode'
+import type { MoveMode } from './moveMode'
 import { PointActorMarker } from './PointActorMarker'
 import { RadiiOverlays } from './RadiiOverlays'
 import { ActorSelectionHighlight, SurfaceSelectionHighlight } from './SelectionHighlight'
@@ -106,30 +108,6 @@ function FlyKeys({ setPose }: { setPose: (fn: (prev: CameraPose) => CameraPose) 
   return null
 }
 
-/** The touch joystick/up-down-buttons' counterpart to `FlyKeys` above -- same `flyMove`/
- * `FLY_SPEED_UU_PER_SEC` mechanics, driven by `MoveJoystick.tsx`'s continuous analog input instead
- * of held keys. A separate ref/component (not folded into `FlyKeys`' `held` set) so touch input
- * never touches keyboard state -- the two channels are fully independent, satisfying "must not
- * interfere with... keyboard controls when both are present" (a touch-capable laptop with a
- * keyboard). `inputRef.current` is mutated directly by `MoveJoystick`'s callbacks (Viewport3D's
- * `onStickChange`/`onVerticalChange`), read fresh every frame here -- the same ref-based, no-React-
- * state-per-move pattern `FlyKeys`' `held` set already uses, for the same reason (a re-render per
- * pointer-move would be wasteful). */
-function TouchFlyInput({
-  inputRef,
-  setPose,
-}: {
-  inputRef: MutableRefObject<{ forward: number; right: number; up: number }>
-  setPose: (fn: (prev: CameraPose) => CameraPose) => void
-}) {
-  useFrame((_state, delta) => {
-    const input = inputRef.current
-    if (input.forward === 0 && input.right === 0 && input.up === 0) return
-    setPose((prev) => flyMove(prev, input, FLY_SPEED_UU_PER_SEC, delta))
-  })
-  return null
-}
-
 // `THREE.Color` reads 0..1 components -- built once from `markers.MARKER_COLOR` (module-scope: a
 // plain data object, no WebGL context needed).
 const MARKER_COLOR_THREE = new THREE.Color(...MARKER_COLOR)
@@ -191,6 +169,20 @@ export interface Viewport3DProps {
   // user is currently looking at, in every pane -- this perspective pane draws no grid overlay of
   // its own, but shares the setting for movement.
   baseGridSize?: number
+  // Real UnrealEd's shading-mode gating signal (Task 19, buildStatus.ts's resolveBuildSolved) --
+  // now also needed here directly: ControlCluster's shading-mode tray gates tile availability
+  // itself (isModeAvailable), the same way ModeSelector used to (viewport-control-redesign-icon-
+  // cluster-replaces spec, "Ownership split").
+  buildSolved: boolean
+  // Fires with the newly-picked shading mode when a ControlCluster tile is chosen -- QuadLayout
+  // binds this to `(mode) => setPaneMode('perspective', mode)`, the same `applyModeKey`/
+  // `setPaneMode` plumbing its old <ModeSelector> render site used.
+  onSelectMode: (mode: ShadingMode) => void
+  // Which of the two mutually-exclusive trays (ControlCluster's shading-mode tray here, MiscOptions'
+  // tray in QuadLayout.tsx) is open -- lifted to QuadLayout (their nearest common owner) so opening
+  // one can collapse the other across this component boundary (spec's "Mutual exclusion").
+  activeTray: ActiveTray
+  onActiveTrayChange: (tray: ActiveTray) => void
 }
 
 // Which single touch contact is the tap-selection candidate: the FIRST finger down, tracked only
@@ -222,8 +214,17 @@ export function Viewport3D({
   showRadii = false,
   showMoverSolid = false,
   baseGridSize = DEFAULT_GRID_SIZE,
+  buildSolved,
+  onSelectMode,
+  activeTray,
+  onActiveTrayChange,
 }: Viewport3DProps) {
   const [pose, setPose] = useState<CameraPose>(INITIAL_POSE)
+  // Move-mode toggle (viewport-control-redesign-icon-cluster-replaces spec): ONE shared state, not
+  // per-platform -- both the desktop drag dispatch (resolveDrag) and the touch two-finger dispatch
+  // (resolveTwoFingerDrag) below read this SAME value, so it's naturally shared with no extra
+  // plumbing. Never lifted to QuadLayout -- nothing outside this component needs it.
+  const [moveMode, setMoveMode] = useState<MoveMode>('fly')
 
   // `F`-frame (Task 15): retarget the pose to fit the requested bbox, keeping pitch/yaw (the current
   // viewing angle) and backing the camera off along its own forward vector far enough to fit the
@@ -255,18 +256,6 @@ export function Viewport3D({
   // `e.pointerType === 'touch'` below) so desktop behavior is unchanged.
   const touchPoints = useRef<Map<number, TouchPoint>>(new Map())
   const touchTap = useRef<TouchTapTracker | null>(null)
-  // The mobile move-joystick/up-down-buttons' live input (board item
-  // mobile-3d-move-joystick-visual-design-pending) -- mutated directly by MoveJoystick's callbacks
-  // below, read every frame by TouchFlyInput. A ref, not React state: matches FlyKeys' own `held`
-  // set (a per-move re-render would be wasteful and isn't needed for anything visible).
-  const touchFlyInput = useRef<{ forward: number; right: number; up: number }>({ forward: 0, right: 0, up: 0 })
-  const onJoystickStickChange = useCallback((v: JoystickVector) => {
-    touchFlyInput.current.forward = v.forward
-    touchFlyInput.current.right = v.right
-  }, [])
-  const onJoystickVerticalChange = useCallback((up: number) => {
-    touchFlyInput.current.up = up
-  }, [])
   const cameraRef = useRef<THREE.Camera | null>(null)
   const meshRef = useRef<THREE.Mesh | null>(null)
   // The Movers:on toggle's own solid mesh (board item `mover-polys-unselectable-in-movers-on-mode`):
@@ -471,18 +460,12 @@ export function Viewport3D({
           }
           return
         }
-        setPose((prev) => {
-          if (altKey && (buttons & 1) !== 0) return orbit(prev, orbitPivot, dx, dy)
-          if ((buttons & 1) !== 0 && (buttons & 2) !== 0) return pan(prev, dx, dy)
-          if ((buttons & 2) !== 0) return look(prev, dx, dy)
-          if ((buttons & 1) !== 0) return dollyAndTurn(prev, dx, dy)
-          return prev
-        })
+        setPose((prev) => resolveDrag(prev, dx, dy, buttons, altKey, moveMode, orbitPivot))
       },
       onTap: (clientX, clientY, additive, shiftKey) => performTapSelect(clientX, clientY, additive, shiftKey),
       onWheel: (deltaY) => setPose((prev) => zoom(prev, deltaY)),
     }),
-    [orbitPivot, performTapSelect, selectedNames, primarySelectedActor, scene.actors, stagedOffsetsRef, setStagedOffsets, baseGridSize],
+    [orbitPivot, performTapSelect, selectedNames, primarySelectedActor, scene.actors, stagedOffsetsRef, setStagedOffsets, baseGridSize, moveMode],
   )
   const mouseDrag = useDragGesture(dragCallbacks)
   const containerRef = mouseDrag.containerRef
@@ -544,14 +527,14 @@ export function Viewport3D({
         const after: [TouchPoint, TouchPoint] = [points.get(ids[0])!, points.get(ids[1])!]
         const { panDx, panDy, zoomDelta } = computeTwoFingerDelta(before, after)
         if (panDx !== 0 || panDy !== 0 || zoomDelta !== 0) {
-          setPose((prevPose) => zoom(pan(prevPose, panDx, panDy), zoomDelta))
+          setPose((prevPose) => zoom(resolveTwoFingerDrag(prevPose, panDx, panDy, moveMode), zoomDelta))
         }
         return
       }
 
       mouseDrag.onPointerMove(e)
     },
-    [mouseDrag],
+    [mouseDrag, moveMode],
   )
 
   const onPointerUp = useCallback(
@@ -616,7 +599,6 @@ export function Viewport3D({
         <color attach="background" args={['#000000']} />
         <CameraRig pose={pose} cameraRef={cameraRef} />
         <FlyKeys setPose={setPose} />
-        <TouchFlyInput inputRef={touchFlyInput} setPose={setPose} />
         {/* All world content is reflected by R = diag(1,-1,1): the world is left-handed, and this is
             the handedness fix (viewportRender.ts's applyCameraPose reflects the camera pose by the
             same R). three.js compensates for the group's negative determinant -- winding (frontFace)
@@ -781,14 +763,20 @@ export function Viewport3D({
         {showRadii && <RadiiOverlays actors={effectiveActors} view="perspective" selectedNames={selectedNames} />}
         </group>
       </Canvas>
-      {/* Touch-only virtual joystick + up/down buttons (board item
-          mobile-3d-move-joystick-visual-design-pending) -- a plain DOM overlay, not 3D content, so
-          it sits outside <Canvas> like the other per-pane overlays (QuadLayout.tsx's
-          .quad-pane-label/.mode-selector); MoveJoystick itself renders nothing on a non-touch
-          device. Bottom-left of this pane is the one corner none of QuadLayout's own overlays uses
-          for the perspective pane (top-left = pane label, bottom-right = mode selector, top-right =
-          the quad-wide toolbar) -- see index.css's .move-joystick-controls. */}
-      <MoveJoystick onStickChange={onJoystickStickChange} onVerticalChange={onJoystickVerticalChange} />
+      {/* Move-mode + shading-mode icon cluster (viewport-control-redesign-icon-cluster-replaces
+          spec) -- a plain DOM overlay, not 3D content, so it sits outside <Canvas> like the other
+          per-pane overlays. Bottom-left of this pane, the joystick's old spot -- see index.css's
+          .control-cluster. Misc-options is a SEPARATE component, rendered by QuadLayout.tsx -- see
+          ControlCluster.tsx's own doc comment for why. */}
+      <ControlCluster
+        moveMode={moveMode}
+        onCycleMoveMode={() => setMoveMode(cycleMoveMode)}
+        shadingMode={mode}
+        buildSolved={buildSolved}
+        onSelectShadingMode={onSelectMode}
+        activeTray={activeTray}
+        onActiveTrayChange={onActiveTrayChange}
+      />
     </div>
   )
 }

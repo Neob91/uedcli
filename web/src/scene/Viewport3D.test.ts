@@ -62,7 +62,7 @@ describe('Viewport3D -- Ctrl/Cmd-drag actor translation wiring', () => {
     )?.[1]
     expect(onDragBody).toBeDefined()
     const axisIdx = onDragBody!.indexOf('resolveActorMoveAxis')
-    const setPoseIdx = onDragBody!.indexOf('setPose((prev) => {')
+    const setPoseIdx = onDragBody!.indexOf('setPose((prev) => resolveDrag(')
     expect(axisIdx).toBeGreaterThanOrEqual(0)
     expect(setPoseIdx).toBeGreaterThan(axisIdx) // the move branch is checked, and returns, first
     // The move branch's own `if (axis) { ... return }` sits entirely before setPose is ever reached.
@@ -275,5 +275,97 @@ describe('Viewport3D -- grid-increment movement wiring', () => {
 
   it('baseGridSize defaults to DEFAULT_GRID_SIZE (the same value the ortho grid dropdown defaults to)', () => {
     expect(VIEWPORT3D_SOURCE).toMatch(/baseGridSize = DEFAULT_GRID_SIZE,/)
+  })
+})
+
+describe('Viewport3D -- move-mode-aware camera dispatch and ControlCluster wiring (viewport-control-redesign-icon-cluster-replaces)', () => {
+  it('no longer imports or renders the deleted MoveJoystick/TouchFlyInput', () => {
+    expect(VIEWPORT3D_SOURCE).not.toContain('MoveJoystick')
+    expect(VIEWPORT3D_SOURCE).not.toContain('TouchFlyInput')
+    expect(VIEWPORT3D_SOURCE).not.toContain("from './joystick'")
+  })
+
+  it('renders ControlCluster with the move-mode/shading-mode/activeTray wiring', () => {
+    expect(VIEWPORT3D_SOURCE).toMatch(/<ControlCluster\b/)
+    expect(VIEWPORT3D_SOURCE).toContain('moveMode={moveMode}')
+    expect(VIEWPORT3D_SOURCE).toContain('onCycleMoveMode={() => setMoveMode(cycleMoveMode)}')
+    expect(VIEWPORT3D_SOURCE).toContain('shadingMode={mode}')
+    expect(VIEWPORT3D_SOURCE).toContain('buildSolved={buildSolved}')
+    expect(VIEWPORT3D_SOURCE).toContain('onSelectShadingMode={onSelectMode}')
+    expect(VIEWPORT3D_SOURCE).toContain('activeTray={activeTray}')
+    expect(VIEWPORT3D_SOURCE).toContain('onActiveTrayChange={onActiveTrayChange}')
+  })
+
+  it('moveMode is Viewport3D\'s own local state, not a prop', () => {
+    expect(VIEWPORT3D_SOURCE).toMatch(/const \[moveMode, setMoveMode\] = useState<MoveMode>\('fly'\)/)
+  })
+
+  it('the desktop drag dispatch delegates to resolveDrag, passing moveMode and orbitPivot', () => {
+    expect(VIEWPORT3D_SOURCE).toContain(
+      'setPose((prev) => resolveDrag(prev, dx, dy, buttons, altKey, moveMode, orbitPivot))',
+    )
+  })
+
+  it('the two-finger touch dispatch delegates to resolveTwoFingerDrag, passing moveMode', () => {
+    expect(VIEWPORT3D_SOURCE).toContain(
+      'setPose((prevPose) => zoom(resolveTwoFingerDrag(prevPose, panDx, panDy, moveMode), zoomDelta))',
+    )
+  })
+
+  it('single-finger touch still calls look directly, unaffected by moveMode', () => {
+    expect(VIEWPORT3D_SOURCE).toContain('setPose((prevPose) => look(prevPose, dx, dy))')
+  })
+})
+
+// Re-verify the Ctrl/Cmd-drag actor-move priority ordering still holds after the dispatch change --
+// same intent as the pre-existing 'Ctrl/Cmd-drag actor translation wiring' describe block above,
+// updated for resolveDrag's call shape (it no longer contains a literal `setPose((prev) => {` -- see
+// this task's own note on why that pre-existing assertion had to change, not just gain new ones).
+//
+// Both tests below locate the REAL `return` statement (line ~472 in the current source: a bare
+// `return` on its own line, unconditionally exiting the `if (axis) { ... }` block) via a regex
+// anchored to the start of a line -- `/^\s*return\b/m` -- rather than a plain `.indexOf('return', ...)`.
+// The actor-move branch's own leading comment literally contains the word `return` in backticks
+// ("... still `return` unconditionally either way ..."), mid-line inside a `//` comment; a plain
+// indexOf match lands there instead, well before the real return statement, and silently truncates
+// everything after it out of the slice these tests inspect.
+describe('Viewport3D -- Ctrl/Cmd-drag priority survives the move-mode dispatch change', () => {
+  it('resolves the actor-move axis and returns BEFORE the camera setPose dispatch in onDrag', () => {
+    const onDragBody = /onDrag: \(dx, dy, buttons, altKey, additive\) => \{([\s\S]*?)\n      \},/.exec(
+      VIEWPORT3D_SOURCE,
+    )?.[1]
+    expect(onDragBody).toBeDefined()
+    const axisIdx = onDragBody!.indexOf('resolveActorMoveAxis')
+    const setPoseIdx = onDragBody!.indexOf('setPose((prev) => resolveDrag(')
+    expect(axisIdx).toBeGreaterThanOrEqual(0)
+    expect(setPoseIdx).toBeGreaterThan(axisIdx)
+    const returnMatch = /^\s*return\b/m.exec(onDragBody!.slice(axisIdx))
+    expect(returnMatch).not.toBeNull()
+    const returnIdx = axisIdx + returnMatch!.index
+    expect(returnIdx).toBeGreaterThan(axisIdx)
+    expect(returnIdx).toBeLessThan(setPoseIdx)
+  })
+
+  // Spec ("Two movement mechanisms this redesign does not touch"): Ctrl/Cmd-drag actor-move must
+  // behave identically in both move-modes. The ordering test above already proves it always runs
+  // and returns BEFORE moveMode is even consulted (resolveDrag isn't reached) -- this test pins
+  // that structurally, by asserting the actor-move branch itself never references moveMode at all,
+  // so there is no code path by which it COULD vary with the mode.
+  it('the actor-move branch never reads moveMode -- its behavior cannot vary by move-mode', () => {
+    const onDragBody = /onDrag: \(dx, dy, buttons, altKey, additive\) => \{([\s\S]*?)\n      \},/.exec(
+      VIEWPORT3D_SOURCE,
+    )?.[1]
+    expect(onDragBody).toBeDefined()
+    const axisIdx = onDragBody!.indexOf('resolveActorMoveAxis')
+    const returnMatch = /^\s*return\b/m.exec(onDragBody!.slice(axisIdx))
+    expect(returnMatch).not.toBeNull()
+    const returnIdx = axisIdx + returnMatch!.index
+    const actorMoveBranch = onDragBody!.slice(axisIdx, returnIdx)
+    // Sanity check that the slice actually reaches the real logic this test means to cover, not
+    // just the leading comment -- guards against this test silently degrading back to the bug above.
+    expect(actorMoveBranch).toContain('accumulateMoveDragFrame')
+    expect(actorMoveBranch).toContain('worldUnitsPerPixelAt')
+    expect(actorMoveBranch).toContain('applyDelta')
+    expect(actorMoveBranch).not.toContain('moveMode')
   })
 })

@@ -505,116 +505,6 @@ body {
   background: var(--sem-selection);
 }
 
-/* The Movers/Radii/Grid overlay toolbar (bug fix, dev/docs/GUI.md "Toolbar overlap"): ONE
-   absolutely-positioned flex row, a child of `.quad-layout` (the quad grid itself) -- not of
-   `.quad-layout-root`, which also spans the 220px org-panel sidebar. Each button's old individual
-   `position: absolute; right: <hardcoded px>` anchored to `.quad-layout-root`, so any offset smaller
-   than the sidebar's width landed the button INSIDE the sidebar instead of over the quad. A single
-   positioned flex container with a `gap` needs no per-button offset math, so it stays correct
-   regardless of the sidebar's width -- including once it's collapsible (below). Being
-   `position: absolute` inside a CSS grid container also excludes it from the grid's own auto-
-   placement (it does not consume one of the 2x2 pane cells). */
-.quad-toolbar {
-  position: absolute;
-  top: 4px;
-  left: 4px;
-  right: 4px;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.quad-toolbar button {
-  font: inherit;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--fg);
-  cursor: pointer;
-}
-
-.mover-solid-toggle[aria-pressed='false'],
-.radii-toggle[aria-pressed='false'] {
-  color: var(--fg-muted);
-}
-
-/* Grid control (owner ruling): one checkbox+dropdown pair instead of two separate buttons -- the
-   dropdown stays visible but disabled while the checkbox is off, so toggling Grid causes no layout
-   shift and the last-chosen size stays visible. */
-.grid-control {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--fg);
-}
-
-.grid-control-toggle {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  cursor: pointer;
-}
-
-.grid-size-select {
-  font: inherit;
-  font-size: 11px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-}
-
-.grid-size-select:disabled {
-  color: var(--fg-muted);
-  cursor: not-allowed;
-}
-
-/* Visible per-pane shading-mode control -- bottom-right of every pane (the one corner none of the
-   existing per-pane/per-quad overlays uses: quad-pane-label is top-left, .quad-toolbar top-right of
-   the whole quad, ortho-cursor-readout bottom-left of ortho panes only). Mirrors .quad-toolbar's own
-   look, one button per available mode instead of a single on/off toggle. */
-.mode-selector {
-  position: absolute;
-  bottom: 4px;
-  right: 4px;
-  z-index: 2;
-  display: flex;
-  gap: 2px;
-}
-
-.mode-selector-btn {
-  font: inherit;
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  border: 1px solid var(--border-strong);
-  background: var(--surface-2);
-  color: var(--fg-muted);
-  cursor: pointer;
-}
-
-.mode-selector-btn[aria-pressed='true'] {
-  color: var(--fg);
-  background: color-mix(in srgb, var(--sem-selection) 20%, var(--surface-2));
-}
-
-.mode-selector-btn:disabled {
-  color: var(--fg-muted);
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
 /* Cursor UU coordinate readout (Task 28) -- bottom-left of each ortho pane. */
 .ortho-cursor-readout {
   position: absolute;
@@ -630,79 +520,210 @@ body {
   pointer-events: none;
 }
 
-/* Touch-only mobile move joystick + up/down buttons (board item
-   mobile-3d-move-joystick-visual-design-pending, owner-approved "Minimal HUD cluster" design) --
-   bottom-left of the perspective pane, the one corner none of this pane's other overlays uses
-   (pane label = top-left, mode selector = bottom-right; the quad-wide toolbar sits above the whole
-   quad, not this pane specifically). `pointer-events: none` on the wrapper + `auto` on its two
-   children keeps the gaps around the ring/buttons click-through to the canvas underneath, matching
-   `.ortho-cursor-readout`'s own convention just above. */
-.move-joystick-controls {
+/* Move-mode + shading-mode icon cluster (viewport-control-redesign-icon-cluster-replaces spec) --
+   bottom-left of the perspective pane, the joystick's old spot. A vertical stack: move-mode on top,
+   shading-mode below it (Stacking order, spec's "Icon cluster") -- .misc-options below uses the SAME
+   left offset and a bottom offset chosen to slot in directly beneath this one, so together they
+   read as one 3-item column even though they're two separate DOM subtrees (the perspective
+   `.quad-pane`'s box and `.quad-layout`'s own box share the same bottom-left corner whenever the
+   perspective pane is visible -- 2x2 default, or perspective itself maximized). */
+.control-cluster {
   position: absolute;
-  bottom: 8px;
+  bottom: 58px; /* clears .misc-options's own 28px button + 4px gap, sitting at bottom:26px */
   left: 8px;
   z-index: 2;
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  pointer-events: none;
-}
-
-.move-joystick-controls > * {
-  pointer-events: auto;
-}
-
-/* Thin ring, not a solid filled base (the approved design's own wording) -- a soft translucent fill
-   just enough to read as a touch target, with the visible affordance carried by the border + dot. */
-.move-joystick-base {
-  position: relative;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
-  border: 1.5px solid var(--accent);
-  background: var(--overlay-bg-soft);
-  touch-action: none;
-}
-
-.move-joystick-dot {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--accent);
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-
-.move-vertical-buttons {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
 
-.move-vertical-btn {
-  width: 30px;
-  height: 30px;
+.control-cluster-item {
+  position: relative;
+}
+
+.control-cluster-btn,
+.misc-options-btn {
+  width: 28px;
+  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
-  line-height: 1;
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid var(--border-strong);
   background: var(--surface-2);
   color: var(--fg);
   cursor: pointer;
-  touch-action: none;
+  padding: 0;
+}
+
+.control-cluster-btn svg,
+.misc-options-btn svg {
+  width: 15px;
+  height: 15px;
+}
+
+.control-cluster-caption {
+  position: absolute;
+  left: 34px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 10px;
+  color: var(--fg-muted);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Opacity, NOT max-width+overflow:hidden -- the latter clips any tooltip popping up from a tile
+   inside it (found live while building this feature: inner-button tooltips rendered but were
+   invisible). Shared by both flyouts below. */
+.control-cluster-flyout,
+.misc-options-flyout {
+  position: absolute;
+  left: 34px;
+  top: 0;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.control-cluster-flyout.open,
+.misc-options-flyout.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.control-cluster-tile {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+  padding: 0;
+}
+
+.control-cluster-tile svg {
+  width: 14px;
+  height: 14px;
+}
+
+.control-cluster-tile[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--sem-selection) 20%, var(--surface-2));
+}
+
+.control-cluster-tile:disabled {
+  color: var(--fg-muted);
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* Misc-options icon (MiscOptions.tsx, QuadLayout-owned -- see its own doc comment for why it's a
+   separate component from .control-cluster above). Anchored to `.quad-layout` itself, not any one
+   pane: because a maximized pane spans the WHOLE `.quad-layout` box
+   (`.quad-layout[data-maximized] .quad-pane:not([hidden])`, above), this one fixed position lands
+   at the right pane's bottom-left corner in every layout state with no JS/conditional positioning
+   needed -- together with .control-cluster in the default/perspective-maximized states, or alone
+   when a non-perspective pane is maximized. The 26px bottom offset (vs. .ortho-cursor-readout's own
+   bottom:4px) keeps this from ever visually overlapping that readout in the "alone" case. */
+.misc-options {
+  position: absolute;
+  bottom: 26px;
+  left: 8px;
+  z-index: 2;
+}
+
+.misc-options-flyout {
+  gap: 4px;
+  /* Narrow-pane fallback (spec): wrap onto a second row rather than clip a control off-screen when
+     there isn't room to the right (a portrait/mobile quad view can put the perspective pane well
+     under 200px wide). */
+  flex-wrap: wrap;
+  max-width: min(200px, calc(100vw - 50px));
+}
+
+.misc-options-toggle {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+}
+
+.misc-options-toggle svg {
+  width: 13px;
+  height: 13px;
+}
+
+.misc-options-toggle.on {
+  background: color-mix(in srgb, var(--sem-selection) 20%, var(--surface-2));
+}
+
+.misc-options-select-wrap select {
+  height: 24px;
+  font: inherit;
+  font-size: 10px;
+  background: var(--surface-2);
+  color: var(--fg);
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+}
+
+.misc-options-select-wrap select:disabled {
+  color: var(--fg-muted);
+  cursor: not-allowed;
+}
+
+/* Shared hover/hold tooltip (viewport-control-redesign-icon-cluster-replaces spec, "Tooltips") --
+   [data-tip] is set by useHoldTooltip.ts on every button in both components above (except the
+   misc-options grid-size select, which keeps the browser's own native `title` tooltip instead).
+   Hover shows it on desktop for free (no JS); [data-tip-active] is toggled by the same hook on
+   touch, after a ~500ms hold. touch-action/-webkit-touch-callout/user-select suppress the OS's own
+   long-press affordances (context menu, callout, text-selection magnifier), which sit in the same
+   time range and would otherwise fire instead of (or alongside) this tooltip. */
+[data-tip] {
+  position: relative;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
   user-select: none;
 }
 
-.move-vertical-btn:active {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
+[data-tip]::after {
+  content: attr(data-tip);
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--surface-3);
+  color: var(--fg);
+  font-size: 10px;
+  padding: 3px 7px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+  z-index: 5;
+}
+
+[data-tip]:hover::after,
+[data-tip][data-tip-active='true']::after {
+  opacity: 1;
 }
 
 /* `top`/`left` are relative to `.viewport-content`, which already starts right below the toolbar

@@ -8,6 +8,8 @@
 // Scroll = zoom (dolly along the forward vector).
 // Alt-drag = orbit around a pivot (the selection), re-aiming at it.
 
+import type { MoveMode } from './moveMode'
+
 export type Vec3 = [number, number, number]
 
 export interface CameraPose {
@@ -116,6 +118,24 @@ export function pan(
   return { position, pitch: pose.pitch, yaw: pose.yaw }
 }
 
+/** Touch two-finger drag in move-mode 'fly' ("Move horizontal", viewport-control-redesign-icon-
+ * cluster-replaces spec): forward/back in the horizontal plane (vertical drag component, like
+ * `dollyAndTurn`'s dy) + strafe (horizontal drag component, like `pan`'s dx) -- no rotation, no Z
+ * change. The touch replacement for the deleted joystick's forward/strafe stick. */
+export function dollyAndStrafe(
+  pose: CameraPose,
+  dx: number,
+  dy: number,
+  speeds: CameraSpeeds = DEFAULT_SPEEDS,
+): CameraPose {
+  const { right } = cameraBasis(pose.pitch, pose.yaw)
+  const y = pose.yaw * DEG2RAD
+  const horizForward: Vec3 = [Math.cos(y), Math.sin(y), 0]
+  let position = addScaled(pose.position, horizForward, -dy * speeds.dollyPerPixel)
+  position = addScaled(position, right, dx * speeds.panPerPixel)
+  return { position, pitch: pose.pitch, yaw: pose.yaw }
+}
+
 /** Scroll-wheel zoom: dolly along the forward vector. */
 export function zoom(
   pose: CameraPose,
@@ -195,4 +215,41 @@ export function orbit(
   ]
   // Face back toward the pivot: camera forward = -offsetDirection = forward(-orbitPitch, orbitYaw + 180).
   return { position, pitch: -orbitPitch, yaw: wrapYaw(orbitYaw + 180) }
+}
+
+/** Mode-aware desktop drag dispatch (viewport-control-redesign-icon-cluster-replaces spec,
+ * "Move-mode toggle"): in 'fly' mode (default), LMB alone dollies+turns and LMB+RMB pans -- today's
+ * original bindings, unchanged. In 'pan' mode the two are SWAPPED: LMB alone pans, LMB+RMB
+ * dollies+turns. RMB alone (`look`) and Alt+LMB (`orbit`) are unaffected by moveMode either way.
+ * Replaces the mode-blind branch chain `Viewport3D.tsx`'s `onDrag` used to inline directly. */
+export function resolveDrag(
+  pose: CameraPose,
+  dx: number,
+  dy: number,
+  buttons: number,
+  altKey: boolean,
+  moveMode: MoveMode,
+  orbitPivot: Vec3,
+  speeds: CameraSpeeds = DEFAULT_SPEEDS,
+): CameraPose {
+  if (altKey && (buttons & 1) !== 0) return orbit(pose, orbitPivot, dx, dy, speeds)
+  const lmb = (buttons & 1) !== 0
+  const rmb = (buttons & 2) !== 0
+  if (lmb && rmb) return moveMode === 'pan' ? dollyAndTurn(pose, dx, dy, speeds) : pan(pose, dx, dy, speeds)
+  if (rmb) return look(pose, dx, dy, speeds)
+  if (lmb) return moveMode === 'pan' ? pan(pose, dx, dy, speeds) : dollyAndTurn(pose, dx, dy, speeds)
+  return pose
+}
+
+/** Mode-aware touch two-finger drag dispatch (same spec section): 'fly' mode ("Move horizontal")
+ * dollies+strafes; 'pan' mode ("Move vertical") does today's original two-finger pan (strafe +
+ * world Z). Single-finger drag (`look`) is untouched by moveMode -- see Viewport3D.tsx. */
+export function resolveTwoFingerDrag(
+  pose: CameraPose,
+  dx: number,
+  dy: number,
+  moveMode: MoveMode,
+  speeds: CameraSpeeds = DEFAULT_SPEEDS,
+): CameraPose {
+  return moveMode === 'pan' ? pan(pose, dx, dy, speeds) : dollyAndStrafe(pose, dx, dy, speeds)
 }

@@ -11,14 +11,15 @@ import type { MutableRefObject, PointerEvent as ReactPointerEvent } from 'react'
 import type { AtlasPayload, LightmapPayload, ScenePayload } from '../api'
 import type { Vec3 } from './camera'
 import type { FrameRequest } from './frame'
-import { DEFAULT_GRID_SIZE, GRID_SIZE_OPTIONS } from './grid'
-import { ModeSelector } from './ModeSelector'
+import type { ActiveTray } from './ControlCluster'
+import { DEFAULT_GRID_SIZE } from './grid'
+import { MiscOptions } from './MiscOptions'
 import { OrthoViewport } from './OrthoViewport'
 import type { PaneId } from './paneLayout'
 import { toggleMaximize } from './paneLayout'
 import { SceneResourcesProvider } from './SceneResourcesContext'
 import { SelectionKeys } from './SelectionKeys'
-import { applyModeKey, canChangeMode, keyForMode, resolveEffectiveMode } from './shadingMode'
+import { applyModeKey, keyForMode, resolveEffectiveMode } from './shadingMode'
 import type { ShadingMode } from './shadingMode'
 import { Viewport3D } from './Viewport3D'
 
@@ -120,6 +121,10 @@ export function QuadLayout({
   // mirroring showRadii's convention. Only the perspective pane reads it (ortho panes are always
   // wireframe, so it has no visible effect there -- expected, not wired to be disabled for it).
   const [showMoverSolid, setShowMoverSolid] = useState(false)
+  // Which of the two mutually-exclusive trays (ControlCluster's shading-mode tray in Viewport3D,
+  // MiscOptions' own tray right here) is open -- lifted here, their nearest common owner, per the
+  // spec's "Mutual exclusion".
+  const [activeTray, setActiveTray] = useState<ActiveTray>(null)
 
   // Resizable panes (bug report item 3): the column/row split as a fraction (0..1) of the quad's
   // own box, in plain component state per the ask -- no persistence needed. `MIN_FRAC`/`MAX_FRAC`
@@ -178,62 +183,18 @@ export function QuadLayout({
           ref={quadRef}
           style={maximized === null ? { gridTemplateColumns: `${colFrac}fr ${1 - colFrac}fr`, gridTemplateRows: `${rowFrac}fr ${1 - rowFrac}fr` } : undefined}
         >
-        {/* Overlay toolbar (Movers/Radii/Grid), positioned relative to THIS element (`.quad-layout`,
-            the quad grid itself), not `.quad-layout-root` (bug fix: `.quad-layout-root` also spans
-            the org-panel sidebar, so a button anchored to it by a hardcoded `right` offset smaller
-            than the sidebar's width landed INSIDE the sidebar instead of over the quad -- see
-            dev/docs/GUI.md "Toolbar overlap"). One flex row, not per-button hand-computed `right`
-            offsets -- adding/removing/resizing a button no longer needs every sibling's offset
-            recomputed. */}
-        <div className="quad-toolbar">
-          {/* Movers solid-geometry toggle (GUI.md "Movers") -- stays enabled regardless of the
-              focused pane's current shading mode: the click still flips the stored toggle state,
-              which matters the instant that pane switches to a non-wireframe mode, even though it
-              has no immediate visible effect while wireframe (or an ortho pane) is active. Never
-              disabled/greyed on `modes`/`focusedPane`. */}
-          <button
-            type="button"
-            className="mover-solid-toggle"
-            onClick={() => setShowMoverSolid((v) => !v)}
-            aria-pressed={showMoverSolid}
-          >
-            Movers: {showMoverSolid ? 'on' : 'off'}
-          </button>
-          <button
-            type="button"
-            className="radii-toggle"
-            onClick={() => setShowRadii((v) => !v)}
-            aria-pressed={showRadii}
-          >
-            Radii: {showRadii ? 'on' : 'off'}
-          </button>
-          {/* Grid control (owner ruling): a single checkbox+dropdown pair, not two separate buttons
-              -- the dropdown stays visible but DISABLED (not hidden) while the checkbox is off, so
-              toggling Grid never shifts the toolbar's layout and the last-chosen size stays visible. */}
-          <div className="grid-control">
-            <label className="grid-control-toggle">
-              <input
-                type="checkbox"
-                checked={showGrid}
-                onChange={(e) => setShowGrid(e.target.checked)}
-              />
-              Grid
-            </label>
-            <select
-              className="grid-size-select"
-              aria-label="Grid size"
-              value={baseGridSize}
-              disabled={!showGrid}
-              onChange={(e) => setBaseGridSize(Number(e.target.value))}
-            >
-              {GRID_SIZE_OPTIONS.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+        <MiscOptions
+          showMoverSolid={showMoverSolid}
+          onToggleMoverSolid={() => setShowMoverSolid((v) => !v)}
+          showRadii={showRadii}
+          onToggleRadii={() => setShowRadii((v) => !v)}
+          showGrid={showGrid}
+          onToggleGrid={() => setShowGrid((v) => !v)}
+          baseGridSize={baseGridSize}
+          onChangeGridSize={setBaseGridSize}
+          activeTray={activeTray}
+          onActiveTrayChange={setActiveTray}
+        />
         {PANES.map((pane) => (
           <div
             key={pane}
@@ -269,6 +230,10 @@ export function QuadLayout({
                 showRadii={showRadii}
                 showMoverSolid={showMoverSolid}
                 baseGridSize={baseGridSize}
+                buildSolved={buildSolved}
+                onSelectMode={(mode) => setPaneMode(pane, mode)}
+                activeTray={activeTray}
+                onActiveTrayChange={setActiveTray}
               />
             ) : (
               <OrthoViewport
@@ -289,15 +254,6 @@ export function QuadLayout({
                 showGrid={showGrid}
                 baseGridSize={baseGridSize}
                 showRadii={showRadii}
-              />
-            )}
-            {/* Owner ruling: ortho panes are ALWAYS wireframe, no mode choice -- only perspective
-                gets the selector (canChangeMode). */}
-            {canChangeMode(pane) && (
-              <ModeSelector
-                mode={resolveEffectiveMode(modes[pane], buildSolved)}
-                buildSolved={buildSolved}
-                onSelect={(mode) => setPaneMode(pane, mode)}
               />
             )}
           </div>

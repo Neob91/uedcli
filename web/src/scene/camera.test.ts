@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CameraPose, CameraSpeeds } from './camera'
-import { cameraBasis, dollyAndTurn, flyInput, flyMove, look, orbit, pan, zoom } from './camera'
+import { cameraBasis, dollyAndTurn, dollyAndStrafe, flyInput, flyMove, look, orbit, pan, resolveDrag, resolveTwoFingerDrag, zoom } from './camera'
+import type { MoveMode } from './moveMode'
 
 const UNIT_SPEEDS: CameraSpeeds = {
   yawPerPixel: 1,
@@ -192,5 +193,77 @@ describe('flyMove (WASD + Q/E)', () => {
     const got = flyMove(pose, { forward: 1, right: 1, up: 1 }, 10, 1)
     expect(got.pitch).toBe(12)
     expect(got.yaw).toBe(34)
+  })
+})
+
+describe('dollyAndStrafe (touch two-finger drag, move-mode "fly")', () => {
+  it('a vertical drag moves forward in the horizontal plane, a horizontal drag strafes -- no rotation', () => {
+    const got = dollyAndStrafe(IDENTITY, 10, -5, UNIT_SPEEDS)
+    expect(got.position[0]).toBeCloseTo(5) // forward, from dy=-5 ("drag up")
+    expect(got.position[1]).toBeCloseTo(10) // strafe, from dx=10 along +right
+    expect(got.position[2]).toBeCloseTo(0)
+    expect(got.yaw).toBe(0) // no rotation, unlike dollyAndTurn
+    expect(got.pitch).toBe(0)
+  })
+})
+
+describe('resolveDrag (mode-aware desktop dispatch)', () => {
+  const PIVOT: [number, number, number] = [0, 0, 0]
+  const modes: MoveMode[] = ['fly', 'pan']
+
+  it("'fly' mode: LMB alone dollies+turns -- today's original binding, unchanged", () => {
+    const got = resolveDrag(IDENTITY, 10, -5, 1, false, 'fly', PIVOT, UNIT_SPEEDS)
+    expect(got).toEqual(dollyAndTurn(IDENTITY, 10, -5, UNIT_SPEEDS))
+  })
+
+  it("'fly' mode: LMB+RMB pans -- today's original binding, unchanged", () => {
+    const got = resolveDrag(IDENTITY, 10, -5, 3, false, 'fly', PIVOT, UNIT_SPEEDS)
+    expect(got).toEqual(pan(IDENTITY, 10, -5, UNIT_SPEEDS))
+  })
+
+  it("'pan' mode: LMB alone and LMB+RMB are SWAPPED relative to 'fly'", () => {
+    expect(resolveDrag(IDENTITY, 10, -5, 1, false, 'pan', PIVOT, UNIT_SPEEDS)).toEqual(
+      pan(IDENTITY, 10, -5, UNIT_SPEEDS),
+    )
+    expect(resolveDrag(IDENTITY, 10, -5, 3, false, 'pan', PIVOT, UNIT_SPEEDS)).toEqual(
+      dollyAndTurn(IDENTITY, 10, -5, UNIT_SPEEDS),
+    )
+  })
+
+  it('RMB alone always looks, unaffected by moveMode', () => {
+    for (const mode of modes) {
+      expect(resolveDrag(IDENTITY, 10, -5, 2, false, mode, PIVOT, UNIT_SPEEDS)).toEqual(
+        look(IDENTITY, 10, -5, UNIT_SPEEDS),
+      )
+    }
+  })
+
+  it('Alt+LMB always orbits, unaffected by moveMode', () => {
+    const pose: CameraPose = { position: [100, 0, 0], pitch: 0, yaw: 0 }
+    for (const mode of modes) {
+      expect(resolveDrag(pose, 10, -5, 1, true, mode, PIVOT, UNIT_SPEEDS)).toEqual(
+        orbit(pose, PIVOT, 10, -5, UNIT_SPEEDS),
+      )
+    }
+  })
+
+  it('no buttons held is a no-op, in either mode', () => {
+    for (const mode of modes) {
+      expect(resolveDrag(IDENTITY, 10, -5, 0, false, mode, PIVOT, UNIT_SPEEDS)).toEqual(IDENTITY)
+    }
+  })
+})
+
+describe('resolveTwoFingerDrag (mode-aware touch two-finger dispatch)', () => {
+  it("'fly' mode (\"Move horizontal\"): dollies+strafes", () => {
+    expect(resolveTwoFingerDrag(IDENTITY, 10, -5, 'fly', UNIT_SPEEDS)).toEqual(
+      dollyAndStrafe(IDENTITY, 10, -5, UNIT_SPEEDS),
+    )
+  })
+
+  it("'pan' mode (\"Move vertical\"): today's original two-finger pan, unchanged", () => {
+    expect(resolveTwoFingerDrag(IDENTITY, 10, -5, 'pan', UNIT_SPEEDS)).toEqual(
+      pan(IDENTITY, 10, -5, UNIT_SPEEDS),
+    )
   })
 })

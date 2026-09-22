@@ -19,22 +19,20 @@ function ruleBody(selector: string): string | null {
 }
 
 describe('toolbar layout CSS (dev/docs/GUI.md toolbar bug fixes)', () => {
-  it('.quad-toolbar (Movers/Radii/Grid) is positioned relative to the quad, not left in document flow', () => {
-    const body = ruleBody('.quad-toolbar')
+  it('.misc-options (Movers/Radii/Grid, viewport-control-redesign-icon-cluster-replaces) is positioned relative to the quad, not left in document flow', () => {
+    const body = ruleBody('.misc-options')
     expect(body).not.toBeNull()
     expect(body).toMatch(/position:\s*absolute/)
-    expect(body).toMatch(/(top|right):\s*\d/)
+    expect(body).toMatch(/(bottom|left):\s*\d/)
   })
 
-  it('.mover-solid-toggle/.radii-toggle have no standalone rule of their own anymore -- they lay out via .quad-toolbar\'s flex row, not a hardcoded per-button `right` offset (bug fix: anchored to .quad-layout-root, which also spans the org-panel sidebar, a small offset landed the button INSIDE the sidebar)', () => {
+  it('.mover-solid-toggle/.radii-toggle have no standalone rule of their own anymore -- replaced by .misc-options-toggle (viewport-control-redesign-icon-cluster-replaces)', () => {
     expect(ruleBody('.mover-solid-toggle')).toBeNull()
     expect(ruleBody('.radii-toggle')).toBeNull()
   })
 
-  it('.grid-control (the consolidated Grid checkbox+dropdown) is not independently absolute-positioned', () => {
-    const body = ruleBody('.grid-control')
-    expect(body).not.toBeNull()
-    expect(body).not.toMatch(/position:\s*absolute/)
+  it('.grid-control (the old Grid checkbox+dropdown container) has no rule of its own anymore -- replaced by .misc-options-select-wrap', () => {
+    expect(ruleBody('.grid-control')).toBeNull()
   })
 
   it('.toolbar-row is a normal flex-column sibling, not an absolute overlay on top of the quad', () => {

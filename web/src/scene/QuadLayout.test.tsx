@@ -4,7 +4,7 @@
 // components at that exact boundary (matching Inspector.test.tsx's established render/query-by-
 // testid RTL pattern) rather than trying to stand up a real WebGL Canvas (confirmed absent from this
 // repo's test setup -- no existing Canvas-in-test pattern to reuse).
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -19,6 +19,10 @@ vi.mock('./Viewport3D', () => ({
     onDeselect,
     mode,
     showMoverSolid,
+    buildSolved,
+    onSelectMode,
+    activeTray,
+    onActiveTrayChange,
   }: {
     selectedNames: ReadonlySet<string>
     onSelectActor: (name: string, additive: boolean) => void
@@ -27,15 +31,23 @@ vi.mock('./Viewport3D', () => ({
     onDeselect: () => void
     mode: string
     showMoverSolid: boolean
+    buildSolved: boolean
+    onSelectMode: (mode: string) => void
+    activeTray: 'shade' | 'misc' | null
+    onActiveTrayChange: (tray: 'shade' | 'misc' | null) => void
   }) => (
     <div>
       <span data-testid="pane-perspective-selected">{[...selectedNames].join(',')}</span>
       <span data-testid="pane-perspective-selected-surfaces">{[...selectedSurfaces].join(',')}</span>
       <span data-testid="pane-perspective-mode">{mode}</span>
       <span data-testid="pane-perspective-mover-solid">{String(showMoverSolid)}</span>
+      <span data-testid="pane-perspective-build-solved">{String(buildSolved)}</span>
+      <span data-testid="pane-perspective-active-tray">{activeTray ?? ''}</span>
       <button type="button" data-testid="pane-perspective-select" onClick={() => onSelectActor('ActorA', false)} />
       <button type="button" data-testid="pane-perspective-select-poly" onClick={() => onSelectSurface('BrushA', 0, false)} />
       <button type="button" data-testid="pane-perspective-miss" onClick={onDeselect} />
+      <button type="button" data-testid="pane-perspective-select-lit-mode" onClick={() => onSelectMode('lit')} />
+      <button type="button" data-testid="pane-perspective-open-shade-tray" onClick={() => onActiveTrayChange('shade')} />
     </div>
   ),
 }))
@@ -183,90 +195,49 @@ describe('QuadLayout cross-pane selection consistency', () => {
   })
 })
 
-// The visible mode selector (ModeSelector) must drive the SAME per-pane mode state the `1`-`4`
-// keyboard shortcuts use, not a second, parallel model -- these pin that it changes only the
-// clicked pane's mode, and respects the same buildSolved gating applyModeKey already enforces.
-// Owner ruling: ortho panes (top/front/side) are ALWAYS wireframe, no mode choice at all -- only
-// perspective gets the selector, and only perspective's mode can ever change.
-describe('QuadLayout visible mode selector', () => {
-  it("clicking perspective's mode button changes only its mode, leaving ortho panes alone", () => {
+describe('QuadLayout mode-select plumbing (now inside Viewport3D/ControlCluster)', () => {
+  it('threads buildSolved to Viewport3D', () => {
     render(<Harness buildSolved={true} />)
+    expect(screen.getByTestId('pane-perspective-build-solved').textContent).toBe('true')
+  })
 
-    // Defaults: perspective 'lit', the three ortho panes 'wireframe' (QuadLayout's DEFAULT_MODES).
-    expect(screen.getByTestId('pane-top-mode').textContent).toBe('wireframe')
+  it("onSelectMode reaches Viewport3D and drives the SAME per-pane mode state '1'-'4' would", () => {
+    render(<Harness buildSolved={true} />)
+    fireEvent.click(screen.getByTestId('pane-perspective-select-lit-mode'))
     expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('lit')
-
-    const perspectivePane = screen.getByTestId('quad-pane-perspective')
-    fireEvent.click(within(perspectivePane).getByTestId('mode-btn-unlit'))
-
-    expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('unlit')
+    // Ortho panes are untouched -- only perspective's mode can ever change (unchanged rule).
     expect(screen.getByTestId('pane-top-mode').textContent).toBe('wireframe')
-    expect(screen.getByTestId('pane-front-mode').textContent).toBe('wireframe')
-    expect(screen.getByTestId('pane-side-mode').textContent).toBe('wireframe')
   })
 
-  it('a mode requiring a solved build is disabled, not silently ignored, when buildSolved is false', () => {
+  it('a mode requiring a solved build has no effect when buildSolved is false (resolveEffectiveMode falls back)', () => {
     render(<Harness buildSolved={false} />)
-
-    // DEFAULT_MODES requests perspective 'lit', but with no solved build the EFFECTIVE mode falls
-    // back to 'wireframe' (resolveEffectiveMode) -- that's what the mocked pane actually receives.
+    fireEvent.click(screen.getByTestId('pane-perspective-select-lit-mode'))
     expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('wireframe')
-
-    const perspectivePane = screen.getByTestId('quad-pane-perspective')
-    const litBtn = within(perspectivePane).getByTestId('mode-btn-lit')
-    expect(litBtn.hasAttribute('disabled')).toBe(true)
-
-    fireEvent.click(litBtn)
-    expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('wireframe') // unchanged
-  })
-
-  it('ortho panes render no mode selector at all -- there is no choice to make', () => {
-    render(<Harness buildSolved={true} />)
-
-    for (const pane of ['top', 'front', 'side']) {
-      const paneEl = screen.getByTestId(`quad-pane-${pane}`)
-      expect(within(paneEl).queryByRole('group', { name: 'Shading mode' })).toBeNull()
-    }
-    // Perspective still has it.
-    const perspectivePane = screen.getByTestId('quad-pane-perspective')
-    expect(within(perspectivePane).getByRole('group', { name: 'Shading mode' })).toBeTruthy()
   })
 })
 
-// GUI.md "Movers": the toolbar toggle showing/hiding a Mover's SOLID geometry (wireframe-outline-only
-// is always on, unaffected by this toggle -- see Viewport3D/brushRings). Mirrors the existing Grid/
-// Radii toggle-button convention.
-describe('QuadLayout Movers toggle', () => {
-  it('defaults off and threads showMoverSolid to the perspective pane', () => {
+describe('QuadLayout misc-options plumbing', () => {
+  it('renders MiscOptions and threads showMoverSolid through it to the perspective pane', () => {
     render(<Harness />)
-
-    const button = screen.getByText('Movers: off')
-    expect(button.getAttribute('aria-pressed')).toBe('false')
-    expect(screen.getByTestId('pane-perspective-mover-solid').textContent).toBe('false')
-  })
-
-  it('clicking the button flips the toggle and the value threaded to the perspective pane', () => {
-    render(<Harness />)
-
-    fireEvent.click(screen.getByText('Movers: off'))
-
-    const button = screen.getByText('Movers: on')
-    expect(button.getAttribute('aria-pressed')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Misc options' }))
+    fireEvent.click(screen.getByLabelText('Movers'))
     expect(screen.getByTestId('pane-perspective-mover-solid').textContent).toBe('true')
   })
+})
 
-  // The click must still change the toggle's stored state even while the focused pane is currently
-  // in wireframe mode -- the button is never disabled/greyed based on the pane's current mode
-  // (unlike ModeSelector's buildSolved gating above, a deliberately different rule for this button).
-  it('stays enabled and toggles even when the perspective pane is in wireframe mode (buildSolved=false)', () => {
-    render(<Harness buildSolved={false} />)
-    expect(screen.getByTestId('pane-perspective-mode').textContent).toBe('wireframe')
-
-    const button = screen.getByText('Movers: off')
-    expect(button.hasAttribute('disabled')).toBe(false)
-
-    fireEvent.click(button)
-    expect(screen.getByText('Movers: on')).toBeTruthy()
-    expect(screen.getByTestId('pane-perspective-mover-solid').textContent).toBe('true')
+describe('QuadLayout activeTray mutual exclusion', () => {
+  it('opening the MiscOptions tray, then the ControlCluster (Viewport3D) tray, closes MiscOptions\' own', () => {
+    render(<Harness />)
+    fireEvent.click(screen.getByRole('button', { name: 'Misc options' }))
+    // activeTray is lifted to QuadLayout and passed identically to both consumers -- Viewport3D's
+    // mock renders it verbatim, so it now reads 'misc', not '' (Viewport3D doesn't OWN this state,
+    // but it does receive and display the same value MiscOptions just set).
+    expect(screen.getByTestId('pane-perspective-active-tray').textContent).toBe('misc')
+    fireEvent.click(screen.getByTestId('pane-perspective-open-shade-tray'))
+    expect(screen.getByTestId('pane-perspective-active-tray').textContent).toBe('shade')
+    // MiscOptions' own tray reads the SAME lifted state -- it must now report closed.
+    expect(
+      screen.getByLabelText('Movers').closest('.misc-options-flyout')?.classList.contains('open'),
+    ).toBe(false)
   })
 })
