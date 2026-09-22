@@ -82,11 +82,11 @@ describe('ControlCluster shading-mode tray', () => {
     ).toBe(true)
   })
 
-  it('picking a tile calls onSelectShadingMode and closes the tray', () => {
+  it('picking a tile calls onSelectShadingMode and leaves the tray open (owner call: close only via the trigger or clicking elsewhere)', () => {
     const props = renderCluster({ activeTray: 'shade' })
     fireEvent.click(screen.getByTestId('control-cluster-tile-lit'))
     expect(props.onSelectShadingMode).toHaveBeenCalledWith('lit')
-    expect(props.onActiveTrayChange).toHaveBeenCalledWith(null)
+    expect(props.onActiveTrayChange).not.toHaveBeenCalled()
   })
 
   it('disables unlit/lit (not wireframe) when the build is not solved', () => {

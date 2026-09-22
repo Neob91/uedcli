@@ -97,12 +97,13 @@ export function ControlCluster({
     onActiveTrayChange(shadeOpen ? null : 'shade')
   }, [shadeOpen, onActiveTrayChange])
 
+  // Picking a tile applies it but leaves the tray open (owner call) -- close it the same two ways
+  // as dismissing without picking: click the trigger button again, or click/tap elsewhere.
   const pickShadingMode = useCallback(
     (mode: ShadingMode) => {
       onSelectShadingMode(mode)
-      onActiveTrayChange(null)
     },
-    [onSelectShadingMode, onActiveTrayChange],
+    [onSelectShadingMode],
   )
 
   // Neutralizes Viewport3D.tsx's own container div, which unconditionally captures the pointer and
