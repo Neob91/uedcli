@@ -782,6 +782,35 @@ body {
   cursor: pointer;
 }
 
+/* SessionPicker/SessionLabel's own error banner (final review fix wave, Important 2 addendum) --
+   same look as `.build-error-banner` but NOT absolutely positioned: neither component sits inside
+   a `position: relative` ancestor sized the way `.build-error-banner`'s `top/left/right: 8px`
+   assumes (`.viewport-content`, App-owned), so reusing that class pinned the banner against the
+   wrong container -- top-left of the whole page for SessionPicker (no positioned ancestor at all),
+   over the entire toolbar row for SessionLabel (`.viewport-pane`). This one is a plain in-flow
+   block, styled the same, positioned by wherever it's rendered in the document instead. */
+.session-error-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 12px;
+}
+
+.session-error-banner button {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 2px 8px;
+  cursor: pointer;
+}
+
 /* The Load/Rebuild toolbar + level picker + theme toggle share one row (quad-layout Part 7 Task 26,
    Part 9 Task 30) -- an ordinary flex-column sibling of `.viewport-content` (`.viewport-pane`'s own
    `flex-direction: column`), NOT an absolute overlay: it takes its natural height and

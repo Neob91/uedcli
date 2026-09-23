@@ -1,7 +1,7 @@
 import pytest
 from uedcli.serve.sessions import (
-    create_session, get_session, list_sessions, delete_session, touch_session,
-    SessionIndexCorruptError,
+    create_session, get_session, list_sessions, delete_session, touch_session, set_name,
+    set_last_seen_generation, SessionIndexCorruptError,
 )
 
 
@@ -92,3 +92,41 @@ def test_touch_session_is_a_noop_when_recently_touched(tmp_path):
     before = get_session(tmp_path, rec.id).last_active_at
     touch_session(tmp_path, rec.id)
     assert get_session(tmp_path, rec.id).last_active_at == before
+
+
+def test_create_session_defaults_name_to_none(tmp_path):
+    rec = create_session(tmp_path, "unatco")
+    assert rec.name is None
+
+
+def test_set_name_persists_and_is_read_back(tmp_path):
+    rec = create_session(tmp_path, "unatco")
+    set_name(tmp_path, rec.id, "My Session")
+    assert get_session(tmp_path, rec.id).name == "My Session"
+
+
+def test_set_name_to_none_clears_it(tmp_path):
+    rec = create_session(tmp_path, "unatco")
+    set_name(tmp_path, rec.id, "My Session")
+    set_name(tmp_path, rec.id, None)
+    assert get_session(tmp_path, rec.id).name is None
+
+
+def test_set_name_on_unknown_session_is_a_noop(tmp_path):
+    set_name(tmp_path, "doesnotexist", "whatever")  # must not raise
+
+
+def test_touch_session_preserves_name(tmp_path):
+    rec = create_session(tmp_path, "unatco")
+    set_name(tmp_path, rec.id, "My Session")
+    old_index = tmp_path / rec.id / "index.json"
+    old_index.write_text(old_index.read_text().replace(rec.last_active_at, "2000-01-01T00:00:00Z"))
+    touch_session(tmp_path, rec.id)
+    assert get_session(tmp_path, rec.id).name == "My Session"
+
+
+def test_set_last_seen_generation_preserves_name(tmp_path):
+    rec = create_session(tmp_path, "unatco")
+    set_name(tmp_path, rec.id, "My Session")
+    set_last_seen_generation(tmp_path, rec.id, 5)
+    assert get_session(tmp_path, rec.id).name == "My Session"

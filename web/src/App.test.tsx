@@ -8,15 +8,16 @@ import App from './App'
  * App-level tests, which only care what App.tsx DOES with the two callbacks it's handed. Mocked
  * the same way `./scene/QuadLayout` already is: capture the collaborator's own inputs, let a test
  * drive them directly, instead of simulating a real socket end to end (that's reload.test.ts's job). */
-const reloadSub: { current: { onChangesAvailable: () => void; onSuperseded: () => void } | null } = { current: null }
+const reloadSub: { current: { onChangesAvailable: () => void; onSuperseded: () => void; onClosed: () => void } | null } = { current: null }
 vi.mock('./reload', () => ({
   subscribeChangesAvailable: (
     _sessionId: string,
     _claimToken: string,
     onChangesAvailable: () => void,
     onSuperseded: () => void,
+    onClosed: () => void,
   ) => {
-    reloadSub.current = { onChangesAvailable, onSuperseded }
+    reloadSub.current = { onChangesAvailable, onSuperseded, onClosed }
     return { unsubscribe: vi.fn() }
   },
 }))
@@ -55,11 +56,10 @@ vi.mock('./scene/QuadLayout', () => ({
 
 afterEach(cleanup)
 
-// Plan Task 16: App.tsx no longer bootstraps off `/api/health` -- with no `?session=` in the URL,
-// `useSession()` (SessionContext.tsx) reads the default level off `/api/levels`' own `current`
-// field and creates a fresh session on it (`POST /api/level/{level}/sessions`). Every test below
-// runs with a clean `/` URL (see `beforeEach`), so every one of them exercises that same
-// auto-create bootstrap unless it sets its own `?session=` first.
+// Session-management-UI spec, decision 1: there is no auto-create any more. Every test below mounts
+// on a CONCRETE `/session/<id>/` path (see `beforeEach`) -- `App`'s own routing (route.ts) sends
+// that straight to `SessionEditor`, which resolves it via `useSession(sessionId)` -> `GET
+// /api/session/{id}` (SessionContext.tsx), never `/api/levels` or a session-creating POST.
 const LEVEL_NAME = 'TestLevel'
 const SESSION_ID = 'sess-1'
 const LEVELS_PAYLOAD = { levels: [{ name: LEVEL_NAME, active: true }], current: LEVEL_NAME }
@@ -75,7 +75,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 beforeEach(() => {
-  window.history.replaceState(null, '', '/')
+  window.history.replaceState(null, '', `/session/${SESSION_ID}/`)
   reloadSub.current = null
 })
 
@@ -88,7 +88,9 @@ function mockFetch(extra?: (url: string, init?: RequestInit) => Response | Promi
     const overridden = await extra?.(url, init)
     if (overridden) return overridden
     if (url.endsWith('/api/levels')) return jsonResponse(LEVELS_PAYLOAD)
-    if (url.endsWith(`/api/level/${LEVEL_NAME}/sessions`) && init?.method === 'POST') return jsonResponse(SESSION_RECORD, 201)
+    if (url.endsWith(`/api/session/${SESSION_ID}`) && (!init || !init.method)) {
+      return jsonResponse({ ...SESSION_RECORD, id: SESSION_ID, last_active_at: '2026-09-22T00:00:00Z', name: null })
+    }
     if (url.endsWith('/api/sessions')) return jsonResponse(SESSIONS_LIST)
     if (url.endsWith('/scene')) return jsonResponse(SCENE)
     if (url.endsWith('/atlas')) return jsonResponse(ATLAS)
@@ -98,6 +100,90 @@ function mockFetch(extra?: (url: string, init?: RequestInit) => Response | Promi
     throw new Error(`unexpected fetch: ${url}`)
   }) as unknown as typeof fetch
 }
+
+// Session-management-UI spec, decision 1: `App`'s own routing (route.ts) is what decides between
+// the two screens, not `SessionContext` -- these prove that split directly, rather than assuming it
+// from the describe blocks above/below which all mount straight onto a `/session/<id>/` path.
+describe('App: routing', () => {
+  it('a bare "/" renders the session picker, not the editor', async () => {
+    window.history.replaceState(null, '', '/')
+    mockFetch()
+    render(<App />)
+    await waitFor(() => expect(screen.getByRole('combobox')).toBeTruthy())
+    expect(screen.queryByTestId('viewport-stub')).toBeNull()
+  })
+
+  it('/session/<id>/ renders the editor', async () => {
+    mockFetch()
+    render(<App />)
+    await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
+  })
+})
+
+// Task 6/7/15: a "closed" push/409 means the session was actually DELETED, not merely claimed
+// elsewhere -- a distinct message from the superseded-takeover banner (`describe('App: superseded
+// takeover', ...)` below), and `markClosed` (SessionContext.tsx) is the shared primitive both the
+// live WS push and the mutating-call 409 fallback route through.
+describe('App: deleted vs superseded', () => {
+  it('a "closed" WS push shows the closed message, not the superseded takeover banner', async () => {
+    mockFetch()
+    render(<App />)
+    await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
+
+    act(() => reloadSub.current?.onClosed())
+
+    expect(screen.getByText(/this session was closed/i)).toBeTruthy()
+  })
+
+  it('a "deleted" 409 from Load/Rebuild shows the closed message too', async () => {
+    // Fixed from the plan's own snippet, which mocked `/load` while clicking Rebuild -- a 409 from
+    // *this* build action has to come from the endpoint it actually posts to (`/rebuild`) for
+    // `runBuildAction`'s catch branch to ever see it.
+    mockFetch((url, init) => {
+      if (url.endsWith('/rebuild') && init?.method === 'POST') return jsonResponse({ error: 'session deleted' }, 409)
+      return undefined
+    })
+    render(<App />)
+    await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: /rebuild/i }))
+
+    await waitFor(() => expect(screen.getByText(/this session was closed/i)).toBeTruthy())
+  })
+})
+
+// Final review fix wave, Important 3: notfound/closed used to be dead ends -- only the browser's
+// own Back button, which doesn't always have anywhere to go. Both views need an in-app way back to
+// the picker. `./session/route` isn't mocked in this file, so these drive the real `navigate` and
+// assert its real, observable effect (the URL actually changes to "/"), the same way every other
+// test in this file exercises real routing rather than a mocked one.
+describe('App: notfound/closed have a way back to the picker', () => {
+  it('the closed view\'s "Back to sessions" button navigates to "/"', async () => {
+    mockFetch()
+    render(<App />)
+    await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
+
+    act(() => reloadSub.current?.onClosed())
+    await waitFor(() => expect(screen.getByText(/this session was closed/i)).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: /back to sessions/i }))
+    expect(window.location.pathname).toBe('/')
+  })
+
+  it('the notfound view\'s "Back to sessions" button navigates to "/"', async () => {
+    const badId = 'does-not-exist'
+    window.history.replaceState(null, '', `/session/${badId}/`)
+    mockFetch((url) => {
+      if (url.endsWith(`/api/session/${badId}`)) return jsonResponse({ error: `session not found: '${badId}'` }, 404)
+      return undefined
+    })
+    render(<App />)
+    await waitFor(() => expect(screen.getByText(`Session not found: ${badId}`)).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: /back to sessions/i }))
+    expect(window.location.pathname).toBe('/')
+  })
+})
 
 describe('App: Load/Rebuild failure handling', () => {
   it('shows a dismissable banner on a failed Rebuild without discarding the already-loaded scene', async () => {
@@ -288,7 +374,10 @@ describe('App: session switching', () => {
 
     render(<App />)
     await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
-    await waitFor(() => expect(screen.getByText(OTHER_SESSION_ID)).toBeTruthy())
+    // Waits for the dropdown to have LOADED the second session as an option, before switching to
+    // it -- checked by `title` (an option's own display text is its name-or-level, `OtherLevel`
+    // here, never the raw id; SessionDropdown.tsx sets `title={s.id}` on every option for this).
+    await waitFor(() => expect(screen.getByTitle(OTHER_SESSION_ID)).toBeTruthy())
 
     fireEvent.change(screen.getByTestId('session-dropdown-select'), { target: { value: OTHER_SESSION_ID } })
 
@@ -311,7 +400,10 @@ describe('App: session switching', () => {
 
     render(<App />)
     await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
-    await waitFor(() => expect(screen.getByText(OTHER_SESSION_ID)).toBeTruthy())
+    // Waits for the dropdown to have LOADED the second session as an option, before switching to
+    // it -- checked by `title` (an option's own display text is its name-or-level, `OtherLevel`
+    // here, never the raw id; SessionDropdown.tsx sets `title={s.id}` on every option for this).
+    await waitFor(() => expect(screen.getByTitle(OTHER_SESSION_ID)).toBeTruthy())
 
     fireEvent.change(screen.getByTestId('session-dropdown-select'), { target: { value: OTHER_SESSION_ID } })
 
@@ -320,6 +412,53 @@ describe('App: session switching', () => {
     // the dead id rather than silently restoring the old session or leaving the page blocked.
     await waitFor(() => expect(screen.getByText(`Session not found: ${OTHER_SESSION_ID}`)).toBeTruthy())
     expect(screen.queryByTestId('viewport-stub')).toBeNull()
+  })
+})
+
+// Task 15 review finding: the `name`/`displayName` wiring (SessionContext.tsx's `name` field,
+// App.tsx's `displayName` state + sync effect, SessionLabel's `name`/`onRenamed` props) had zero
+// coverage -- every other test's bootstrap fixture returns `name: null`, so none of them ever
+// exercise a real name reaching the toolbar, or `onRenamed` updating it WITHOUT a full reload
+// (the entire reason `displayName` exists as its own state instead of just reading `session.name`
+// directly). `SessionLabel` isn't mocked in this file (unlike `QuadLayout`), so this drives its
+// real rename UI (`InlineRename`) rather than capturing/calling a prop.
+describe('App: SessionLabel display name', () => {
+  it("shows the session's real name once loaded, and a rename updates it without a full reload", async () => {
+    let sessionGetCount = 0
+    mockFetch((url, init) => {
+      if (url.endsWith(`/api/session/${SESSION_ID}`) && (!init || !init.method)) {
+        sessionGetCount += 1
+        return jsonResponse({ ...SESSION_RECORD, id: SESSION_ID, last_active_at: '2026-09-22T00:00:00Z', name: 'My Session' })
+      }
+      if (url.endsWith(`/api/session/${SESSION_ID}/rename`) && init?.method === 'POST') {
+        return jsonResponse({
+          id: SESSION_ID, level: LEVEL_NAME,
+          created_at: '2026-09-22T00:00:00Z', last_active_at: '2026-09-22T00:00:02Z', name: 'Renamed Session',
+        })
+      }
+      return undefined
+    })
+
+    render(<App />)
+    await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
+
+    // The toolbar label shows the real name from `GET /api/session/{id}`, not the level placeholder
+    // `InlineRename` falls back to when `name` is null (every other test's fixture).
+    expect(screen.getByText('My Session')).toBeTruthy()
+    expect(sessionGetCount).toBe(1)
+
+    // Drive SessionLabel's own rename UI: click the display span to start editing, type a new
+    // name, confirm.
+    fireEvent.click(screen.getByText('My Session'))
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Renamed Session' } })
+    fireEvent.click(screen.getByRole('button', { name: 'confirm rename' }))
+
+    // The displayed name updates to the rename response's own name...
+    await waitFor(() => expect(screen.getByText('Renamed Session')).toBeTruthy())
+    expect(screen.queryByText('My Session')).toBeNull()
+    // ...via `onRenamed` setting `displayName` directly, NOT by re-fetching the session -- still
+    // exactly the one GET from mount.
+    expect(sessionGetCount).toBe(1)
   })
 })
 

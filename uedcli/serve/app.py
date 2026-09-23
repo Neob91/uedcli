@@ -15,7 +15,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 
@@ -238,6 +238,20 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         sessions.touch_session(_sessions_root, session_id)
         return session
 
+    def _claim_conflict_response(session_id: str, *, suffix: str = "") -> JSONResponse:
+        """A claim-token check that just failed can mean one of two different things, and until
+        now every call site here defaulted to the wrong one whenever the session was ALSO gone:
+        `ClaimRegistry.check` fails on a genuine takeover (another window minted a fresher claim,
+        session still exists), but it does NOT fail once `forget()` (called after a delete) has
+        cleared the registry entry -- `check`'s own restart-safety rule auto-accepts any token for
+        an id it doesn't recognize. So the misleading case is the narrow window BEFORE `forget()`
+        runs: a stale token still fails the claim check, and until this helper, that branch never
+        looked at whether the session still existed before answering "superseded". `suffix` lets
+        `session_rebuild`'s mid-solve variant keep its own wording."""
+        if sessions.get_session(_sessions_root, session_id) is None:
+            return JSONResponse(status_code=409, content={"error": f"session deleted{suffix}"})
+        return JSONResponse(status_code=409, content={"error": f"session superseded{suffix}"})
+
     async def _broadcast_changes_available(ctx: LevelContext) -> None:
         # Iterate a SNAPSHOT: `await ws.send_json` yields the event loop, and a client connecting
         # or disconnecting in that window mutates `ctx.connections` from a concurrently-running
@@ -270,10 +284,8 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         loop, which a plain call to this function (e.g. from a test, or a threadpool route handler)
         doesn't have. The app's STARTUP level's watcher is started/stopped by `_lifespan` below; a
         lazily-created second level's watcher is started by `ws_endpoint` (final-review fix round,
-        Finding 5), the first async context that sees a session on it -- never stopped by this app
-        (only the startup level's is, on shutdown), a known, accepted gap: stopping it would need
-        tracking every lazily-created level's watcher for `_lifespan`'s shutdown to sweep, which
-        nothing has asked for yet."""
+        Finding 5), the first async context that sees a session on it -- and stopped, like every
+        other level's, by `_lifespan`'s shutdown phase sweeping every entry in `_level_contexts`."""
         ctx = _level_contexts.get(level_name)
         if ctx is not None:
             return ctx
@@ -426,8 +438,18 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         try:
             yield
         finally:
-            if _startup_ctx is not None:
-                _startup_ctx.watcher.stop()
+            # Stop every level's watcher, not just the startup one -- a level created lazily later
+            # (e.g. from `ws_endpoint`, on first WS connect for it) has its own started `TrunkWatcher`
+            # too, and it was never swept on shutdown before this. `TrunkWatcher.stop()` is a no-op
+            # on one that was never started (both its guards are `is not None` checks), so this loop
+            # also covers the startup level with no need to special-case it.
+            # Snapshotted under the lock (review finding): a route handler still in flight during
+            # shutdown can lazily create a new level context concurrently, and iterating the dict
+            # directly would risk "dictionary changed size during iteration."
+            with _level_contexts_lock:
+                contexts = list(_level_contexts.values())
+            for ctx in contexts:
+                ctx.watcher.stop()
 
     app = FastAPI(lifespan=_lifespan)
     # Recorded regardless of whether a startup level was given (plan Task 12) -- e.g. for the
@@ -556,8 +578,7 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
                 # Superseded mid-solve (a newer claim minted while the solve above was running):
                 # drop the result, write nothing.
                 logger.info("session_rebuild_superseded", extra={"session_id": session_id})
-                return JSONResponse(status_code=409,
-                                    content={"error": "session superseded mid-solve"})
+                return _claim_conflict_response(session_id, suffix=" mid-solve")
             # Fix round 1, Finding 1 (two-part): the claim check alone can't tell "session
             # legitimately deleted mid-solve" apart from "no one has claimed it yet" --
             # `ClaimRegistry.check`'s restart-safety rule (see its own docstring) auto-accepts any
@@ -710,7 +731,7 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         token = request.headers.get("X-Claim-Token", "")
         with _claims.lock_for(session_id):
             if not _claims.check(session_id, token):
-                return JSONResponse(status_code=409, content={"error": "session superseded"})
+                return _claim_conflict_response(session_id)
             # Fix round 1 (Task 13, Finding 1): same two-part reasoning as `session_rebuild`'s own
             # existence re-check -- `_claims.check` alone can't tell "deleted mid-request" apart
             # from "never claimed", so a DELETE racing this request's own entry-to-lock window would
@@ -754,7 +775,7 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         token = request.headers.get("X-Claim-Token", "")
         with _claims.lock_for(session_id):
             if not _claims.check(session_id, token):
-                return JSONResponse(status_code=409, content={"error": "session superseded"})
+                return _claim_conflict_response(session_id)
             # Fix round 1 (Task 13, Finding 1): the concrete repro the review found -- a DELETE
             # racing this request's own entry-to-lock window would otherwise sail through the
             # `_claims.check` above (it auto-accepts once `forget()` has cleared the recorded
@@ -788,7 +809,7 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         token = request.headers.get("X-Claim-Token", "")
         with _claims.lock_for(session_id):
             if not _claims.check(session_id, token):
-                return JSONResponse(status_code=409, content={"error": "session superseded"})
+                return _claim_conflict_response(session_id)
             # Fix round 1 (Task 13, Finding 1): same re-check as `session_stage`/`session_load`/
             # `session_save` -- `discard_staged` also writes (or removes) `staged.json` through
             # `_staging_store`, so a DELETE racing this request's entry-to-lock window must not be
@@ -811,7 +832,7 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         token = request.headers.get("X-Claim-Token", "")
         with _claims.lock_for(session_id):
             if not _claims.check(session_id, token):
-                return JSONResponse(status_code=409, content={"error": "session superseded"})
+                return _claim_conflict_response(session_id)
             # Fix round 1 (Task 13, Finding 1): same re-check as `session_stage`/`session_load`/
             # `session_discard` -- `save_staged` writes the trunk itself, the highest-stakes write
             # of the four, so a DELETE racing this request's entry-to-lock window must not be
@@ -913,7 +934,7 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         return {
             "sessions": [
                 {"id": r.id, "level": r.level, "created_at": r.created_at,
-                 "last_active_at": r.last_active_at}
+                 "last_active_at": r.last_active_at, "name": r.name}
                 for r in sessions.list_sessions(_sessions_root)
             ],
         }
@@ -932,7 +953,30 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
                                 content={"error": f"session not found: {session_id!r}"})
         token = _claims.mint(session_id)
         return {"id": rec.id, "level": rec.level, "created_at": rec.created_at,
-                "last_active_at": rec.last_active_at, "claim_token": token}
+                "last_active_at": rec.last_active_at, "name": rec.name, "claim_token": token}
+
+    @app.post("/api/session/{session_id}/rename")
+    def rename_session_route(session_id: str, body: dict, request: Request) -> dict:
+        # Claim-gated and mutating like load/stage/discard/save/rebuild -- resolved through
+        # `_require_session` (422 on an unknown id), not GET/DELETE's own bare 404.
+        session = _require_session(session_id)
+        token = request.headers.get("X-Claim-Token", "")
+        with _claims.lock_for(session_id):
+            if not _claims.check(session_id, token):
+                return _claim_conflict_response(session_id)
+            # Same re-check session_load/stage/discard/save already do: the claim check alone
+            # can't tell "deleted mid-request" apart from "never claimed" once forget() has run --
+            # a DELETE racing this request's entry-to-lock window must not resurrect a stale
+            # response reporting success for a session that's actually gone.
+            if sessions.get_session(_sessions_root, session_id) is None:
+                logger.info("session_rename_dropped_session_deleted",
+                            extra={"session_id": session_id})
+                return JSONResponse(status_code=409, content={"error": "session deleted"})
+            raw_name = (body or {}).get("name") or ""
+            name = raw_name.strip() or None
+            sessions.set_name(_sessions_root, session_id, name)
+        return {"id": session.id, "level": session.level, "created_at": session.created_at,
+                "last_active_at": session.last_active_at, "name": name}
 
     @app.delete("/api/session/{session_id}", status_code=204)
     def delete_session_route(session_id: str, request: Request, force: bool = False):
@@ -983,8 +1027,10 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         # the delete first keeps the registered lock valid for the whole removal; only once the
         # directory is truly gone does `forget()` retire the registry entry.
         with _claims.lock_for(session_id):
-            sessions.delete_session(_sessions_root, session_id)
-            _claims.forget(session_id)
+            try:
+                sessions.delete_session(_sessions_root, session_id)
+            finally:
+                _claims.forget(session_id)
         return Response(status_code=204)
 
     @app.websocket("/ws")
@@ -1063,15 +1109,12 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
                     # by `delete_session_route`) leaves behind. Without this existence re-check, a
                     # deleted session's still-open WS would have its own stale token auto-accepted
                     # forever (re-recording it each tick) and never learn the session is gone -- the
-                    # gap flagged in this route's own comment above. Both cases are reported to the
-                    # client as the same `{"type": "superseded"}` message: from the client's point of
-                    # view the practical action is identical either way ("this session is gone from
-                    # under you, stop editing"), so there is no reason to teach it a second shape. The
-                    # close code/reason differs only for a human reading server logs/network tab:
-                    # 4004 = session no longer exists at all; 4003 = it exists but another connection
-                    # now holds its claim.
+                    # gap flagged in this route's own comment above. Task 5: the client now
+                    # distinguishes the two -- 4004 (session deleted) sends `{"type": "closed"}`
+                    # since there's nothing left to reclaim; 4003 (claimed elsewhere) keeps
+                    # `{"type": "superseded"}` since another connection now holds the session.
                     if sessions.get_session(_sessions_root, session_id) is None:
-                        await websocket.send_json({"type": "superseded"})
+                        await websocket.send_json({"type": "closed"})
                         await websocket.close(code=4004, reason="session deleted")
                         return
                     if not _claims.check(session_id, claim_token):
@@ -1086,6 +1129,19 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
 
     frontend_dist = _frontend_dist_dir()
     if frontend_dist is not None:
+        @app.get("/session/{session_id}")
+        @app.get("/session/{session_id}/")
+        def spa_session_route(session_id: str) -> FileResponse:
+            # Deliberately no validation of session_id -- serves index.html unconditionally, same
+            # as the SPA's own client routing already treats an unknown ?session= id today. A
+            # bogus id resolves client-side, once the JS loads and calls GET /api/session/{id}.
+            # Both the bare and trailing-slash forms are registered explicitly (FastAPI's
+            # redirect_slashes never fires here -- the StaticFiles mount below always matches
+            # SOME route for any path, so the "nothing matched" fallback that triggers a redirect
+            # never runs; a request for the un-registered spelling would otherwise 404 straight
+            # into the mount's own file lookup).
+            return FileResponse(frontend_dist / "index.html")
+
         app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
     else:
         # WARNING, not INFO: `uedcli serve`'s own uvicorn.run(..., log_level="info") only

@@ -30,6 +30,7 @@ export function subscribeChangesAvailable(
   claimToken: string,
   onChangesAvailable: () => void,
   onSuperseded: () => void,
+  onClosed: () => void,
 ): ReloadSubscription {
   // Set once a "superseded" push arrives (or once the caller unsubscribes): stops the reconnect
   // loop, since there is no longer a live session worth reconnecting to.
@@ -38,10 +39,19 @@ export function subscribeChangesAvailable(
   let pendingReconnect: ReturnType<typeof setTimeout> | undefined
 
   function connect(): void {
-    ws = openChangesAvailableSocket(sessionId, claimToken, onChangesAvailable, () => {
-      stopped = true
-      onSuperseded()
-    })
+    ws = openChangesAvailableSocket(
+      sessionId,
+      claimToken,
+      onChangesAvailable,
+      () => {
+        stopped = true
+        onSuperseded()
+      },
+      () => {
+        stopped = true
+        onClosed()
+      },
+    )
     ws.addEventListener('close', (event: CloseEvent) => {
       if (stopped) return
       // Fix round 1, Important finding: code 4001 (`ws_endpoint`'s pre-accept rejection) means the

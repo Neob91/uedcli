@@ -11,7 +11,10 @@ vi.mock('../api', () => ({
   postDiscard: (...args: unknown[]) => postDiscard(...args),
   // Mirrors api.ts's own real implementation (Task 17) -- SaveBar.tsx imports this for real, and
   // this mock replaces the whole module, so it must supply a working one too.
-  isSupersededError: (e: unknown) => typeof e === 'object' && e !== null && (e as { status?: number }).status === 409,
+  isSupersededError: (e: unknown) => typeof e === 'object' && e !== null && (e as { status?: number }).status === 409 && !String((e as Error).message).includes('deleted'),
+  // Mirrors api.ts's own real implementation (Task 6) -- distinguishes a "deleted" 409 from a
+  // "superseded" one, same convention as isSupersededError above.
+  isClosedError: (e: unknown) => typeof e === 'object' && e !== null && (e as { status?: number }).status === 409 && String((e as Error).message).includes('deleted'),
 }))
 
 afterEach(() => {
@@ -23,7 +26,7 @@ afterEach(() => {
 describe('SaveBar', () => {
   it('renders nothing with no staged names', () => {
     const { container } = render(
-      <SaveBar level="TestLevel" stagedNames={new Set()} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set()} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
     )
     expect(container.innerHTML).toBe('')
   })
@@ -61,7 +64,7 @@ describe('SaveBar', () => {
 
   it('renders Save/Discard buttons with staged names', () => {
     render(
-      <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
     )
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Discard' })).toBeTruthy()
@@ -72,7 +75,7 @@ describe('SaveBar', () => {
   // via drag gestures, not a button click), so this is the one real user-facing count to fix.
   it('labels the staged count as "Unsaved: N", never "staged"', () => {
     render(
-      <SaveBar level="TestLevel" stagedNames={new Set(['Light0', 'Light1'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0', 'Light1'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
     )
     expect(screen.getByText('Unsaved: 2')).toBeTruthy()
     expect(screen.queryByText(/staged/i)).toBeNull()
@@ -82,7 +85,7 @@ describe('SaveBar', () => {
     postSave.mockResolvedValue({ applied: ['Light0'], conflicts: [] })
     const onSaved = vi.fn()
     render(
-      <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={onSaved} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0'])} onSaved={onSaved} onDiscarded={vi.fn()} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -95,7 +98,7 @@ describe('SaveBar', () => {
     postDiscard.mockResolvedValue({ status: 'ok' })
     const onDiscarded = vi.fn()
     render(
-      <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={onDiscarded} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={onDiscarded} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
@@ -111,7 +114,7 @@ describe('SaveBar', () => {
     })
     const onSaved = vi.fn()
     render(
-      <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={onSaved} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0'])} onSaved={onSaved} onDiscarded={vi.fn()} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -142,7 +145,7 @@ describe('SaveBar', () => {
     })
     const onDiscarded = vi.fn()
     render(
-      <SaveBar level="TestLevel" stagedNames={new Set(['Light0', 'Light1'])} onSaved={vi.fn()} onDiscarded={onDiscarded} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0', 'Light1'])} onSaved={vi.fn()} onDiscarded={onDiscarded} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -174,7 +177,7 @@ describe('SaveBar', () => {
     const onActorDiscarded = vi.fn()
     render(
       <SaveBar
-        level="TestLevel"
+        sessionId="TestLevel"
         stagedNames={new Set(['Light0', 'Light1'])}
         onSaved={vi.fn()}
         onDiscarded={onDiscarded}
@@ -198,7 +201,7 @@ describe('SaveBar', () => {
       conflicts: [{ name: 'Light0', staged_location: [10, 0, 0], trunk_location: [20, 0, 0] }],
     })
     render(
-      <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -228,7 +231,7 @@ describe('SaveBar', () => {
       conflicts: [{ name: 'Light0', staged_location: [10, 0, 0], trunk_location: [20, 0, 0] }],
     })
     render(
-      <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -247,7 +250,7 @@ describe('SaveBar', () => {
       postSave.mockRejectedValueOnce(supersededError)
       const onSuperseded = vi.fn()
       render(
-        <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} onSuperseded={onSuperseded} />,
+        <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} onSuperseded={onSuperseded} />,
       )
 
       fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -261,7 +264,7 @@ describe('SaveBar', () => {
       postDiscard.mockRejectedValueOnce(supersededError)
       const onSuperseded = vi.fn()
       render(
-        <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} onSuperseded={onSuperseded} />,
+        <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} onSuperseded={onSuperseded} />,
       )
 
       fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
@@ -269,11 +272,26 @@ describe('SaveBar', () => {
       await waitFor(() => expect(onSuperseded).toHaveBeenCalledTimes(1))
     })
 
+    it('a "deleted" 409 from postSave calls onClosed, not onSuperseded', async () => {
+      const closedError = Object.assign(new Error('sess-1: session deleted'), { status: 409 })
+      postSave.mockRejectedValueOnce(closedError)
+      const onSuperseded = vi.fn()
+      const onClosed = vi.fn()
+      render(
+        <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} onSuperseded={onSuperseded} onClosed={onClosed} />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      await waitFor(() => expect(onClosed).toHaveBeenCalledTimes(1))
+      expect(onSuperseded).not.toHaveBeenCalled()
+    })
+
     it('a non-409 error still shows the local error banner, not onSuperseded', async () => {
       postSave.mockRejectedValueOnce(new Error('sess-1: level not found'))
       const onSuperseded = vi.fn()
       render(
-        <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} onSuperseded={onSuperseded} />,
+        <SaveBar sessionId="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} onSuperseded={onSuperseded} />,
       )
 
       fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -289,7 +307,7 @@ describe('SaveBar', () => {
       conflicts: [{ name: 'Light0', staged_location: [10, 0, 0], trunk_location: [20, 0, 0] }],
     })
     const { rerender } = render(
-      <SaveBar level="LevelA" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="LevelA" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -302,7 +320,7 @@ describe('SaveBar', () => {
     // rendering -- proving the Save button's re-enabled state comes from the conflict state
     // actually clearing, not merely from the component unmounting.
     rerender(
-      <SaveBar level="LevelB" stagedNames={new Set(['OtherActor'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="LevelB" stagedNames={new Set(['OtherActor'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
     )
 
     // The stale conflict from LevelA must not linger -- ConflictResolver's rows are gone, and

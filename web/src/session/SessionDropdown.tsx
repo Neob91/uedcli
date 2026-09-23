@@ -53,8 +53,8 @@ export function SessionDropdown({ currentSessionId, onSwitchSession }: SessionDr
         {[...groups.entries()].map(([level, group]) => (
           <optgroup key={level} label={level}>
             {group.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.id}
+              <option key={s.id} value={s.id} title={s.id}>
+                {s.name ?? s.level}
               </option>
             ))}
           </optgroup>

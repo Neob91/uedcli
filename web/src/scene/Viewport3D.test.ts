@@ -78,7 +78,7 @@ describe('Viewport3D -- Ctrl/Cmd-drag actor translation wiring', () => {
       VIEWPORT3D_SOURCE,
     )?.[1]
     expect(onPointerUpBody).toBeDefined()
-    expect(onPointerUpBody).toContain('postStage(level, locations)')
+    expect(onPointerUpBody).toContain('postStage(sessionId, locations)')
   })
 
   // Review finding: BrushOutlines/SelectionMarkers/DirectionalArrows/RadiiOverlays were fed
@@ -140,7 +140,7 @@ describe('Viewport3D -- Ctrl/Cmd-drag tap-vs-drag threshold gating (Critical 1)'
 // Important 3, final review fix wave: postStage had no .catch() at all.
 describe('Viewport3D -- postStage error handling (Important 3)', () => {
   it('chains a .catch() off the SAME postStage call that reverts the offset and surfaces the error', () => {
-    const postStageIdx = VIEWPORT3D_SOURCE.indexOf('postStage(level, locations)')
+    const postStageIdx = VIEWPORT3D_SOURCE.indexOf('postStage(sessionId, locations)')
     expect(postStageIdx).toBeGreaterThanOrEqual(0)
     const catchIdx = VIEWPORT3D_SOURCE.indexOf('.catch(', postStageIdx)
     expect(catchIdx).toBeGreaterThan(postStageIdx)

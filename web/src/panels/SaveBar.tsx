@@ -17,11 +17,11 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ConflictPayload } from '../api'
-import { isSupersededError, postDiscard, postSave } from '../api'
+import { isClosedError, isSupersededError, postDiscard, postSave } from '../api'
 import { ConflictResolver } from './ConflictResolver'
 
 export interface SaveBarProps {
-  level: string
+  sessionId: string
   stagedNames: ReadonlySet<string>
   // Bug found post-merge: Save's SECOND job -- promoting this session's own build pin to the
   // level's (so a later-opened session inherits it) -- has no visibility trigger of its own. A
@@ -48,6 +48,9 @@ export interface SaveBarProps {
   // "superseded" push shows, App.tsx's `markSuperseded`. Optional: a caller that never sees a 409
   // (e.g. this component's own tests, which mock `postSave`/`postDiscard` directly) can omit it.
   onSuperseded?: () => void
+  // Fires instead of onSuperseded when the 409 means the session was actually deleted, not merely
+  // claimed elsewhere (Task 6's isClosedError). Optional, same convention as onSuperseded.
+  onClosed?: () => void
 }
 
 /** Save's own resolutionLabels/mapping -- 'mine' keeps the staged move, 'theirs' keeps the current
@@ -63,13 +66,14 @@ function mapToSaveResolutions(picks: Record<string, 'mine' | 'theirs'>): Record<
 }
 
 export function SaveBar({
-  level,
+  sessionId,
   stagedNames,
   hasBuildPin = false,
   onSaved,
   onDiscarded,
   onActorDiscarded,
   onSuperseded,
+  onClosed,
 }: SaveBarProps) {
   const [conflicts, setConflicts] = useState<ConflictPayload[]>([])
   const [busy, setBusy] = useState(false)
@@ -83,18 +87,22 @@ export function SaveBar({
     setConflicts([])
     setBusy(false)
     setError(null)
-  }, [level])
+  }, [sessionId])
 
   const runSave = useCallback(
     (resolutions: Record<string, 'staged' | 'trunk'>) => {
       setBusy(true)
       setError(null)
-      postSave(level, resolutions)
+      postSave(sessionId, resolutions)
         .then((result) => {
           setConflicts(result.conflicts)
           if (result.conflicts.length === 0) onSaved()
         })
         .catch((e: unknown) => {
+          if (isClosedError(e)) {
+            onClosed?.()
+            return
+          }
           if (isSupersededError(e)) {
             onSuperseded?.()
             return
@@ -103,7 +111,7 @@ export function SaveBar({
         })
         .finally(() => setBusy(false))
     },
-    [level, onSaved, onSuperseded],
+    [sessionId, onSaved, onSuperseded, onClosed],
   )
 
   const handleSave = useCallback(() => runSave({}), [runSave])
@@ -111,12 +119,16 @@ export function SaveBar({
   const handleDiscard = useCallback(() => {
     setBusy(true)
     setError(null)
-    postDiscard(level)
+    postDiscard(sessionId)
       .then(() => {
         setConflicts([])
         onDiscarded()
       })
       .catch((e: unknown) => {
+        if (isClosedError(e)) {
+          onClosed?.()
+          return
+        }
         if (isSupersededError(e)) {
           onSuperseded?.()
           return
@@ -124,7 +136,7 @@ export function SaveBar({
         setError(String(e))
       })
       .finally(() => setBusy(false))
-  }, [level, onDiscarded, onSuperseded])
+  }, [sessionId, onDiscarded, onSuperseded, onClosed])
 
   const handleResolve = useCallback(
     (picks: Record<string, 'mine' | 'theirs'>) => runSave(mapToSaveResolutions(picks)),
@@ -142,7 +154,7 @@ export function SaveBar({
       // dependency array below), not a functional `setConflicts` updater -- calling `onDiscarded`
       // (a side effect) from inside a state-updater function risks a double-fire under React
       // StrictMode's deliberate double-invocation of updaters.
-      postDiscard(level, [name])
+      postDiscard(sessionId, [name])
         .then(() => {
           const next = conflicts.filter((c) => c.name !== name)
           setConflicts(next)
@@ -150,6 +162,10 @@ export function SaveBar({
           if (next.length === 0) onDiscarded()
         })
         .catch((e: unknown) => {
+          if (isClosedError(e)) {
+            onClosed?.()
+            return
+          }
           if (isSupersededError(e)) {
             onSuperseded?.()
             return
@@ -158,7 +174,7 @@ export function SaveBar({
         })
         .finally(() => setBusy(false))
     },
-    [level, onDiscarded, onActorDiscarded, conflicts, onSuperseded],
+    [sessionId, onDiscarded, onActorDiscarded, conflicts, onSuperseded, onClosed],
   )
 
   if (stagedNames.size === 0 && conflicts.length === 0 && !hasBuildPin) return null

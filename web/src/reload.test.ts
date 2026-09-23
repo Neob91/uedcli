@@ -30,6 +30,7 @@ type Call = {
   claimToken: string
   onChanged: () => void
   onSuperseded: () => void
+  onClosed: () => void
   socket: ReturnType<typeof makeFakeSocket>
 }
 let calls: Call[]
@@ -39,9 +40,9 @@ beforeEach(() => {
   calls = []
   openChangesAvailableSocketMock.mockReset()
   openChangesAvailableSocketMock.mockImplementation(
-    (sessionId: string, claimToken: string, onChanged: () => void, onSuperseded: () => void) => {
+    (sessionId: string, claimToken: string, onChanged: () => void, onSuperseded: () => void, onClosed: () => void) => {
       const socket = makeFakeSocket()
-      calls.push({ sessionId, claimToken, onChanged, onSuperseded, socket })
+      calls.push({ sessionId, claimToken, onChanged, onSuperseded, onClosed, socket })
       return socket
     },
   )
@@ -53,7 +54,7 @@ afterEach(() => {
 
 describe('subscribeChangesAvailable', () => {
   it('opens the socket with the given session id and claim token', () => {
-    subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), vi.fn())
+    subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), vi.fn(), vi.fn())
 
     expect(calls).toHaveLength(1)
     expect(calls[0].sessionId).toBe('sess-1')
@@ -62,7 +63,7 @@ describe('subscribeChangesAvailable', () => {
 
   it('calls onChangesAvailable for every pushed "changes_available" message -- no fetch, no auto-refetch', () => {
     const onChangesAvailable = vi.fn()
-    subscribeChangesAvailable('sess-1', 'tok-1', onChangesAvailable, vi.fn())
+    subscribeChangesAvailable('sess-1', 'tok-1', onChangesAvailable, vi.fn(), vi.fn())
 
     calls[0].onChanged()
     expect(onChangesAvailable).toHaveBeenCalledTimes(1)
@@ -72,7 +73,7 @@ describe('subscribeChangesAvailable', () => {
 
   it('an explicit "superseded" push calls onSuperseded and does not reconnect', () => {
     const onSuperseded = vi.fn()
-    subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), onSuperseded)
+    subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), onSuperseded, vi.fn())
 
     calls[0].onSuperseded()
     expect(onSuperseded).toHaveBeenCalledTimes(1)
@@ -84,9 +85,21 @@ describe('subscribeChangesAvailable', () => {
     expect(openChangesAvailableSocketMock).toHaveBeenCalledTimes(1)
   })
 
+  it('an explicit "closed" push calls onClosed and does not reconnect', () => {
+    const onClosed = vi.fn()
+    subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), vi.fn(), onClosed)
+
+    calls[0].onClosed()
+    expect(onClosed).toHaveBeenCalledTimes(1)
+
+    calls[0].socket.fireClose()
+    vi.advanceTimersByTime(10_000)
+    expect(openChangesAvailableSocketMock).toHaveBeenCalledTimes(1)
+  })
+
   it('an ordinary close with NO prior "superseded" message does not show the takeover, and instead reconnects', () => {
     const onSuperseded = vi.fn()
-    subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), onSuperseded)
+    subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), onSuperseded, vi.fn())
 
     calls[0].socket.fireClose()
     expect(onSuperseded).not.toHaveBeenCalled()
@@ -104,7 +117,7 @@ describe('subscribeChangesAvailable', () => {
 
   it('a close with code 4001 (unknown session or missing claim) does not reconnect', () => {
     const onSuperseded = vi.fn()
-    subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), onSuperseded)
+    subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), onSuperseded, vi.fn())
 
     // 4001 means the request itself was bad -- no prior "superseded" message, since the server
     // never even accepted the connection to send one on this path.
@@ -118,7 +131,7 @@ describe('subscribeChangesAvailable', () => {
   })
 
   it('a close with an ordinary code (e.g. 1006, a dropped connection) still reconnects', () => {
-    subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), vi.fn())
+    subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), vi.fn(), vi.fn())
 
     calls[0].socket.fireClose(1006)
     expect(openChangesAvailableSocketMock).toHaveBeenCalledTimes(1)
@@ -129,7 +142,7 @@ describe('subscribeChangesAvailable', () => {
   })
 
   it('unsubscribe closes the current socket and suppresses any further reconnect', () => {
-    const sub = subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), vi.fn())
+    const sub = subscribeChangesAvailable('sess-1', 'tok-1', vi.fn(), vi.fn(), vi.fn())
 
     sub.unsubscribe()
     expect(calls[0].socket.close).toHaveBeenCalledTimes(1)

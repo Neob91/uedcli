@@ -57,7 +57,7 @@ describe('OrthoViewport -- Ctrl/Cmd-drag actor translation wiring', () => {
       ORTHOVIEWPORT_SOURCE,
     )?.[1]
     expect(onPointerUpBody).toBeDefined()
-    expect(onPointerUpBody).toContain('postStage(level, locations)')
+    expect(onPointerUpBody).toContain('postStage(sessionId, locations)')
   })
 
   // Review finding this task must NOT repeat (Task 8's own history): BrushOutlines/SelectionMarkers/
@@ -117,7 +117,7 @@ describe('OrthoViewport -- Ctrl/Cmd-drag tap-vs-drag threshold gating (Critical 
 // staged even though nothing was staged server-side.
 describe('OrthoViewport -- postStage error handling (Important 3)', () => {
   it('chains a .catch() off the SAME postStage call that reverts the offset and surfaces the error', () => {
-    const postStageIdx = ORTHOVIEWPORT_SOURCE.indexOf('postStage(level, locations)')
+    const postStageIdx = ORTHOVIEWPORT_SOURCE.indexOf('postStage(sessionId, locations)')
     expect(postStageIdx).toBeGreaterThanOrEqual(0)
     const catchIdx = ORTHOVIEWPORT_SOURCE.indexOf('.catch(', postStageIdx)
     expect(catchIdx).toBeGreaterThan(postStageIdx)

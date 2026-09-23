@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { AtlasPayload, ConflictPayload, LightmapPayload, ScenePayload, ScenePoly, StatusPayload } from './api'
-import { fetchLevelState, fetchStaged, fetchStatus, isSupersededError, postLoad, postRebuild, setClaimToken } from './api'
+import { fetchLevelState, fetchStaged, fetchStatus, isClosedError, isSupersededError, postLoad, postRebuild, setClaimToken } from './api'
 import { useHasUnseenSelection } from './layout/useSelectionSeen'
 import { useSidebar } from './layout/useSidebar'
 import { ConflictResolver } from './panels/ConflictResolver'
@@ -18,6 +18,9 @@ import { applyStagedOffsets } from './scene/dragStage'
 import { QuadLayout } from './scene/QuadLayout'
 import { clearSelection, parseSurfaceKey, surfaceKey, toggleSelection } from './scene/selectionSet'
 import { SessionDropdown } from './session/SessionDropdown'
+import { SessionLabel } from './session/SessionLabel'
+import { SessionPicker } from './session/SessionPicker'
+import { navigate, useRoute } from './session/route'
 import { useSession } from './session/SessionContext'
 import { useTheme } from './theme/useTheme'
 import type { ThemePreference } from './theme/useTheme'
@@ -87,14 +90,24 @@ function BuildToolbar({
   )
 }
 
-function App() {
+/** The session-editing screen (the plan's former `App`, now mounted only for the `/session/<id>/`
+ * route -- `App` below decides picker vs. editor). The incoming `sessionId` prop is renamed to
+ * `routeSessionId` to feed `useSession` -- the body below keeps using the hook's OWN `sessionId`
+ * (destructured from `session`), which is null until the resolve settles, matching this file's
+ * pre-existing "gate every fetch/render on a resolved id" convention exactly (the same reason the
+ * old auto-create bootstrap's `sessionId` started null too). Once resolved, the two are equal. */
+function SessionEditor({ sessionId: routeSessionId }: { sessionId: string }) {
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
-  // Session identity, carried in the URL (plan Task 16) -- replaces the old in-process level
-  // switch. `sessionId`/`level`/`view` are destructured individually (not the whole `session`
-  // object) so effects/callbacks below can depend on the exact stable pieces they use, rather than
-  // a fresh object every render.
-  const session = useSession()
-  const { sessionId, level, view, claimToken, reload: reloadSession, markSuperseded } = session
+  // Session identity (plan Task 16, redesigned for path-based routing): `sessionId`/`level`/`view`
+  // are destructured individually (not the whole `session` object) so effects/callbacks below can
+  // depend on the exact stable pieces they use, rather than a fresh object every render.
+  const session = useSession(routeSessionId)
+  const { sessionId, level, view, claimToken, name, reload: reloadSession, markSuperseded, markClosed } = session
+  // `SessionLabel`'s own local copy of the session's name (Task 12), seeded from `session.name` and
+  // updated immediately by `SessionLabel`'s `onRenamed` -- `SessionContext` has no setter for `name`
+  // alone, so a rename would otherwise only show up after the session's next full `reload()`.
+  const [displayName, setDisplayName] = useState<string | null>(null)
+  useEffect(() => setDisplayName(name), [name])
 
   // Task 17: pushes the session's current claim token into api.ts's module-level state, the one
   // place every mutating call reads it from (see api.ts's own doc comment on `setClaimToken` for
@@ -365,9 +378,9 @@ function App() {
   // is minted (a session switch, or the takeover's own Reload re-claiming this window).
   useEffect(() => {
     if (!sessionId || !claimToken) return
-    const sub = subscribeChangesAvailable(sessionId, claimToken, () => refreshStatus(sessionId), markSuperseded)
+    const sub = subscribeChangesAvailable(sessionId, claimToken, () => refreshStatus(sessionId), markSuperseded, markClosed)
     return () => sub.unsubscribe()
-  }, [sessionId, claimToken, refreshStatus, markSuperseded])
+  }, [sessionId, claimToken, refreshStatus, markSuperseded, markClosed])
 
   // Shared by Load and Rebuild: run the POST, then refetch scene+atlas+lightmap and /status --
   // both actions change what the server has to hand back (Load: the trunk view; Rebuild: the
@@ -392,9 +405,14 @@ function App() {
         })
         .then(() => refreshStatus(sessionId))
         .catch((e: unknown) => {
-          // A 409 here means this session's claim was taken by another window (or the session was
-          // deleted) -- the same takeover the `/ws` "superseded" push shows, kept as a fallback for
-          // whenever that push was lost. Not a build failure, so it doesn't go in `buildError`.
+          // A 409 here means this session's claim was taken by another window, or the session was
+          // deleted outright -- the same two takeovers the `/ws` "superseded"/"closed" pushes show,
+          // kept as a fallback for whenever that push was lost. Not a build failure, so neither goes
+          // in `buildError`. Same check order as SaveBar.tsx's own catch branches.
+          if (isClosedError(e)) {
+            markClosed()
+            return
+          }
           if (isSupersededError(e)) {
             markSuperseded()
             return
@@ -406,7 +424,7 @@ function App() {
           setReloading(false)
         })
     },
-    [sessionId, busy, refreshStatus, markSuperseded],
+    [sessionId, busy, refreshStatus, markSuperseded, markClosed],
   )
   const handleLoad = useCallback(
     () => runBuildAction('load', (sid) => postLoad(sid), (result) => setLoadConflicts(result.conflicts)),
@@ -464,20 +482,16 @@ function App() {
   )
 
   // Session switch (SessionDropdown's own "switch to" action, plan Task 16 -- replaces the old
-  // LevelPicker's PUT /api/level call entirely). Writing the id into the URL and re-resolving via
-  // SessionContext's `reload` is the ONE navigation mechanism a session switch uses -- the exact
-  // same code path a fresh page load with a `?session=` already present takes at mount. The old
-  // eager "unload/block" step lives in the scene-fetch effect above now, keyed off `sessionId`
-  // itself changing, not a bespoke pre-switch clear here.
+  // LevelPicker's PUT /api/level call entirely). `navigate` (route.ts) is the ONE navigation
+  // mechanism a session switch uses now -- it changes the `/session/<id>/` path, which changes the
+  // `sessionId` prop the outer `App` passes this component, which `useSession`'s own effect already
+  // re-fires on (SessionContext.tsx). No local reload call is needed here any more.
   const handleSwitchSession = useCallback(
     (id: string) => {
       if (id === sessionId) return
-      const url = new URL(window.location.href)
-      url.searchParams.set('session', id)
-      window.history.replaceState(null, '', url.toString())
-      reloadSession()
+      navigate(`/session/${id}/`)
     },
-    [sessionId, reloadSession],
+    [sessionId],
   )
 
   // Every selected actor's CURRENT (staged-offset-applied) state, in scene.actors order --
@@ -550,12 +564,26 @@ function App() {
   // auto-create, per the spec: a bare/valid URL auto-creates, but a BAD one is shown, not silently
   // papered over with a fresh session the user never asked for.
   if (view === 'notfound') {
-    return <div className="status-message error">Session not found: {sessionId}</div>
+    return (
+      <div className="status-message error">
+        Session not found: {sessionId}
+        <button type="button" onClick={() => navigate('/')}>
+          Back to sessions
+        </button>
+      </div>
+    )
   }
   // This tab's own session was closed (by another tab/window, or directly) -- no auto-navigate,
   // per the spec: the user decides what to do next, this never silently creates a replacement.
   if (view === 'closed') {
-    return <div className="status-message">This session was closed.</div>
+    return (
+      <div className="status-message">
+        This session was closed.
+        <button type="button" onClick={() => navigate('/')}>
+          Back to sessions
+        </button>
+      </div>
+    )
   }
   // Another window took this session's claim (or it was deleted) -- the `/ws` "superseded" push,
   // or a mutating call's 409 fallback, both routed through `markSuperseded`. Reload re-resolves the
@@ -585,14 +613,16 @@ function App() {
           <ThemeToggle preference={themePreference} onChange={setThemePreference} />
           <BuildToolbar status={status} busy={busy} onLoad={handleLoad} onRebuild={handleRebuild} />
           <SaveBar
-            level={sessionId}
+            sessionId={sessionId}
             stagedNames={stagedNames}
             hasBuildPin={status !== null && status.build_status !== 'no_build'}
             onSaved={onSaved}
             onDiscarded={onDiscarded}
             onActorDiscarded={onActorDiscarded}
             onSuperseded={markSuperseded}
+            onClosed={markClosed}
           />
+          <SessionLabel sessionId={sessionId} level={level} name={displayName} onRenamed={setDisplayName} />
           <SessionDropdown currentSessionId={sessionId} onSwitchSession={handleSwitchSession} />
         </div>
         {/* Fills exactly the space left below the toolbar row (a flex column: toolbar + this),
@@ -668,6 +698,15 @@ function App() {
       />
     </div>
   )
+}
+
+/** The routing root (session-management-UI spec, decision 1): a bare `/` renders the session
+ * picker (create/pick/rename/delete, no auto-create), and `/session/<id>/` renders the real editor.
+ * `useRoute()` (route.ts) does the parsing; this component owns no state of its own. */
+function App() {
+  const route = useRoute()
+  if (route.screen === 'picker') return <SessionPicker />
+  return <SessionEditor sessionId={route.id} />
 }
 
 export default App

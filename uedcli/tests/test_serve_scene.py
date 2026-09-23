@@ -865,3 +865,70 @@ def test_scene_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypatch)
     r2 = c.get(f"/api/session/{sess.id}/scene")
     assert r2.status_code == 200
     assert r2.json()["geometry_pinned"] is True
+
+
+def test_scene_route_falls_back_to_disk_when_the_memory_cache_is_cold(tmp_path, monkeypatch):
+    """`_resolve_session_geometry`'s disk-fallback branch (`build_cache.load_scene`, on an
+    in-memory `_BuildResultCache` miss) had no test of its own -- the test above only ever exercises
+    the WARM-cache path, since its own preceding Rebuild always populates `_build_result_cache`
+    first via `session_rebuild`'s `.put()` call. Same setup as that test (a real Rebuild through the
+    HTTP route pins a real build, on disk AND in memory), but this one empties the in-memory cache
+    before reading `/scene` back, so the only way the route can still return real geometry is via
+    the disk read.
+
+    `app.state.build_result_cache` IS the same `_BuildResultCache` object `_resolve_session_geometry`
+    closes over (`create_app` hands the one local instance to both `app.state` and the route
+    closures) -- clearing its private `_data` dict in place reaches the closure too, unlike
+    reassigning `app.state.build_result_cache` to a fresh instance, which the closure would never
+    see."""
+    from fastapi.testclient import TestClient
+
+    from uedcli.serve import app as serve_app
+
+    root = tmp_path / "proj"
+    maps_dir = root / "maps" / "TestLevel"
+    maps_dir.mkdir(parents=True)
+    room = cube_room()
+    light = Actor(name="Light0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)))
+    level = Level(actors={room.name: room, light.name: light}, order=[room.name, light.name])
+    trunk.write_level(maps_dir, level, {room.name: "m", light.name: "n"})
+    project = SimpleNamespace(root=str(root), maps=None)
+
+    from uedcli.serve import sessions
+
+    index = _ued22_index()
+    monkeypatch.setattr(serve_app, "_scene_inputs", lambda project: ([], index, DEFAULTS))
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    token = app.state.claims.mint(sess.id)
+
+    rebuild = c.post(f"/api/session/{sess.id}/rebuild", headers={"X-Claim-Token": token})
+    assert rebuild.status_code == 200
+    assert rebuild.json()["geom_hash"]
+
+    # Empty the in-memory cache `session_rebuild` just populated -- the same object
+    # `_resolve_session_geometry` reads, so this genuinely cools the memory path, not a copy of it.
+    assert len(app.state.build_result_cache._data) > 0   # sanity: the rebuild really did populate it
+    app.state.build_result_cache._data.clear()
+
+    r = c.get(f"/api/session/{sess.id}/scene")
+
+    assert r.status_code == 200
+    body = r.json()
+    # Real, non-empty geometry despite the cold memory cache -- proves the disk fallback works.
+    assert body["polys"] and body["actors"]
+    assert {a["name"] for a in body["actors"]} == {"Room", "Light0"}
+    assert body["geometry_pinned"] is True
+
+    # The disk hit must have repopulated the memory cache -- a second call with disk access
+    # monkeypatched to fail proves it, mirroring the warm-cache test's own assertion above.
+    assert len(app.state.build_result_cache._data) > 0
+
+    def _fail_load_scene(*a, **k):
+        raise AssertionError("load_scene should not be called -- the memory cache was just repopulated")
+
+    monkeypatch.setattr(serve_app.build_cache, "load_scene", _fail_load_scene)
+    r2 = c.get(f"/api/session/{sess.id}/scene")
+    assert r2.status_code == 200
+    assert r2.json()["geometry_pinned"] is True

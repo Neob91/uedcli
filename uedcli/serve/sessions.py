@@ -30,6 +30,7 @@ class SessionRecord:
     created_at: str
     last_active_at: str
     last_seen_generation: int = 0
+    name: str | None = None
 
 
 def _index_path(sessions_root: Path, session_id: str) -> Path:
@@ -78,6 +79,7 @@ def get_session(sessions_root: Path, session_id: str) -> SessionRecord | None:
             id=data["id"], level=data["level"], created_at=data["created_at"],
             last_active_at=data["last_active_at"],
             last_seen_generation=data.get("last_seen_generation", 0),
+            name=data.get("name"),
         )
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
         raise SessionIndexCorruptError(
@@ -120,6 +122,7 @@ def touch_session(sessions_root: Path, session_id: str) -> None:
     atomic_write_json(_index_path(sessions_root, session_id), {
         "id": rec.id, "level": rec.level, "created_at": rec.created_at,
         "last_active_at": _now(), "last_seen_generation": rec.last_seen_generation,
+        "name": rec.name,
     })
 
 
@@ -130,4 +133,18 @@ def set_last_seen_generation(sessions_root: Path, session_id: str, generation: i
     atomic_write_json(_index_path(sessions_root, session_id), {
         "id": rec.id, "level": rec.level, "created_at": rec.created_at,
         "last_active_at": rec.last_active_at, "last_seen_generation": generation,
+        "name": rec.name,
+    })
+
+
+def set_name(sessions_root: Path, session_id: str, name: str | None) -> None:
+    """Empty/whitespace-only persists as `None` -- the caller (`app.py`'s rename route) is
+    responsible for that normalization; this just writes whatever it's given."""
+    rec = get_session(sessions_root, session_id)
+    if rec is None:
+        return
+    atomic_write_json(_index_path(sessions_root, session_id), {
+        "id": rec.id, "level": rec.level, "created_at": rec.created_at,
+        "last_active_at": rec.last_active_at, "last_seen_generation": rec.last_seen_generation,
+        "name": name,
     })

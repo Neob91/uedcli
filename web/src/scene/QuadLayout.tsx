@@ -211,7 +211,7 @@ export function QuadLayout({
             </div>
             {pane === 'perspective' ? (
               <Viewport3D
-                level={level}
+                sessionId={level}
                 scene={scene}
                 atlas={atlas}
                 lightmap={lightmap}
@@ -237,7 +237,7 @@ export function QuadLayout({
               />
             ) : (
               <OrthoViewport
-                level={level}
+                sessionId={level}
                 axis={pane}
                 selectedNames={selectedNames}
                 onSelectActor={onSelectActor}

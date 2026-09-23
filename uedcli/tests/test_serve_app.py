@@ -23,6 +23,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
+from uedcli.serve import sessions
 from uedcli.serve.app import create_app
 
 
@@ -70,6 +71,34 @@ def test_frontend_static_files_absent_serve_stays_api_only(tmp_path, monkeypatch
     c = TestClient(app)
     assert c.get("/").status_code == 404
     assert c.get("/api/health").status_code == 200
+
+
+def test_session_path_route_serves_index_html(tmp_path, monkeypatch):
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "index.html").write_text("<!doctype html><title>t</title>")
+    monkeypatch.setattr("uedcli.serve.app._frontend_dist_dir", lambda: dist)
+    app = create_app(_project(tmp_path), "TestLevel")
+    c = TestClient(app)
+
+    r = c.get("/session/some-id")
+
+    assert r.status_code == 200
+    assert "<!doctype html>" in r.text
+
+    r_slash = c.get("/session/some-id/")
+    assert r_slash.status_code == 200
+    assert "<!doctype html>" in r_slash.text
+
+
+def test_session_path_route_absent_without_a_built_frontend(tmp_path, monkeypatch):
+    monkeypatch.setattr("uedcli.serve.app._frontend_dist_dir", lambda: None)
+    app = create_app(_project(tmp_path), "TestLevel")
+    c = TestClient(app)
+
+    r = c.get("/session/some-id")
+
+    assert r.status_code == 404
 
 
 def test_fault_route_is_absent_by_default(tmp_path):
@@ -1023,7 +1052,7 @@ def test_list_sessions_returns_every_session(tmp_path):
     ids = {s["id"] for s in body["sessions"]}
     assert ids == {sess_a.id, sess_b.id}
     for s in body["sessions"]:
-        assert set(s) == {"id", "level", "created_at", "last_active_at"}
+        assert set(s) == {"id", "level", "created_at", "last_active_at", "name"}
 
 
 def test_list_sessions_empty_when_none_created(tmp_path):
@@ -1050,7 +1079,7 @@ def test_get_session_returns_full_shape_with_a_fresh_claim_token(tmp_path):
 
     assert r.status_code == 200
     body = r.json()
-    assert set(body) == {"id", "level", "created_at", "last_active_at", "claim_token"}
+    assert set(body) == {"id", "level", "created_at", "last_active_at", "name", "claim_token"}
     assert body["id"] == created["id"]
     assert body["level"] == "TestLevel"
     assert body["claim_token"] != created["claim_token"]   # fresh, not the one creation minted
@@ -1085,6 +1114,139 @@ def test_get_session_unknown_id_returns_404(tmp_path):
 
     assert r.status_code == 404
     assert "not found" in r.json()["error"]
+
+
+def test_rename_session_sets_the_name(tmp_path):
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local("Brush1")])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    token = app.state.claims.mint(sess.id)
+
+    r = c.post(f"/api/session/{sess.id}/rename", json={"name": "My Session"},
+              headers={"X-Claim-Token": token})
+
+    assert r.status_code == 200
+    body = r.json()
+    assert body["name"] == "My Session"
+    assert "claim_token" not in body
+    assert sessions.get_session(app.state.sessions_root, sess.id).name == "My Session"
+
+
+def test_rename_session_with_empty_name_clears_it(tmp_path):
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local("Brush1")])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    token = app.state.claims.mint(sess.id)
+    sessions.set_name(app.state.sessions_root, sess.id, "My Session")
+
+    r = c.post(f"/api/session/{sess.id}/rename", json={"name": "   "},
+              headers={"X-Claim-Token": token})
+
+    assert r.status_code == 200
+    assert r.json()["name"] is None
+    assert sessions.get_session(app.state.sessions_root, sess.id).name is None
+
+
+def test_rename_session_unknown_id_is_422(tmp_path):
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local("Brush1")])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    # `raise_server_exceptions=False`: `_require_session` raises `CommandError` for an unknown id,
+    # which the app's own exception handler turns into a clean 422 in production -- `TestClient`
+    # re-raises server exceptions for debugging by default even when a handler caught them (same
+    # Starlette caveat as `test_fault_route_renders_a_structured_error_not_a_traceback` above).
+    c = TestClient(app, raise_server_exceptions=False)
+
+    r = c.post("/api/session/doesnotexist/rename", json={"name": "x"},
+              headers={"X-Claim-Token": "whatever"})
+
+    assert r.status_code == 422
+
+
+def test_rename_session_stale_token_reports_superseded(tmp_path):
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local("Brush1")])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    stale_token = app.state.claims.mint(sess.id)
+    app.state.claims.mint(sess.id)
+
+    r = c.post(f"/api/session/{sess.id}/rename", json={"name": "x"},
+              headers={"X-Claim-Token": stale_token})
+
+    assert r.status_code == 409
+    assert r.json()["error"] == "session superseded"
+
+
+def test_rename_session_dropped_when_deleted_mid_request(tmp_path, monkeypatch):
+    from uedcli.serve import sessions
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local("Brush1")])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    token = app.state.claims.mint(sess.id)
+
+    real_get_session = sessions.get_session
+    deleted = {"done": False}
+
+    def get_session_then_delete(sessions_root, session_id):
+        result = real_get_session(sessions_root, session_id)
+        if not deleted["done"]:
+            deleted["done"] = True
+            sessions.delete_session(sessions_root, session_id)
+        return result
+
+    monkeypatch.setattr(sessions, "get_session", get_session_then_delete)
+
+    r = c.post(f"/api/session/{sess.id}/rename", json={"name": "New Name"},
+              headers={"X-Claim-Token": token})
+
+    assert r.status_code == 409
+    assert r.json()["error"] == "session deleted"
+    assert sessions.get_session(app.state.sessions_root, sess.id) is None
+
+
+def test_list_sessions_route_includes_name(tmp_path):
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local("Brush1")])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    sessions.set_name(app.state.sessions_root, sess.id, "My Session")
+
+    r = c.get("/api/sessions")
+
+    assert r.status_code == 200
+    [entry] = [s for s in r.json()["sessions"] if s["id"] == sess.id]
+    assert entry["name"] == "My Session"
+
+
+def test_get_session_route_includes_name(tmp_path):
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local("Brush1")])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    sessions.set_name(app.state.sessions_root, sess.id, "My Session")
+
+    r = c.get(f"/api/session/{sess.id}")
+
+    assert r.status_code == 200
+    assert r.json()["name"] == "My Session"
 
 
 def test_delete_session_succeeds_with_no_staged_edits(tmp_path):
@@ -1412,6 +1574,62 @@ def test_stage_discard_save_staged_are_session_scoped_and_old_paths_are_gone(tmp
     assert c.get("/api/level/TestLevel/staged").status_code == 404
 
 
+def test_claim_check_fails_reports_deleted_when_the_session_is_actually_gone(tmp_path, monkeypatch):
+    """The bug this task fixes: a stale token on a session that's genuinely gone used to always
+    say "superseded" -- `_claims.check` fails first, and the existence check only ever ran on the
+    SUCCESS branch. Simulates a delete landing in the gap between `_require_session`'s own
+    existence check and the claim check a few lines later (same monkeypatch-a-real-call idiom
+    `test_rebuild_dropped_when_session_deleted_mid_solve` already uses) -- `_require_session`
+    itself must still succeed (the session existed at that instant), and the token must genuinely
+    mismatch (a second mint, not `forget()`, which would make ANY token auto-accept and never
+    reach the failure branch at all)."""
+    from uedcli.serve import sessions
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local("Brush1")])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    c = TestClient(app)
+
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    stale_token = app.state.claims.mint(sess.id)
+    app.state.claims.mint(sess.id)  # supersedes stale_token -- the claim check will genuinely fail
+
+    real_get_session = sessions.get_session
+    deleted = {"done": False}
+
+    def get_session_then_delete(sessions_root, session_id):
+        result = real_get_session(sessions_root, session_id)
+        if not deleted["done"]:
+            deleted["done"] = True
+            sessions.delete_session(sessions_root, session_id)
+        return result
+
+    monkeypatch.setattr(sessions, "get_session", get_session_then_delete)
+
+    r = c.post(f"/api/session/{sess.id}/discard", json={}, headers={"X-Claim-Token": stale_token})
+
+    assert r.status_code == 409
+    assert r.json()["error"] == "session deleted"
+
+
+def test_claim_check_fails_reports_superseded_when_the_session_still_exists(tmp_path):
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local("Brush1")])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    c = TestClient(app)
+
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    stale_token = app.state.claims.mint(sess.id)
+    app.state.claims.mint(sess.id)  # a second mint supersedes the first, session still exists
+
+    r = c.post(f"/api/session/{sess.id}/discard", json={}, headers={"X-Claim-Token": stale_token})
+
+    assert r.status_code == 409
+    assert r.json()["error"] == "session superseded"
+
+
 def _cube_room_local(name="Room", **kwargs):
     from uedcli.tests.conftest import cube_room
     return cube_room(name, **kwargs)
@@ -1666,7 +1884,7 @@ def test_ws_receives_superseded_then_closes_when_its_claim_is_superseded(tmp_pat
             ws.receive_json(mode="text")   # the server closes right after the superseded message
 
 
-def test_ws_receives_superseded_then_closes_when_its_session_is_deleted(tmp_path):
+def test_ws_receives_closed_then_closes_when_its_session_is_deleted(tmp_path):
     """Critical fix, Task 15 review round 1: `DELETE /api/session/{id}` calls `_claims.forget(...)`,
     which pops the session's recorded token entirely. Without an existence check,
     `ClaimRegistry.check`'s own documented three-state semantics would then treat the deleted
@@ -1674,9 +1892,12 @@ def test_ws_receives_superseded_then_closes_when_its_session_is_deleted(tmp_path
     stale token again forever -- a claim-check-alone poll would never notice the session is gone
     (see `ws_endpoint`'s and `delete_session_route`'s own comments). The fix re-checks
     `sessions.get_session(...) is None` on every poll tick, BEFORE the claim check, so a deleted
-    session's open WS gets the same `{"type": "superseded"}` treatment and closes -- bounded by a
-    couple of poll intervals, not indefinite. Driven through the real `DELETE` route, the real
-    trigger for this bug in production."""
+    session's open WS closes -- bounded by a couple of poll intervals, not indefinite. Driven
+    through the real `DELETE` route, the real trigger for this bug in production.
+
+    Task 5: this case is now distinguished from "claimed elsewhere" -- the session is truly gone,
+    not merely superseded by another connection, so the client gets `{"type": "closed"}`, not
+    `{"type": "superseded"}`."""
     import time
 
     from starlette.websockets import WebSocketDisconnect
@@ -1696,9 +1917,9 @@ def test_ws_receives_superseded_then_closes_when_its_session_is_deleted(tmp_path
 
         time.sleep(0.05)   # give the delete a moment to land before the poll tick checks it
         msg = ws.receive_json(mode="text")
-        assert msg == {"type": "superseded"}
+        assert msg == {"type": "closed"}
         with pytest.raises(WebSocketDisconnect) as exc_info:
-            ws.receive_json(mode="text")   # the server closes right after the superseded message
+            ws.receive_json(mode="text")   # the server closes right after the closed message
         assert exc_info.value.code == 4004
 
 

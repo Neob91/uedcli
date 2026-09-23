@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+import { fetchSessions } from '../api'
 import { SessionDropdown } from './SessionDropdown'
 
 vi.mock('../api', () => ({
@@ -19,9 +20,9 @@ describe('SessionDropdown', () => {
   it('renders every session grouped by level', async () => {
     render(<SessionDropdown currentSessionId="sess-a1" onSwitchSession={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText('sess-a2')).toBeTruthy())
-
     const select = screen.getByTestId('session-dropdown-select') as HTMLSelectElement
+    await waitFor(() => expect(select.querySelector('option[title="sess-a2"]')).toBeTruthy())
+
     const groupLabels = [...select.querySelectorAll('optgroup')].map((g) => g.getAttribute('label'))
     expect(groupLabels).toEqual(['Alpha', 'Beta'])
 
@@ -36,9 +37,10 @@ describe('SessionDropdown', () => {
     const onSwitchSession = vi.fn()
     render(<SessionDropdown currentSessionId="sess-a1" onSwitchSession={onSwitchSession} />)
 
-    await waitFor(() => expect(screen.getByText('sess-b1')).toBeTruthy())
+    const select = screen.getByTestId('session-dropdown-select') as HTMLSelectElement
+    await waitFor(() => expect(select.querySelector('option[title="sess-b1"]')).toBeTruthy())
 
-    fireEvent.change(screen.getByTestId('session-dropdown-select'), { target: { value: 'sess-b1' } })
+    fireEvent.change(select, { target: { value: 'sess-b1' } })
 
     expect(onSwitchSession).toHaveBeenCalledWith('sess-b1')
   })
@@ -47,8 +49,9 @@ describe('SessionDropdown', () => {
     const onSwitchSession = vi.fn()
     render(<SessionDropdown currentSessionId="sess-a1" onSwitchSession={onSwitchSession} />)
 
-    await waitFor(() => expect(screen.getByText('sess-a2')).toBeTruthy())
-    fireEvent.change(screen.getByTestId('session-dropdown-select'), { target: { value: 'sess-a1' } })
+    const select = screen.getByTestId('session-dropdown-select') as HTMLSelectElement
+    await waitFor(() => expect(select.querySelector('option[title="sess-a2"]')).toBeTruthy())
+    fireEvent.change(select, { target: { value: 'sess-a1' } })
 
     expect(onSwitchSession).not.toHaveBeenCalled()
   })
@@ -56,7 +59,24 @@ describe('SessionDropdown', () => {
   it('adds a synthetic option for a current session id the fetched list does not (yet) know', async () => {
     render(<SessionDropdown currentSessionId="sess-unknown" onSwitchSession={vi.fn()} />)
 
-    await waitFor(() => expect(screen.getByText('sess-a1')).toBeTruthy())
+    const select = screen.getByTestId('session-dropdown-select') as HTMLSelectElement
+    await waitFor(() => expect(select.querySelector('option[title="sess-a1"]')).toBeTruthy())
     expect(screen.getByText('sess-unknown')).toBeTruthy()
+  })
+
+  it('shows name-or-level as the option text, with the raw id as a title/hover attribute', async () => {
+    vi.mocked(fetchSessions).mockResolvedValueOnce({
+      sessions: [
+        { id: 's1', level: 'Alpha', created_at: 'c', last_active_at: 'a', name: 'My Session' },
+        { id: 's2', level: 'Alpha', created_at: 'c', last_active_at: 'a', name: null },
+      ],
+    })
+    render(<SessionDropdown currentSessionId="s1" onSwitchSession={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('My Session')).toBeTruthy())
+
+    const named = screen.getByText('My Session') as HTMLOptionElement
+    expect(named.title).toBe('s1')
+    const unnamed = screen.getByText('Alpha') as HTMLOptionElement
+    expect(unnamed.title).toBe('s2')
   })
 })

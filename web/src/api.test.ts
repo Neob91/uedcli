@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
   createSession,
+  deleteSession,
   fetchAtlas,
   fetchLevels,
   fetchLightmap,
@@ -10,12 +11,14 @@ import {
   fetchSessions,
   fetchStaged,
   fetchStatus,
+  isClosedError,
   isSupersededError,
   postDiscard,
   postLoad,
   postRebuild,
   postSave,
   postStage,
+  renameSession,
   setClaimToken,
 } from './api'
 
@@ -442,5 +445,118 @@ describe('isSupersededError', () => {
     expect(isSupersededError(new Error('plain error, no status'))).toBe(false)
     expect(isSupersededError(null)).toBe(false)
     expect(isSupersededError('a string')).toBe(false)
+  })
+})
+
+describe('isClosedError', () => {
+  it('is true for a 409 whose body says "session deleted"', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ error: 'session deleted' }), { status: 409 }),
+    ) as unknown as typeof fetch
+
+    try {
+      await postSave('sess-1')
+      expect.unreachable('postSave should have rejected on the 409 response')
+    } catch (e) {
+      expect(isClosedError(e)).toBe(true)
+      expect(isSupersededError(e)).toBe(false)
+    }
+  })
+
+  it('is true for the mid-solve suffix variant too', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ error: 'session deleted mid-solve' }), { status: 409 }),
+    ) as unknown as typeof fetch
+
+    try {
+      await postRebuild('sess-1')
+      expect.unreachable('postRebuild should have rejected on the 409 response')
+    } catch (e) {
+      expect(isClosedError(e)).toBe(true)
+    }
+  })
+
+  it('is false for "session superseded", and for any other 409/non-409', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ error: 'session superseded' }), { status: 409 }),
+    ) as unknown as typeof fetch
+
+    try {
+      await postSave('sess-1')
+      expect.unreachable('postSave should have rejected on the 409 response')
+    } catch (e) {
+      expect(isClosedError(e)).toBe(false)
+      expect(isSupersededError(e)).toBe(true)
+    }
+    expect(isClosedError(null)).toBe(false)
+    expect(isClosedError(new Error('plain error'))).toBe(false)
+  })
+})
+
+describe('fetchSessions/fetchSession carry name', () => {
+  it('fetchSessions passes through a session entry\'s name', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      sessions: [{ id: 's1', level: 'L', created_at: 'c', last_active_at: 'a', name: 'My Session' }],
+    }), { status: 200 })) as unknown as typeof fetch
+
+    const { sessions } = await fetchSessions()
+    expect(sessions[0].name).toBe('My Session')
+  })
+
+  it('fetchSession passes through name: null', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+      id: 's1', level: 'L', created_at: 'c', last_active_at: 'a', claim_token: 't', name: null,
+    }), { status: 200 })) as unknown as typeof fetch
+
+    const rec = await fetchSession('s1')
+    expect(rec.name).toBeNull()
+  })
+})
+
+describe('renameSession', () => {
+  it('POSTs {name} to the rename route with the claim-token header and returns the result', async () => {
+    setClaimToken('tok-1')
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({
+      id: 's1', level: 'L', created_at: 'c', last_active_at: 'a', name: 'New Name',
+    }), { status: 200 }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    const result = await renameSession('s1', 'New Name')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/session/s1/rename',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({ 'X-Claim-Token': 'tok-1' }),
+        body: JSON.stringify({ name: 'New Name' }),
+      }),
+    )
+    expect(result.name).toBe('New Name')
+    setClaimToken(null)
+  })
+})
+
+describe('deleteSession', () => {
+  it('DELETEs the session with the claim-token header, no ?force by default', async () => {
+    setClaimToken('tok-1')
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await deleteSession('s1')
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/session/s1',
+      expect.objectContaining({ method: 'DELETE', headers: expect.objectContaining({ 'X-Claim-Token': 'tok-1' }) }),
+    )
+    setClaimToken(null)
+  })
+
+  it('appends ?force=true when opts.force is true', async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }))
+    globalThis.fetch = fetchMock as unknown as typeof fetch
+
+    await deleteSession('s1', { force: true })
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/session/s1?force=true', expect.anything())
   })
 })

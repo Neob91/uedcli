@@ -113,7 +113,7 @@ function FlyKeys({ setPose }: { setPose: (fn: (prev: CameraPose) => CameraPose) 
 const MARKER_COLOR_THREE = new THREE.Color(...MARKER_COLOR)
 
 export interface Viewport3DProps {
-  level: string
+  sessionId: string
   scene: ScenePayload
   atlas: AtlasPayload
   lightmap: LightmapPayload | null
@@ -197,7 +197,7 @@ interface TouchTapTracker {
 // `atlas`/`lightmap` stay in Viewport3DProps for API stability, but the built geometry/textures
 // they used to drive locally now come from SceneResourcesContext (Task 3) -- unused here directly.
 export function Viewport3D({
-  level,
+  sessionId,
   scene,
   selectedNames,
   onSelectActor,
@@ -557,7 +557,7 @@ export function Viewport3D({
         dragMovedRef.current = false
         const locations = stagedLocationsFor(stagedOffsetsRef.current, selectedNames)
         if (Object.keys(locations).length > 0) {
-          postStage(level, locations)
+          postStage(sessionId, locations)
             .then((result) => onStaged?.(result.staged))
             .catch((e2: unknown) => {
               // Important 3 (final review fix wave): a stage call CAN fail for real reasons (the
@@ -572,7 +572,7 @@ export function Viewport3D({
       }
       mouseDrag.onPointerUp(e)
     },
-    [mouseDrag, performTapSelect, level, selectedNames, onStaged, stagedOffsetsRef, setStagedOffsets, onStageError],
+    [mouseDrag, performTapSelect, sessionId, selectedNames, onStaged, stagedOffsetsRef, setStagedOffsets, onStageError],
   )
 
   const onContextMenu = mouseDrag.onContextMenu

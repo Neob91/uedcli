@@ -162,6 +162,12 @@ export interface SupersededMessage {
   type: 'superseded'
 }
 
+/** The session was actually deleted (Task 6) -- distinct from `SupersededMessage`, which means it
+ * still exists but another connection now holds its claim. */
+export interface ClosedMessage {
+  type: 'closed'
+}
+
 /** `GET /api/level/{level}/status` (uedcli/serve/app.py `status`): whether a settled trunk change
  * is waiting on an explicit Load, and whether solved geometry is currently pinned (and if not,
  * why). `build_status` is `'built'` whenever `geometry_pinned`; `'no_build'` if geometry was never
@@ -183,29 +189,49 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await (init ? fetch(url, init) : fetch(url))
   if (!res.ok) {
     let message = res.statusText
+    // Derived from `body.error` directly, BEFORE it's folded into `message`/the Error -- deriving
+    // this from the thrown Error's own `.message` would never match, since that has the url
+    // prefixed onto it (`${url}: ${message}` below).
+    let reason: 'deleted' | 'superseded' | undefined
     try {
       const body = (await res.json()) as ErrorBody
-      if (body.error) message = body.error
+      if (body.error) {
+        message = body.error
+        if (body.error.startsWith('session deleted')) reason = 'deleted'
+        else if (body.error.startsWith('session superseded')) reason = 'superseded'
+      }
     } catch {
       // The error body wasn't JSON -- fall back to the HTTP status text.
     }
-    // `status` rides on the thrown Error rather than a dedicated error class, so every existing
-    // `.rejects.toThrow(message)` assertion keeps working unchanged -- `isSupersededError` below is
-    // the one place anything reads it.
-    const err = new Error(`${url}: ${message}`) as Error & { status: number }
+    // `status`/`reason` ride on the thrown Error rather than a dedicated error class, so every
+    // existing `.rejects.toThrow(message)` assertion keeps working unchanged -- `isSupersededError`/
+    // `isClosedError` below are the only places anything reads them.
+    const err = new Error(`${url}: ${message}`) as Error & { status: number; reason?: 'deleted' | 'superseded' }
     err.status = res.status
+    err.reason = reason
     throw err
   }
+  // 204 No Content (deleteSession's success response) has no body to parse -- `T` is `void` there.
+  if (res.status === 204) return undefined as T
   return (await res.json()) as T
 }
 
-/** True for a mutating call's 409 (persistent-GUI-editing-sessions plan, Task 17): this session's
- * claim was taken by another window, or the session was deleted. Every session-scoped mutating
- * route (`/load`, `/rebuild`, `/stage`, `/discard`, `/save`) 409s this way (uedcli/serve/app.py) --
- * the fallback path for the same takeover the `/ws` "superseded" push shows, for whenever that
- * push was lost or hasn't arrived yet. */
+/** True for a mutating call's 409 (persistent-GUI-editing-sessions plan, Task 17) whose claim was
+ * taken by another window -- NOT for the session having been deleted outright (Task 6's
+ * `isClosedError`, a distinct outcome the backend now tells apart in the same 409 body). Every
+ * session-scoped mutating route (`/load`, `/rebuild`, `/stage`, `/discard`, `/save`) 409s one way
+ * or the other (uedcli/serve/app.py) -- the fallback path for the same takeover the `/ws`
+ * "superseded" push shows, for whenever that push was lost or hasn't arrived yet. */
 export function isSupersededError(e: unknown): boolean {
   return typeof e === 'object' && e !== null && (e as { status?: number }).status === 409
+    && (e as { reason?: string }).reason !== 'deleted'
+}
+
+/** True for a mutating call's 409 whose body says the session was actually deleted (Task 6), not
+ * merely claimed elsewhere -- the distinction `isSupersededError` alone can't make. */
+export function isClosedError(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { status?: number }).status === 409
+    && (e as { reason?: string }).reason === 'deleted'
 }
 
 // The session's current claim token (Task 17) -- module-level, not threaded through every mutating
@@ -284,10 +310,38 @@ export interface SessionDetail {
   created_at: string
   last_active_at: string
   claim_token: string
+  name: string | null
 }
 
 export function fetchSession(sessionId: string): Promise<SessionDetail> {
   return request<SessionDetail>(`/api/session/${encodeURIComponent(sessionId)}`)
+}
+
+/** `POST /api/session/{id}/rename`'s result -- the session record after the rename, same shape as
+ * `createSession`'s (no `claim_token`; a rename doesn't mint one). */
+export interface SessionRenameResult {
+  id: string
+  level: string
+  created_at: string
+  last_active_at: string
+  name: string | null
+}
+
+/** Renames a session (Task 6). Requires the session's current claim token, same as `postLoad` etc. */
+export function renameSession(sessionId: string, name: string): Promise<SessionRenameResult> {
+  return request(`/api/session/${encodeURIComponent(sessionId)}/rename`, withClaimToken({
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name }),
+  }))
+}
+
+/** Deletes a session (Task 6). Requires the session's current claim token, same as `postLoad` etc.
+ * `opts.force` bypasses whatever conflict check the backend would otherwise 409 on (e.g. unsaved
+ * staged moves). */
+export function deleteSession(sessionId: string, opts: { force?: boolean } = {}): Promise<void> {
+  const qs = opts.force ? '?force=true' : ''
+  return request(`/api/session/${encodeURIComponent(sessionId)}${qs}`, withClaimToken({ method: 'DELETE' }))
 }
 
 /** One entry of `GET /api/sessions` (Task 12) -- no claim token, since listing mints none. */
@@ -296,6 +350,7 @@ export interface SessionSummary {
   level: string
   created_at: string
   last_active_at: string
+  name: string | null
 }
 
 export function fetchSessions(): Promise<{ sessions: SessionSummary[] }> {
@@ -410,21 +465,25 @@ export async function fetchLevelState(sessionId: string): Promise<LevelState> {
  * <token>`, no back-compat no-params mode). Calls `onChanged` for every settled trunk change push
  * (uedcli/serve/watch.py's debounced TrunkWatcher) -- a banner signal ONLY, the caller decides
  * what, if anything, to refetch (gui-explicit-rebuild spec §2: no silent auto-reload) -- and
- * `onSuperseded` for the one other message this socket ever sends. Returns the socket so the
- * caller (`reload.ts`) can close it on unmount, or notice an ordinary close and reconnect. */
+ * `onSuperseded` when another connection takes this session's claim, and `onClosed` (Task 6) when
+ * the session was actually deleted -- the two other messages this socket ever sends. Returns the
+ * socket so the caller (`reload.ts`) can close it on unmount, or notice an ordinary close and
+ * reconnect. */
 export function openChangesAvailableSocket(
   sessionId: string,
   claimToken: string,
   onChanged: (msg: ChangesAvailableMessage) => void,
   onSuperseded: () => void,
+  onClosed: () => void,
 ): WebSocket {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
   const url = `${proto}://${window.location.host}/ws?session=${encodeURIComponent(sessionId)}&claim=${encodeURIComponent(claimToken)}`
   const ws = new WebSocket(url)
   ws.addEventListener('message', (event: MessageEvent<string>) => {
-    const msg = JSON.parse(event.data) as ChangesAvailableMessage | SupersededMessage
+    const msg = JSON.parse(event.data) as ChangesAvailableMessage | SupersededMessage | ClosedMessage
     if (msg.type === 'changes_available') onChanged(msg)
     else if (msg.type === 'superseded') onSuperseded()
+    else if (msg.type === 'closed') onClosed()
   })
   return ws
 }

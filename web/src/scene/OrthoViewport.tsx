@@ -83,9 +83,9 @@ function OrthoCameraRig({
 
 export interface OrthoViewportProps {
   // Threaded straight to `postStage` (Ctrl/Cmd-drag actor translation, Task 9 -- the ortho
-  // counterpart of Viewport3D.tsx's identical mechanism) -- the level name the currently-shown
-  // scene was fetched for. See QuadLayoutProps' identical doc.
-  level: string
+  // counterpart of Viewport3D.tsx's identical mechanism) -- the id of the session the
+  // currently-shown scene was fetched for.
+  sessionId: string
   axis: OrthoAxis
   selectedNames: ReadonlySet<string>
   onSelectActor: (name: string, additive: boolean) => void
@@ -128,7 +128,7 @@ export interface OrthoViewportProps {
 }
 
 export function OrthoViewport({
-  level,
+  sessionId,
   axis,
   selectedNames,
   onSelectActor,
@@ -432,7 +432,7 @@ export function OrthoViewport({
         dragMovedRef.current = false
         const locations = stagedLocationsFor(stagedOffsetsRef.current, selectedNames)
         if (Object.keys(locations).length > 0) {
-          postStage(level, locations)
+          postStage(sessionId, locations)
             .then((result) => onStaged?.(result.staged))
             .catch((e2: unknown) => {
               // Important 3 (final review fix wave) -- see Viewport3D.tsx's identical comment.
@@ -444,7 +444,7 @@ export function OrthoViewport({
       }
       mouseDrag.onPointerUp(e)
     },
-    [mouseDrag, performTapSelect, level, selectedNames, onStaged, stagedOffsetsRef, setStagedOffsets, onStageError],
+    [mouseDrag, performTapSelect, sessionId, selectedNames, onStaged, stagedOffsetsRef, setStagedOffsets, onStageError],
   )
 
   return (
