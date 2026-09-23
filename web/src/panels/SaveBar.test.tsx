@@ -28,6 +28,37 @@ describe('SaveBar', () => {
     expect(container.innerHTML).toBe('')
   })
 
+  // Bug found post-merge: a plain Rebuild with nothing staged used to hide this whole component,
+  // leaving no way to click Save to promote that rebuild's pin to the level.
+  it('renders a bare Save button (no count, no Discard) when hasBuildPin is true but nothing is staged', () => {
+    render(
+      <SaveBar level="TestLevel" stagedNames={new Set()} hasBuildPin onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+    )
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull()
+    expect(screen.queryByText(/Unsaved:/)).toBeNull()
+  })
+
+  it('still renders nothing when hasBuildPin is false and nothing is staged', () => {
+    const { container } = render(
+      <SaveBar level="TestLevel" stagedNames={new Set()} hasBuildPin={false} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+    )
+    expect(container.innerHTML).toBe('')
+  })
+
+  it('clicking the bare Save button (hasBuildPin, nothing staged) calls postSave with no resolutions', async () => {
+    postSave.mockResolvedValue({ applied: [], conflicts: [] })
+    const onSaved = vi.fn()
+    render(
+      <SaveBar level="TestLevel" stagedNames={new Set()} hasBuildPin onSaved={onSaved} onDiscarded={vi.fn()} />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(postSave).toHaveBeenCalledWith('TestLevel', {}))
+    await waitFor(() => expect(onSaved).toHaveBeenCalled())
+  })
+
   it('renders Save/Discard buttons with staged names', () => {
     render(
       <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,

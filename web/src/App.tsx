@@ -587,6 +587,7 @@ function App() {
           <SaveBar
             level={sessionId}
             stagedNames={stagedNames}
+            hasBuildPin={status !== null && status.build_status !== 'no_build'}
             onSaved={onSaved}
             onDiscarded={onDiscarded}
             onActorDiscarded={onActorDiscarded}

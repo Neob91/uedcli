@@ -23,6 +23,14 @@ import { ConflictResolver } from './ConflictResolver'
 export interface SaveBarProps {
   level: string
   stagedNames: ReadonlySet<string>
+  // Bug found post-merge: Save's SECOND job -- promoting this session's own build pin to the
+  // level's (so a later-opened session inherits it) -- has no visibility trigger of its own. A
+  // plain Rebuild with nothing staged left this whole component hidden (see the render gate
+  // below), so there was no way to click Save at all and the rebuild's pin never got promoted.
+  // `true` whenever the session has ANY build pin worth promoting (`status.build_status !==
+  // 'no_build'`, App.tsx's own status poll) -- 'evicted' counts too: `session_save`'s promotion
+  // only needs `load_session_pointer` to succeed, not the content to still be cached.
+  hasBuildPin?: boolean
   // Called once a Save round-trip completes with NO remaining conflicts (the level's whole stage
   // is now empty) -- App.tsx clears its own `stagedNames`.
   onSaved: () => void
@@ -54,7 +62,15 @@ function mapToSaveResolutions(picks: Record<string, 'mine' | 'theirs'>): Record<
   return out
 }
 
-export function SaveBar({ level, stagedNames, onSaved, onDiscarded, onActorDiscarded, onSuperseded }: SaveBarProps) {
+export function SaveBar({
+  level,
+  stagedNames,
+  hasBuildPin = false,
+  onSaved,
+  onDiscarded,
+  onActorDiscarded,
+  onSuperseded,
+}: SaveBarProps) {
   const [conflicts, setConflicts] = useState<ConflictPayload[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -145,12 +161,17 @@ export function SaveBar({ level, stagedNames, onSaved, onDiscarded, onActorDisca
     [level, onDiscarded, onActorDiscarded, conflicts, onSuperseded],
   )
 
-  if (stagedNames.size === 0 && conflicts.length === 0) return null
+  if (stagedNames.size === 0 && conflicts.length === 0 && !hasBuildPin) return null
 
   return (
     <div className="save-bar">
       <div className="save-bar-actions">
-        <span className="save-bar-count">Unsaved: {stagedNames.size}</span>
+        {/* "Unsaved: N" and the whole-level Discard button are both about STAGED actor edits --
+            neither means anything when the only reason this bar is showing is an unpromoted
+            build pin (nothing staged, nothing to discard). Save itself stays meaningful either
+            way: `session_save`'s pin promotion runs unconditionally, even with an empty
+            `resolutions` body. */}
+        {stagedNames.size > 0 && <span className="save-bar-count">Unsaved: {stagedNames.size}</span>}
         <button type="button" onClick={handleSave} disabled={busy || conflicts.length > 0}>
           {busy ? 'Saving…' : 'Save'}
         </button>
@@ -158,9 +179,11 @@ export function SaveBar({ level, stagedNames, onSaved, onDiscarded, onActorDisca
             ONLY ways to clear it are resolving every row via ConflictResolver or the per-actor
             discard escape hatch below -- the whole-level Discard button must not be a one-click
             bypass of the mandatory conflict UI. */}
-        <button type="button" onClick={handleDiscard} disabled={busy || conflicts.length > 0}>
-          Discard
-        </button>
+        {stagedNames.size > 0 && (
+          <button type="button" onClick={handleDiscard} disabled={busy || conflicts.length > 0}>
+            Discard
+          </button>
+        )}
       </div>
       {error && <div className="save-bar-error">{error}</div>}
       {conflicts.length > 0 && (
