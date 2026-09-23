@@ -1,12 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import type { AtlasPayload, ConflictPayload, LightmapPayload, ScenePayload, ScenePoly, StatusPayload } from './api'
-import { fetchLevelState, fetchStaged, fetchStatus, postLoad, postRebuild, switchLevel } from './api'
+import { fetchLevelState, fetchStaged, fetchStatus, isSupersededError, postLoad, postRebuild, setClaimToken } from './api'
 import { useHasUnseenSelection } from './layout/useSelectionSeen'
 import { useSidebar } from './layout/useSidebar'
 import { ConflictResolver } from './panels/ConflictResolver'
 import type { SurfaceSelection } from './panels/Inspector'
-import { LevelPicker } from './panels/LevelPicker'
 import { SaveBar } from './panels/SaveBar'
 import { Sidebar } from './panels/Sidebar'
 import { buildSidebarPanels } from './panels/sidebarRegistry'
@@ -18,6 +17,8 @@ import { unionBBox } from './scene/frame'
 import { applyStagedOffsets } from './scene/dragStage'
 import { QuadLayout } from './scene/QuadLayout'
 import { clearSelection, parseSurfaceKey, surfaceKey, toggleSelection } from './scene/selectionSet'
+import { SessionDropdown } from './session/SessionDropdown'
+import { useSession } from './session/SessionContext'
 import { useTheme } from './theme/useTheme'
 import type { ThemePreference } from './theme/useTheme'
 
@@ -44,11 +45,6 @@ function ThemeToggle({ preference, onChange }: { preference: ThemePreference; on
       Theme: {preference}
     </button>
   )
-}
-
-interface HealthResponse {
-  status: string
-  level: string
 }
 
 const STATUS_POLL_MS = 3000
@@ -93,7 +89,20 @@ function BuildToolbar({
 
 function App() {
   const { preference: themePreference, setPreference: setThemePreference } = useTheme()
-  const [level, setLevel] = useState<string | null>(null)
+  // Session identity, carried in the URL (plan Task 16) -- replaces the old in-process level
+  // switch. `sessionId`/`level`/`view` are destructured individually (not the whole `session`
+  // object) so effects/callbacks below can depend on the exact stable pieces they use, rather than
+  // a fresh object every render.
+  const session = useSession()
+  const { sessionId, level, view, claimToken, reload: reloadSession, markSuperseded } = session
+
+  // Task 17: pushes the session's current claim token into api.ts's module-level state, the one
+  // place every mutating call reads it from (see api.ts's own doc comment on `setClaimToken` for
+  // why it isn't threaded through every call site's params instead). Runs before anything else
+  // that might fire a mutating call this render.
+  useEffect(() => {
+    setClaimToken(claimToken)
+  }, [claimToken])
   const [scene, setScene] = useState<ScenePayload | null>(null)
   const [atlas, setAtlas] = useState<AtlasPayload | null>(null)
   const [lightmap, setLightmap] = useState<LightmapPayload | null>(null)
@@ -247,7 +256,7 @@ function App() {
     setStagedOffsets(next)
   }, [setStagedOffsets])
   // Surfaces a failed `postStage` call (Important 3, final review fix wave) -- the same dismissable-
-  // banner pattern `buildError`/`levelSwitchError` below already use, not a new mechanism.
+  // banner pattern `buildError` above already uses, not a new mechanism.
   const [stageError, setStageError] = useState<string | null>(null)
   const onStageError = useCallback((message: string) => setStageError(message), [])
   const onDiscarded = useCallback(() => {
@@ -265,13 +274,6 @@ function App() {
   const [loadConflicts, setLoadConflicts] = useState<ConflictPayload[]>([])
   const [reloading, setReloading] = useState(false)
   const [busy, setBusy] = useState<'load' | 'rebuild' | null>(null)
-  // Level switching (owner ruling): unload the OLD level's state the instant a switch starts, and
-  // block the whole app until the new level's full state has loaded -- a broader blast radius than
-  // Load/Rebuild's `reloading` badge, since the picker/org-panel/selection are all invalid mid-switch,
-  // not just the built geometry. `!scene` in the render gate below (already used for the initial
-  // load) does the actual blocking -- unmounting the whole app is the most thorough "block all UI".
-  const [levelSwitching, setLevelSwitching] = useState(false)
-  const [levelSwitchError, setLevelSwitchError] = useState<string | null>(null)
   // The unified sidebar's own collapse/active-tab state (spec's Architecture -> Components) --
   // owned HERE, not inside Sidebar.tsx, because the Selection tab's discoverability dot (below)
   // needs `activeTabId` too (spec's "Selection strip data"). Sidebar.tsx receives all three as
@@ -287,27 +289,34 @@ function App() {
   // computes `hasIndicator` for the `selection` registry entry; Sidebar.tsx never computes it.
   const hasUnseenSelection = useHasUnseenSelection(selectionIdentity, sidebarActiveTabId)
 
+  // Fetches this session's full scene+atlas+lightmap state whenever the RESOLVED session changes
+  // -- the initial resolve, or a later switch to a different session (SessionDropdown). Clears the
+  // previous session's own scene/selection/staging state FIRST (same blast radius the old
+  // `handleSwitchLevel` cleared explicitly): the render gate below blanks the page to "Loading…"
+  // the instant `scene` goes null, and stays blanked until the new session's own fetch resolves --
+  // the same "unload immediately, block until the new state has fully loaded" behavior the old
+  // level switch had, just driven by this effect's own dependency change instead of a bespoke
+  // pre-switch clearing step.
   useEffect(() => {
-    fetch('/api/health')
-      .then((r) => r.json() as Promise<HealthResponse>)
-      .then((body) => setLevel(body.level))
-      .catch((e: unknown) => setError(String(e)))
-  }, [])
-
-  useEffect(() => {
-    if (!level) return
-    fetchLevelState(level)
+    if (!sessionId || !level) return
+    setScene(null)
+    setAtlas(null)
+    setLightmap(null)
+    setStatus(null)
+    setSelectedNames(clearSelection())
+    setSelectedSurfaces(clearSelection())
+    setStagedNames(clearSelection())
+    setStagedOffsets({})
+    setStageError(null)
+    setLoadConflicts([])
+    fetchLevelState(sessionId)
       .then(({ scene: s, atlas: a, lightmap: l }) => {
         setScene(s)
         setAtlas(a)
         setLightmap(l)
       })
       .catch((e: unknown) => setError(String(e)))
-      // Covers both the initial load and a level switch's own setLevel() below -- a level switch
-      // stays blocked (levelSwitching stays true) until exactly this fetch settles; a no-op for the
-      // initial load, where levelSwitching is already false.
-      .finally(() => setLevelSwitching(false))
-  }, [level])
+  }, [sessionId, level, setStagedOffsets])
 
   // Staged edits survive a page refresh (a `POST /stage` writes through immediately -- only the
   // in-progress drag PREVIEW is refresh-lost, plan's own "Known limitations") -- so `stagedNames`
@@ -317,8 +326,8 @@ function App() {
   // not just its count -- previously only `stagedNames` was recovered here, so a refreshed page
   // showed the Save bar but rendered every actor at its un-staged trunk position until the next drag.
   useEffect(() => {
-    if (!level) return
-    fetchStaged(level)
+    if (!sessionId) return
+    fetchStaged(sessionId)
       .then((staged) => {
         setStagedNames(new Set(Object.keys(staged)))
         const offsets: Record<string, Vec3> = {}
@@ -328,10 +337,10 @@ function App() {
       .catch(() => {
         // Same tolerance as refreshStatus below -- not worth a page-level error.
       })
-  }, [level, setStagedOffsets])
+  }, [sessionId, setStagedOffsets])
 
-  const refreshStatus = useCallback((lvl: string) => {
-    fetchStatus(lvl)
+  const refreshStatus = useCallback((sid: string) => {
+    fetchStatus(sid)
       .then(setStatus)
       .catch(() => {
         // A status poll failing is not worth surfacing as a page-level error -- the next poll tries again.
@@ -341,19 +350,24 @@ function App() {
   // Poll /status (cheap: no CSG solve) so the toolbar reflects build_status/changes_available even
   // with no WS push in between -- e.g. right after this tab's own Load/Rebuild, or a slow network.
   useEffect(() => {
-    if (!level) return
-    refreshStatus(level)
-    const id = setInterval(() => refreshStatus(level), STATUS_POLL_MS)
+    if (!sessionId) return
+    refreshStatus(sessionId)
+    const id = setInterval(() => refreshStatus(sessionId), STATUS_POLL_MS)
     return () => clearInterval(id)
-  }, [level, refreshStatus])
+  }, [sessionId, refreshStatus])
 
   // gui-explicit-rebuild spec §2: a settled trunk change is a BANNER signal only -- refresh
   // `/status` so the badge shows up immediately, never an automatic scene refetch.
+  //
+  // Task 17: the same socket also carries the session's "superseded" push -- the live counterpart
+  // to a mutating call's 409 fallback below. Needs `claimToken` too (the backend's `/ws` requires
+  // `?session=&claim=`), so this waits for both, and re-subscribes with a fresh token whenever one
+  // is minted (a session switch, or the takeover's own Reload re-claiming this window).
   useEffect(() => {
-    if (!level) return
-    const sub = subscribeChangesAvailable(() => refreshStatus(level))
+    if (!sessionId || !claimToken) return
+    const sub = subscribeChangesAvailable(sessionId, claimToken, () => refreshStatus(sessionId), markSuperseded)
     return () => sub.unsubscribe()
-  }, [level, refreshStatus])
+  }, [sessionId, claimToken, refreshStatus, markSuperseded])
 
   // Shared by Load and Rebuild: run the POST, then refetch scene+atlas+lightmap and /status --
   // both actions change what the server has to hand back (Load: the trunk view; Rebuild: the
@@ -361,32 +375,41 @@ function App() {
   // caller inspect the POST's own response (Load's `conflicts` field) before that refresh fires --
   // it must run first, not after, since a slow refresh must not delay showing the conflict UI.
   const runBuildAction = useCallback(
-    <T,>(which: 'load' | 'rebuild', post: (lvl: string) => Promise<T>, onResult?: (result: T) => void) => {
-      if (!level || busy) return
+    <T,>(which: 'load' | 'rebuild', post: (sid: string) => Promise<T>, onResult?: (result: T) => void) => {
+      if (!sessionId || busy) return
       setBusy(which)
       setReloading(true)
       setBuildError(null)   // clear any previous failure banner -- this attempt gets a fresh verdict
-      post(level)
+      post(sessionId)
         .then((result) => {
           onResult?.(result)
-          return fetchLevelState(level)
+          return fetchLevelState(sessionId)
         })
         .then(({ scene: s, atlas: a, lightmap: l }) => {
           setScene(s)
           setAtlas(a)
           setLightmap(l)
         })
-        .then(() => refreshStatus(level))
-        .catch((e: unknown) => setBuildError(String(e)))
+        .then(() => refreshStatus(sessionId))
+        .catch((e: unknown) => {
+          // A 409 here means this session's claim was taken by another window (or the session was
+          // deleted) -- the same takeover the `/ws` "superseded" push shows, kept as a fallback for
+          // whenever that push was lost. Not a build failure, so it doesn't go in `buildError`.
+          if (isSupersededError(e)) {
+            markSuperseded()
+            return
+          }
+          setBuildError(String(e))
+        })
         .finally(() => {
           setBusy(null)
           setReloading(false)
         })
     },
-    [level, busy, refreshStatus],
+    [sessionId, busy, refreshStatus, markSuperseded],
   )
   const handleLoad = useCallback(
-    () => runBuildAction('load', (lvl) => postLoad(lvl), (result) => setLoadConflicts(result.conflicts)),
+    () => runBuildAction('load', (sid) => postLoad(sid), (result) => setLoadConflicts(result.conflicts)),
     [runBuildAction],
   )
   const handleRebuild = useCallback(() => runBuildAction('rebuild', postRebuild), [runBuildAction])
@@ -406,7 +429,7 @@ function App() {
   const onSaved = useCallback(() => {
     setStagedNames(new Set())
     setStagedOffsets({})
-    runBuildAction('load', (lvl) => postLoad(lvl), (result) => setLoadConflicts(result.conflicts))
+    runBuildAction('load', (sid) => postLoad(sid), (result) => setLoadConflicts(result.conflicts))
   }, [runBuildAction, setStagedOffsets])
   // Load conflict resolution (Task 10, fixed -- Important 4, final review fix wave): a 'theirs' pick
   // means "accept the trunk's value", POSTed as `check_load_conflicts`'s own `"accept-load"`. A
@@ -430,7 +453,7 @@ function App() {
       }
       runBuildAction(
         'load',
-        (lvl) => postLoad(lvl, resolutions),
+        (sid) => postLoad(sid, resolutions),
         (result) => {
           setLoadConflicts(result.conflicts.filter((c) => !mineNames.includes(c.name)))
           clearStagedOffsetNames(Object.keys(resolutions))
@@ -440,51 +463,21 @@ function App() {
     [runBuildAction, clearStagedOffsetNames],
   )
 
-  // Level switch (LevelPicker's own PUT /api/level call site -- moved here since a switch
-  // invalidates far more of App's own state than LevelPicker owns).
-  const handleSwitchLevel = useCallback(
-    (name: string) => {
-      if (!level || name === level || levelSwitching) return
-      setLevelSwitching(true)
-      setLevelSwitchError(null)
-      setBuildError(null)
-      // Unload the old level's state FIRST, before the switch request even resolves -- never let
-      // stale scene/atlas/lightmap/selection linger while the new level loads.
-      setScene(null)
-      setAtlas(null)
-      setLightmap(null)
-      setStatus(null)
-      setSelectedNames(clearSelection())
-      setSelectedSurfaces(clearSelection())
-      setStagedNames(clearSelection())
-      setStagedOffsets({}) // a different level's staged positions must not linger into the new one
-      setStageError(null)
-      setLoadConflicts([])
-      switchLevel(name)
-        .then(() => setLevel(name)) // drives the fetch-on-level-change effect above (scene + staged)
-        .catch((e: unknown) => {
-          // The switch itself failed server-side -- `level` never changed, so restore its state
-          // instead of leaving the app blocked on nothing.
-          setLevelSwitchError(String(e))
-          setLevelSwitching(false)
-          return fetchLevelState(level)
-            .then(({ scene: s, atlas: a, lightmap: l }) => {
-              setScene(s)
-              setAtlas(a)
-              setLightmap(l)
-            })
-            .then(() => fetchStaged(level))
-            .then((staged) => {
-              setStagedNames(new Set(Object.keys(staged)))
-              const offsets: Record<string, Vec3> = {}
-              for (const [n, entry] of Object.entries(staged)) offsets[n] = entry.staged_location
-              setStagedOffsets(offsets)
-            })
-            .then(() => refreshStatus(level))
-        })
-        .catch((e: unknown) => setError(String(e))) // the restore itself failed -- nothing left to show
+  // Session switch (SessionDropdown's own "switch to" action, plan Task 16 -- replaces the old
+  // LevelPicker's PUT /api/level call entirely). Writing the id into the URL and re-resolving via
+  // SessionContext's `reload` is the ONE navigation mechanism a session switch uses -- the exact
+  // same code path a fresh page load with a `?session=` already present takes at mount. The old
+  // eager "unload/block" step lives in the scene-fetch effect above now, keyed off `sessionId`
+  // itself changing, not a bespoke pre-switch clear here.
+  const handleSwitchSession = useCallback(
+    (id: string) => {
+      if (id === sessionId) return
+      const url = new URL(window.location.href)
+      url.searchParams.set('session', id)
+      window.history.replaceState(null, '', url.toString())
+      reloadSession()
     },
-    [level, levelSwitching, refreshStatus, setStagedOffsets],
+    [sessionId, reloadSession],
   )
 
   // Every selected actor's CURRENT (staged-offset-applied) state, in scene.actors order --
@@ -553,9 +546,34 @@ function App() {
   // already does, not a second fetch.
   const buildSolved = resolveBuildSolved(status)
 
+  // A session id in the URL that the server doesn't know (never created, or a garbage id) -- no
+  // auto-create, per the spec: a bare/valid URL auto-creates, but a BAD one is shown, not silently
+  // papered over with a fresh session the user never asked for.
+  if (view === 'notfound') {
+    return <div className="status-message error">Session not found: {sessionId}</div>
+  }
+  // This tab's own session was closed (by another tab/window, or directly) -- no auto-navigate,
+  // per the spec: the user decides what to do next, this never silently creates a replacement.
+  if (view === 'closed') {
+    return <div className="status-message">This session was closed.</div>
+  }
+  // Another window took this session's claim (or it was deleted) -- the `/ws` "superseded" push,
+  // or a mutating call's 409 fallback, both routed through `markSuperseded`. Reload re-resolves the
+  // session (`fetchSession` mints a fresh claim token, reclaiming it for THIS window) and returns
+  // to 'editing' on success -- the same primitive a session switch already uses.
+  if (view === 'superseded') {
+    return (
+      <div className="status-message superseded-takeover">
+        This session is now open in another window. Reload to keep using it here.
+        <button type="button" onClick={reloadSession}>
+          Reload
+        </button>
+      </div>
+    )
+  }
   if (error) return <div className="status-message error">{error}</div>
-  if (!level || !scene || !atlas || !lightmap) {
-    return <div className="status-message">{levelSwitching ? 'Switching level…' : 'Loading…'}</div>
+  if (!sessionId || !level || !scene || !atlas || !lightmap) {
+    return <div className="status-message">Loading…</div>
   }
 
   return (
@@ -567,18 +585,14 @@ function App() {
           <ThemeToggle preference={themePreference} onChange={setThemePreference} />
           <BuildToolbar status={status} busy={busy} onLoad={handleLoad} onRebuild={handleRebuild} />
           <SaveBar
-            level={level}
+            level={sessionId}
             stagedNames={stagedNames}
             onSaved={onSaved}
             onDiscarded={onDiscarded}
             onActorDiscarded={onActorDiscarded}
+            onSuperseded={markSuperseded}
           />
-          <LevelPicker
-            currentLevel={level}
-            disabled={levelSwitching}
-            error={levelSwitchError}
-            onSwitchLevel={handleSwitchLevel}
-          />
+          <SessionDropdown currentSessionId={sessionId} onSwitchSession={handleSwitchSession} />
         </div>
         {/* Fills exactly the space left below the toolbar row (a flex column: toolbar + this),
             instead of the quad being sized against the full viewport height and drawing underneath
@@ -619,7 +633,7 @@ function App() {
             </div>
           )}
           <QuadLayout
-            level={level}
+            level={sessionId}
             scene={scene}
             atlas={atlas}
             lightmap={lightmap}

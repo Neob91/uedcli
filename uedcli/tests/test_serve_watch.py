@@ -67,6 +67,21 @@ def test_stop_cancels_a_pending_timer():
     asyncio.run(_run())
 
 
+def test_started_reflects_start_and_stop(tmp_path):
+    """Final-review fix round, Finding 5: `started` is what `app.py`'s `ws_endpoint` checks before
+    calling `.start()` on a lazily-created level's watcher (`.start()` itself is NOT idempotent --
+    calling it twice would replace `_watch_task` and leak the old one)."""
+    async def _run():
+        watcher = TrunkWatcher(tmp_path, lambda: None, debounce_s=0.02)
+        assert watcher.started is False
+        watcher.start()
+        assert watcher.started is True
+        watcher.stop()
+        assert watcher.started is False
+
+    asyncio.run(_run())
+
+
 def test_notify_during_an_in_flight_broadcast_does_not_cancel_it():
     """Regression: `notify()` (and `stop()`) used to `.cancel()` the SAME task running
     `on_change()`, so a rapid `notify()`/`stop()` arriving while a slow `on_change()` (e.g. mid

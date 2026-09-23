@@ -9,6 +9,9 @@ const postDiscard = vi.fn()
 vi.mock('../api', () => ({
   postSave: (...args: unknown[]) => postSave(...args),
   postDiscard: (...args: unknown[]) => postDiscard(...args),
+  // Mirrors api.ts's own real implementation (Task 17) -- SaveBar.tsx imports this for real, and
+  // this mock replaces the whole module, so it must supply a working one too.
+  isSupersededError: (e: unknown) => typeof e === 'object' && e !== null && (e as { status?: number }).status === 409,
 }))
 
 afterEach(() => {
@@ -31,6 +34,17 @@ describe('SaveBar', () => {
     )
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Discard' })).toBeTruthy()
+  })
+
+  // Copy fix (Task 17): user-facing copy says "unsaved," never "staged" -- the spec's own naming
+  // decision. No literal "Stage"-labeled button exists anywhere in this codebase (staging happens
+  // via drag gestures, not a button click), so this is the one real user-facing count to fix.
+  it('labels the staged count as "Unsaved: N", never "staged"', () => {
+    render(
+      <SaveBar level="TestLevel" stagedNames={new Set(['Light0', 'Light1'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+    )
+    expect(screen.getByText('Unsaved: 2')).toBeTruthy()
+    expect(screen.queryByText(/staged/i)).toBeNull()
   })
 
   it('clicking Save calls postSave and, on a clean apply, calls onSaved', async () => {
@@ -175,6 +189,67 @@ describe('SaveBar', () => {
     await waitFor(() => expect(screen.queryByText('Light0')).toBeNull())
 
     expect(screen.getByRole('button', { name: 'Discard' }).hasAttribute('disabled')).toBe(false)
+  })
+
+  it('labels the per-actor conflict-discard escape hatch as "unsaved," never "staged"', async () => {
+    postSave.mockResolvedValueOnce({
+      applied: [],
+      conflicts: [{ name: 'Light0', staged_location: [10, 0, 0], trunk_location: [20, 0, 0] }],
+    })
+    render(
+      <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.getByText('Light0')).toBeTruthy())
+
+    expect(screen.getByText("Or discard one actor's unsaved edit, leaving the rest unsaved:")).toBeTruthy()
+    expect(screen.queryByText(/staged/i)).toBeNull()
+  })
+
+  // Task 17: a 409 from postSave/postDiscard means this session's claim was taken by another
+  // window (or it was deleted) -- the same takeover the `/ws` "superseded" push shows. SaveBar
+  // reports this through `onSuperseded` instead of its own local error banner.
+  describe('superseded (409) handling', () => {
+    it('a 409 from postSave calls onSuperseded, not the local error banner', async () => {
+      const supersededError = Object.assign(new Error('sess-1: session superseded'), { status: 409 })
+      postSave.mockRejectedValueOnce(supersededError)
+      const onSuperseded = vi.fn()
+      render(
+        <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} onSuperseded={onSuperseded} />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      await waitFor(() => expect(onSuperseded).toHaveBeenCalledTimes(1))
+      expect(screen.queryByText(/session superseded/)).toBeNull()
+    })
+
+    it('a 409 from postDiscard (whole-level Discard) calls onSuperseded', async () => {
+      const supersededError = Object.assign(new Error('sess-1: session superseded'), { status: 409 })
+      postDiscard.mockRejectedValueOnce(supersededError)
+      const onSuperseded = vi.fn()
+      render(
+        <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} onSuperseded={onSuperseded} />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Discard' }))
+
+      await waitFor(() => expect(onSuperseded).toHaveBeenCalledTimes(1))
+    })
+
+    it('a non-409 error still shows the local error banner, not onSuperseded', async () => {
+      postSave.mockRejectedValueOnce(new Error('sess-1: level not found'))
+      const onSuperseded = vi.fn()
+      render(
+        <SaveBar level="TestLevel" stagedNames={new Set(['Light0'])} onSaved={vi.fn()} onDiscarded={vi.fn()} onSuperseded={onSuperseded} />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+      await waitFor(() => expect(screen.getByText(/level not found/)).toBeTruthy())
+      expect(onSuperseded).not.toHaveBeenCalled()
+    })
   })
 
   it('resets local conflict/busy/error state when the level prop changes', async () => {

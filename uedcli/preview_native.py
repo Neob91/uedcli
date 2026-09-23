@@ -31,7 +31,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from . import movers, preview_cache
+from . import build_cache, movers
 from .classindex import CORE_OBJECT, ClassRefError
 from .normalize import is_builder_brush
 from .preview import sprite_footprint
@@ -805,7 +805,7 @@ def _scene_hashes(level, light_names: set[str]) -> tuple[str, str]:
     not just the restricted subset's relative order — reordering a light actor relative to a brush
     can't move CSG evaluation order (`_brush_inputs` filters to brush actors before reading it), so
     this is deliberately over-invalidating rather than reasoning that out: same "err strict, never
-    serve stale" posture as `canonical_level_hash` itself (`preview_cache` costs an extra rebuild on
+    serve stale" posture as `canonical_level_hash` itself (`build_cache` costs an extra rebuild on
     a miss, never a wrong scene).
 
     A BRUSH actor is excluded from `light_names` here regardless of what `gather_lights` says about
@@ -838,16 +838,17 @@ def _scene_hashes(level, light_names: set[str]) -> tuple[str, str]:
 def build_scene(level, search_files, index, *, defaults, project=None,
                 level_name=None, visibility: Literal["gameplay", "editor"] = "gameplay",
                 include_meshes: bool = True, include_movers: bool = True
-                ) -> tuple[list, list, list]:
-    """Trunk → (render polys, texture table, per-poly owner names): CSG build + node-poly
-    extraction + source-poly join + Python UV frames + mover extra_polys + native texture decode +
-    world-surf lighting (board `bake-lighting-into-level-photo-native`). Raises NativePreviewError
-    on every named RENDER failure path (spec §7). `index` is a `classindex.ClassIndex`: movers are
-    excluded from world CSG and rendered separately, and mover-ness is decided schema-aware by
-    `movers.is_mover` against the game's class hierarchy — an unresolvable class therefore raises
-    `classindex.ClassRefError` (naming the class) straight through this function, rather than a
-    NativePreviewError; dispatch's top-level guard turns it into the same clean exit 2. `defaults`
-    is a `classdefaults.ClassDefaults`, needed to read light properties (their class defaults) —
+                ) -> tuple[list, list, list, str | None, str | None]:
+    """Trunk → (render polys, texture table, per-poly owner names, geom_hash, light_hash): CSG build
+    + node-poly extraction + source-poly join + Python UV frames + mover extra_polys + native
+    texture decode + world-surf lighting (board `bake-lighting-into-level-photo-native`). Raises
+    NativePreviewError on every named RENDER failure path (spec §7). `index` is a
+    `classindex.ClassIndex`: movers are excluded from world CSG and rendered separately, and
+    mover-ness is decided schema-aware by `movers.is_mover` against the game's class hierarchy —
+    an unresolvable class therefore raises `classindex.ClassRefError` (naming the class) straight
+    through this function, rather than a NativePreviewError; dispatch's top-level guard turns it
+    into the same clean exit 2. `defaults` is a `classdefaults.ClassDefaults`, needed to read light
+    properties (their class defaults) —
     world BSP surfaces are lit; mesh/mover actors are not (a separate, un-RE'd mechanism, board
     item `mesh-mover-per-vertex-lighting-in-level-photo`).
 
@@ -864,7 +865,13 @@ def build_scene(level, search_files, index, *, defaults, project=None,
     authored polygon they came from, so a click anywhere on it selects the whole authored face
     instead of one fragment (owner bug report, "brush poly selection is off").
 
-    `project`/`level_name` are the `preview_cache` identity (owner ruling 2026-09-13, board `native-
+    The fourth/fifth return values, `geom_hash`/`light_hash`, are the SAME identity strings this
+    function already computes internally (below) to key its own on-disk `build_cache` entries —
+    returned so a caller needing them (`uedcli serve`'s `_build_and_publish_geometry`) doesn't have
+    to recompute them itself. Both are `None` whenever `project`/`level_name` aren't both given
+    (the same gate that skips caching entirely).
+
+    `project`/`level_name` are the `build_cache` identity (owner ruling 2026-09-13, board `native-
     photo-scene-cache`): given both, an unchanged level reuses its fully-lit scene outright, and a
     level whose only change is to its light actors reuses the CSG solve + texture decode and reruns
     only the (cheap) lighting bake. Neither given (every direct test call in this codebase) → always
@@ -933,11 +940,11 @@ def build_scene(level, search_files, index, *, defaults, project=None,
         # under the other's rule.
         geom_hash += (("e" if visibility == "editor" else "g")
                      + ("" if include_meshes else "x") + ("" if include_movers else "m"))
-        cached_scene = preview_cache.load_scene(project, level_name, geom_hash, light_hash)
+        cached_scene = build_cache.load_scene(project, level_name, geom_hash, light_hash)
         if cached_scene is not None:
-            return cached_scene
+            return (*cached_scene, geom_hash, light_hash)
 
-    geo = preview_cache.load_geometry(project, level_name, geom_hash) if cache else None
+    geo = build_cache.load_geometry(project, level_name, geom_hash) if cache else None
 
     built = None
     if geo is not None:
@@ -1080,7 +1087,7 @@ def build_scene(level, search_files, index, *, defaults, project=None,
 
         texture_table = textures.table
         if cache:
-            preview_cache.store_geometry(project, level_name, geom_hash,
+            build_cache.store_geometry(project, level_name, geom_hash,
                                          (model_body, portals, polys_no_light, i_surf_by_poly,
                                           actor_names_by_poly, texture_table))
 
@@ -1099,10 +1106,10 @@ def build_scene(level, search_files, index, *, defaults, project=None,
     ]
 
     if cache:
-        preview_cache.store_scene(project, level_name, geom_hash, light_hash,
+        build_cache.store_scene(project, level_name, geom_hash, light_hash,
                                   (polys, texture_table, actor_names_by_poly))
 
-    return polys, texture_table, actor_names_by_poly
+    return polys, texture_table, actor_names_by_poly, geom_hash, light_hash
 
 
 @dataclass(frozen=True)
@@ -1202,11 +1209,10 @@ def render_shots(*, level, shots: list[Shot], out_dir: Path, index, defaults,
         except ValueError as e:
             raise NativePreviewError(str(e)) from None
 
-    polys, textures, _actor_names = build_scene(level, search_files or [], index, defaults=defaults,
-                                                project=project, level_name=level_name,
-                                                visibility="gameplay")   # unchanged: bHidden, not
-                                                                          # bHiddenEd (owner ruling
-                                                                          # 2026-09-14)
+    polys, textures, _actor_names, _geom_hash, _light_hash = build_scene(
+        level, search_files or [], index, defaults=defaults,
+        project=project, level_name=level_name,
+        visibility="gameplay")   # unchanged: bHidden, not bHiddenEd (owner ruling 2026-09-14)
     sky_actor = find_sky_actor(level, index)              # None -> every PF_FakeBackdrop face
                                                             # falls back to its own texture
 

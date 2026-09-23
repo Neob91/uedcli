@@ -17,7 +17,7 @@
 import { useCallback, useEffect, useState } from 'react'
 
 import type { ConflictPayload } from '../api'
-import { postDiscard, postSave } from '../api'
+import { isSupersededError, postDiscard, postSave } from '../api'
 import { ConflictResolver } from './ConflictResolver'
 
 export interface SaveBarProps {
@@ -35,6 +35,11 @@ export interface SaveBarProps {
   // doesn't keep showing a stale offset for an actor whose own stage was just dropped. Optional:
   // a caller that doesn't track staged positions client-side can omit it.
   onActorDiscarded?: (name: string) => void
+  // Fires instead of the local error banner when `postSave`/`postDiscard` 409s (Task 17): this
+  // session's claim was taken by another window, or it was deleted -- the same takeover the `/ws`
+  // "superseded" push shows, App.tsx's `markSuperseded`. Optional: a caller that never sees a 409
+  // (e.g. this component's own tests, which mock `postSave`/`postDiscard` directly) can omit it.
+  onSuperseded?: () => void
 }
 
 /** Save's own resolutionLabels/mapping -- 'mine' keeps the staged move, 'theirs' keeps the current
@@ -49,7 +54,7 @@ function mapToSaveResolutions(picks: Record<string, 'mine' | 'theirs'>): Record<
   return out
 }
 
-export function SaveBar({ level, stagedNames, onSaved, onDiscarded, onActorDiscarded }: SaveBarProps) {
+export function SaveBar({ level, stagedNames, onSaved, onDiscarded, onActorDiscarded, onSuperseded }: SaveBarProps) {
   const [conflicts, setConflicts] = useState<ConflictPayload[]>([])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -73,10 +78,16 @@ export function SaveBar({ level, stagedNames, onSaved, onDiscarded, onActorDisca
           setConflicts(result.conflicts)
           if (result.conflicts.length === 0) onSaved()
         })
-        .catch((e: unknown) => setError(String(e)))
+        .catch((e: unknown) => {
+          if (isSupersededError(e)) {
+            onSuperseded?.()
+            return
+          }
+          setError(String(e))
+        })
         .finally(() => setBusy(false))
     },
-    [level, onSaved],
+    [level, onSaved, onSuperseded],
   )
 
   const handleSave = useCallback(() => runSave({}), [runSave])
@@ -89,9 +100,15 @@ export function SaveBar({ level, stagedNames, onSaved, onDiscarded, onActorDisca
         setConflicts([])
         onDiscarded()
       })
-      .catch((e: unknown) => setError(String(e)))
+      .catch((e: unknown) => {
+        if (isSupersededError(e)) {
+          onSuperseded?.()
+          return
+        }
+        setError(String(e))
+      })
       .finally(() => setBusy(false))
-  }, [level, onDiscarded])
+  }, [level, onDiscarded, onSuperseded])
 
   const handleResolve = useCallback(
     (picks: Record<string, 'mine' | 'theirs'>) => runSave(mapToSaveResolutions(picks)),
@@ -116,10 +133,16 @@ export function SaveBar({ level, stagedNames, onSaved, onDiscarded, onActorDisca
           onActorDiscarded?.(name)
           if (next.length === 0) onDiscarded()
         })
-        .catch((e: unknown) => setError(String(e)))
+        .catch((e: unknown) => {
+          if (isSupersededError(e)) {
+            onSuperseded?.()
+            return
+          }
+          setError(String(e))
+        })
         .finally(() => setBusy(false))
     },
-    [level, onDiscarded, onActorDiscarded, conflicts],
+    [level, onDiscarded, onActorDiscarded, conflicts, onSuperseded],
   )
 
   if (stagedNames.size === 0 && conflicts.length === 0) return null
@@ -127,9 +150,7 @@ export function SaveBar({ level, stagedNames, onSaved, onDiscarded, onActorDisca
   return (
     <div className="save-bar">
       <div className="save-bar-actions">
-        <span className="save-bar-count">
-          {stagedNames.size} staged move{stagedNames.size === 1 ? '' : 's'}
-        </span>
+        <span className="save-bar-count">Unsaved: {stagedNames.size}</span>
         <button type="button" onClick={handleSave} disabled={busy || conflicts.length > 0}>
           {busy ? 'Saving…' : 'Save'}
         </button>
@@ -150,7 +171,7 @@ export function SaveBar({ level, stagedNames, onSaved, onDiscarded, onActorDisca
             onResolve={handleResolve}
           />
           <div className="save-bar-conflict-discard-list">
-            <p>Or discard one actor&apos;s staged edit, leaving the rest staged:</p>
+            <p>Or discard one actor&apos;s unsaved edit, leaving the rest unsaved:</p>
             {conflicts.map((c) => (
               <button
                 key={c.name}

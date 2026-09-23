@@ -1,22 +1,33 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  createSession,
   fetchAtlas,
   fetchLevels,
   fetchLightmap,
   fetchScene,
+  fetchSession,
+  fetchSessions,
   fetchStaged,
   fetchStatus,
+  isSupersededError,
   postDiscard,
   postLoad,
   postRebuild,
   postSave,
   postStage,
-  switchLevel,
+  setClaimToken,
 } from './api'
 
+// Task 17: `setClaimToken` is module-level state (not a per-call param -- see api.ts's own doc
+// comment on it), so every test that sets one must clean up after itself or leak into an unrelated
+// test run later in this file.
+afterEach(() => {
+  setClaimToken(null)
+})
+
 describe('fetchScene', () => {
-  it('returns the typed payload from /api/level/<level>/scene', async () => {
+  it('returns the typed payload from /api/session/<id>/scene', async () => {
     const payload = {
       polys: [
         {
@@ -52,18 +63,18 @@ describe('fetchScene', () => {
       async () => new Response(JSON.stringify(payload), { status: 200 }),
     ) as unknown as typeof fetch
 
-    const got = await fetchScene('TestLevel')
+    const got = await fetchScene('sess-1')
 
     expect(got).toEqual(payload)
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/scene')
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/scene')
   })
 
   it('rejects with the backend structured-error message on a non-2xx response', async () => {
     globalThis.fetch = vi.fn(
-      async () => new Response(JSON.stringify({ error: 'level not found: \'bogus\'' }), { status: 422 }),
+      async () => new Response(JSON.stringify({ error: "session not found: 'bogus'" }), { status: 422 }),
     ) as unknown as typeof fetch
 
-    await expect(fetchScene('bogus')).rejects.toThrow("level not found: 'bogus'")
+    await expect(fetchScene('bogus')).rejects.toThrow("session not found: 'bogus'")
   })
 })
 
@@ -79,10 +90,10 @@ describe('fetchAtlas', () => {
       async () => new Response(JSON.stringify(payload), { status: 200 }),
     ) as unknown as typeof fetch
 
-    const got = await fetchAtlas('TestLevel')
+    const got = await fetchAtlas('sess-1')
 
     expect(got).toEqual(payload)
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/atlas')
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/atlas')
   })
 })
 
@@ -99,10 +110,10 @@ describe('fetchLightmap', () => {
       async () => new Response(JSON.stringify(payload), { status: 200 }),
     ) as unknown as typeof fetch
 
-    const got = await fetchLightmap('TestLevel')
+    const got = await fetchLightmap('sess-1')
 
     expect(got).toEqual(payload)
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/lightmap')
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/lightmap')
   })
 })
 
@@ -113,10 +124,10 @@ describe('fetchStatus', () => {
       async () => new Response(JSON.stringify(payload), { status: 200 }),
     ) as unknown as typeof fetch
 
-    const got = await fetchStatus('TestLevel')
+    const got = await fetchStatus('sess-1')
 
     expect(got).toEqual(payload)
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/status')
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/status')
   })
 })
 
@@ -125,10 +136,10 @@ describe('postLoad', () => {
     const payload = { status: 'ok', conflicts: [] }
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
 
-    const got = await postLoad('TestLevel')
+    const got = await postLoad('sess-1')
 
     expect(got).toEqual(payload)
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/load', {
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ resolutions: {} }),
@@ -142,10 +153,10 @@ describe('postLoad', () => {
     }
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
 
-    const got = await postLoad('TestLevel', { Light0: 'accept-load' })
+    const got = await postLoad('sess-1', { Light0: 'accept-load' })
 
     expect(got).toEqual(payload)
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/load', {
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ resolutions: { Light0: 'accept-load' } }),
@@ -158,10 +169,10 @@ describe('postStage', () => {
     const payload = { staged: ['Light0', 'Light1'] }
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
 
-    const got = await postStage('TestLevel', { Light0: [1, 2, 3], Light1: [4, 5, 6] })
+    const got = await postStage('sess-1', { Light0: [1, 2, 3], Light1: [4, 5, 6] })
 
     expect(got).toEqual(payload)
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/stage', {
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/stage', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ actors: { Light0: [1, 2, 3], Light1: [4, 5, 6] } }),
@@ -173,10 +184,10 @@ describe('postDiscard', () => {
   it('POSTs an empty JSON body to the discard route with no actors', async () => {
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ status: 'ok' }), { status: 200 })) as unknown as typeof fetch
 
-    const got = await postDiscard('TestLevel')
+    const got = await postDiscard('sess-1')
 
     expect(got).toEqual({ status: 'ok' })
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/discard', {
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/discard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
@@ -186,10 +197,10 @@ describe('postDiscard', () => {
   it('POSTs {actors} to the discard route for a subset discard', async () => {
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ status: 'ok' }), { status: 200 })) as unknown as typeof fetch
 
-    const got = await postDiscard('TestLevel', ['Light0'])
+    const got = await postDiscard('sess-1', ['Light0'])
 
     expect(got).toEqual({ status: 'ok' })
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/discard', {
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/discard', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ actors: ['Light0'] }),
@@ -202,10 +213,10 @@ describe('postSave', () => {
     const payload = { applied: ['Light0'], conflicts: [] }
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
 
-    const got = await postSave('TestLevel')
+    const got = await postSave('sess-1')
 
     expect(got).toEqual(payload)
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/save', {
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ resolutions: {} }),
@@ -219,10 +230,10 @@ describe('postSave', () => {
     }
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
 
-    const got = await postSave('TestLevel', { Light0: 'trunk' })
+    const got = await postSave('sess-1', { Light0: 'trunk' })
 
     expect(got).toEqual(payload)
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/save', {
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ resolutions: { Light0: 'trunk' } }),
@@ -231,38 +242,38 @@ describe('postSave', () => {
 })
 
 describe('fetchStaged', () => {
-  it('returns the typed staged-actors payload from /api/level/<level>/staged', async () => {
+  it('returns the typed staged-actors payload from /api/session/<id>/staged', async () => {
     const payload = {
       Light0: { staged_location: [1, 2, 3], baseline_location: [0, 0, 0] },
     }
     globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
 
-    const got = await fetchStaged('TestLevel')
+    const got = await fetchStaged('sess-1')
 
     expect(got).toEqual(payload)
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/staged')
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/staged')
   })
 })
 
 describe('postRebuild', () => {
-  it('POSTs to the rebuild route', async () => {
-    const payload = { status: 'ok', geom_hash: null, light_hash: null }
+  it('POSTs to the session-scoped rebuild route', async () => {
+    const payload = { geom_hash: null, light_hash: null }
     globalThis.fetch = vi.fn(
       async () => new Response(JSON.stringify(payload), { status: 200 }),
     ) as unknown as typeof fetch
 
-    const got = await postRebuild('TestLevel')
+    const got = await postRebuild('sess-1')
 
     expect(got).toEqual(payload)
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/TestLevel/rebuild', { method: 'POST' })
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/rebuild', { method: 'POST' })
   })
 
   it('rejects with the backend structured-error message on a non-2xx response', async () => {
     globalThis.fetch = vi.fn(
-      async () => new Response(JSON.stringify({ error: 'level not found: \'bogus\'' }), { status: 422 }),
+      async () => new Response(JSON.stringify({ error: "session not found: 'bogus'" }), { status: 422 }),
     ) as unknown as typeof fetch
 
-    await expect(postRebuild('bogus')).rejects.toThrow("level not found: 'bogus'")
+    await expect(postRebuild('bogus')).rejects.toThrow("session not found: 'bogus'")
   })
 })
 
@@ -284,18 +295,15 @@ describe('fetchLevels', () => {
   })
 })
 
-describe('switchLevel', () => {
-  it('PUTs a JSON body {level: name} to /api/level', async () => {
-    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ level: 'Beta' }), { status: 200 })) as unknown as typeof fetch
+describe('createSession', () => {
+  it('POSTs to /api/level/<level>/sessions and returns the new session record', async () => {
+    const payload = { id: 'sess-1', level: 'Beta', created_at: '2026-09-22T00:00:00Z', claim_token: 'tok-1' }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 201 })) as unknown as typeof fetch
 
-    const got = await switchLevel('Beta')
+    const got = await createSession('Beta')
 
-    expect(got).toEqual({ level: 'Beta' })
-    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ level: 'Beta' }),
-    })
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/level/Beta/sessions', { method: 'POST' })
   })
 
   it('rejects with the backend structured-error message on a non-2xx response', async () => {
@@ -303,6 +311,136 @@ describe('switchLevel', () => {
       async () => new Response(JSON.stringify({ error: "level not found: 'bogus'" }), { status: 422 }),
     ) as unknown as typeof fetch
 
-    await expect(switchLevel('bogus')).rejects.toThrow("level not found: 'bogus'")
+    await expect(createSession('bogus')).rejects.toThrow("level not found: 'bogus'")
+  })
+})
+
+describe('fetchSession', () => {
+  it('GETs /api/session/<id> and returns the resolved record', async () => {
+    const payload = {
+      id: 'sess-1', level: 'Beta', created_at: '2026-09-22T00:00:00Z',
+      last_active_at: '2026-09-22T00:00:01Z', claim_token: 'tok-2',
+    }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
+
+    const got = await fetchSession('sess-1')
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1')
+  })
+
+  it('rejects on a 404 for an unknown session id', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ error: "session not found: 'bogus'" }), { status: 404 }),
+    ) as unknown as typeof fetch
+
+    await expect(fetchSession('bogus')).rejects.toThrow("session not found: 'bogus'")
+  })
+})
+
+describe('fetchSessions', () => {
+  it('GETs /api/sessions and returns every open session', async () => {
+    const payload = {
+      sessions: [
+        { id: 'sess-1', level: 'Alpha', created_at: '2026-09-22T00:00:00Z', last_active_at: '2026-09-22T00:00:01Z' },
+        { id: 'sess-2', level: 'Beta', created_at: '2026-09-22T00:00:02Z', last_active_at: '2026-09-22T00:00:03Z' },
+      ],
+    }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
+
+    const got = await fetchSessions()
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/sessions')
+  })
+})
+
+// Task 17: every mutating call attaches the session's current claim token as `X-Claim-Token` --
+// set once via `setClaimToken` (module-level, see api.ts's own doc comment on why), read by every
+// one of `postLoad`/`postRebuild`/`postStage`/`postDiscard`/`postSave`.
+describe('claim token header', () => {
+  it('postSave attaches X-Claim-Token when a token is set', async () => {
+    setClaimToken('tok-1')
+    const payload = { applied: ['Light0'], conflicts: [] }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
+
+    await postSave('sess-1')
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Claim-Token': 'tok-1' },
+      body: JSON.stringify({ resolutions: {} }),
+    })
+  })
+
+  it('postStage attaches X-Claim-Token when a token is set', async () => {
+    setClaimToken('tok-2')
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ staged: ['Light0'] }), { status: 200 })) as unknown as typeof fetch
+
+    await postStage('sess-1', { Light0: [1, 2, 3] })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/stage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Claim-Token': 'tok-2' },
+      body: JSON.stringify({ actors: { Light0: [1, 2, 3] } }),
+    })
+  })
+
+  it('postRebuild (no JSON body) still attaches X-Claim-Token when a token is set', async () => {
+    setClaimToken('tok-3')
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ geom_hash: null, light_hash: null }), { status: 200 }),
+    ) as unknown as typeof fetch
+
+    await postRebuild('sess-1')
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/rebuild', {
+      method: 'POST',
+      headers: { 'X-Claim-Token': 'tok-3' },
+    })
+  })
+
+  it('sends no X-Claim-Token header at all when no token has been set', async () => {
+    // No setClaimToken call -- the module starts (and, per the afterEach above, always returns to)
+    // a null token. The old exact request shape (no `headers` key at all for postRebuild, no
+    // `X-Claim-Token` for postSave) must be preserved unchanged for a caller with no session yet.
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ geom_hash: null, light_hash: null }), { status: 200 }),
+    ) as unknown as typeof fetch
+
+    await postRebuild('sess-1')
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/rebuild', { method: 'POST' })
+  })
+})
+
+describe('isSupersededError', () => {
+  it('is true for an Error carrying status 409 (a mutating call rejected by request())', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ error: 'session superseded' }), { status: 409 }),
+    ) as unknown as typeof fetch
+
+    try {
+      await postSave('sess-1')
+      expect.unreachable('postSave should have rejected on the 409 response')
+    } catch (e) {
+      expect(isSupersededError(e)).toBe(true)
+    }
+  })
+
+  it('is false for any other status, and for a non-error value', async () => {
+    globalThis.fetch = vi.fn(
+      async () => new Response(JSON.stringify({ error: 'level not found' }), { status: 422 }),
+    ) as unknown as typeof fetch
+
+    try {
+      await postSave('sess-1')
+      expect.unreachable('postSave should have rejected on the 422 response')
+    } catch (e) {
+      expect(isSupersededError(e)).toBe(false)
+    }
+    expect(isSupersededError(new Error('plain error, no status'))).toBe(false)
+    expect(isSupersededError(null)).toBe(false)
+    expect(isSupersededError('a string')).toBe(false)
   })
 })

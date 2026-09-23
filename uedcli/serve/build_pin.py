@@ -1,27 +1,54 @@
-"""On-disk build-pin pointer for `uedcli serve` (spec §1): `.uedcli/build/<level>/current.json`
-names the `(geom_hash, light_hash)` pair a Save last committed, resolved against the existing
-`preview_cache` scene store. Read-only — nothing in this plan's scope ever writes this file; Save
-(P2, doesn't exist yet) owns the write, atomically with its own trunk write."""
+"""Two build pins, not one. `sessions/<sid>/build.json` is this session's own current pin while it
+edits — corrupt-and-instruct, since a session's own state is closer to "work" than to a cache
+(direction/safety.md). `build/pin/<level>/current.json` is the level's pin, written only by Save,
+naming the build matching the last-saved trunk — unchanged from before this feature: silent-degrade
+to "never built" on any read failure, since it's purely regenerable (a fresh Rebuild replaces it)."""
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from .. import config, preview_cache
+from .. import build_cache, config
+from .atomic_io import atomic_write_json
 
 
-def pointer_path(project, level_name: str) -> Path:
-    """`.uedcli/build/<level_name>/current.json`. Never creates the `build` subdir — read-only
-    helper, nothing in this plan's scope ever writes it (see module docstring)."""
-    return config.state_subdir(project.root, "build", create=False) / level_name / "current.json"
+class SessionPointerCorruptError(Exception):
+    pass
 
 
-def load_pointer(project, level_name: str) -> tuple[str, str] | None:
-    """`(geom_hash, light_hash)` from the on-disk pointer, or `None` if it's absent, unreadable, or
-    malformed — a corrupt/partial pointer degrades to "never built" like any other cache miss,
-    never an exception (matches `preview_cache._load`'s own corrupt-entry posture)."""
+def session_pointer_path(sessions_root: Path, session_id: str) -> Path:
+    return Path(sessions_root) / session_id / "build.json"
+
+
+def load_session_pointer(sessions_root: Path, session_id: str) -> tuple[str, str]:
+    p = session_pointer_path(sessions_root, session_id)
     try:
-        raw = pointer_path(project, level_name).read_text()
+        raw = p.read_text(encoding="utf-8")
+        data = json.loads(raw)
+        return data["geom_hash"], data["light_hash"]
+    except (OSError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise SessionPointerCorruptError(
+            f"session {session_id}: build pin at {p} is missing or unreadable: {exc}"
+        ) from exc
+
+
+def write_session_pointer(sessions_root: Path, session_id: str, geom_hash: str, light_hash: str) -> None:
+    atomic_write_json(session_pointer_path(sessions_root, session_id),
+                       {"geom_hash": geom_hash, "light_hash": light_hash})
+
+
+def resolve_session_pin(project, level_name: str, sessions_root: Path, session_id: str):
+    geom_hash, light_hash = load_session_pointer(sessions_root, session_id)
+    return build_cache.load_scene(project, level_name, geom_hash, light_hash)
+
+
+def level_pointer_path(project, level_name: str) -> Path:
+    return config.state_subdir(project.root, "build/pin", create=False) / level_name / "current.json"
+
+
+def load_level_pointer(project, level_name: str) -> tuple[str, str] | None:
+    try:
+        raw = level_pointer_path(project, level_name).read_text(encoding="utf-8")
     except OSError:
         return None
     try:
@@ -31,10 +58,14 @@ def load_pointer(project, level_name: str) -> tuple[str, str] | None:
         return None
 
 
-def resolve_pin(project, level_name: str, pin: tuple[str, str]):
-    """The cached `(polys, texture_table, actor_names_by_poly)` scene for `pin`, or `None` on a
-    miss — the pointer names a hash pair `preview_cache` no longer holds (evicted by its
-    project-wide LRU, spec §1's "Eviction caveat"). Does not itself decide what "degraded" means to
-    a caller; a pure lookup wrapper."""
+def write_level_pointer(project, level_name: str, geom_hash: str, light_hash: str) -> None:
+    atomic_write_json(level_pointer_path(project, level_name),
+                       {"geom_hash": geom_hash, "light_hash": light_hash})
+
+
+def resolve_level_pin(project, level_name: str):
+    pin = load_level_pointer(project, level_name)
+    if pin is None:
+        return None
     geom_hash, light_hash = pin
-    return preview_cache.load_scene(project, level_name, geom_hash, light_hash)
+    return build_cache.load_scene(project, level_name, geom_hash, light_hash)

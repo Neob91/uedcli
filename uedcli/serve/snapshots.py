@@ -1,6 +1,7 @@
 """Staging store for GUI actor edits: persists staged actor locations with baseline tracking.
-Stores actor T3D text in content-addressed blobs, and staged/baseline coordinates in a per-level
-manifest. Re-staging an actor preserves its original baseline, enabling conflict detection on Save."""
+Stores actor T3D text in content-addressed blobs (shared across every session, in `blobs_root`),
+and staged/baseline coordinates in a per-session manifest (`sessions_root/<session_id>/staged.json`).
+Re-staging an actor preserves its original baseline, enabling conflict detection on Save."""
 from __future__ import annotations
 
 import hashlib
@@ -8,6 +9,8 @@ import json
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
+
+from .atomic_io import atomic_write_json
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -19,15 +22,23 @@ class StagedActor:
 
 
 class StagingStore:
-    """Staging store for staged actor edits: blobs + per-level manifest."""
+    """Staging store for staged actor edits: shared blobs + per-session manifest."""
 
-    def __init__(self, root: Path) -> None:
-        """Initialize the store at `root` (typically `.uedcli/snapshots`)."""
-        self.root = Path(root)
+    def __init__(self, sessions_root: Path, blobs_root: Path) -> None:
+        """Initialize the store with a per-session manifest root and a shared content-addressed
+        blob root (typically `.uedcli/sessions` and `.uedcli/staging/blobs`)."""
+        self.sessions_root = Path(sessions_root)
+        self.blobs_root = Path(blobs_root)
+
+    def _manifest_path(self, session_id: str) -> Path:
+        return self.sessions_root / session_id / "staged.json"
+
+    def _blob_path(self, blob_hash: str) -> Path:
+        return self.blobs_root / blob_hash[:2] / blob_hash
 
     def stage(
         self,
-        level: str,
+        session_id: str,
         actor_name: str,
         *,
         actor_t3d_text: str,
@@ -37,68 +48,90 @@ class StagingStore:
         """Stage an actor edit: compute blob hash, write blob if missing, update manifest entry.
         Re-staging the same actor keeps its original baseline_location; only staged_location and
         blob_hash are updated."""
-        # Compute blob hash
         blob_hash = hashlib.sha256(actor_t3d_text.encode("utf-8")).hexdigest()
-
-        # Write blob if it doesn't exist
-        blob_dir = self.root / "blobs" / blob_hash[:2]
-        blob_path = blob_dir / blob_hash
+        blob_path = self._blob_path(blob_hash)
         if not blob_path.exists():
-            blob_dir.mkdir(parents=True, exist_ok=True)
+            blob_path.parent.mkdir(parents=True, exist_ok=True)
             blob_path.write_text(actor_t3d_text, encoding="utf-8")
 
-        # Read existing manifest for this level
-        manifest_path = self.root / "staged" / f"{level}.json"
-        manifest: dict[str, dict] = {}
-        if manifest_path.exists():
-            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-
-        # If actor already staged, keep its baseline; otherwise use the provided one
-        if actor_name in manifest:
-            existing_baseline = manifest[actor_name]["baseline_location"]
-        else:
-            existing_baseline = [str(x) for x in baseline_location]
-
-        # Update manifest entry with new staged_location and blob_hash
+        manifest = self._read_manifest(session_id)
+        existing = manifest.get(actor_name)
+        # Re-staging an already-staged actor keeps its ORIGINAL baseline -- the caller's
+        # baseline_location argument is only used the first time this actor is staged in this
+        # session. Overwriting it on every re-stage would corrupt Save's conflict check, which
+        # compares this baseline against the trunk's CURRENT state, not against whatever the most
+        # recent drag happened to load.
+        effective_baseline = (
+            [Decimal(c) for c in existing["baseline_location"]] if existing is not None
+            else list(baseline_location)
+        )
         manifest[actor_name] = {
-            "baseline_location": existing_baseline,
-            "staged_location": [str(x) for x in staged_location],
+            "baseline_location": [str(c) for c in effective_baseline],
+            "staged_location": [str(c) for c in staged_location],
             "blob_hash": blob_hash,
         }
+        atomic_write_json(self._manifest_path(session_id), manifest)
 
-        # Write manifest
-        manifest_path.parent.mkdir(parents=True, exist_ok=True)
-        manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-
-    def read_staged(self, level: str) -> dict[str, StagedActor]:
-        """Read all staged actors for a level, or {} if the manifest doesn't exist."""
-        manifest_path = self.root / "staged" / f"{level}.json"
-        if not manifest_path.exists():
-            return {}
-
-        data = json.loads(manifest_path.read_text(encoding="utf-8"))
-        result: dict[str, StagedActor] = {}
-        for actor_name, entry in data.items():
-            result[actor_name] = StagedActor(
-                baseline_location=tuple(Decimal(x) for x in entry["baseline_location"]),  # type: ignore
-                staged_location=tuple(Decimal(x) for x in entry["staged_location"]),  # type: ignore
-                blob_hash=entry["blob_hash"],
+    def read_staged(self, session_id: str) -> dict[str, StagedActor]:
+        """Read all staged actors for a session, or {} if the manifest doesn't exist."""
+        manifest = self._read_manifest(session_id)
+        return {
+            name: StagedActor(
+                baseline_location=tuple(Decimal(c) for c in v["baseline_location"]),  # type: ignore
+                staged_location=tuple(Decimal(c) for c in v["staged_location"]),  # type: ignore
+                blob_hash=v["blob_hash"],
             )
-        return result
+            for name, v in manifest.items()
+        }
 
-    def clear_actor(self, level: str, actor_name: str) -> None:
+    def clear_actor(self, session_id: str, actor_name: str) -> None:
         """Remove a single staged actor from the manifest, if it exists."""
-        manifest_path = self.root / "staged" / f"{level}.json"
-        if not manifest_path.exists():
+        manifest = self._read_manifest(session_id)
+        if actor_name not in manifest:
             return
+        manifest.pop(actor_name, None)
+        atomic_write_json(self._manifest_path(session_id), manifest)
 
-        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-        if actor_name in manifest:
-            del manifest[actor_name]
-            manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    def discard(self, session_id: str) -> None:
+        """Discard all staged edits for a session (delete the manifest file)."""
+        self._manifest_path(session_id).unlink(missing_ok=True)
 
-    def discard(self, level: str) -> None:
-        """Discard all staged edits for a level (delete the manifest file)."""
-        manifest_path = self.root / "staged" / f"{level}.json"
-        if manifest_path.exists():
-            manifest_path.unlink()
+    def _read_manifest(self, session_id: str) -> dict:
+        p = self._manifest_path(session_id)
+        if not p.exists():
+            return {}
+        return json.loads(p.read_text(encoding="utf-8"))
+
+    def evict_unreferenced_blobs(self, *, live_hashes: set[str], max_bytes: int | None = None) -> dict:
+        """Delete blobs no session's staged.json names, oldest-atime-first. A blob named in
+        `live_hashes` is NEVER deleted, regardless of budget. With `max_bytes=None`, every
+        unreferenced blob is deleted (no budget to stay under); with `max_bytes` given, only enough
+        unreferenced blobs are deleted (oldest first) to bring total usage back under it. Caller
+        computes `live_hashes` by scanning every sessions/*/staged.json -- see app.py's eviction
+        orchestration (Task 9) for the lock scope this must run under."""
+        candidates: list[tuple[float, int, Path]] = []
+        total = 0
+        if self.blobs_root.is_dir():
+            for shard in self.blobs_root.iterdir():
+                if not shard.is_dir():
+                    continue
+                for f in shard.iterdir():
+                    if not f.is_file():
+                        continue
+                    st = f.stat()
+                    total += st.st_size
+                    if f.name not in live_hashes:
+                        candidates.append((st.st_atime, st.st_size, f))
+        evicted = freed = 0
+        candidates.sort(key=lambda c: c[0])
+        for _atime, size, path in candidates:
+            if max_bytes is not None and total <= max_bytes:
+                break
+            try:
+                path.unlink()
+            except OSError:
+                continue
+            total -= size
+            evicted += 1
+            freed += size
+        return {"evicted": evicted, "freed_bytes": freed, "kept_bytes": total}

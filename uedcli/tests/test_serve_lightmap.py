@@ -73,12 +73,17 @@ def test_polys_sharing_a_lightmap_object_share_one_rect():
 
 
 def test_lightmap_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypatch):
-    """HTTP round-trip for the real `/api/level/{level}/lightmap` route against a light-bearing
+    """HTTP round-trip for the real `/api/session/{id}/lightmap` route against a light-bearing
     fixture (a room + a centred `Engine.Light`), symmetric with the scene/atlas route tests. Every
     poly whose scene payload carries a lightmap frame must have a manifest rect keyed by its index.
 
-    `/lightmap` no longer auto-solves (gui-explicit-rebuild plan, Task 2) — a Rebuild is simulated
-    directly via `app.state.build_and_publish_geometry` before hitting the route."""
+    Final-review fix round, Finding 1: `session_lightmap` now actually resolves this session's
+    pinned build and packs its lit polys, instead of unconditionally returning the degenerate
+    (empty-manifest) response even after a real `POST /api/session/{id}/rebuild` -- restored to (and
+    ported to the session-scoped route from) the shape this test had before Task 9 stripped
+    in-memory geometry pinning. A real Rebuild (through the HTTP route, with a real claim token) is
+    what pins the geometry this test then reads back through `/lightmap` and cross-checks against
+    `/scene`."""
     from decimal import Decimal
     from pathlib import Path
     from types import SimpleNamespace
@@ -118,20 +123,26 @@ def test_lightmap_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypat
     trunk.write_level(maps_dir, level, {room.name: "m", light.name: "n"})
     project = SimpleNamespace(root=str(root), maps=None)
 
+    from uedcli.serve import sessions
+
     monkeypatch.setattr(serve_app, "_scene_inputs", lambda project: ([], index, defaults))
     app = serve_app.create_app(project, "TestLevel")
     c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    token = app.state.claims.mint(sess.id)
 
-    app.state.build_and_publish_geometry("TestLevel", [], index, defaults)
+    rebuild = c.post(f"/api/session/{sess.id}/rebuild", headers={"X-Claim-Token": token})
+    assert rebuild.status_code == 200
+    assert rebuild.json()["geom_hash"]
 
-    r = c.get("/api/level/TestLevel/lightmap")
+    r = c.get(f"/api/session/{sess.id}/lightmap")
     assert r.status_code == 200
     body = r.json()
     assert body["intensity"] >= 1.0
     assert body["manifest"]                                     # the light produced lit polys
     assert body["png_base64"]
 
-    scene = c.get("/api/level/TestLevel/scene").json()
+    scene = c.get(f"/api/session/{sess.id}/scene").json()
     for i, poly in enumerate(scene["polys"]):
         if poly["lightmap"] is not None:
             assert str(i) in body["manifest"]                   # every lit poly has a packed rect

@@ -3,6 +3,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
 
+/** `subscribeChangesAvailable`'s real implementation (reload.ts) opens a genuine WebSocket, which
+ * jsdom will try (and fail) to actually connect over the network -- irrelevant noise for these
+ * App-level tests, which only care what App.tsx DOES with the two callbacks it's handed. Mocked
+ * the same way `./scene/QuadLayout` already is: capture the collaborator's own inputs, let a test
+ * drive them directly, instead of simulating a real socket end to end (that's reload.test.ts's job). */
+const reloadSub: { current: { onChangesAvailable: () => void; onSuperseded: () => void } | null } = { current: null }
+vi.mock('./reload', () => ({
+  subscribeChangesAvailable: (
+    _sessionId: string,
+    _claimToken: string,
+    onChangesAvailable: () => void,
+    onSuperseded: () => void,
+  ) => {
+    reloadSub.current = { onChangesAvailable, onSuperseded }
+    return { unsubscribe: vi.fn() }
+  },
+}))
+
 /** The selection callbacks App hands the (stubbed) quad, captured so a test can drive App's own
  * real handlers without a WebGL raycast. Extended (final review fix wave) with the Critical 2
  * staged-offset props -- a test can call `setStagedOffsets` directly, exactly the way a real
@@ -37,7 +55,16 @@ vi.mock('./scene/QuadLayout', () => ({
 
 afterEach(cleanup)
 
-const HEALTH = { status: 'ok', level: 'TestLevel' }
+// Plan Task 16: App.tsx no longer bootstraps off `/api/health` -- with no `?session=` in the URL,
+// `useSession()` (SessionContext.tsx) reads the default level off `/api/levels`' own `current`
+// field and creates a fresh session on it (`POST /api/level/{level}/sessions`). Every test below
+// runs with a clean `/` URL (see `beforeEach`), so every one of them exercises that same
+// auto-create bootstrap unless it sets its own `?session=` first.
+const LEVEL_NAME = 'TestLevel'
+const SESSION_ID = 'sess-1'
+const LEVELS_PAYLOAD = { levels: [{ name: LEVEL_NAME, active: true }], current: LEVEL_NAME }
+const SESSION_RECORD = { id: SESSION_ID, level: LEVEL_NAME, created_at: '2026-09-22T00:00:00Z', claim_token: 'tok-1' }
+const SESSIONS_LIST = { sessions: [{ id: SESSION_ID, level: LEVEL_NAME, created_at: '2026-09-22T00:00:00Z', last_active_at: '2026-09-22T00:00:00Z' }] }
 const SCENE = { polys: [], actors: [], geometry_pinned: false }
 const ATLAS = { width: 1, height: 1, manifest: [], png_base64: '' }
 const LIGHTMAP = { width: 1, height: 1, intensity: 1, manifest: [], png_base64: '' }
@@ -47,14 +74,22 @@ function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status })
 }
 
-/** Routes the fixed set of GET requests App.tsx makes on mount + status polling; a caller-supplied
- * `extra` handles a specific test's own POST /load or /rebuild. */
-function mockFetch(extra?: (url: string, init?: RequestInit) => Response | undefined) {
+beforeEach(() => {
+  window.history.replaceState(null, '', '/')
+  reloadSub.current = null
+})
+
+/** Routes the fixed set of GET/POST requests App.tsx (via `useSession`/`SessionDropdown`) makes on
+ * mount + status polling; a caller-supplied `extra` handles a specific test's own POST /load or
+ * /rebuild, or a different session/level bootstrap. */
+function mockFetch(extra?: (url: string, init?: RequestInit) => Response | Promise<Response> | undefined) {
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input)
-    const overridden = extra?.(url, init)
+    const overridden = await extra?.(url, init)
     if (overridden) return overridden
-    if (url.endsWith('/api/health')) return jsonResponse(HEALTH)
+    if (url.endsWith('/api/levels')) return jsonResponse(LEVELS_PAYLOAD)
+    if (url.endsWith(`/api/level/${LEVEL_NAME}/sessions`) && init?.method === 'POST') return jsonResponse(SESSION_RECORD, 201)
+    if (url.endsWith('/api/sessions')) return jsonResponse(SESSIONS_LIST)
     if (url.endsWith('/scene')) return jsonResponse(SCENE)
     if (url.endsWith('/atlas')) return jsonResponse(ATLAS)
     if (url.endsWith('/lightmap')) return jsonResponse(LIGHTMAP)
@@ -211,77 +246,80 @@ describe('App: Load conflict resolution', () => {
   })
 })
 
-describe('App: level switching', () => {
-  const LEVELS_PAYLOAD = {
-    levels: [
-      { name: 'TestLevel', active: true },
-      { name: 'OtherLevel', active: false },
+// Plan Task 16: replaces the old in-process `PUT /api/level` level switch (LevelPicker) with
+// session identity carried in the URL (SessionContext) + a session dropdown (SessionDropdown).
+// A session switch writes the picked id into the URL and re-resolves it via `GET
+// /api/session/{id}` -- NOT a level-switch endpoint -- so these tests drive that dropdown and
+// mock the session-resolve GET, mirroring the old suite's own "deferrable, so a test can inspect
+// the blocked state mid-switch" shape.
+describe('App: session switching', () => {
+  const OTHER_SESSION_ID = 'sess-2'
+  const OTHER_LEVEL_NAME = 'OtherLevel'
+  const SESSIONS_LIST_TWO = {
+    sessions: [
+      { id: SESSION_ID, level: LEVEL_NAME, created_at: '2026-09-22T00:00:00Z', last_active_at: '2026-09-22T00:00:00Z' },
+      { id: OTHER_SESSION_ID, level: OTHER_LEVEL_NAME, created_at: '2026-09-22T00:00:01Z', last_active_at: '2026-09-22T00:00:01Z' },
     ],
-    current: 'TestLevel',
   }
 
-  /** Like `mockFetch`, plus `/api/levels` (LevelPicker's own fetch) and a caller-supplied handler
-   * for `PUT /api/level` -- deferrable, so a test can inspect the blocked state mid-switch. */
-  function mockFetchForSwitch(putHandler: () => Promise<Response>) {
-    globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      const url = String(input)
-      if (url.endsWith('/api/health')) return jsonResponse(HEALTH)
-      if (url.endsWith('/api/levels')) return jsonResponse(LEVELS_PAYLOAD)
-      if (url.endsWith('/api/level') && init?.method === 'PUT') return putHandler()
-      if (url.endsWith('/scene')) return jsonResponse(SCENE)
-      if (url.endsWith('/atlas')) return jsonResponse(ATLAS)
-      if (url.endsWith('/lightmap')) return jsonResponse(LIGHTMAP)
-      if (url.endsWith('/status')) return jsonResponse(STATUS_UNBUILT)
-      if (url.endsWith('/staged')) return jsonResponse({})
-      throw new Error(`unexpected fetch: ${url}`)
-    }) as unknown as typeof fetch
+  /** Like `mockFetch`, plus the two-session `/api/sessions` listing above and a caller-supplied
+   * handler for `GET /api/session/{OTHER_SESSION_ID}` -- deferrable, so a test can inspect the
+   * in-between state while a session switch's own resolve GET is still in flight. */
+  function mockFetchForSwitch(resolveOtherSession: () => Promise<Response>) {
+    mockFetch((url) => {
+      if (url.endsWith('/api/sessions')) return jsonResponse(SESSIONS_LIST_TWO)
+      if (url.endsWith(`/api/session/${OTHER_SESSION_ID}`)) return resolveOtherSession()
+      return undefined
+    })
   }
 
-  it('unloads the old scene immediately and blocks the whole app until the new level fully loads', async () => {
-    let resolvePut: (() => void) | undefined
-    const putGate = new Promise<void>((resolve) => {
-      resolvePut = resolve
+  it('switching sessions in the dropdown loads the newly-picked session, replacing the old one', async () => {
+    let resolveGet: (() => void) | undefined
+    const getGate = new Promise<void>((resolve) => {
+      resolveGet = resolve
     })
     mockFetchForSwitch(async () => {
-      await putGate
-      return jsonResponse({ level: 'OtherLevel' })
+      await getGate
+      return jsonResponse({
+        id: OTHER_SESSION_ID, level: OTHER_LEVEL_NAME,
+        created_at: '2026-09-22T00:00:01Z', last_active_at: '2026-09-22T00:00:01Z', claim_token: 'tok-2',
+      })
     })
 
     render(<App />)
     await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
-    await waitFor(() => expect(screen.getByText('OtherLevel')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(OTHER_SESSION_ID)).toBeTruthy())
 
-    fireEvent.change(screen.getByTestId('level-picker-select'), { target: { value: 'OtherLevel' } })
+    fireEvent.change(screen.getByTestId('session-dropdown-select'), { target: { value: OTHER_SESSION_ID } })
 
-    // The old scene, toolbar, and picker are gone immediately -- before the PUT even resolves --
-    // and a loading indicator takes their place (reusing the existing `.status-message` pattern).
-    await waitFor(() => expect(screen.queryByTestId('viewport-stub')).toBeNull())
-    expect(screen.getByText('Switching level…')).toBeTruthy()
-    expect(screen.queryByTestId('level-picker-select')).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Rebuild' })).toBeNull()
+    // Unlike the old level switch (which unloaded the OLD scene the instant a switch started, at
+    // the picker's own click), a session switch's `sessionId` state doesn't move until the resolve
+    // GET above actually settles -- so the previous session's scene stays on screen while it's in
+    // flight. A deliberate difference from the old mechanism, not an oversight: see App.tsx's own
+    // doc comment on the scene-fetch effect.
+    expect(screen.getByTestId('viewport-stub')).toBeTruthy()
 
-    resolvePut?.()
+    resolveGet?.()
 
-    // Only unblocks once the new level's full state (scene+atlas+lightmap) has loaded.
+    // Once the switch resolves, the dropdown reflects the new session and its own scene loads.
     await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
-    expect(screen.queryByText('Switching level…')).toBeNull()
-    expect(screen.getByTestId('level-picker-select')).toBeTruthy()
+    await waitFor(() => expect((screen.getByTestId('session-dropdown-select') as HTMLSelectElement).value).toBe(OTHER_SESSION_ID))
   })
 
-  it('restores the old level state and unblocks if the switch itself fails', async () => {
-    mockFetchForSwitch(async () => jsonResponse({ error: 'level not found: OtherLevel' }, 500))
+  it('switching to a session that no longer exists shows the notfound view, naming the id', async () => {
+    mockFetchForSwitch(async () => jsonResponse({ error: `session not found: '${OTHER_SESSION_ID}'` }, 404))
 
     render(<App />)
     await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
-    await waitFor(() => expect(screen.getByText('OtherLevel')).toBeTruthy())
+    await waitFor(() => expect(screen.getByText(OTHER_SESSION_ID)).toBeTruthy())
 
-    fireEvent.change(screen.getByTestId('level-picker-select'), { target: { value: 'OtherLevel' } })
+    fireEvent.change(screen.getByTestId('session-dropdown-select'), { target: { value: OTHER_SESSION_ID } })
 
-    // The failed switch never changed the server-side level -- the old level's scene comes back,
-    // not a page stuck blocked on nothing.
-    await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
-    await waitFor(() => expect(screen.getByText(/level not found/)).toBeTruthy())
-    expect(screen.getByTestId('level-picker-select').hasAttribute('disabled')).toBe(false)
+    // The failed resolve is for an id this hook has never successfully resolved before --
+    // `notfound`, not `closed` (SessionContext.tsx's own `resolvedIdsRef` distinction) -- naming
+    // the dead id rather than silently restoring the old session or leaving the page blocked.
+    await waitFor(() => expect(screen.getByText(`Session not found: ${OTHER_SESSION_ID}`)).toBeTruthy())
+    expect(screen.queryByTestId('viewport-stub')).toBeNull()
   })
 })
 
@@ -558,5 +596,86 @@ describe('App: Save success refreshes the trunk view (Important 5)', () => {
     // all, so the scene/atlas/lightmap/status stayed exactly as they were before the Save.
     await waitFor(() => expect(loadCallCount).toBe(1))
     await waitFor(() => expect(screen.queryByRole('button', { name: 'Save' })).toBeNull())
+  })
+})
+
+// Task 17: another window taking this session's claim (or the session being deleted) is signaled
+// two ways -- a live `/ws` "superseded" push (the primary signal), and a 409 from any mutating
+// call (the fallback, for whenever that push was lost). Both must show the SAME full-page takeover
+// and leave the way back (Reload) open, not dead-end the tab.
+describe('App: superseded takeover', () => {
+  const TAKEOVER_TEXT = /This session is now open in another window\. Reload to keep using it here\./
+
+  it('a WS "superseded" push shows the full-page takeover', async () => {
+    mockFetch()
+    render(<App />)
+    await waitFor(() => expect(reloadSub.current).not.toBeNull())
+
+    act(() => reloadSub.current!.onSuperseded())
+
+    expect(screen.getByText(TAKEOVER_TEXT)).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeTruthy()
+    // The rest of the page (the viewport, the toolbar) is gone -- a genuine takeover, not a banner
+    // layered over the still-live scene.
+    expect(screen.queryByTestId('viewport-stub')).toBeNull()
+  })
+
+  it('clicking Reload in the takeover re-resolves the session and returns to editing', async () => {
+    mockFetch((url) => {
+      if (url.endsWith(`/api/session/${SESSION_ID}`)) {
+        return jsonResponse({
+          id: SESSION_ID, level: LEVEL_NAME, created_at: '2026-09-22T00:00:00Z',
+          last_active_at: '2026-09-22T00:00:02Z', claim_token: 'tok-reclaimed',
+        })
+      }
+      return undefined
+    })
+    render(<App />)
+    await waitFor(() => expect(reloadSub.current).not.toBeNull())
+
+    act(() => reloadSub.current!.onSuperseded())
+    await waitFor(() => expect(screen.getByText(TAKEOVER_TEXT)).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reload' }))
+
+    await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
+    expect(screen.queryByText(TAKEOVER_TEXT)).toBeNull()
+  })
+
+  it('a 409 from Rebuild also shows the takeover (the fallback path)', async () => {
+    mockFetch((url, init) => {
+      if (url.endsWith('/rebuild') && init?.method === 'POST') {
+        return jsonResponse({ error: 'session superseded' }, 409)
+      }
+      return undefined
+    })
+    render(<App />)
+    await waitFor(() => expect(screen.getByTestId('viewport-stub')).toBeTruthy())
+
+    fireEvent.click(screen.getByRole('button', { name: 'Rebuild' }))
+
+    await waitFor(() => expect(screen.getByText(TAKEOVER_TEXT)).toBeTruthy())
+    // Not the ordinary build-error banner -- the 409 is recognized specifically, not just any failure.
+    expect(screen.queryByText(/session superseded/)).toBeNull()
+  })
+
+  it('a 409 from Save also shows the takeover (the fallback path, via SaveBar)', async () => {
+    mockFetch((url, init) => {
+      if (url.endsWith('/save') && init?.method === 'POST') {
+        return jsonResponse({ error: 'session superseded' }, 409)
+      }
+      return undefined
+    })
+    render(<App />)
+    await waitFor(() => expect(quadProps.current).not.toBeNull())
+
+    await waitFor(() => {
+      act(() => quadProps.current!.onStaged?.(['Light0']))
+      expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() => expect(screen.getByText(TAKEOVER_TEXT)).toBeTruthy())
   })
 })

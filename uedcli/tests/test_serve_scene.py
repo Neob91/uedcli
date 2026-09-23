@@ -79,10 +79,11 @@ def _load_and_build_for(project, level_name, index, defaults, search_files):
     # `mesh-actors-should-render-independent-of-geometry-build`/`mover-triangles-not-build-state-
     # independent`) -- `resolve_mesh_scene_polys`/`resolve_mover_scene_polys` below are the SAME
     # independent calls `_get_trunk` makes in production.
-    polys, texture_table, owners = build_scene(level, search_files, index, defaults=defaults,
-                                               project=project, level_name=level_name,
-                                               visibility="editor", include_meshes=False,
-                                               include_movers=False)
+    polys, texture_table, owners, geom_hash, light_hash = build_scene(
+        level, search_files, index, defaults=defaults,
+        project=project, level_name=level_name,
+        visibility="editor", include_meshes=False,
+        include_movers=False)
     sprite_table, actor_sprites = resolve_actor_sprites(level, search_files, defaults)
     mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
         level, index, search_files, defaults)
@@ -94,7 +95,7 @@ def _load_and_build_for(project, level_name, index, defaults, search_files):
                                mesh_texture_table=mesh_texture_table,
                                mover_polys=mover_polys, mover_owners=mover_owners,
                                mover_texture_table=mover_texture_table)
-    geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=polys,
+    geometry = _BuiltGeometry(geom_hash=geom_hash, light_hash=light_hash, polys=polys,
                               texture_table=texture_table, owners=owners)
     return trunk_state, geometry
 
@@ -799,18 +800,19 @@ def test_build_scene_payload_amortizes_class_resolution_over_repeated_classes(tm
 
 
 def test_scene_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypatch):
-    """HTTP-level round-trip for the real `/api/level/{level}/scene` route — `build_scene_payload`
-    alone (the test above) never round-trips through the actual HTTP/JSON layer, so a shape that
+    """HTTP-level round-trip for the real `/api/session/{id}/scene` route — `build_scene_payload`
+    alone (the tests above) never round-trips through the actual HTTP/JSON layer, so a shape that
     the JSON encoder can't handle would slip past it. Includes a real light actor so at least one
     poly carries a non-None `lightmap` (a bare brush level never does — `gather_lights` finds
-    nothing to bake): `bake_radiance`'s RGB buffer is a plain `list[float]`, already JSON-safe, but
-    that is exactly the kind of assumption this test exists to keep honest against the real route
-    rather than take on faith. `_scene_inputs` is monkeypatched to an offline (real `ClassIndex`,
+    nothing to bake). `_scene_inputs` is monkeypatched to an offline (real `ClassIndex`,
     `ClassDefaults`) trio so the test stays hermetic (no real per-user games config needed).
 
-    `/scene` no longer auto-solves (gui-explicit-rebuild plan, Task 2) — a Rebuild is simulated
-    directly via `app.state.build_and_publish_geometry` (the same function `POST /rebuild` calls)
-    before hitting the route, since this test's whole point is the SOLVED payload's JSON shape."""
+    Final-review fix round, Finding 1: `session_scene` now actually resolves this session's pinned
+    build (`_resolve_session_geometry`) and calls `build_scene_payload`, instead of unconditionally
+    serving the cold/wireframe case even after a real `POST /api/session/{id}/rebuild` -- this is
+    the regression test for that fix, restored to (and extending) the shape this route had before
+    Task 9 stripped in-memory geometry pinning. A real Rebuild (through the HTTP route, with a real
+    claim token) is what pins the geometry this test then reads back through `/scene`."""
     from fastapi.testclient import TestClient
 
     from uedcli.serve import app as serve_app
@@ -824,18 +826,26 @@ def test_scene_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypatch)
     trunk.write_level(maps_dir, level, {room.name: "m", light.name: "n"})
     project = SimpleNamespace(root=str(root), maps=None)
 
+    from uedcli.serve import sessions
+
     index = _ued22_index()
     monkeypatch.setattr(serve_app, "_scene_inputs", lambda project: ([], index, DEFAULTS))
     app = serve_app.create_app(project, "TestLevel")
     c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    token = app.state.claims.mint(sess.id)
 
-    app.state.build_and_publish_geometry("TestLevel", [], index, DEFAULTS)
+    rebuild = c.post(f"/api/session/{sess.id}/rebuild", headers={"X-Claim-Token": token})
+    assert rebuild.status_code == 200
+    assert rebuild.json()["geom_hash"]
 
-    r = c.get("/api/level/TestLevel/scene")
+    r = c.get(f"/api/session/{sess.id}/scene")
 
     assert r.status_code == 200
     body = r.json()
     assert body["polys"] and body["actors"]
+    assert {a["name"] for a in body["actors"]} == {"Room", "Light0"}
+    assert body["geometry_pinned"] is True
     lightmaps = [p["lightmap"] for p in body["polys"]]
     assert any(lm is not None for lm in lightmaps)   # the light actually produced baked radiance
     for lm in lightmaps:
@@ -845,3 +855,13 @@ def test_scene_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypatch)
             assert len(lm["origin"]) == 3 and len(lm["u_step"]) == 3 and len(lm["v_step"]) == 3
             assert isinstance(lm["u_size"], int) and isinstance(lm["v_size"], int)
             assert "rgb" not in lm
+
+    # A second /scene call for the same session hits the in-memory `_BuildResultCache`, not a
+    # second disk read -- `build_cache.load_scene` monkeypatched to fail if called proves it.
+    def _fail_load_scene(*a, **k):
+        raise AssertionError("load_scene should not be called -- the memory cache should hit")
+
+    monkeypatch.setattr(serve_app.build_cache, "load_scene", _fail_load_scene)
+    r2 = c.get(f"/api/session/{sess.id}/scene")
+    assert r2.status_code == 200
+    assert r2.json()["geometry_pinned"] is True

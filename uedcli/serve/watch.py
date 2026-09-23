@@ -54,6 +54,14 @@ class TrunkWatcher:
         async for _changes in watchfiles.awatch(self.level_dir):
             self.notify()
 
+    @property
+    def started(self) -> bool:
+        """Whether `start()` has been called and `stop()` hasn't since -- lets a caller that may
+        see this watcher more than once (e.g. `app.py`'s `/ws`, reached on every connect) check
+        before calling `start()` again: `start()` itself is NOT idempotent, since calling it twice
+        would replace `_watch_task` and leak the old one."""
+        return self._watch_task is not None
+
     def start(self) -> asyncio.Task:
         self._watch_task = asyncio.ensure_future(self.run())
         return self._watch_task

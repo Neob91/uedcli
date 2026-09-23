@@ -705,3 +705,39 @@ def test_project_file_marker_must_be_named_uedcli_toml(tmp_path):
     other.write_text('game = "dx"\n')
     with pytest.raises(config.ConfigError, match="not a project marker"):
         config.load_project(str(other))
+
+
+def test_project_accepts_build_cache_max_bytes(tmp_path):
+    toml = tmp_path / "uedcli.toml"
+    toml.write_text('game = "deusex"\nbuild_cache_max_bytes = 5000000\n', encoding="utf-8")
+    project = config.load_project(str(toml))
+    assert project.build_cache_max_bytes == 5000000
+
+
+def test_project_accepts_staging_blobs_max_bytes(tmp_path):
+    toml = tmp_path / "uedcli.toml"
+    toml.write_text('game = "deusex"\nstaging_blobs_max_bytes = 200000\n', encoding="utf-8")
+    project = config.load_project(str(toml))
+    assert project.staging_blobs_max_bytes == 200000
+
+
+def test_project_defaults_both_budgets_to_none(tmp_path):
+    toml = tmp_path / "uedcli.toml"
+    toml.write_text('game = "deusex"\n', encoding="utf-8")
+    project = config.load_project(str(toml))
+    assert project.build_cache_max_bytes is None
+    assert project.staging_blobs_max_bytes is None
+
+
+def test_project_rejects_non_positive_build_cache_max_bytes(tmp_path):
+    toml = tmp_path / "uedcli.toml"
+    toml.write_text('game = "deusex"\nbuild_cache_max_bytes = 0\n', encoding="utf-8")
+    with pytest.raises(config.ConfigError, match="build_cache_max_bytes must be a positive integer, got 0"):
+        config.load_project(str(toml))
+
+
+def test_project_rejects_non_integer_staging_blobs_max_bytes(tmp_path):
+    toml = tmp_path / "uedcli.toml"
+    toml.write_text('game = "deusex"\nstaging_blobs_max_bytes = "lots"\n', encoding="utf-8")
+    with pytest.raises(config.ConfigError, match="staging_blobs_max_bytes must be a positive integer"):
+        config.load_project(str(toml))

@@ -48,7 +48,8 @@ PKG_EXTS = (".u", ".dx", ".utx", ".uax", ".umx")
 # Top-level keys that mark a PROJECT config (vs the per-user games config). Used both to reject
 # unknown project keys and to classify a config by schema. (`id`/`name` were DROPPED with the
 # registry — direction/projects-and-config.md 2026-07-17 20:58 §2; a file carrying them gets the unknown-key error.)
-_PROJECT_KEYS = {"game", "paths", "catalog", "prefabs", "maps"}
+_PROJECT_KEYS = {"game", "paths", "catalog", "prefabs", "maps",
+                  "build_cache_max_bytes", "staging_blobs_max_bytes"}
 
 # A Windows drive-letter colon (`Z:\` / `Z:/`) inside a value — the `:` is our list separator, so a
 # pasted container path must be a named error, never a silent split. Anchored to an element boundary
@@ -120,6 +121,8 @@ class Project:
     catalog: str | None = None      # raw, relative to `root`; see project_catalog_dir()
     prefabs: str | None = None
     maps: str | None = None
+    build_cache_max_bytes: int | None = None
+    staging_blobs_max_bytes: int | None = None
     source: str = ""                # the uedcli.toml path
 
 
@@ -397,8 +400,14 @@ def load_project(dir_or_toml: str) -> Project:
         v = raw.get(key)
         if v is not None and (not isinstance(v, str) or not v.strip()):
             raise ConfigError(f"{toml_path}: key {key!r} must be a non-empty string, got {v!r}")
+    for key in ("build_cache_max_bytes", "staging_blobs_max_bytes"):
+        v = raw.get(key)
+        if v is not None and (not isinstance(v, int) or isinstance(v, bool) or v <= 0):
+            raise ConfigError(f"{toml_path}: {key} must be a positive integer, got {v!r}")
     return Project(root=os.path.dirname(toml_path), game=game, paths=raw.get("paths"),
                    catalog=raw.get("catalog"), prefabs=raw.get("prefabs"), maps=raw.get("maps"),
+                   build_cache_max_bytes=raw.get("build_cache_max_bytes"),
+                   staging_blobs_max_bytes=raw.get("staging_blobs_max_bytes"),
                    source=toml_path)
 
 

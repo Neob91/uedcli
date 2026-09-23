@@ -19,6 +19,7 @@ Load. Unlike Save, Load never blocks or fails on a conflict -- it only reports o
 trunk refresh always completes."""
 from __future__ import annotations
 
+import copy
 from dataclasses import dataclass
 from decimal import Decimal
 from pathlib import Path
@@ -26,7 +27,8 @@ from pathlib import Path
 from .. import config, query, trunk
 from ..cli.errors import CommandError
 from ..cli.level_sources import TrunkLevelSource
-from .snapshots import StagingStore
+from ..model import Level
+from .snapshots import StagedActor, StagingStore
 
 _ZERO: tuple[Decimal, Decimal, Decimal] = (Decimal(0), Decimal(0), Decimal(0))
 
@@ -182,6 +184,26 @@ def save_staged(
         store.clear_actor(level_name, name)
 
     return SaveResult(applied=touched, conflicts=conflicts)
+
+
+def apply_staged_overlay(level: Level, staged: dict[str, StagedActor]) -> Level:
+    """A new `Level` -- a shallow copy of `level` whose `actors` dict is itself a shallow copy, with
+    only staged actors replaced by a copy carrying the staged `Location` -- never mutates `level`
+    itself. Session-scoped Rebuild (plan Task 11) feeds this into `build_scene` instead of the
+    shared `LevelContext.trunk_ref`'s `Level` directly, so two sessions (or two Rebuilds of the same
+    session) can safely overlay the same shared trunk concurrently: neither ever writes into the
+    original. A staged actor no longer present in `level` (e.g. deleted from the trunk externally)
+    is silently skipped -- Rebuild has nothing to write, so there's nothing to protect by raising."""
+    new_actors = dict(level.actors)
+    for name, entry in staged.items():
+        if name not in new_actors:
+            continue
+        actor_copy = copy.copy(new_actors[name])
+        actor_copy.location = entry.staged_location
+        new_actors[name] = actor_copy
+    overlaid = copy.copy(level)
+    overlaid.actors = new_actors
+    return overlaid
 
 
 def check_load_conflicts(

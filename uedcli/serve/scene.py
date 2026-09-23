@@ -288,9 +288,8 @@ class _LoadedTrunk:
 @dataclass(frozen=True, kw_only=True)
 class _BuiltGeometry:
     """Rebuild-owned data: CSG + lighting output (shared-cache spec's Design section). `geom_hash`/
-    `light_hash` are `None` for now — `build_scene` computes them internally but doesn't return
-    them yet (plan's OQ1, deferred: widening its return tuple touches ~30+ call sites elsewhere and
-    no route here reads these fields either way)."""
+    `light_hash` are the real values `build_scene` computes internally and now returns (OQ1) —
+    `None` only when `_build_and_publish_geometry` calls it without a `project`/`level_name`."""
     geom_hash: str | None
     light_hash: str | None
     polys: list[tuple]

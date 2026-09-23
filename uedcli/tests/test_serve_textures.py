@@ -77,8 +77,9 @@ def test_every_poly_tex_index_resolves_to_a_manifest_rect():
     room = cube_room(texture="LUM_InfoPortraits.ArthurCallaway")
     level = Level(actors={room.name: room}, order=[room.name])
     fixtures = Path(__file__).parent / "fixtures"
-    polys, texture_table, _owners = build_scene(level, [str(fixtures / "LUM_InfoPortraits.utx")],
-                                                StubClassIndex(), defaults=ClassDefaults(_resolver))
+    polys, texture_table, _owners, _geom_hash, _light_hash = build_scene(
+        level, [str(fixtures / "LUM_InfoPortraits.utx")],
+        StubClassIndex(), defaults=ClassDefaults(_resolver))
 
     _png, manifest, _w, _h = build_atlas(texture_table)
     for verts, base, tu, tv, pan, tex_index, masked, flags, lightmap in polys:
@@ -118,12 +119,15 @@ def test_atlas_route_returns_200_with_a_json_safe_payload(tmp_path, monkeypatch)
     trunk.write_level(maps_dir, Level(actors={room.name: room}, order=[room.name]), {room.name: "m"})
     project = SimpleNamespace(root=str(root), maps=None)
 
+    from uedcli.serve import sessions
+
     monkeypatch.setattr(serve_app, "_scene_inputs",
                         lambda project: ([], StubClassIndex(), ClassDefaults(_resolver)))
     app = serve_app.create_app(project, "TestLevel")
     c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
 
-    r = c.get("/api/level/TestLevel/atlas")
+    r = c.get(f"/api/session/{sess.id}/atlas")   # Task 13: /atlas is session-scoped now
 
     assert r.status_code == 200
     body = r.json()

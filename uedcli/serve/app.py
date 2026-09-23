@@ -3,33 +3,36 @@ library (spec, "Architecture"). Binds localhost only (enforced by the `serve` ve
 holds all domain logic — the client draws only what these routes hand it."""
 from __future__ import annotations
 
+import asyncio
 import base64
+import functools
 import logging
 import threading
+from collections import OrderedDict
 from contextlib import asynccontextmanager
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from decimal import Decimal
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 
-from .. import config, packages, trunk
+from .. import build_cache, config, packages, trunk
 from ..classdefaults import ClassDefaults
 from ..cli import resources
 from ..cli.errors import CommandError
-from ..preview_native import build_scene as _build_scene
+from ..preview_native import build_scene
 from ..preview_native import resolve_actor_sprites, resolve_mesh_scene_polys, resolve_mover_scene_polys
-from . import build_pin, edits
+from . import build_pin, edits, sessions
+from .claims import ClaimRegistry
 from .errors import error_to_status
 from .levels import levels_payload
 from .lightmap import build_lightmap_atlas
 from .scene import (
     _BuiltGeometry,
     _LoadedTrunk,
-    ScenePayload,
     _resolve_hidden_ed,
     build_scene_payload,
     build_wireframe_payload,
@@ -40,6 +43,65 @@ from .textures import build_atlas
 from .watch import TrunkWatcher
 
 logger = logging.getLogger(__name__)
+
+# How often `ws_endpoint` re-checks its own claim token between client messages (Task 15). Short
+# enough that a superseded connection notices quickly and tests don't need to wait long; cheap
+# enough (`ClaimRegistry.check` is a dict lookup under a lock) that a tighter interval costs nothing
+# real even with many open connections.
+_WS_CLAIM_POLL_INTERVAL_S = 0.1
+
+
+class _BuildResultCache:
+    """In-memory LRU in front of build_cache's on-disk store, keyed by content hash -- shared
+    across every session and level, since identical hashes mean identical content regardless of who
+    asked. Without this, every /scene|/atlas|/lightmap call re-does disk I/O + deserialization on
+    every request (a real, previously-fixed perf regression -- see the spec's Build cache section)."""
+    def __init__(self, max_entries: int = 8) -> None:
+        self._max = max_entries
+        self._data: OrderedDict[tuple, object] = OrderedDict()
+        self._lock = threading.Lock()
+
+    def get(self, key: tuple):
+        with self._lock:
+            if key not in self._data:
+                return None
+            self._data.move_to_end(key)
+            return self._data[key]
+
+    def put(self, key: tuple, value) -> None:
+        with self._lock:
+            self._data[key] = value
+            self._data.move_to_end(key)
+            while len(self._data) > self._max:
+                self._data.popitem(last=False)
+
+
+class _SessionKeyedStore:
+    """Adapts `_staging_store` for `edits.py`'s `stage_locations`/`save_staged` (Task 13). Those two
+    functions bind ONE `level_name` parameter to two different real uses internally: `_trunk_dir`
+    (needs the real level name) and `store.<method>(level_name, ...)` (needs the real session id,
+    since staged edits are keyed per-session, not per-level). Wraps the real `StagingStore` and
+    substitutes the session id closed over at construction for whatever `level_name` argument
+    `edits.py` passes through to `.stage`/`.read_staged`/`.clear_actor` -- so a call like
+    `stage_locations(project, session.level, moves, store=_SessionKeyedStore(_staging_store,
+    session_id))` correctly loads the trunk from `session.level` while still keying the actual store
+    writes by `session_id`.
+
+    `discard_staged`/`check_load_conflicts` need no such wrapper: their own `level_name` parameter
+    is used ONLY as the store key (neither ever touches the trunk), so a route can pass `session_id`
+    straight through to them with the real `_staging_store`, no adapter required."""
+    def __init__(self, store: StagingStore, session_id: str) -> None:
+        self._store = store
+        self._session_id = session_id
+
+    def stage(self, _level_name: str, actor_name: str, **kwargs) -> None:
+        self._store.stage(self._session_id, actor_name, **kwargs)
+
+    def read_staged(self, _level_name: str):
+        return self._store.read_staged(self._session_id)
+
+    def clear_actor(self, _level_name: str, actor_name: str) -> None:
+        self._store.clear_actor(self._session_id, actor_name)
 
 
 def _frontend_dist_dir() -> Path | None:
@@ -57,19 +119,7 @@ def _scene_inputs(project):
     call site assembles (`cli/commands/level.py` ~732-745): the composed package search path, the
     schema-aware class/mover resolver, and the class-defaults resolver `build_scene` needs to light
     world BSP surfaces. Recomputed per request (cheap: no CSG solve here) rather than memoized on
-    the app, so a `--project`'s on-disk games config can change without a `serve` restart.
-
-    Caveat (shared-cache spec, accepted trade-off): once `_geometry_ref` is populated (by a
-    Rebuild) or `_payload_ref` is warm, a fresh `defaults`/`search_files`/`index` computed here has
-    no effect on what a route actually returns — `_read_geometry()`/`_get_payload()` serve straight
-    from their cached refs without ever consulting this call's result. A games-config edit
-    therefore needs a Rebuild (or a `serve` restart) to take effect, not just the next request.
-    Accepted because games-config edits are rare (one-time project setup) next to trunk edits (this
-    tool's whole reason to be cheap and frequent). This caveat used to be FALSE for `/scene`
-    specifically — before `_get_payload` existed, `scene()` fed this call's fresh `defaults`/`index`
-    straight into `build_scene_payload`/`build_wireframe_payload` on every request, so a warm
-    geometry cache didn't save that route from redoing every actor's class resolution from scratch
-    each time (see `_get_payload`'s comment)."""
+    the app, so a `--project`'s on-disk games config can change without a `serve` restart."""
     user_config = config.load_user_config()
     search_files = config.composed_search_files(project, user_config)
     index = resources.mover_index(None, "uedcli serve", project=project)
@@ -77,35 +127,83 @@ def _scene_inputs(project):
     return search_files, index, defaults
 
 
-def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
-    """Build the app for one project, initially serving `level` -- no longer fixed for the app's
-    lifetime (quad-layout Part 7): `PUT /api/level` switches which level this SAME running app
-    serves, in-process, via the `_current_level`/`_watcher` holder cells below (no restart, no page-
-    reload trick). `fault_route=True` mounts `/api/_boom` (raises a real domain error, for testing
-    the exception handler) — never set outside tests; the shipped app never mounts it."""
-    # Trunk watcher + WebSocket signal (sibling scene-cache spec, Task 4): AI edits hit the trunk
-    # instantly; a rapid multi-verb burst coalesces to ONE push (`TrunkWatcher`'s debounce), not one
-    # per verb. gui-explicit-rebuild spec §2 supersedes what that push MEANS: a `"changes_available"`
-    # banner signal for an explicit Load, never a silent auto-reload (Task 3 below).
-    connections: set[WebSocket] = set()
-    # Serializes the ~24s CSG solve so the client's concurrent /scene + /atlas fetches don't both
-    # cold-solve and race the `preview_cache` write: the first solves+caches under the lock, the
-    # second blocks then reads the cache. Held only around the solve, in a threadpool thread (the
-    # routes are sync `def`), so the event loop — WS pushes, /api/health, other viewers — stays free.
-    solve_lock = threading.Lock()
+@dataclass(frozen=True, kw_only=True)
+class LevelContext:
+    """Level-shared state — one per level name, created lazily by `_get_or_create_level_context`
+    (plan Task 9, persistent-GUI-editing-sessions). Replaces the app's old single flat holder-cell
+    set (`_trunk_ref`/`_generation`/`_trunk_lock`/one `TrunkWatcher`/`connections`/
+    `_scene_inputs_ref`), so a second level can be served by the SAME running app without stepping
+    on the first one's cache.
 
+    Deliberately does NOT carry solved-build state (`geometry_ref`/`payload_ref`/`build_status`,
+    nor a `solve_lock`) — that state is REMOVED ENTIRELY by this task, not moved here. It becomes
+    per-session, disk-backed state in a later task (Task 11: session-scoped Rebuild). Between this
+    task and that one, `POST /rebuild` is deliberately memoryless.
+
+    `scene_inputs_ref` DOES stay here, despite living next to the removed fields in the old code:
+    it caches the composed package search path + class-resolution machinery (`search_files`,
+    `index`, `defaults`), which depends only on the level + project config, never on any session's
+    staged edits — genuinely level-shared, exactly like `trunk_ref`/`generation`/`watcher`. Dropping
+    it would reintroduce a real, already-fixed perf regression (see `scene.py::build_scene_payload`'s
+    docstring: a WanChai-scale request stayed ~28s even on a warm repeat before this cache existed)."""
+    level_name: str
+    trunk_ref: list           # [_LoadedTrunk | None], mutated by index, never reassigned
+    generation: list[int]
+    changes_available: list[bool]
+    trunk_lock: threading.Lock
+    watcher: TrunkWatcher
+    connections: set
+    scene_inputs_ref: list    # [tuple | None]
+
+
+def create_app(project, level: str | None = None, *, fault_route: bool = False) -> FastAPI:
+    """Build the app for one project. `level`, if given, is the STARTUP level: its `LevelContext`
+    (and `TrunkWatcher`) is created eagerly and `app.state.connections`/`broadcast_changes_available`/
+    `on_trunk_settled`/`changes_available`/`generation` are bound to it, purely so pre-Task-12 tests
+    (and any other zero-argument caller) keep working unchanged. `level=None` (plan Task 12: session
+    CRUD): the process starts with ZERO `LevelContext`s — no eager session/trunk-watcher creation at
+    startup, per the spec's "a session is created only by a real page load, never automatically".
+    `level` is still recorded as `app.state.default_level` (e.g. for the frontend's fallback default
+    on a bare URL with no session id) regardless of whether it's `None`. `/ws` (Task 15) is now
+    genuinely session-scoped instead of bound to the startup level: it resolves its own
+    `LevelContext` from the connecting session's `.level` via `_get_or_create_level_context`, so
+    `level=None` is no longer a connect-time crash -- a session on any level can connect regardless
+    of which (if any) level the app started with. `fault_route=True` mounts `/api/_boom`
+    (raises a real domain error, for testing the exception handler) — never set outside tests; the
+    shipped app never mounts it."""
     maps_root = Path(config.project_maps_dir(project))
     # One StagingStore per app (plan Task 3), not per-request -- same "construct once, cache on the
-    # closure" convention as every other per-project state above/below (`_trunk_ref` et al.). Its
-    # root is the project's own machine-local state dir (`config.state_subdir`, `create=True` so the
-    # first stage/save of a session doesn't need a separate bootstrap step).
-    _staging_store = StagingStore(config.state_subdir(project.root, "snapshots", create=True))
-
-    # The level this app currently serves (quad-layout Part 7, Task 25) — a single-element list
-    # mutated BY INDEX (`_current_level[0] = ...`) in `PUT /api/level`'s closure, the same holder-
-    # cell idiom `_trunk_ref`/`_geometry_ref` below already use (a plain local reassignment inside a
-    # nested function needs `nonlocal`; mutating a list element in place doesn't).
-    _current_level: list[str] = [level]
+    # closure" convention as every other per-project state here. Its roots are the project's own
+    # machine-local state dir (`config.state_subdir`, `create=True` so the first stage/save of a
+    # session doesn't need a separate bootstrap step): a per-session manifest root and a shared
+    # content-addressed blob root.
+    # Shared with `sessions.py`'s own `sessions_root` (Task 6/11): both key off the same
+    # `sessions/<sid>/` layout -- `StagingStore`'s per-session manifest, `sessions.py`'s
+    # `index.json`, and `build_pin.py`'s per-session `build.json` all live side by side there.
+    _sessions_root = config.state_subdir(project.root, "sessions", create=True)
+    _staging_store = StagingStore(
+        _sessions_root,
+        config.state_subdir(project.root, "staging/blobs", create=True),
+    )
+    _claims = ClaimRegistry()
+    # `_BuildResultCache`'s own docstring says it sits in front of `build_cache`'s on-disk store --
+    # one instance per app, same "construct once, close over it" convention as
+    # `_staging_store`/`_claims` above. `session_rebuild` populates it; `_resolve_session_geometry`
+    # (final-review fix round, Finding 1) is the read side -- checked before falling back to
+    # `build_cache.load_scene` on disk.
+    _build_result_cache = _BuildResultCache()
+    # Final-review fix round, Finding 3: `build_cache.evict_unreferenced` reads
+    # `project.build_cache_max_bytes` ITSELF whenever the caller's own `max_bytes` override is
+    # `None` -- there is no way to tell it "treat this as genuinely unconfigured, don't touch
+    # `project` at all" from the outside without redesigning that fallback (out of scope here).
+    # This app's own real `config.Project` always defines the field (default `None`, i.e. no
+    # budget), but many tests construct a bare `SimpleNamespace(root=..., maps=None)` project
+    # double that doesn't -- so eviction is skipped entirely for a `project` that can't represent a
+    # budget at all. `StagingStore.evict_unreferenced_blobs` has no such internal project-read (its
+    # `max_bytes` is a plain parameter, no fallback), so `_staging_blobs_max_bytes` below just
+    # needs a safe default, not a skip-guard.
+    _project_has_build_cache_budget = hasattr(project, "build_cache_max_bytes")
+    _staging_blobs_max_bytes = getattr(project, "staging_blobs_max_bytes", None)
 
     def _valid_level_name(name: str) -> bool:
         # Single-segment guards against a name that isn't a real level dir (traversal is already
@@ -115,177 +213,128 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
     def _require_level(level_name: str) -> None:
         # Route param validated like the `serve` verb's own up-front check, so a bad/nonexistent name
         # returns a clean "level not found" (exit-2-equivalent 422) rather than falling through to
-        # build_scene's misleading "no CSG brush actors" (no-half-answer rule). `level_name !=
-        # _current_level[0]`: every route below except `PUT /api/level` itself operates on ONLY the
-        # currently-served level, and with the shared trunk/geometry cache keyed on nothing but that
-        # one level, a syntactically-valid-but-different level name would otherwise silently serve
-        # THIS level's cached data instead of its own (shared-cache spec's `_require_level` finding).
-        if level_name != _current_level[0] or not _valid_level_name(level_name):
+        # build_scene's misleading "no CSG brush actors" (no-half-answer rule). Plan Task 9: no
+        # longer compares against a single "currently served" level -- `LevelContext` is keyed per
+        # level name in a dict, so ANY syntactically-valid on-disk level is now servable, each with
+        # its own independent context. (This is the actual multi-level-serving change this task
+        # makes -- the old comparison existed only to protect the single flat cache this task
+        # replaces.)
+        if not _valid_level_name(level_name):
             raise CommandError(f"level not found: {level_name!r}")
 
-    async def _broadcast_changes_available() -> None:
+    def _require_session(session_id: str) -> sessions.SessionRecord:
+        # Task 13: the shared "resolve a session id to its record, then validate its level" pattern
+        # `session_rebuild` (Task 11) already open-coded once -- now shared across every
+        # session-scoped route below instead of duplicated per-route.
+        session = sessions.get_session(_sessions_root, session_id)
+        if session is None:
+            raise CommandError(f"session not found: {session_id!r}")
+        _require_level(session.level)
+        # Final-review fix round, Finding 4: "any request scoped to a session updates that
+        # session's last_active_at" (spec) -- this is the one chokepoint every session-scoped route
+        # below resolves its session through, so wiring it here covers all of them at once.
+        # `touch_session` self-throttles (a no-op inside 30s of the last update), so calling it on
+        # every request costs one cheap `get_session` re-read, not a write per request.
+        sessions.touch_session(_sessions_root, session_id)
+        return session
+
+    async def _broadcast_changes_available(ctx: LevelContext) -> None:
         # Iterate a SNAPSHOT: `await ws.send_json` yields the event loop, and a client connecting
-        # or disconnecting in that window mutates `connections` from a concurrently-running
+        # or disconnecting in that window mutates `ctx.connections` from a concurrently-running
         # coroutine (`ws_endpoint`) — iterating the live set directly raises "Set changed size
         # during iteration" and drops the whole broadcast (review finding, multi-viewer scenario).
-        #
-        # `type` is `"changes_available"`, not the old `"reload"` (gui-explicit-rebuild spec §2,
-        # Task 3): the client's job is to show a banner/badge for an explicit Load, never to
-        # silently auto-refetch — a real, tested wire-format change, not a silent regression.
         dead = set()
-        for ws in list(connections):
+        for ws in list(ctx.connections):
             try:
-                await ws.send_json({"type": "changes_available", "level": _current_level[0]})
+                await ws.send_json({"type": "changes_available", "level": ctx.level_name})
             except Exception:
                 dead.add(ws)
-        connections.difference_update(dead)
+        ctx.connections.difference_update(dead)
 
-    # Shared in-process scene cache (`dev/docs/board/to-build/uedcli-serve-share-one-in-process-
-    # scene-cache/`): three independently-atomic slots -- `_trunk_ref` (Load-owned), `_geometry_ref`
-    # (Rebuild-owned, gui-explicit-rebuild spec §0), and `_payload_ref` (added after a live perf bug,
-    # see below). `_generation` guards against a slow build in flight when an invalidation lands
-    # publishing a stale result over a state that's since moved on (a real race a plain
-    # double-checked-locking sketch has no defense against -- see `_build_and_publish_geometry`
-    # below); bumped by `_on_trunk_settled` (the watcher settling), which no longer clears any of the
-    # three refs (Task 3) -- a mere trunk change on disk must not silently discard an already-pinned
-    # Rebuild or payload; only an explicit Load/Rebuild reassigns a ref outright.
-    #
-    # `_payload_ref`/`_get_payload` cache `build_scene_payload`/`build_wireframe_payload`'s OUTPUT,
-    # keyed on the IDENTITY of the `(trunk_state, geometry)` pair that produced it -- NOT on
-    # `_generation`, since neither `_trunk_ref` nor `_geometry_ref` is cleared by a generation bump
-    # any more (unlike the sibling scene-cache spec's original model, where a `_generation` mismatch
-    # meant "the ref got cleared, rebuild"). A payload is only ever stale once `/load` or `/rebuild`
-    # reassigns one of those refs to a NEW object, which identity comparison catches directly.
-    # Measured on a real WanChai-scale request (2288 actors): `/scene` stayed ~28s even on a WARM
-    # repeat (`/atlas`, which never calls `build_scene_payload`, took ~2.4s on the identical warm
-    # cache). Root cause wasn't `build_scene_payload`'s own per-actor loop -- it already amortizes
-    # `_is_hidden_ed`'s class resolution to one `ClassDefaults.for_class` call per DISTINCT class
-    # within a single call. It was the CALLER: `scene()` built a brand-new `ClassDefaults`/
-    # `ClassIndex` via `_scene_inputs()` on EVERY request, so that per-class memo was thrown away and
-    # rebuilt from scratch (a package load + Super-chain walk + defaults decode per distinct class,
-    # ~0.1-0.3s cold each) on every single `/scene` GET, warm trunk/geometry cache or not. Caching
-    # the payload itself means a warm request never calls `build_scene_payload`/
-    # `build_wireframe_payload` (or touches `defaults`/`index`) at all -- profiled fix: a synthetic
-    # 2288-actor/19-class level went from ~1.8s on every repeat call to ~1.8s once, ~0.06s every call
-    # after (`_scratch/profile_scene.py`).
-    _generation = [0]
-    _trunk_lock = threading.Lock()
-    _payload_lock = threading.Lock()
-    _trunk_ref: list[_LoadedTrunk | None] = [None]
-    # `_scene_inputs_ref` caches `(search_files, index, defaults)` for the THREE READ ROUTES ONLY
-    # (`/scene`, `/atlas`, `/lightmap`) -- board `gui-serve-rebuilds-classindex-on-every-request`
-    # spec's "Proposed fix". Its lifetime is tied to `_trunk_ref`'s, not the process's: stashed
-    # only where `_trunk_ref[0]` itself gets (re)assigned (`/load`'s handler, `_get_trunk`'s
-    # once-only bootstrap branch below), read by `_current_scene_inputs()`. `/load` and `/rebuild`
-    # deliberately do NOT read from this slot -- they call `_scene_inputs()` fresh every time,
-    # unchanged, because they genuinely consume a fresh `index`/`defaults` to re-derive real state
-    # (the trunk itself; the CSG/lighting solve) where a stale one could silently produce a
-    # different, wrong result -- not merely a slower-but-correct one (spec §3).
-    _scene_inputs_ref: list[tuple | None] = [None]
-    _geometry_ref: list[_BuiltGeometry | None] = [None]
-    # `_payload_ref` caches `build_scene_payload`/`build_wireframe_payload`'s output as
-    # `(trunk_state, geometry, payload)` -- `_get_payload` below compares the first two by identity
-    # against the CURRENT `_trunk_ref[0]`/`_read_geometry()` to decide if the cached `payload` is
-    # still valid (see the cache-slot comment above).
-    _payload_ref: list[tuple[_LoadedTrunk, _BuiltGeometry | None, ScenePayload] | None] = [None]
-    # gui-explicit-rebuild spec §2: flipped by `_on_trunk_settled` when a trunk change lands after
-    # the level is already open, cleared by an explicit Load (Task 5) -- the client's "changes
-    # available" banner signal, never an auto-refetch trigger.
-    _changes_available: list[bool] = [False]
-    # `/status`'s `build_status` (spec §1/§4): WHY the geometry slot is empty, not just that it is --
-    # `"no_build"` (never populated, no usable on-disk pointer either) vs `"evicted"` (an on-disk
-    # pointer exists but Load's bootstrap check, Task 5, found no matching `preview_cache` entry) are
-    # both "no geometry pinned" to `_read_geometry()`, but a client needs to tell them apart to show
-    # the right message. `"built"` is derived from `_read_geometry() is not None`, never stored here
-    # separately, so the two can't disagree.
-    _build_status: list[str] = ["no_build"]
+    async def _on_trunk_settled(ctx: LevelContext) -> None:
+        # gui-explicit-rebuild spec §0/§2: a mere trunk change settling on disk touches only the
+        # generation counter (guarding a build-in-flight, see `_get_trunk` below) and the
+        # `changes_available` banner flag -- never the trunk slot itself. Never takes
+        # `ctx.trunk_lock` (event-loop-freeze hazard, same reasoning as `_broadcast_changes_available`).
+        ctx.generation[0] += 1
+        ctx.changes_available[0] = True
+        await _broadcast_changes_available(ctx)
 
-    def _bootstrap_geometry_if_empty(level_name: str) -> None:
-        # gui-explicit-rebuild spec §4: "at Load (including the automatic initial one) ... populate
-        # the in-memory pin FROM [the on-disk pointer] immediately" -- a `preview_cache` lookup, no
-        # `build_scene()` call, so this is safe to run from BOTH `_get_trunk`'s own first-population
-        # branch (the automatic initial Load) and the explicit `POST /load` route (Task 5's own
-        # re-population step). The `_geometry_ref[0] is not None` guard makes it a no-op on any call
-        # after the first -- in particular, a Rebuild that already populated the slot this session is
-        # NEVER overwritten by a stale on-disk pointer (spec §1's last bullet). No lock: a
-        # `preview_cache` lookup is fast, not a slow operation racing an invalidation the way
-        # `build_scene()` is (plan's Open Questions #7 -- a narrow, accepted redundant-work risk on
-        # truly concurrent first calls, not a correctness one: same pin either way).
-        if _geometry_ref[0] is not None:
-            return
-        pin = build_pin.load_pointer(project, level_name)
-        if pin is None:
-            _build_status[0] = "no_build"
-            return
-        resolved = build_pin.resolve_pin(project, level_name, pin)
-        if resolved is None:
-            _build_status[0] = "evicted"   # spec §1's eviction caveat -- degrade, never raise
-            return
-        polys, texture_table, owners = resolved
-        geom_hash, light_hash = pin
-        _geometry_ref[0] = _BuiltGeometry(geom_hash=geom_hash, light_hash=light_hash, polys=polys,
-                                          texture_table=texture_table, owners=owners)
-        _build_status[0] = "built"
+    _level_contexts: dict[str, LevelContext] = {}
+    _level_contexts_lock = threading.Lock()
 
-    def _current_scene_inputs():
+    def _get_or_create_level_context(level_name: str) -> LevelContext:
+        """The per-level state this app now keys everything off of (plan Task 9). Lazily creates a
+        `LevelContext` the first time a level name is seen, idempotent on every later call. Builds
+        (but never STARTS) that level's own `TrunkWatcher` -- starting one needs a running event
+        loop, which a plain call to this function (e.g. from a test, or a threadpool route handler)
+        doesn't have. The app's STARTUP level's watcher is started/stopped by `_lifespan` below; a
+        lazily-created second level's watcher is started by `ws_endpoint` (final-review fix round,
+        Finding 5), the first async context that sees a session on it -- never stopped by this app
+        (only the startup level's is, on shutdown), a known, accepted gap: stopping it would need
+        tracking every lazily-created level's watcher for `_lifespan`'s shutdown to sweep, which
+        nothing has asked for yet."""
+        ctx = _level_contexts.get(level_name)
+        if ctx is not None:
+            return ctx
+        with _level_contexts_lock:
+            ctx = _level_contexts.get(level_name)
+            if ctx is not None:
+                return ctx
+            # The watcher's callback looks the context up by name at call time (rather than
+            # capturing it directly) so the watcher can be constructed as part of building the
+            # context itself, with no partially-constructed placeholder needed.
+            watcher = TrunkWatcher(maps_root / level_name,
+                                   lambda: _on_trunk_settled(_level_contexts[level_name]))
+            ctx = LevelContext(level_name=level_name, trunk_ref=[None], generation=[0],
+                               changes_available=[False], trunk_lock=threading.Lock(),
+                               watcher=watcher, connections=set(), scene_inputs_ref=[None])
+            _level_contexts[level_name] = ctx
+            return ctx
+
+    def _current_scene_inputs(level_name: str):
         """`(search_files, index, defaults)` for `/scene`/`/atlas`/`/lightmap` only -- reuses
-        whatever was built alongside the CURRENT `_trunk_ref[0]` instead of rebuilding a fresh,
+        whatever was built alongside the CURRENT `ctx.trunk_ref[0]` instead of rebuilding a fresh,
         memo-less `ClassIndex`/`ClassDefaults` on every read (board
-        `gui-serve-rebuilds-classindex-on-every-request`). Safe because these three routes only
-        ever CONSUME the trunk `_scene_inputs_ref` was seeded alongside: on a `_get_payload` cache
-        HIT, `index`/`defaults` are never even touched; on a MISS (a fresh trunk with no cached
-        payload yet -- always true right after a Load), `build_scene_payload`/
-        `build_wireframe_payload` DO consume them, but they get exactly the same `index`/`defaults`
-        that Load itself just resolved the trunk's own actors with (both writes happen together,
-        see the two `_scene_inputs_ref[0] = ...` call sites) -- reusing that pairing is exactly as
-        fresh as what these routes already effectively run against today. `/load`/`/rebuild` never
-        call this -- they call `_scene_inputs()` directly, unconditionally (see the
-        `_scene_inputs_ref` cache-slot comment above).
+        `gui-serve-rebuilds-classindex-on-every-request`). `/load`/`/rebuild` never call this --
+        they call `_scene_inputs()` directly, unconditionally, since they genuinely need a fresh
+        `index`/`defaults` to re-derive real state where a stale one could silently produce a
+        different, wrong result -- not merely a slower-but-correct one.
 
-        Cold path (`_trunk_ref[0]` still `None` -- nothing to pair with yet, e.g. the very first
-        request in the process is one of these three routes, before any `/load`): builds fresh via
+        Cold path (`ctx.trunk_ref[0]` still `None` -- nothing to pair with yet): builds fresh via
         `_scene_inputs()`, same cost as today; not a regression, since there is nothing to reuse
-        yet. `_get_trunk`'s own bootstrap branch stashes ITS result into `_scene_inputs_ref` once
-        it wins `_trunk_lock`, so a second read route racing behind it reuses that instead of also
-        building its own."""
-        cached = _scene_inputs_ref[0]
-        if cached is not None and _trunk_ref[0] is not None:
+        yet. `_get_trunk`'s own bootstrap branch stashes ITS result into `ctx.scene_inputs_ref`
+        once it wins `ctx.trunk_lock`, so a second read route racing behind it reuses that instead
+        of also building its own."""
+        ctx = _get_or_create_level_context(level_name)
+        cached = ctx.scene_inputs_ref[0]
+        if cached is not None and ctx.trunk_ref[0] is not None:
             return cached
         return _scene_inputs(project)
 
     def _get_trunk(level_name: str, search_files, index, defaults) -> _LoadedTrunk:
-        # NOTE on parameters: the plan's own illustrative pseudocode named this `_get_trunk(search_files,
-        # index)` and called `resolve_actor_sprites(lvl, index, search_files)` -- but the REAL
-        # `resolve_actor_sprites` signature (`preview_native.py:380`) is `(level, search_files,
-        # class_defaults)`, and `class_defaults` (a `ClassDefaults`, with `.for_class`) is not
-        # interchangeable with `index` (a `ClassIndex`, no `.for_class` -- would raise
-        # `AttributeError` on the very first call). Fixed to the verified real signature; flagged in
-        # the build report rather than silently carried over. `index` is now a real, separate
-        # parameter again (board `mesh-actors-should-render-independent-of-geometry-build`):
+        # NOTE on parameters: `resolve_actor_sprites`'s real signature (`preview_native.py:380`) is
+        # `(level, search_files, class_defaults)` -- `defaults` (a `ClassDefaults`, with
+        # `.for_class`) is not interchangeable with `index` (a `ClassIndex`, no `.for_class`).
         # `resolve_mesh_scene_polys`/`resolve_mover_scene_polys` (mesh-actor/Mover triangles, both
-        # Load-owned like sprites) need a `ClassIndex`, not a `ClassDefaults` -- every caller already
-        # has one from `_scene_inputs()`.
-        #
-        # `level_name` is the caller's own already-`_require_level`-validated name, not re-read from
-        # `_current_level[0]` here (review finding): a concurrent `PUT /api/level` between the
-        # caller's validation and this call could otherwise silently build against a DIFFERENT
-        # level's directory than the one the caller checked.
+        # Load-owned like sprites) need a `ClassIndex`, not a `ClassDefaults`.
+        ctx = _get_or_create_level_context(level_name)
         while True:
-            cached = _trunk_ref[0]
+            cached = ctx.trunk_ref[0]
             if cached is not None:
                 return cached
-            with _trunk_lock:
-                cached = _trunk_ref[0]
+            with ctx.trunk_lock:
+                cached = ctx.trunk_ref[0]
                 if cached is not None:
                     return cached
-                gen_before = _generation[0]
+                gen_before = ctx.generation[0]
                 lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level_name)
                 sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
                 mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
                     lvl, index, search_files, defaults)
                 mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
                     lvl, index, search_files, defaults)
-                if _generation[0] != gen_before:
+                if ctx.generation[0] != gen_before:
                     continue    # invalidated mid-build: discard, loop back and retry from the top
                 built = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
                                      sprite_table=sprite_table, actor_sprites=actor_sprites,
@@ -293,161 +342,119 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
                                      mesh_texture_table=mesh_texture_table,
                                      mover_polys=mover_polys, mover_owners=mover_owners,
                                      mover_texture_table=mover_texture_table)
-                # Written BEFORE `_trunk_ref[0]` (review finding): `_current_scene_inputs()` gates
-                # solely on `_trunk_ref[0] is not None`, unsynchronized -- if `_trunk_ref[0]` were
-                # set first, a concurrent reader could observe the NEW trunk paired with the
-                # PREVIOUS `_scene_inputs_ref[0]` (a real race, not a benign one: `_get_payload`'s
-                # own identity check misses on the new trunk and builds+caches a payload from that
-                # stale index/defaults, persisting until the next Load/Rebuild). Writing this first
-                # makes "trunk populated" always imply "matching scene-inputs already populated"
-                # for a lock-free reader, same reasoning `_read_geometry`'s own comment relies on.
-                _scene_inputs_ref[0] = (search_files, index, defaults)   # seeds _current_scene_inputs too
-                _trunk_ref[0] = built
-                # The AUTOMATIC INITIAL LOAD (spec §"Two independent axes"): this branch only ever
-                # runs once per process (gated by `_trunk_ref[0] is None` above), exactly the "first
-                # time this level is opened" moment the bootstrap-from-disk-pointer rule targets.
-                _bootstrap_geometry_if_empty(level_name)
+                # Written BEFORE `ctx.trunk_ref[0]` (same reasoning `_current_scene_inputs` relies
+                # on): a lock-free reader must never observe the NEW trunk paired with the
+                # PREVIOUS `ctx.scene_inputs_ref[0]`.
+                ctx.scene_inputs_ref[0] = (search_files, index, defaults)
+                ctx.trunk_ref[0] = built
                 return built
 
-    def _read_geometry() -> _BuiltGeometry | None:
-        # Pure read, NEVER calls `build_scene()` -- the whole point of the gui-explicit-rebuild spec
-        # (§4): nothing may auto-solve as a side effect of a route being fetched, only an explicit
-        # Rebuild (`_build_and_publish_geometry` below). No lock needed: a single list-index read of
-        # a cell only ever replaced by one atomic assignment, same "single-reference-swap is atomic"
-        # reasoning `_trunk_ref`/`_geometry_ref` already relied on before this split.
-        return _geometry_ref[0]
+    def _resolve_session_geometry(session_id: str, level_name: str) -> _BuiltGeometry | None:
+        """Final-review fix round, Finding 1: the read side of session-scoped Rebuild --
+        `session_scene`/`session_atlas`/`session_lightmap`'s way of turning "this session has a
+        build pin" into a real `_BuiltGeometry`. Mirrors `session_status`'s own pin resolution
+        (`build_pin.resolve_session_pin`), but split apart so the in-memory `_build_result_cache`
+        can be checked BEFORE any disk read: `resolve_session_pin` always goes straight to
+        `build_cache.load_scene`, which is exactly the redundant disk I/O `_BuildResultCache` exists
+        to avoid on the common case (this session's own just-completed `session_rebuild` already
+        populated it). Returns `None` for "no build pinned" (never rebuilt) or "evicted" (a pin
+        exists but neither the memory cache nor disk has the content any more) -- the caller can't
+        tell those two apart from this alone and doesn't need to; `session_status` is the route that
+        reports which."""
+        try:
+            geom_hash, light_hash = build_pin.load_session_pointer(_sessions_root, session_id)
+        except build_pin.SessionPointerCorruptError:
+            return None
+        key = (level_name, geom_hash, light_hash)
+        cached = _build_result_cache.get(key)
+        if cached is None:
+            cached = build_cache.load_scene(project, level_name, geom_hash, light_hash)
+            if cached is None:
+                return None
+            _build_result_cache.put(key, cached)
+        polys, texture_table, owners = cached
+        return _BuiltGeometry(geom_hash=geom_hash, light_hash=light_hash, polys=polys,
+                              texture_table=texture_table, owners=owners)
 
-    def _build_and_publish_geometry(level_name: str, search_files, index, defaults) -> _BuiltGeometry:
-        # The ONLY function in this app that ever calls `build_scene()` -- reached ONLY from
-        # `POST /rebuild` (gui-explicit-rebuild spec §3). Deliberately has no "already cached? return
-        # early" short-circuit (unlike the sibling scene-cache spec's retired `_get_geometry`):
-        # Rebuild always re-derives from the CURRENT trunk view, even though `build_scene`'s own
-        # internal `preview_cache` lookup makes a same-hash repeat a cheap hit, not a genuine re-solve
-        # (spec §3.3 "never accumulates" / plan Task 2's "always re-derives" test).
-        #
-        # `while True: ... continue` instead of a recursive retry: `solve_lock`/`_trunk_lock` are
-        # plain `threading.Lock`s, not reentrant -- a recursive call's own `with solve_lock:` would
-        # deadlock against the still-held outer lock. `continue` from inside a `with` block runs
-        # `__exit__` (releasing the lock) before control reaches the top of the loop, so the retry's
-        # re-acquisition never contends with itself. Same shape the sibling spec's `_get_trunk` uses.
-        while True:
-            with solve_lock:
-                gen_before = _generation[0]
-                trunk_state = _get_trunk(level_name, search_files, index, defaults)
-                # `include_meshes=False`/`include_movers=False`: the GUI resolves mesh-actor and
-                # Mover triangles itself, independently of this CSG-solved pipeline (`_get_trunk`'s
-                # `resolve_mesh_scene_polys`/`resolve_mover_scene_polys` calls, above), so
-                # `geometry.polys` never carries either (boards `mesh-actors-should-render-
-                # independent-of-geometry-build`/`mover-triangles-not-build-state-independent`, owner
-                # decision "Option A" for both, 2026-09-18) — see `scene.py`'s
-                # `build_scene_payload`/`filtered_geometry_polys` docstrings.
-                polys, texture_table, owners = _build_scene(
-                    trunk_state.level, search_files, index, defaults=defaults, project=project,
-                    level_name=level_name, visibility="editor", include_meshes=False,
-                    include_movers=False)
-                if _generation[0] != gen_before:
-                    continue    # invalidated mid-build: discard, retry against the new state
-                built = _BuiltGeometry(geom_hash=None, light_hash=None,   # OQ1 -- see scene.py
-                                       polys=polys, texture_table=texture_table, owners=owners)
-                _geometry_ref[0] = built
-                _build_status[0] = "built"
-                return built
+    def _live_build_refs(level_name: str) -> tuple[set[str], set[tuple[str, str]]]:
+        """Final-review fix round, Finding 3: the "live" reference sets `build_cache.evict_
+        unreferenced` needs -- every `(geom_hash)`/`(geom_hash, light_hash)` currently pinned by any
+        session editing `level_name`, plus the level's own saved pin (Save-promoted, `build_pin.
+        write_level_pointer`) -- so eviction never deletes a cache entry a session or a save still
+        points at, only genuinely orphaned ones."""
+        geom_hashes: set[str] = set()
+        pairs: set[tuple[str, str]] = set()
+        for rec in sessions.list_sessions(_sessions_root):
+            if rec.level != level_name:
+                continue
+            try:
+                geom_hash, light_hash = build_pin.load_session_pointer(_sessions_root, rec.id)
+            except build_pin.SessionPointerCorruptError:
+                continue
+            geom_hashes.add(geom_hash)
+            pairs.add((geom_hash, light_hash))
+        level_pin = build_pin.load_level_pointer(project, level_name)
+        if level_pin is not None:
+            geom_hash, light_hash = level_pin
+            geom_hashes.add(geom_hash)
+            pairs.add((geom_hash, light_hash))
+        return geom_hashes, pairs
 
-    def _get_payload(level_name: str, search_files, index, defaults
-                     ) -> tuple[ScenePayload, _BuiltGeometry | None, _LoadedTrunk]:
-        # Caches `build_scene_payload`/`build_wireframe_payload`'s result so a warm request never
-        # re-resolves `_is_hidden_ed`'s class defaults or `_brush_highlight`'s CSG classification,
-        # both of which `defaults`/`index` fresh from THIS request's own `_scene_inputs()` call
-        # would otherwise force from scratch (see the cache-slot comment above). Keyed on the
-        # IDENTITY of `(trunk_state, geometry)` -- not `_generation` -- since neither `_trunk_ref`
-        # nor `_geometry_ref` is cleared by a generation bump in this (gui-explicit-rebuild) model;
-        # they only change via an explicit `/load` or `/rebuild` reassigning the ref outright, which
-        # identity comparison catches directly. No retry-on-invalidation loop is needed the way
-        # `_get_trunk`/`_build_and_publish_geometry` need one: this function does no slow work of
-        # its own that a concurrent Load/Rebuild could invalidate mid-flight in a way that matters —
-        # it captures `trunk_state`/`geometry` up front and builds a payload for exactly that pair,
-        # which stays correct (just possibly superseded) even if the global refs move on before it
-        # finishes; the NEXT caller's identity check catches that and rebuilds for the new pair.
-        # `_payload_lock` is its own lock, not `solve_lock`/`_trunk_lock` — this function calls
-        # `_get_trunk`/`_read_geometry`, and reusing either lock here would deadlock the way a
-        # recursive `_get_trunk`/`_build_and_publish_geometry` call would (see their own comments).
-        #
-        # Returns `(payload, geometry, trunk_state)` — the identity-matched pair that produced
-        # `payload`, not just the boolean `geometry_pinned` a caller used to derive from its OWN
-        # separate `_read_geometry()`/`_get_trunk()` call (review finding: `/atlas`/`/lightmap` each
-        # called `_read_geometry()` independently instead of going through this identity-matched
-        # read, so a `/rebuild` landing mid-flight could desync what they built from what `/scene`
-        # built from). Every caller (`/scene`, `/atlas`, `/lightmap`) now reads `geometry`/
-        # `trunk_state` from THIS return, never a second unsynchronized read of their own: a second
-        # read taken before or after this call can observe a DIFFERENT geometry state if a `/rebuild`
-        # completes while a caller is blocked on `_payload_lock` behind a slow (~28-37s) build — a
-        # real race a review caught, not a hypothetical one, since that lock-contention window is
-        # exactly this function's own slow path.
-        trunk_state = _get_trunk(level_name, search_files, index, defaults)
-        geometry = _read_geometry()
-        cached = _payload_ref[0]
-        if cached is not None and cached[0] is trunk_state and cached[1] is geometry:
-            return cached[2], geometry, trunk_state
-        with _payload_lock:
-            trunk_state = _get_trunk(level_name, search_files, index, defaults)
-            geometry = _read_geometry()
-            cached = _payload_ref[0]
-            if cached is not None and cached[0] is trunk_state and cached[1] is geometry:
-                return cached[2], geometry, trunk_state
-            if geometry is None:
-                payload = build_wireframe_payload(trunk_state, index, defaults)
-            else:
-                payload = build_scene_payload(trunk_state, geometry, index, defaults)
-            _payload_ref[0] = (trunk_state, geometry, payload)
-            return payload, geometry, trunk_state
+    def _live_blob_hashes() -> set[str]:
+        """Final-review fix round, Finding 3: the "live" set `StagingStore.evict_unreferenced_blobs`
+        needs -- every blob hash any session's own `staged.json` currently names, across every
+        session (blobs are content-addressed and shared, not per-level)."""
+        return {
+            entry.blob_hash
+            for rec in sessions.list_sessions(_sessions_root)
+            for entry in _staging_store.read_staged(rec.id).values()
+        }
 
-    async def _on_trunk_settled() -> None:
-        # gui-explicit-rebuild spec §0/§2: supersedes the sibling scene-cache spec's own TRIGGER,
-        # not its slot shape -- Load owns `_trunk_ref`, Rebuild owns `_geometry_ref`, and a mere
-        # trunk change settling on disk touches NEITHER any more (contrast the sibling spec's original
-        # design, which cleared both here so the next request would auto-rebuild). `_payload_ref`
-        # is untouched too, for the same reason -- it goes stale automatically (caught by `_get_payload`'s
-        # own identity check) once an explicit `/load` or `/rebuild` actually reassigns `_trunk_ref`/
-        # `_geometry_ref`, never merely because the trunk changed on disk. Still bumps
-        # `_generation[0]` -- repurposed from "guard an automatic rebuild" to "guard a Rebuild's
-        # publish against a stale mid-flight solve" (`_build_and_publish_geometry`'s own generation
-        # check) -- and flips `_changes_available[0]` for the client to show as a banner, never an
-        # auto-refetch (spec §2, superseding the old silent `"reload"` push). Neither takes
-        # `solve_lock` (event-loop-freeze hazard, same reasoning as `_broadcast_changes_available`).
-        _generation[0] += 1
-        _changes_available[0] = True
-        await _broadcast_changes_available()
-
-    # `_watcher` is a holder cell too (quad-layout Part 7, Task 25): a level switch must STOP this
-    # exact watcher instance and START a new one bound to the new level's directory, but `_lifespan`
-    # is defined once, at `create_app` time -- its `finally: watcher.stop()` would otherwise close
-    # over whatever a bare `watcher` local NAMED at that moment, not whatever `PUT /api/level` later
-    # replaces it with.
-    _watcher: list[TrunkWatcher] = [TrunkWatcher(maps_root / _current_level[0], _on_trunk_settled)]
+    # `_watcher` for the app's STARTUP level, started here rather than lazily -- `_lifespan` is
+    # defined once, at `create_app` time, so it closes over this one context's watcher. A lazily-
+    # created second level's watcher is started elsewhere, from `ws_endpoint` (final-review fix
+    # round, Finding 5) -- the first async context that sees that level, since `.start()` needs a
+    # running event loop this plain call doesn't have.
+    # Plan Task 12: `level` is now optional -- with none given, there is no startup level and so no
+    # `LevelContext` is created eagerly (the whole point: zero `LevelContext`s at process start).
+    _startup_ctx = _get_or_create_level_context(level) if level is not None else None
 
     @asynccontextmanager
     async def _lifespan(_app: FastAPI):
-        _watcher[0].start()
+        if _startup_ctx is not None:
+            _startup_ctx.watcher.start()
         try:
             yield
         finally:
-            _watcher[0].stop()
+            if _startup_ctx is not None:
+                _startup_ctx.watcher.stop()
 
     app = FastAPI(lifespan=_lifespan)
+    # Recorded regardless of whether a startup level was given (plan Task 12) -- e.g. for the
+    # frontend's fallback default on a bare URL with no session id.
+    app.state.default_level = level
     # Exposed on app.state for tests only (e.g. exercising `_broadcast_changes_available`'s
-    # concurrent-mutation safety directly) — not part of the HTTP surface.
-    app.state.connections = connections
-    app.state.broadcast_changes_available = _broadcast_changes_available
+    # concurrent-mutation safety directly) — not part of the HTTP surface. Bound to the STARTUP
+    # level's context, matching every pre-Task-9 test's zero-argument usage. Plan Task 12: these
+    # simply don't exist on `app.state` when there is no startup level -- nothing reads them in that
+    # case (every route that needs a `LevelContext` resolves one itself, per-level-name, via
+    # `_get_or_create_level_context`/`app.state.get_or_create_level_context`).
+    if _startup_ctx is not None:
+        app.state.connections = _startup_ctx.connections
+        app.state.broadcast_changes_available = functools.partial(_broadcast_changes_available, _startup_ctx)
+        app.state.on_trunk_settled = functools.partial(_on_trunk_settled, _startup_ctx)
+        app.state.changes_available = _startup_ctx.changes_available
+        app.state.generation = _startup_ctx.generation
     app.state.get_trunk = _get_trunk
-    app.state.read_geometry = _read_geometry
-    app.state.build_and_publish_geometry = _build_and_publish_geometry
-    app.state.get_payload = _get_payload
-    app.state.on_trunk_settled = _on_trunk_settled
-    app.state.changes_available = _changes_available
-    app.state.generation = _generation
-    app.state.build_status = _build_status
-    app.state.current_level = _current_level
-    app.state.watcher = _watcher
+    app.state.get_or_create_level_context = _get_or_create_level_context
+    # Task 11: session-scoped Rebuild's own dependencies -- exposed on `app.state` so tests reach
+    # them directly (`sessions.create_session(app.state.sessions_root, ...)`,
+    # `app.state.staging_store.stage(...)`, `app.state.claims.mint(...)`), per this plan's
+    # "tests set up state via lower-level module functions" rule.
+    app.state.sessions_root = _sessions_root
+    app.state.staging_store = _staging_store
+    app.state.claims = _claims
+    app.state.build_result_cache = _build_result_cache
 
     @app.exception_handler(Exception)
     async def _domain_error_handler(request: Request, exc: Exception) -> JSONResponse:
@@ -465,200 +472,156 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
 
     @app.get("/api/health")
     async def health() -> dict:
-        return {"status": "ok", "level": _current_level[0]}
+        return {"status": "ok"}
 
     @app.get("/api/levels")
     def levels() -> dict:
         # GET /api/levels (quad-layout Part 7, Task 24) -- reuses level_sources.list_levels, the
         # same enumeration `level list`/`level list --json` already use, not a second one.
-        return levels_payload(maps_root, _current_level[0])
+        return levels_payload(maps_root, level)
 
-    @app.put("/api/level")
-    async def switch_level(request: Request) -> dict:
-        # The in-process level switch (quad-layout Part 7, Task 25): validates the requested level,
-        # stops the OLD watcher, resets EVERY cache slot this app now carries (`_trunk_ref`,
-        # `_geometry_ref`, `_payload_ref` -- all three cache data scoped to the OLD level; none of it
-        # is valid for the new one), starts a new watcher bound to the new level's directory, and
-        # updates the holder cells. No process restart, no page-reload trick.
-        #
-        # `async def`, the one exception to this file's sync-route convention (every other route is
-        # deliberately sync `def` so Starlette runs the blocking ~24s CSG solve in its threadpool,
-        # never the event loop -- see `/scene`'s own comment). `TrunkWatcher.start()`/`stop()` call
-        # `asyncio.ensure_future(...)`/`task.cancel()`, which need the event loop THIS request runs
-        # on; a threadpool worker thread (what a sync route here would run in) has no running event
-        # loop, so a sync version of this route would raise `RuntimeError: There is no current event
-        # loop in thread ...` the moment it called `new_watcher.start()`.
-        body = await request.json()
-        new_level = body.get("level") if isinstance(body, dict) else None
-        if not isinstance(new_level, str) or not _valid_level_name(new_level):
-            raise CommandError(f"level not found: {new_level!r}")
-
-        _watcher[0].stop()
-
-        # Bump `_generation` before clearing the slots so a slow build/trunk-read for the OLD level
-        # still in flight discards its result on completion (the same generation-guard mechanism
-        # `_on_trunk_settled`/`_build_and_publish_geometry` already use) instead of publishing over
-        # the new level's freshly-emptied slots.
-        _generation[0] += 1
-        _trunk_ref[0] = None
-        _geometry_ref[0] = None
-        _payload_ref[0] = None
-        _scene_inputs_ref[0] = None
-        _changes_available[0] = False
-        _build_status[0] = "no_build"
-
-        _current_level[0] = new_level
-        new_watcher = TrunkWatcher(maps_root / new_level, _on_trunk_settled)
-        new_watcher.start()
-        _watcher[0] = new_watcher
-
-        # No WS broadcast here (a deliberate choice, not an oversight): `"changes_available"` means
-        # exactly one thing today (a settled trunk change waiting on an explicit Load, spec §2) --
-        # broadcasting it for a LEVEL SWITCH would tell every other connected viewer to refresh
-        # `/status` for what they still think is their own level, which just changed under them. A
-        # second viewer's own next request against a level name that no longer matches
-        # `_current_level[0]` gets `_require_level`'s ordinary "level not found", which is honest;
-        # true multi-viewer-aware level switching is out of scope here (this app has always been
-        # one-level-per-process, Slice 1's own docstring).
-        return {"level": new_level}
-
-    @app.get("/api/level/{level_name}/status")
-    def status(level_name: str) -> dict:
-        # gui-explicit-rebuild spec §1/§4: folds the Load axis's "changes available" signal and the
-        # Rebuild axis's mode-gating signal into one route (this plan's own design choice, not a
-        # spec mandate -- see the plan's Open Questions #3/#4) -- a client showing either banner
-        # needs both at once anyway. `geometry_pinned` is the literal mode-gate condition ("no
-        # in-memory geometry pin currently held" unlocks only wireframe); `build_status` is `"built"`
-        # whenever `geometry_pinned` (derived, never stored separately, so the two can't disagree),
-        # else whatever `_build_status[0]` last recorded by the bootstrap-from-disk-pointer check
-        # (`_bootstrap_geometry_if_empty`, below) -- `"no_build"` (never populated, no usable pointer
-        # either) or `"evicted"` (a pointer exists but names hashes `preview_cache` no longer holds).
-        _require_level(level_name)
-        pinned = _read_geometry() is not None
+    @app.get("/api/session/{session_id}/status")
+    def session_status(session_id: str) -> dict:
+        # Task 14: replaces the old per-level `/status` (Task 9's deliberate cold-only placeholder)
+        # -- both fields it deferred are per-session state now: `geometry_pinned`/`build_status`
+        # come from this session's own `build.json` (Task 11's `build_pin`), and
+        # `changes_available` compares the level's trunk-generation counter against THIS session's
+        # own high-water mark (`last_seen_generation`, bumped only by this session's own Load,
+        # Task 13) instead of a level-wide flag every session shared.
+        session = _require_session(session_id)
+        ctx = _get_or_create_level_context(session.level)
+        try:
+            resolved = build_pin.resolve_session_pin(project, session.level, _sessions_root,
+                                                      session_id)
+        except build_pin.SessionPointerCorruptError:
+            # The normal "never Rebuilt" case, not corruption -- same meaning `session_save`'s own
+            # pin-promotion step already gives this exception.
+            build_status = "no_build"
+        else:
+            build_status = "built" if resolved is not None else "evicted"
         return {
-            "changes_available": _changes_available[0],
-            "geometry_pinned": pinned,
-            "build_status": "built" if pinned else _build_status[0],
+            "changes_available": ctx.generation[0] > session.last_seen_generation,
+            "geometry_pinned": build_status == "built",
+            "build_status": build_status,
         }
 
-    @app.post("/api/level/{level_name}/load")
-    def load(level_name: str, body: dict | None = None) -> dict:
-        # The explicit Load action (spec §2). Plan Task 4: symmetric with Save's staged-edit
-        # conflict check, in the reverse direction -- `edits.check_load_conflicts` reports (never
-        # blocks) when an external trunk change collides with a staged edit. Load carries no
-        # data-loss risk (nothing is written to the trunk here), so the refresh below always
-        # completes regardless of what the check finds.
-        # Re-reads the trunk UNCONDITIONALLY (unlike `_get_trunk`'s own double-checked-lock gate,
-        # which only populates an EMPTY slot) -- an explicit Load must see a change even when the
-        # slot is already warm. `resolve_actor_sprites`/`resolve_mesh_scene_polys`/
-        # `resolve_mover_scene_polys` ride along, same as `_get_trunk`'s own build, since sprite/
-        # mesh/Mover resolution are all Load-owned (spec §"Two independent axes"; mesh/Mover
-        # independence: boards `mesh-actors-should-render-independent-of-geometry-build`/
-        # `mover-triangles-not-build-state-independent`).
-        _require_level(level_name)
-        resolutions = (body or {}).get("resolutions") or {}
+    # The SESSION-scoped Rebuild (Task 11; the per-level `/api/level/{level_name}/rebuild` route
+    # that used to coexist with this one is deleted outright -- final-review fix round, Finding 2:
+    # nothing calls it any more once this route exists, and CLAUDE.md's no-back-compat-cruft
+    # convention says a superseded verb doesn't get to linger). Solves on a COPY of the shared trunk
+    # `Level` (`edits.apply_staged_overlay`) instead of `LevelContext.trunk_ref`'s `Level` directly,
+    # so two sessions rebuilding the same level concurrently never see each other's staged edits and
+    # never mutate the shared trunk. The claim token is checked ONLY at write time, under
+    # `claims.lock_for(session_id)`: a session superseded mid-solve (a newer claim minted while this
+    # request's CSG+lighting solve was running) drops the result with 409 and writes nothing --
+    # neither `build_pin`'s per-session pointer nor anything else. `build_scene` itself already
+    # stores its geometry/scene into `build_cache` on disk when given `project=`/`level_name=` (see
+    # its own docstring) -- no separate `build_cache.store_*` call belongs here.
+    # Sync `def` (NOT async): the blocking CSG+lighting solve runs in Starlette's threadpool.
+    @app.post("/api/session/{session_id}/rebuild")
+    def session_rebuild(session_id: str, request: Request):
+        # `_require_session` (not a hand-resolved `sessions.get_session`/`_require_level` pair, as
+        # this route used to do before this fix round): same "clean, named 422" convention as every
+        # other session route, and it's also the chokepoint that touches this session's
+        # `last_active_at` (Finding 4).
+        session = _require_session(session_id)
         search_files, index, defaults = _scene_inputs(project)
-        lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level_name)
-        conflicts = edits.check_load_conflicts(
-            level_name, lvl, store=_staging_store, resolutions=resolutions)
-        sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
-        mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
-            lvl, index, search_files, defaults)
-        mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
-            lvl, index, search_files, defaults)
-        loaded = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
-                              sprite_table=sprite_table, actor_sprites=actor_sprites,
-                              mesh_polys=mesh_polys, mesh_owners=mesh_owners,
-                              mesh_texture_table=mesh_texture_table,
-                              mover_polys=mover_polys, mover_owners=mover_owners,
-                              mover_texture_table=mover_texture_table)
-        # Written BEFORE `_trunk_ref[0]` (review finding, same reasoning as `_get_trunk`'s bootstrap
-        # branch): `_current_scene_inputs()` gates solely on `_trunk_ref[0] is not None`, so a
-        # concurrent `/scene`/`/atlas`/`/lightmap` must never be able to observe the NEW trunk
-        # paired with the PREVIOUS `_scene_inputs_ref[0]` -- that would feed a stale index/defaults
-        # into `_get_payload`'s payload-cache-miss branch (trunk identity just changed, so it always
-        # misses right after a Load) and cache a wrong payload until the next Load/Rebuild.
-        _scene_inputs_ref[0] = (search_files, index, defaults)   # seeds /scene, /atlas, /lightmap
-        _trunk_ref[0] = loaded
-        _changes_available[0] = False
-        # Bootstrap-from-disk-pointer: a no-op if a Rebuild already populated the slot this session
-        # (spec §1's last bullet -- an on-disk pointer must never overwrite an in-memory pin a
-        # Rebuild already set), otherwise the same "unlock all modes with no Rebuild needed" check
-        # the automatic initial Load already runs (spec test #8).
-        _bootstrap_geometry_if_empty(level_name)
-        return {
-            "status": "ok",
-            "conflicts": [
-                {
-                    "name": c.name,
-                    "staged_location": _serialize_location(c.staged_location),
-                    "trunk_location": _serialize_location(c.trunk_location),
-                }
-                for c in conflicts
-            ],
-        }
+        trunk_state = _get_trunk(session.level, search_files, index, defaults)
+        staged = _staging_store.read_staged(session_id)
+        overlaid = edits.apply_staged_overlay(trunk_state.level, staged)
+        # `include_meshes=False`/`include_movers=False`: same reasoning as the per-level route
+        # above -- the GUI resolves mesh-actor/Mover triangles itself, independently of this
+        # CSG-solved pipeline.
+        polys, texture_table, owners, geom_hash, light_hash = build_scene(
+            overlaid, search_files, index, defaults=defaults, project=project,
+            level_name=session.level, visibility="editor", include_meshes=False,
+            include_movers=False)
 
-    # Sync `def` (NOT async): the blocking ~24s CSG+lighting solve runs in Starlette's threadpool,
-    # not the event loop -- WS pushes, /health, and every other viewer stay responsive during it.
-    @app.post("/api/level/{level_name}/rebuild")
-    def rebuild(level_name: str) -> dict:
-        # The explicit Rebuild action (spec §3): the ONLY route in this app that ever calls
-        # `build_scene()`, via `_build_and_publish_geometry` -- which itself calls `_get_trunk()`
-        # (performing the automatic initial Load if this is the very first route hit in the process
-        # at all, spec §3 test #6: "no Load first" still works). In-memory only -- never touches
-        # `build_pin`'s on-disk pointer file, which is Save-owned (P2, out of this plan's scope).
-        _require_level(level_name)
-        search_files, index, defaults = _scene_inputs(project)
-        geometry = _build_and_publish_geometry(level_name, search_files, index, defaults)
-        return {"status": "ok", "geom_hash": geometry.geom_hash, "light_hash": geometry.light_hash}
+        # Task 11 fix round 1 (Finding 1): populate the in-memory `_BuildResultCache` with this
+        # solve's result. `geom_hash`/`light_hash` are `build_scene`'s own OUTPUTS -- computed FROM
+        # the solved content -- so there is no key available before the solve runs; this route can
+        # only ever POPULATE the cache, never benefit from a pre-solve hit itself (the read side is
+        # `_resolve_session_geometry`, called from `session_scene`/`session_atlas`/`session_lightmap`
+        # below -- final-review fix round, Finding 1). Populated unconditionally, BEFORE the claim check
+        # below decides whether this particular session's write survives: the cache is keyed by
+        # CONTENT hash (`level_name`, `geom_hash`, `light_hash`), not by session, so a result
+        # dropped as superseded for THIS session is still valid, reusable content for any other
+        # caller who solves to the same hash -- there is no reason to make it wait on, or depend on,
+        # an outcome that is about this session's claim, not about the content's validity.
+        _build_result_cache.put((session.level, geom_hash, light_hash), (polys, texture_table, owners))
 
-    # Sync `def` (NOT async): Starlette runs a sync route in its threadpool, so the blocking ~24s
-    # solve never freezes the event loop (review finding — an async route would hang WS pushes,
-    # /health, and every other viewer during a cold solve or a geometry-changing reload). None of
-    # these three routes below ever triggers that solve any more (gui-explicit-rebuild spec §4) --
-    # ONLY `POST /rebuild` above calls `_build_and_publish_geometry`; a route here reads whatever is
-    # already pinned (possibly nothing) via `_read_geometry()`, which never builds.
-    @app.get("/api/level/{level_name}/scene")
-    def scene(level_name: str) -> dict:
-        _require_level(level_name)
-        search_files, index, defaults = _current_scene_inputs()
-        # `_get_payload` internally picks `build_wireframe_payload` (cold-open / no Rebuild yet --
-        # genuinely no solved geometry, not an error; every actor's own AUTHORED brush shape still
-        # rides on `SceneActor.brush`, spec §4) vs `build_scene_payload`, the same way this route's
-        # own inline branch used to, before payload caching existed. `geometry_pinned` comes from
-        # `_get_payload`'s OWN return, not a separate `_read_geometry()` call here — a second,
-        # unsynchronized read could observe a different geometry state than the one that actually
-        # produced `payload` if a `/rebuild` completes while this call was blocked on
-        # `_get_payload`'s lock (review finding: that contention window is exactly this route's
-        # slow path, not a negligible one).
-        payload, geometry, _trunk_state = _get_payload(level_name, search_files, index, defaults)
+        token = request.headers.get("X-Claim-Token", "")
+        with _claims.lock_for(session_id):
+            if not _claims.check(session_id, token):
+                # Superseded mid-solve (a newer claim minted while the solve above was running):
+                # drop the result, write nothing.
+                logger.info("session_rebuild_superseded", extra={"session_id": session_id})
+                return JSONResponse(status_code=409,
+                                    content={"error": "session superseded mid-solve"})
+            # Fix round 1, Finding 1 (two-part): the claim check alone can't tell "session
+            # legitimately deleted mid-solve" apart from "no one has claimed it yet" --
+            # `ClaimRegistry.check`'s restart-safety rule (see its own docstring) auto-accepts any
+            # token once `forget()` has cleared the recorded one, so a DELETE that raced this
+            # solve would otherwise sail through the check above and `write_session_pointer` would
+            # then RECREATE the just-removed `sessions/<sid>/` directory. Re-check existence here,
+            # under the same lock DELETE now also takes (below) around its own forget+delete, so
+            # the two critical sections never interleave arbitrarily.
+            if sessions.get_session(_sessions_root, session_id) is None:
+                logger.info("session_rebuild_dropped_session_deleted",
+                            extra={"session_id": session_id})
+                return JSONResponse(status_code=409,
+                                    content={"error": "session deleted mid-solve"})
+            build_pin.write_session_pointer(_sessions_root, session_id, geom_hash, light_hash)
+            # Final-review fix round, Finding 3: eviction runs opportunistically on the write path
+            # that could push the build cache over budget -- right after the write that pins this
+            # solve's result, still under the same per-session lock (a cheap directory scan against
+            # a small cache dir, not worth a separate critical section). No override `max_bytes` is
+            # passed -- `evict_unreferenced`'s own default reads `project.build_cache_max_bytes`
+            # (None -> unconfigured -> no eviction pressure at all), which is exactly what a real
+            # `config.Project` always defines.
+            if _project_has_build_cache_budget:
+                live_geom_hashes, live_pairs = _live_build_refs(session.level)
+                build_cache.evict_unreferenced(project, session.level,
+                                               live_geom_hashes=live_geom_hashes,
+                                               live_pairs=live_pairs)
+
+        return {"geom_hash": geom_hash, "light_hash": light_hash}
+
+    # Sync `def` (NOT async): Starlette runs a sync route in its threadpool, so a slow trunk read
+    # never freezes the event loop. Final-review fix round, Finding 1: these three routes now
+    # actually resolve this session's pinned build (`_resolve_session_geometry`) instead of
+    # unconditionally serving the cold/wireframe case -- `build_scene_payload` (the geometry-aware
+    # payload builder) when a build is pinned, `build_wireframe_payload` (unchanged) when it isn't.
+    # None of these three ever calls `build_scene` itself — only `POST /api/session/{id}/rebuild`
+    # does; a pinned build's geometry always comes from the cache/disk read `_resolve_session_geometry`
+    # does, never a fresh solve. These stay UNGATED reads (the spec's "only writes are gated" rule),
+    # resolving `session.level` via `_require_session`.
+    @app.get("/api/session/{session_id}/scene")
+    def session_scene(session_id: str) -> dict:
+        session = _require_session(session_id)
+        search_files, index, defaults = _current_scene_inputs(session.level)
+        trunk_state = _get_trunk(session.level, search_files, index, defaults)
+        geometry = _resolve_session_geometry(session_id, session.level)
+        if geometry is None:
+            payload = build_wireframe_payload(trunk_state, index, defaults)
+        else:
+            payload = build_scene_payload(trunk_state, geometry, index, defaults)
         return {
             "polys": [asdict(p) for p in payload.polys],
             "actors": [asdict(a) for a in payload.actors],
             "geometry_pinned": geometry is not None,
         }
 
-    @app.get("/api/level/{level_name}/atlas")
-    def atlas(level_name: str) -> dict:
-        # Routed through `_get_payload` (review finding, item 4) -- the SAME identity-matched
-        # `(trunk_state, geometry)` pair `/scene` built its payload from, not a second independent
-        # `_get_trunk()`/`_read_geometry()` read: two unsynchronized reads here could observe a
-        # DIFFERENT geometry state than `/scene`'s if a `/rebuild` lands mid-flight between them.
-        # With geometry pinned: `geometry.texture_table + trunk_state.sprite_table +
-        # trunk_state.mesh_texture_table + trunk_state.mover_texture_table`, in the same order
-        # `scene.py::build_scene_payload` uses when it wraps `trunk.actor_sprites`/`trunk.mesh_polys`/
-        # `trunk.mover_polys` into `SceneActor.sprite`/`ScenePoly` mesh/Mover entries, so a
-        # `tex_index` from /scene names the same rect here. With NO geometry pinned: sprites, mesh
-        # textures AND Mover textures are all Load-owned (unaffected by whether geometry exists -- a
-        # point actor's icon, a mesh actor's own texture, and a Mover's own texture should all still
-        # show in wireframe mode), so the atlas is built from `trunk_state.sprite_table +
-        # trunk_state.mesh_texture_table + trunk_state.mover_texture_table`
-        # (`build_wireframe_payload`'s own sprites/mesh/Mover polys carry `tex_index` offset the same
-        # way, matching this — boards `mesh-actors-should-render-independent-of-geometry-build`/
-        # `mover-triangles-not-build-state-independent`).
-        _require_level(level_name)
-        search_files, index, defaults = _current_scene_inputs()
-        _payload, geometry, trunk_state = _get_payload(level_name, search_files, index, defaults)
+    @app.get("/api/session/{session_id}/atlas")
+    def session_atlas(session_id: str) -> dict:
+        # Sprites, mesh textures AND Mover textures are all Load-owned (unaffected by whether
+        # geometry exists), so those three always ride on `trunk_state`'s own texture tables.
+        # With a build pinned, `geometry.texture_table` is prepended -- the same order
+        # `build_scene_payload` uses when it offsets `ScenePoly.tex_index` into this atlas.
+        session = _require_session(session_id)
+        search_files, index, defaults = _current_scene_inputs(session.level)
+        trunk_state = _get_trunk(session.level, search_files, index, defaults)
+        geometry = _resolve_session_geometry(session_id, session.level)
         texture_table = ((geometry.texture_table if geometry is not None else [])
                          + trunk_state.sprite_table + trunk_state.mesh_texture_table
                          + trunk_state.mover_texture_table)
@@ -670,28 +633,23 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
             "png_base64": base64.b64encode(png_bytes).decode("ascii"),
         }
 
-    @app.get("/api/level/{level_name}/lightmap")
-    def lightmap(level_name: str) -> dict:
-        # Routed through `_get_payload` too (review finding, item 4 — same identity-matched pair as
-        # /scene and /atlas). The poly list this route packs must also be the SAME FILTERED set
-        # `/scene` built its payload from (review finding, item 2): `build_scene_payload` drops a
-        # hidden `CSG_Add` brush's own surfaces from `ScenePayload.polys`, which shifts every LATER
-        # poly's array position — the client indexes this route's manifest by that same (filtered)
-        # position, so packing the raw UNFILTERED `geometry.polys` here silently mis-indexed
-        # lightmaps on any level with such a brush. `filtered_geometry_polys` is the ONE filter
-        # function `build_scene_payload` itself uses, so the two routes' filtering can't drift.
-        # `intensity` is the atlas's global multiplier scale — the client's `lightMapIntensity`. No
-        # geometry pinned: there are no lit polys to pack -- `build_lightmap_atlas([])` already
-        # returns a valid degenerate response (1x1 PNG, empty manifest, intensity 1.0 — the same
-        # shape a solved-but-unlit level gets), so no special-casing is needed here.
-        _require_level(level_name)
-        search_files, index, defaults = _current_scene_inputs()
-        _payload, geometry, trunk_state = _get_payload(level_name, search_files, index, defaults)
+    @app.get("/api/session/{session_id}/lightmap")
+    def session_lightmap(session_id: str) -> dict:
+        # No trunk read needed when nothing is pinned: unlike `/scene`/`/atlas`, this route never
+        # touches actor/sprite data. With a build pinned, the packed poly list must be the SAME
+        # filtered set `build_scene_payload` built its own payload from (`filtered_geometry_polys`
+        # is the ONE filter function both go through, so the two routes' poly-index positions can't
+        # drift) -- needs a real trunk read for `_resolve_hidden_ed`'s own `bHiddenEd` check.
+        session = _require_session(session_id)
+        geometry = _resolve_session_geometry(session_id, session.level)
         if geometry is None:
             polys: list[tuple] = []
         else:
+            search_files, index, defaults = _current_scene_inputs(session.level)
+            trunk_state = _get_trunk(session.level, search_files, index, defaults)
             hidden_ed = _resolve_hidden_ed(trunk_state.level, defaults)
-            polys = [poly for poly, _owner in filtered_geometry_polys(trunk_state.level, geometry, hidden_ed)]
+            polys = [poly for poly, _owner in
+                    filtered_geometry_polys(trunk_state.level, geometry, hidden_ed)]
         png_bytes, manifest, width, height, intensity = build_lightmap_atlas(polys)
         return {
             "width": width,
@@ -703,9 +661,8 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
 
     # Plan Task 3: thin HTTP adapters over `edits.py`'s stage/discard/save (Task 2) and
     # `StagingStore.read_staged` (Task 1) -- no business logic here, matching every route above.
-    # Sync `def`, like every route in this file except `switch_level`/`ws_endpoint`: none of these
-    # four does a slow CSG solve, but a trunk load/save is still blocking file I/O, so it belongs in
-    # Starlette's threadpool, not the event loop.
+    # Sync `def`: none of these does a slow CSG solve, but a trunk load/save is still blocking file
+    # I/O, so it belongs in Starlette's threadpool, not the event loop.
     #
     # The Decimal/JSON boundary lives ONLY here: JSON has no `Decimal` type, so every incoming
     # `[x, y, z]` array is parsed via `Decimal(str(v))` -- never `Decimal(v)` on the already-lossy
@@ -718,52 +675,189 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
     def _serialize_location(loc: tuple[Decimal, Decimal, Decimal]) -> list[float]:
         return [float(d) for d in loc]
 
-    @app.post("/api/level/{level_name}/stage")
-    def stage(level_name: str, body: dict) -> dict:
-        _require_level(level_name)
-        actors = body.get("actors") or {}
-        moves = {name: _parse_location(loc) for name, loc in actors.items()}
-        staged = edits.stage_locations(project, level_name, moves, store=_staging_store)
-        return {"staged": staged}
+    def _serialize_conflicts(conflicts) -> list[dict]:
+        return [
+            {
+                "name": c.name,
+                "staged_location": _serialize_location(c.staged_location),
+                "trunk_location": _serialize_location(c.trunk_location),
+            }
+            for c in conflicts
+        ]
 
-    @app.post("/api/level/{level_name}/discard")
-    def discard(level_name: str, body: dict | None = None) -> dict:
-        # `actors` (Task 10 extension, plan Task 3 didn't originally call for this): an optional
-        # subset of staged actor names to discard, leaving every other staged actor's edit in
-        # place -- lets the Save conflict-resolution UI drop one conflicting actor's stage without
-        # discarding unrelated staged work. Omitted/`None` -> the original whole-level discard.
-        _require_level(level_name)
-        actors = (body or {}).get("actors")
-        edits.discard_staged(project, level_name, store=_staging_store, actors=actors)
-        return {"status": "ok"}
+    # Task 13: `load`/`stage`/`discard`/`save` all require the `X-Claim-Token` header, same as
+    # Task 11's `rebuild` -- every one of them mutates this session's own state (`load` bumps
+    # `last_seen_generation`, `stage`/`discard` write `staged.json`, `save` writes the trunk plus
+    # the level pin), so a stale token gets the identical 409 `rebuild` already gives. Unlike
+    # `rebuild` (which checks only AFTER its expensive CSG solve), none of these four has an
+    # expensive precursor -- the claim check runs BEFORE any write, under
+    # `_claims.lock_for(session_id)`, so a stale token never performs a write at all (nothing to
+    # discard on failure, unlike `rebuild`'s in-flight solve result). Fix round 1 (Task 13, Finding
+    # 1): each of the four also re-checks `sessions.get_session(...) is None` under the SAME lock,
+    # right after the claim check passes and before its first write side-effect -- the same
+    # existence re-check `session_rebuild` already does, for the same reason (see its own comment
+    # above): the claim-token check alone can't distinguish "deleted mid-request" from "never
+    # claimed", so a DELETE racing this request's entry-to-lock window would otherwise resurrect
+    # the just-removed session directory.
+    @app.post("/api/session/{session_id}/load")
+    def session_load(session_id: str, request: Request, body: dict | None = None) -> dict:
+        # The explicit Load action (spec §2), re-keyed to session_id (Task 13). Plan Task 4:
+        # symmetric with Save's staged-edit conflict check, in the reverse direction --
+        # `edits.check_load_conflicts` reports (never blocks) when an external trunk change
+        # collides with a staged edit. Load carries no data-loss risk (nothing is written to the
+        # trunk here), so the refresh below always completes once the claim check passes.
+        session = _require_session(session_id)
+        token = request.headers.get("X-Claim-Token", "")
+        with _claims.lock_for(session_id):
+            if not _claims.check(session_id, token):
+                return JSONResponse(status_code=409, content={"error": "session superseded"})
+            # Fix round 1 (Task 13, Finding 1): same two-part reasoning as `session_rebuild`'s own
+            # existence re-check -- `_claims.check` alone can't tell "deleted mid-request" apart
+            # from "never claimed", so a DELETE racing this request's own entry-to-lock window would
+            # otherwise sail through the check above.
+            if sessions.get_session(_sessions_root, session_id) is None:
+                logger.info("session_load_dropped_session_deleted",
+                            extra={"session_id": session_id})
+                return JSONResponse(status_code=409, content={"error": "session deleted"})
+            ctx = _get_or_create_level_context(session.level)
+            resolutions = (body or {}).get("resolutions") or {}
+            search_files, index, defaults = _scene_inputs(project)
+            lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / session.level)
+            conflicts = edits.check_load_conflicts(
+                session_id, lvl, store=_staging_store, resolutions=resolutions)
+            sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
+            mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
+                lvl, index, search_files, defaults)
+            mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
+                lvl, index, search_files, defaults)
+            loaded = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
+                                  sprite_table=sprite_table, actor_sprites=actor_sprites,
+                                  mesh_polys=mesh_polys, mesh_owners=mesh_owners,
+                                  mesh_texture_table=mesh_texture_table,
+                                  mover_polys=mover_polys, mover_owners=mover_owners,
+                                  mover_texture_table=mover_texture_table)
+            # Written BEFORE `ctx.trunk_ref[0]` (same reasoning as `_get_trunk`'s bootstrap
+            # branch): a concurrent `/scene`/`/atlas`/`/lightmap` must never observe the NEW trunk
+            # paired with the PREVIOUS `ctx.scene_inputs_ref[0]`.
+            ctx.scene_inputs_ref[0] = (search_files, index, defaults)   # seeds /scene,/atlas,/lightmap
+            ctx.trunk_ref[0] = loaded
+            ctx.changes_available[0] = False
+            # Task 13's own plan text: Load bumps this session's high-water mark of the trunk
+            # generation it has actually seen -- `sessions.py` (Task 6) already has this function,
+            # unused until now.
+            sessions.set_last_seen_generation(_sessions_root, session_id, ctx.generation[0])
+            return {"status": "ok", "conflicts": _serialize_conflicts(conflicts)}
 
-    @app.post("/api/level/{level_name}/save")
-    def save(level_name: str, body: dict) -> dict:
-        _require_level(level_name)
-        resolutions = body.get("resolutions") or {}
-        result = edits.save_staged(project, level_name, store=_staging_store,
-                                   resolutions=resolutions)
+    @app.post("/api/session/{session_id}/stage")
+    def session_stage(session_id: str, body: dict, request: Request) -> dict:
+        session = _require_session(session_id)
+        token = request.headers.get("X-Claim-Token", "")
+        with _claims.lock_for(session_id):
+            if not _claims.check(session_id, token):
+                return JSONResponse(status_code=409, content={"error": "session superseded"})
+            # Fix round 1 (Task 13, Finding 1): the concrete repro the review found -- a DELETE
+            # racing this request's own entry-to-lock window would otherwise sail through the
+            # `_claims.check` above (it auto-accepts once `forget()` has cleared the recorded
+            # token) and `edits.stage_locations` would then resurrect the just-removed
+            # `sessions/<sid>/` directory via `atomic_write_json`'s unconditional `mkdir`. Re-check
+            # existence here, under the same lock DELETE takes around its own forget+delete.
+            if sessions.get_session(_sessions_root, session_id) is None:
+                logger.info("session_stage_dropped_session_deleted",
+                            extra={"session_id": session_id})
+                return JSONResponse(status_code=409, content={"error": "session deleted"})
+            actors = body.get("actors") or {}
+            moves = {name: _parse_location(loc) for name, loc in actors.items()}
+            staged = edits.stage_locations(project, session.level, moves,
+                                           store=_SessionKeyedStore(_staging_store, session_id))
+            # Final-review fix round, Finding 3: a re-stage can orphan the actor's PREVIOUS blob
+            # (its content-addressed hash changes, the old one is no longer named by any manifest)
+            # -- opportunistic eviction on the write path that could free one, per the spec.
+            _staging_store.evict_unreferenced_blobs(live_hashes=_live_blob_hashes(),
+                                                    max_bytes=_staging_blobs_max_bytes)
+            return {"staged": staged}
+
+    @app.post("/api/session/{session_id}/discard")
+    def session_discard(session_id: str, request: Request, body: dict | None = None) -> dict:
+        # `actors`: an optional subset of staged actor names to discard, leaving every other
+        # staged actor's edit in place -- lets the Save conflict-resolution UI drop one conflicting
+        # actor's stage without discarding unrelated staged work. Omitted/`None` -> the original
+        # whole-session discard. `discard_staged`'s own `level_name` parameter is used ONLY as the
+        # store key (it never touches the trunk), so `session_id` is passed straight through to the
+        # real `_staging_store` -- no `_SessionKeyedStore` wrapper needed here (unlike stage/save).
+        _require_session(session_id)
+        token = request.headers.get("X-Claim-Token", "")
+        with _claims.lock_for(session_id):
+            if not _claims.check(session_id, token):
+                return JSONResponse(status_code=409, content={"error": "session superseded"})
+            # Fix round 1 (Task 13, Finding 1): same re-check as `session_stage`/`session_load`/
+            # `session_save` -- `discard_staged` also writes (or removes) `staged.json` through
+            # `_staging_store`, so a DELETE racing this request's entry-to-lock window must not be
+            # allowed to resurrect the session directory here either.
+            if sessions.get_session(_sessions_root, session_id) is None:
+                logger.info("session_discard_dropped_session_deleted",
+                            extra={"session_id": session_id})
+                return JSONResponse(status_code=409, content={"error": "session deleted"})
+            actors = (body or {}).get("actors")
+            edits.discard_staged(project, session_id, store=_staging_store, actors=actors)
+            # Final-review fix round, Finding 3: discarding is exactly the write that frees a
+            # blob's last reference -- evict opportunistically right here.
+            _staging_store.evict_unreferenced_blobs(live_hashes=_live_blob_hashes(),
+                                                    max_bytes=_staging_blobs_max_bytes)
+            return {"status": "ok"}
+
+    @app.post("/api/session/{session_id}/save")
+    def session_save(session_id: str, body: dict, request: Request) -> dict:
+        session = _require_session(session_id)
+        token = request.headers.get("X-Claim-Token", "")
+        with _claims.lock_for(session_id):
+            if not _claims.check(session_id, token):
+                return JSONResponse(status_code=409, content={"error": "session superseded"})
+            # Fix round 1 (Task 13, Finding 1): same re-check as `session_stage`/`session_load`/
+            # `session_discard` -- `save_staged` writes the trunk itself, the highest-stakes write
+            # of the four, so a DELETE racing this request's entry-to-lock window must not be
+            # allowed through here either.
+            if sessions.get_session(_sessions_root, session_id) is None:
+                logger.info("session_save_dropped_session_deleted",
+                            extra={"session_id": session_id})
+                return JSONResponse(status_code=409, content={"error": "session deleted"})
+            resolutions = body.get("resolutions") or {}
+            result = edits.save_staged(project, session.level,
+                                       store=_SessionKeyedStore(_staging_store, session_id),
+                                       resolutions=resolutions)
+            # Final-review fix round, Finding 3: Save clears every applied actor's stage --
+            # exactly the write that frees a blob's last reference -- evict opportunistically here.
+            _staging_store.evict_unreferenced_blobs(live_hashes=_live_blob_hashes(),
+                                                    max_bytes=_staging_blobs_max_bytes)
+
+        # Pin promotion, sequenced AFTER the trunk write above: under `ctx.trunk_lock` -- the
+        # existing per-level write serialization (unchanged in purpose), NOT the per-session claim
+        # lock, which is already released by the `with` block's exit above (the two locks are
+        # never held simultaneously). `SessionPointerCorruptError` here is the NORMAL "this session
+        # never ran a Rebuild" case, not corruption -- skip promotion and leave the level's
+        # existing pin (whatever it currently holds, if anything) untouched.
+        ctx = _get_or_create_level_context(session.level)
+        with ctx.trunk_lock:
+            try:
+                geom_hash, light_hash = build_pin.load_session_pointer(_sessions_root, session_id)
+            except build_pin.SessionPointerCorruptError:
+                pass
+            else:
+                build_pin.write_level_pointer(project, session.level, geom_hash, light_hash)
+
         return {
             "applied": result.applied,
-            "conflicts": [
-                {
-                    "name": c.name,
-                    "staged_location": _serialize_location(c.staged_location),
-                    "trunk_location": _serialize_location(c.trunk_location),
-                }
-                for c in result.conflicts
-            ],
+            "conflicts": _serialize_conflicts(result.conflicts),
         }
 
-    @app.get("/api/level/{level_name}/staged")
-    def staged(level_name: str) -> dict:
-        _require_level(level_name)
+    @app.get("/api/session/{session_id}/staged")
+    def session_staged(session_id: str) -> dict:
+        _require_session(session_id)
         return {
             name: {
                 "staged_location": _serialize_location(entry.staged_location),
                 "baseline_location": _serialize_location(entry.baseline_location),
             }
-            for name, entry in _staging_store.read_staged(level_name).items()
+            for name, entry in _staging_store.read_staged(session_id).items()
         }
 
     if fault_route:
@@ -771,17 +865,201 @@ def create_app(project, level: str, *, fault_route: bool = False) -> FastAPI:
         async def _boom():
             raise CommandError("Actor not found: Foo")
 
+    # Plan Task 12: session CRUD. Unlike every other route in this file (which raises `CommandError`
+    # for a clean "not found" 422 via the shared `error_to_status` exception handler), GET/DELETE's
+    # "unknown id" case here returns a literal `404` via a direct `JSONResponse` -- the plan's own
+    # brief specifies exactly that status for these two routes, a deliberate, narrower departure from
+    # the 422-everywhere convention Task 11 established for `POST /api/session/{id}/rebuild`'s
+    # analogous case. Flagged, not silently reconciled either way.
+    @app.post("/api/level/{level_name}/sessions", status_code=201)
+    def create_session_route(level_name: str) -> dict:
+        # Creating a session establishes its own first claim -- nothing to supersede yet (spec's
+        # claim-token note under "Session identity & lifecycle").
+        _require_level(level_name)
+        rec = sessions.create_session(_sessions_root, level_name)
+        token = _claims.mint(rec.id)
+        return {"id": rec.id, "level": rec.level, "created_at": rec.created_at,
+                "claim_token": token}
+
+    @app.get("/api/sessions")
+    def list_sessions_route() -> dict:
+        # A pure read: no claim token is required to call this, and none is minted either -- unlike
+        # `GET /api/session/{id}` below, minting a token per listed session here would supersede
+        # every open session's claim on every poll of the session-picker dropdown, which is not what
+        # "listing" should do.
+        return {
+            "sessions": [
+                {"id": r.id, "level": r.level, "created_at": r.created_at,
+                 "last_active_at": r.last_active_at}
+                for r in sessions.list_sessions(_sessions_root)
+            ],
+        }
+
+    @app.get("/api/session/{session_id}")
+    def get_session_route(session_id: str):
+        # Mints a FRESH claim_token on every call, superseding whatever claim existed before -- this
+        # is the spec's "resolving a session" operation, the same one a page load/reload performs
+        # ("Reloading re-resolves the session fresh, mints a new claim ... supersedes whichever
+        # window currently holds it"). Deliberately NOT idempotent in that sense: two GETs in quick
+        # succession genuinely hand write ownership to whichever one landed last, by design -- the
+        # mechanism that makes "whichever window last loaded always wins" true.
+        rec = sessions.get_session(_sessions_root, session_id)
+        if rec is None:
+            return JSONResponse(status_code=404,
+                                content={"error": f"session not found: {session_id!r}"})
+        token = _claims.mint(session_id)
+        return {"id": rec.id, "level": rec.level, "created_at": rec.created_at,
+                "last_active_at": rec.last_active_at, "claim_token": token}
+
+    @app.delete("/api/session/{session_id}", status_code=204)
+    def delete_session_route(session_id: str, request: Request, force: bool = False):
+        # Explicit close (spec, "API surface"): removes `sessions/<sid>/` entirely. A mutation, so
+        # it needs a valid claim_token like any other write; destructive, so it also follows the
+        # project's "never irretrievably clobber" convention -- refuses 409 on non-empty staged
+        # edits unless `?force=true`.
+        rec = sessions.get_session(_sessions_root, session_id)
+        if rec is None:
+            return JSONResponse(status_code=404,
+                                content={"error": f"session not found: {session_id!r}"})
+
+        token = request.headers.get("X-Claim-Token", "")
+        if not _claims.check(session_id, token):
+            return JSONResponse(status_code=409, content={"error": "session superseded"})
+
+        if not force and _staging_store.read_staged(session_id):
+            return JSONResponse(
+                status_code=409,
+                content={"error": "session has unsaved edits; pass ?force=true to close anyway"})
+
+        # "closing every open WS connection for that session" (spec) is done here only PASSIVELY,
+        # not by an active push: `delete_session_route` never reaches into `/ws` directly --
+        # `LevelContext.connections` (the only WS connection set that exists in this app) stays
+        # keyed per-LEVEL, not per-session, so this route has no way to find "just this session's"
+        # connection among a level's other open ones without a new WS-to-session tracking structure,
+        # which no task's brief has asked for and this route doesn't add on its own initiative.
+        # Instead, `ws_endpoint`'s own poll loop (Task 15 fix round 1) re-checks
+        # `sessions.get_session(...) is None` on every tick, BEFORE the claim check -- this closes
+        # the gap `forget(session_id)` would otherwise leave (a deleted session's stale token
+        # auto-re-accepting itself forever via `claims.check`'s first-claim semantics), at the cost
+        # of up to `_WS_CLAIM_POLL_INTERVAL_S` of lag rather than an immediate close.
+        #
+        # Fix round 1, Finding 1: forget+delete run under the SAME per-session lock
+        # `session_rebuild`'s write-time critical section uses, so an in-flight Rebuild's
+        # claim-check-then-write can't interleave with this delete arbitrarily -- whichever side
+        # gets the lock first completes cleanly, and `session_rebuild`'s own existence re-check
+        # (added in the same fix) catches the case where this delete won the race.
+        #
+        # Fix round 2, Finding 1 (re-review of round 1): `delete_session` MUST run before `forget`,
+        # not after. `forget()` pops this session_id's entry out of `_claims._session_locks` as a
+        # side effect -- the moment it returns, the *registry* no longer knows about this lock, even
+        # though the `with` block below is still holding the actual `Lock` object and hasn't exited.
+        # `sessions.delete_session` does a real `shutil.rmtree`, which can release the GIL mid-call;
+        # if `forget()` ran first, any other thread calling `_claims.lock_for(session_id)` during that
+        # window gets handed a brand-new, independent `Lock` (not the one we're holding) and proceeds
+        # unguarded for the rest of the rmtree -- exactly the race this lock exists to prevent. Doing
+        # the delete first keeps the registered lock valid for the whole removal; only once the
+        # directory is truly gone does `forget()` retire the registry entry.
+        with _claims.lock_for(session_id):
+            sessions.delete_session(_sessions_root, session_id)
+            _claims.forget(session_id)
+        return Response(status_code=204)
+
     @app.websocket("/ws")
     async def ws_endpoint(websocket: WebSocket) -> None:
+        # Task 15: `/ws` is now genuinely session-scoped, not bound to a single startup level.
+        # The client must present `?session=<id>&claim=<token>` -- no back-compat no-params legacy
+        # mode (CLAUDE.md). Both are validated up front: `sessions.get_session` confirms the session
+        # exists, `_claims.check` confirms the presented token is (or becomes, per its own documented
+        # first-claim semantics) the session's current claim. Every session that exists was minted a
+        # token by `create_session_route`/`get_session_route` at creation time, so `_claims.check`'s
+        # existence-agnostic three-state rule (unrecorded id -> auto-accept, recorded id -> exact
+        # match) already gives the right refuse/accept behavior here with no extra "was this session
+        # ever claimed" check needed -- the `sessions.get_session` call above is what supplies the
+        # "does it exist" half.
+        #
+        # Two different refusal shapes (fix round 1, Important finding): an unknown/deleted session
+        # or a request with no claim token at all is not something a retry can ever fix, so that case
+        # calls `websocket.close()` directly, without ever calling `.accept()` -- confirmed against
+        # Starlette 1.6's own `WebSocket.send`/`accept` source (not assumed): while `application_state`
+        # is still CONNECTING, `send()` allows a "websocket.close" ASGI message (in addition to
+        # "websocket.accept"), so this cleanly rejects the upgrade, and the client never sees an
+        # accepted connection at all. A STALE claim on an EXISTING session is different -- the client
+        # needs to actually learn that (see below), so that case does accept, briefly, to say so.
+        session_id = websocket.query_params.get("session")
+        claim_token = websocket.query_params.get("claim")
+        session = sessions.get_session(_sessions_root, session_id) if session_id else None
+        if session is None or not claim_token:
+            await websocket.close(code=4001, reason="unknown session or missing claim token")
+            return
+        if not _claims.check(session_id, claim_token):
+            # Fix round 1, Important finding: unlike the case above, the session genuinely exists --
+            # this token is merely STALE (a newer claim was minted elsewhere, e.g. another window
+            # opened the same session). The client needs to actually learn that, the same way the
+            # mid-poll rejection below already tells it, so accept just long enough to push the same
+            # "superseded" signal before closing -- a bare close here (as the old, undifferentiated
+            # 4001 path did) is indistinguishable from a transient drop and would make a reconnecting
+            # client retry this exact stale token forever.
+            await websocket.accept()
+            await websocket.send_json({"type": "superseded"})
+            await websocket.close(code=4003, reason="session claimed by another connection")
+            return
+
+        # Joins the level's own `connections` set -- the pre-existing, UNRELATED trunk-watcher
+        # broadcast mechanism (`_broadcast_changes_available`) this route already fed into, still
+        # needed so a session-scoped connection keeps receiving "changes_available" pushes exactly
+        # as before. `_get_or_create_level_context` is idempotent, so a session on the startup
+        # level reuses `_startup_ctx` unchanged; a session on any other level lazily gets its own.
+        ctx = _get_or_create_level_context(session.level)
+        # Final-review fix round, Finding 5: `_get_or_create_level_context` builds a level's
+        # `TrunkWatcher` but never STARTS one for a lazily-created (non-startup) level -- Task 9's
+        # own docstring said a later async-context caller should do this, and none did. This route
+        # is exactly that caller: `async def`, reached on every connect, and idempotent to check
+        # (`TrunkWatcher.start()` itself is NOT idempotent -- calling it twice would leak the old
+        # `_watch_task`). The startup level's watcher is already started by `_lifespan`, so
+        # `ctx.watcher.started` is already True there and this is a no-op for it.
+        if not ctx.watcher.started:
+            ctx.watcher.start()
         await websocket.accept()
-        connections.add(websocket)
+        ctx.connections.add(websocket)
         try:
             while True:
-                await websocket.receive_text()   # the client sends nothing meaningful; just detects disconnect
+                # Poll, not push: `claims.mint` is called from plain sync routes (`create_session_route`/
+                # `get_session_route`), which FastAPI/Starlette run in a worker THREAD, not on this
+                # coroutine's event loop -- there is no cheap direct way for that thread to push into an
+                # already-open WS living on a different thread's loop without a real cross-thread-to-loop
+                # bridge, which doesn't exist anywhere in this codebase today. Re-checking the claim on
+                # every receive-timeout tick stays entirely inside this already-correct async context, at
+                # the cost of up to `_WS_CLAIM_POLL_INTERVAL_S` of lag before a superseded connection
+                # learns about it.
+                try:
+                    await asyncio.wait_for(websocket.receive_text(), timeout=_WS_CLAIM_POLL_INTERVAL_S)
+                except asyncio.TimeoutError:
+                    # Fix round 1, Critical finding: check existence BEFORE the claim check.
+                    # `ClaimRegistry.check`'s own documented semantics auto-accept an *unrecorded*
+                    # session id as a legitimate first claim -- exactly the state `forget()` (called
+                    # by `delete_session_route`) leaves behind. Without this existence re-check, a
+                    # deleted session's still-open WS would have its own stale token auto-accepted
+                    # forever (re-recording it each tick) and never learn the session is gone -- the
+                    # gap flagged in this route's own comment above. Both cases are reported to the
+                    # client as the same `{"type": "superseded"}` message: from the client's point of
+                    # view the practical action is identical either way ("this session is gone from
+                    # under you, stop editing"), so there is no reason to teach it a second shape. The
+                    # close code/reason differs only for a human reading server logs/network tab:
+                    # 4004 = session no longer exists at all; 4003 = it exists but another connection
+                    # now holds its claim.
+                    if sessions.get_session(_sessions_root, session_id) is None:
+                        await websocket.send_json({"type": "superseded"})
+                        await websocket.close(code=4004, reason="session deleted")
+                        return
+                    if not _claims.check(session_id, claim_token):
+                        await websocket.send_json({"type": "superseded"})
+                        await websocket.close(code=4003, reason="session claimed by another connection")
+                        return
+                    # else: still current -- nothing arrived this tick, just poll again.
         except WebSocketDisconnect:
             pass
         finally:
-            connections.discard(websocket)   # also drop on any other receive error, not just clean disconnect
+            ctx.connections.discard(websocket)   # also drop on any other receive error
 
     frontend_dist = _frontend_dist_dir()
     if frontend_dist is not None:

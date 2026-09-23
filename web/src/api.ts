@@ -154,6 +154,14 @@ export interface ChangesAvailableMessage {
   level: string
 }
 
+/** The other message `/ws` ever sends (Task 17, `uedcli/serve/app.py` `ws_endpoint`): this
+ * connection's claim token no longer matches the session's current one -- another window took it
+ * over, or the session was deleted. The socket closes right after sending it (code 4003 or 4004),
+ * so a caller must treat this as the live signal, not the close event that follows it. */
+export interface SupersededMessage {
+  type: 'superseded'
+}
+
 /** `GET /api/level/{level}/status` (uedcli/serve/app.py `status`): whether a settled trunk change
  * is waiting on an explicit Load, and whether solved geometry is currently pinned (and if not,
  * why). `build_status` is `'built'` whenever `geometry_pinned`; `'no_build'` if geometry was never
@@ -181,30 +189,67 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     } catch {
       // The error body wasn't JSON -- fall back to the HTTP status text.
     }
-    throw new Error(`${url}: ${message}`)
+    // `status` rides on the thrown Error rather than a dedicated error class, so every existing
+    // `.rejects.toThrow(message)` assertion keeps working unchanged -- `isSupersededError` below is
+    // the one place anything reads it.
+    const err = new Error(`${url}: ${message}`) as Error & { status: number }
+    err.status = res.status
+    throw err
   }
   return (await res.json()) as T
 }
 
-export function fetchScene(level: string): Promise<ScenePayload> {
-  return request<ScenePayload>(`/api/level/${encodeURIComponent(level)}/scene`)
+/** True for a mutating call's 409 (persistent-GUI-editing-sessions plan, Task 17): this session's
+ * claim was taken by another window, or the session was deleted. Every session-scoped mutating
+ * route (`/load`, `/rebuild`, `/stage`, `/discard`, `/save`) 409s this way (uedcli/serve/app.py) --
+ * the fallback path for the same takeover the `/ws` "superseded" push shows, for whenever that
+ * push was lost or hasn't arrived yet. */
+export function isSupersededError(e: unknown): boolean {
+  return typeof e === 'object' && e !== null && (e as { status?: number }).status === 409
 }
 
-export function fetchAtlas(level: string): Promise<AtlasPayload> {
-  return request<AtlasPayload>(`/api/level/${encodeURIComponent(level)}/atlas`)
+// The session's current claim token (Task 17) -- module-level, not threaded through every mutating
+// call's own parameter list: `postStage` alone is called from both Viewport3D.tsx and
+// OrthoViewport.tsx, several props deep under QuadLayout, and re-threading it down through all of
+// that just to reach this one header would touch a pile of files with no other reason to change.
+// App.tsx sets this once, in a `useEffect` keyed on `SessionContext`'s own `claimToken` -- the same
+// "one source of truth pushed into a leaf module" shape `theme/useTheme.ts` and `layout/
+// useSidebar.ts` already use for their own persisted state.
+let currentClaimToken: string | null = null
+
+export function setClaimToken(token: string | null): void {
+  currentClaimToken = token
 }
 
-export function fetchLightmap(level: string): Promise<LightmapPayload> {
-  return request<LightmapPayload>(`/api/level/${encodeURIComponent(level)}/lightmap`)
+/** Merges the current claim token into `init`'s headers, leaving `init` untouched when there is no
+ * token (so a caller with no session yet -- or a test that never calls `setClaimToken` -- gets the
+ * exact same request it always did, no empty `headers: {}` for `toHaveBeenCalledWith` to trip on). */
+function withClaimToken(init: RequestInit): RequestInit {
+  if (!currentClaimToken) return init
+  return { ...init, headers: { ...(init.headers as Record<string, string> | undefined), 'X-Claim-Token': currentClaimToken } }
 }
 
-export function fetchStatus(level: string): Promise<StatusPayload> {
-  return request<StatusPayload>(`/api/level/${encodeURIComponent(level)}/status`)
+export function fetchScene(sessionId: string): Promise<ScenePayload> {
+  return request<ScenePayload>(`/api/session/${encodeURIComponent(sessionId)}/scene`)
 }
 
-/** `GET /api/levels` (quad-layout Part 7, Task 26): every level under the project's maps dir,
- * flagging which one this app currently serves -- mirrors `level list --json`'s `{name, active}`
- * shape (`uedcli/serve/levels.py`). */
+export function fetchAtlas(sessionId: string): Promise<AtlasPayload> {
+  return request<AtlasPayload>(`/api/session/${encodeURIComponent(sessionId)}/atlas`)
+}
+
+export function fetchLightmap(sessionId: string): Promise<LightmapPayload> {
+  return request<LightmapPayload>(`/api/session/${encodeURIComponent(sessionId)}/lightmap`)
+}
+
+export function fetchStatus(sessionId: string): Promise<StatusPayload> {
+  return request<StatusPayload>(`/api/session/${encodeURIComponent(sessionId)}/status`)
+}
+
+/** `GET /api/levels` (quad-layout Part 7, Task 26): every level under the project's maps dir --
+ * mirrors `level list --json`'s `{name, active}` shape (`uedcli/serve/levels.py`). `current` is the
+ * server's own startup/default level (`app.state.default_level`) -- SessionContext's own bootstrap
+ * fallback for "which level does a brand-new session with no `?session=` in the URL start on"
+ * (persistent-GUI-editing-sessions plan, Task 16). */
 export interface LevelsPayload {
   levels: { name: string; active: boolean }[]
   current: string
@@ -214,16 +259,47 @@ export function fetchLevels(): Promise<LevelsPayload> {
   return request<LevelsPayload>('/api/levels')
 }
 
-/** `PUT /api/level` (spec §6): switches which level this SAME running app serves, in-process --
- * no page reload. On success, the caller sets its own `level` state to the new name; the existing
- * `useEffect(..., [level])`s (scene/atlas/lightmap fetch, the changes-available WS subscription)
- * already unsubscribe-old/refetch-fresh on that state change (reload.ts needs no changes). */
-export function switchLevel(name: string): Promise<{ level: string }> {
-  return request('/api/level', {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ level: name }),
-  })
+/** `POST /api/level/{level}/sessions` (persistent-GUI-editing-sessions plan, Task 12): creates a
+ * new session on `level` and mints its first claim token. Replaces the old in-process `PUT
+ * /api/level` level switch entirely -- a session, not a level, is now the unit of navigation
+ * (SessionContext.tsx). */
+export interface SessionRecord {
+  id: string
+  level: string
+  created_at: string
+  claim_token: string
+}
+
+export function createSession(level: string): Promise<SessionRecord> {
+  return request<SessionRecord>(`/api/level/${encodeURIComponent(level)}/sessions`, { method: 'POST' })
+}
+
+/** `GET /api/session/{id}` (Task 12): resolves a session id to its record, minting a FRESH claim
+ * token every call -- this is the "reloading re-resolves the session, superseding whichever window
+ * currently holds it" operation the spec describes, not an idempotent read. 404s (as a thrown
+ * `Error`, via `request`'s own error handling) when the id is unknown or was closed. */
+export interface SessionDetail {
+  id: string
+  level: string
+  created_at: string
+  last_active_at: string
+  claim_token: string
+}
+
+export function fetchSession(sessionId: string): Promise<SessionDetail> {
+  return request<SessionDetail>(`/api/session/${encodeURIComponent(sessionId)}`)
+}
+
+/** One entry of `GET /api/sessions` (Task 12) -- no claim token, since listing mints none. */
+export interface SessionSummary {
+  id: string
+  level: string
+  created_at: string
+  last_active_at: string
+}
+
+export function fetchSessions(): Promise<{ sessions: SessionSummary[] }> {
+  return request('/api/sessions')
 }
 
 /** One `POST /save` (or `/load`) conflict entry: a staged actor move whose baseline trunk location
@@ -243,72 +319,77 @@ export interface SaveResult {
   conflicts: ConflictPayload[]
 }
 
-/** One entry of `GET /api/level/{level}/staged` (uedcli/serve/app.py `staged`). */
+/** One entry of `GET /api/session/{id}/staged` (uedcli/serve/app.py `session_staged`). */
 export interface StagedActorPayload {
   staged_location: [number, number, number]
   baseline_location: [number, number, number]
 }
 
-/** The explicit Load action (gui-explicit-rebuild spec §2): re-reads the trunk and clears the
- * server's `changes_available` flag. Does NOT solve geometry -- see `postRebuild`. `resolutions`
+/** The explicit Load action (gui-explicit-rebuild spec §2): re-reads the trunk and clears this
+ * session's `changes_available` flag. Does NOT solve geometry -- see `postRebuild`. `resolutions`
  * answers a load-conflict entry ("accept-load" is the only verdict this direction supports) --
- * default `{}` matches the backend's own default (uedcli/serve/app.py `load`). */
+ * default `{}` matches the backend's own default (uedcli/serve/app.py `session_load`). Sends the
+ * session's current `X-Claim-Token` (Task 17) -- required for the backend to actually write; a
+ * stale/superseded token 409s "session superseded" (`isSupersededError`). */
 export function postLoad(
-  level: string,
+  sessionId: string,
   resolutions: Record<string, 'accept-load'> = {},
 ): Promise<{ status: string; conflicts: ConflictPayload[] }> {
-  return request(`/api/level/${encodeURIComponent(level)}/load`, {
+  return request(`/api/session/${encodeURIComponent(sessionId)}/load`, withClaimToken({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ resolutions }),
-  })
+  }))
 }
 
 /** The explicit Rebuild action (spec §3): the only thing that ever runs the ~24s CSG+lighting
- * solve. Resolves once the new geometry is pinned server-side. */
-export function postRebuild(level: string): Promise<{ status: string; geom_hash: string | null; light_hash: string | null }> {
-  return request(`/api/level/${encodeURIComponent(level)}/rebuild`, { method: 'POST' })
+ * solve. Session-scoped (`uedcli/serve/app.py session_rebuild`), not the memoryless per-level
+ * route -- only the session-scoped one pins the solved geometry `session_status`/`session_scene`
+ * read back, via `build_pin`. Same claim-token requirement as `postLoad` above. */
+export function postRebuild(sessionId: string): Promise<{ geom_hash: string | null; light_hash: string | null }> {
+  return request(`/api/session/${encodeURIComponent(sessionId)}/rebuild`, withClaimToken({ method: 'POST' }))
 }
 
-/** Stages a batch of actor moves (uedcli/serve/app.py `stage`) -- not written to the trunk until
- * `postSave`. `actors` maps actor name -> new `[x, y, z]` location. Returns the names actually
- * staged. */
-export function postStage(level: string, actors: Record<string, [number, number, number]>): Promise<{ staged: string[] }> {
-  return request(`/api/level/${encodeURIComponent(level)}/stage`, {
+/** Stages a batch of actor moves (uedcli/serve/app.py `session_stage`) -- not written to the trunk
+ * until `postSave`. `actors` maps actor name -> new `[x, y, z]` location. Returns the names
+ * actually staged. Same claim-token requirement as `postLoad` above. */
+export function postStage(sessionId: string, actors: Record<string, [number, number, number]>): Promise<{ staged: string[] }> {
+  return request(`/api/session/${encodeURIComponent(sessionId)}/stage`, withClaimToken({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ actors }),
-  })
+  }))
 }
 
-/** Discards staged moves for this level (uedcli/serve/app.py `discard`) -- no trunk write. With no
- * `actors`, discards EVERY staged move for the level (the original whole-level behavior). With an
- * `actors` subset, discards only those actors' staged moves, leaving every other staged actor's
- * move in place -- lets the Save conflict-resolution UI drop one conflicting actor's stage without
- * losing unrelated staged work (Task 10's extension to Task 3's route). */
-export function postDiscard(level: string, actors?: string[]): Promise<{ status: string }> {
-  return request(`/api/level/${encodeURIComponent(level)}/discard`, {
+/** Discards staged moves for this session (uedcli/serve/app.py `session_discard`) -- no trunk
+ * write. With no `actors`, discards EVERY staged move for the session (the original whole-level
+ * behavior, now per-session). With an `actors` subset, discards only those actors' staged moves,
+ * leaving every other staged actor's move in place -- lets the Save conflict-resolution UI drop one
+ * conflicting actor's stage without losing unrelated staged work (Task 10's extension to Task 3's
+ * route). Same claim-token requirement as `postLoad` above. */
+export function postDiscard(sessionId: string, actors?: string[]): Promise<{ status: string }> {
+  return request(`/api/session/${encodeURIComponent(sessionId)}/discard`, withClaimToken({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(actors ? { actors } : {}),
-  })
+  }))
 }
 
-/** Writes staged moves to the trunk (uedcli/serve/app.py `save`). `resolutions` answers a
+/** Writes staged moves to the trunk (uedcli/serve/app.py `session_save`). `resolutions` answers a
  * save-conflict entry (staged vs. trunk) by actor name; default `{}` matches the backend's own
- * default. */
-export function postSave(level: string, resolutions: Record<string, 'staged' | 'trunk'> = {}): Promise<SaveResult> {
-  return request(`/api/level/${encodeURIComponent(level)}/save`, {
+ * default. Same claim-token requirement as `postLoad` above. */
+export function postSave(sessionId: string, resolutions: Record<string, 'staged' | 'trunk'> = {}): Promise<SaveResult> {
+  return request(`/api/session/${encodeURIComponent(sessionId)}/save`, withClaimToken({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ resolutions }),
-  })
+  }))
 }
 
-/** The current staging state (uedcli/serve/app.py `staged`) -- maps actor name -> its staged and
- * pre-stage baseline locations. */
-export function fetchStaged(level: string): Promise<Record<string, StagedActorPayload>> {
-  return request(`/api/level/${encodeURIComponent(level)}/staged`)
+/** The current staging state (uedcli/serve/app.py `session_staged`) -- maps actor name -> its
+ * staged and pre-stage baseline locations. An ungated read, no claim token needed. */
+export function fetchStaged(sessionId: string): Promise<Record<string, StagedActorPayload>> {
+  return request(`/api/session/${encodeURIComponent(sessionId)}/staged`)
 }
 
 export interface LevelState {
@@ -319,21 +400,31 @@ export interface LevelState {
 
 /** Fetches scene+atlas+lightmap together -- the one shape every full-refresh call site (initial
  * open, post-Load, post-Rebuild) needs. */
-export async function fetchLevelState(level: string): Promise<LevelState> {
-  const [scene, atlas, lightmap] = await Promise.all([fetchScene(level), fetchAtlas(level), fetchLightmap(level)])
+export async function fetchLevelState(sessionId: string): Promise<LevelState> {
+  const [scene, atlas, lightmap] = await Promise.all([fetchScene(sessionId), fetchAtlas(sessionId), fetchLightmap(sessionId)])
   return { scene, atlas, lightmap }
 }
 
-/** Opens the live "changes available" WebSocket and calls `onChanged` for every settled trunk
- * change push (uedcli/serve/watch.py's debounced TrunkWatcher). Returns the socket so the caller
- * can close it on unmount. This is a banner signal ONLY -- the caller decides what, if anything,
- * to refetch (gui-explicit-rebuild spec §2: no silent auto-reload). */
-export function openChangesAvailableSocket(onChanged: (msg: ChangesAvailableMessage) => void): WebSocket {
+/** Opens the live "changes available" WebSocket for one session, presenting its current claim
+ * token on the URL (Task 17 -- `uedcli/serve/app.py ws_endpoint` requires `?session=<id>&claim=
+ * <token>`, no back-compat no-params mode). Calls `onChanged` for every settled trunk change push
+ * (uedcli/serve/watch.py's debounced TrunkWatcher) -- a banner signal ONLY, the caller decides
+ * what, if anything, to refetch (gui-explicit-rebuild spec §2: no silent auto-reload) -- and
+ * `onSuperseded` for the one other message this socket ever sends. Returns the socket so the
+ * caller (`reload.ts`) can close it on unmount, or notice an ordinary close and reconnect. */
+export function openChangesAvailableSocket(
+  sessionId: string,
+  claimToken: string,
+  onChanged: (msg: ChangesAvailableMessage) => void,
+  onSuperseded: () => void,
+): WebSocket {
   const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
-  const ws = new WebSocket(`${proto}://${window.location.host}/ws`)
+  const url = `${proto}://${window.location.host}/ws?session=${encodeURIComponent(sessionId)}&claim=${encodeURIComponent(claimToken)}`
+  const ws = new WebSocket(url)
   ws.addEventListener('message', (event: MessageEvent<string>) => {
-    const msg = JSON.parse(event.data) as ChangesAvailableMessage
+    const msg = JSON.parse(event.data) as ChangesAvailableMessage | SupersededMessage
     if (msg.type === 'changes_available') onChanged(msg)
+    else if (msg.type === 'superseded') onSuperseded()
   })
   return ws
 }

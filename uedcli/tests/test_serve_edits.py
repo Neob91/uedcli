@@ -15,8 +15,14 @@ from uedcli import config, trunk
 from uedcli.cli.errors import CommandError
 from uedcli.cli.level_sources import TrunkLevelSource
 from uedcli.model import Level
-from uedcli.serve.edits import check_load_conflicts, discard_staged, save_staged, stage_locations
-from uedcli.serve.snapshots import StagingStore
+from uedcli.serve.edits import (
+    apply_staged_overlay,
+    check_load_conflicts,
+    discard_staged,
+    save_staged,
+    stage_locations,
+)
+from uedcli.serve.snapshots import StagedActor, StagingStore
 from uedcli.tests.conftest import cube_room, set_prop
 
 
@@ -50,7 +56,7 @@ def level_name(_project_and_level):
 
 @pytest.fixture
 def store(tmp_path):
-    return StagingStore(tmp_path / "snapshots")
+    return StagingStore(tmp_path / "sessions", tmp_path / "staging" / "blobs")
 
 
 def _trunk_dir(project, level_name) -> Path:
@@ -69,6 +75,48 @@ def _external_edit(project, level_name, mutate) -> None:
     level = src.load()
     mutate(level)
     src.save(verb="test-external-edit", args={}, level=level, touched=list(level.actors))
+
+
+def _make_level_with_actor(name: str, *, location: tuple[Decimal, Decimal, Decimal]) -> Level:
+    """A minimal in-memory `Level` holding one actor at `location` -- `apply_staged_overlay` needs
+    no real trunk on disk (it never reads/writes one), just a `Level`/`Actor` shape."""
+    actor = cube_room(name)
+    actor.location = location
+    return Level(actors={name: actor}, order=[name])
+
+
+def test_apply_staged_overlay_does_not_mutate_the_original_level() -> None:
+    level = _make_level_with_actor("Light12", location=(Decimal(0), Decimal(0), Decimal(0)))
+    staged = {"Light12": StagedActor(
+        baseline_location=(Decimal(0), Decimal(0), Decimal(0)),
+        staged_location=(Decimal(0), Decimal(0), Decimal(99)), blob_hash="x")}
+
+    overlaid = apply_staged_overlay(level, staged)
+
+    assert level.actors["Light12"].location == (Decimal(0), Decimal(0), Decimal(0))
+    assert overlaid.actors["Light12"].location == (Decimal(0), Decimal(0), Decimal(99))
+
+
+def test_apply_staged_overlay_leaves_unstaged_actors_untouched() -> None:
+    level = _make_level_with_actor("Brush1", location=(Decimal(5), Decimal(5), Decimal(5)))
+
+    overlaid = apply_staged_overlay(level, {})
+
+    assert overlaid.actors["Brush1"].location == (Decimal(5), Decimal(5), Decimal(5))
+
+
+def test_apply_staged_overlay_skips_a_staged_actor_no_longer_in_the_level() -> None:
+    """A staged actor deleted from the trunk externally (not present in `level.actors` at all) --
+    silently skipped, mirroring `check_load_conflicts`'s analogous case (Rebuild has nothing to
+    write, so raising here would only block a solve that doesn't even touch that actor)."""
+    level = _make_level_with_actor("Brush1", location=(Decimal(0), Decimal(0), Decimal(0)))
+    staged = {"Deleted": StagedActor(
+        baseline_location=(Decimal(0), Decimal(0), Decimal(0)),
+        staged_location=(Decimal(0), Decimal(0), Decimal(1)), blob_hash="x")}
+
+    overlaid = apply_staged_overlay(level, staged)
+
+    assert set(overlaid.actors) == {"Brush1"}
 
 
 def test_save_no_conflict_preserves_other_property(project, level_name, store) -> None:

@@ -9,6 +9,12 @@ asking it. If a rule of theirs points one way and you judge otherwise, that is a
 widget, not a deviation recorded in a commit message and moved past. The board is for a real finding
 that is out of scope for the current change. *(Owner ruling, 2026-07-26.)*
 
+### Speccing: finer details go through the owner too
+
+Not just top-level design forks. While turning an approved design into an exact spec — config key
+names, on-disk layouts, field names, API shapes — surface these as questions too, rather than
+silently deciding them or deferring them to the plan phase. *(Owner ruling, 2026-09-21.)*
+
 ### A decision is implemented as given, never altered without an explicit yes
 
 Wherever the decision was made — a spec, chat, a one-line answer:

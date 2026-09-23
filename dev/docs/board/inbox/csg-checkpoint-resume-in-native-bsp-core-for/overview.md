@@ -20,3 +20,15 @@ biggest for iterative append-and-preview loops, no help for editing early/founda
 
 Scoped as a BSP-core change (`uedcli-native/src/bspcsg.rs`), not touched by the geometry/lighting
 split cache landing separately. Not spec'd or spiked — nice-to-have, not committed to.
+
+## Added motivation: GUI sessions (2026-09-21)
+
+The in-progress persistent-GUI-sessions design (per-session staged builds, `persistent-gui-editing-
+sessions`) makes this matter more: each session's Rebuild pays the full CSG cost (~24s CPU on a
+mid-size level, `preview_cache.py`'s own docstring) independently whenever its staged actor set
+isn't byte-identical to another cached build. The common GUI editing workflow — iteratively adding
+new brushes while building out a level — lands exactly in this item's "biggest payoff" case: a newly
+added actor gets `append_rank` (`t3dtree.py:244`, "a new order_value ordering AFTER every current
+actor") by default, i.e. it sorts to the END of `level.order`, the CSG-tail position this item
+already identifies as where checkpoint/resume helps most. Still not spec'd/spiked/committed — noted
+here so the connection isn't lost when this gets picked up.
