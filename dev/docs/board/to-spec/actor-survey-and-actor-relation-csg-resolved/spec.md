@@ -132,8 +132,8 @@ The annotation, where present, is parenthesised and glued to the relation word �
 only a bounding-box area *estimate* (no clean coplanar face match) prints bare names with the
 estimate still shown, no `:idx`. **No `csg`-tier line ever carries a `:idx`** (that was cut
 entirely; see that tier's section for why), and every raw `contains`/`carves` line prints bare
-names with no annotation. The one `csg`-tier annotation is the penetration depth on a `crosses`
-line whose source is a collision extent — `crosses(8.2uu)`, see that relation's section.
+names with no annotation. The one `csg`-tier annotation is the penetration depth every `crosses`
+line carries, any source kind — `crosses(8.2uu)`, see that relation's section.
 Facts print to stdout; a one-line count summary prints to stderr. No `--json` on `survey` itself —
 YAGNI, no consumption need shown yet (note: `brush relation find` already has `--json` for its own
 reason — piping into `set`/`compare` — that precedent doesn't transfer to `survey`, whose output is
@@ -259,7 +259,7 @@ drops the worst by-design overlap from 436 uu to 64 uu.
   | Subtract | no | yes | no solid of its own; but it authors real carved faces |
   | **Nonsolid** | **no** | **no** | `PF_NotSolid` sets `NF_NotCsg`, so its nodes bound no solid at all and the engine walks straight through — passing through one is designed behaviour, not an intrusion |
   | **Intersect / Deintersect** | **no** | **no** | contributes nothing whatever: no face, no solid, no node (see the warning below) |
-  | Mover | not yet ruled | no | excluded from world CSG entirely, so nothing can cross *into* it; whether its own private model may cross out is open — see "Open items" |
+  | Mover | **yes** | no | excluded from world CSG entirely, so nothing can cross *into* it — but it carries a real private `UModel` of genuine solid matter, and that matter is treated exactly like an Add's: no special case, no depth-only carve-out, no keyframe-sweep complexity. Owner ruling: "treat just like an additive in that respect." A door sitting in its frame at rest genuinely reports `crosses` under this rule, same as any other solid actor whose extent overlaps another's face — that is a true fact about its base pose, not an error to suppress. |
 
   **Scope of the gate, stated explicitly since an earlier draft left it ambiguous and a review
   caught the ambiguous reading exiting the entire command**: this restriction gates only whether
@@ -269,11 +269,7 @@ drops the worst by-design overlap from 436 uu to 64 uu.
   actor's `crosses` line where the table above allows — only the "does *this* actor's own matter
   cross into something" computation is skipped for it, silently, the same way a non-colliding point
   actor's `crosses`-as-source is already skipped (not an error; a level full of Semisolids — 29% of
-  shipped brush actors — is the normal case, not an exceptional one). `Mover` in particular needs
-  this stated plainly: the worked example below shows `DeusExMover9` fully and normally, including
-  as the `dst` of `Brush118`'s `contains` line — only a hypothetical
-  `DeusExMover9`-as-`crosses`-source fact would be the omitted one, and no such fact appears in
-  this design's examples.
+  shipped brush actors — is the normal case, not an exceptional one).
 
   Fires when the source's own contributed solid (or collision extent) extends past a resolved,
   surviving face belonging to `X`, into space the source does not itself claim. **No `:idx` at
@@ -289,18 +285,21 @@ drops the worst by-design overlap from 436 uu to 64 uu.
   see below). `crosses` is reserved for exactly the case neither of those covers: a solid actor's
   own matter genuinely extending somewhere it shouldn't.
 
-  **The collision-extent arm fires on real, correctly-placed content, and that is accepted.**
-  Measured over every collidable actor in shipped Deus Ex levels: under the `bBlockActors` gate
-  above, 1188 of 1338 (89%) clear resolved solid entirely; the remaining 11% really are inside it,
-  by ~6 uu at the median and 11 uu at p90 — flush-mounted `CageLight`, `Keypad1`, `Toilet`,
-  `VendingMachine`, `ClothesRack`. **No tolerance can separate those from a mistake**: not one of
-  1936 actors penetrates by less than 0.01 uu, the smallest real penetration anywhere is 0.043 uu,
-  and the distribution from there is continuous — there is no float-noise band to absorb and no gap
-  to cut at. So the fact is reported and made *readable* instead: a `crosses` line whose source is a
-  collision extent carries the measured penetration depth in the existing annotation grammar,
-  `crosses(8.2uu)`, so 8 uu of flush mounting reads differently from 60 uu of misplacement. This is
-  the one annotation the `csg` tier carries; every other `csg` line stays bare.
-  `dev/docs/spikes/2026-09-23-actor-survey-csg-kind-and-cost/`.
+  **`crosses` fires on real, correctly-placed content, and that is accepted.** Measured over every
+  collidable actor in shipped Deus Ex levels: under the `bBlockActors` gate above, 1188 of 1338
+  (89%) clear resolved solid entirely; the remaining 11% really are inside it, by ~6 uu at the
+  median and 11 uu at p90 — flush-mounted `CageLight`, `Keypad1`, `Toilet`, `VendingMachine`,
+  `ClothesRack`. **No tolerance can separate those from a mistake**: not one of 1936 actors
+  penetrates by less than 0.01 uu, the smallest real penetration anywhere is 0.043 uu, and the
+  distribution from there is continuous — there is no float-noise band to absorb and no gap to cut
+  at. So the fact is reported and made *readable* instead: **every `crosses` line carries the
+  measured penetration depth**, `crosses(8.2uu)`, so 8 uu of flush mounting reads differently from
+  60 uu of misplacement — one shape for the relation regardless of source kind, not a collision-only
+  special case. For a brush source the depth is the intruding geometry's own maximum perpendicular
+  distance past the crossed face's plane, within the overlap region — the same "how far past the
+  plane" computation the collision-extent case already needed, just measured against brush geometry
+  instead of a box. This is the one annotation the `csg` tier carries; every other `csg` relation
+  stays bare. `dev/docs/spikes/2026-09-23-actor-survey-csg-kind-and-cost/`.
 
   **Warning for a surveyed Intersect/Deintersect brush.** `survey` prints its full output and exits
   0, plus one stderr line naming the actor and its `CsgOper`: a placed `CSG_Intersect`/
@@ -618,18 +617,18 @@ Kept for context so this is not re-litigated without cause:
 
 ## Open items (not yet resolved — do not proceed to `to-plan/` until closed)
 
-- **CSG-kind coverage — RESOLVED except for one ruling.** Every kind is measured and folded in
-  above (`crosses`'s own table, `carves`'s Semisolid/Nonsolid paragraph, the Intersect/Deintersect
-  warning); `Intersect`/`Deintersect` can never be the container side of `contains` either, since
-  they contribute nothing to the world at all. **What remains open is Mover only**: whether a
-  Mover's own private model may make it a `crosses` SOURCE. The factual half is settled — a Mover
-  is excluded from world CSG entirely, so nothing can cross *into* it and nothing can carve it —
-  but the design call is the owner's. Parked as `questions/mover-as-a-crosses-source.md`.
-- **Two collision-gate changes awaiting the owner's confirmation**, both introduced by the
-  tolerance spike from measurement rather than asked for: the `crosses` source gate tightening to
-  `bCollideActors && bBlockActors`, and the `crosses(<depth>uu)` annotation. Both are written into
-  the body above and both revert in one edit. Parked as
-  `questions/collision-source-gate-and-depth-annotation.md`.
+- **CSG-kind coverage — RESOLVED.** Every kind is measured and folded in above (`crosses`'s own
+  table, `carves`'s Semisolid/Nonsolid paragraph, the Intersect/Deintersect warning);
+  `Intersect`/`Deintersect` can never be the container side of `contains` either, since they
+  contribute nothing to the world at all. Mover was the one ruling left open (whether its private
+  model may make it a `crosses` source) — owner ruling: treat it exactly like an Add, no special
+  case (folded into `crosses`'s table above).
+- **Collision-gate changes — CONFIRMED.** Both changes the tolerance spike introduced from
+  measurement — the `crosses` source gate tightening to `bCollideActors && bBlockActors`, and the
+  `crosses(<depth>uu)` annotation — are kept. The depth annotation is further extended, per owner
+  ruling, to every `crosses` line regardless of source kind (brush or collision extent), not just
+  the collision-extent case that motivated it — one shape for the relation, not a source-dependent
+  special case.
 - **`csg`-tier `:idx` (which specific poly a `crosses`/`touches` fact concerns)**: cut from this
   spec entirely (see the `csg`-tier `:idx` section) after two straight review rounds found the
   asserted attribution mechanism factually wrong against the real native code. A real fix needs the
@@ -822,3 +821,15 @@ Kept for context so this is not re-litigated without cause:
   9 sub-percent boundary shifts; 2 exact-coplanar ties). It also found a real trap: truncation
   can change which brush is first, firing `bsp_brush_csg`'s leading-Add world-shell shortcut on the
   wrong brush, so the level's own first world-CSG brush is always included.
+- **Round 8** (owner ruling on the two questions Round 7 filed): **Mover is a valid `crosses`
+  source, no special case** — "treat just like an additive in that respect." A door overlapping its
+  frame at rest genuinely reports `crosses`; that is a true fact about its base pose, not an error
+  to suppress. Both collision-gate changes from Round 7 (the `bBlockActors` source-gate tightening,
+  the `crosses(<depth>uu)` annotation) are **confirmed, kept**. Further ruling from the same
+  exchange: **the depth annotation now applies to every `crosses` line, any source kind** — brush
+  intrusions included, not just collision extents — one shape for the relation rather than a
+  source-dependent special case; for a brush source, depth is the intruding geometry's own maximum
+  perpendicular distance past the crossed face's plane, the same "how far past the plane"
+  computation the collision-extent case already needed. Both board questions answered and deleted
+  per this project's convention (deleting, not just answering, unblocks the item); CSG-kind
+  coverage and the collision-gate item in "Open items" marked resolved.
