@@ -1491,6 +1491,53 @@ def test_save_with_no_prior_rebuild_leaves_the_level_pin_untouched(tmp_path, mon
     assert build_pin.load_level_pointer(project, "unatco") == ("existing-geom", "existing-light")
 
 
+def test_create_session_inherits_the_levels_pin(tmp_path):
+    """Bug found post-merge: Save promotes a session's own build pin to the level
+    (`build_pin.write_level_pointer`), but nothing ever read that level pin back into a NEW
+    session -- so "Rebuild, Save, then open a new session on the same level" always showed the new
+    session as un-built, even though a resolvable build already existed. `create_session_route`
+    now seeds a fresh session's own pin from the level's current one at creation time, mirroring
+    the `last_seen_generation` inheritance fix above. No real Rebuild/UED22 needed here: the level
+    pin is written directly, the same way `test_save_with_no_prior_rebuild_leaves_the_level_pin_
+    untouched` sets up a pre-existing pin."""
+    from uedcli.serve import build_pin, sessions
+
+    root = tmp_path / "proj"
+    _write_pin_fixture(root)
+    project = SimpleNamespace(root=str(root), maps=None)
+    build_pin.write_level_pointer(project, "unatco", "existing-geom", "existing-light")
+    app = create_app(project, "unatco")
+    c = TestClient(app)
+
+    r = c.post("/api/level/unatco/sessions")
+
+    assert r.status_code == 201
+    new_id = r.json()["id"]
+    assert build_pin.load_session_pointer(app.state.sessions_root, new_id) == \
+        ("existing-geom", "existing-light")
+
+
+def test_create_session_with_no_level_pin_stays_unbuilt(tmp_path):
+    """The other half of the same rule: a level with no saved pin yet (never rebuilt-and-saved by
+    anyone) leaves a new session with no pin of its own -- `load_session_pointer` raising
+    `SessionPointerCorruptError` is the normal "never built" case, not corruption, matching every
+    other un-rebuilt-session test in this file."""
+    from uedcli.serve import build_pin, sessions
+
+    root = tmp_path / "proj"
+    _write_pin_fixture(root)
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "unatco")
+    c = TestClient(app)
+
+    r = c.post("/api/level/unatco/sessions")
+
+    assert r.status_code == 201
+    new_id = r.json()["id"]
+    with pytest.raises(build_pin.SessionPointerCorruptError):
+        build_pin.load_session_pointer(app.state.sessions_root, new_id)
+
+
 def test_save_returns_409_on_a_stale_claim_token_and_never_performs_its_write(tmp_path):
     """Mirrors `test_rebuild_superseded_mid_solve_drops_the_result_without_error`'s shape for the
     highest-stakes of the four newly-gated writes: a stale `X-Claim-Token` on `save` returns 409

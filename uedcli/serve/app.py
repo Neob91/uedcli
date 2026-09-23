@@ -886,6 +886,20 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         ctx = _get_or_create_level_context(level_name)
         rec = sessions.create_session(_sessions_root, level_name,
                                       last_seen_generation=ctx.generation[0])
+        # Bug found post-merge: a Save promotes a session's own build pin to the level (`build_pin.
+        # write_level_pointer`, see the Save route), but no session-facing route ever read that
+        # level pin back -- so "Rebuild, Save, then open a new session on the same level" always
+        # showed the new session as un-built, even though a resolvable build already existed. Seed
+        # the new session's own pin from the level's current one, same "inherit like everything
+        # else" pattern as `last_seen_generation` above: a plain copy of whatever `load_level_
+        # pointer` returns right now, race-safe by the same monotonic-improvement argument -- a
+        # concurrent Save promoting a newer pin during this creation means at worst the new session
+        # inherits an older (or no) pin, never a wrong one, and never worse than today's universal
+        # "always nothing."
+        level_pin = build_pin.load_level_pointer(project, level_name)
+        if level_pin is not None:
+            geom_hash, light_hash = level_pin
+            build_pin.write_session_pointer(_sessions_root, rec.id, geom_hash, light_hash)
         token = _claims.mint(rec.id)
         return {"id": rec.id, "level": rec.level, "created_at": rec.created_at,
                 "claim_token": token}
