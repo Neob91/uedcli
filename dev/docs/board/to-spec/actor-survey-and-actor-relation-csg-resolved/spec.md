@@ -131,7 +131,7 @@ The annotation, where present, is parenthesised and glued to the relation word �
 **only** on **raw** `touches` lines that found a real matched face pair; a raw `touches` line with
 only a bounding-box area *estimate* (no clean coplanar face match) prints bare names with the
 estimate still shown, no `:idx`. Every `csg`-tier line — `crosses`/`touches` included — and every
-raw `contains`/`carved_by` line prints bare names, no `:idx`, no annotation (the `csg` tier's own
+raw `contains`/`carves` line prints bare names, no `:idx`, no annotation (the `csg` tier's own
 `:idx` was cut entirely; see that tier's section for why).
 Facts print to stdout; a one-line count summary prints to stderr. No `--json` on `survey` itself —
 YAGNI, no consumption need shown yet (note: `brush relation find` already has `--json` for its own
@@ -144,12 +144,12 @@ a report, not a selector list to feed onward).
 |---|---|
 | raw `touches` | symmetric — the surveyed actor leads (see below) |
 | raw `contains` | the container leads — several containers can each emit their own line for the same contained actor (raw has no competition rule) |
-| raw `carved_by` | the Add (victim) leads, whichever side is surveyed — matches `level graph` exactly |
+| raw `carves` | the Subtract (agent) leads, whichever side is surveyed — **same word, same direction as csg `carves`** (below); does not match `level graph`'s own shipped `carved_by` (victim-leads) — deliberate, see below |
 | csg `touches` | symmetric — the surveyed actor leads |
 | csg `connects` | symmetric — the surveyed actor leads |
 | csg `crosses` | the intruding solid actor leads |
 | csg `contains` | the container leads — single-owner only, no multi-container case exists at this tier |
-| csg `carves` | the Subtract (agent) leads, whichever side is surveyed — **deliberately inverted from `level graph`'s `carved_by`**, see below |
+| csg `carves` | the Subtract (agent) leads, whichever side is surveyed |
 
 *Symmetric relations* (`touches` at both tiers, `connects`): `level graph` itself has no
 subject-actor convention for these (it enumerates every pair via trunk order,
@@ -163,26 +163,33 @@ to `(src, dst)` positionally, so swapping which actor leads must swap `matched_p
 too — a naive rename-only flip renders a real face selector against the wrong brush.
 
 *Fixed-direction relations* — the same actor leads regardless of which side of the pair you survey.
-`carves` is a deliberate deviation from `level graph`, not a claim of matching it: `level graph`'s
-`carved_by` puts the victim first specifically so `contains`/`carved_by` share one direction rule
-(Subtract leads only when it legitimately contains; leads *from* the victim otherwise). `actor
-survey`'s `carves` instead always leads with the agent, matching `contains`'s container-leads
-convention rather than `carved_by`'s victim-leads one — the owner's explicit choice (see this item's
-design history), traded for a simpler single mental model ("the actor that acted leads") over exact
-`level graph` parity. Anyone reading raw `carved_by` and csg `carves` for the same underlying pair
-in the same `survey` output sees them with `src`/`dst` swapped — confirmed intentional, not an
-oversight, and worth calling out once in the user-facing docs so it isn't mistaken for a bug.
+**One name, one direction, at both tiers**: `carves` is the only word for this relation anywhere in
+`actor survey`'s output — raw and csg alike, agent (the Subtract) always leading, matching
+`contains`'s container-leads convention. This is an owner ruling, made explicitly for consistency
+("KEEP ONE NAME FOR EACH INTERACTION, and flip the sides to match if needed") rather than have raw
+and csg use two different words with two different direction rules for what a reader would
+otherwise reasonably assume is one relation.
+
+This is a deliberate, scoped divergence from `level graph`'s own shipped output, which still uses
+`carved_by` with the victim leading (`uedcli/actorgraph.py::classify_pair`) — `actor survey`'s scope
+is this new verb only, on the owner's explicit instruction ("focus on getting `actor survey` clean,
+ignore what `level graph` does, we'll want to revisit that"). Bringing `level graph` itself onto
+`carves` is a separate, filed follow-up: board item
+`level-graph-align-carved-by-vocabulary-with`. Until that lands, `level graph` and `actor survey`
+will print different words and different leading sides for the same underlying pair — worth one
+line in the user-facing docs so it reads as a known, temporary divergence, not a bug.
 
 ### `raw` tier — cheap SAT geometry, auto-discovered, pre-CSG
 
-Reuses `level graph`'s existing shipped vocabulary and computation exactly (`uedcli/actorgraph.py`)
-— no new machinery, just auto-scoped to one actor's neighborhood instead of the whole level, with
-no explicit reference face required (unlike `actor relation compare`/`find`). **Real vocabulary,
-verified against `classify_pair`: `touches`, `contains`, `carved_by`.** (An earlier draft of this
-spec invented a fourth word, `overlaps`, for a touch-vs-interpenetration distinction — `level
-graph`'s own `cells_touch_or_overlap` collapses that distinction into one boolean and never
-reports it separately; there is no `overlaps` relation, and adding one is new geometry work, not
-reuse. Dropped.)
+Reuses `level graph`'s existing shipped **computation** exactly (`uedcli/actorgraph.py`) — no new
+machinery, just auto-scoped to one actor's neighborhood instead of the whole level, with no explicit
+reference face required (unlike `actor relation compare`/`find`). **Real computation, verified
+against `classify_pair`: `touches`, `contains`, and a third relation** (`level graph` itself spells
+it `carved_by`; `actor survey` spells it `carves`, see the directionality section above for why the
+two differ on purpose). (An earlier draft of this spec invented a fourth word, `overlaps`, for a
+touch-vs-interpenetration distinction — `level graph`'s own `cells_touch_or_overlap` collapses that
+distinction into one boolean and never reports it separately; there is no `overlaps` relation, and
+adding one is new geometry work, not reuse. Dropped.)
 
 - **`touches <X>`** — both actors Subtract, or both Add-or-Mover-adjacent (i.e. neither is a
   Subtract): brush volumes touch or interpenetrate (SAT, `_TOUCH_EPS` tolerance, does not
@@ -198,14 +205,15 @@ reuse. Dropped.)
   heuristic) — every brush whose volume contains the point actor's `Location` reports `contains`,
   regardless of that brush's own CSG kind (Add, Subtract, Semisolid, alike; there is no Mover
   exclusion here, since a Mover is itself a brush actor and never appears as a point candidate).
-- **`carved_by <X>`** — brush-to-brush, exactly one is a Subtract, the other is not a Mover, and the
-  Subtract is *later* in trunk order. `X` is the Subtract; the surveyed Add leads (`level graph`'s
-  own convention, unchanged here).
+- **`carves <X>`** — brush-to-brush, exactly one is a Subtract, the other is not a Mover, and the
+  Subtract is *later* in trunk order. `X` is the Add; the Subtract leads (same word, same direction
+  as csg `carves` below — a deliberate deviation from `level graph`'s own `carved_by`, which puts
+  the Add first; see the directionality section above).
 
 All three are order-heuristic or pure-geometry facts computed **before** full CSG resolution — real
 signals, but each can be invalidated by something downstream (a later Subtract carving away the
-touching matter; a "contains"/"carved_by" call made wrong by a brush a third, later operation has
-since hollowed out). That gap is what the `csg` tier closes.
+touching matter; a "contains"/"carves" call made wrong by a brush a third, later operation has since
+hollowed out). That gap is what the `csg` tier closes.
 
 ### `csg` tier — resolved via the native CSG/BSP engine, authoritative
 
@@ -381,8 +389,9 @@ solved here.
   what remains of `X` sits flush against it — that is `touches`). `carves` records the *history*
   matter that used to extend further, before this Subtract reduced it — the one fact neither
   `crosses` nor `touches` expresses. Active voice, the Subtract (agent) leads regardless of which
-  side is surveyed (see the directionality table above for how this differs from `level graph`'s
-  own `carved_by`).
+  side is surveyed — the same word and the same direction rule as raw `carves` above, deliberately
+  (see the directionality section for why both tiers now share one name for this relation, and how
+  that differs from `level graph`'s own `carved_by`).
 
   **Total removal**: an Add entirely consumed by a later Subtract still reports `carves` — "part"
   in the definition above means "at least part," not "strictly not all"; complete removal is the
@@ -403,7 +412,7 @@ Scenario, fixed once and used for both surveys below: `Brush118` is a Subtract r
 an Add wall `Brush118` genuinely carves a niche into (`Brush118` is later in trunk order).
 `Brush113` is an Add wall `Brush118` merely stops flush against — no real removal ever occurred —
 but `Brush118` is *also* later than `Brush113` in trunk order, so the raw order-heuristic cannot
-tell the two apart and calls both `carved_by`; only the `csg` tier can. `Brush944` is a second
+tell the two apart and calls both `carves`; only the `csg` tier can. `Brush944` is a second
 Subtract room, void-connected to `Brush118` through a doorway. `DeusExMover9` is a Mover sitting
 fully inside `Brush118`'s void — `Brush118` is the only Subtract whose authored shape contains its
 full extent, so it wins `contains`'s volume competition uncontested (only one candidate at all).
@@ -413,8 +422,8 @@ spec's own stated `csg`-tier rules — not composed by feel:
 
 ```
 $ uedcli actor survey Brush118
-raw Brush117 [Engine.Brush Add] --carved_by--> Brush118 [Engine.Brush Subtract]
-raw Brush113 [Engine.Brush Add] --carved_by--> Brush118 [Engine.Brush Subtract]
+raw Brush118 [Engine.Brush Subtract] --carves--> Brush117 [Engine.Brush Add]
+raw Brush118 [Engine.Brush Subtract] --carves--> Brush113 [Engine.Brush Add]
 raw Brush118:4 [Engine.Brush Subtract] --touches(640uu^2)--> Brush944:1 [Engine.Brush Subtract]
 raw Brush118 [Engine.Brush Subtract] --contains--> DeusExMover9 [DeusEx.DeusExMover]
 
@@ -429,19 +438,20 @@ stderr: actor survey: 4 raw fact(s), 5 resolved CSG fact(s) for Brush118
 ```
 
 Read together, `Brush117` and `Brush113` show exactly the contrast the whole two-tier design exists
-for: **raw calls both `carved_by`, identically — csg tells them apart.** `Brush117` genuinely lost
+for: **raw calls both `carves`, identically — csg tells them apart.** `Brush117` genuinely lost
 matter (`carves` *and* `touches`, for what remains of it); `Brush113` never did (`touches` only,
-`carves` correctly absent — the raw heuristic's `carved_by` call for that pair was wrong, and `csg`
-is what catches it). `Brush118` itself never shows a `csg crosses` line anywhere — it is a Subtract,
+`carves` correctly absent — the raw heuristic's `carves` call for that pair was wrong, and `csg` is
+what catches it). `Brush118` itself never shows a `csg crosses` line anywhere — it is a Subtract,
 and `crosses` is source-restricted away from it.
 
 `Brush117`'s own survey, same level, same pairs, matching the directionality table exactly — the
-`carved_by`/`carves` lines are identical (fixed direction, victim/agent unaffected by which side is
-surveyed); the `csg touches` line flips to `Brush117` leading (symmetric, surveyed actor leads):
+raw and csg `carves` lines are both identical to `Brush118`'s survey (fixed direction, the Subtract
+leads regardless of which side is surveyed); only the `csg touches` line flips to `Brush117` leading
+(symmetric, surveyed actor leads):
 
 ```
 $ uedcli actor survey Brush117
-raw Brush117 [Engine.Brush Add] --carved_by--> Brush118 [Engine.Brush Subtract]
+raw Brush118 [Engine.Brush Subtract] --carves--> Brush117 [Engine.Brush Add]
 
 csg Brush118 [Engine.Brush Subtract] --carves--> Brush117 [Engine.Brush Add]
 csg Brush117 [Engine.Brush Add] --touches--> Brush118 [Engine.Brush Subtract]
@@ -644,3 +654,13 @@ Kept for context so this is not re-litigated without cause:
   investigation or an owner ruling (CSG-kind coverage, csg-tier `:idx` v2, collision-cylinder
   tolerance, bounded-cost mechanism for both tiers, error paths, and the docs-fallout work itself)
   — that gate is deliberate, not a defect the review process left behind.
+- **Round 6** (owner ruling, post-merge): raw's `carved_by` renamed to `carves`, Subtract (agent)
+  leading regardless of which side is surveyed — the same word and the same direction as csg
+  `carves`, not two words for one relation. Owner instruction: "I want CONSISTENCY. `carves` ONLY,
+  no `carved_by`. KEEP ONE NAME FOR EACH INTERACTION, and flip the sides to match if needed." This
+  is a deliberate, scoped divergence from `level graph`'s own shipped `carved_by` (still
+  victim-leads) — `actor survey`'s own scope stays this verb only, per explicit instruction
+  ("focus on getting `actor survey` clean, ignore what `level graph` does, we'll want to revisit
+  that"). Bringing `level graph` itself onto `carves` is filed separately: board item
+  `level-graph-align-carved-by-vocabulary-with`. Both worked examples and the directionality table
+  updated to match.
