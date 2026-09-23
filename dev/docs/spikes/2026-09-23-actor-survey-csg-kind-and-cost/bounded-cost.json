@@ -1,0 +1,2354 @@
+{
+ "summary": {
+  "levels": 11,
+  "surveys": 110,
+  "surveys_with_any_divergence": 9,
+  "neighbour_fraction_p50": 0.0051,
+  "neighbour_fraction_max": 0.056,
+  "trunc_csg_s_p50": 0.006,
+  "trunc_csg_s_max": 0.046,
+  "raw_scoped_s_max": 5.5182,
+  "max_boundary_shift_uu_over_all_surveys": 0.245292,
+  "raw_scoped_s_p50": 0.0305,
+  "per_level": {
+   "showcase_chizra": {
+    "brushes": 2111,
+    "load_s": 10.16,
+    "full_csg_s": 6.671,
+    "raw_full_s": null
+   },
+   "showcase_bluff": {
+    "brushes": 2048,
+    "load_s": 9.31,
+    "full_csg_s": 10.194,
+    "raw_full_s": null
+   },
+   "showcase_dig": {
+    "brushes": 1771,
+    "load_s": 7.81,
+    "full_csg_s": 4.712,
+    "raw_full_s": null
+   },
+   "oceanlab-lab": {
+    "brushes": 1925,
+    "load_s": 6.69,
+    "full_csg_s": 10.157,
+    "raw_full_s": null
+   },
+   "showcase_sunspire": {
+    "brushes": 782,
+    "load_s": 6.26,
+    "full_csg_s": 3.507,
+    "raw_full_s": null
+   },
+   "wanchaimkt": {
+    "brushes": 1330,
+    "load_s": 5.38,
+    "full_csg_s": 3.47,
+    "raw_full_s": null
+   },
+   "wanchai": {
+    "brushes": 1331,
+    "load_s": 7.94,
+    "full_csg_s": 3.445,
+    "raw_full_s": null
+   },
+   "showcase_ceremony": {
+    "brushes": 1188,
+    "load_s": 5.38,
+    "full_csg_s": 2.647,
+    "raw_full_s": null
+   },
+   "paris-chateau": {
+    "brushes": 1032,
+    "load_s": 4.66,
+    "full_csg_s": 2.467,
+    "raw_full_s": null
+   },
+   "nsfhq04": {
+    "brushes": 1035,
+    "load_s": 4.49,
+    "full_csg_s": 1.284,
+    "raw_full_s": null
+   },
+   "nsfhq04-q": {
+    "brushes": 1035,
+    "load_s": 5.11,
+    "full_csg_s": 1.259,
+    "raw_full_s": null
+   }
+  }
+ },
+ "levels": [
+  {
+   "level": "showcase_chizra",
+   "game": "unreal",
+   "actors": 3940,
+   "brushes": 2111,
+   "load_s": 10.16,
+   "full_csg_s": 6.671,
+   "raw_full_s": null,
+   "samples": [
+    {
+     "actor": "Brush2022",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 2111,
+     "select_s": 0.6237,
+     "trunc_csg_s": 0.0026,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 4,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Mover55",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 2111,
+     "select_s": 0.5729,
+     "trunc_csg_s": 0.0022,
+     "raw_scoped_s": 0.0146,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1744",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 2111,
+     "select_s": 0.6059,
+     "trunc_csg_s": 0.0021,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 3,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush2204",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 2111,
+     "select_s": 0.5976,
+     "trunc_csg_s": 0.0145,
+     "raw_scoped_s": 0.0357,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 11,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1470",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 2111,
+     "select_s": 0.5946,
+     "trunc_csg_s": 0.0031,
+     "raw_scoped_s": 0.0209,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 13,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush2449",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 2111,
+     "select_s": 0.6167,
+     "trunc_csg_s": 0.002,
+     "raw_scoped_s": 0.0311,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 9,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1033",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 2111,
+     "select_s": 0.6281,
+     "trunc_csg_s": 0.002,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 3,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1200",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 2111,
+     "select_s": 0.6306,
+     "trunc_csg_s": 0.0037,
+     "raw_scoped_s": 0.0254,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 16,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush357",
+     "neighbours": 10,
+     "csg_set": 11,
+     "brushes": 2111,
+     "select_s": 0.6351,
+     "trunc_csg_s": 0.004,
+     "raw_scoped_s": 0.0422,
+     "raw_edges": 8,
+     "compare": {
+      "keys": 34,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush380",
+     "neighbours": 17,
+     "csg_set": 18,
+     "brushes": 2111,
+     "select_s": 0.6294,
+     "trunc_csg_s": 0.0101,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 59,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 1,
+      "max_boundary_shift_uu": 0.000118,
+      "worst": [
+       [
+        [
+         "Brush349",
+         3
+        ],
+        65.0157,
+        65.0313,
+        0.015617,
+        0.000118
+       ]
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "level": "showcase_bluff",
+   "game": "unreal",
+   "actors": 3585,
+   "brushes": 2048,
+   "load_s": 9.31,
+   "full_csg_s": 10.194,
+   "raw_full_s": null,
+   "samples": [
+    {
+     "actor": "Brush1966",
+     "neighbours": 7,
+     "csg_set": 7,
+     "brushes": 2048,
+     "select_s": 0.7891,
+     "trunc_csg_s": 0.0328,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 11,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1312",
+     "neighbours": 11,
+     "csg_set": 11,
+     "brushes": 2048,
+     "select_s": 0.8052,
+     "trunc_csg_s": 0.0223,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 11,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1988",
+     "neighbours": 5,
+     "csg_set": 5,
+     "brushes": 2048,
+     "select_s": 0.7406,
+     "trunc_csg_s": 0.0337,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush669",
+     "neighbours": 6,
+     "csg_set": 6,
+     "brushes": 2048,
+     "select_s": 0.7735,
+     "trunc_csg_s": 0.0198,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 3,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush506",
+     "neighbours": 7,
+     "csg_set": 7,
+     "brushes": 2048,
+     "select_s": 0.7446,
+     "trunc_csg_s": 0.0241,
+     "raw_scoped_s": 5.2475,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 17,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1599",
+     "neighbours": 4,
+     "csg_set": 4,
+     "brushes": 2048,
+     "select_s": 0.7433,
+     "trunc_csg_s": 0.0213,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 8,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush2155",
+     "neighbours": 5,
+     "csg_set": 5,
+     "brushes": 2048,
+     "select_s": 0.7421,
+     "trunc_csg_s": 0.0197,
+     "raw_scoped_s": 5.5182,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 11,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush939",
+     "neighbours": 7,
+     "csg_set": 7,
+     "brushes": 2048,
+     "select_s": 0.7336,
+     "trunc_csg_s": 0.0203,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 12,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1919",
+     "neighbours": 5,
+     "csg_set": 5,
+     "brushes": 2048,
+     "select_s": 0.7952,
+     "trunc_csg_s": 0.0209,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1716",
+     "neighbours": 6,
+     "csg_set": 6,
+     "brushes": 2048,
+     "select_s": 0.7425,
+     "trunc_csg_s": 0.0187,
+     "raw_scoped_s": 5.3356,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "showcase_dig",
+   "game": "unreal",
+   "actors": 3152,
+   "brushes": 1771,
+   "load_s": 7.81,
+   "full_csg_s": 4.712,
+   "raw_full_s": null,
+   "samples": [
+    {
+     "actor": "Brush15",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 1771,
+     "select_s": 0.5157,
+     "trunc_csg_s": 0.0017,
+     "raw_scoped_s": 0.0037,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1312",
+     "neighbours": 10,
+     "csg_set": 11,
+     "brushes": 1771,
+     "select_s": 0.5363,
+     "trunc_csg_s": 0.0051,
+     "raw_scoped_s": 0.0502,
+     "raw_edges": 9,
+     "compare": {
+      "keys": 15,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush419",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 1771,
+     "select_s": 0.497,
+     "trunc_csg_s": 0.0032,
+     "raw_scoped_s": 0.0305,
+     "raw_edges": 5,
+     "compare": {
+      "keys": 9,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1523",
+     "neighbours": 8,
+     "csg_set": 8,
+     "brushes": 1771,
+     "select_s": 0.4886,
+     "trunc_csg_s": 0.0038,
+     "raw_scoped_s": 0.0335,
+     "raw_edges": 7,
+     "compare": {
+      "keys": 17,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1657",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 1771,
+     "select_s": 0.5425,
+     "trunc_csg_s": 0.0049,
+     "raw_scoped_s": 0.0248,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 12,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1676",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1771,
+     "select_s": 0.5396,
+     "trunc_csg_s": 0.0068,
+     "raw_scoped_s": 0.0133,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 9,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush992",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 1771,
+     "select_s": 0.5175,
+     "trunc_csg_s": 0.0019,
+     "raw_scoped_s": 0.0134,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 7,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1340",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 1771,
+     "select_s": 0.5336,
+     "trunc_csg_s": 0.0322,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 17,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush887",
+     "neighbours": 11,
+     "csg_set": 12,
+     "brushes": 1771,
+     "select_s": 0.5158,
+     "trunc_csg_s": 0.0059,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 35,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1539",
+     "neighbours": 8,
+     "csg_set": 9,
+     "brushes": 1771,
+     "select_s": 0.523,
+     "trunc_csg_s": 0.0034,
+     "raw_scoped_s": 0.0305,
+     "raw_edges": 7,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "oceanlab-lab",
+   "game": "deusex",
+   "actors": 2745,
+   "brushes": 1925,
+   "load_s": 6.69,
+   "full_csg_s": 10.157,
+   "raw_full_s": null,
+   "samples": [
+    {
+     "actor": "Brush191",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 1925,
+     "select_s": 0.5003,
+     "trunc_csg_s": 0.0272,
+     "raw_scoped_s": 0.0706,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush2278",
+     "neighbours": 9,
+     "csg_set": 10,
+     "brushes": 1925,
+     "select_s": 0.5693,
+     "trunc_csg_s": 0.0316,
+     "raw_scoped_s": 0.0749,
+     "raw_edges": 6,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush664",
+     "neighbours": 9,
+     "csg_set": 10,
+     "brushes": 1925,
+     "select_s": 0.4953,
+     "trunc_csg_s": 0.0325,
+     "raw_scoped_s": 0.0717,
+     "raw_edges": 5,
+     "compare": {
+      "keys": 34,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 2,
+      "max_boundary_shift_uu": 0.000528,
+      "worst": [
+       [
+        [
+         "Brush648",
+         3
+        ],
+        5.5427,
+        5.5346,
+        0.008164,
+        0.000528
+       ],
+       [
+        [
+         "Brush648",
+         6
+        ],
+        5.9918,
+        5.9895,
+        0.00235,
+        0.000124
+       ]
+      ]
+     }
+    },
+    {
+     "actor": "Brush974",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 1925,
+     "select_s": 0.5355,
+     "trunc_csg_s": 0.0317,
+     "raw_scoped_s": 0.0599,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 11,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1395",
+     "neighbours": 7,
+     "csg_set": 8,
+     "brushes": 1925,
+     "select_s": 0.4923,
+     "trunc_csg_s": 0.039,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 20,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1333",
+     "neighbours": 20,
+     "csg_set": 21,
+     "brushes": 1925,
+     "select_s": 0.5183,
+     "trunc_csg_s": 0.0418,
+     "raw_scoped_s": 0.1568,
+     "raw_edges": 15,
+     "compare": {
+      "keys": 61,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 2,
+      "max_boundary_shift_uu": 0.023548,
+      "worst": [
+       [
+        [
+         "Brush1292",
+         1
+        ],
+        64.8999,
+        65.9175,
+        1.017547,
+        0.023548
+       ],
+       [
+        [
+         "Brush1292",
+         2
+        ],
+        71.9956,
+        71.4362,
+        0.564434,
+        0.010855
+       ]
+      ]
+     }
+    },
+    {
+     "actor": "Brush3786",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 1925,
+     "select_s": 0.4894,
+     "trunc_csg_s": 0.0241,
+     "raw_scoped_s": 0.0513,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1429",
+     "neighbours": 10,
+     "csg_set": 11,
+     "brushes": 1925,
+     "select_s": 0.5557,
+     "trunc_csg_s": 0.039,
+     "raw_scoped_s": 0.0668,
+     "raw_edges": 5,
+     "compare": {
+      "keys": 28,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1570",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 1925,
+     "select_s": 0.501,
+     "trunc_csg_s": 0.0025,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 18,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush61",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 1925,
+     "select_s": 0.5574,
+     "trunc_csg_s": 0.0042,
+     "raw_scoped_s": 0.0137,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 9,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "showcase_sunspire",
+   "game": "unreal",
+   "actors": 2391,
+   "brushes": 782,
+   "load_s": 6.26,
+   "full_csg_s": 3.507,
+   "raw_full_s": null,
+   "samples": [
+    {
+     "actor": "Brush2265",
+     "neighbours": 2,
+     "csg_set": 2,
+     "brushes": 782,
+     "select_s": 0.3803,
+     "trunc_csg_s": 0.0245,
+     "raw_scoped_s": 2.3573,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1783",
+     "neighbours": 4,
+     "csg_set": 4,
+     "brushes": 782,
+     "select_s": 0.403,
+     "trunc_csg_s": 0.0375,
+     "raw_scoped_s": 2.5668,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 17,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1571",
+     "neighbours": 8,
+     "csg_set": 8,
+     "brushes": 782,
+     "select_s": 0.3943,
+     "trunc_csg_s": 0.0342,
+     "raw_scoped_s": 2.4449,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1172",
+     "neighbours": 6,
+     "csg_set": 6,
+     "brushes": 782,
+     "select_s": 0.3927,
+     "trunc_csg_s": 0.0315,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 21,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1629",
+     "neighbours": 3,
+     "csg_set": 3,
+     "brushes": 782,
+     "select_s": 0.3916,
+     "trunc_csg_s": 0.0261,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 9,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 3,
+      "max_boundary_shift_uu": 0.000431,
+      "worst": [
+       [
+        [
+         "Brush1509",
+         13
+        ],
+        352.0068,
+        352.118,
+        0.111222,
+        0.000157
+       ],
+       [
+        [
+         "Brush1509",
+         10
+        ],
+        71.5534,
+        71.4901,
+        0.063386,
+        0.000431
+       ],
+       [
+        [
+         "Brush1509",
+         16
+        ],
+        71.5528,
+        71.4913,
+        0.061567,
+        0.000419
+       ]
+      ]
+     }
+    },
+    {
+     "actor": "Brush1355",
+     "neighbours": 6,
+     "csg_set": 6,
+     "brushes": 782,
+     "select_s": 0.4032,
+     "trunc_csg_s": 0.0377,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 26,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush518",
+     "neighbours": 10,
+     "csg_set": 11,
+     "brushes": 782,
+     "select_s": 0.4001,
+     "trunc_csg_s": 0.0291,
+     "raw_scoped_s": 0.0073,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush487",
+     "neighbours": 3,
+     "csg_set": 3,
+     "brushes": 782,
+     "select_s": 0.3793,
+     "trunc_csg_s": 0.0322,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1409",
+     "neighbours": 7,
+     "csg_set": 7,
+     "brushes": 782,
+     "select_s": 0.4064,
+     "trunc_csg_s": 0.0407,
+     "raw_scoped_s": 2.4519,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 20,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1114",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 782,
+     "select_s": 0.4012,
+     "trunc_csg_s": 0.0304,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 4,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "wanchaimkt",
+   "game": "deusex",
+   "actors": 2288,
+   "brushes": 1330,
+   "load_s": 5.38,
+   "full_csg_s": 3.47,
+   "raw_full_s": null,
+   "samples": [
+    {
+     "actor": "Brush585",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 1330,
+     "select_s": 0.4248,
+     "trunc_csg_s": 0.0041,
+     "raw_scoped_s": 0.0193,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush747",
+     "neighbours": 7,
+     "csg_set": 7,
+     "brushes": 1330,
+     "select_s": 0.4192,
+     "trunc_csg_s": 0.0065,
+     "raw_scoped_s": 0.0329,
+     "raw_edges": 6,
+     "compare": {
+      "keys": 16,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush580",
+     "neighbours": 7,
+     "csg_set": 8,
+     "brushes": 1330,
+     "select_s": 0.4236,
+     "trunc_csg_s": 0.0044,
+     "raw_scoped_s": 0.0238,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush852",
+     "neighbours": 8,
+     "csg_set": 8,
+     "brushes": 1330,
+     "select_s": 0.442,
+     "trunc_csg_s": 0.0058,
+     "raw_scoped_s": 0.0354,
+     "raw_edges": 6,
+     "compare": {
+      "keys": 11,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1218",
+     "neighbours": 5,
+     "csg_set": 5,
+     "brushes": 1330,
+     "select_s": 0.4187,
+     "trunc_csg_s": 0.0049,
+     "raw_scoped_s": 0.0124,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 7,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush519",
+     "neighbours": 3,
+     "csg_set": 3,
+     "brushes": 1330,
+     "select_s": 0.4411,
+     "trunc_csg_s": 0.0026,
+     "raw_scoped_s": 0.0157,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush2407",
+     "neighbours": 7,
+     "csg_set": 8,
+     "brushes": 1330,
+     "select_s": 0.4315,
+     "trunc_csg_s": 0.0066,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 13,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 1,
+      "max_boundary_shift_uu": 9e-05,
+      "worst": [
+       [
+        [
+         "Brush2424",
+         0
+        ],
+        8.9443,
+        8.9456,
+        0.001639,
+        9e-05
+       ]
+      ]
+     }
+    },
+    {
+     "actor": "Brush389",
+     "neighbours": 8,
+     "csg_set": 9,
+     "brushes": 1330,
+     "select_s": 0.4242,
+     "trunc_csg_s": 0.0052,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush981",
+     "neighbours": 4,
+     "csg_set": 4,
+     "brushes": 1330,
+     "select_s": 0.3967,
+     "trunc_csg_s": 0.0025,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 5,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush926",
+     "neighbours": 2,
+     "csg_set": 2,
+     "brushes": 1330,
+     "select_s": 0.4294,
+     "trunc_csg_s": 0.0012,
+     "raw_scoped_s": 0.0065,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "wanchai",
+   "game": "deusex",
+   "actors": 2288,
+   "brushes": 1331,
+   "load_s": 7.94,
+   "full_csg_s": 3.445,
+   "raw_full_s": null,
+   "samples": [
+    {
+     "actor": "Brush2441",
+     "neighbours": 9,
+     "csg_set": 10,
+     "brushes": 1331,
+     "select_s": 0.417,
+     "trunc_csg_s": 0.0056,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 8,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush366",
+     "neighbours": 14,
+     "csg_set": 15,
+     "brushes": 1331,
+     "select_s": 0.4196,
+     "trunc_csg_s": 0.0058,
+     "raw_scoped_s": 0.0381,
+     "raw_edges": 5,
+     "compare": {
+      "keys": 28,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush306",
+     "neighbours": 11,
+     "csg_set": 11,
+     "brushes": 1331,
+     "select_s": 0.4072,
+     "trunc_csg_s": 0.0113,
+     "raw_scoped_s": 0.0612,
+     "raw_edges": 10,
+     "compare": {
+      "keys": 30,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "DeusExMover4",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1331,
+     "select_s": 0.4009,
+     "trunc_csg_s": 0.0015,
+     "raw_scoped_s": 0.0149,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 7,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush227",
+     "neighbours": 9,
+     "csg_set": 9,
+     "brushes": 1331,
+     "select_s": 0.4165,
+     "trunc_csg_s": 0.0087,
+     "raw_scoped_s": 0.0519,
+     "raw_edges": 8,
+     "compare": {
+      "keys": 16,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1755",
+     "neighbours": 3,
+     "csg_set": 3,
+     "brushes": 1331,
+     "select_s": 0.394,
+     "trunc_csg_s": 0.0012,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 2,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1200",
+     "neighbours": 8,
+     "csg_set": 8,
+     "brushes": 1331,
+     "select_s": 0.4128,
+     "trunc_csg_s": 0.0133,
+     "raw_scoped_s": 0.0395,
+     "raw_edges": 5,
+     "compare": {
+      "keys": 9,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1817",
+     "neighbours": 10,
+     "csg_set": 11,
+     "brushes": 1331,
+     "select_s": 0.4318,
+     "trunc_csg_s": 0.006,
+     "raw_scoped_s": 0.036,
+     "raw_edges": 6,
+     "compare": {
+      "keys": 21,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 3,
+      "max_boundary_shift_uu": 0.000211,
+      "worst": [
+       [
+        [
+         "Brush2443",
+         0
+        ],
+        96.041,
+        96.0,
+        0.041016,
+        0.000211
+       ],
+       [
+        [
+         "Brush2388",
+         4
+        ],
+        32.0137,
+        32.0,
+        0.013672,
+        0.000207
+       ],
+       [
+        [
+         "Brush2388",
+         0
+        ],
+        8.0034,
+        8.0,
+        0.003418,
+        0.00019
+       ]
+      ]
+     }
+    },
+    {
+     "actor": "Brush1172",
+     "neighbours": 6,
+     "csg_set": 6,
+     "brushes": 1331,
+     "select_s": 0.4202,
+     "trunc_csg_s": 0.006,
+     "raw_scoped_s": 0.0302,
+     "raw_edges": 5,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush531",
+     "neighbours": 10,
+     "csg_set": 10,
+     "brushes": 1331,
+     "select_s": 0.4074,
+     "trunc_csg_s": 0.009,
+     "raw_scoped_s": 0.0539,
+     "raw_edges": 8,
+     "compare": {
+      "keys": 25,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "showcase_ceremony",
+   "game": "unreal",
+   "actors": 2226,
+   "brushes": 1188,
+   "load_s": 5.38,
+   "full_csg_s": 2.647,
+   "raw_full_s": null,
+   "samples": [
+    {
+     "actor": "Brush532",
+     "neighbours": 9,
+     "csg_set": 10,
+     "brushes": 1188,
+     "select_s": 0.4053,
+     "trunc_csg_s": 0.0202,
+     "raw_scoped_s": 0.0442,
+     "raw_edges": 7,
+     "compare": {
+      "keys": 25,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush20",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1188,
+     "select_s": 0.3395,
+     "trunc_csg_s": 0.0136,
+     "raw_scoped_s": 0.0128,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 9,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1267",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 1188,
+     "select_s": 0.3532,
+     "trunc_csg_s": 0.0221,
+     "raw_scoped_s": 0.0363,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 13,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1922",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 1188,
+     "select_s": 0.3633,
+     "trunc_csg_s": 0.0131,
+     "raw_scoped_s": 0.0099,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 8,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush355",
+     "neighbours": 11,
+     "csg_set": 12,
+     "brushes": 1188,
+     "select_s": 0.3536,
+     "trunc_csg_s": 0.0149,
+     "raw_scoped_s": 0.0227,
+     "raw_edges": 8,
+     "compare": {
+      "keys": 38,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush589",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1188,
+     "select_s": 0.3448,
+     "trunc_csg_s": 0.0125,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 3,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1680",
+     "neighbours": 6,
+     "csg_set": 6,
+     "brushes": 1188,
+     "select_s": 0.3909,
+     "trunc_csg_s": 0.0327,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 28,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush500",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 1188,
+     "select_s": 0.3484,
+     "trunc_csg_s": 0.0131,
+     "raw_scoped_s": 0.0255,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 12,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1653",
+     "neighbours": 7,
+     "csg_set": 8,
+     "brushes": 1188,
+     "select_s": 0.346,
+     "trunc_csg_s": 0.0142,
+     "raw_scoped_s": 0.0305,
+     "raw_edges": 6,
+     "compare": {
+      "keys": 17,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush599",
+     "neighbours": 7,
+     "csg_set": 8,
+     "brushes": 1188,
+     "select_s": 0.3596,
+     "trunc_csg_s": 0.0134,
+     "raw_scoped_s": 0.0224,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 13,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "paris-chateau",
+   "game": "deusex",
+   "actors": 2126,
+   "brushes": 1032,
+   "load_s": 4.66,
+   "full_csg_s": 2.467,
+   "raw_full_s": null,
+   "samples": [
+    {
+     "actor": "Brush941",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1032,
+     "select_s": 0.243,
+     "trunc_csg_s": 0.0031,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 5,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush219",
+     "neighbours": 2,
+     "csg_set": 3,
+     "brushes": 1032,
+     "select_s": 0.2663,
+     "trunc_csg_s": 0.0018,
+     "raw_scoped_s": 0.011,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush483",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1032,
+     "select_s": 0.2565,
+     "trunc_csg_s": 0.0028,
+     "raw_scoped_s": 0.0165,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1076",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 1032,
+     "select_s": 0.2496,
+     "trunc_csg_s": 0.0066,
+     "raw_scoped_s": 0.0179,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 1,
+      "max_boundary_shift_uu": 0.245292,
+      "worst": [
+       [
+        [
+         "Brush996",
+         2
+        ],
+        450.0013,
+        226.0006,
+        224.000664,
+        0.245292
+       ]
+      ]
+     }
+    },
+    {
+     "actor": "Brush922",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1032,
+     "select_s": 0.2568,
+     "trunc_csg_s": 0.0053,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 5,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush61",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1032,
+     "select_s": 0.2452,
+     "trunc_csg_s": 0.0027,
+     "raw_scoped_s": 0.0178,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush367",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1032,
+     "select_s": 0.2551,
+     "trunc_csg_s": 0.0038,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 18,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush787",
+     "neighbours": 7,
+     "csg_set": 8,
+     "brushes": 1032,
+     "select_s": 0.2765,
+     "trunc_csg_s": 0.0086,
+     "raw_scoped_s": 0.0429,
+     "raw_edges": 6,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush676",
+     "neighbours": 7,
+     "csg_set": 8,
+     "brushes": 1032,
+     "select_s": 0.2377,
+     "trunc_csg_s": 0.0064,
+     "raw_scoped_s": 0.0315,
+     "raw_edges": 6,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush869",
+     "neighbours": 9,
+     "csg_set": 10,
+     "brushes": 1032,
+     "select_s": 0.2468,
+     "trunc_csg_s": 0.007,
+     "raw_scoped_s": 0.0316,
+     "raw_edges": 5,
+     "compare": {
+      "keys": 13,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "nsfhq04",
+   "game": "deusex",
+   "actors": 1992,
+   "brushes": 1035,
+   "load_s": 4.49,
+   "full_csg_s": 1.284,
+   "raw_full_s": null,
+   "samples": [
+    {
+     "actor": "Brush181",
+     "neighbours": 7,
+     "csg_set": 8,
+     "brushes": 1035,
+     "select_s": 0.2898,
+     "trunc_csg_s": 0.0049,
+     "raw_scoped_s": 0.0457,
+     "raw_edges": 6,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush217",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 1035,
+     "select_s": 0.3034,
+     "trunc_csg_s": 0.0055,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 5,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush414",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1035,
+     "select_s": 0.2902,
+     "trunc_csg_s": 0.0021,
+     "raw_scoped_s": 0.0185,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 12,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush298",
+     "neighbours": 10,
+     "csg_set": 11,
+     "brushes": 1035,
+     "select_s": 0.2891,
+     "trunc_csg_s": 0.0072,
+     "raw_scoped_s": 0.0553,
+     "raw_edges": 8,
+     "compare": {
+      "keys": 21,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 1,
+      "max_boundary_shift_uu": 0.000276,
+      "worst": [
+       [
+        [
+         "Brush78",
+         1
+        ],
+        84.9871,
+        85.001,
+        0.014915,
+        0.000276
+       ]
+      ]
+     }
+    },
+    {
+     "actor": "Brush356",
+     "neighbours": 7,
+     "csg_set": 8,
+     "brushes": 1035,
+     "select_s": 0.2817,
+     "trunc_csg_s": 0.0042,
+     "raw_scoped_s": 0.0383,
+     "raw_edges": 6,
+     "compare": {
+      "keys": 12,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush595",
+     "neighbours": 57,
+     "csg_set": 58,
+     "brushes": 1035,
+     "select_s": 0.3045,
+     "trunc_csg_s": 0.046,
+     "raw_scoped_s": 0.275,
+     "raw_edges": 52,
+     "compare": {
+      "keys": 202,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush392",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 1035,
+     "select_s": 0.2835,
+     "trunc_csg_s": 0.0037,
+     "raw_scoped_s": 0.0237,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1653",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 1035,
+     "select_s": 0.2903,
+     "trunc_csg_s": 0.002,
+     "raw_scoped_s": 0.0116,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "DeusExMover140",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 1035,
+     "select_s": 0.2892,
+     "trunc_csg_s": 0.0027,
+     "raw_scoped_s": 0.0175,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush818",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 1035,
+     "select_s": 0.3032,
+     "trunc_csg_s": 0.0026,
+     "raw_scoped_s": 0.0288,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 16,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 2,
+      "max_boundary_shift_uu": 0.001179,
+      "worst": [
+       [
+        [
+         "Brush816",
+         2
+        ],
+        527.3515,
+        527.672,
+        0.32043,
+        0.001179
+       ],
+       [
+        [
+         "Brush816",
+         4
+        ],
+        1306.0799,
+        1306.2401,
+        0.160217,
+        0.000236
+       ]
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "level": "nsfhq04-q",
+   "game": "deusex",
+   "actors": 1992,
+   "brushes": 1035,
+   "load_s": 5.11,
+   "full_csg_s": 1.259,
+   "raw_full_s": null,
+   "samples": [
+    {
+     "actor": "Brush489",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 1035,
+     "select_s": 0.293,
+     "trunc_csg_s": 0.0041,
+     "raw_scoped_s": 0.0293,
+     "raw_edges": 5,
+     "compare": {
+      "keys": 5,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush778",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 1035,
+     "select_s": 0.303,
+     "trunc_csg_s": 0.0017,
+     "raw_scoped_s": 0.0034,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "DeusExMover31",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 1035,
+     "select_s": 0.2685,
+     "trunc_csg_s": 0.0011,
+     "raw_scoped_s": 0.0127,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 4,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush697",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 1035,
+     "select_s": 0.3072,
+     "trunc_csg_s": 0.0041,
+     "raw_scoped_s": 0.0365,
+     "raw_edges": 5,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1629",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 1035,
+     "select_s": 0.3121,
+     "trunc_csg_s": 0.0034,
+     "raw_scoped_s": 0.0234,
+     "raw_edges": 5,
+     "compare": {
+      "keys": 8,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush8521",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 1035,
+     "select_s": 0.2766,
+     "trunc_csg_s": 0.0038,
+     "raw_scoped_s": 0.0266,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush19",
+     "neighbours": 10,
+     "csg_set": 11,
+     "brushes": 1035,
+     "select_s": 0.2865,
+     "trunc_csg_s": 0.0045,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush442",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1035,
+     "select_s": 0.3061,
+     "trunc_csg_s": 0.0034,
+     "raw_scoped_s": 0.0193,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush26",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 1035,
+     "select_s": 0.2904,
+     "trunc_csg_s": 0.0023,
+     "raw_scoped_s": 0.0164,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush208",
+     "neighbours": 7,
+     "csg_set": 8,
+     "brushes": 1035,
+     "select_s": 0.283,
+     "trunc_csg_s": 0.0057,
+     "raw_scoped_s": 0.024,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 15,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  }
+ ]
+}

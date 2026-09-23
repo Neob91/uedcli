@@ -2,6 +2,7 @@
 priority = "p?"
 kind = "implement"
 summary = "actor survey and actor relation: CSG-resolved spatial facts"
+spikes = ["dev/docs/spikes/2026-09-23-actor-survey-csg-kind-and-cost/"]
 +++
 
 # actor survey and actor relation: CSG-resolved spatial facts

@@ -1,0 +1,725 @@
+{
+ "summary": {
+  "levels": 6,
+  "surveys": 30,
+  "surveys_with_any_divergence": 5,
+  "neighbour_fraction_p50": 0.0476,
+  "neighbour_fraction_max": 1.0,
+  "trunc_csg_s_p50": 0.0023,
+  "trunc_csg_s_max": 0.0208,
+  "raw_scoped_s_max": 0.1583,
+  "max_boundary_shift_uu_over_all_surveys": 0.714286,
+  "raw_scoped_s_p50": 0.013,
+  "per_level": {
+   "dx": {
+    "brushes": 5,
+    "load_s": 0.08,
+    "full_csg_s": 0.07,
+    "raw_full_s": 0.01
+   },
+   "endgame4": {
+    "brushes": 6,
+    "load_s": 0.09,
+    "full_csg_s": 0.007,
+    "raw_full_s": 0.02
+   },
+   "nyc-shipfan": {
+    "brushes": 111,
+    "load_s": 0.99,
+    "full_csg_s": 0.135,
+    "raw_full_s": 2.11
+   },
+   "nyc-underground04": {
+    "brushes": 132,
+    "load_s": 0.85,
+    "full_csg_s": 0.178,
+    "raw_full_s": 1.51
+   },
+   "wanchai-garage": {
+    "brushes": 201,
+    "load_s": 0.83,
+    "full_csg_s": 0.27,
+    "raw_full_s": 2.1
+   },
+   "nyc-bar": {
+    "brushes": 208,
+    "load_s": 1.13,
+    "full_csg_s": 0.174,
+    "raw_full_s": 2.11
+   }
+  }
+ },
+ "levels": [
+  {
+   "level": "dx",
+   "game": "deusex",
+   "actors": 37,
+   "brushes": 5,
+   "load_s": 0.08,
+   "full_csg_s": 0.07,
+   "raw_full_s": 0.01,
+   "samples": [
+    {
+     "actor": "Brush9",
+     "neighbours": 2,
+     "csg_set": 3,
+     "brushes": 5,
+     "select_s": 0.0003,
+     "trunc_csg_s": 0.0018,
+     "raw_scoped_s": 0.0023,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush8",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 5,
+     "select_s": 0.0003,
+     "trunc_csg_s": 0.0016,
+     "raw_scoped_s": 0.005,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush5",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 5,
+     "select_s": 0.0003,
+     "trunc_csg_s": 0.0016,
+     "raw_scoped_s": 0.0044,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 12,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush4",
+     "neighbours": 3,
+     "csg_set": 3,
+     "brushes": 5,
+     "select_s": 0.0004,
+     "trunc_csg_s": 0.0014,
+     "raw_scoped_s": 0.0045,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 12,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush3",
+     "neighbours": 2,
+     "csg_set": 2,
+     "brushes": 5,
+     "select_s": 0.0003,
+     "trunc_csg_s": 0.0009,
+     "raw_scoped_s": 0.0023,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "endgame4",
+   "game": "deusex",
+   "actors": 39,
+   "brushes": 6,
+   "load_s": 0.09,
+   "full_csg_s": 0.007,
+   "raw_full_s": 0.02,
+   "samples": [
+    {
+     "actor": "Brush6",
+     "neighbours": 2,
+     "csg_set": 2,
+     "brushes": 6,
+     "select_s": 0.0014,
+     "trunc_csg_s": 0.001,
+     "raw_scoped_s": 0.0028,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush8",
+     "neighbours": 2,
+     "csg_set": 2,
+     "brushes": 6,
+     "select_s": 0.0011,
+     "trunc_csg_s": 0.0008,
+     "raw_scoped_s": 0.0029,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush22",
+     "neighbours": 2,
+     "csg_set": 2,
+     "brushes": 6,
+     "select_s": 0.0011,
+     "trunc_csg_s": 0.0007,
+     "raw_scoped_s": 0.0029,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush20",
+     "neighbours": 6,
+     "csg_set": 6,
+     "brushes": 6,
+     "select_s": 0.0013,
+     "trunc_csg_s": 0.0029,
+     "raw_scoped_s": 0.0231,
+     "raw_edges": 5,
+     "compare": {
+      "keys": 30,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush5",
+     "neighbours": 2,
+     "csg_set": 2,
+     "brushes": 6,
+     "select_s": 0.0012,
+     "trunc_csg_s": 0.0009,
+     "raw_scoped_s": 0.0031,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "nyc-shipfan",
+   "game": "deusex",
+   "actors": 289,
+   "brushes": 111,
+   "load_s": 0.99,
+   "full_csg_s": 0.135,
+   "raw_full_s": 2.11,
+   "samples": [
+    {
+     "actor": "Brush42",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 111,
+     "select_s": 0.0792,
+     "trunc_csg_s": 0.0035,
+     "raw_scoped_s": 0.1425,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 111,
+     "select_s": 0.0745,
+     "trunc_csg_s": 0.0023,
+     "raw_scoped_s": 0.0123,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 9,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush8666",
+     "neighbours": 2,
+     "csg_set": 3,
+     "brushes": 111,
+     "select_s": 0.0805,
+     "trunc_csg_s": 0.0019,
+     "raw_scoped_s": 0.0017,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush1358",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 111,
+     "select_s": 0.0704,
+     "trunc_csg_s": 0.0047,
+     "raw_scoped_s": 0.0216,
+     "raw_edges": 1,
+     "compare": {
+      "keys": 20,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush49",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 111,
+     "select_s": 0.0743,
+     "trunc_csg_s": 0.0039,
+     "raw_scoped_s": 0.0101,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "nyc-underground04",
+   "game": "deusex",
+   "actors": 333,
+   "brushes": 132,
+   "load_s": 0.85,
+   "full_csg_s": 0.178,
+   "raw_full_s": 1.51,
+   "samples": [
+    {
+     "actor": "Brush225",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 132,
+     "select_s": 0.0775,
+     "trunc_csg_s": 0.0068,
+     "raw_scoped_s": 0.035,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 26,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush83",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 132,
+     "select_s": 0.0678,
+     "trunc_csg_s": 0.0057,
+     "raw_scoped_s": 0.0245,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 12,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 1,
+      "max_boundary_shift_uu": 0.01194,
+      "worst": [
+       [
+        [
+         "Brush188",
+         8
+        ],
+        68.0833,
+        66.4817,
+        1.601823,
+        0.01194
+       ]
+      ]
+     }
+    },
+    {
+     "actor": "Brush188",
+     "neighbours": 17,
+     "csg_set": 18,
+     "brushes": 132,
+     "select_s": 0.0655,
+     "trunc_csg_s": 0.0178,
+     "raw_scoped_s": 0.1583,
+     "raw_edges": 14,
+     "compare": {
+      "keys": 85,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 1,
+      "max_boundary_shift_uu": 6.8e-05,
+      "worst": [
+       [
+        [
+         "Brush82",
+         3
+        ],
+        127.9825,
+        128.0,
+        0.017502,
+        6.8e-05
+       ]
+      ]
+     }
+    },
+    {
+     "actor": "Brush267",
+     "neighbours": 4,
+     "csg_set": 5,
+     "brushes": 132,
+     "select_s": 0.0655,
+     "trunc_csg_s": 0.0065,
+     "raw_scoped_s": 0.0351,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 24,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 1,
+      "max_boundary_shift_uu": 0.004531,
+      "worst": [
+       [
+        [
+         "Brush1833",
+         6
+        ],
+        2421.8041,
+        2418.9171,
+        2.888317,
+        0.004531
+       ]
+      ]
+     }
+    },
+    {
+     "actor": "Brush6",
+     "neighbours": 8,
+     "csg_set": 8,
+     "brushes": 132,
+     "select_s": 0.0652,
+     "trunc_csg_s": 0.0053,
+     "raw_scoped_s": 0.0411,
+     "raw_edges": 6,
+     "compare": {
+      "keys": 24,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 1,
+      "area_mismatch": 1,
+      "max_boundary_shift_uu": 0.714286,
+      "worst": [
+       [
+        [
+         "Brush6",
+         0
+        ],
+        12288.001,
+        11648.001,
+        640.0,
+        0.714286
+       ]
+      ]
+     }
+    }
+   ]
+  },
+  {
+   "level": "wanchai-garage",
+   "game": "deusex",
+   "actors": 351,
+   "brushes": 201,
+   "load_s": 0.83,
+   "full_csg_s": 0.27,
+   "raw_full_s": 2.1,
+   "samples": [
+    {
+     "actor": "Brush147",
+     "neighbours": 8,
+     "csg_set": 8,
+     "brushes": 201,
+     "select_s": 0.0861,
+     "trunc_csg_s": 0.011,
+     "raw_scoped_s": null,
+     "raw_edges": 0,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush594",
+     "neighbours": 6,
+     "csg_set": 6,
+     "brushes": 201,
+     "select_s": 0.0821,
+     "trunc_csg_s": 0.0048,
+     "raw_scoped_s": 0.0259,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 12,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush135",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 201,
+     "select_s": 0.0842,
+     "trunc_csg_s": 0.0018,
+     "raw_scoped_s": 0.0137,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 5,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush79",
+     "neighbours": 9,
+     "csg_set": 10,
+     "brushes": 201,
+     "select_s": 0.0903,
+     "trunc_csg_s": 0.0208,
+     "raw_scoped_s": 0.0428,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 14,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush72",
+     "neighbours": 6,
+     "csg_set": 7,
+     "brushes": 201,
+     "select_s": 0.0816,
+     "trunc_csg_s": 0.0137,
+     "raw_scoped_s": 0.0283,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 10,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  },
+  {
+   "level": "nyc-bar",
+   "game": "deusex",
+   "actors": 487,
+   "brushes": 208,
+   "load_s": 1.13,
+   "full_csg_s": 0.174,
+   "raw_full_s": 2.11,
+   "samples": [
+    {
+     "actor": "DeusExMover12",
+     "neighbours": 3,
+     "csg_set": 4,
+     "brushes": 208,
+     "select_s": 0.0568,
+     "trunc_csg_s": 0.0013,
+     "raw_scoped_s": 0.0121,
+     "raw_edges": 2,
+     "compare": {
+      "keys": 5,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush819",
+     "neighbours": 5,
+     "csg_set": 6,
+     "brushes": 208,
+     "select_s": 0.0589,
+     "trunc_csg_s": 0.0021,
+     "raw_scoped_s": 0.036,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 19,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush621",
+     "neighbours": 12,
+     "csg_set": 13,
+     "brushes": 208,
+     "select_s": 0.0609,
+     "trunc_csg_s": 0.0146,
+     "raw_scoped_s": 0.0398,
+     "raw_edges": 4,
+     "compare": {
+      "keys": 57,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 2,
+      "max_boundary_shift_uu": 0.000122,
+      "worst": [
+       [
+        [
+         "Brush639",
+         2
+        ],
+        3.9988,
+        4.0,
+        0.001221,
+        0.000122
+       ],
+       [
+        [
+         "Brush639",
+         7
+        ],
+        2.8293,
+        2.8284,
+        0.000863,
+        0.000113
+       ]
+      ]
+     }
+    },
+    {
+     "actor": "Brush80",
+     "neighbours": 4,
+     "csg_set": 4,
+     "brushes": 208,
+     "select_s": 0.0455,
+     "trunc_csg_s": 0.0024,
+     "raw_scoped_s": 0.013,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 12,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    },
+    {
+     "actor": "Brush125",
+     "neighbours": 4,
+     "csg_set": 4,
+     "brushes": 208,
+     "select_s": 0.0438,
+     "trunc_csg_s": 0.0014,
+     "raw_scoped_s": 0.0056,
+     "raw_edges": 3,
+     "compare": {
+      "keys": 6,
+      "missing_in_truncated": 0,
+      "extra_in_truncated": 0,
+      "area_mismatch": 0,
+      "max_boundary_shift_uu": 0.0,
+      "worst": []
+     }
+    }
+   ]
+  }
+ ]
+}

@@ -99,7 +99,7 @@ something against — this does not change). The broadening is entirely on the *
 
 This broadening is for a different reason than `actor survey`'s non-brush support (below): here it
 is about *positioning* (an actor's bare location relative to a face); `actor survey` is about
-*does this actor's volume intrude on real solid matter* (its collision cylinder). Keep the two
+*does this actor's volume intrude on real solid matter* (its collision extent). Keep the two
 reasons distinct in the docs.
 
 ## Part 2 — `actor survey <name>` (new, standalone)
@@ -111,8 +111,8 @@ different shape. Sits at the top level next to verbs like `actor bbox`/`actor di
 
 **Scope**: always exactly one named actor, never a multi-candidate scan — this is what keeps
 `survey` safe to call after every mutation without the cost risk a flag on `find`/`compare` would
-carry. **Cost mechanism is not yet designed** — see "Open items" below; this spec commits to the
-one-actor-at-a-time API shape, not yet to a specific bounded-cost algorithm.
+carry. Both tiers are computed over a bounded neighborhood of that actor, not the whole level; the
+algorithm and its correctness argument are in "Bounded cost" below.
 
 ### Output shape
 
@@ -130,9 +130,10 @@ The annotation, where present, is parenthesised and glued to the relation word �
 `[Package.Class]` (no `Kind`) for a non-brush actor or a Mover. `:idx` and the annotation appear
 **only** on **raw** `touches` lines that found a real matched face pair; a raw `touches` line with
 only a bounding-box area *estimate* (no clean coplanar face match) prints bare names with the
-estimate still shown, no `:idx`. Every `csg`-tier line — `crosses`/`touches` included — and every
-raw `contains`/`carves` line prints bare names, no `:idx`, no annotation (the `csg` tier's own
-`:idx` was cut entirely; see that tier's section for why).
+estimate still shown, no `:idx`. **No `csg`-tier line ever carries a `:idx`** (that was cut
+entirely; see that tier's section for why), and every raw `contains`/`carves` line prints bare
+names with no annotation. The one `csg`-tier annotation is the penetration depth on a `crosses`
+line whose source is a collision extent — `crosses(8.2uu)`, see that relation's section.
 Facts print to stdout; a one-line count summary prints to stderr. No `--json` on `survey` itself —
 YAGNI, no consumption need shown yet (note: `brush relation find` already has `--json` for its own
 reason — piping into `set`/`compare` — that precedent doesn't transfer to `survey`, whose output is
@@ -210,6 +211,13 @@ adding one is new geometry work, not reuse. Dropped.)
   as csg `carves` below — a deliberate deviation from `level graph`'s own `carved_by`, which puts
   the Add first; see the directionality section above).
 
+**The raw tier is blind to CSG kind, and that is inherited, not a choice.** `classify_pair` branches
+on `query.csg_is_subtract` and `is_mover` only, so Semisolid, Nonsolid, Intersect and Deintersect
+all land in its "Add-or-Mover" bucket and get the same edges a solid Add would. Semisolid is 29% of
+brush actors in shipped content and Nonsolid another 3%, so this is the common case, not a corner:
+raw will report `carves` on a semisolid the resolved world can never carve, and `touches` on a
+nonsolid sheet that bounds no solid. The `csg` tier is what corrects each of those.
+
 All three are order-heuristic or pure-geometry facts computed **before** full CSG resolution — real
 signals, but each can be invalidated by something downstream (a later Subtract carving away the
 touching matter; a "contains"/"carves" call made wrong by a brush a third, later operation has since
@@ -217,35 +225,57 @@ hollowed out). That gap is what the `csg` tier closes.
 
 ### `csg` tier — resolved via the native CSG/BSP engine, authoritative
 
-Five relation types. For a non-brush actor, its collision cylinder (`CollisionRadius`/
-`CollisionHeight`, from the instance if set, else the class default) stands in for brush geometry
-throughout. `bCollideActors = False` or a zero/absent radius means the actor contributes no
-`csg`-tier *geometry* of its own: it never appears as a `src` for `crosses` (nothing to test), and
-never as the `dst` of a `touches`/`crosses` (no face of its own to be flush against or penetrated)
-— but it is entirely unaffected as the `dst` of `contains` (`contains` tests a Subtract's own
-authored shape against the actor's `Location`, which every actor has regardless of collision).
+Five relation types. For a non-brush actor, its **collision extent** stands in for brush geometry
+throughout: the engine collides an axis-aligned BOX of half-extents `(CollisionRadius,
+CollisionRadius, CollisionHeight)` — `uedcli-native/src/collision.rs`'s `Scout::extent`, and the
+extent `UModel::PointCheck`/`LineCheck` take. It is not a cylinder; the property names are, the
+geometry is not. Values come from the instance if set, else the class default.
+
+An actor contributes `csg`-tier geometry of its own only when it has that box **and physically
+blocks**: `bCollideActors` and `bBlockActors` both true, with a nonzero radius and height.
+Otherwise it never appears as a `src` for `crosses` (nothing to test), and never as the `dst` of a
+`touches`/`crosses` (no face of its own to be flush against or penetrated) — but it is entirely
+unaffected as the `dst` of `contains` (`contains` tests a Subtract's own authored shape against the
+actor's `Location`, which every actor has regardless of collision).
+
+`bBlockActors` is in that gate because `bCollideActors` alone is not a claim about matter. A
+`DataLinkTrigger` (`CollisionRadius` 520), a `FlagTrigger` (630), a `LaserTrigger`, a
+`Teleporter` — all set `bCollideActors` so they can be touched, block nothing, and are routinely
+sized to span whole rooms, walls included. Measured across 1936 collidable actors in shipped Deus
+Ex levels, the non-blocking ones are 598 of them and carry the entire deep tail: gating them out
+drops the worst by-design overlap from 436 uu to 64 uu.
+(`dev/docs/spikes/2026-09-23-actor-survey-csg-kind-and-cost/`.)
 
 - **`crosses <X>`** — **source-restricted, stated positively**: only ever fires from an actor that
-  contributes surviving solid matter to the resolved world. Confirmed valid sources: an Add brush,
-  or a non-brush actor via a real collision cylinder (`bCollideActors = True` and a nonzero
-  radius/height). **Confirmed never a valid source: a Subtract** — it contributes no solid matter
-  to test for improper penetration. **Not yet ruled on, and NOT to be treated as valid by default**:
-  Semisolid, Nonsolid, Intersect, Deintersect, and Mover — see "Open items", CSG-kind coverage.
+  contributes surviving solid matter to the resolved world. Valid sources, each measured against
+  the native CSG core rather than reasoned from the kind's name
+  (`dev/docs/spikes/2026-09-23-actor-survey-csg-kind-and-cost/`, regression
+  `uedcli/tests/test_csg_kind_facts.py`):
+
+  | kind | `crosses` source? | `crosses` target? | why |
+  |---|---|---|---|
+  | Add | yes | yes | contributes solid |
+  | **Semisolid** | **yes** | **yes** | contributes real solid and collides like solid — it only declines to *cut* the world |
+  | Subtract | no | yes | no solid of its own; but it authors real carved faces |
+  | **Nonsolid** | **no** | **no** | `PF_NotSolid` sets `NF_NotCsg`, so its nodes bound no solid at all and the engine walks straight through — passing through one is designed behaviour, not an intrusion |
+  | **Intersect / Deintersect** | **no** | **no** | contributes nothing whatever: no face, no solid, no node (see the warning below) |
+  | Mover | not yet ruled | no | excluded from world CSG entirely, so nothing can cross *into* it; whether its own private model may cross out is open — see "Open items" |
+
   **Scope of the gate, stated explicitly since an earlier draft left it ambiguous and a review
   caught the ambiguous reading exiting the entire command**: this restriction gates only whether
   *this specific actor's own `crosses`-as-source facts* are computed — never the rest of the
-  survey. Surveying an actor of one of these unruled kinds still prints its full `raw` tier and its
+  survey. Surveying an actor of a source-ineligible kind still prints its full `raw` tier and its
   `csg` `touches`/`contains`/`connects` facts, and it can still appear as the `dst` of another
-  actor's `crosses` line (`crosses` only restricts which actor can be the `src`) — only the
-  "does *this* actor's own matter cross into something" computation is skipped for it, silently,
-  the same way a non-colliding point actor's `crosses`-as-source is already skipped (not an error;
-  a level with actors of these kinds is the normal case, not an exceptional one). `Mover` in
-  particular needs this stated plainly: the worked example below shows `DeusExMover9` fully and
-  normally, including as the `dst` of `Brush118`'s `contains` line — only a hypothetical
+  actor's `crosses` line where the table above allows — only the "does *this* actor's own matter
+  cross into something" computation is skipped for it, silently, the same way a non-colliding point
+  actor's `crosses`-as-source is already skipped (not an error; a level full of Semisolids — 29% of
+  shipped brush actors — is the normal case, not an exceptional one). `Mover` in particular needs
+  this stated plainly: the worked example below shows `DeusExMover9` fully and normally, including
+  as the `dst` of `Brush118`'s `contains` line — only a hypothetical
   `DeusExMover9`-as-`crosses`-source fact would be the omitted one, and no such fact appears in
   this design's examples.
 
-  Fires when the source's own contributed solid (or collision cylinder) extends past a resolved,
+  Fires when the source's own contributed solid (or collision extent) extends past a resolved,
   surviving face belonging to `X`, into space the source does not itself claim. **No `:idx` at
   either tier boundary — bare names only, same as `connects`/`contains`/`carves`** (see "csg-tier
   `:idx`" below for why this was cut rather than pushed through a third revision).
@@ -259,10 +289,28 @@ authored shape against the actor's `Location`, which every actor has regardless 
   see below). `crosses` is reserved for exactly the case neither of those covers: a solid actor's
   own matter genuinely extending somewhere it shouldn't.
 
-  A second, related and **also unresolved**, noise concern for the collision-cylinder arm
-  specifically: a cylinder is an axis-aligned bounding approximation of a mesh, and a decoration
-  resting on a floor or set against a wall routinely has its cylinder overlap adjacent solid by a
-  few units *by design*, not by error — see "Open items", collision-cylinder tolerance.
+  **The collision-extent arm fires on real, correctly-placed content, and that is accepted.**
+  Measured over every collidable actor in shipped Deus Ex levels: under the `bBlockActors` gate
+  above, 1188 of 1338 (89%) clear resolved solid entirely; the remaining 11% really are inside it,
+  by ~6 uu at the median and 11 uu at p90 — flush-mounted `CageLight`, `Keypad1`, `Toilet`,
+  `VendingMachine`, `ClothesRack`. **No tolerance can separate those from a mistake**: not one of
+  1936 actors penetrates by less than 0.01 uu, the smallest real penetration anywhere is 0.043 uu,
+  and the distribution from there is continuous — there is no float-noise band to absorb and no gap
+  to cut at. So the fact is reported and made *readable* instead: a `crosses` line whose source is a
+  collision extent carries the measured penetration depth in the existing annotation grammar,
+  `crosses(8.2uu)`, so 8 uu of flush mounting reads differently from 60 uu of misplacement. This is
+  the one annotation the `csg` tier carries; every other `csg` line stays bare.
+  `dev/docs/spikes/2026-09-23-actor-survey-csg-kind-and-cost/`.
+
+  **Warning for a surveyed Intersect/Deintersect brush.** `survey` prints its full output and exits
+  0, plus one stderr line naming the actor and its `CsgOper`: a placed `CSG_Intersect`/
+  `CSG_Deintersect` contributes nothing to the resolved world (`bspBrushCSG` dispatches it to a tail
+  that rewrites the BRUSH's own model and never touches the world), so its `csg` tier carries no
+  fact it sources, and its `raw` tier treats it as Add-like, which the resolved world does not.
+  **No other actor's survey warns** — contributing nothing, such a brush cannot change anyone
+  else's facts. Owner ruling ("warn on Intersect/Deintersect"). The spec previously justified this
+  by saying they "can affect resolution outside a single actor's immediate neighborhood"; that is
+  false, and is why the warning is scoped to the one actor rather than to the neighborhood.
 
   **Surface-ownership rule** (`X` can be an Add or a Subtract): `X` is whoever *authored* the
   specific face being crossed — a Subtract's own carved boundary is a real face even though the
@@ -290,11 +338,15 @@ authored shape against the actor's `Location`, which every actor has regardless 
   how "this room is bounded by that wall, and the wall is intact" gets stated). No `:idx` — bare
   names, same as every other `csg` relation.
 
-  **Tolerance, shared with `crosses`**: both use the same `_TOUCH_EPS`-class tolerance this codebase
-  already applies everywhere real, editor-placed geometry needs float-noise slack (matching
-  `actorgraph.py`'s and `relation.py`'s existing named constants) — a face within tolerance of
-  coincident is `touches`, not a hair-width `crosses`. This is not a new tolerance to invent; it is
-  the same constant class the rest of this module already uses, applied consistently here.
+  **Tolerance, shared with `crosses`: 0.015 uu at the `csg` tier**, its own named constant — NOT
+  the raw tier's `_TOUCH_EPS = 1e-3`. A face within that of coincident is `touches`, not a
+  hair-width `crosses`. The number is the engine's own resolution limit, not a guess: resolved
+  point coordinates are only reproducible to the CSG point-dedup thresholds
+  (`THRESH_POINTS_ARE_SAME` 0.002 uu, `THRESH_POINTS_ARE_NEAR` 0.015 uu, `bspcsg.rs`), so nothing
+  finer is a real geometric distinction in a resolved model, and it is comfortably under the
+  0.043 uu smallest penetration measured on real content, so it suppresses no real fact. It also
+  covers everything the bounded-neighborhood solve below can perturb. `_TOUCH_EPS` stays correct
+  for the `raw` tier, which works on authored brush vertices rather than resolved points.
 
 **csg-tier `:idx` — cut, not just simplified, and here's why.** No `csg`-tier relation carries a
 `:idx` selector, on either side, ever — every line is bare `Name --relation--> Name`. This is a
@@ -329,6 +381,11 @@ solved here.
   Not split by the raw tier's underlying touch-vs-overlap distinction, since that distinction does
   not exist at the raw tier either (see the `raw` tier correction above) — nothing to fall back on
   here, and nothing lost, since raw `touches` never claimed to carry it in the first place.
+
+  **Decide it by local face existence, never by zone number.** A zone id is tempting ("same zone ⇒
+  connected") and is wrong here for a concrete reason: the zone flood is a whole-model pass over the
+  entire portal graph, so zone numbers are not reproducible under the bounded-neighborhood solve
+  below, and two rooms can share a zone without their voids meeting at all.
 
 - **`contains <X>`** — one rule, after two dropped attempts at a second one. `X` (or `X`'s
   `Location`; for a brush or Mover `X`, its own **full extent**, not just its centroid — a strict
@@ -400,11 +457,89 @@ solved here.
   of `X` survives anywhere, no `touches` line accompanies the `carves` line for that pair, and that
   is correct — there is nothing left to be flush against.
 
+  **`X` is never a Semisolid, and this is where the two tiers earn their keep.** The editor applies
+  every Add and Subtract in one pass and only then, after the repartition, the semisolid brushes
+  (`csgRebuild`'s LOOP 2 / LOOP 3; native's `detail_pass`, `bspcsg.rs`) — so a semisolid is always
+  applied last and no Subtract in the trunk can ever remove its matter, whatever trunk order says.
+  Measured: a Subtract straddling a semisolid pillar leaves its six faces and its full area intact,
+  and the pillar stays solid inside the Subtract's own volume
+  (`uedcli/tests/test_csg_kind_facts.py`). Raw `carves` will claim that pair whenever trunk order
+  looks right; `csg` correcting it is exactly the contrast the worked example below shows for
+  `Brush117` vs `Brush113`. A **Nonsolid** `X` is the opposite case and IS a valid target: it
+  contributes no solid, but its faces are real world surfaces and a later Subtract removes them,
+  measured with the same area loss as an Add's.
+
   A second Subtract subtracting *exactly* the same, already-carved region as a first Subtract does
   **not** report `carves` against the original Add — nothing of the Add's matter remains there to
   remove. It reports `connects` against the first Subtract instead. A second Subtract whose carve
   only *partially* overlaps the first's already-carved region reports both: `connects` for the
   redundant portion, `carves <the Add>` for the portion that is genuinely new removal.
+
+### Bounded cost — the neighborhood both tiers are computed over
+
+Measured in `dev/docs/spikes/2026-09-23-actor-survey-csg-kind-and-cost/` against 17 shipped level
+trunks (5–2111 brushes), 140 sampled surveys.
+
+**The `csg` tier was never the cost problem.** A full-level native CSG solve of a real level is
+1.3–10.2 s, about the same as the Python trunk read *every* uedcli verb already pays (4.5–10.2 s,
+and 41 s on the largest trunk measured). The genuinely expensive one is the `raw` tier:
+`actorgraph.build_graph` is `O(brushes²)` convex decomposition plus SAT over every pair, and already
+costs 12× the full CSG solve at 208 brushes.
+
+**Scoped, one survey costs a median 6 ms for the `csg` tier and 31 ms for the `raw` tier** — three
+orders of magnitude below either whole-level pass.
+
+**The algorithm, one selection rule serving both tiers:**
+
+```
+R  := actor_bounds(surveyed), grown by a small pad
+N  := [ a for a in level.order if a.brush and aabb_intersects(actor_bounds(a), R) ]   # trunk order
+     ... plus, always, the level's FIRST world-CSG brush (see below)
+csg facts := resolve the world over N (trunk order preserved), read facts only inside R
+raw facts := decompose the surveyed brush + each a in N, then classify_pair(surveyed, a)
+```
+
+`actor_bounds` and `aabb_intersects` already exist (`uedcli/writes.py`), and
+`preview_native.solve_world_surfaces` already takes an ad-hoc ordered actor list — this is a
+selection rule over shipped parts, not new machinery.
+
+**Why the truncation is sound.** A CSG operation changes the world's solid/void labelling only
+inside its own brush volume — that is all `bspBrushCSG` does: it filters the brush's own polys
+through the world tree (so only fragments inside the brush are added) and cuts only world faces
+interior to the brush, a pass native already prunes by the brush's own bound sphere. So the
+labelling restricted to `R` after the full ordered brush list equals the labelling after applying
+only the sublist whose volumes meet `R`; every other brush is the identity on `R`. Faces are the
+boundary of that labelling, so the faces inside `R` are the same surfaces. The AABB test is a
+conservative superset of "volume meets `R`", and trunk order is preserved, so the order of the
+operations that do matter is unchanged.
+
+**The level's first world-CSG brush is always included**, whether or not it is near `R`. Not for its
+geometry — it is usually far away and identity on `R` — but because `bsp_brush_csg` special-cases a
+leading `CSG_Add` against a node-less world, seeding it as the world shell instead of classifying it
+(`bspcsg.rs`'s `first_add_seed`). Truncation can change which brush is first, and then that shortcut
+fires on the wrong one. This is not hypothetical: without this clause, `nsfhq04 DeusExMover31`'s
+truncated solve lost all four of `Brush799`'s faces and gained one of `Brush798`'s.
+
+**What the argument does not cover, stated rather than hidden:**
+
+- **Poly identity.** A different tree shape splits the same surface into different polygons. Facts
+  must be read from geometry, never from a poly index or a face count. The `csg` tier's `:idx` was
+  already cut for an unrelated reason; this is a second, independent reason it has to stay cut.
+- **Point dedup.** `bspAddPoint`'s `FindNearestVertex` descends the *live* tree, so dropping far
+  brushes changes which existing point a new point welds onto — bounded by the dedup thresholds,
+  0.002 uu / 0.015 uu. This is why the `csg` tier's tolerance is 0.015 uu: every perturbation the
+  truncation can introduce is already inside the tolerance band. Measured: 9 of 140 surveys move a
+  surface boundary at all, eight of them by ≤ 0.024 uu.
+- **Whole-model passes.** The zone flood, `bspOptGeom`'s point merge and shared-side counter, the
+  bounds pass and the canonical surf reorder are all global, so zone numbers are not reproducible
+  under truncation. No relation may read one — see `connects`.
+- **Exact-coplanar ties.** Where a face lies exactly on an adjacent brush's face plane, whether it
+  survives is decided by the CSG filter's coplanar cases against whatever the live tree is, and a
+  smaller tree can decide the tie the other way. Measured: 2 of 140 surveys, both on a face exactly
+  coincident with a neighbour's. **The constraint this puts on the implementation**: `touches` and
+  `crosses` must be decided by plane coincidence within the tolerance, never by "does a face exist
+  here" — a redundant coplanar face appearing or vanishing must not change a reported fact. Read
+  that way, neither measured residual changes an answer.
 
 ### Worked example
 
@@ -483,20 +618,18 @@ Kept for context so this is not re-litigated without cause:
 
 ## Open items (not yet resolved — do not proceed to `to-plan/` until closed)
 
-- **CSG-kind coverage**: this spec is written entirely in terms of Add/Subtract (and Mover, via
-  `is_mover`). `query.csg_kind` has six *brush* kinds (a seventh, `"mover"`, is returned separately
-  and is handled throughout this spec via `is_mover`, not as a `csg_kind` case) —
-  `add`/`subtract`/`semisolid`/`nonsolid`/`intersect`/`deintersect` — and `level graph` already
-  tags all of them, Mover included. Needs one ruling per kind before
-  `to-plan/` — at minimum whether Semisolid/Nonsolid are treated as Add-like for `crosses`/`carves`
-  purposes, and whether `Intersect`/`Deintersect`/Mover are in scope for v1 as `crosses` sources.
-  Whichever kinds are ruled out stay **silently skipped as a `crosses` source only** — never an
-  exit-2 refusal of the whole `survey` command (the `crosses` section's gate is scoped to that one
-  relation; nothing in this spec refuses a whole survey over an unruled kind). Also needs a ruling
-  on whether `Intersect`/`Deintersect` can themselves ever be the container side of `contains` (the
-  rule as written is Subtract-only), and a Mover's solid-contribution status to world CSG is itself
-  unconfirmed (excluded from world CSG entirely, per its own `NodeTag` handling — whether that means
-  it never contributes solid to test, or needs a separate private-model check, is not yet decided).
+- **CSG-kind coverage — RESOLVED except for one ruling.** Every kind is measured and folded in
+  above (`crosses`'s own table, `carves`'s Semisolid/Nonsolid paragraph, the Intersect/Deintersect
+  warning); `Intersect`/`Deintersect` can never be the container side of `contains` either, since
+  they contribute nothing to the world at all. **What remains open is Mover only**: whether a
+  Mover's own private model may make it a `crosses` SOURCE. The factual half is settled — a Mover
+  is excluded from world CSG entirely, so nothing can cross *into* it and nothing can carve it —
+  but the design call is the owner's. Parked as `questions/mover-as-a-crosses-source.md`.
+- **Two collision-gate changes awaiting the owner's confirmation**, both introduced by the
+  tolerance spike from measurement rather than asked for: the `crosses` source gate tightening to
+  `bCollideActors && bBlockActors`, and the `crosses(<depth>uu)` annotation. Both are written into
+  the body above and both revert in one edit. Parked as
+  `questions/collision-source-gate-and-depth-annotation.md`.
 - **`csg`-tier `:idx` (which specific poly a `crosses`/`touches` fact concerns)**: cut from this
   spec entirely (see the `csg`-tier `:idx` section) after two straight review rounds found the
   asserted attribution mechanism factually wrong against the real native code. A real fix needs the
@@ -504,22 +637,13 @@ Kept for context so this is not re-litigated without cause:
   construction `preview_native.py` already uses, and explicit handling for a coplanar-merged face
   and a Mover's own private model — verify this directly against `uedcli-native` before attempting
   it again, not by further reasoning against this document.
-- **Collision-cylinder tolerance for `crosses`**: a cylinder is an axis-aligned bounding
-  approximation, and a decoration resting on a floor or set against a wall routinely has its
-  cylinder overlap adjacent solid by a few units *by design*. Needs either a real tolerance above
-  `_TOUCH_EPS` for cylinder sources specifically, or an explicit decision to scope the
-  collision-cylinder arm of `crosses` out of v1 pending real-content measurement of how much this
-  actually fires.
-- **Bounded-cost mechanism**: the "safe to call after every mutation" claim needs an actual
-  neighborhood-selection algorithm (which brushes participate in one actor's CSG resolution) with a
-  correctness argument for the truncation, not just an assertion — this covers the `csg` tier.
-  **The `raw` tier is not automatically safe either**: finding the surveyed actor's neighbours still
-  means decomposing every brush in the level for SAT (`decompose_convex` over the whole level), and
-  each CLI invocation is a fresh process with no cache carried across calls — so "safe after every
-  mutation" needs a cost story for both tiers, not just `csg`. Likely needs a short spike against
-  `uedcli-native`'s existing incremental-resolution machinery (`NATIVE-MATERIALIZE.md`'s campaign)
-  for the `csg` half, and a measurement of real-level raw-decomposition cost for the other half,
-  before `to-plan/`.
+- **A production home for the point-in-solid test.** The `csg` tier needs "is this point inside
+  resolved solid", and the answer is NOT `UModel::PointRegion` — a Semisolid's nodes are added after
+  the zone pass, so `PointRegion` reports a Semisolid's interior as void (measured; pinned by
+  `test_csg_kind_facts.py`). The right test is the engine's own collision walk, `FBspNode::IsCsg`
+  plus the walker's outside state, which exists in Rust (`CollisionModel::point_check`) but is not
+  exposed to Python. Per the Rust-by-default convention the implementation belongs in
+  `uedcli-native` as a point/box solidity query. Plan-time work, not an open design question.
 - **Error paths**: unknown/ambiguous actor name, degenerate brush (including when the *surveyed*
   actor itself is degenerate — `level graph` has an explicit `skipped` list and
   `DegenerateBrushError`; `survey` needs its own stated behavior, not silent reuse).
@@ -556,6 +680,13 @@ Kept for context so this is not re-litigated without cause:
   `connects` case, the partial-overlap `carves`+`connects` coexistence case, total-removal `carves`
   with no accompanying `touches`, and the two-adjacent-rooms `connects`-not-`touches`
   disambiguation.
+- The CSG-kind rules the `crosses` table and the `carves` Semisolid/Nonsolid paragraph rest on are
+  already pinned, against the native core, by `uedcli/tests/test_csg_kind_facts.py` — reuse that
+  scenario rather than rebuilding it, and add the `survey`-level cases on top.
+- The bounded-neighborhood truncation needs its own regression: the same actor surveyed over the
+  neighborhood and over the whole level must produce the same fact set. The spike's
+  `bounded_cost.py` is the shape of that check (face signatures clipped to the region), but a
+  committed test wants a small synthetic level rather than the gitignored corpus.
 
 ## Revision history
 
@@ -664,3 +795,30 @@ Kept for context so this is not re-litigated without cause:
   that"). Bringing `level graph` itself onto `carves` is filed separately: board item
   `level-graph-align-carved-by-vocabulary-with`. Both worked examples and the directionality table
   updated to match.
+- **Round 7** (spike `dev/docs/spikes/2026-09-23-actor-survey-csg-kind-and-cost/`): four "Open
+  items" closed by measurement against the native CSG core and 23 shipped level trunks, not by
+  reasoning. (1) **CSG-kind coverage**: Semisolid contributes real solid and is a valid `crosses`
+  source/target but can NEVER be the target of `csg carves` (the editor applies every Add/Subtract
+  before any semisolid, so trunk order cannot make it carveable — the sharpest raw-vs-csg contrast
+  in the spec); Nonsolid contributes no solid at all and is neither source nor target of `crosses`,
+  but IS a valid `carves` target since its faces really are removed; a placed Intersect/Deintersect
+  contributes nothing whatever. Each pinned by `uedcli/tests/test_csg_kind_facts.py`. Mover is the
+  one kind left open, narrowed to a single question. (2) **Intersect/Deintersect**: the spec's own
+  stated reason for the risk ("can affect resolution outside a single actor's immediate
+  neighborhood") is FALSE — they affect nothing at all — so the warning is scoped to the surveyed
+  actor alone rather than to any brush in the neighborhood, and says what is really wrong (an empty
+  `csg` tier and an Add-like `raw` tier). Zero exist in 16,796 shipped brush actors. (3)
+  **Collision tolerance**: the measurement says no tolerance exists — not one of 1936 real
+  collidable actors penetrates solid by under 0.01 uu, the smallest real penetration is 0.043 uu,
+  and the distribution is continuous from there to 64 uu. What actually removes the noise is the
+  SOURCE GATE (`bCollideActors` alone admits room-spanning trigger volumes), and what makes the
+  residual 11% readable is a depth annotation. Also corrected: the engine collides an axis-aligned
+  BOX `(R, R, H)`, not a cylinder. The `csg` tier's tolerance is now 0.015 uu, the engine's own
+  point-dedup resolution limit, distinct from the raw tier's `_TOUCH_EPS`. (4) **Bounded cost**: a
+  full-level native solve turns out to be cheaper than the trunk read every verb already pays, so
+  the `csg` tier was never the cost problem — the `raw` tier's `O(brushes²)` sweep was. One AABB
+  neighborhood rule now serves both tiers, with a locality argument, three named residual risks,
+  and a measured check over 140 surveys (no face ever missing once the first-brush clause is in;
+  9 sub-percent boundary shifts; 2 exact-coplanar ties). It also found a real trap: truncation
+  can change which brush is first, firing `bsp_brush_csg`'s leading-Add world-shell shortcut on the
+  wrong brush, so the level's own first world-CSG brush is always included.
