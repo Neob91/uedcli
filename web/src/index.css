@@ -811,6 +811,156 @@ body {
   cursor: pointer;
 }
 
+/* SessionPicker's landing page (session-management-UI spec, decision 1). */
+.session-picker {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+  color: var(--fg);
+}
+
+.session-picker-create {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.session-picker-create select,
+.session-dropdown select {
+  font: inherit;
+  padding: 3px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.session-picker-create button {
+  font: inherit;
+  padding: 3px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.session-picker-create button:hover:not(:disabled) {
+  background: var(--surface-2-hover);
+}
+
+.session-picker-create button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.session-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.session-picker-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  cursor: pointer;
+}
+
+.session-picker-row:hover {
+  background: var(--surface-2-hover);
+}
+
+.session-picker-row button {
+  font: inherit;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.session-picker-row button:hover {
+  background: var(--surface-2-hover);
+}
+
+.session-picker-row-level {
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+.session-picker-row-active {
+  margin-left: auto;
+  color: var(--fg-muted);
+  font-size: 12px;
+}
+
+/* SessionLabel: the toolbar's persistent session-identity control (decisions 4/5/6). */
+.session-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.session-label button {
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.session-label button:hover {
+  background: var(--surface-2-hover);
+}
+
+/* InlineRename: shared click-to-edit control used by SessionPicker rows and SessionLabel. */
+.inline-rename-display {
+  cursor: pointer;
+  border-bottom: 1px dashed var(--border-strong);
+}
+
+.inline-rename-display:hover {
+  color: var(--accent);
+}
+
+.inline-rename-editing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.inline-rename-editing input {
+  font: inherit;
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  color: var(--fg);
+}
+
+.inline-rename-editing button {
+  font: inherit;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.inline-rename-editing button:hover {
+  background: var(--surface-2-hover);
+}
+
 /* The Load/Rebuild toolbar + level picker + theme toggle share one row (quad-layout Part 7 Task 26,
    Part 9 Task 30) -- an ordinary flex-column sibling of `.viewport-content` (`.viewport-pane`'s own
    `flex-direction: column`), NOT an absolute overlay: it takes its natural height and
