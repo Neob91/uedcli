@@ -16,6 +16,20 @@ def test_create_session_writes_index_json_under_its_own_directory(tmp_path):
     assert (tmp_path / rec.id / "index.json").exists()
 
 
+def test_create_session_defaults_last_seen_generation_to_zero(tmp_path):
+    rec = create_session(tmp_path, "unatco")
+    assert rec.last_seen_generation == 0
+
+
+def test_create_session_seeds_last_seen_generation_from_caller(tmp_path):
+    # The caller (app.py's create_session_route) passes the level's own current generation, so a
+    # fresh session on a level that's already changed since server startup doesn't immediately
+    # report `changes_available: True` for something it never had a chance to see.
+    rec = create_session(tmp_path, "unatco", last_seen_generation=5)
+    assert rec.last_seen_generation == 5
+    assert get_session(tmp_path, rec.id).last_seen_generation == 5
+
+
 def test_get_session_returns_the_created_record(tmp_path):
     rec = create_session(tmp_path, "unatco")
     fetched = get_session(tmp_path, rec.id)

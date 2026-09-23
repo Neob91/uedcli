@@ -975,6 +975,34 @@ def test_create_session_unknown_level_is_a_clean_not_found(tmp_path):
     assert "not found" in r.json()["error"]
 
 
+def test_create_session_on_a_level_that_already_changed_does_not_show_changes_available(tmp_path):
+    """Bug found post-merge: a fresh session used to always start at `last_seen_generation=0`, so a
+    level whose trunk had settled a change even once since server startup (common -- another
+    session's Save, an external edit, anything the `TrunkWatcher` notices) made every NEW session on
+    it immediately report `changes_available: True` for a change it never had a chance to see. Fixed
+    by seeding the new session's baseline from the level's own CURRENT generation at creation time."""
+    root = tmp_path / "proj"
+    _make_level_dir(root, "TestLevel")
+    app = create_app(SimpleNamespace(root=str(root), maps=None))
+    c = TestClient(app)
+    # Simulate a settled trunk change landing BEFORE this session ever existed -- the level's own
+    # generation counter is the one lower-level hook a test can legitimately bump directly (same
+    # `app.state.get_or_create_level_context` seam `test_on_trunk_settled_...` already uses).
+    ctx = app.state.get_or_create_level_context("TestLevel")
+    ctx.generation[0] = 3
+
+    created = c.post("/api/level/TestLevel/sessions").json()
+    status = c.get(f"/api/session/{created['id']}/status").json()
+
+    assert status["changes_available"] is False
+
+    # The fix must not swallow a REAL subsequent change either -- a session correctly seeded at the
+    # level's generation-3 baseline still notices generation 4.
+    ctx.generation[0] = 4
+    status_after = c.get(f"/api/session/{created['id']}/status").json()
+    assert status_after["changes_available"] is True
+
+
 def test_list_sessions_returns_every_session(tmp_path):
     """Spec: `GET /api/sessions` -> `{"sessions": [{"id", "level", "created_at", "last_active_at"},
     ...]}` -- every session across every level, no `claim_token` (a pure read that mints nothing,

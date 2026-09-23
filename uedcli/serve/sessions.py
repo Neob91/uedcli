@@ -40,9 +40,27 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def create_session(sessions_root: Path, level: str) -> SessionRecord:
+def create_session(sessions_root: Path, level: str, *, last_seen_generation: int = 0) -> SessionRecord:
+    """`last_seen_generation` should be the level's `LevelContext.generation[0]` at the moment of
+    creation (the caller, `app.py`'s `create_session_route`, reads it fresh and passes it through) --
+    NOT the dataclass default of 0. Otherwise a session created on a level whose generation counter
+    is already > 0 (any level whose trunk has changed on disk even once since the server started --
+    common, not exotic) would immediately report `changes_available: True` for a change that
+    happened before this session ever existed, which it never had a chance to "miss".
+
+    Race between the caller's read of the live generation and this write: safe by construction, not
+    by locking. `generation[0]` only ever increases (a monotonic counter, bumped once per settled
+    trunk change), so a plain read can only ever return the CURRENT value or a slightly-earlier one
+    -- never one from later. If a settle event lands in the gap between the caller's read and this
+    write, the session is seeded with a value that's a real, valid, merely-slightly-stale snapshot;
+    the ONLY possible effect is `changes_available` reporting `True` sooner than it strictly needed
+    to (a harmless, momentary "reload available" banner for a change this session's first Load would
+    pick up anyway) -- never `False` when a real change is being missed. That asymmetry is why no
+    lock is needed here: the race can only bias toward the safe (over-notify) side, never the unsafe
+    (silently-stale) one."""
     now = _now()
-    rec = SessionRecord(id=uuid7(), level=level, created_at=now, last_active_at=now)
+    rec = SessionRecord(id=uuid7(), level=level, created_at=now, last_active_at=now,
+                        last_seen_generation=last_seen_generation)
     atomic_write_json(_index_path(sessions_root, rec.id), {
         "id": rec.id, "level": rec.level, "created_at": rec.created_at,
         "last_active_at": rec.last_active_at, "last_seen_generation": rec.last_seen_generation,

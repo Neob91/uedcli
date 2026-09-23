@@ -876,7 +876,16 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         # Creating a session establishes its own first claim -- nothing to supersede yet (spec's
         # claim-token note under "Session identity & lifecycle").
         _require_level(level_name)
-        rec = sessions.create_session(_sessions_root, level_name)
+        # Bug found post-merge: a fresh session used to always start at last_seen_generation=0,
+        # so any level whose trunk had changed on disk even once since the server started (common,
+        # not exotic) immediately showed "changes available" for a change this session never had a
+        # chance to see. Seed it from the level's OWN current generation instead -- read as late as
+        # possible, right before the write, to minimize (not that it needs to be zero: see
+        # `create_session`'s own docstring for why any race here is safe-by-construction) the window
+        # between this read and the persisted write.
+        ctx = _get_or_create_level_context(level_name)
+        rec = sessions.create_session(_sessions_root, level_name,
+                                      last_seen_generation=ctx.generation[0])
         token = _claims.mint(rec.id)
         return {"id": rec.id, "level": rec.level, "created_at": rec.created_at,
                 "claim_token": token}
