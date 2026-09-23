@@ -35,7 +35,7 @@ describe('SaveBar', () => {
   // leaving no way to click Save to promote that rebuild's pin to the level.
   it('renders a bare Save button (no count, no Discard) when hasBuildPin is true but nothing is staged', () => {
     render(
-      <SaveBar level="TestLevel" stagedNames={new Set()} hasBuildPin onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set()} hasBuildPin onSaved={vi.fn()} onDiscarded={vi.fn()} />,
     )
     expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull()
@@ -44,7 +44,7 @@ describe('SaveBar', () => {
 
   it('still renders nothing when hasBuildPin is false and nothing is staged', () => {
     const { container } = render(
-      <SaveBar level="TestLevel" stagedNames={new Set()} hasBuildPin={false} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set()} hasBuildPin={false} onSaved={vi.fn()} onDiscarded={vi.fn()} />,
     )
     expect(container.innerHTML).toBe('')
   })
@@ -53,7 +53,7 @@ describe('SaveBar', () => {
     postSave.mockResolvedValue({ applied: [], conflicts: [] })
     const onSaved = vi.fn()
     render(
-      <SaveBar level="TestLevel" stagedNames={new Set()} hasBuildPin onSaved={onSaved} onDiscarded={vi.fn()} />,
+      <SaveBar sessionId="TestLevel" stagedNames={new Set()} hasBuildPin onSaved={onSaved} onDiscarded={vi.fn()} />,
     )
 
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
