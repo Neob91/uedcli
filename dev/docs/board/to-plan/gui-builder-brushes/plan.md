@@ -330,6 +330,7 @@ import json
 from pathlib import Path
 
 from .. import builders, config, model, normalize
+from ..cli.errors import CommandError
 from .atomic_io import atomic_write_json
 
 RESERVED_NAME = "*Builder"
@@ -483,8 +484,17 @@ def seed_session_box(project, level_name: str, sessions_root: Path, session_id: 
     """Seed a session's builder-brush working copy from the level's persisted box, or a fresh
     default cube when the level has none yet. Called ONCE, at session creation — never again for
     that session's lifetime (session-pinned, spec "Data model"; `/discard` is a no-op for the
-    builder brush, it does NOT re-seed)."""
-    actor = load_level_box(project, level_name)
+    builder brush, it does NOT re-seed).
+
+    `LevelBoxCorruptError` is caught HERE and re-raised as `CommandError` — same pattern
+    `build_pin.SessionPointerCorruptError` already uses at its own real call sites (`app.py:402,
+    428, 542, 907`, caught locally, never registered in `error_to_status`) — so `create_session_
+    route` (Task 12) never sees the raw, unclassified exception type, which `error_to_status`
+    doesn't know about and would otherwise fall through to a generic, undiagnostic 500."""
+    try:
+        actor = load_level_box(project, level_name)
+    except LevelBoxCorruptError as exc:
+        raise CommandError(str(exc)) from exc
     if actor is None:
         actor = default_actor()
     write_session_box(sessions_root, session_id, actor)
@@ -613,8 +623,7 @@ against that real code):
   names — a direct `fn(**params)` call is correct for all three.
 
 ```python
-from ..cli.errors import CommandError
-from ..geometry import validate_brush
+from ..geometry import validate_brush   # CommandError already imported at module top, Task 3
 
 _DIRECT_SHAPES = {"cube", "sheet", "staircase"}   # no CLI-side adapter needed, `fn(**params)` is correct
 
@@ -640,7 +649,10 @@ def build(sessions_root: Path, session_id: str, shape: str, params: dict):
         incoming = _build_incoming(shape, params)
     except TypeError as exc:
         raise CommandError(f"invalid params for shape {shape!r}: {exc}") from exc
-    actor = load_session_box(sessions_root, session_id)
+    try:
+        actor = load_session_box(sessions_root, session_id)
+    except SessionBoxCorruptError as exc:
+        raise CommandError(str(exc)) from exc
     swap_polys(actor.brush, incoming)
     validate_brush(actor.brush)
     write_session_box(sessions_root, session_id, actor)
@@ -784,7 +796,10 @@ def set_props(sessions_root: Path, session_id: str, index, props: dict[str, str]
     `actor prop set KEY=VALUE` argument would carry. ALL properties are validated (planned) before
     ANY is applied — one `plan_edit` call over every token, not one call per property, so a bad
     second property can never leave a valid first property already persisted."""
-    actor = load_session_box(sessions_root, session_id)
+    try:
+        actor = load_session_box(sessions_root, session_id)
+    except SessionBoxCorruptError as exc:
+        raise CommandError(str(exc)) from exc
     ctx = _class_ctx_for(actor.cls, index)
     try:
         toks = [propedit.parse_token(f"{name}={value}", expect_value=True)
@@ -879,7 +894,10 @@ def clone_for_csg(sessions_root: Path, session_id: str, existing_names: set[str]
     another Add/Subtract (spec "Data model")."""
     if csg not in builders.CSG_OPER:
         raise CommandError(f"invalid csg operation: {csg!r} (must be 'add' or 'subtract')")
-    original = load_session_box(sessions_root, session_id)
+    try:
+        original = load_session_box(sessions_root, session_id)
+    except SessionBoxCorruptError as exc:
+        raise CommandError(str(exc)) from exc
     clone = copy.deepcopy(original)
     clone.name = t3dtree.alloc_name("Builder", existing_names)
     clone.props = [(k, v) for k, v in clone.props if k.casefold() != "csgoper"]
@@ -1662,6 +1680,19 @@ def test_stage_between_add_and_save_does_not_evict_the_staged_clones_blob(client
     assert new_name in save_resp.json()["applied"]
 
 
+def test_scene_on_corrupt_builder_brush_box_is_a_clean_422_not_500(client, session_id,
+                                                                    sessions_root, ...):
+    # Regression: SessionBoxCorruptError was never caught anywhere in this route's wiring --
+    # would have fallen through error_to_status's closed exception set to a generic, undiagnostic
+    # 500 instead of a clean, named 422. A session that existed before this feature's own deploy
+    # (no builder-brush.json ever seeded) hits exactly this path on its first /scene poll.
+    box_path = builder_brush.session_box_path(sessions_root, session_id)
+    box_path.write_text("not json", encoding="utf-8")
+    resp = client.get(f"/api/session/{session_id}/scene")
+    assert resp.status_code == 422
+    assert "builder brush" in resp.json()["error"]
+
+
 def test_save_flushes_builder_brush_to_level_box_without_clearing(client, session_id, project,
                                                                    level_name, ...):
     client.post(f"/api/session/{session_id}/stage",
@@ -1908,7 +1939,10 @@ hashes too:
 pin-promotion block):
 
 ```python
-            session_actor = builder_brush.load_session_box(_sessions_root, session_id)
+            try:
+                session_actor = builder_brush.load_session_box(_sessions_root, session_id)
+            except builder_brush.SessionBoxCorruptError as exc:
+                raise CommandError(str(exc)) from exc
             builder_brush.write_level_box(project, session.level, session_actor)
 ```
 
@@ -1918,11 +1952,27 @@ pin-promotion block):
         builder_brush.seed_session_box(project, level_name, _sessions_root, rec.id)
 ```
 
+**`LevelBoxCorruptError`/`SessionBoxCorruptError` are caught-and-reraised as `CommandError` at
+EVERY call site that reads a box** — inside `builder_brush.build`/`set_props`/`clone_for_csg`/
+`seed_session_box` themselves (Tasks 4-7, already shown above), and at these two direct `app.py`
+reads. Neither exception type is registered in `error_to_status` (real `uedcli/serve/errors.py:
+30-69`'s closed set) — an uncaught one would fall through to `_domain_error_handler`'s generic,
+undiagnostic 500 (`app.py:505-516`), exactly the failure this task's own blob-eviction fix above
+was written to avoid for a DIFFERENT exception type. Same precedent this whole pattern already
+follows: `build_pin.SessionPointerCorruptError` is likewise never registered in `error_to_status` —
+it's caught locally at each of its 4 real call sites (`app.py:402, 428, 542, 907`) instead. A
+session that existed before this feature deploys (no `builder-brush.json` ever seeded for it) hits
+this path on its very first `/scene` poll — not a rare edge case, worth the explicit catch at every
+site rather than assuming it "shouldn't happen."
+
 `session_scene` extension (`GET /scene`, after building `payload` from `build_wireframe_payload`/
 `build_scene_payload`, before the `return`):
 
 ```python
-        builder_actor = builder_brush.load_session_box(_sessions_root, session_id)
+        try:
+            builder_actor = builder_brush.load_session_box(_sessions_root, session_id)
+        except builder_brush.SessionBoxCorruptError as exc:
+            raise CommandError(str(exc)) from exc
         builder_scene_actor, builder_enum_types = _build_one_actor(
             builder_actor.name, builder_actor, 0, ranks={}, actor_sprites={}, tex_offset=0,
             ctx_cache={}, index=index, radii_map={}, arrow_map={})
