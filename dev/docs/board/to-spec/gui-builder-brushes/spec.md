@@ -44,6 +44,10 @@ for another Add/Subtract. The staged clone reaches the trunk only when the user 
   the builder brush through the exact same `POST /api/session/{id}/stage` call it uses for a real
   actor — see "API surface" for how the backend routes that one reserved Name differently without the
   FE (or the route's own request/response shape) knowing or caring.
+- No real per-property staging for ordinary (non-builder-brush) actors. `/stage`'s wire shape
+  generalizes to a prop-map so the builder brush can share the route, but a real actor's map still
+  only honors `Location` — any other property is rejected, not silently applied. Extending
+  `StagingStore` itself to arbitrary real-actor properties is future GUI work. See "API surface".
 
 ## Background — what exists, reused as-is
 
@@ -64,8 +68,10 @@ for another Add/Subtract. The staged clone reaches the trunk only when the user 
   handles both, and every other prop, uniformly. *(Owner ruling — see memory
   `gui_backend_no_special_cased_props` and the follow-up item below.)* The builder brush's own prop
   edits reuse this path directly, through the SAME `/stage` route a real actor's edits use (see "API
-  surface") — this spec generalizes that route's request shape from Location-only to any property, for
-  every actor it names, builder brush included.
+  surface"). This spec generalizes that route's WIRE SHAPE (a prop-map per actor, not a bare Location
+  triple) so the call site is uniform — but only the builder brush's map is actually applied
+  generically; a real actor's map still only honors `Location`, unchanged from today (owner ruling:
+  real per-property staging for ordinary actors is future GUI work, out of scope here).
 - **`StagingStore` (`uedcli/serve/snapshots.py`) keeps its own code exactly as it is today — the
   dispatch lives one layer up, in the route handler, not inside `StagingStore` itself.** `stage()`/
   `save_staged()`/`discard_staged()` keep their existing trunk-baseline/conflict-check contract,
@@ -250,13 +256,18 @@ new declarative data this feature adds per shape.
   Writes to the session's own builder-brush store. Returns the actor re-serialized through the same
   per-actor path `/scene`'s overlay uses, so the FE has an immediate render without a second round
   trip.
-- `POST /api/session/{id}/stage` (existing route, generalized) `{"actors": {name: {prop: value,
-  ...}}}` — moving Location off its own hardcoded shape onto the generic form is what lets the SAME
-  call the FE already makes for a real actor's move also cover the builder brush's move/rotate/any-
-  other-prop needs. The route handler's ONE dispatch point (see "Background") sends a write for
-  `*Builder` to the session's own store (through `propedit`'s plan/apply, same as `actor prop set`)
-  and a write for any other name to `StagingStore`, exactly as today. Neither the request/response
-  shape nor the FE's call site differs by which kind of actor is named.
+- `POST /api/session/{id}/stage` (existing route, generalized wire shape) `{"actors": {name: {prop:
+  value, ...}}}` — the request body's SHAPE is now generic (a prop-map per actor) so the FE's call
+  site is identical for the builder brush and a real actor. What the route DOES with it still differs
+  by which Name is named, per the ONE dispatch point (see "Background"):
+  - **`*Builder`** — every property in its map is applied through `propedit`'s plan/apply (same as
+    `actor prop set`), to the session's own store. Genuinely generic — `Location`, `Rotation`, or any
+    other settable property.
+  - **Any other Name** — routes to `StagingStore`, UNCHANGED from today: only a `Location` key is
+    honored. *(Owner ruling: `/stage`'s wire shape generalizes so the builder brush can share the
+    route, but `StagingStore` itself gains no new capability — real per-property staging for ordinary
+    actors stays future GUI work.)* Any OTHER property key present in a real actor's map is a clean
+    422 naming the actor and the rejected property — never silently dropped or silently applied.
 - `POST /api/session/{id}/builder-brush/add` and `POST /api/session/{id}/builder-brush/subtract` —
   clone the builder brush's current actor into a new `StagingStore`-staged actor with a freshly
   `allocate_name`d Name and `CsgOper` stamped per the route. Returns the new actor's allocated Name and
@@ -331,7 +342,10 @@ new declarative data this feature adds per shape.
   builder-brush store (setting `Location`, `Rotation`, and at least one other property through the
   SAME `propedit` plan/apply path `actor prop set` uses) and every other name to `StagingStore`
   exactly as before, from the SAME request — a single test asserting both branches of one call proves
-  the dispatch point, not two divergent code paths; `StagingStore`'s own move-staging/conflict/clear
+  the dispatch point, not two divergent code paths; `POST /stage` with a real actor's map containing a
+  `Rotation` (or any non-`Location`) key is a clean 422 naming the actor and the rejected property,
+  and does NOT apply the `Location` key from the same request either (all-or-nothing, not a partial
+  apply); `StagingStore`'s own move-staging/conflict/clear
   behavior for REAL actors is completely unchanged by this feature (a regression check, since it's the
   module most at risk of accidental special-casing creeping back in); Save writes the builder-brush
   store's content to `levels/<level>/builder-brush.json` without clearing the store, and separately
