@@ -52,10 +52,15 @@ existing **Save** action — same as any other staged edit.
   PolyFlags, Rotation, Location, and PrePivot are all left untouched (comment at `edit.py:503-506`).
   This is the exact "regenerate the shape, keep everything else" operation UED22's per-shape Build
   buttons perform on its one builder brush.
-- **Whole-actor edits already exist and need no new logic.** `actor move`/`actor rotate` are pure
-  model-side verbs (load → mutate one field → `LevelSource.save`, `dev/docs/architecture.md` "The core
-  write pattern"). Moving/rotating the builder brush reuses these same mutations — only the target (a
-  builder-brush box, not the trunk) differs.
+- **Property edits are already generic at the model layer — the GUI must not re-special-case them.**
+  `actor prop set` reaches `Location` through `propedit`'s typed-field registry
+  (`uedcli/propedit/fields.py:275`, `TYPED_FIELDS`) and `Rotation` as an ordinary struct-typed prop
+  (it isn't even in that registry) — ONE generic plan/apply path (`uedcli/propedit/edit.py`) already
+  handles both, and every other prop, uniformly. Editing the builder brush's Location, Rotation, or
+  any other property reuses THAT one path (see "Reuse strategy") — no dedicated move/rotate operation.
+  *(Owner ruling, this design round: the GUI backend must never fork Location/Rotation away from
+  regular props the way `SceneActor`/`StagingStore` already do — see `gui_backend_no_special_cased_
+  props` memory and the follow-up item below.)*
 - **`StagingStore` (`uedcli/serve/snapshots.py`) does not fit the builder brush's OWN state.** It
   stages `Location` edits to actors that already exist in the trunk — `stage()`/`save_staged()`
   require `query.resolve_actor_name` to resolve against the trunk first (`edits.py:74-76`). The
@@ -73,6 +78,13 @@ existing **Save** action — same as any other staged edit.
   moves are NOT merged into it server-side — only `POST /rebuild`'s CSG solve does that, via
   `edits.apply_staged_overlay` (`uedcli/serve/app.py:551-560`). The builder brush follows the same
   principle: it is served through its own endpoint (below), not folded into `/scene`'s actor list.
+- **`SceneActor` (`uedcli/serve/scene.py`) itself special-cases `location`/`rotation` as dedicated
+  fields, separate from its generic `props` list — the exact anti-pattern this spec's props ruling
+  rejects, just pre-existing.** This spec deliberately does NOT reuse `SceneActor` for the builder
+  brush's own responses (see "API surface") rather than propagate that special-casing into new code.
+  Fixing `SceneActor` itself is out of scope here — it ripples into `/scene`, `/rebuild`, staged
+  moves, and existing FE/test code — and is filed separately at p1:
+  `dev/docs/board/inbox/sceneactor-special-cases-location-rotation/`.
 - **Two build pins, two failure postures — the precedent this spec's persistence follows.**
   `uedcli/serve/build_pin.py` docstring: `sessions/<sid>/build.json` is "this session's own current
   pin while it edits — corrupt-and-instruct, since a session's own state is closer to 'work' than to a
@@ -88,8 +100,9 @@ existing **Save** action — same as any other staged edit.
 
 1. **Tier 0 — session, git-untracked, the session's live working copy.** At most one builder-brush
    actor per session (settled: matches UED22, which has exactly one builder brush at a time; building
-   a new shape replaces it). Every live interaction (build/rebuild-shape, move, rotate) writes here
-   immediately. **Session-pinned**: once a session has created a builder brush, it is NEVER refreshed
+   a new shape replaces it). Every live interaction (build/rebuild-shape, or a prop edit — Location,
+   Rotation, or anything else settable, all through the one generic path) writes here immediately.
+   **Session-pinned**: once a session has created a builder brush, it is NEVER refreshed
    from Tier 1 for the rest of that session's life, even if another session's Save changes Tier 1 for
    the same level. A brand-new session seeds its Tier 0 from whatever Tier 1 currently holds. This
    mirrors `build_pin.py`'s session pin pinning to one `(geom_hash, light_hash)` instead of always
@@ -177,28 +190,36 @@ new declarative data this feature adds per shape.
 All new routes are session-scoped, matching every existing GUI route (`/api/session/{id}/...`,
 `uedcli/serve/app.py`) — not the shape-in-URL-path form floated early in design.
 
+**Response shape — builder-brush-specific, NOT `SceneActor`.** Every route below that returns the
+builder-brush actor uses one new shape: geometry for rendering (reusing `BrushHighlight`'s
+poly/local-origin fields, `uedcli/serve/scene.py:89-118` — geometry rendering is unrelated to the
+props special-casing this spec avoids) plus **one generic `props` list** covering every property,
+Location and Rotation included, with no dedicated `location`/`rotation` fields. This is deliberately
+narrower than `SceneActor` (see "Background") rather than propagating its special-casing.
+
 - `GET /api/builders` — the shape registry above. No session; static per install (derived from the
   CLI parser tree).
 - `POST /api/session/{id}/builder-brush/build` `{shape, params}` — construct/rebuild Tier 0's brush
   geometry via `builders.<shape>(**params)`, then swap-in-place via the extracted pure function
   described below. If Tier 0 has no builder brush yet, creates one via `make_brush_actor` at a default
   Location (world origin); `make_brush_actor` requires SOME `CsgOper` to produce valid T3D, so it is
-  given `CsgOper=CSG_Add` as an inert default — never shown or toggleable in the UI (see "Non-goals"),
-  and irrelevant once Add/Subtract stamps its own value on the clone. Returns the updated actor,
-  serialized the same way
-  `scene.py` already serializes any brush actor (`SceneActor`/`BrushHighlight`,
-  `uedcli/serve/scene.py:89-118,208-231`) — reusing that serialization is what keeps the FE from
-  needing its own brush-to-render-shape logic.
-- `POST /api/session/{id}/builder-brush/move` `{location}` — `Location` only, no shape recompute.
-- `POST /api/session/{id}/builder-brush/rotate` `{rotation}`.
-- `GET /api/session/{id}/builder-brush` — current Tier 0 actor (same serialized shape as `build`
+  given `CsgOper=CSG_Add` as an inert default — never shown or settable through `prop` (see
+  "Non-goals"), and irrelevant once Add/Subtract stamps its own value on the clone. Returns the
+  updated actor in the response shape above.
+- `POST /api/session/{id}/builder-brush/prop` `{name, value}` — set ONE property on Tier 0's actor,
+  through the same generic plan/apply `actor prop set` uses model-side (`uedcli/propedit/edit.py`) —
+  covers `Location`, `Rotation`, and any other settable property uniformly, no shape recompute, no
+  per-field endpoint. Returns the updated actor in the response shape above.
+- `GET /api/session/{id}/builder-brush` — current Tier 0 actor (same response shape as `build`
   returns), or `null` if the session has none yet.
 - `DELETE /api/session/{id}/builder-brush` — discard Tier 0 (does not touch Tier 1, the staging store,
   or the trunk).
 - `POST /api/session/{id}/builder-brush/add` and `POST /api/session/{id}/builder-brush/subtract` —
   clone Tier 0's current actor into a new staged actor with `CsgOper` stamped per the route, per "Data
-  model". Returns the new actor's allocated Name and its serialized form (same `SceneActor`/
-  `BrushHighlight` shape as `build`/`GET`). Tier 0 is left unchanged.
+  model". Returns the new actor's allocated Name and its serialized form (`SceneActor`/`BrushHighlight`
+  — this one DOES land in the trunk on Save and become an ordinary actor, so it goes through the
+  regular actor read path like any other trunk actor once staged; the follow-up item covers fixing
+  that path's own special-casing). Tier 0 is left unchanged.
 - `POST /api/session/{id}/save` (existing route, `app.py:829`) — extended to also (a) flush Tier 0 →
   Tier 1 for the builder brush, and (b) apply every staged NEW actor (from `add`/`subtract`) into the
   trunk, alongside its existing staged-`Location`-move flush.
@@ -210,6 +231,11 @@ All new routes are session-scoped, matching every existing GUI route (`/api/sess
   `actor move` write pattern directly rather than shelling out to the CLI (`edits.py`'s own docstring:
   "Writes go through `TrunkLevelSource`, the exact model-side path `cli/commands/actor/edit.py`'s
   `_move` already uses").
+- **`prop` reuses `propedit`'s plan/apply, not a hand-rolled Location/Rotation setter.** The route
+  builds a `PropToken`/plan the same way `actor prop set` does (`uedcli/propedit/edit.py`) against
+  Tier 0's single actor, so `Location`'s typed-field validation (Decimal precision, PrePivot
+  invariant D8) and any struct-typed prop's grammar are enforced identically to the CLI, with zero
+  reimplementation — and zero special-casing of which property is being set.
 - **The "swap only PolyList" logic in `_replace()`** (`uedcli/cli/commands/brush/edit.py:502-543`,
   specifically lines 537-541) is extracted into a small pure function — proposed home `builders.py`,
   alongside the other builder functions — called by both the CLI's `_replace()` (unchanged behavior)
@@ -247,7 +273,9 @@ All new routes are session-scoped, matching every existing GUI route (`/api/sess
 
 ## Testing
 
-- **Backend**: Tier 0 write/read round-trip (build, move, rotate); the extracted poly-swap function
+- **Backend**: Tier 0 write/read round-trip (build; `prop` setting `Location`, `Rotation`, and at
+  least one other property, all through the one endpoint — no code path that special-cases which
+  property name was sent); the extracted poly-swap function
   produces byte-identical results to today's `_replace()` for the same inputs (no behavior change to
   the CLI verb); Save flushes Tier 0 → Tier 1 correctly and leaves Tier 0 untouched; a session created
   AFTER another session's Save picks up the new Tier 1 state, while an already-running session does
@@ -277,5 +305,11 @@ All new routes are session-scoped, matching every existing GUI route (`/api/sess
   store Add/Subtract stage their new actors into, extended with a new "stage a new actor" capability).
 - `uedcli/serve/build_pin.py` (the two-pin, two-failure-posture precedent Tier 0/Tier 1 copy).
 - `uedcli/build_cache.py`, `uedcli/preview_game.py` (on-disk paths renamed by this spec).
-- `uedcli/serve/scene.py:89-118,208-231` (`BrushHighlight`/`SceneActor` — reused for the builder
-  brush's own serialization).
+- `uedcli/serve/scene.py:89-118` (`BrushHighlight` — its geometry fields are reused for the builder
+  brush's own rendering; its parent `SceneActor` is NOT reused, see "Background"/"API surface").
+- `uedcli/propedit/edit.py`, `uedcli/propedit/fields.py:275` (`TYPED_FIELDS` — the generic plan/apply
+  the new `prop` route calls, unmodified).
+- `dev/docs/board/inbox/sceneactor-special-cases-location-rotation/` (p1 follow-up: fold
+  `SceneActor`'s dedicated `location`/`rotation` fields into its generic `props`, out of scope here).
+- Memory `gui_backend_no_special_cased_props` (owner ruling this spec round: never special-case
+  Location/Rotation away from regular props in the GUI backend).
