@@ -234,6 +234,14 @@ impl CollisionModel {
     }
 
     /// `UModel::PointCheck` with an extent (`0x1aeba0`): true when the box is in free space.
+    ///
+    /// This is a real box test against WORLD BSP geometry, for the path-build Scout's own extent
+    /// (see this module's header) — not evidence about actor collision shape in general. A real
+    /// actor's own collision volume is a CYLINDER, not a box: `AActor::SetCollisionSize`'s
+    /// `CollisionRadius`/`CollisionHeight` feed `UPrimitive::PointCheck` (`Engine.dll` `0x1935d0`),
+    /// which does a circular XY test (`dx*dx + dy*dy` vs `(radius sum)^2`) plus a separate Z test —
+    /// see `dev/docs/unrealed/leveldesign/kb/actors-collision-pathing.md` §1. Do not cite this
+    /// function as evidence for actor-vs-actor or actor-vs-world collision shape.
     pub fn point_check(&self, loc: Vec3, extent: Vec3) -> bool {
         if self.nodes.is_empty() {
             return self.root_outside;
