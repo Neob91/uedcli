@@ -99,10 +99,16 @@ action — same as any other staged edit.
 
 ## Data model
 
-**One reserved Name, one builder brush, per level.** Proposed sentinel: `UedcliBuilderBrush` — never
-minted through `allocate_name` (invariant D6 mints `Uedcli<Class><n>` with a numeric/random suffix;
-this is a fixed literal, permanently excluded from that allocator so a real content actor can never
-collide with it).
+**One reserved Name, one builder brush, per level.** Proposed sentinel: `uedcli/builder-brush` —
+chosen to be **structurally impossible** as a real UnrealEngine object name, not merely a value the
+allocator promises never to mint. `t3dtree.check_safe_segment` (`uedcli/t3dtree.py:153-157`) rejects
+any name containing `/` or `\`, precisely because "a real UnrealEngine object name can never contain"
+either — the same guard every `actors/<name>` trunk-tree write already goes through. A name with a
+`/` in it can therefore never collide with a real actor's Name, and — as a bonus — if a bug ever
+routed this sentinel through the trunk-write path by mistake, `check_safe_segment` would reject it
+loudly there rather than silently writing something wrong. It is never minted through `allocate_name`
+either (invariant D6 mints `Uedcli<Class><n>` with a numeric/random suffix, a disjoint scheme), but
+that is now a second, redundant guarantee, not the only one.
 
 **Where it lives — two tiers, neither is the trunk:**
 
@@ -129,7 +135,7 @@ instead (a) overwrites `levels/<level>/builder-brush.json` with its current stag
 does **NOT** clear it from the session's staging store afterward — unlike every other staged edit,
 the builder brush is not "consumed" by Save; the session keeps working on the same staged entry.
 
-**Discard.** `POST /api/session/{id}/discard {"actors": ["UedcliBuilderBrush"]}` reuses the existing
+**Discard.** `POST /api/session/{id}/discard {"actors": ["uedcli/builder-brush"]}` reuses the existing
 route, but — because there is no trunk copy to fall back to the way a real actor's discard has — it
 **re-seeds** the reserved Name's staged entry the same way session-creation does (from
 `levels/<level>/builder-brush.json`, else the default cube), rather than leaving it staged-absent.
@@ -147,7 +153,7 @@ never find a pre-existing trunk value to compare it against either.
 ## `/scene` overlay
 
 `GET /api/session/{id}/scene` appends ONE synthetic entry — the session's current staged actor for
-`UedcliBuilderBrush` — to the trunk-derived actor list, serialized through the exact same per-actor
+`uedcli/builder-brush` — to the trunk-derived actor list, serialized through the exact same per-actor
 path `_build_actors` (`uedcli/serve/scene.py:571`) already applies to every trunk actor. No second
 serialization path, no bespoke response shape. The FE distinguishes it (for the red builder-brush
 rendering, and to route edits/Add/Subtract UI to it) by Name equality against the reserved sentinel —
@@ -224,7 +230,7 @@ new declarative data this feature adds per shape.
   render without a second round trip.
 - `POST /api/session/{id}/stage` (existing route, generalized) `{"actors": {name: {prop: value,
   ...}}}` — moving Location off its own hardcoded shape onto the generic form covers the builder
-  brush's move/rotate needs with ZERO builder-brush-specific code: `UedcliBuilderBrush` is just
+  brush's move/rotate needs with ZERO builder-brush-specific code: `uedcli/builder-brush` is just
   another name in the same map real actors use. No new route.
 - `POST /api/session/{id}/builder-brush/add` and `POST /api/session/{id}/builder-brush/subtract` —
   clone the reserved Name's current staged actor into a new staged actor with a freshly
@@ -232,7 +238,7 @@ new declarative data this feature adds per shape.
   its `SceneActor`/`BrushHighlight` form (it now IS an ordinary staged actor, read the ordinary way).
   The reserved Name's own staged entry is untouched.
 - `POST /api/session/{id}/discard` (existing route, no change to its shape) — `{"actors":
-  ["UedcliBuilderBrush"]}` re-seeds it per "Data model", rather than leaving it absent.
+  ["uedcli/builder-brush"]}` re-seeds it per "Data model", rather than leaving it absent.
 - `POST /api/session/{id}/save` (existing route, `app.py:829`, extended) — for the reserved Name:
   flush to `levels/<level>/builder-brush.json` instead of the trunk, and do not clear it from staging.
   For every other staged actor: unchanged.
@@ -289,7 +295,7 @@ new declarative data this feature adds per shape.
 
 - **Backend**: session creation seeds the reserved Name's staged entry from `levels/<level>/
   builder-brush.json` when present, else the default cube; `/scene` includes exactly one
-  `UedcliBuilderBrush` entry, serialized through the same per-actor path as a real actor; `build`
+  `uedcli/builder-brush` entry, serialized through the same per-actor path as a real actor; `build`
   swaps only `PolyList` (byte-identical to today's `_replace()` for the same inputs); the generalized
   `/stage` route sets `Location`, `Rotation`, and at least one other property on the reserved Name
   through the SAME code path used for a real actor's staged move — no code path that special-cases
@@ -325,6 +331,7 @@ new declarative data this feature adds per shape.
   `build`'s response both reuse).
 - `uedcli/propedit/edit.py`, `uedcli/propedit/fields.py:275` (`TYPED_FIELDS` — the generic plan/apply
   the generalized `/stage` route calls, unmodified).
+- `uedcli/t3dtree.py:153-157` (`check_safe_segment` — why the reserved Name contains `/`).
 - `uedcli/normalize.py:96-99,174-177`, `dev/docs/spikes/2026-09-15-builder-brush-is-actors1-not-a-
   content-heuristic/spike.md` (why the reserved Name is not `"Brush0"`).
 - `dev/docs/board/inbox/sceneactor-special-cases-location-rotation/` (p1 follow-up: fold
