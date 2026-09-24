@@ -526,7 +526,12 @@ git commit -m "builder_brush: session-box store and one-time creation seeding"
   `geometry.validate_brush`, `builders.<shape>` functions.
 - Produces: `build(sessions_root: Path, session_id: str, shape: str, params: dict) -> Actor` —
   rebuilds the session box's `PolyList` only; raises `CommandError` for an unknown `shape` or invalid
-  `params` (bad type/missing required key) or a degenerate result (`geometry.validate_brush`).
+  `params` (bad type/missing required key). A degenerate result raises `geometry.GeometryError`
+  (`uedcli/geometry.py:20`, `class GeometryError(ValueError)`) UNWRAPPED — same as `_replace()`'s own
+  `validate_brush(target.brush)` call (`edit.py:541`) — not `CommandError`; both are already
+  classified to a clean 422 by `uedcli/serve/errors.py::error_to_status`, so no new exception
+  handling is needed here, but a test must `pytest.raises(GeometryError)` for this case, not
+  `CommandError`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -987,7 +992,7 @@ After the existing move-staging apply logic (the `if touched: src.save(...)` blo
     applied_new: list[str] = []
     if new_actors_staged:
         # A fresh TrunkLevelSource, LOADED before use -- TrunkLevelSource.save() hard-requires a
-        # prior load() (uedcli/cli/level_sources.py:77: "raise RuntimeError" otherwise, since it
+        # prior load() (uedcli/cli/level_sources.py:77-78: "raise RuntimeError" otherwise, since it
         # preserves the existing order_values from that load). Reloading here (rather than reusing
         # `src` from the move-apply above) means the collision check below is against the CURRENT
         # trunk, not the stale snapshot this function started with -- the move-apply, if any, may
@@ -1299,7 +1304,7 @@ def shape_registry() -> list[dict]:
     """Memoized (module-level cache — the argparse tree is pure/static per process, same
     "resolve once" convention as `classindex.ClassIndex`). Reuses `uedcli.cli.main.build_parser()`
     verbatim — the SAME function `uedcli.cli.main.main()` calls to build the real top-level CLI
-    parser (`uedcli/cli/main.py:35-58`) — rather than re-registering `brush.register` in isolation,
+    parser (`uedcli/cli/main.py:35-60`) — rather than re-registering `brush.register` in isolation,
     so this registry can never drift from what the CLI itself actually exposes."""
     global _registry_cache
     if _registry_cache is not None:
@@ -1320,7 +1325,7 @@ def shape_registry() -> list[dict]:
     return entries
 ```
 
-**Verified against the real parser-construction code**: `uedcli/cli/main.py:35-58`'s `build_parser()`
+**Verified against the real parser-construction code**: `uedcli/cli/main.py:35-60`'s `build_parser()`
 is the exact function `main()` itself calls — `brush.register(sub)` (line 44) registers the whole
 `brush` verb tree, including `build` and every shape subparser, through `uedcli/cli/parsers/
 brush.py:17`'s `register(sub)`. `argparse._SubParsersAction.choices` is a `{name: ArgumentParser}`
@@ -1497,10 +1502,17 @@ New standalone routes (place near the other `/api/session/{id}/...` routes):
         return builder_registry.shape_registry()
 
     @app.post("/api/session/{session_id}/builder-brush/build")
-    def builder_brush_build(session_id: str, body: dict) -> dict:
-        _require_session(session_id)
-        actor = builder_brush.build(_sessions_root, session_id, body["shape"], body.get("params", {}))
+    def builder_brush_build(session_id: str, body: dict, request: Request) -> dict:
+        # Claim-token gated like every other session-mutating route (`load`/`stage`/`discard`/
+        # `save`) — this writes the session's builder-brush store, so it needs the same protection
+        # against a stale/superseded client mutating a session it no longer owns.
         session = _require_session(session_id)
+        token = request.headers.get("X-Claim-Token", "")
+        with _claims.lock_for(session_id):
+            if not _claims.check(session_id, token):
+                return _claim_conflict_response(session_id)
+            actor = builder_brush.build(_sessions_root, session_id, body["shape"],
+                                        body.get("params", {}))
         search_files, index, defaults = _current_scene_inputs(session.level)
         scene_actor, _ = _build_one_actor(
             actor.name, actor, 0, ranks={}, actor_sprites={}, tex_offset=0, ctx_cache={},
@@ -1508,21 +1520,25 @@ New standalone routes (place near the other `/api/session/{id}/...` routes):
         return asdict(scene_actor)
 
     @app.post("/api/session/{session_id}/builder-brush/add")
-    def builder_brush_add(session_id: str) -> dict:
-        return _builder_brush_csg(session_id, "add")
+    def builder_brush_add(session_id: str, request: Request) -> dict:
+        return _builder_brush_csg(session_id, "add", request)
 
     @app.post("/api/session/{session_id}/builder-brush/subtract")
-    def builder_brush_subtract(session_id: str) -> dict:
-        return _builder_brush_csg(session_id, "subtract")
+    def builder_brush_subtract(session_id: str, request: Request) -> dict:
+        return _builder_brush_csg(session_id, "subtract", request)
 
-    def _builder_brush_csg(session_id: str, csg: str) -> dict:
+    def _builder_brush_csg(session_id: str, csg: str, request: Request) -> dict:
         session = _require_session(session_id)
-        trunk_dir = Path(config.project_maps_dir(project)) / session.level
-        level = TrunkLevelSource(trunk_dir).load()
-        existing = set(level.actors)
-        clone = builder_brush.clone_for_csg(_sessions_root, session_id, existing, csg=csg)
-        _staging_store.stage_new(session_id, clone.name,
-                                 actor_t3d_text=normalize.canonical_actor_t3d(clone))
+        token = request.headers.get("X-Claim-Token", "")
+        with _claims.lock_for(session_id):
+            if not _claims.check(session_id, token):
+                return _claim_conflict_response(session_id)
+            trunk_dir = Path(config.project_maps_dir(project)) / session.level
+            level = TrunkLevelSource(trunk_dir).load()
+            existing = set(level.actors)
+            clone = builder_brush.clone_for_csg(_sessions_root, session_id, existing, csg=csg)
+            _staging_store.stage_new(session_id, clone.name,
+                                     actor_t3d_text=normalize.canonical_actor_t3d(clone))
         search_files, index, defaults = _current_scene_inputs(session.level)
         scene_actor, _ = _build_one_actor(
             clone.name, clone, 0, ranks={}, actor_sprites={}, tex_offset=0, ctx_cache={},
@@ -1609,6 +1625,19 @@ use — reuse that same import, add `InvalidOperation` to it if not already pres
 `discard_staged(..., actors=None)` call is ALREADY a no-op for the builder brush with no change
 needed there; only the FILTERED case above needs the explicit skip.)
 
+`_SessionKeyedStore` (`app.py:79-104`) extension — **required**: `session_save` calls
+`edits.save_staged(..., store=_SessionKeyedStore(_staging_store, session_id))`
+(real `app.py:889-891`), and Task 9's extended `save_staged` now calls
+`store.read_staged_new_actors(level_name)`. The real `_SessionKeyedStore` only proxies `stage`/
+`read_staged`/`clear_actor` — without this addition, ANY Save after an Add/Subtract raises
+`AttributeError` (unclassified by `error_to_status`, so it would escape as a raw 500, violating "no
+Python exception reaches the user"). Add one more proxy method, same shape as the other three:
+
+```python
+    def read_staged_new_actors(self, _level_name: str):
+        return self._store.read_staged_new_actors(self._session_id)
+```
+
 `session_save` extension (after the existing `edits.save_staged` call and blob eviction, before the
 pin-promotion block):
 
@@ -1628,15 +1657,26 @@ pin-promotion block):
 
 ```python
         builder_actor = builder_brush.load_session_box(_sessions_root, session_id)
-        builder_scene_actor, _ = _build_one_actor(
+        builder_scene_actor, builder_enum_types = _build_one_actor(
             builder_actor.name, builder_actor, 0, ranks={}, actor_sprites={}, tex_offset=0,
             ctx_cache={}, index=index, radii_map={}, arrow_map={})
+        enums = dict(payload.enums)
+        enums.update(builder_enum_types)
         return {
             "polys": [asdict(p) for p in payload.polys],
             "actors": [asdict(a) for a in payload.actors] + [asdict(builder_scene_actor)],
+            "enums": enums,
             "geometry_pinned": geometry is not None,
         }
 ```
+
+**Fixes a real regression an earlier draft of this task had**: the REAL current `session_scene`
+(`app.py:659-664`) already returns `"enums": payload.enums` — an earlier version of this snippet
+dropped that field entirely, which would have silently broken enum-typed prop editing for every
+actor, level-wide, not just the builder brush. The version above keeps it, and additionally folds in
+`_build_one_actor`'s own second return value (the builder brush's own enum types, previously
+discarded as `_` at the call site above) via a dict update — matching the exact pattern `_build_
+actors`'s own loop uses (`payload_enums.update(actor_enum_types)`, Task 10).
 
 - [ ] **Step 4: Run all new tests, then the FULL app.py suite**
 
@@ -1799,7 +1839,7 @@ file) rather than pattern-matching blindly.
 
 - [ ] **Step 5: Run the frontend test suite for these 3 files**
 
-Run: `cd web && npx vitest run src/api.test.ts src/scene/Viewport3D.test.tsx src/scene/OrthoViewport.test.tsx`
+Run: `cd web && npx vitest run src/api.test.ts src/scene/Viewport3D.test.ts src/scene/OrthoViewport.test.ts`
 Expected: PASS — including each file's EXISTING tests that exercise `postStage`, updated to the new
 call shape (check each test file's own mocked `postStage` assertions and update them to match, same
 migration as the real call sites).
@@ -1808,8 +1848,8 @@ migration as the real call sites).
 
 ```bash
 git add web/src/api.ts web/src/api.test.ts \
-  web/src/scene/Viewport3D.tsx web/src/scene/Viewport3D.test.tsx \
-  web/src/scene/OrthoViewport.tsx web/src/scene/OrthoViewport.test.tsx
+  web/src/scene/Viewport3D.tsx web/src/scene/Viewport3D.test.ts \
+  web/src/scene/OrthoViewport.tsx web/src/scene/OrthoViewport.test.ts
 git commit -m "api.ts: generalize postStage to a prop-map, add builder-brush API calls"
 ```
 
