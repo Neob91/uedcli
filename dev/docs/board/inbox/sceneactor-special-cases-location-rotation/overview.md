@@ -22,5 +22,8 @@ staged-move code (`uedcli/serve/edits.py`), and whatever FE code currently reads
 `SceneActor.location`/`.rotation` directly — real scope, not a one-file rename.
 
 Raised while speccing `gui-builder-brushes` (`dev/docs/board/to-spec/gui-builder-brushes/`), which is
-deliberately NOT fixing this itself — it gives the builder brush its own generic-props response shape
-rather than reusing `SceneActor`, to avoid growing its own scope into this larger fix.
+deliberately NOT fixing this itself. That spec's builder brush IS exposed as a genuine `SceneActor`
+(reused as-is, not a bespoke shape — an earlier draft tried a bespoke response shape specifically to
+dodge this issue, then dropped it once "transparent, ordinary actor" became the actual design), so it
+inherits this special-casing exactly like every other actor — no better, no worse. Fixing it here
+would ripple beyond the builder-brush feature's own scope.

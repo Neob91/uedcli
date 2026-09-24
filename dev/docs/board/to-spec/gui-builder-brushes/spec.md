@@ -35,10 +35,11 @@ for another Add/Subtract. The staged clone reaches the trunk only when the user 
   on the CLONE — the builder brush has no add-vs-subtract "mode" to toggle.
 - No conflict-detection/merge machinery for the builder brush's own edits, and none for a staged
   Add/Subtract clone either — see "Data model" for why neither can conflict.
-- Texture/solidity/folder/label/base-name/mover-class — the extra flags `_common_build_opts` adds to
-  every `brush build <shape>` subparser (`uedcli/cli/parsers/brush.py:121-151`) — are NOT part of the
-  builder-brush "build" call. Only each shape's own geometry params are; Location/Rotation/CsgOper are
-  set (or, for CsgOper, chosen) through the operations described below. See "Builder registry".
+- Texture/solidity/folder/label/base-name/mover-class/prop/at/rotate — the ten extra flags
+  `_common_build_opts` adds to every `brush build <shape>` subparser
+  (`uedcli/cli/parsers/brush.py:121-179`) — are NOT part of the builder-brush "build" call. Only each
+  shape's own geometry params are; Location/Rotation/CsgOper are set (or, for CsgOper, chosen) through
+  the operations described below. See "Builder registry".
 - No separate, builder-brush-only edit endpoints for move/rotate/prop-set. The FE stages an edit to
   the builder brush through the exact same `POST /api/session/{id}/stage` call it uses for a real
   actor — see "API surface" for how the backend routes that one reserved Name differently without the
@@ -114,7 +115,7 @@ and `*` is neither, so this string can never be a real actor Name. It is never m
 scheme), but that is now a second, redundant guarantee, not the only one.
 
 One thing `*Builder` does NOT get, that an earlier `/`-containing candidate would have:
-`t3dtree.check_safe_segment` (`uedcli/t3dtree.py:153-157`) only rejects a name containing `/`/`\` or
+`t3dtree.check_safe_segment` (`uedcli/t3dtree.py:153-159`) only rejects a name containing `/`/`\` or
 equal to `.`/`..` — a bare `*` passes it unchanged, so a bug that somehow routed this sentinel through
 the trunk-write path would not be caught there the way it would with a `/`-containing name. Not
 load-bearing (this design never passes the reserved Name to a trunk-write path — only its D6-allocated
@@ -170,6 +171,14 @@ second serialization path, no bespoke response shape. The FE distinguishes it (f
 builder-brush rendering, and to route edits/Add/Subtract UI at it) by Name equality against the
 reserved sentinel — no new boolean flag needed, since the Name is already unique and known.
 
+**Real integration work, not a one-line call.** `_build_actors(trunk: _LoadedTrunk, hidden_ed, *,
+tex_offset, index, radii_map, arrow_map)` is a whole-trunk BATCH function — both its existing call
+sites (`scene.py:773`, `:806`) pass a full `_LoadedTrunk` plus a `radii_map`/`arrow_map` precomputed
+for the entire level. Reusing it for one extra builder-brush entry means either synthesizing a
+one-actor `_LoadedTrunk` (with its own one-entry `radii_map`/`arrow_map` slice) to feed it, or a small
+refactor extracting a genuinely per-actor path out of it. Left to the implementation plan which of the
+two; either way it's more than "call the existing function again."
+
 This overlay is scoped to exactly this one entry — it does not change `/scene`'s existing behavior for
 any real actor's staged edits, which still only appear through client-side optimistic rendering and
 `POST /rebuild`'s CSG solve, unchanged from today.
@@ -220,10 +229,11 @@ default/required-ness, `choices=` (for enum-like params, e.g. `--axis`'s `choice
 `GET /api/builders` introspects these subparsers and serves, per shape: its id (the subparser name,
 e.g. `"cylinder"`), its own `help=` as the label, and one entry per **shape-specific** argument (name,
 type, default, choices if any, help text) — **excluding** every argument `_common_build_opts` adds
-(`--at`, `--base-name`, `--csg`, `--solidity`, `--folder`, `--label`, `--texture`,
-`brush.py:121-151`), since `--at` is handled by the builder-brush `prop` route (see "API surface"),
-and `--csg` is not a builder-brush property at all — it is chosen only by which of Add/Subtract the
-user presses (see "Non-goals").
+(`--at`, `--base-name`, `--csg`, `--solidity`, `--folder`, `--label`, `--texture`, `--mover-class`,
+`--prop`, `--rotate` — `brush.py:121-179`), since `--at`/`--rotate` are handled by `/stage` (see "API
+surface"), `--csg` is not a builder-brush property at all — it is chosen only by which of Add/Subtract
+the user presses (see "Non-goals") — and `--mover-class`/`--prop`/`--base-name`/`--folder`/`--label`
+have no meaning for a not-yet-placed scratch actor.
 
 **Icon** has no CLI analog — one small new hand-authored table, shape id → icon name/path, is the only
 new declarative data this feature adds per shape.
@@ -346,8 +356,8 @@ new declarative data this feature adds per shape.
 - `dev/docs/architecture.md` "The core write pattern", "The `LevelSource` seam and `--tree`" (the
   seam this feature deliberately does NOT extend), module map entries for `builders.py`/`profile.py`.
 - `uedcli/cli/commands/brush/edit.py:502-543` (`_replace`, the poly-swap this feature extracts).
-- `uedcli/cli/parsers/brush.py:121-278` (`_common_build_opts` + all `brush build` shape subparsers —
-  the registry's source of truth).
+- `uedcli/cli/parsers/brush.py:121-345` (`_common_build_opts` + all `brush build` shape subparsers,
+  extrude/revolve included — the registry's source of truth).
 - `uedcli/serve/snapshots.py`, `uedcli/serve/edits.py`, `uedcli/serve/app.py:772-827` (`StagingStore`/
   staged-actor flow — kept exactly as-is for real actors, plus one new "stage a new actor" capability
   for Add/Subtract's output; NOT where the builder brush's own state lives).
@@ -358,7 +368,7 @@ new declarative data this feature adds per shape.
   `build`'s response both reuse).
 - `uedcli/propedit/edit.py`, `uedcli/propedit/fields.py:275` (`TYPED_FIELDS` — the generic plan/apply
   the generalized `/stage` route's builder-brush dispatch calls, unmodified).
-- `uedcli/t3dtree.py:153-157` (`check_safe_segment` — the guard an earlier `/`-based sentinel would
+- `uedcli/t3dtree.py:153-159` (`check_safe_segment` — the guard an earlier `/`-based sentinel would
   have tripped; `*Builder` passes it, a noted trade-off, see "Data model").
 - `uedcli/preview_shots.py:21` (FNames are alnum/underscore — why `*Builder` is illegal).
 - `uedcli/normalize.py:96-99,174-177`, `dev/docs/spikes/2026-09-15-builder-brush-is-actors1-not-a-
