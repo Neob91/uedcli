@@ -63,7 +63,7 @@ for another Add/Subtract. The staged clone reaches the trunk only when the user 
   buttons perform on its one builder brush.
 - **Property edits are already generic at the model layer — the GUI must not re-special-case them.**
   `actor prop set` reaches `Location` through `propedit`'s typed-field registry
-  (`uedcli/propedit/fields.py:275`, `TYPED_FIELDS`) and `Rotation` as an ordinary struct-typed prop
+  (`uedcli/propedit/fields.py:274`, `TYPED_FIELDS`) and `Rotation` as an ordinary struct-typed prop
   (it isn't even in that registry) — ONE generic plan/apply path (`uedcli/propedit/edit.py`) already
   handles both, and every other prop, uniformly. *(Owner ruling — see memory
   `gui_backend_no_special_cased_props` and the follow-up item below.)* The builder brush's own prop
@@ -87,10 +87,10 @@ for another Add/Subtract. The staged clone reaches the trunk only when the user 
   needs no conflict handling either (fresh Name, nothing to diverge from).
 - **`GET /api/session/{id}/scene` serves the raw trunk today, unmodified by session state.** Staged
   actor moves are NOT merged into it server-side — only `POST /rebuild`'s CSG solve does that, via
-  `edits.apply_staged_overlay` (`uedcli/serve/app.py:551-560`). **This spec adds ONE narrow overlay**:
+  `edits.apply_staged_overlay` (`uedcli/serve/app.py:558-577`). **This spec adds ONE narrow overlay**:
   the session's builder-brush actor (from its own store, not `StagingStore`) is appended to `/scene`'s
   actor list, through the same per-actor serialization `_build_actors` already applies to a trunk
-  actor (`uedcli/serve/scene.py:571`) — not a general "overlay session state into `/scene`" change; a
+  actor (`uedcli/serve/scene.py:635`) — not a general "overlay session state into `/scene`" change; a
   real actor's staged `Location` move still does not appear there, unchanged from today.
 - **`SceneActor` (`uedcli/serve/scene.py`) special-cases `location`/`rotation` as dedicated fields,
   separate from its generic `props` list.** Because the builder brush is exposed as a genuine
@@ -172,7 +172,7 @@ session's own store is never touched by any other session's writes.
 
 `GET /api/session/{id}/scene` appends ONE synthetic entry — the session's own builder-brush actor,
 read from its own store — to the trunk-derived actor list, serialized through the exact same
-per-actor path `_build_actors` (`uedcli/serve/scene.py:571`) already applies to every trunk actor. No
+per-actor path `_build_actors` (`uedcli/serve/scene.py:635`) already applies to every trunk actor. No
 second serialization path, no bespoke response shape. The FE distinguishes it (for the red
 builder-brush rendering, and to route edits/Add/Subtract UI at it) by Name equality against the
 reserved sentinel — no new boolean flag needed, since the Name is already unique and known.
@@ -277,7 +277,7 @@ new declarative data this feature adds per shape.
 - `POST /api/session/{id}/discard` (existing route, no change to its shape) — `{"actors":
   ["*Builder"]}` dispatches to a true no-op per "Data model" (UnrealEd never lets you delete or reset
   its builder brush), rather than clearing it to nothing the way a real actor's discard does.
-- `POST /api/session/{id}/save` (existing route, `app.py:829`, extended) — gains a second, independent
+- `POST /api/session/{id}/save` (existing route, `app.py:873`, extended) — gains a second, independent
   job: flush the session's builder-brush store into `levels/<level>/builder-brush.json`, without
   clearing it. Its existing `StagingStore`-apply behavior (real actor moves, and now staged
   Add/Subtract clones) is unchanged.
@@ -372,15 +372,15 @@ new declarative data this feature adds per shape.
 - `uedcli/cli/commands/brush/edit.py:502-543` (`_replace`, the poly-swap this feature extracts).
 - `uedcli/cli/parsers/brush.py:121-345` (`_common_build_opts` + all `brush build` shape subparsers,
   extrude/revolve included — the registry's source of truth).
-- `uedcli/serve/snapshots.py`, `uedcli/serve/edits.py`, `uedcli/serve/app.py:772-827` (`StagingStore`/
+- `uedcli/serve/snapshots.py`, `uedcli/serve/edits.py`, `uedcli/serve/app.py:816-871` (`StagingStore`/
   staged-actor flow — kept exactly as-is for real actors, plus one new "stage a new actor" capability
   for Add/Subtract's output; NOT where the builder brush's own state lives).
 - `uedcli/serve/build_pin.py` (the two-pin, two-failure-posture precedent the session-store/
   `levels/<level>/builder-brush.json` split follows).
 - `uedcli/build_cache.py`, `uedcli/preview_game.py` (on-disk paths renamed by this spec).
-- `uedcli/serve/scene.py:571` (`_build_actors` — the per-actor serialization the `/scene` overlay and
+- `uedcli/serve/scene.py:635` (`_build_actors` — the per-actor serialization the `/scene` overlay and
   `build`'s response both reuse).
-- `uedcli/propedit/edit.py`, `uedcli/propedit/fields.py:275` (`TYPED_FIELDS` — the generic plan/apply
+- `uedcli/propedit/edit.py`, `uedcli/propedit/fields.py:274` (`TYPED_FIELDS` — the generic plan/apply
   the generalized `/stage` route's builder-brush dispatch calls, unmodified).
 - `uedcli/t3dtree.py:153-159` (`check_safe_segment` — the guard an earlier `/`-based sentinel would
   have tripped; `*Builder` passes it, a noted trade-off, see "Data model").
