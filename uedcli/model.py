@@ -117,6 +117,18 @@ class Actor:
     # it. Read it through `normalize._stated_axes`, never directly. NEVER emitted (see
     # `emit_actor`), never hashed, never written to the trunk.
     location_text: str | None = None
+    # The `MainScale=` value EXACTLY as it was parsed, or None when the actor had no MainScale line.
+    # A CONTAINED SIDE-CHANNEL for one fact the typed `main_scale` field cannot carry: the VERBATIM
+    # SOURCE TEXT. Like `location_text`, this is a compare-side record not meant for emission.
+    # See architecture.md "Scale" and effective_props._resolve_typed_fields, which consumes it.
+    # NEVER emitted (see `emit_actor`), never hashed, never written to the trunk.
+    main_scale_text: str | None = None
+    # The `PostScale=` value EXACTLY as it was parsed, or None when the actor had no PostScale line.
+    # A CONTAINED SIDE-CHANNEL for one fact the typed `post_scale` field cannot carry: the VERBATIM
+    # SOURCE TEXT. Like `location_text`, this is a compare-side record not meant for emission.
+    # See architecture.md "Scale" and effective_props._resolve_typed_fields, which consumes it.
+    # NEVER emitted (see `emit_actor`), never hashed, never written to the trunk.
+    post_scale_text: str | None = None
 
 
 @dataclass
@@ -226,13 +238,16 @@ def _parse_actor(lines: list[str], i: int) -> tuple[Actor, int]:
                 # MainScale/PostScale are owned by the typed `actor.main_scale`/`post_scale` fields
                 # (like Location) — NOT mirrored into `props`, so emit_actor re-emits from the field
                 # and a stale props copy can't double-emit (spec §10). The value is a nested
-                # `(Scale=(X=,Y=,Z=),SheerRate=,SheerAxis=)` FScale struct.
+                # `(Scale=(X=,Y=,Z=),SheerRate=,SheerAxis=)` FScale struct. The verbatim text is
+                # also recorded in main_scale_text/post_scale_text for the compare seam (task 3).
                 from .transform import parse_fscale
                 fs = parse_fscale(val)
                 if key == "MainScale":
                     actor.main_scale = fs
+                    actor.main_scale_text = val
                 else:
                     actor.post_scale = fs
+                    actor.post_scale_text = val
             else:
                 actor.props.append((key, val.strip('"')))
         i += 1

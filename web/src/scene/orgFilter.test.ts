@@ -22,7 +22,6 @@ function actor(overrides: Partial<SceneActor> = {}): SceneActor {
     order_value: 'm',
     csg_rank: 1,
     props: [],
-    categories: [],
     brush: null,
     sprite: null,
     radii: null,

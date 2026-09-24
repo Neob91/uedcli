@@ -18,13 +18,34 @@ default; `class show` prints names/types only, not values).
 
 ---
 
-## 1. Collision — the cylinder model  [ENGINE] 🔬
+## 1. Collision — the cylinder model  [ENGINE] ✅
 
 UE1 actor collision is cylinder-based. Every actor has one upright collision cylinder:
 
 - `CollisionRadius` — half-width. `CollisionHeight` — half-height (total height = 2 × `CollisionHeight`).
 - No per-poly, box, or capsule actor collision in UE1 (that is UE2); the cylinder stays upright
   regardless of rotation — a rotated crate still collides as an upright cylinder.
+
+**Disassembly confirmation (✅, `Engine.dll`, ImageBase `0x10000000`):** `AActor::SetCollisionSize`
+(RVA `0x12e8b0`) stores its two float args to `[actor+0x190]`/`[actor+0x194]` — pinning
+`CollisionRadius`/`CollisionHeight`'s real offsets. The actual solid/overlap test,
+`UPrimitive::PointCheck` (RVA `0x1935d0`, reached via `FCollisionHash::ActorPointCheck` at
+`0x125380` through vtable slot `[eax+0x54]`; `AActor::IsOverlapping`, RVA `0x12d3d0`, has the same
+shape), does:
+
+- Z: `(queryExtent.Z + CollisionHeight)^2 > dz^2` — a plain per-axis test.
+- XY: `(queryExtent.X + CollisionRadius)^2 > dx*dx + dy*dy` — ONE circular sum, no separate Y-axis
+  term. `queryExtent.Y` is never read at all; a query box's Y half-extent is silently discarded
+  in favor of using X as the query's own radius.
+- Both comparisons are STRICT (`jbe` on a miss) — exact edge contact counts as a miss, not a hit.
+
+No third, independent per-axis XY comparison exists anywhere in this function — a box test (which
+would need one) is ruled out. This closes a mistake from 2026-09-23: a different, unrelated
+function — `UModel::PointCheck` (RVA `0x1aeba0`, `uedcli-native/src/collision.rs`), the native
+AI-pathing Scout's OWN world-BSP box collision, ported for `level materialize`'s reachspec
+generation — was cited as if it were evidence about general actor collision shape. It isn't a
+box-vs-cylinder question at all: that function's box IS correct, for the pathing Scout's own
+purpose, and is unrelated to how a real actor collides with the world or other actors.
 
 ### 1.1 The flag families  🔬
 

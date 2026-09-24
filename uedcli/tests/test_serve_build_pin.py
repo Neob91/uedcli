@@ -58,7 +58,7 @@ def test_resolve_level_pin_returns_none_on_a_cache_miss(tmp_path):
 
 def test_resolve_level_pin_returns_the_cached_payload_on_a_hit(tmp_path):
     project = _project(tmp_path)
-    payload = ([1, 2, 3], ["tex"], ["Room"])
+    payload = ([1, 2, 3], ["tex"], ["Room"], ["Pkg.Group.Name"])
     build_cache.store_scene(project, "TestLevel", "abc123abc123", "def456def456", payload)
     build_pin.write_level_pointer(project, "TestLevel", "abc123abc123", "def456def456")
 

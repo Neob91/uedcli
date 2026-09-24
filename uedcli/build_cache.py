@@ -27,7 +27,7 @@ from pathlib import Path
 
 from . import config
 
-_CACHE_VERSION = 3   # bumped: the per-poly actor-owner list's elements widened to (name, i_brush_poly)
+_CACHE_VERSION = 4   # bumped: geometry/scene payloads gained a trailing texture_table `groups` list
 
 
 def _dir(project, level_name: str) -> Path:
@@ -65,14 +65,17 @@ def _store(path: Path, payload) -> None:
 
 
 def load_geometry(project, level_name: str, geom_hash12: str):
-    """`(model_body, portals, polys_no_light, i_surf_by_poly, actor_names_by_poly, texture_table)`
-    for `geom_hash12`, or None. `portals` is `uedcli_native.leaf_portals(built)`'s output (the
-    frozen portal graph, not part of `model_body`'s on-disk format — MUST be restored via
-    `load_model(body, leaf_portals=portals)`, never dropped, or `bake_lighting` silently falls back
-    to a stale recompute). `polys_no_light` entries omit the trailing lightmap field;
+    """`(model_body, portals, polys_no_light, i_surf_by_poly, actor_names_by_poly, texture_table,
+    texture_groups)` for `geom_hash12`, or None. `portals` is `uedcli_native.leaf_portals(built)`'s
+    output (the frozen portal graph, not part of `model_body`'s on-disk format — MUST be restored
+    via `load_model(body, leaf_portals=portals)`, never dropped, or `bake_lighting` silently falls
+    back to a stale recompute). `polys_no_light` entries omit the trailing lightmap field;
     `i_surf_by_poly[i]` is the world-BSP surf index feeding `polys_no_light[i]`'s eventual lightmap
     (None for a mover/mesh poly, which never gets one); `actor_names_by_poly[i]` is that same poly's
-    owning actor name (None for an out-of-range CSG join)."""
+    owning actor name (None for an out-of-range CSG join). `texture_groups[i]` is
+    `_TextureTable.group_for(i)` for `texture_table[i]` — the real `Package.Group.Name` identity
+    `build_scene`'s `groups_out` out-param needs, carried through the cache so a geometry-cache HIT
+    doesn't lose it (board/review finding: it used to)."""
     return _load(_geometry_path(project, level_name, geom_hash12))
 
 
@@ -81,8 +84,9 @@ def store_geometry(project, level_name: str, geom_hash12: str, payload) -> None:
 
 
 def load_scene(project, level_name: str, geom_hash12: str, light_hash12: str):
-    """The cached fully-lit `(polys, texture_table, actor_names_by_poly)` for this exact
-    geometry+light combination (both hashes must match), or None."""
+    """The cached fully-lit `(polys, texture_table, actor_names_by_poly, texture_groups)` for this
+    exact geometry+light combination (both hashes must match), or None. `texture_groups[i]` is
+    `_TextureTable.group_for(i)` for `texture_table[i]` — see `load_geometry`'s docstring."""
     return _load(_lighting_path(project, level_name, geom_hash12, light_hash12))
 
 

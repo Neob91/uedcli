@@ -1137,6 +1137,16 @@ and plan both in board item `re-evaluate-whether-reject-nonlevel-target`; `direc
     non-uniform `--by --pivot` over a rotated brush warns (MainScale is pre-rotation — inexact).
     `mirror` = `brush scale --by -1,1,1` (no sugar verb). **`actor rotate` gains `--to P,Y,R`** (absolute
     Rotation field, in place, excludes `--pivot`).
+  - **All four typed transform fields are ordinary engine `StructProperty` declarations, not
+    native-hardcoded.** ✅ uedcli-used: `uprops.own_class_properties` against the real `Engine.u`
+    (confirmed 2026-09-22): `Location`/`Rotation` (`Engine.Actor`, `Vector`/`Rotator`,
+    `PropertyFlags=0x23`) and `MainScale`/`PostScale` (`Engine.Brush`, both `Scale`,
+    `PropertyFlags=0x1`) — the same `StructProperty` kind a user-defined struct gets, `CPF_Edit`
+    (`0x1`) set on all four. `Engine.Brush` also declares a sibling `TempScale` (`Scale`,
+    `PropertyFlags=0x0`) — `CPF_Edit` absent, so it's engine-internal, never authored. The typed-field
+    handling above (`model.Actor.location`/`.main_scale`/`.post_scale`, `propedit/fields.py`) is a
+    uedcli tooling convenience layered on top — the engine itself treats all four like any struct
+    property.
 - **`actor order <names…|-> (--first|--last|--before NAME|--after NAME)`** and **`actor add --order
   (first|last|before=NAME|after=NAME)`** control **CSG precedence** — the `(order_value, name)` sort —
   by minting new LexoRanks, purely model-side (spec in board item `csg-order-control-actor-order-actor-add-order`; decisions

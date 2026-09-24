@@ -26,8 +26,8 @@ const EMPTY_ATLAS: AtlasPayload = { width: 1, height: 1, manifest: {}, png_base6
 
 function poly(verts: number[]): ScenePoly {
   return {
-    verts, base: [0, 0, 0], tu: [1, 0, 0], tv: [0, 1, 0], pan: [0, 0], tex_index: -1,
-    masked: false, two_sided: false, blend: 'opaque', flags: 0, lightmap: null, owner: null,
+    verts, base: [0, 0, 0], tu: [1, 0, 0], tv: [0, 1, 0], pan: [0, 0], normal: [0, 0, 1], area: 100,
+    tex_index: -1, masked: false, two_sided: false, blend: 'opaque', flags: 0, lightmap: null, owner: null,
     i_brush_poly: null,
   }
 }

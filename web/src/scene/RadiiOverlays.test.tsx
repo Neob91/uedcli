@@ -33,7 +33,6 @@ function actor(radii: SceneActor['radii']): SceneActor {
     order_value: 'A',
     csg_rank: 1,
     props: [],
-    categories: [],
     brush: null,
     sprite: null,
     radii,

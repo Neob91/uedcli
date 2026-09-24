@@ -10,6 +10,8 @@ function quad(overrides: Partial<ScenePoly> = {}): ScenePoly {
     tu: [1, 0, 0],
     tv: [0, 1, 0],
     pan: [0, 0],
+    normal: [0, 0, 1],
+    area: 100,
     tex_index: -1,
     masked: false,
     two_sided: false,
@@ -38,7 +40,7 @@ describe('buildGeometryData', () => {
   it('tags each triangle with its poly owner, in the same order as positions', () => {
     const got = buildGeometryData(
       [quad({ owner: 'Room' }), quad({ tex_index: 0, owner: 'Inner' })],
-      { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' },
+      { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8, name: null } }, png_base64: '' },
     )
     // 2 groups (different tex_index), 2 triangles each -> 4 total, owner aligned per-triangle.
     expect(got.triangleOwners).toEqual(['Room', 'Room', 'Inner', 'Inner'])
@@ -52,7 +54,7 @@ describe('buildGeometryData', () => {
   it('tags each triangle with its poly\'s i_brush_poly (BRUSH:IDX, not an array position)', () => {
     const got = buildGeometryData(
       [quad({ owner: 'Room', i_brush_poly: 4 }), quad({ tex_index: 0, owner: 'Inner', i_brush_poly: 2 })],
-      { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' },
+      { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8, name: null } }, png_base64: '' },
     )
     // 2 groups (different tex_index), 2 triangles each -- poly 0 (Room:4) then poly 1 (Inner:2).
     expect(got.trianglePolyIndex).toEqual([4, 4, 2, 2])
@@ -76,7 +78,7 @@ describe('buildGeometryData', () => {
   it('groups by (texture, masked) pair -- one group per distinct texture', () => {
     const got = buildGeometryData(
       [quad({ tex_index: 0 }), quad({ tex_index: 1 }), quad({ tex_index: 0, masked: true })],
-      { width: 16, height: 16, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 }, '1': { x: 8, y: 0, w: 8, h: 8 } }, png_base64: '' },
+      { width: 16, height: 16, manifest: { '0': { x: 0, y: 0, w: 8, h: 8, name: null }, '1': { x: 8, y: 0, w: 8, h: 8, name: null } }, png_base64: '' },
     )
     expect(got.groups).toEqual([
       { texIndex: 0, masked: false, twoSided: false, blend: 'opaque', lit: false, start: 0, count: 6 },
@@ -87,7 +89,7 @@ describe('buildGeometryData', () => {
   })
 
   it('splits masked and non-masked polys of one texture into separate groups', () => {
-    const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' }
+    const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8, name: null } }, png_base64: '' }
     const got = buildGeometryData([quad({ tex_index: 0 }), quad({ tex_index: 0, masked: true })], atlas)
     expect(got.groups).toEqual([
       { texIndex: 0, masked: false, twoSided: false, blend: 'opaque', lit: false, start: 0, count: 6 },
@@ -102,7 +104,7 @@ describe('buildGeometryData', () => {
   })
 
   it('tiles UVs raw over the texture size -- a surface spanning 8 tiles goes 0..8 in U, not collapsed', () => {
-    const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' }
+    const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8, name: null } }, png_base64: '' }
     const floor = quad({ verts: [0, 0, 0, 64, 0, 0, 64, 64, 0, 0, 64, 0], tex_index: 0 })
     const got = buildGeometryData([floor], atlas)
     const us: number[] = []
@@ -150,7 +152,7 @@ describe('buildGeometryData', () => {
   })
 
   it('splits a lit and an unlit poly of the same texture into separate groups', () => {
-    const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8 } }, png_base64: '' }
+    const atlas: AtlasPayload = { width: 8, height: 8, manifest: { '0': { x: 0, y: 0, w: 8, h: 8, name: null } }, png_base64: '' }
     const litFrame = { origin: [0, 0, 0], u_step: [1, 0, 0], v_step: [0, 1, 0], u_size: 2, v_size: 2 }
     const got = buildGeometryData(
       [quad({ tex_index: 0, lightmap: litFrame }), quad({ tex_index: 0 })],

@@ -39,7 +39,8 @@ from .preview_shots import ResolvedShot, Shot, resolve_pose, shot_filename
 from .rotation import (actor_linear, actor_prepivot, deg_to_uu, euler_to_matrix_uu, matvec)
 from .texframe import poly_flags_int, world_uv_frame
 from .transform import DegenerateTransformError
-from .utexture import TextureError, TextureResolver, resolve_or_procedural_red
+from .utexture import (TextureError, TextureResolver, group_of_export,
+                       resolve_or_procedural_red)
 
 PF_INVISIBLE = 0x1
 PF_MASKED = 0x2                                       # alpha-test: palette-index-0 texels cut out
@@ -272,18 +273,22 @@ def resolve_mover_actor_polys(level, index, *, textures: _TextureTable,
 
 def resolve_mover_scene_polys(level, index, search_files, class_defaults, *,
                               hidden_prop: str = "bhiddened"
-                              ) -> tuple[list[tuple], list[tuple[str, int]], list[tuple]]:
+                              ) -> tuple[list[tuple], list[tuple[str, int]], list[tuple],
+                                        list[str | None]]:
     """`uedcli serve`'s Load-owned, build-state-independent Mover resolution entry point (mirrors
     `resolve_mesh_scene_polys`): every Mover's world-space triangles + a PRIVATE texture table, from
     `level`/`index` alone -- no CSG/BSP dependency (board `mover-triangles-not-build-state-
-    independent`). Returns `(polys, owners, texture_table)`: `polys`/`owners` are
+    independent`). Returns `(polys, owners, texture_table, groups)`: `polys`/`owners` are
     `resolve_mover_actor_polys`'s own pairs, unzipped; `texture_table` is the private
     `_TextureTable.table` this call built, for the caller to publish as its own atlas slot
     (`uedcli/serve/app.py`'s `/atlas` route) alongside `geometry.texture_table`/`sprite_table`/
-    `mesh_texture_table` — never folded into any of them.
+    `mesh_texture_table` — never folded into any of them; `groups` is `_TextureTable.group_for`'s
+    result for each `texture_table` entry, same order -- a Mover's own polys resolve their texture
+    via `_TextureTable.index_for` (real export-backed), so every entry can carry a real
+    `Package.Group.Name` (spec's "brush-poly entries" case, `AtlasRect.name`).
 
-    Returns `([], [], [])` when `search_files` is empty -- matches `resolve_mesh_scene_polys`'s own
-    degrade disposition for the same condition, never a crash. `hidden_prop` defaults to
+    Returns `([], [], [], [])` when `search_files` is empty -- matches `resolve_mesh_scene_polys`'s
+    own degrade disposition for the same condition, never a crash. `hidden_prop` defaults to
     `"bhiddened"` (EDITOR visibility, owner ruling 2026-09-14) -- unconditionally drops a hidden
     Mover's own triangles, the same disposition its own surfaces got when they still rode in
     `geometry.polys` (a Mover has no `CsgOper`, defaults to `CSG_Add`, always safe to drop whole --
@@ -293,13 +298,14 @@ def resolve_mover_scene_polys(level, index, search_files, class_defaults, *,
     `load-resolves-mesh-class-defaults-and-texture`); required rather than optional so a future
     caller can't silently forget to pass it."""
     if not search_files:
-        return [], [], []
+        return [], [], [], []
     textures = _TextureTable(TextureResolver(search_files, class_index=index))
     resolved = resolve_mover_actor_polys(level, index, textures=textures, hidden_prop=hidden_prop,
                                          class_defaults=class_defaults)
     polys = [poly for poly, _owner in resolved]
     owners = [owner for _poly, owner in resolved]
-    return polys, owners, textures.table
+    groups = [textures.group_for(i) for i in range(len(textures.table))]
+    return polys, owners, textures.table, groups
 
 
 def _mesh_actor_polys(actor, index, search_files, *, hidden_prop: str = "bhidden",
@@ -492,17 +498,23 @@ def resolve_mesh_actor_polys(level, index, search_files, *, hidden_prop: str, te
 
 def resolve_mesh_scene_polys(level, index, search_files, class_defaults, *,
                              hidden_prop: str = "bhiddened"
-                             ) -> tuple[list[tuple], list[tuple[str, None]], list[tuple]]:
+                             ) -> tuple[list[tuple], list[tuple[str, None]], list[tuple],
+                                       list[str | None]]:
     """`uedcli serve`'s Load-owned, build-state-independent mesh-actor resolution entry point
     (mirrors `resolve_actor_sprites`'s existing independence for point-actor icons): every DT_Mesh
     actor's world-space triangles + a PRIVATE texture table, from `level` alone -- no CSG/BSP
     dependency, no `in_solid` gate (see `resolve_mesh_actor_polys`'s docstring for why). Returns
-    `(polys, owners, texture_table)`: `polys`/`owners` are `resolve_mesh_actor_polys`'s own pairs,
-    unzipped; `texture_table` is the private `_TextureTable.table` this call built, for the caller
-    to publish as its own atlas slot (`uedcli/serve/app.py`'s `/atlas` route) alongside
-    `geometry.texture_table` and `trunk.sprite_table` — never folded into either.
+    `(polys, owners, texture_table, groups)`: `polys`/`owners` are `resolve_mesh_actor_polys`'s own
+    pairs, unzipped; `texture_table` is the private `_TextureTable.table` this call built, for the
+    caller to publish as its own atlas slot (`uedcli/serve/app.py`'s `/atlas` route) alongside
+    `geometry.texture_table` and `trunk.sprite_table` — never folded into either; `groups` is
+    `_TextureTable.group_for`'s result for each `texture_table` entry, same order -- ALWAYS `None`
+    here, since a mesh actor's texture resolves via `_TextureTable.index_for_decoded` (a decoded
+    skin, no export index), never `index_for` (spec's "mesh-skin entries genuinely cannot [resolve a
+    real Group]"). Threaded through for shape consistency with `resolve_mover_scene_polys`, not
+    because this call site can ever produce a real name.
 
-    Returns `([], [], [])` when `search_files` is empty (no configured search path, so no
+    Returns `([], [], [], [])` when `search_files` is empty (no configured search path, so no
     `TextureResolver` is possible) -- matches `resolve_actor_sprites`'s own degrade disposition for
     the same condition, never a crash. `hidden_prop` defaults to `"bhiddened"` (EDITOR visibility —
     the GUI hides `bHiddenEd` actors and ignores `bHidden`, owner ruling 2026-09-14), matching every
@@ -512,13 +524,14 @@ def resolve_mesh_scene_polys(level, index, search_files, class_defaults, *,
     actor referencing it (board `load-resolves-mesh-class-defaults-and-texture`); required rather
     than optional so a future caller can't silently forget to pass it."""
     if not search_files:
-        return [], [], []
+        return [], [], [], []
     textures = _TextureTable(TextureResolver(search_files, class_index=index))
     resolved = resolve_mesh_actor_polys(level, index, search_files, hidden_prop=hidden_prop,
                                         textures=textures, class_defaults=class_defaults)
     polys = [poly for poly, _owner in resolved]
     owners = [owner for _poly, owner in resolved]
-    return polys, owners, textures.table
+    groups = [textures.group_for(i) for i in range(len(textures.table))]
+    return polys, owners, textures.table, groups
 
 
 # --------------------------------------------------------------------- textures
@@ -535,6 +548,10 @@ class _TextureTable:
         self._resolver = resolver
         self.table: list[tuple[int, int, bytes, bytes]] = []
         self.bmasked: list[bool] = []                    # per-index: is the texture itself bMasked
+        self._group: list[str | None] = []                # per-index: real Package.Group.Name from
+                                                            # `index_for`, `None` from
+                                                            # `index_for_decoded` -- kept strictly
+                                                            # parallel to `table`/`bmasked` either way
         self._by_ref: dict[str, int] = {}
         self._by_decoded: dict = {}
 
@@ -542,6 +559,16 @@ class _TextureTable:
         """Does the texture at table `idx` carry `bMasked` (masks index-0 regardless of the surface
         `PF_Masked` flag)? `-1`/out-of-range (no texture) → False."""
         return 0 <= idx < len(self.bmasked) and self.bmasked[idx]
+
+    def group_for(self, idx: int) -> str | None:
+        """The real `Package.Group.Name` (or `Package.Name` when the export has no group) for the
+        texture at table `idx`, resolved via `index_for` -- or `None` for an out-of-range index.
+        `index_for_decoded` (a mesh-skin entry) appends `None` to `self._group` too, keeping it
+        strictly index-parallel with `table`/`bmasked` regardless of which method registered a
+        given slot -- so a mesh-skin index's own slot correctly reads `None` here, matching the
+        spec's mesh-skin-excluded case, rather than shifting every LATER `index_for` entry's real
+        name onto the wrong index."""
+        return self._group[idx] if 0 <= idx < len(self._group) else None
 
     def index_for(self, ref: str | None) -> int:
         if not ref:
@@ -556,6 +583,20 @@ class _TextureTable:
         idx = len(self.table)
         self.table.append((got.width, got.height, got.rgb, got.mask))
         self.bmasked.append(bool(got.b_masked))
+        located = self._resolver.package_for_ref(ref)
+        if located is not None:
+            pkg, export_index = located
+            export_name = pkg.name(pkg.exports[export_index]["nm"]) or ""
+            group = group_of_export(pkg, export_index)
+            pkg_name = pkg.stem or ""   # always agrees with the resolver's own canonical
+                                        # case-preserved spelling by construction --
+                                        # `TextureResolver._package` loads every package as
+                                        # `load_package(path, stem=self._stem_spelling.get(key,
+                                        # stem))` (`utexture.py`)
+            self._group.append(f"{pkg_name}.{group}.{export_name}" if group
+                               else f"{pkg_name}.{export_name}")
+        else:
+            self._group.append(None)
         self._by_ref[key] = idx
         return idx
 
@@ -596,6 +637,8 @@ class _TextureTable:
         idx = len(self.table)
         self.table.append((w, h, rgb, mask))
         self.bmasked.append(bool(b_masked))
+        self._group.append(None)   # keeps `_group` index-parallel with `table`/`bmasked` -- see
+                                    # `group_for`'s docstring
         self._by_decoded[cache_key] = idx
         return idx
 
@@ -837,7 +880,8 @@ def _scene_hashes(level, light_names: set[str]) -> tuple[str, str]:
 
 def build_scene(level, search_files, index, *, defaults, project=None,
                 level_name=None, visibility: Literal["gameplay", "editor"] = "gameplay",
-                include_meshes: bool = True, include_movers: bool = True
+                include_meshes: bool = True, include_movers: bool = True,
+                groups_out: list[str | None] | None = None
                 ) -> tuple[list, list, list, str | None, str | None]:
     """Trunk → (render polys, texture table, per-poly owner names, geom_hash, light_hash): CSG build
     + node-poly extraction + source-poly join + Python UV frames + mover extra_polys + native
@@ -911,7 +955,18 @@ def build_scene(level, search_files, index, *, defaults, project=None,
     triangles itself via `resolve_mover_scene_polys` (`uedcli/serve/scene.py`), independently of this
     CSG-solved pipeline, so a Mover renders the SAME way before and after a Rebuild. `level photo
     --native` never passes this (default `True`, unchanged behavior). Folded into `geom_hash` below
-    too, for the same reason as `include_meshes`."""
+    too, for the same reason as `include_meshes`.
+
+    `groups_out`, if given, is a caller-owned list this call EXTENDS in place with
+    `_TextureTable.group_for`'s result for each `texture_table` entry, same order -- an out-param
+    rather than a wider return tuple, since `build_scene`'s 3-tuple return has ~30+ call sites across
+    the codebase (see `_BuiltGeometry`'s own docstring, OQ1) and this feature (`AtlasRect.name`,
+    `uedcli/serve/app.py`'s `/atlas` route) needs it from exactly one of them. A CACHE hit (either
+    `build_cache.load_scene` or `.load_geometry`) carries its own `texture_groups` list alongside
+    the cached `texture_table` (both caches round-trip it, review finding: they used to silently
+    drop it, turning every real group name back into `None` on the very next cache hit) -- so
+    `groups_out` gets the SAME real names on a cache hit as it would from a fresh build, not a
+    `None`-filled fallback."""
     try:
         from uedcli.native_ext import import_native
         uedcli_native = import_native()
@@ -942,13 +997,21 @@ def build_scene(level, search_files, index, *, defaults, project=None,
                      + ("" if include_meshes else "x") + ("" if include_movers else "m"))
         cached_scene = build_cache.load_scene(project, level_name, geom_hash, light_hash)
         if cached_scene is not None:
-            return (*cached_scene, geom_hash, light_hash)
+            cached_polys, cached_table, cached_owners, cached_groups = cached_scene
+            if groups_out is not None:
+                groups_out.extend(cached_groups)
+            return cached_polys, cached_table, cached_owners, geom_hash, light_hash
 
     geo = build_cache.load_geometry(project, level_name, geom_hash) if cache else None
 
     built = None
+    textures = None   # set below only on a FRESH build -- a geometry-cache hit has no _TextureTable
+                       # to ask for groups_out; it reuses the cached `texture_groups` list instead
+                       # (see build_scene's own docstring on groups_out)
+    texture_groups: list[str | None] = []   # kept index-parallel with `texture_table` on every path
     if geo is not None:
-        model_body, portals, polys_no_light, i_surf_by_poly, actor_names_by_poly, texture_table = geo
+        (model_body, portals, polys_no_light, i_surf_by_poly, actor_names_by_poly, texture_table,
+         texture_groups) = geo
         try:
             # `leaf_portals` is the frozen portal graph `assign_leaves_and_zones` computed during
             # THIS geometry's original build — `serialize_model`'s on-disk format doesn't carry it,
@@ -1086,10 +1149,11 @@ def build_scene(level, search_files, index, *, defaults, project=None,
                 actor_names_by_poly.append(owner)   # no `.brush.polys` to index into
 
         texture_table = textures.table
+        texture_groups = [textures.group_for(i) for i in range(len(texture_table))]
         if cache:
             build_cache.store_geometry(project, level_name, geom_hash,
                                          (model_body, portals, polys_no_light, i_surf_by_poly,
-                                          actor_names_by_poly, texture_table))
+                                          actor_names_by_poly, texture_table, texture_groups))
 
     try:
         uedcli_native.bake_lighting(built, lights_ffi)
@@ -1107,7 +1171,10 @@ def build_scene(level, search_files, index, *, defaults, project=None,
 
     if cache:
         build_cache.store_scene(project, level_name, geom_hash, light_hash,
-                                  (polys, texture_table, actor_names_by_poly))
+                                  (polys, texture_table, actor_names_by_poly, texture_groups))
+
+    if groups_out is not None:
+        groups_out.extend(texture_groups)
 
     return polys, texture_table, actor_names_by_poly, geom_hash, light_hash
 

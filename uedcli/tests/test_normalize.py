@@ -1041,6 +1041,20 @@ def test_the_location_text_side_channel_is_never_emitted():
     assert "Location=(X=100.000000,Y=200.000000,Z=0.000000)" in canonical_actor_t3d(a)
 
 
+def test_mainscale_text_captures_stated_axes():
+    t3d = """Begin Map
+    Begin Actor Class=Engine.Brush Name=Brush0
+        MainScale=(Scale=(X=2.000000))
+        Location=(X=0.000000,Y=0.000000,Z=0.000000)
+    End Actor
+    End Map
+    """
+    level = parse_t3d(t3d)
+    actor = level.actors["Brush0"]
+    assert actor.main_scale_text == "(Scale=(X=2.000000))"
+    assert actor.post_scale_text is None
+
+
 # --- the injectivity guard: absent is NOT the same as an authored zero --------------------------
 
 _LAVA = StubDefaults({"TNM.LavaSpitter": {("rotation", 0): "(Pitch=16384,Yaw=0,Roll=0)"}},

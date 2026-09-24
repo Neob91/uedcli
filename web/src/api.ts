@@ -19,6 +19,8 @@ export interface ScenePoly {
   tu: number[] // [x,y,z] texture-U axis
   tv: number[] // [x,y,z] texture-V axis
   pan: number[] // [u,v] pan offset
+  normal: [number, number, number] // world-space face normal
+  area: number // world-space face area (UU^2)
   tex_index: number // index into the atlas manifest, or -1 (untextured -> flat grey)
   masked: boolean // alpha-test this poly against the atlas's mask channel
   two_sided: boolean // draw both faces (PF_TwoSided|PF_Portal); else backface-culled (FrontSide)
@@ -87,6 +89,40 @@ export interface DirectionalArrow {
   lines: number[]
 }
 
+/** An actor's resolved property list (uedcli/serve/scene.py::SceneActor.props), replacing the old
+ * flat `[string, string][]` + parallel `categories: string[]` -- a discriminated union keyed on
+ * `kind`, so e.g. a `float` prop carries no unused `enum_type` slot. Copied verbatim from
+ * `dev/docs/board/to-build/gui-inspector-effective-props-search-show-all/spec.md`'s Design section
+ * (the reviewed, final type) -- do not paraphrase. */
+interface EffectivePropBase {
+  name: string // real declared casing
+  category: string
+}
+
+export type EffectiveProp = EffectivePropBase &
+  (
+    | {
+        kind: 'float' | 'int' | 'bool' | 'byte' | 'name' | 'string'
+        stored_value: string | null // the actor's own stated value; null = not stated
+        default_value: string // class default, always resolved (propedit's engine)
+      }
+    | {
+        kind: 'enum'
+        enum_type: string // key into ScenePayload.enums
+        stored_value: string | null
+        default_value: string
+      }
+    | {
+        kind: 'struct'
+        members: EffectiveProp[] // recursive, same shape
+      }
+    | {
+        kind: 'array'
+        element_kind: EffectiveProp['kind'] // the declared element type (a static array's own Prop kind)
+        elements: EffectiveProp[] // one entry per array_dim slot; never empty
+      }
+  )
+
 export interface SceneActor {
   name: string
   cls: string
@@ -98,8 +134,7 @@ export interface SceneActor {
   labels: string[]
   order_value: string
   csg_rank: number // 1-based position in level.order (CSG evaluation order); order_value's human-readable stand-in
-  props: [string, string][] // the raw stored T3D property list, for the inspector's raw-props view
-  categories: string[] // parallel to props: categories[i] is the UnrealEd category of props[i]
+  props: EffectiveProp[] // resolved property list, for the inspector's props view
   brush: BrushHighlight | null // selection-highlight geometry; null for a non-brush actor
   sprite: ActorSprite | null // resolved DT_Sprite billboard; null -> client draws a generic marker
   radii: ActorRadii | null // collision/light radii; null for a brush actor or one that clears neither gate
@@ -119,6 +154,7 @@ export interface ScenePayload {
   // no-Rebuild-yet response: `polys` is genuinely empty, not an error -- uedcli/serve/app.py's
   // `scene` route).
   geometry_pinned: boolean
+  enums: Record<string, string[]> // enum type name -> ordered tag list, keyed by EffectiveProp['enum_type']
 }
 
 export interface AtlasRect {
@@ -126,6 +162,7 @@ export interface AtlasRect {
   y: number
   w: number
   h: number
+  name: string | null
 }
 
 export interface AtlasPayload {
@@ -135,6 +172,16 @@ export interface AtlasPayload {
   png_base64: string
 }
 
+/** One lightmap patch's interior rect -- `uedcli/serve/lightmap.py`'s `manifest` entries are plain
+ * `{x, y, w, h}` dicts, unlike the texture atlas's `AtlasRect`: a lightmap patch has no source
+ * texture group to name. */
+export interface LightmapRect {
+  x: number
+  y: number
+  w: number
+  h: number
+}
+
 /** The lightmap atlas (uedcli/serve/lightmap.py): every lit poly's baked lumel grid packed into
  * one image, keyed by POLY INDEX (not texture index). `intensity` is the global multiplier scale
  * -- the client's `lightMapIntensity`, so `sampledTexel * intensity` recovers the baked value. */
@@ -142,7 +189,7 @@ export interface LightmapPayload {
   width: number
   height: number
   intensity: number
-  manifest: Record<string, AtlasRect> // poly index -> interior lumel rect
+  manifest: Record<string, LightmapRect> // poly index -> interior lumel rect
   png_base64: string
 }
 

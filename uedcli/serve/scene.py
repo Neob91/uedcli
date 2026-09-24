@@ -16,11 +16,10 @@ from __future__ import annotations
 
 import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from decimal import Decimal
 
-from .. import typedprops, uprops
-from ..emit import fmt_loc
+from .. import effective_props, propedit, uprops
 from ..model import Level
 from ..movers import is_mover
 from ..preview import _CSG_PALETTE, classify_brush, world_light_radius, world_sound_radius
@@ -29,7 +28,32 @@ from ..rotation import actor_linear, actor_matrix, actor_prepivot, actor_rotatio
 from ..writes import actor_bounds
 
 _ZERO3 = (Decimal(0), Decimal(0), Decimal(0))
-_FALLBACK_CATEGORY = "Uncategorized"    # uedcli's own catch-all bucket -- not a real UnrealEd category
+
+
+def _poly_normal(tu: list[float], tv: list[float]) -> list[float]:
+    """Cross product of two basis vectors, normalized to unit length."""
+    ax, ay, az = tu
+    bx, by, bz = tv
+    cx, cy, cz = ay*bz - az*by, az*bx - ax*bz, ax*by - ay*bx
+    length = (cx*cx + cy*cy + cz*cz) ** 0.5
+    return [cx/length, cy/length, cz/length] if length else [0.0, 0.0, 0.0]
+
+
+def _poly_area(verts: list[float]) -> float:
+    """Shoelace sum, 3D via the cross-product-of-consecutive-edges form (planar polygon assumed --
+    a CSG-solved ScenePoly always is)."""
+    n = len(verts) // 3
+    if n < 3:
+        return 0.0
+    ox, oy, oz = verts[0], verts[1], verts[2]
+    total = [0.0, 0.0, 0.0]
+    for i in range(1, n - 1):
+        ax, ay, az = verts[i*3] - ox, verts[i*3+1] - oy, verts[i*3+2] - oz
+        bx, by, bz = verts[(i+1)*3] - ox, verts[(i+1)*3+1] - oy, verts[(i+1)*3+2] - oz
+        total[0] += ay*bz - az*by
+        total[1] += az*bx - ax*bz
+        total[2] += ax*by - ay*bx
+    return 0.5 * (total[0]**2 + total[1]**2 + total[2]**2) ** 0.5
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -83,6 +107,8 @@ class ScenePoly:
     # None when `owner` has no single source poly (a mesh actor, which has no `.brush.polys`), or
     # when `owner` itself is None (an out-of-range CSG join).
     i_brush_poly: int | None
+    normal: list[float]
+    area: float
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -210,13 +236,12 @@ class SceneActor:
     actor's polys already ride in `ScenePayload.polys`, joined by CSG, not by actor). `csg_rank` is
     the actor's 1-based position in `level.order` (rank 1 = evaluated/carved first) — a
     human-readable stand-in for `order_value`'s opaque LexoRank string, which stays in the payload
-    too (kept for a future audit-diff, not shown in the Inspector). `props` is
-    the actor's raw stored T3D property list (`Actor.props`, `list[(key, raw-text-value)]`) — the
-    read-only inspector's "full raw T3D property set" (spec, "Selection & inspector"). `categories`
-    is `props`' parallel UnrealEd category array (`categories[i]` groups `props[i]`; `_actor_categories`)
-    — `_FALLBACK_CATEGORY` ("Uncategorized") for an unresolvable class or an unmatched/schema-`None`
-    prop. `brush` is the selection-highlight geometry (None for a non-brush actor — a separate task's
-    concern).
+    too (kept for a future audit-diff, not shown in the Inspector). `props` is the actor's complete
+    resolved `EffectiveProp` tree (`effective_props.resolve_actor_props`) — schema + stored/default
+    value, struct/array members already expanded, each entry carrying its own `category`
+    ("Uncategorized" for a bare `var()` with none) — replaces the old flat
+    `list[(key, raw-text-value)]` + parallel `categories` array. `brush` is the selection-highlight
+    geometry (None for a non-brush actor — a separate task's concern).
     `sprite` is None for a brush actor, and for a point actor whose `DT_Sprite` billboard didn't
     resolve — the client then falls back to a generic marker (`markers.ts`).
     `radii` is None for a brush actor and for any actor that clears neither the collision nor the
@@ -236,8 +261,7 @@ class SceneActor:
     labels: list[str]
     order_value: str
     csg_rank: int
-    props: list[tuple[str, str]]
-    categories: list[str]
+    props: list[effective_props.EffectiveProp]
     brush: BrushHighlight | None
     sprite: ActorSprite | None
     radii: ActorRadii | None
@@ -249,6 +273,7 @@ class SceneActor:
 class ScenePayload:
     polys: list[ScenePoly]
     actors: list[SceneActor]
+    enums: dict[str, list[str]]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -271,7 +296,18 @@ class _LoadedTrunk:
 
     `mover_polys`/`mover_owners`/`mover_texture_table` are the same shape, from
     `preview_native.resolve_mover_scene_polys` (board `mover-triangles-not-build-state-independent`
-    — mirrors the mesh fix exactly: a Mover's own brush polys need no CSG/BSP solve either)."""
+    — mirrors the mesh fix exactly: a Mover's own brush polys need no CSG/BSP solve either).
+
+    `mover_groups` is `resolve_mover_scene_polys`'s own 4th return value — `_TextureTable.group_for(i)`
+    per `mover_texture_table` entry, same order (`AtlasRect.name`, `uedcli/serve/app.py`'s `/atlas`
+    route). Required rather than optional so a future caller can't silently forget to pass it (same
+    convention `resolve_mover_scene_polys`'s own docstring states for `class_defaults`). There is no
+    `mesh_groups` field here: `resolve_mesh_scene_polys`'s own 4th return value can only ever be
+    `None`-filled (a mesh actor's texture resolves via `index_for_decoded`, never a real export), so
+    threading it through this dataclass would be dead weight — `/atlas` builds that segment inline
+    (`[None] * len(mesh_texture_table)`), the same way it already does for `sprite_table`, which
+    never resolves via `_TextureTable` at all (out of this feature's scope, spec.md only covers
+    brush-poly entries)."""
     level: Level
     ranks: dict[str, str]
     folders: dict[str, str | None]
@@ -283,18 +319,28 @@ class _LoadedTrunk:
     mover_polys: list[tuple]
     mover_owners: list[tuple[str, int]]
     mover_texture_table: list[tuple[int, int, bytes, bytes]]
+    mover_groups: list[str | None]
 
 
 @dataclass(frozen=True, kw_only=True)
 class _BuiltGeometry:
     """Rebuild-owned data: CSG + lighting output (shared-cache spec's Design section). `geom_hash`/
     `light_hash` are the real values `build_scene` computes internally and now returns (OQ1) —
-    `None` only when `_build_and_publish_geometry` calls it without a `project`/`level_name`."""
+    `None` only when a caller builds this dataclass without a `project`/`level_name` build_scene
+    call to source them from.
+
+    `groups` is `build_scene`'s own `groups_out` out-param result — `_TextureTable.group_for(i)` per
+    `texture_table` entry, same order (`AtlasRect.name`, `uedcli/serve/app.py`'s `/atlas` route). Real
+    names on a pin-restored geometry too — the cached `(polys, texture_table, owners, groups)` tuple
+    a session/level pin resolves to already carries them — the `field(default_factory=list)` default
+    below only ever fires for a test fixture that constructs this dataclass directly, not for any
+    real production path."""
     geom_hash: str | None
     light_hash: str | None
     polys: list[tuple]
     texture_table: list[tuple]
     owners: list[tuple[str, int | None] | None]
+    groups: list[str | None] = field(default_factory=list)
 
 
 def _lightmap_frame(lightmap: tuple | None) -> LightmapFrame | None:
@@ -528,60 +574,93 @@ def _resolve_directional_arrows(level: Level, defaults, index,
     return arrows
 
 
-def _class_category_map(fqcn: str, index) -> dict[str, str] | None:
-    """`casefold(prop name) -> UnrealEd category` for `fqcn`'s full (own+inherited) schema, or None
-    if the class's schema can't be resolved at all (offline index / missing package) — caller falls
-    back to `_FALLBACK_CATEGORY` for every one of that actor's props rather than failing the payload.
-    `resolve_class_properties` already keeps the most-derived prop on a name collision, matching
-    `class show`'s own convention."""
-    resolver = getattr(index, "resolver", None)
-    if resolver is None:
-        return None
-    try:
-        props = uprops.resolve_class_properties(fqcn, resolver=resolver())
-    except uprops.SchemaError:
-        return None
-    return {p.name.casefold(): (p.category or _FALLBACK_CATEGORY) for p in props}
+def _struct_members_via(resolver, prop) -> list[uprops.Prop]:
+    """Port of cli/resources.py::struct_members, parameterized on `resolver` instead of `project` --
+    scene.py has no CLI args/project to resolve one from, only index.resolver()."""
+    owner_pkg_name = prop.owner.split(".", 1)[0]
+    path = resolver(owner_pkg_name)
+    if path is None:
+        raise uprops.SchemaError(f"package {owner_pkg_name!r} not found on the schema search path "
+                                 f"(needed to resolve {prop.owner}.{prop.name})")
+    dp = uprops.load_package(path, name=owner_pkg_name)
+    tp, ti = uprops.resolve_type_export(dp, prop.type_ref, "Struct", resolver=resolver, _pkgs={})
+    return uprops.struct_members(tp, ti, owner=prop.type_name or prop.name)
 
 
-def _actor_categories(props: list[tuple[str, str]],
-                      category_map: dict[str, str] | None) -> list[str]:
-    """`categories[i]` for `props[i]`: `_FALLBACK_CATEGORY` if `category_map` is None (unresolvable
-    class) or the prop's name (index-stripped, `KeyPos(1)` and `KeyPos` share one category) isn't in
-    it."""
-    if category_map is None:
-        return [_FALLBACK_CATEGORY for _ in props]
-    return [category_map.get(typedprops.split_index(key)[0].casefold(), _FALLBACK_CATEGORY)
-            for key, _ in props]
+def _enum_names_via(resolver, prop) -> tuple[str, ...]:
+    """Port of cli/resources.py::enum_names, same reparameterization."""
+    owner_pkg_name = prop.owner.split(".", 1)[0]
+    path = resolver(owner_pkg_name)
+    if path is None:
+        raise uprops.SchemaError(f"package {owner_pkg_name!r} not found on the schema search path "
+                                 f"(needed to resolve {prop.owner}.{prop.name})")
+    dp = uprops.load_package(path, name=owner_pkg_name)
+    return uprops.resolve_enum_names(prop, dp, resolver=resolver)
 
 
-def _with_synthetic_location(props: list[tuple[str, str]], categories: list[str],
-                             loc) -> tuple[list[tuple[str, str]], list[str]]:
-    """Prepends a `Location` entry to the inspector's prop/category lists. `model.py`'s T3D parser
-    deliberately keeps `Location` OUT of `Actor.props` — it's the typed `actor.location` field's
-    job alone, so the two can't drift when a move/rotate verb mutates it (see `model.py`'s own
-    comment at the `Location` branch) — but it's still a bona-fide UnrealEd property (real category
-    "Movement") that the inspector should show alongside the rest. Synthesized here, at the wire
-    boundary, in the same `(X=..,Y=..,Z=..)` T3D value syntax `emit.py` writes it in — never as a
-    frontend-side special case (the client draws props verbatim, no model logic of its own)."""
-    value = f"(X={fmt_loc(loc[0])},Y={fmt_loc(loc[1])},Z={fmt_loc(loc[2])})"
-    return [("Location", value), *props], ["Movement", *categories]
+def _class_ctx_for(cls: str, index) -> propedit.ClassCtx:
+    """The same lazy per-class schema bundle `cli/resources.py::class_ctx` builds for the CLI,
+    sourced from the GUI-serve `index`'s own resolver instead of CLI `args`.
+
+    `index.resolver` is looked up defensively (`getattr(..., None)`, matching the guarded lookup the
+    since-deleted `_class_category_map` used) rather than called unconditionally: a real
+    `classindex.ClassIndex` always has `.resolver()`, but a test/offline stand-in may not (a real
+    regression here previously let a bare `AttributeError` reach `_domain_error_handler` as an
+    unclassified exception -- `test_atlas_route_returns_200_with_a_json_safe_payload`). A missing
+    resolver degrades LAZILY: every loader closure raises `uprops.SchemaError` only when actually
+    called, so `resolve_actor_props`'s existing class-level `except SchemaError` degrade (the SAME
+    convention `_is_hidden_ed`/`_actor_radii` use) handles it per-actor, never a 500 for the whole
+    payload."""
+    resolver_fn = getattr(index, "resolver", None)
+    if resolver_fn is None:
+        def _no_resolver(*_a, **_kw):
+            raise uprops.SchemaError(
+                f"{cls}: class index has no schema resolver -- cannot resolve effective props")
+        return propedit.ClassCtx(cls=cls, load_schema=_no_resolver, load_defaults=_no_resolver,
+                                 load_members=_no_resolver, load_enums=_no_resolver)
+    resolver = resolver_fn()
+    return propedit.ClassCtx(
+        cls=cls,
+        load_schema=lambda: {p.name.casefold(): p for p in
+                            uprops.resolve_class_properties(cls, resolver=resolver)},
+        # dict, NOT the raw list resolve_class_properties returns -- ClassCtx.schema()'s contract
+        # (propedit/base.py) is dict[str, Prop], and Task 4's `for prop in ctx.schema().values()`
+        # depends on it.
+        load_defaults=lambda: uprops.resolve_class_defaults(cls, resolver=resolver),
+        load_members=lambda p: _struct_members_via(resolver, p),
+        load_enums=lambda p: _enum_names_via(resolver, p),
+    )
 
 
 def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset: int,
                   index, radii_map: dict[str, ActorRadii],
-                  arrow_map: dict[str, DirectionalArrow]) -> list[SceneActor]:
+                  arrow_map: dict[str, DirectionalArrow]
+                  ) -> tuple[list[SceneActor], dict[str, list[str]]]:
     """The actor-metadata list (inspector/organization panel + selection highlight + sprite +
     collision/light radii), built from `trunk` alone -- shared by both `build_scene_payload`
     (geometry pinned, `tex_offset = len(geometry.texture_table)`) and `build_wireframe_payload` (no
-    geometry, `tex_offset = 0`). `category_maps` memoizes `_class_category_map` per class for this
-    call -- a level can have many actors of one class, so this avoids re-walking the Super chain per
-    actor. `radii_map`/`arrow_map` are `_resolve_actor_radii`/`_resolve_directional_arrows`'s own
-    output, gathered once by the caller."""
+    geometry, `tex_offset = 0`). `radii_map`/`arrow_map` are `_resolve_actor_radii`/
+    `_resolve_directional_arrows`'s own output, gathered once by the caller. `notes` collects a
+    stderr line per actor whose class-level schema resolution failed (`resolve_actor_props`'s own
+    class-unresolvable degrade, same convention as `_is_hidden_ed`/`_actor_radii`) -- printed once,
+    after the loop, rather than per-actor, so the loop itself stays a pure resolve step.
+    `ctx_cache` memoizes `_class_ctx_for` per class -- a `ClassCtx` is purely schema-derived (no
+    actor state), so it's safe to share across every actor of one class: a level can have
+    hundreds of actors across a handful of distinct classes, and re-resolving the whole schema
+    chain (package load + Super-chain walk) per ACTOR instead of per distinct CLASS is the exact
+    O(actors) regression `_is_hidden_ed`'s own docstring already fought once for `ClassDefaults`.
+
+    `payload_enums` unions every actor's `ctx_by_type` (`resolve_actor_props`'s second return
+    value) into one payload-wide dict -- the same `enum_type` key always maps to the same ordinal-
+    ordered tag list regardless of which actor seeded it first (it's derived purely from the
+    class's own schema / the fixed `ESheerAxis` constant, never actor state), so a later actor's
+    entry safely overwrites an earlier one for the same key."""
     level = trunk.level
     ranks = trunk.ranks
     actor_sprites = trunk.actor_sprites
-    category_maps: dict[str, dict[str, str] | None] = {}
+    notes: list[str] = []
+    ctx_cache: dict[str, propedit.ClassCtx] = {}
+    payload_enums: dict[str, list[str]] = {}
     actors = []
     for csg_rank, name in enumerate(level.order, start=1):
         actor = level.actors.get(name)
@@ -594,10 +673,12 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
             local_idx, width, height = raw
             sprite = ActorSprite(tex_index=tex_offset + local_idx, width=width, height=height)
         cls = actor.cls or ""
-        if cls not in category_maps:
-            category_maps[cls] = _class_category_map(cls, index)
-        props, categories = _with_synthetic_location(
-            list(actor.props), _actor_categories(actor.props, category_maps[cls]), loc)
+        if cls not in ctx_cache:
+            ctx_cache[cls] = _class_ctx_for(cls, index)
+        props, actor_enum_types, note = effective_props.resolve_actor_props(actor, ctx_cache[cls])
+        if note:
+            notes.append(note)
+        payload_enums.update(actor_enum_types)
         # Computed once here (not inside `_brush_highlight`) since `SceneActor.is_mover` needs it
         # too — a non-brush actor is never a Mover (`Engine.Mover` descends from `Engine.Brush`), so
         # `is_mover` is only invoked, and can only raise `ClassRefError`, for a brush actor.
@@ -608,11 +689,13 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
             location=tuple(float(c) for c in loc), rotation=actor_rotation_uu(actor),
             folder=actor.folder, labels=sorted(actor.labels), order_value=ranks.get(name, ""),
             csg_rank=csg_rank,
-            props=props, categories=categories,
+            props=props,
             brush=_brush_highlight(actor, is_mover_flag=is_mover_flag), sprite=sprite,
             radii=radii_map.get(name), is_mover=is_mover_flag,
             directional_arrow=arrow_map.get(name)))
-    return actors
+    for line in notes:
+        print(line, file=sys.stderr)
+    return actors, payload_enums
 
 
 def filtered_geometry_polys(level: Level, geometry: _BuiltGeometry, hidden_ed: dict[str, bool]
@@ -657,7 +740,8 @@ def _wrap_mesh_scene_polys(trunk: _LoadedTrunk, *, tex_offset: int) -> list[Scen
         ScenePoly(verts=verts, base=list(base), tu=list(tu), tv=list(tv), pan=list(pan),
                  tex_index=tex_index + tex_offset if tex_index >= 0 else -1, masked=masked,
                  two_sided=poly_two_sided(flags), blend=poly_blend(flags), flags=flags,
-                 lightmap=None, owner=owner[0], i_brush_poly=owner[1])
+                 lightmap=None, owner=owner[0], i_brush_poly=owner[1],
+                 normal=_poly_normal(tu, tv), area=_poly_area(verts))
         for (verts, base, tu, tv, pan, tex_index, masked, flags), owner in
         zip(trunk.mesh_polys, trunk.mesh_owners)
     ]
@@ -678,7 +762,8 @@ def _wrap_mover_scene_polys(trunk: _LoadedTrunk, *, tex_offset: int) -> list[Sce
         ScenePoly(verts=verts, base=list(base), tu=list(tu), tv=list(tv), pan=list(pan),
                  tex_index=tex_index + tex_offset if tex_index >= 0 else -1, masked=masked,
                  two_sided=poly_two_sided(flags), blend=poly_blend(flags), flags=flags,
-                 lightmap=None, owner=owner[0], i_brush_poly=owner[1])
+                 lightmap=None, owner=owner[0], i_brush_poly=owner[1],
+                 normal=_poly_normal(tu, tv), area=_poly_area(verts))
         for (verts, base, tu, tv, pan, tex_index, masked, flags), owner in
         zip(trunk.mover_polys, trunk.mover_owners)
     ]
@@ -763,15 +848,16 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
                  tex_index=tex_index, masked=masked, two_sided=poly_two_sided(flags),
                  blend=poly_blend(flags), flags=flags, lightmap=_lightmap_frame(lightmap),
                  owner=owner[0] if owner is not None else None,
-                 i_brush_poly=owner[1] if owner is not None else None)
+                 i_brush_poly=owner[1] if owner is not None else None,
+                 normal=_poly_normal(tu, tv), area=_poly_area(verts))
         for (verts, base, tu, tv, pan, tex_index, masked, flags, lightmap), owner in filtered
     ]
     # Point-actor sprite billboards ride in trunk.sprite_table/actor_sprites (Load-owned, no CSG
     # involved) -- `/api/level/{level}/atlas` (`app.py`'s `atlas` route) appends that SAME
     # `resolve_actor_sprites` result onto `geometry.texture_table` in the same order, so
     # `tex_offset + local_index` names the same atlas rect on both endpoints.
-    actors = _build_actors(trunk, hidden_ed, tex_offset=len(texture_table), index=index,
-                           radii_map=radii_map, arrow_map=arrow_map)
+    actors, payload_enums = _build_actors(trunk, hidden_ed, tex_offset=len(texture_table),
+                                          index=index, radii_map=radii_map, arrow_map=arrow_map)
     # Mesh-actor and Mover triangles: appended AFTER the filtered world/BSP polys above, never mixed
     # in or reordered among them -- `/lightmap`'s manifest indexes `filtered`'s polys by ARRAY
     # POSITION (`app.py`'s `/lightmap` route docstring), and neither a mesh nor a Mover poly ever
@@ -782,7 +868,7 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     scene_polys += _wrap_mesh_scene_polys(trunk, tex_offset=len(texture_table) + len(trunk.sprite_table))
     scene_polys += _wrap_mover_scene_polys(
         trunk, tex_offset=len(texture_table) + len(trunk.sprite_table) + len(trunk.mesh_texture_table))
-    return ScenePayload(polys=scene_polys, actors=actors)
+    return ScenePayload(polys=scene_polys, actors=actors, enums=payload_enums)
 
 
 def build_wireframe_payload(trunk: _LoadedTrunk, index, defaults) -> ScenePayload:
@@ -803,9 +889,9 @@ def build_wireframe_payload(trunk: _LoadedTrunk, index, defaults) -> ScenePayloa
     hidden_ed = _resolve_hidden_ed(trunk.level, defaults)
     radii_map = _resolve_actor_radii(trunk.level, defaults, hidden_ed)
     arrow_map = _resolve_directional_arrows(trunk.level, defaults, index, hidden_ed)
-    actors = _build_actors(trunk, hidden_ed, tex_offset=0, index=index, radii_map=radii_map,
-                           arrow_map=arrow_map)
+    actors, payload_enums = _build_actors(trunk, hidden_ed, tex_offset=0, index=index,
+                                          radii_map=radii_map, arrow_map=arrow_map)
     polys = _wrap_mesh_scene_polys(trunk, tex_offset=len(trunk.sprite_table))
     polys += _wrap_mover_scene_polys(
         trunk, tex_offset=len(trunk.sprite_table) + len(trunk.mesh_texture_table))
-    return ScenePayload(polys=polys, actors=actors)
+    return ScenePayload(polys=polys, actors=actors, enums=payload_enums)

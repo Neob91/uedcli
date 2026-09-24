@@ -82,7 +82,7 @@ import { surfaceKey, toggleSelection } from './selectionSet'
 
 afterEach(cleanup)
 
-const SCENE: ScenePayload = { polys: [], actors: [], geometry_pinned: false }
+const SCENE: ScenePayload = { polys: [], actors: [], geometry_pinned: false, enums: {} }
 const ATLAS: AtlasPayload = { width: 1, height: 1, manifest: {}, png_base64: '' }
 
 /** Owns `selectedNames` the way App.tsx does -- QuadLayout itself is a controlled component, so the

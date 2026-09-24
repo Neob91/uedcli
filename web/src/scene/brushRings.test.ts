@@ -16,7 +16,6 @@ function brushActor(name: string, color: [number, number, number], isMover = fal
     order_value: 'm',
     csg_rank: 1,
     props: [],
-    categories: [],
     brush: { csg_class: 'add', color, polys: [[0, 0, 0, 1, 0, 0, 1, 1, 0]], local_origin: [0, 0, 0] },
     sprite: null,
     radii: null,

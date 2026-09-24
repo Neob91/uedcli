@@ -104,6 +104,24 @@ class _SessionKeyedStore:
         self._store.clear_actor(self._session_id, actor_name)
 
 
+def _padded_group_segment(table: list[tuple], groups: list[str | None]) -> list[str | None]:
+    """`groups`, padded with `None` out to `len(table)` -- so a shorter-than-its-table segment
+    (`_BuiltGeometry.groups`'s pin-restored `[]` default, or any other `resolve_*` result whose
+    `groups`/`groups_out` came back shorter than its own table for whatever reason) never misaligns
+    a LATER `/atlas` segment's real names against the wrong table entries once every segment is
+    flat-concatenated into one `groups` list alongside `texture_table`.
+
+    `groups` longer than `table` is asserted against rather than silently returned unpadded (which
+    the naive `len(table) - len(groups)` multiplier would do -- a negative repeat count is an empty
+    list, not an error) -- this project's own convention is a loud failure over a silent
+    misalignment (`CLAUDE.md`: "no fallbacks, and no silent half-answers"). Not reachable today
+    (every real producer emits exactly `len(table)` entries); the intentional degrade-to-`[]`/
+    shorter-than-`table` case is unaffected."""
+    assert len(groups) in (0, len(table)), (
+        f"group/table length mismatch: {len(groups)} groups vs {len(table)} table entries")
+    return list(groups) + [None] * (len(table) - len(groups))
+
+
 def _frontend_dist_dir() -> Path | None:
     """A built `web/dist` next to this package -- same relative path whether this is a source
     checkout (repo root's `web/dist`, once `npm run build` has run) or a Nuitka standalone binary
@@ -342,9 +360,14 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
                 gen_before = ctx.generation[0]
                 lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level_name)
                 sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
-                mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
+                # `mesh_groups` (4th return) is discarded -- `resolve_mesh_scene_polys` can only
+                # ever return an all-`None` list (a mesh actor's texture resolves via
+                # `index_for_decoded`, never a real export), so `_LoadedTrunk` carries no
+                # `mesh_groups` field; `/atlas` builds that segment inline instead (see
+                # `_LoadedTrunk`'s own docstring).
+                mesh_polys, mesh_owners, mesh_texture_table, _mesh_groups = resolve_mesh_scene_polys(
                     lvl, index, search_files, defaults)
-                mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
+                mover_polys, mover_owners, mover_texture_table, mover_groups = resolve_mover_scene_polys(
                     lvl, index, search_files, defaults)
                 if ctx.generation[0] != gen_before:
                     continue    # invalidated mid-build: discard, loop back and retry from the top
@@ -353,7 +376,8 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
                                      mesh_polys=mesh_polys, mesh_owners=mesh_owners,
                                      mesh_texture_table=mesh_texture_table,
                                      mover_polys=mover_polys, mover_owners=mover_owners,
-                                     mover_texture_table=mover_texture_table)
+                                     mover_texture_table=mover_texture_table,
+                                     mover_groups=mover_groups)
                 # Written BEFORE `ctx.trunk_ref[0]` (same reasoning `_current_scene_inputs` relies
                 # on): a lock-free reader must never observe the NEW trunk paired with the
                 # PREVIOUS `ctx.scene_inputs_ref[0]`.
@@ -384,9 +408,9 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
             if cached is None:
                 return None
             _build_result_cache.put(key, cached)
-        polys, texture_table, owners = cached
+        polys, texture_table, owners, groups = cached
         return _BuiltGeometry(geom_hash=geom_hash, light_hash=light_hash, polys=polys,
-                              texture_table=texture_table, owners=owners)
+                              texture_table=texture_table, owners=owners, groups=groups)
 
     def _live_build_refs(level_name: str) -> tuple[set[str], set[tuple[str, str]]]:
         """Final-review fix round, Finding 3: the "live" reference sets `build_cache.evict_
@@ -551,13 +575,17 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         trunk_state = _get_trunk(session.level, search_files, index, defaults)
         staged = _staging_store.read_staged(session_id)
         overlaid = edits.apply_staged_overlay(trunk_state.level, staged)
-        # `include_meshes=False`/`include_movers=False`: same reasoning as the per-level route
-        # above -- the GUI resolves mesh-actor/Mover triangles itself, independently of this
-        # CSG-solved pipeline.
+        # `include_meshes=False`/`include_movers=False`: the GUI resolves mesh-actor/Mover
+        # triangles itself, independently of this CSG-solved pipeline (`_get_trunk`'s
+        # `resolve_mesh_scene_polys`/`resolve_mover_scene_polys` calls, above). `groups_out`:
+        # real `Package.Group.Name` texture identity for `texture_table`, threaded through so
+        # `/atlas` can carry real names for a session's solved geometry too, same as
+        # `_LoadedTrunk.mover_groups` already does for Load-owned textures.
+        groups: list[str | None] = []
         polys, texture_table, owners, geom_hash, light_hash = build_scene(
             overlaid, search_files, index, defaults=defaults, project=project,
             level_name=session.level, visibility="editor", include_meshes=False,
-            include_movers=False)
+            include_movers=False, groups_out=groups)
 
         # Task 11 fix round 1 (Finding 1): populate the in-memory `_BuildResultCache` with this
         # solve's result. `geom_hash`/`light_hash` are `build_scene`'s own OUTPUTS -- computed FROM
@@ -570,7 +598,8 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         # dropped as superseded for THIS session is still valid, reusable content for any other
         # caller who solves to the same hash -- there is no reason to make it wait on, or depend on,
         # an outcome that is about this session's claim, not about the content's validity.
-        _build_result_cache.put((session.level, geom_hash, light_hash), (polys, texture_table, owners))
+        _build_result_cache.put((session.level, geom_hash, light_hash),
+                                (polys, texture_table, owners, groups))
 
         token = request.headers.get("X-Claim-Token", "")
         with _claims.lock_for(session_id):
@@ -630,6 +659,7 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         return {
             "polys": [asdict(p) for p in payload.polys],
             "actors": [asdict(a) for a in payload.actors],
+            "enums": payload.enums,
             "geometry_pinned": geometry is not None,
         }
 
@@ -643,14 +673,27 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         search_files, index, defaults = _current_scene_inputs(session.level)
         trunk_state = _get_trunk(session.level, search_files, index, defaults)
         geometry = _resolve_session_geometry(session_id, session.level)
-        texture_table = ((geometry.texture_table if geometry is not None else [])
-                         + trunk_state.sprite_table + trunk_state.mesh_texture_table
+        geo_table = geometry.texture_table if geometry is not None else []
+        texture_table = (geo_table + trunk_state.sprite_table + trunk_state.mesh_texture_table
                          + trunk_state.mover_texture_table)
-        png_bytes, manifest, width, height = build_atlas(texture_table)
+        # `groups` mirrors `texture_table`'s own four-segment concatenation, one real (or `None`)
+        # `AtlasRect.name` per entry -- `_padded_group_segment` pads a shorter-than-its-table segment
+        # to `None` (any `geometry`/`trunk_state` construction path whose own default left `groups`
+        # unset) rather than letting a length mismatch misalign a LATER segment's names against the
+        # wrong table entries -- both `geometry.groups` and `trunk_state.mover_groups` carry real
+        # names on every real production path, pin-restored geometry included. Sprites and mesh-actor
+        # skins never resolve a real group via `_TextureTable` at all (see `_LoadedTrunk`'s own
+        # docstring for the mesh case) -- both segments are plain `None`-filled inline, same as
+        # `/atlas`'s own texture_table concatenation right above builds those two segments.
+        groups = (_padded_group_segment(geo_table, geometry.groups if geometry is not None else [])
+                 + [None] * len(trunk_state.sprite_table)
+                 + [None] * len(trunk_state.mesh_texture_table)
+                 + _padded_group_segment(trunk_state.mover_texture_table, trunk_state.mover_groups))
+        png_bytes, manifest, width, height = build_atlas(texture_table, groups)
         return {
             "width": width,
             "height": height,
-            "manifest": manifest,
+            "manifest": {idx: asdict(rect) for idx, rect in manifest.items()},
             "png_base64": base64.b64encode(png_bytes).decode("ascii"),
         }
 
@@ -747,16 +790,17 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
             conflicts = edits.check_load_conflicts(
                 session_id, lvl, store=_staging_store, resolutions=resolutions)
             sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
-            mesh_polys, mesh_owners, mesh_texture_table = resolve_mesh_scene_polys(
+            # `mesh_groups` discarded -- see the matching call site in `_get_trunk` above.
+            mesh_polys, mesh_owners, mesh_texture_table, _mesh_groups = resolve_mesh_scene_polys(
                 lvl, index, search_files, defaults)
-            mover_polys, mover_owners, mover_texture_table = resolve_mover_scene_polys(
+            mover_polys, mover_owners, mover_texture_table, mover_groups = resolve_mover_scene_polys(
                 lvl, index, search_files, defaults)
             loaded = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
                                   sprite_table=sprite_table, actor_sprites=actor_sprites,
                                   mesh_polys=mesh_polys, mesh_owners=mesh_owners,
                                   mesh_texture_table=mesh_texture_table,
                                   mover_polys=mover_polys, mover_owners=mover_owners,
-                                  mover_texture_table=mover_texture_table)
+                                  mover_texture_table=mover_texture_table, mover_groups=mover_groups)
             # Written BEFORE `ctx.trunk_ref[0]` (same reasoning as `_get_trunk`'s bootstrap
             # branch): a concurrent `/scene`/`/atlas`/`/lightmap` must never observe the NEW trunk
             # paired with the PREVIOUS `ctx.scene_inputs_ref[0]`.

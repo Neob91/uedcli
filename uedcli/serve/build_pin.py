@@ -64,6 +64,12 @@ def write_level_pointer(project, level_name: str, geom_hash: str, light_hash: st
 
 
 def resolve_level_pin(project, level_name: str):
+    """The cached `(polys, texture_table, actor_names_by_poly, texture_groups)` scene for the
+    level's own saved pin, or `None` on a miss -- either nothing is pinned yet, or the pointer
+    names a hash pair `build_cache` no longer holds (evicted by its project-wide LRU). `texture_
+    groups[i]` is the real `Package.Group.Name` identity for `texture_table[i]` (`AtlasRect.name`)
+    -- carried by `build_cache.load_scene` itself, so a pin-restored geometry gets real names too,
+    not just a fresh `build_scene` call."""
     pin = load_level_pointer(project, level_name)
     if pin is None:
         return None

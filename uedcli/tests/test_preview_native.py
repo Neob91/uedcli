@@ -270,6 +270,67 @@ def test_real_fixture_texture_resolves():
     assert len(mask) == w * h                    # per-texel mask plumbed alongside RGB
 
 
+def test_texture_table_records_real_group_name():
+    """`_TextureTable.group_for` returns the real `Package.Group.Name` for a texture resolved via
+    `index_for`, read off the REAL export (`utexture.group_of_export`), never guessed from `ref`'s
+    own text. `dev/docs/unrealed/quirks.md`'s "T3D format" section cites `CoreTexMetal.Area51Wall_A`
+    (`Group=Metal`) as the canonical live-confirmed example, but `CoreTexMetal.utx` is full retail
+    Deus Ex content, not committed to this repo (unlike `Area51Wall_A`'s own doc citation, which was
+    captured against a real install). `CoreTexWater.utx` -- already a committed test fixture used
+    elsewhere in this file -- has the same shape: `dirtywater`/`bluewater` both live in `Group=water`
+    (confirmed by decoding the committed package directly, not assumed)."""
+    table = pn._TextureTable(pn.TextureResolver([str(FIXTURES / "CoreTexWater.utx")]))
+    idx = table.index_for("CoreTexWater.dirtywater")
+    assert table.group_for(idx) == "CoreTexWater.water.dirtywater"
+
+
+def test_texture_table_group_none_when_export_has_none():
+    """A texture whose export has no group (`Outer` ref `0`) still gets a real `group_for` result --
+    `Package.Name`, not a bare `None` -- matching `group_of_export`'s own contract (`None` only means
+    "no group", never "unresolvable"). Real fixture, real (ungrouped) export: `LUM_InfoPortraits
+    .utx`'s own `ArthurCallaway` (confirmed ungrouped by decoding the committed package directly)."""
+    table = pn._TextureTable(pn.TextureResolver([str(FIXTURES / "LUM_InfoPortraits.utx")]))
+    idx = table.index_for("LUM_InfoPortraits.ArthurCallaway")
+    assert table.group_for(idx) == "LUM_InfoPortraits.ArthurCallaway"
+
+
+def test_texture_table_group_for_out_of_range_index_is_none():
+    """`group_for` is bounds-checked like `is_bmasked` -- an out-of-range index (a mesh-skin entry,
+    `index_for_decoded`, which never appends to `_group`) reports `None`, not an `IndexError`."""
+    table = pn._TextureTable(pn.TextureResolver([str(FIXTURES / "CoreTexWater.utx")]))
+    assert table.group_for(-1) is None
+    assert table.group_for(0) is None               # nothing registered yet
+    table.index_for("CoreTexWater.dirtywater")
+    assert table.group_for(1) is None               # only index 0 exists
+
+
+def test_texture_table_group_for_stays_aligned_when_decoded_precedes_index_for():
+    """Important review finding: `index_for_decoded` used to append to `table`/`bmasked` but NOT
+    `_group`, so calling it BEFORE a later `index_for` call shifted every SUBSEQUENT `_group` entry
+    off by one -- silently mislabeling a DIFFERENT texture's name. `build_scene`'s own call order
+    (world polys -> movers -> meshes last) happens to avoid this today, but `index_for`/
+    `index_for_decoded` are both public `_TextureTable` methods with no ordering contract of their
+    own -- `build_scene(include_meshes=True, ...)` is already a legal, tested call shape."""
+    table = pn._TextureTable(pn.TextureResolver([str(FIXTURES / "CoreTexWater.utx")]))
+    decoded_idx = table.index_for_decoded("DeusEx.CrateA", ("DeusExDeco", "Crate"), 0, 1, 1,
+                                          b"\xff\x00\x00", False, b"\x01")
+    real_idx = table.index_for("CoreTexWater.dirtywater")
+    assert decoded_idx != real_idx
+    assert table.group_for(decoded_idx) is None
+    assert table.group_for(real_idx) == "CoreTexWater.water.dirtywater"
+
+
+def test_build_scene_groups_out_parallels_texture_table():
+    """`build_scene`'s `groups_out` out-param, once threaded through a real fresh build, stays
+    parallel to `texture_table` and carries the real group for the one grouped texture involved."""
+    room = cube_room(texture="CoreTexWater.dirtywater")
+    groups: list = []
+    polys, table, _, _, _ = pn.build_scene(_level(room), [str(FIXTURES / "CoreTexWater.utx")], IDX,
+                                     defaults=DEFAULTS, groups_out=groups)
+    assert len(groups) == len(table) == 1
+    assert groups[0] == "CoreTexWater.water.dirtywater"
+
+
 def test_resolve_actor_sprites_dt_sprite_actor_gets_a_billboard():
     """A non-brush actor whose (instance-else-class-default) `DrawType` is `DT_Sprite` resolves its
     `Texture` into a FRESH table (same `(w, h, rgb, mask)` row shape as `_TextureTable.table`) and
@@ -392,6 +453,9 @@ def test_bmasked_texture_masks_without_the_surface_flag():
         def resolve(self, ref):
             return _tex(ref == "Masked.Tex")
 
+        def package_for_ref(self, ref):
+            return None   # synthetic, no real Package behind it -- group_for degrades to None
+
     t = pn._TextureTable(_Resolver())
     assert t.is_bmasked(t.index_for("Masked.Tex")) is True
     assert t.is_bmasked(t.index_for("Plain.Tex")) is False
@@ -411,6 +475,9 @@ def test_bmasked_texture_masks_through_build_scene(monkeypatch):
         def resolve(self, ref):
             return SimpleNamespace(width=2, height=1, rgb=b"\xff\x00\x00\xff\x00\x00",
                                    mask=b"\x01\x00", b_masked=True)
+
+        def package_for_ref(self, ref):
+            return None   # synthetic, no real Package behind it -- group_for degrades to None
 
     monkeypatch.setattr(pn, "TextureResolver", _Resolver)
     room = cube_room(texture="Masked.Tex")               # bMasked texture, NO PolyFlags set
@@ -544,6 +611,19 @@ def test_mover_polyflags_high_bit_does_not_overflow_render_frame():
     fwd, right, up = pn.camera_basis(0.0, 0.0)
     uedcli_native.render_frame(mover_polys, table, ((0.0, 0.0, 500.0), fwd, right, up, 90.0),
                                (8, 8))                    # must not raise OverflowError
+
+
+def test_resolve_mover_scene_polys_groups_parallels_texture_table():
+    """A Mover's own texture resolves via `_TextureTable.index_for` (real export-backed, unlike a
+    mesh actor's decoded skin) -- `resolve_mover_scene_polys`'s 4th return element carries the real
+    group for it, real fixture content, same as `_TextureTable.group_for` directly."""
+    mover = make_brush_actor("Door", cube(64, 8, 96, texture="CoreTexWater.dirtywater"),
+                             mover_class="Engine.Mover")
+    lvl = _level(cube_room(), mover)
+    polys, owners, table, groups = pn.resolve_mover_scene_polys(
+        lvl, IDX, [str(FIXTURES / "CoreTexWater.utx")], DEFAULTS)
+    assert len(groups) == len(table) == 1
+    assert groups[0] == "CoreTexWater.water.dirtywater"
 
 
 # --------------------------------------------------------------- DT_Mesh actors (real corpus)
@@ -967,6 +1047,9 @@ def _flat_texture_resolver_stub(colors: dict):
                                   layout="linear1", layout_source="synthetic", format_code=0,
                                   array="mips", b_masked=False, b_alpha_texture=False)
 
+        def package_for_ref(self, ref):
+            return None   # synthetic, no real Package behind it -- group_for degrades to None
+
     return _Stub
 
 
@@ -1260,6 +1343,50 @@ def test_build_scene_reuses_geometry_when_only_a_light_changes(tmp_path, monkeyp
                                                    defaults=DEFAULTS)
     assert second == reference
     assert second_textures == reference_textures
+
+
+def test_build_scene_groups_out_survives_a_full_scene_cache_hit(tmp_path):
+    """Critical review finding: `groups_out` used to come back `None`-filled on every CACHED build
+    (`build_cache.store_scene`/`.load_scene` dropped the `_TextureTable`'s group identity
+    entirely, not just on a cold build) -- an Inspector showing a real qualified texture name once,
+    then silently falling back to `#index` on the very next reload. Two identical `build_scene`
+    calls against the same project/level_name hit `build_cache.load_scene` on the second call
+    (same shape as `test_build_scene_reuses_the_full_scene_when_nothing_changed`) -- `groups_out`
+    must carry the SAME real group name both times, not fall back to `None` on the cache hit."""
+    index = _ued22_index()
+    room = cube_room(texture="CoreTexWater.dirtywater")
+    lvl = _level(room, _light("8"))
+    proj = _proj(tmp_path)
+    search_files = [str(FIXTURES / "CoreTexWater.utx")]
+
+    first_groups: list = []
+    pn.build_scene(lvl, search_files, index, defaults=DEFAULTS, project=proj, level_name="lvl",
+                   groups_out=first_groups)
+    second_groups: list = []
+    _, table, _, _, _ = pn.build_scene(lvl, search_files, index, defaults=DEFAULTS, project=proj,
+                                 level_name="lvl", groups_out=second_groups)
+
+    assert len(second_groups) == len(table) == 1
+    assert second_groups == first_groups == ["CoreTexWater.water.dirtywater"]
+
+
+def test_build_scene_groups_out_survives_a_geometry_cache_hit(tmp_path):
+    """Same Critical finding, the OTHER cache layer: a light-only change busts `scenelit` but hits
+    `scenegeo` (same shape as `test_build_scene_reuses_geometry_when_only_a_light_changes`) --
+    `groups_out` must carry the real name on THAT path too, not just on a full scene-cache hit."""
+    index = _ued22_index()
+    room = cube_room(texture="CoreTexWater.dirtywater")
+    proj = _proj(tmp_path)
+    search_files = [str(FIXTURES / "CoreTexWater.utx")]
+
+    pn.build_scene(_level(room, _light("8")), search_files, index, defaults=DEFAULTS,
+                   project=proj, level_name="lvl")
+    groups: list = []
+    _, table, _, _, _ = pn.build_scene(_level(room, _light("64")), search_files, index, defaults=DEFAULTS,
+                                 project=proj, level_name="lvl", groups_out=groups)
+
+    assert len(groups) == len(table) == 1
+    assert groups == ["CoreTexWater.water.dirtywater"]
 
 
 def test_build_scene_rebuilds_csg_when_geometry_changes(tmp_path, monkeypatch):
