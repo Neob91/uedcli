@@ -35,7 +35,7 @@ for another Add/Subtract. The staged clone reaches the trunk only when the user 
   on the CLONE — the builder brush has no add-vs-subtract "mode" to toggle.
 - No conflict-detection/merge machinery for the builder brush's own edits, and none for a staged
   Add/Subtract clone either — see "Data model" for why neither can conflict.
-- Texture/solidity/folder/label/base-name/mover-class/prop/at/rotate — the ten extra flags
+- Texture/solidity/folder/label/base-name/mover-class/prop/at/rotate/csg — the ten extra flags
   `_common_build_opts` adds to every `brush build <shape>` subparser
   (`uedcli/cli/parsers/brush.py:121-179`) — are NOT part of the builder-brush "build" call. Only each
   shape's own geometry params are; Location/Rotation/CsgOper are set (or, for CsgOper, chosen) through
