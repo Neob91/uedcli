@@ -691,48 +691,76 @@ git commit -m "builder_brush: build (shape rebuild, poly-swap only)"
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-def test_set_props_location(tmp_path, real_index):
+import glob
+import os
+from pathlib import Path as _Path
+
+import pytest
+from uedcli.classindex import ClassIndex
+
+_UED22 = _Path(__file__).resolve().parents[1] / "uned" / "UED22"
+
+pytestmark = pytest.mark.skipif(
+    not (_UED22 / "Engine.u").is_file(),
+    reason="committed UED22/Engine.u not present (set_props needs a real class schema)")
+
+
+def _ued22_index() -> ClassIndex:
+    """A real `ClassIndex` over the committed UED22 corpus — needed because `_class_ctx_for` (which
+    `set_props` calls) needs a working `.resolver()`, which the offline `StubClassIndex` (used
+    elsewhere in this codebase's tests) doesn't implement. This is a per-file helper, NOT a shared
+    fixture — no `real_index`/shared fixture exists anywhere in this codebase; `test_serve_scene.py`
+    has its own identically-shaped `_ued22_index()` (that file's own private copy), and
+    `test_import_verb.py`/`test_reimport_verb.py` each independently duplicate an analogous
+    `_real_index()` — per-file duplication of this small helper is the established convention here,
+    confirmed by three existing precedents, not something to factor out for this one new file."""
+    files = [(os.path.splitext(os.path.basename(f))[0], f) for f in glob.glob(str(_UED22 / "*.u"))]
+    return ClassIndex.from_files(files)
+
+
+def test_set_props_location(tmp_path):
     sessions_root = tmp_path / "sessions"
     builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
-    result = builder_brush.set_props(sessions_root, "sid1", real_index, {"Location": "100,200,300"})
+    result = builder_brush.set_props(sessions_root, "sid1", _ued22_index(),
+                                     {"Location": "100,200,300"})
     assert result.location == (Decimal(100), Decimal(200), Decimal(300))
 
 
-def test_set_props_rotation(tmp_path, real_index):
+def test_set_props_rotation(tmp_path):
     sessions_root = tmp_path / "sessions"
     builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
-    result = builder_brush.set_props(sessions_root, "sid1", real_index,
+    result = builder_brush.set_props(sessions_root, "sid1", _ued22_index(),
                                      {"Rotation": "(Pitch=0,Yaw=16384,Roll=0)"})
     assert dict(result.props).get("Rotation") is not None
 
 
-def test_set_props_multiple_at_once_is_atomic(tmp_path, real_index):
+def test_set_props_multiple_at_once_is_atomic(tmp_path):
     # Regression: an earlier version called set_prop once per property in a loop -- a second,
     # invalid property left the first one already persisted. One call with two properties, the
     # second invalid, must leave BOTH unapplied (validate-before-mutate, like actor prop set).
     from uedcli.cli.errors import CommandError
     sessions_root = tmp_path / "sessions"
     builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
-    import pytest
     with pytest.raises(CommandError):
-        builder_brush.set_props(sessions_root, "sid1", real_index,
+        builder_brush.set_props(sessions_root, "sid1", _ued22_index(),
                                 {"Location": "100,200,300", "NotAReal Prop!": "x"})
     unchanged = builder_brush.load_session_box(sessions_root, "sid1")
     assert unchanged.location != (Decimal(100), Decimal(200), Decimal(300))
 
 
-def test_set_props_bad_token_raises_command_error(tmp_path, real_index):
+def test_set_props_bad_token_raises_command_error(tmp_path):
     from uedcli.cli.errors import CommandError
     sessions_root = tmp_path / "sessions"
     builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
-    import pytest
     with pytest.raises(CommandError):
-        builder_brush.set_props(sessions_root, "sid1", real_index, {"NotAReal Prop!": "x"})
+        builder_brush.set_props(sessions_root, "sid1", _ued22_index(), {"NotAReal Prop!": "x"})
 ```
 
-`real_index` — check `uedcli/tests/test_serve_scene.py` (or wherever `_class_ctx_for` is already
-exercised) for the exact fixture name/construction this codebase already uses for a real/offline
-`ClassIndex` in a test; reuse it rather than inventing a new one.
+`_ued22_index()`/`pytestmark` above are copied to the TOP of `uedcli/tests/test_builder_brush.py`
+(module scope, alongside its other imports) — not repeated per-test. Real precedent verified
+directly: `uedcli/tests/test_serve_scene.py:32-51` has the identically-shaped `pytestmark`/
+`_ued22_index()` pair; `test_import_verb.py:30,35` and `test_reimport_verb.py`'s own `_real_index()`
+confirm per-file duplication (not a shared fixture) is how this codebase already handles this need.
 
 - [ ] **Step 2: Run tests to verify they fail**
 
@@ -884,7 +912,7 @@ git commit -m "builder_brush: Add/Subtract clone (fresh name, stamped CsgOper)"
 - Consumes: nothing new — same `hashlib`/`atomic_write_json`/blob-path machinery `stage()` already
   uses.
 - Produces:
-  - `@dataclass(frozen=True, kw_only=True) class StagedNewActor: actor_t3d_text: str`
+  - `@dataclass(frozen=True, kw_only=True) class StagedNewActor: actor_t3d_text: str; blob_hash: str`
   - `StagingStore.stage_new(self, session_id: str, actor_name: str, *, actor_t3d_text: str) -> None`
   - `StagingStore.read_staged_new_actors(self, session_id: str) -> dict[str, StagedNewActor]`
 
@@ -936,8 +964,12 @@ Expected: FAIL — `AttributeError`.
 class StagedNewActor:
     """A staged brand-new actor — no baseline, nothing to conflict against (a fresh, never-before-
     seen Name). `actor_t3d_text` is the actor's full T3D body, applied verbatim into the trunk on
-    Save (`edits.save_staged`, Task 9)."""
+    Save (`edits.save_staged`, Task 9). `blob_hash` is exposed (not just the decoded text) because
+    `app.py`'s existing `_live_blob_hashes()` (Task 12) needs it to keep this blob alive across
+    eviction — the SAME shape `StagedActor` (the existing move-staging dataclass) already carries a
+    `blob_hash` for the same reason."""
     actor_t3d_text: str
+    blob_hash: str
 ```
 
 ```python
@@ -959,8 +991,10 @@ class StagedNewActor:
         for name, entry in manifest.items():
             if entry.get("kind") != "new":
                 continue
-            blob_path = self._blob_path(entry["blob_hash"])
-            out[name] = StagedNewActor(actor_t3d_text=blob_path.read_text(encoding="utf-8"))
+            blob_hash = entry["blob_hash"]
+            blob_path = self._blob_path(blob_hash)
+            out[name] = StagedNewActor(actor_t3d_text=blob_path.read_text(encoding="utf-8"),
+                                       blob_hash=blob_hash)
         return out
 ```
 
@@ -1369,11 +1403,9 @@ Expected: FAIL — module doesn't exist.
 
 - [ ] **Step 3: Write `uedcli/serve/builder_registry.py`**
 
-Build the argparse parser tree the same way the CLI itself does (find how `uedcli/cli/parsers/
-brush.py`'s `build_parser` — or whatever the top-level parser-construction entry point is called;
-grep `uedcli/cli/dispatch.py` or `uedcli/cli/__init__.py` for how the full parser gets assembled —
-and reuse THAT to reach the real `bbuild` subparsers object, rather than re-implementing
-`_common_build_opts`'s argument list by hand:
+Reuses `uedcli.cli.main.build_parser()` (see "Verified against the real parser-construction code"
+below) to reach the real subparser tree, rather than re-implementing `_common_build_opts`'s argument
+list by hand:
 
 ```python
 """GET /api/builders' shape registry — introspected from the SAME argparse subparsers the CLI's
@@ -1530,8 +1562,14 @@ leaves the feature non-functional.
 
 - [ ] **Step 1: Write the failing route tests**
 
-Add to `uedcli/tests/test_serve_app.py`, following its existing `TestClient` fixture pattern (check
-an existing `/scene`/`/stage` test for the exact session-creation boilerplate and reuse it):
+Add to `uedcli/tests/test_serve_app.py`. **No shared `client`/`session_id` fixture exists there** —
+every real test in that file (e.g. `test_health_reports_ok`, `test_session_status_reports_no_build_
+right_after_create`) builds its own inline `TestClient(app)` plus `tmp_path`/`monkeypatch` project
+setup, not a reusable fixture. Follow an existing `/scene` or `/stage` test's inline boilerplate
+(project setup, `TestClient(app)` construction, `POST /api/level/{level}/sessions` to mint a real
+session) rather than assuming a `client`/`session_id` fixture is available to request as a parameter
+— the pseudocode below uses `client`/`session_id`/`project`/`level_name` as stand-ins for whatever
+that inline setup produces, not as real fixture names to request:
 
 ```python
 def test_get_builders_lists_shapes(client, ...):
@@ -1600,6 +1638,27 @@ def test_add_stages_new_actor_leaves_builder_brush_unchanged(client, session_id,
     # The real, meaningful check: Save actually applies the new actor to the trunk (the HTTP-layer
     # counterpart of Task 9's direct save_staged() test).
     save_resp = client.post(f"/api/session/{session_id}/save", json={})
+    assert new_name in save_resp.json()["applied"]
+
+
+def test_stage_between_add_and_save_does_not_evict_the_staged_clones_blob(client, session_id, ...):
+    # THE regression this task exists to prevent: _live_blob_hashes() (real app.py:439-447) used to
+    # count only StagingStore.read_staged()'s move-staging entries, never
+    # read_staged_new_actors()'s -- so ANY /stage call between Add/Subtract and Save (even moving
+    # the builder brush itself, which routes through the SAME /stage endpoint) ran the
+    # unconditional eviction sweep and deleted the just-staged clone's blob, since nothing marked
+    # it live. Save then hit a bare FileNotFoundError -- an unclassified exception, a raw 500.
+    add_resp = client.post(f"/api/session/{session_id}/builder-brush/add")
+    new_name = add_resp.json()["name"]
+
+    # An ordinary /stage call in between -- moving the builder brush -- triggers the SAME eviction
+    # sweep every /stage call does.
+    stage_resp = client.post(f"/api/session/{session_id}/stage",
+                             json={"actors": {"*Builder": {"Location": "1,2,3"}}})
+    assert stage_resp.status_code == 200
+
+    save_resp = client.post(f"/api/session/{session_id}/save", json={})
+    assert save_resp.status_code == 200
     assert new_name in save_resp.json()["applied"]
 
 
@@ -1813,6 +1872,36 @@ Python exception reaches the user"). Add one more proxy method, same shape as th
 ```python
     def read_staged_new_actors(self, _level_name: str):
         return self._store.read_staged_new_actors(self._session_id)
+```
+
+`_live_blob_hashes()` (`app.py:439-447`) extension — **required, and the single most important fix
+in this task**: this existing function feeds `evict_unreferenced_blobs`, which every one of
+`/stage`/`/discard`/`/save` already calls UNCONDITIONALLY on every request (`app.py:840-841,
+869-870, 894-895`), and `_staging_blobs_max_bytes` defaults to `None` — per
+`StagingStore.evict_unreferenced_blobs`'s own docstring, "`max_bytes=None`: every unreferenced blob
+is deleted." Today `_live_blob_hashes()` only unions `entry.blob_hash for ... in
+_staging_store.read_staged(rec.id).values()` — Task 8's `"kind":"new"` entries are invisible to
+`read_staged()` by design, so a staged Add/Subtract clone's blob is NEVER counted as live. Concretely:
+press Add (stages clone X's blob) → do ANYTHING that calls `/stage` again before Save — including
+moving/rotating the BUILDER BRUSH ITSELF, which routes through this same `/stage` endpoint — and the
+eviction sweep on that second call deletes clone X's blob, since nothing marks it live. Save then
+calls `store.read_staged_new_actors(...)`, which does `blob_path.read_text(...)` on a file that no
+longer exists — a bare `FileNotFoundError`, unclassified by `error_to_status`, escaping as an
+unhandled 500. This is not a rare race: adjusting the builder brush after pressing Add, before
+Save, is a completely ordinary sequence. Fix — union in every session's staged-new-actor blob
+hashes too:
+
+```python
+    def _live_blob_hashes() -> set[str]:
+        return {
+            entry.blob_hash
+            for rec in sessions.list_sessions(_sessions_root)
+            for entry in _staging_store.read_staged(rec.id).values()
+        } | {
+            entry.blob_hash
+            for rec in sessions.list_sessions(_sessions_root)
+            for entry in _staging_store.read_staged_new_actors(rec.id).values()
+        }
 ```
 
 `session_save` extension (after the existing `edits.save_staged` call and blob eviction, before the
@@ -2442,14 +2531,11 @@ git commit -m "App.tsx: mount BuilderBrushPanel, wired to the existing scene pol
 
 ## Self-Review Notes (for whoever executes this plan)
 
-- **Task 11** (`builder_registry.py`) and **Task 12**'s `_builder_brush_csg`/`session_stage`/
-  `session_scene` bodies reference a couple of exact call shapes (`add_parser` for the CLI's parser
-  tree, `Path(config.project_maps_dir(project))`, `TrunkLevelSource`, `_parse_location`) that must be
-  confirmed against the real current source at implementation time — each is flagged inline with
-  "read X first, don't guess." This plan was written against `origin/master` at
-  `35bc041475a16a6971221b5651db8b7fc9d78f8c`; re-verify line numbers/signatures if master has moved
-  further by the time a task starts, the same way this plan's own spec citations were refreshed
-  mid-session (see `dev/docs/board/to-plan/gui-builder-brushes/spec.md`'s commit history).
+This plan went through 6 review rounds; nearly everything flagged in earlier rounds ("read X first,
+don't guess"-style hedges, guessed signatures, stale citations) was resolved with a "Verified/
+Confirmed against real source" citation in place of the hedge. Two genuine items remain, worth
+carrying forward rather than re-discovering:
+
 - **`SceneActor.props`'s exact current shape** (flat list vs. `EffectiveProp` tree) has a discrepancy
   between the Python backend (`uedcli/serve/scene.py`'s docstring: `EffectiveProp` tree) and the TS
   type (`web/src/api.ts`: `[string, string][]`, "raw stored T3D property list") noted during this
@@ -2458,3 +2544,13 @@ git commit -m "App.tsx: mount BuilderBrushPanel, wired to the existing scene pol
   produces whatever shape the current pipeline already produces, automatically, with no assumption
   baked into this plan about what that shape is. Flag it to whoever owns that other effort if it
   hasn't already been caught.
+- **`session_stage`'s dispatch loop (Task 12) applies each actor's edit immediately, per entry, not
+  validate-all-then-apply-all across the whole request.** A single `/stage` call naming BOTH
+  `*Builder` and a real actor with a rejected (non-`Location`) property would leave the builder
+  brush's edit already applied even though the request as a whole returns 422 — a partial apply
+  across actors within one call (within `*Builder`'s own edit, `set_props`, Task 6 already made this
+  atomic — this is specifically about mixing `*Builder` with a real actor in the SAME request).
+  Neither real FE call site built by this plan (Task 13's migrated `Viewport3D.tsx`/
+  `OrthoViewport.tsx`, or the builder-brush panel's own `/stage` calls) ever mixes builder-brush and
+  real-actor names in one call, so this is latent, not reachable through anything this plan builds —
+  not fixed here, just recorded so it isn't mistaken for an oversight if it's ever hit.
