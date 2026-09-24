@@ -38,3 +38,36 @@ refuse-same-actor-edit; the GUI audit-snapshot-store exemption); `dev/docs/archi
 write pattern); `dev/docs/board/to-plan/uedcli-human-gui/spec.md` "Deferred" (the P2 persistence
 ruling this reasons about); `dev/docs/board/done/gui-p2-actor-translate-ctrl-drag/` (P2's first
 slice, built on this).
+
+---
+
+## The GUI backend never special-cases a subset of actor properties
+
+**Owner ruling, this spec round (`gui-builder-brushes`): `Location`/`Rotation` — or any property —
+must be exposed and edited through one generic mechanism, never a dedicated field or endpoint per
+property.** Recorded here because it is a standing convention for all future GUI/`serve` work, not
+just the item that surfaced it.
+
+**Why it is this way.** The model/CLI layer already treats every property uniformly: `actor prop set`
+reaches `Location` through `propedit`'s typed-field registry (`uedcli/propedit/fields.py`,
+`TYPED_FIELDS`) and `Rotation` as an ordinary struct-typed prop — it isn't even in that registry —
+through the same plan/apply path (`uedcli/propedit/edit.py`). There is no model-side reason for the
+GUI to fork them apart; doing so only duplicates validation logic (Decimal precision, the `PrePivot`
+invariant D8) that already lives in one place, and makes every future property (a new struct field, a
+new typed field) require its own new GUI endpoint instead of working automatically through the
+existing generic path.
+
+**What already violates this, not yet fixed.** `uedcli/serve/scene.py`'s `SceneActor` carries
+dedicated `location`/`rotation` fields separate from its generic `props` list; `StagingStore`
+(`uedcli/serve/snapshots.py`) stages `Location` moves specifically, with baseline/conflict machinery
+keyed to that one field. Both predate this ruling and are known debt, not a pattern to copy — tracked
+at `dev/docs/board/inbox/sceneactor-special-cases-location-rotation/` (p1).
+
+**How to apply.** Any new GUI/`serve` route that reads or writes an actor property — the builder
+brush's own `prop` route (`dev/docs/board/to-spec/gui-builder-brushes/spec.md`), a future inspector,
+any later editing slice — goes through one generic prop path mirroring `propedit`'s plan/apply, never
+a per-field endpoint or a per-field response field.
+
+**Refs.** `uedcli/propedit/fields.py`, `uedcli/propedit/edit.py`; `dev/docs/rationale/propedit.md`;
+`dev/docs/board/to-spec/gui-builder-brushes/spec.md`; `dev/docs/board/inbox/sceneactor-special-cases-
+location-rotation/`.
