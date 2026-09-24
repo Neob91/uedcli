@@ -147,12 +147,14 @@ builder-brush store is flushed, as a whole, into `levels/<level>/builder-brush.j
 overwrite, not cleared afterward (unlike a `StagingStore` entry, which IS cleared once applied — the
 builder brush is not "consumed" by Save; the session keeps working on the same store).
 
-**Discard.** `POST /api/session/{id}/discard {"actors": ["*Builder"]}` — the SAME route a real actor's
-discard uses. For the reserved Name, the handler's dispatch (see "Background") routes it to the
-builder-brush store instead of `StagingStore.clear_actor`, and — because there is no trunk copy to
-fall back to the way a real actor's discard has — it **re-seeds** the session's store the same way
-session-creation does (from `levels/<level>/builder-brush.json`, else the default cube), rather than
-leaving it empty.
+**Discard is a no-op for the builder brush.** `POST /api/session/{id}/discard` — the SAME route a real
+actor's discard uses, for both its filtered form (`{"actors": ["*Builder"]}`) and its whole-session
+form (no `actors` filter, which today wipes the WHOLE `StagingStore` manifest). Either way, the
+builder brush's own store is left completely untouched — matching UnrealEd itself, which never lets
+you delete or reset its one builder brush. The whole-session form already does this for free once the
+builder brush lives in its own file, separate from `staged.json` (there's nothing there to wipe); the
+filtered form needs the handler's dispatch (see "Background") to recognize the reserved Name and
+route it to a true no-op instead of `StagingStore.clear_actor`.
 
 **Why nothing here needs conflict/merge machinery.** The builder brush's own store has no trunk
 baseline to diverge from (Save never writes IT to the trunk — only Add/Subtract's clones reach the
@@ -252,16 +254,17 @@ new declarative data this feature adds per shape.
   The builder brush's own store is untouched. These stay their own routes — cloning into a brand-new
   actor has no "real actor" analog to piggyback on, unlike move/rotate/prop-set.
 - `POST /api/session/{id}/discard` (existing route, no change to its shape) — `{"actors":
-  ["*Builder"]}` dispatches to the builder-brush store and re-seeds it per "Data model", rather than
-  clearing it to nothing the way a real actor's discard does.
+  ["*Builder"]}` dispatches to a true no-op per "Data model" (UnrealEd never lets you delete or reset
+  its builder brush), rather than clearing it to nothing the way a real actor's discard does.
 - `POST /api/session/{id}/save` (existing route, `app.py:829`, extended) — gains a second, independent
   job: flush the session's builder-brush store into `levels/<level>/builder-brush.json`, without
   clearing it. Its existing `StagingStore`-apply behavior (real actor moves, and now staged
   Add/Subtract clones) is unchanged.
 - No dedicated `GET`/`POST .../prop`/`POST .../move`/`POST .../reset` builder-brush routes — reading
-  it is superseded by the `/scene` overlay; editing and resetting it ride `/stage` and `/discard`,
-  the same routes a real actor's edits use. Only `build` and `add`/`subtract` are genuinely new
-  operations with no real-actor equivalent, so only those stay their own routes.
+  it is superseded by the `/scene` overlay; editing it rides `/stage`, the same route a real actor's
+  edits use; `/discard` is the same route too, just a no-op for it (see "Data model"). Only `build`
+  and `add`/`subtract` are genuinely new operations with no real-actor equivalent, so only those stay
+  their own routes.
 
 ## Reuse strategy (no logic duplication, backend or frontend)
 
@@ -323,10 +326,10 @@ new declarative data this feature adds per shape.
   module most at risk of accidental special-casing creeping back in); Save writes the builder-brush
   store's content to `levels/<level>/builder-brush.json` without clearing the store, and separately
   applies every `StagingStore`-staged actor (moves and Add/Subtract clones) exactly as it does today;
-  `POST /discard {"actors": ["*Builder"]}` re-seeds the store rather than leaving it empty, while
-  discarding a real actor's Name still clears it to nothing, unchanged; a session created AFTER
-  another session's Save picks up the new persisted state, while an already-running session does not
-  (the pinning rule);
+  both `POST /discard {"actors": ["*Builder"]}` and a whole-session `POST /discard` (no filter) leave
+  the builder-brush store byte-for-byte unchanged, while discarding a real actor's Name still clears
+  it to nothing, unchanged; a session created AFTER another session's Save picks up the new persisted
+  state, while an already-running session does not (the pinning rule);
   `add`/`subtract` clone the builder brush's current actor (shape/Location/Rotation/other props
   preserved, fresh Name, correct `CsgOper`) into `StagingStore` and leave the builder brush's own store
   byte-for-byte unchanged; pressing Add then Subtract produces two independent staged actors, not one
