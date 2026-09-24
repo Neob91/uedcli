@@ -91,9 +91,10 @@ Save flow.
 - `web/src/api.ts` — generalize `postStage`'s type from `Record<string, [number,number,number]>` to
   `Record<string, Record<string, string>>`; add `fetchBuilders`, `postBuilderBrushBuild`,
   `postBuilderBrushAdd`, `postBuilderBrushSubtract`.
-- `web/src/panels/SaveBar.tsx`, `web/src/scene/Viewport3D.tsx`, `web/src/scene/OrthoViewport.tsx` —
-  migrate their `postStage(...)` call sites to the new per-actor prop-map shape (Location-only
-  payload, new wire shape).
+- `web/src/scene/Viewport3D.tsx:560`, `web/src/scene/OrthoViewport.tsx:435` — the only two real
+  `postStage(...)` call sites (confirmed via `grep -rn "postStage(" web/src` — `SaveBar.tsx` imports
+  `postDiscard`/`postSave` only, never `postStage`) — migrate both to the new per-actor prop-map
+  shape (Location-only payload, new wire shape).
 - `web/src/App.tsx` — mounts `BuilderBrushPanel`, passes `sessionId`.
 
 ---
@@ -762,21 +763,18 @@ import copy
 
 from .. import t3dtree
 
-_CSG_PROP = {"add": "CSG_Add", "subtract": "CSG_Subtract"}
-
-
 def clone_for_csg(sessions_root: Path, session_id: str, existing_names: set[str], *, csg: str):
     """Clone the session's builder-brush actor into a NEW actor with a freshly allocated Name
     (invariant D6, `t3dtree.alloc_name`) and `CsgOper` stamped per `csg` (`"add"` or `"subtract"`).
     The session box itself is NOT modified — the builder brush stays exactly as it was, ready for
     another Add/Subtract (spec "Data model")."""
-    if csg not in _CSG_PROP:
+    if csg not in builders.CSG_OPER:
         raise CommandError(f"invalid csg operation: {csg!r} (must be 'add' or 'subtract')")
     original = load_session_box(sessions_root, session_id)
     clone = copy.deepcopy(original)
     clone.name = t3dtree.alloc_name("Builder", existing_names)
     clone.props = [(k, v) for k, v in clone.props if k.casefold() != "csgoper"]
-    clone.props.append(("CsgOper", _CSG_PROP[csg]))
+    clone.props.append(("CsgOper", builders.CSG_OPER[csg]))
     return clone
 ```
 
@@ -988,9 +986,14 @@ After the existing move-staging apply logic (the `if touched: src.save(...)` blo
     new_actors_staged = store.read_staged_new_actors(level_name)
     applied_new: list[str] = []
     if new_actors_staged:
-        # Reload fresh (the move-apply above may have already saved once) so the collision check
-        # below is against the CURRENT trunk, not the stale snapshot this function started with.
-        fresh_level, *_ = trunk.read_level_with_bodies(trunk_dir)
+        # A fresh TrunkLevelSource, LOADED before use -- TrunkLevelSource.save() hard-requires a
+        # prior load() (uedcli/cli/level_sources.py:77: "raise RuntimeError" otherwise, since it
+        # preserves the existing order_values from that load). Reloading here (rather than reusing
+        # `src` from the move-apply above) means the collision check below is against the CURRENT
+        # trunk, not the stale snapshot this function started with -- the move-apply, if any, may
+        # have already saved once.
+        fresh_src = TrunkLevelSource(trunk_dir)
+        fresh_level = fresh_src.load()
         for name, staged_new in new_actors_staged.items():
             if name in fresh_level.actors:
                 raise CommandError(
@@ -1002,11 +1005,17 @@ After the existing move-staging apply logic (the `if touched: src.save(...)` blo
             fresh_level.actors[name] = incoming[0]
             fresh_level.order.append(name)
             applied_new.append(name)
-        fresh_src = TrunkLevelSource(trunk_dir)
         fresh_src.save(verb="add", args={"names": applied_new}, level=fresh_level,
                        touched=applied_new)
         for name in applied_new:
             store.clear_actor(level_name, name)
+```
+
+Then update the function's final return (the existing `return SaveResult(applied=touched,
+conflicts=conflicts)`, real `edits.py:186`) to include the new names too:
+
+```python
+    return SaveResult(applied=touched + applied_new, conflicts=conflicts)
 ```
 
 **Verified against `edits.py`'s real current imports**: `CommandError` and `TrunkLevelSource` are
@@ -1416,8 +1425,23 @@ def test_add_stages_new_actor_leaves_builder_brush_unchanged(client, session_id,
     assert resp.status_code == 200
     new_name = resp.json()["name"]
     assert new_name != "*Builder"
+
+    # The builder brush's own /scene entry is untouched by Add.
+    scene = client.get(f"/api/session/{session_id}/scene").json()
+    builder = next(a for a in scene["actors"] if a["name"] == "*Builder")
+    assert builder["location"] == [0.0, 0.0, 0.0]
+
+    # `GET /staged` (session_staged, real app.py:918-926 -- a bare {name: {...}} dict via
+    # StagingStore.read_staged) deliberately does NOT surface the new actor: Task 8's manifest-kind
+    # split keeps "kind": "new" entries out of read_staged() on purpose, so this staged clone is
+    # invisible there BY DESIGN, not a bug -- assert that explicitly rather than assuming otherwise.
     staged = client.get(f"/api/session/{session_id}/staged").json()
-    assert new_name in staged["staged"] and "*Builder" not in staged["staged"]
+    assert new_name not in staged and "*Builder" not in staged
+
+    # The real, meaningful check: Save actually applies the new actor to the trunk (the HTTP-layer
+    # counterpart of Task 9's direct save_staged() test).
+    save_resp = client.post(f"/api/session/{session_id}/save", json={})
+    assert new_name in save_resp.json()["applied"]
 
 
 def test_save_flushes_builder_brush_to_level_box_without_clearing(client, session_id, project,
@@ -1640,8 +1664,9 @@ git commit -m "Wire builder-brush routes: registry, build/add/subtract, stage/di
 ### Task 13: `api.ts` — generalize `postStage`, add builder-brush calls
 
 **Files:**
-- Modify: `web/src/api.ts:411-417` (`postStage`), and its 3 real call sites: `web/src/panels/
-  SaveBar.tsx`, `web/src/scene/Viewport3D.tsx`, `web/src/scene/OrthoViewport.tsx`.
+- Modify: `web/src/api.ts:411-417` (`postStage`), and its 2 real call sites: `web/src/scene/
+  Viewport3D.tsx:560`, `web/src/scene/OrthoViewport.tsx:435` (verified via `grep -rn "postStage("
+  web/src` — `SaveBar.tsx` does NOT call `postStage`, it only imports `postDiscard`/`postSave`).
 - Modify: `web/src/api.test.ts` (confirmed to exist — `postStage`'s existing test file).
 
 **Interfaces:**
@@ -1757,11 +1782,11 @@ export function postBuilderBrushSubtract(sessionId: string): Promise<{ name: str
 }
 ```
 
-- [ ] **Step 4: Migrate the 3 existing `postStage` call sites**
+- [ ] **Step 4: Migrate the 2 existing `postStage` call sites**
 
-In `web/src/panels/SaveBar.tsx`, `web/src/scene/Viewport3D.tsx`, `web/src/scene/OrthoViewport.tsx`:
-find each `postStage(sessionId, ...)` call — it currently builds `Record<string,
-[number,number,number]>`. Change each call site to wrap its location tuple as a prop-map:
+In `web/src/scene/Viewport3D.tsx:560` and `web/src/scene/OrthoViewport.tsx:435`: each
+`postStage(sessionId, ...)` call currently builds `Record<string, [number,number,number]>`. Change
+each call site to wrap its location tuple as a prop-map:
 
 ```typescript
 // before: postStage(sessionId, { [name]: [x, y, z] })
@@ -1772,9 +1797,9 @@ postStage(sessionId, { [name]: { Location: `${x},${y},${z}` } });
 Read each call site's surrounding code first (the exact variable names for `x`/`y`/`z` differ per
 file) rather than pattern-matching blindly.
 
-- [ ] **Step 5: Run the frontend test suite for these 4 files**
+- [ ] **Step 5: Run the frontend test suite for these 3 files**
 
-Run: `cd web && npx vitest run src/api.test.ts src/panels/SaveBar.test.tsx src/scene/Viewport3D.test.tsx src/scene/OrthoViewport.test.tsx`
+Run: `cd web && npx vitest run src/api.test.ts src/scene/Viewport3D.test.tsx src/scene/OrthoViewport.test.tsx`
 Expected: PASS — including each file's EXISTING tests that exercise `postStage`, updated to the new
 call shape (check each test file's own mocked `postStage` assertions and update them to match, same
 migration as the real call sites).
@@ -1782,7 +1807,7 @@ migration as the real call sites).
 - [ ] **Step 6: Commit**
 
 ```bash
-git add web/src/api.ts web/src/api.test.ts web/src/panels/SaveBar.tsx web/src/panels/SaveBar.test.tsx \
+git add web/src/api.ts web/src/api.test.ts \
   web/src/scene/Viewport3D.tsx web/src/scene/Viewport3D.test.tsx \
   web/src/scene/OrthoViewport.tsx web/src/scene/OrthoViewport.test.tsx
 git commit -m "api.ts: generalize postStage to a prop-map, add builder-brush API calls"
