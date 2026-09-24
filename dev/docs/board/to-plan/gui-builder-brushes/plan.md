@@ -481,17 +481,6 @@ def write_session_box(sessions_root: Path, session_id: str, actor) -> None:
 
 def seed_session_box(project, level_name: str, sessions_root: Path, session_id: str) -> None:
     """Seed a session's builder-brush working copy from the level's persisted box, or a fresh
-    default cube when the level has none yet. Called once at session creation, and again by the
-    `/discard` no-op's actual implementation... """
-```
-
-Wait — per spec "Data model," `/discard` is a **no-op** for `*Builder` (does NOT re-seed). Only
-session CREATION seeds. Finish the docstring accordingly and keep `seed_session_box` a single-purpose
-function called from exactly one place (Task 12's session-creation route):
-
-```python
-def seed_session_box(project, level_name: str, sessions_root: Path, session_id: str) -> None:
-    """Seed a session's builder-brush working copy from the level's persisted box, or a fresh
     default cube when the level has none yet. Called ONCE, at session creation — never again for
     that session's lifetime (session-pinned, spec "Data model"; `/discard` is a no-op for the
     builder brush, it does NOT re-seed)."""
@@ -586,16 +575,15 @@ def test_build_cylinder_rejects_fewer_than_3_sides(tmp_path):
                             {"height": 100.0, "radius": 50.0, "sides": 2})
 
 
-def test_build_sheet_flags_maps_to_extra_flags(tmp_path):
-    # Regression: builders.sheet's own "flags" kwarg is a raw bitmask, a DIFFERENT parameter from
-    # the registry's "flags" (a list of flag-name strings from --flag) -- must map onto sheet's
-    # extra_flags kwarg, not its flags kwarg, or the call either raises TypeError (wrong type) or
-    # silently corrupts the wrong field.
+def test_build_sheet_direct_pass_no_flags_param(tmp_path):
+    # sheet's --flag/flags is excluded from the registry entirely (owner ruling: GUI builder
+    # brushes dictate shape only) -- confirm the direct-pass path builds correctly with just its
+    # shape params, and that build() never needs to accept a "flags" key for sheet at all.
     sessions_root = tmp_path / "sessions"
     builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
     result = builder_brush.build(sessions_root, "sid1", "sheet",
-                                 {"width": 100.0, "height": 100.0, "flags": ["portal"]})
-    direct = builders.sheet(100.0, 100.0, extra_flags=["portal"])
+                                 {"width": 100.0, "height": 100.0, "plane": "xz"})
+    direct = builders.sheet(100.0, 100.0, "xz")
     assert result.brush.polys == direct.polys
 ```
 
@@ -616,20 +604,19 @@ against that real code):
   `sides` of 0 or 1 would divide-by-zero in the very next line); the boolean `align_to_side` becomes
   a computed `angle_offset` (`_align_offset_degrees`, `build.py:71-79`: `180.0 / sides if
   align_to_side else 0.0`) — `builders.cylinder`/`cone` have NO `align_to_side` parameter at all.
-- **sheet**: the registry's `flags` param (from `--flag`, a list of flag-NAME strings) maps onto
-  `builders.sheet`'s `extra_flags` kwarg, NOT its own same-named `flags` kwarg (a different,
-  raw-bitmask parameter almost never set this way — `build.py:184-185`:
-  `extra_flags=getattr(args, "flags", None)`).
-- **cube/staircase**: no adapter needed — the CLI passes `args.width`/`args.breadth`/`args.height`
-  (cube) and `args.steps`/`args.depth`/`args.rise`/`args.breadth` (staircase) straight through
-  (`build.py:167-168, 183`), and the registry's params for these two shapes are exactly those same
-  names — a direct `fn(**params)` call is correct for these two ONLY.
+- **cube/sheet/staircase**: no adapter needed. The CLI passes `args.width`/`args.breadth`/
+  `args.height` (cube), `args.width`/`args.height`/`args.plane` (sheet — `args.flags`/`--flag` is
+  EXCLUDED from the registry entirely per the owner's "GUI builder brushes dictate shape only" ruling,
+  spec "Builder registry"; sheet's `extra_flags` kwarg is simply never set here), and
+  `args.steps`/`args.depth`/`args.rise`/`args.breadth` (staircase) straight through (`build.py:
+  167-168, 183, 184-185`), and the registry's params for these three shapes are exactly those same
+  names — a direct `fn(**params)` call is correct for all three.
 
 ```python
 from ..cli.errors import CommandError
 from ..geometry import validate_brush
 
-_DIRECT_SHAPES = {"cube", "staircase"}   # no CLI-side adapter needed, `fn(**params)` is correct
+_DIRECT_SHAPES = {"cube", "sheet", "staircase"}   # no CLI-side adapter needed, `fn(**params)` is correct
 
 
 def _build_incoming(shape: str, params: dict):
@@ -645,10 +632,6 @@ def _build_incoming(shape: str, params: dict):
         p["angle_offset"] = 180.0 / sides if align_to_side else 0.0
         fn = builders.cylinder if shape == "cylinder" else builders.cone
         return fn(**p)
-    if shape == "sheet":
-        p = dict(params)
-        flag_names = p.pop("flags", None)
-        return builders.sheet(**p, extra_flags=flag_names)
     raise CommandError(f"unknown builder-brush shape: {shape!r}")
 
 
@@ -1234,14 +1217,24 @@ Replace the loop body inside `_build_actors` (the code between `for csg_rank, na
 enumerate(level.order, start=1):` and the `for line in notes:` after the loop) with a call to a new
 function carrying that exact body:
 
+`_build_one_actor` takes a `notes: list[str] | None = None` parameter from the start: appends to it
+when the caller supplies one (`_build_actors`'s own loop, which needs to keep its EXISTING
+print-batching behavior — collect every actor's note, print them all once after the loop, to stay
+behavior-identical) and prints immediately only when `None` (the standalone `/scene`-overlay caller,
+Task 12, which has no batch to join and only ever calls this once per request):
+
 ```python
 def _build_one_actor(name: str, actor, csg_rank: int, *, ranks: dict, actor_sprites: dict,
-                     tex_offset: int, ctx_cache: dict, index, radii_map: dict, arrow_map: dict
+                     tex_offset: int, ctx_cache: dict, index, radii_map: dict, arrow_map: dict,
+                     notes: list[str] | None = None
                      ) -> tuple["SceneActor", dict[str, list[str]]]:
     """One iteration of `_build_actors`'s loop, extracted so it is independently callable for an
     actor that is NOT part of any trunk (the builder-brush `/scene` overlay, Task 12). `ctx_cache`
     is mutated in place (per-class `ClassCtx` memo) — callers iterating many actors should share one
-    dict across calls, exactly as `_build_actors`'s own loop does."""
+    dict across calls, exactly as `_build_actors`'s own loop does. `notes`: pass the caller's own
+    batch list to APPEND a resolution note to it (keeps `_build_actors`' existing print-once-after-
+    the-loop behavior); leave it `None` to print immediately instead (the standalone overlay case,
+    which has no batch)."""
     lo, hi = actor_bounds(actor)
     loc = actor.location or _ZERO3
     sprite = None
@@ -1253,7 +1246,10 @@ def _build_one_actor(name: str, actor, csg_rank: int, *, ranks: dict, actor_spri
         ctx_cache[cls] = _class_ctx_for(cls, index)
     props, actor_enum_types, note = effective_props.resolve_actor_props(actor, ctx_cache[cls])
     if note:
-        print(note, file=sys.stderr)
+        if notes is not None:
+            notes.append(note)
+        else:
+            print(note, file=sys.stderr)
     is_mover_flag = is_mover(actor, index) if actor.brush is not None else False
     scene_actor = SceneActor(
         name=name, cls=cls,
@@ -1267,9 +1263,7 @@ def _build_one_actor(name: str, actor, csg_rank: int, *, ranks: dict, actor_spri
     return scene_actor, actor_enum_types
 ```
 
-Note this version prints `note` immediately (per-actor) rather than collecting into a `notes` list —
-`_build_actors` must keep its OWN batching behavior (collect then print once after the loop) to stay
-behavior-identical, so its refactored loop looks like:
+`_build_actors`'s own refactored loop passes its `notes` list through, so its behavior is unchanged:
 
 ```python
     notes: list[str] = []
@@ -1283,7 +1277,7 @@ behavior-identical, so its refactored loop looks like:
         scene_actor, actor_enum_types = _build_one_actor(
             name, actor, csg_rank, ranks=ranks, actor_sprites=actor_sprites,
             tex_offset=tex_offset, ctx_cache=ctx_cache, index=index,
-            radii_map=radii_map, arrow_map=arrow_map)
+            radii_map=radii_map, arrow_map=arrow_map, notes=notes)
         payload_enums.update(actor_enum_types)
         actors.append(scene_actor)
     for line in notes:
@@ -1291,11 +1285,10 @@ behavior-identical, so its refactored loop looks like:
     return actors, payload_enums
 ```
 
-— but `_build_one_actor` above prints its own note immediately rather than appending to `notes`,
-which WOULD change `_build_actors`' print-batching behavior. Fix: give `_build_one_actor` a `notes:
-list[str] | None = None` parameter — append to it when provided (the `_build_actors` loop passes its
-own `notes` list) and print immediately only when `None` (the standalone overlay caller, Task 12,
-which has no batch to join). Update both the signature and body accordingly before running the tests.
+Task 12's two standalone callers (`builder_brush_build`'s response and the `/scene` overlay) call
+`_build_one_actor` WITHOUT a `notes` argument, so a resolution note for the builder brush's own class
+(rare — it prints only when `effective_props.resolve_actor_props` can't fully resolve the class
+schema) prints immediately rather than joining a batch that doesn't exist for those call sites.
 
 - [ ] **Step 4: Run the extraction test, then the FULL existing scene.py suite**
 
@@ -1337,6 +1330,12 @@ def test_shape_registry_excludes_spiral_extrude_revolve_and_common_opts():
     param_names = {p["name"] for p in cylinder["params"]}
     assert param_names == {"height", "radius", "sides", "align_to_side", "axis"}
     assert "at" not in param_names and "csg" not in param_names and "rotate" not in param_names
+
+    # sheet's --flag (dest "flags") is excluded too, even though it isn't part of
+    # _common_build_opts -- material, not shape (owner ruling).
+    sheet = next(s for s in reg if s["id"] == "sheet")
+    sheet_param_names = {p["name"] for p in sheet["params"]}
+    assert sheet_param_names == {"width", "height", "plane"}
 
 
 def test_shape_registry_param_carries_real_help_text():
@@ -1385,10 +1384,11 @@ from __future__ import annotations
 import argparse
 
 # Every arg name _common_build_opts adds to EVERY shape subparser (uedcli/cli/parsers/
-# brush.py:121-179) -- excluded here since none of them are build-time params for the GUI's
-# builder brush (spec "Non-goals" / "Builder registry").
+# brush.py:121-179), PLUS sheet's own --flag (dest "flags", not part of _common_build_opts, but
+# excluded for the same reason: material, not shape -- owner ruling, spec "Builder registry"). None
+# of these are build-time params for the GUI's builder brush (spec "Non-goals" / "Builder registry").
 _COMMON_OPT_DESTS = {"at", "base_name", "csg", "solidity", "folder", "label", "texture",
-                     "mover_class", "prop", "rotate"}
+                     "mover_class", "prop", "rotate", "flags"}
 
 _EXCLUDED_SHAPES = {
     "spiral",    # multi-actor output, spec "Non-goals"
@@ -1709,7 +1709,7 @@ New standalone routes (place near the other `/api/session/{id}/...` routes):
                 logger.info("builder_brush_csg_dropped_session_deleted",
                             extra={"session_id": session_id})
                 return JSONResponse(status_code=409, content={"error": "session deleted"})
-            trunk_dir = Path(config.project_maps_dir(project)) / session.level
+            trunk_dir = edits._trunk_dir(project, session.level)   # reuse, don't reimplement (edits.py:51-52)
             level = TrunkLevelSource(trunk_dir).load()
             existing = set(level.actors)
             clone = builder_brush.clone_for_csg(_sessions_root, session_id, existing, csg=csg)
@@ -2001,25 +2001,36 @@ export function postBuilderBrushSubtract(sessionId: string): Promise<{ name: str
 
 - [ ] **Step 4: Migrate the 2 existing `postStage` call sites**
 
-In `web/src/scene/Viewport3D.tsx:560` and `web/src/scene/OrthoViewport.tsx:435`: each
-`postStage(sessionId, ...)` call currently builds `Record<string, [number,number,number]>`. Change
-each call site to wrap its location tuple as a prop-map:
+**Both real call sites pass a `locations: Record<string, Vec3>` built by `stagedLocationsFor`**
+(`web/src/scene/dragStage.ts:86-95`, `Vec3 = [number, number, number]` per `web/src/scene/camera.ts:
+13`) — potentially MULTIPLE actor names at once (the current multi-select drag), not a single `{name,
+x, y, z}` triple. `Viewport3D.tsx:557-560`:
+```typescript
+const locations = stagedLocationsFor(stagedOffsetsRef.current, selectedNames)
+if (Object.keys(locations).length > 0) {
+  postStage(sessionId, locations)
+```
+`OrthoViewport.tsx:432-435` is the same shape. At BOTH call sites, transform the whole `locations`
+record into the new per-actor prop-map form — every entry, not just one:
 
 ```typescript
-// before: postStage(sessionId, { [name]: [x, y, z] })
+// before:
+postStage(sessionId, locations)
 // after:
-postStage(sessionId, { [name]: { Location: `${x},${y},${z}` } });
+postStage(sessionId, Object.fromEntries(
+  Object.entries(locations).map(([name, [x, y, z]]) => [name, { Location: `${x},${y},${z}` }])
+))
 ```
-
-Read each call site's surrounding code first (the exact variable names for `x`/`y`/`z` differ per
-file) rather than pattern-matching blindly.
 
 Also update `web/src/api.test.ts`'s existing `describe('postStage', ...)` block
 (`api.test.ts:170-184`), which asserts the OLD bare-tuple body shape
 (`postStage('sess-1', { Light0: [1, 2, 3], Light1: [4, 5, 6] })` →
-`body: JSON.stringify({ actors: { Light0: [1, 2, 3], ... } })`). It would keep passing at runtime
-even after the real signature changes (JS doesn't enforce the TS type), silently testing a shape
-`postStage` no longer produces. Rewrite it to the new call shape:
+`body: JSON.stringify({ actors: { Light0: [1, 2, 3], ... } })`). **A SECOND, separate stale
+`postStage` call also exists** — inside `describe('claim token header', ...)` at
+`api.test.ts:379-390`, functionally identical to the first (`postStage('sess-1', { Light0: [1, 2,
+3] })`). Both would keep passing at runtime even after the real signature changes (JS doesn't
+enforce the TS type), silently testing a shape `postStage` no longer produces — fix BOTH, not just
+the first. Rewrite the `describe('postStage', ...)` block to the new call shape:
 
 ```typescript
 describe('postStage', () => {
@@ -2037,6 +2048,25 @@ describe('postStage', () => {
     })
   })
 })
+```
+
+And the second block, `api.test.ts:379-390` (`'postStage attaches X-Claim-Token when a token is
+set'`, inside the `describe('claim token header', ...)` group — untouched otherwise, only this one
+`it` block's body and assertion change):
+
+```typescript
+  it('postStage attaches X-Claim-Token when a token is set', async () => {
+    setClaimToken('tok-2')
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({ staged: ['Light0'] }), { status: 200 })) as unknown as typeof fetch
+
+    await postStage('sess-1', { Light0: { Location: '1,2,3' } })
+
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/stage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Claim-Token': 'tok-2' },
+      body: JSON.stringify({ actors: { Light0: { Location: '1,2,3' } } }),
+    })
+  })
 ```
 
 - [ ] **Step 5: Run the frontend test suite for these 3 files**
@@ -2197,6 +2227,14 @@ export function BuilderBrushPanel({ sessionId, onBuilderBrushChanged }: Props) {
                 >
                   {p.choices.map((c) => <option key={c} value={c}>{c}</option>)}
                 </select>
+              ) : p.type === 'boolean' ? (
+                <input
+                  aria-label={p.name}
+                  type="checkbox"
+                  checked={values[p.name] === 'true'}
+                  onChange={(e) => setValues((v) => ({ ...v, [p.name]: String(e.target.checked) }))}
+                  title={p.help}
+                />
               ) : (
                 <input
                   aria-label={p.name}

@@ -41,11 +41,16 @@ for another Add/Subtract. The staged clone reaches the trunk only when the user 
   on the CLONE — the builder brush has no add-vs-subtract "mode" to toggle.
 - No conflict-detection/merge machinery for the builder brush's own edits, and none for a staged
   Add/Subtract clone either — see "Data model" for why neither can conflict.
-- Texture/solidity/folder/label/base-name/mover-class/prop/at/rotate/csg — the ten extra flags
-  `_common_build_opts` adds to every `brush build <shape>` subparser
-  (`uedcli/cli/parsers/brush.py:121-179`) — are NOT part of the builder-brush "build" call. Only each
-  shape's own geometry params are; Location/Rotation/CsgOper are set (or, for CsgOper, chosen) through
-  the operations described below. See "Builder registry".
+- **The GUI builder brush's "build" call dictates SHAPE ONLY — never placement, CSG, or material.**
+  *(Owner ruling.)* The CLI's `brush build <shape>` bundles shape geometry together with placement/
+  CSG/material/organization in one call (`--at`, `--csg`, `--solidity`, `--folder`, `--label`,
+  `--texture`, `--mover-class`, `--prop`, `--rotate`, and, on `sheet` specifically, `--flag` — a
+  poly-flag-at-build-time convenience). None of that is part of the GUI builder-brush's "build" call:
+  Location/Rotation are set (or, for CsgOper, CHOSEN) through the operations described below, and
+  everything else (texture, poly flags, folder, labels, …) is out of scope for the builder brush
+  entirely — settable, if ever needed, only AFTER Add/Subtract places a real actor, through the same
+  per-face/per-actor verbs (`brush poly set --add-flag`, `actor prop set`, …) any other trunk actor
+  already uses. See "Builder registry" for the exact excluded-argument set this implies per shape.
 - No separate, builder-brush-only edit endpoints for move/rotate/prop-set. The FE stages an edit to
   the builder brush through the exact same `POST /api/session/{id}/stage` call it uses for a real
   actor — see "API surface" for how the backend routes that one reserved Name differently without the
@@ -240,12 +245,18 @@ default/required-ness, `choices=` (for enum-like params, e.g. `--axis`'s `choice
 `brush.py:209`), and a real `help=` string (required for every arg by this project's CLI conventions).
 `GET /api/builders` introspects these subparsers and serves, per shape: its id (the subparser name,
 e.g. `"cylinder"`), its own `help=` as the label, and one entry per **shape-specific** argument (name,
-type, default, choices if any, help text) — **excluding** every argument `_common_build_opts` adds
-(`--at`, `--base-name`, `--csg`, `--solidity`, `--folder`, `--label`, `--texture`, `--mover-class`,
-`--prop`, `--rotate` — `brush.py:121-179`), since `--at`/`--rotate` are handled by `/stage` (see "API
-surface"), `--csg` is not a builder-brush property at all — it is chosen only by which of Add/Subtract
-the user presses (see "Non-goals") — and `--mover-class`/`--prop`/`--base-name`/`--folder`/`--label`
-have no meaning for a not-yet-placed scratch actor.
+type, default, choices if any, help text) — **excluding**:
+- every argument `_common_build_opts` adds (`--at`, `--base-name`, `--csg`, `--solidity`, `--folder`,
+  `--label`, `--texture`, `--mover-class`, `--prop`, `--rotate` — `brush.py:121-179`), since
+  `--at`/`--rotate` are handled by `/stage` (see "API surface"), `--csg` is chosen only by which of
+  Add/Subtract the user presses (see "Non-goals"), and `--mover-class`/`--prop`/`--base-name`/
+  `--folder`/`--label`/`--texture` are all placement/material/organization, not shape — out of scope
+  per the "shape only" ruling above;
+- `sheet`'s own `--flag` (dest `flags`) for the same reason — it's a poly-flag-at-build-time
+  convenience, material not shape, even though it isn't one of `_common_build_opts`'s shared flags.
+
+`Location`/`Rotation`/`CsgOper` never appear in a `build` param list at all — they're set (or, for
+CsgOper, chosen) through the operations described in "API surface", never through `build`.
 
 **Icon** has no CLI analog — one small new hand-authored table, shape id → icon name/path, is the only
 new declarative data this feature adds per shape.
@@ -377,8 +388,10 @@ registry covers `cube`/`cylinder`/`cone`/`sheet`/`staircase` only.
 - `dev/docs/architecture.md` "The core write pattern", "The `LevelSource` seam and `--tree`" (the
   seam this feature deliberately does NOT extend), module map entries for `builders.py`/`profile.py`.
 - `uedcli/cli/commands/brush/edit.py:502-543` (`_replace`, the poly-swap this feature extracts).
-- `uedcli/cli/parsers/brush.py:121-345` (`_common_build_opts` + all `brush build` shape subparsers,
-  extrude/revolve included — the registry's source of truth).
+- `uedcli/cli/parsers/brush.py:121-345` (`_common_build_opts` + every `brush build` shape subparser
+  this range spans, extrude/revolve's own subparsers included even though the GUI registry itself
+  excludes both — this citation range is about where the CLI code lives, not what the registry
+  exposes; see "Non-goals"/"Builder registry" for the actual excluded set).
 - `uedcli/serve/snapshots.py`, `uedcli/serve/edits.py`, `uedcli/serve/app.py:816-871` (`StagingStore`/
   staged-actor flow — kept exactly as-is for real actors, plus one new "stage a new actor" capability
   for Add/Subtract's output; NOT where the builder brush's own state lives).
