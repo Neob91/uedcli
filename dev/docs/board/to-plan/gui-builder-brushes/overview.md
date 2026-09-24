@@ -11,7 +11,7 @@ actor under a reserved Name (`*Builder`), always present in the scene, edited th
 `/stage`/`/discard` calls a real actor's edits use. Underneath, its own unsaved state routes to a
 small store kept separate from `StagingStore` (one dispatch point in the route handlers, not spread
 through shared staged-actor code) — persisted to the trunk it is not. Build a parametric shape
-(cube/cylinder/cone/sheet/staircase/extrude/revolve), reposition/rotate/re-shape it, then press Add or
+(cube/cylinder/cone/sheet/staircase), reposition/rotate/re-shape it, then press Add or
 Subtract to clone it into a new staged brush with that CSG operation (the builder brush itself is
 untouched) — reaching the trunk only on the existing Save action. Reuses existing model-side brush
 builders and edit verbs end to end — no brush-geometry or CSG logic duplicated in the GUI frontend.

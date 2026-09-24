@@ -4,8 +4,8 @@ Written for a reader who has not seen the design discussion. Terms are defined b
 
 ## Goal and non-goals
 
-**Goal.** Let a GUI session build a parametric shape (cube/cylinder/cone/sheet/staircase, plus the
-2D-profile sweeps extrude/revolve), see it rendered as UED22's red **builder brush**, reposition/
+**Goal.** Let a GUI session build a parametric shape (cube/cylinder/cone/sheet/staircase), see it
+rendered as UED22's red **builder brush**, reposition/
 rotate/re-shape it, then press **Add** or **Subtract** to clone it into a new placed brush with that
 CSG operation. The builder brush is **exposed to the GUI transparently, as one more ordinary actor**
 in `GET /api/session/{id}/scene`'s actor list, under a reserved, permanent Name — even though its own
@@ -27,6 +27,12 @@ for another Add/Subtract. The staged clone reaches the trunk only when the user 
   `builders.spiral_staircase()` returns `list[Brush]` (N+1 actors: one column + one tread per step,
   `uedcli/builders.py:638`) — it cannot be represented as UED22's single builder-brush actor. It stays
   CLI/pipe-only (`brush build spiral | actor add -`), unchanged.
+- **`brush build extrude`/`revolve`** (the 2D-profile sweeps) are also excluded, for a different
+  reason: their real parameter is a repeated 2D point list (`--point U,V`, parsed/welded/validated by
+  `uedcli/cli/commands/brush/build.py`'s `_profile_points`; `revolve` additionally computes a sweep
+  angle/segment count), which has no representation in a flat per-shape param form (see "Builder
+  registry"). A real point-list editor control is real, separate FE scope — not built here. Both stay
+  CLI/pipe-only, unchanged, same as `spiral`.
 - No multi-builder-brush support: one reserved Name, one builder brush, per level (see "Data model").
 - No new CLI verb, flag, or `--tree` kind. The CLI never resolves, reads, or writes a builder brush.
   Reuse happens at the Python-function level, not by making the builder-brush box reachable from
@@ -244,7 +250,8 @@ have no meaning for a not-yet-placed scratch actor.
 **Icon** has no CLI analog — one small new hand-authored table, shape id → icon name/path, is the only
 new declarative data this feature adds per shape.
 
-`spiral` is excluded from this registry entirely (see "Non-goals").
+`spiral`, `extrude`, and `revolve` are excluded from this registry entirely (see "Non-goals") — the
+registry covers `cube`/`cylinder`/`cone`/`sheet`/`staircase` only.
 
 ## API surface
 

@@ -557,6 +557,46 @@ def test_build_unknown_shape_raises_command_error(tmp_path):
     import pytest
     with pytest.raises(CommandError):
         builder_brush.build(sessions_root, "sid1", "nonexistent_shape", {})
+
+
+def test_build_cylinder_align_to_side_becomes_angle_offset(tmp_path):
+    # Regression: builders.cylinder has no align_to_side kwarg at all -- an earlier version of this
+    # function passed the registry's raw params straight through and raised TypeError for every
+    # align_to_side=True request. Confirm it now builds successfully and actually rotates the
+    # cross-section (half a segment = 180/sides degrees), matching build.py's own
+    # _align_offset_degrees.
+    sessions_root = tmp_path / "sessions"
+    builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
+    aligned = builder_brush.build(sessions_root, "sid1", "cylinder",
+                                  {"height": 100.0, "radius": 50.0, "sides": 8,
+                                   "align_to_side": True})
+    unaligned = builders.cylinder(100.0, 50.0, sides=8, angle_offset=0.0)
+    aligned_direct = builders.cylinder(100.0, 50.0, sides=8, angle_offset=180.0 / 8)
+    assert aligned.brush.polys == aligned_direct.polys
+    assert aligned.brush.polys != unaligned.polys
+
+
+def test_build_cylinder_rejects_fewer_than_3_sides(tmp_path):
+    from uedcli.cli.errors import CommandError
+    sessions_root = tmp_path / "sessions"
+    builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
+    import pytest
+    with pytest.raises(CommandError):
+        builder_brush.build(sessions_root, "sid1", "cylinder",
+                            {"height": 100.0, "radius": 50.0, "sides": 2})
+
+
+def test_build_sheet_flags_maps_to_extra_flags(tmp_path):
+    # Regression: builders.sheet's own "flags" kwarg is a raw bitmask, a DIFFERENT parameter from
+    # the registry's "flags" (a list of flag-name strings from --flag) -- must map onto sheet's
+    # extra_flags kwarg, not its flags kwarg, or the call either raises TypeError (wrong type) or
+    # silently corrupts the wrong field.
+    sessions_root = tmp_path / "sessions"
+    builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
+    result = builder_brush.build(sessions_root, "sid1", "sheet",
+                                 {"width": 100.0, "height": 100.0, "flags": ["portal"]})
+    direct = builders.sheet(100.0, 100.0, extra_flags=["portal"])
+    assert result.brush.polys == direct.polys
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -566,28 +606,55 @@ Expected: FAIL — `AttributeError`.
 
 - [ ] **Step 3: Add `build` to `uedcli/serve/builder_brush.py`**
 
+**Real per-shape adapters, not blind `fn(**params)`.** The registry's params come straight off each
+shape's argparse subparser (Task 11) — but the CLI itself doesn't call `builders.<shape>(**args)`
+directly either; `uedcli/cli/commands/brush/build.py`'s `_build_brushes()` (lines 160-201) does real
+adapter work first for 2 of these 5 shapes, which this function must replicate exactly (verified
+against that real code):
+
+- **cylinder/cone**: `--sides` is validated `>= 3` BEFORE use (`build.py:176-178` — an unchecked
+  `sides` of 0 or 1 would divide-by-zero in the very next line); the boolean `align_to_side` becomes
+  a computed `angle_offset` (`_align_offset_degrees`, `build.py:71-79`: `180.0 / sides if
+  align_to_side else 0.0`) — `builders.cylinder`/`cone` have NO `align_to_side` parameter at all.
+- **sheet**: the registry's `flags` param (from `--flag`, a list of flag-NAME strings) maps onto
+  `builders.sheet`'s `extra_flags` kwarg, NOT its own same-named `flags` kwarg (a different,
+  raw-bitmask parameter almost never set this way — `build.py:184-185`:
+  `extra_flags=getattr(args, "flags", None)`).
+- **cube/staircase**: no adapter needed — the CLI passes `args.width`/`args.breadth`/`args.height`
+  (cube) and `args.steps`/`args.depth`/`args.rise`/`args.breadth` (staircase) straight through
+  (`build.py:167-168, 183`), and the registry's params for these two shapes are exactly those same
+  names — a direct `fn(**params)` call is correct for these two ONLY.
+
 ```python
 from ..cli.errors import CommandError
 from ..geometry import validate_brush
 
-_SHAPE_FNS = {
-    "cube": builders.cube,
-    "cylinder": builders.cylinder,
-    "cone": builders.cone,
-    "sheet": builders.sheet,
-    "staircase": builders.staircase,
-    "extrude": builders.extrude,
-    "revolve": builders.revolve,
-    # "spiral" deliberately excluded — multi-actor output, spec "Non-goals".
-}
+_DIRECT_SHAPES = {"cube", "staircase"}   # no CLI-side adapter needed, `fn(**params)` is correct
+
+
+def _build_incoming(shape: str, params: dict):
+    if shape in _DIRECT_SHAPES:
+        fn = getattr(builders, shape)
+        return fn(**params)
+    if shape in ("cylinder", "cone"):
+        p = dict(params)
+        sides = p.get("sides", 8)
+        if sides < 3:
+            raise CommandError(f"builder-brush build {shape}: sides must be at least 3, got {sides}")
+        align_to_side = p.pop("align_to_side", False)
+        p["angle_offset"] = 180.0 / sides if align_to_side else 0.0
+        fn = builders.cylinder if shape == "cylinder" else builders.cone
+        return fn(**p)
+    if shape == "sheet":
+        p = dict(params)
+        flag_names = p.pop("flags", None)
+        return builders.sheet(**p, extra_flags=flag_names)
+    raise CommandError(f"unknown builder-brush shape: {shape!r}")
 
 
 def build(sessions_root: Path, session_id: str, shape: str, params: dict):
-    fn = _SHAPE_FNS.get(shape)
-    if fn is None:
-        raise CommandError(f"unknown builder-brush shape: {shape!r}")
     try:
-        incoming = fn(**params)
+        incoming = _build_incoming(shape, params)
     except TypeError as exc:
         raise CommandError(f"invalid params for shape {shape!r}: {exc}") from exc
     actor = load_session_box(sessions_root, session_id)
@@ -625,36 +692,59 @@ git commit -m "builder_brush: build (shape rebuild, poly-swap only)"
 **Interfaces:**
 - Consumes: `uedcli.propedit` (`parse_token`, `plan_edit`, `PropEditError`, `TYPED_FIELDS`),
   `uedcli.serve.scene._class_ctx_for`, `uprops.SchemaError`.
-- Produces: `set_prop(sessions_root: Path, session_id: str, index, name: str, value: str) -> Actor` —
-  sets ONE property (any property — `Location`, `Rotation`, or a plain prop) on the session box's
-  actor via `propedit`'s plan/apply, the same path `actor prop set` uses. Raises `CommandError` on
-  any `PropEditError`/`SchemaError`.
+- Produces: `set_props(sessions_root: Path, session_id: str, index, props: dict[str, str]) -> Actor`
+  — sets one or more properties (any property — `Location`, `Rotation`, or a plain prop) on the
+  session box's actor via `propedit`'s plan/apply, the same path `actor prop set` uses. **Batched,
+  not one call per property**: builds every token first and calls `plan_edit` ONCE with the whole
+  list, matching `actor prop set`'s own two-phase validate-before-mutate pattern exactly (real
+  `uedcli/cli/commands/actor/prop.py:104-107`: `toks = [propedit.parse_token(t, ...) for t in
+  args.tokens]; plans = [propedit.plan_edit(actor, toks, mode, ...) for actor in actors]` — ALL
+  tokens for one actor go into ONE `plan_edit` call). A single-property `/stage` request (the common
+  case — one Location move) is just the one-element case of this same function; a multi-property
+  request (Location AND Rotation in one call) stays atomic: an invalid SECOND property must not
+  leave the FIRST already applied. Raises `CommandError` on any `PropEditError`/`SchemaError`,
+  before any property is applied.
 
 - [ ] **Step 1: Write the failing tests**
 
 ```python
-def test_set_prop_location(tmp_path, real_index):
+def test_set_props_location(tmp_path, real_index):
     sessions_root = tmp_path / "sessions"
     builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
-    result = builder_brush.set_prop(sessions_root, "sid1", real_index, "Location", "100,200,300")
+    result = builder_brush.set_props(sessions_root, "sid1", real_index, {"Location": "100,200,300"})
     assert result.location == (Decimal(100), Decimal(200), Decimal(300))
 
 
-def test_set_prop_rotation(tmp_path, real_index):
+def test_set_props_rotation(tmp_path, real_index):
     sessions_root = tmp_path / "sessions"
     builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
-    result = builder_brush.set_prop(sessions_root, "sid1", real_index, "Rotation",
-                                    "(Pitch=0,Yaw=16384,Roll=0)")
+    result = builder_brush.set_props(sessions_root, "sid1", real_index,
+                                     {"Rotation": "(Pitch=0,Yaw=16384,Roll=0)"})
     assert dict(result.props).get("Rotation") is not None
 
 
-def test_set_prop_bad_token_raises_command_error(tmp_path, real_index):
+def test_set_props_multiple_at_once_is_atomic(tmp_path, real_index):
+    # Regression: an earlier version called set_prop once per property in a loop -- a second,
+    # invalid property left the first one already persisted. One call with two properties, the
+    # second invalid, must leave BOTH unapplied (validate-before-mutate, like actor prop set).
     from uedcli.cli.errors import CommandError
     sessions_root = tmp_path / "sessions"
     builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
     import pytest
     with pytest.raises(CommandError):
-        builder_brush.set_prop(sessions_root, "sid1", real_index, "NotAReal Prop!", "x")
+        builder_brush.set_props(sessions_root, "sid1", real_index,
+                                {"Location": "100,200,300", "NotAReal Prop!": "x"})
+    unchanged = builder_brush.load_session_box(sessions_root, "sid1")
+    assert unchanged.location != (Decimal(100), Decimal(200), Decimal(300))
+
+
+def test_set_props_bad_token_raises_command_error(tmp_path, real_index):
+    from uedcli.cli.errors import CommandError
+    sessions_root = tmp_path / "sessions"
+    builder_brush.write_session_box(sessions_root, "sid1", builder_brush.default_actor())
+    import pytest
+    with pytest.raises(CommandError):
+        builder_brush.set_props(sessions_root, "sid1", real_index, {"NotAReal Prop!": "x"})
 ```
 
 `real_index` — check `uedcli/tests/test_serve_scene.py` (or wherever `_class_ctx_for` is already
@@ -663,10 +753,10 @@ exercised) for the exact fixture name/construction this codebase already uses fo
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `bin/test -k test_set_prop -v`
+Run: `bin/test -k test_set_props -v`
 Expected: FAIL — `AttributeError`.
 
-- [ ] **Step 3: Add `set_prop` to `uedcli/serve/builder_brush.py`**
+- [ ] **Step 3: Add `set_props` to `uedcli/serve/builder_brush.py`**
 
 ```python
 from .. import propedit
@@ -674,18 +764,21 @@ from ..uprops import SchemaError
 from .scene import _class_ctx_for
 
 
-def set_prop(sessions_root: Path, session_id: str, index, name: str, value: str):
-    """Set ONE property on the session box's actor, through the exact `propedit` plan/apply path
-    `actor prop set` uses (`uedcli/cli/commands/actor/prop.py`'s `run()`), so `Location`'s typed-
-    field validation and any struct-typed prop's grammar are enforced identically, with zero
-    reimplementation. `value` is the T3D-literal text form (e.g. `"100,200,300"` for Location,
+def set_props(sessions_root: Path, session_id: str, index, props: dict[str, str]):
+    """Set one or more properties on the session box's actor, through the exact `propedit` plan/
+    apply path `actor prop set` uses (`uedcli/cli/commands/actor/prop.py`'s `run()`), so `Location`'s
+    typed-field validation and any struct-typed prop's grammar are enforced identically, with zero
+    reimplementation. Each value is the T3D-literal text form (e.g. `"100,200,300"` for Location,
     `"(Pitch=0,Yaw=16384,Roll=0)"` for a struct prop) — the SAME text a CLI `--prop` token or
-    `actor prop set KEY=VALUE` argument would carry."""
+    `actor prop set KEY=VALUE` argument would carry. ALL properties are validated (planned) before
+    ANY is applied — one `plan_edit` call over every token, not one call per property, so a bad
+    second property can never leave a valid first property already persisted."""
     actor = load_session_box(sessions_root, session_id)
     ctx = _class_ctx_for(actor.cls, index)
     try:
-        tok = propedit.parse_token(f"{name}={value}", expect_value=True)
-        plan = propedit.plan_edit(actor, [tok], "set", ctx, propedit.TYPED_FIELDS)
+        toks = [propedit.parse_token(f"{name}={value}", expect_value=True)
+                for name, value in props.items()]
+        plan = propedit.plan_edit(actor, toks, "set", ctx, propedit.TYPED_FIELDS)
     except (propedit.PropEditError, SchemaError) as exc:
         raise CommandError(str(exc)) from exc
     actor.props = plan.props
@@ -697,14 +790,14 @@ def set_prop(sessions_root: Path, session_id: str, index, name: str, value: str)
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `bin/test -k test_set_prop -v`
+Run: `bin/test -k test_set_props -v`
 Expected: PASS.
 
 - [ ] **Step 5: Commit**
 
 ```bash
 git add uedcli/serve/builder_brush.py uedcli/tests/test_builder_brush.py
-git commit -m "builder_brush: prop set via propedit's generic plan/apply"
+git commit -m "builder_brush: batched prop set via propedit's generic plan/apply"
 ```
 
 ---
@@ -970,7 +1063,28 @@ def test_save_staged_new_actor_name_collision_raises_command_error(tmp_path, rea
     # between Add/Subtract-click-time and Save-time) -- must be a clean, named error, never a
     # silent overwrite.
     ...
+
+
+def test_save_staged_applies_new_actor_with_no_staged_moves(tmp_path, real_project_with_level):
+    # THE common real workflow -- build a shape, press Add, press Save, with NOTHING else staged.
+    # Regression test: save_staged's early-return guard (real edits.py:126-127, `if not staged:
+    # return SaveResult(applied=[], conflicts=[])`) fires on `store.read_staged(...)` alone -- a
+    # naive read of the spec could miss that this guard must also account for
+    # `read_staged_new_actors`, silently making Add/Subtract-then-Save a no-op whenever no REAL
+    # actor move is also staged. Confirmed this is the actual common case: Add/Subtract alone
+    # stages nothing via `store.stage()`, only via `store.stage_new()`.
+    project, level_name = real_project_with_level
+    store = StagingStore(tmp_path / "sessions", tmp_path / "blobs")
+    new_actor_t3d = normalize.canonical_actor_t3d(
+        builders.make_brush_actor("Builder_ab12", builders.cube(50.0, 50.0, 50.0), csg="add"))
+    store.stage_new(level_name, "Builder_ab12", actor_t3d_text=new_actor_t3d)
+    assert store.read_staged(level_name) == {}   # confirms the "no staged moves" precondition
+
+    result = save_staged(project, level_name, store=store)
+
+    assert "Builder_ab12" in result.applied
 ```
+
 
 Use `normalize.canonical_actor_t3d(builders.make_brush_actor("Builder_ab12", builders.cube(50.0,
 50.0, 50.0), csg="add"))` to build a real, valid T3D snippet for the first test rather than hand-
@@ -984,11 +1098,33 @@ Expected: FAIL — the new actor never reaches the trunk (no such logic exists y
 
 - [ ] **Step 3: Extend `save_staged` in `uedcli/serve/edits.py`**
 
-After the existing move-staging apply logic (the `if touched: src.save(...)` block), before the
-`return SaveResult(...)`, add:
+**Critical placement note, found by review**: the real `save_staged` has an EARLY RETURN before any
+of this — `staged = store.read_staged(level_name); if not staged: return SaveResult(applied=[],
+conflicts=[])` (real `edits.py:125-127`). This guard checks ONLY move-staged entries. Add/Subtract's
+output is staged exclusively via `store.stage_new()` — `store.stage()` (moves) is never touched by
+it — so the COMMON real workflow (build a shape, press Add, press Save, nothing else staged) hits
+this guard with `staged == {}` and returns immediately, before ever reaching new-actor logic placed
+after the move-apply block. **This guard must change first**, to a two-part check:
 
 ```python
+    resolutions = resolutions or {}
+    staged = store.read_staged(level_name)
     new_actors_staged = store.read_staged_new_actors(level_name)
+    if not staged and not new_actors_staged:
+        return SaveResult(applied=[], conflicts=[])
+```
+
+(This replaces the real current `staged = store.read_staged(level_name)` / `if not staged: return
+SaveResult(applied=[], conflicts=[])` pair — `resolutions = resolutions or {}` above it is unchanged,
+just shown for placement context.) The rest of the function's move-handling body is UNCHANGED and
+already tolerates an empty `staged` gracefully: `for name, entry in staged.items():` is simply a
+no-op loop, `touched`/`conflicts` stay `[]`, and `if touched: src.save(...)` already guards the
+move-side trunk write — none of that needs editing.
+
+Then, after the existing move-staging apply logic (the `if touched: src.save(...)` block), before
+the `return SaveResult(...)`, add:
+
+```python
     applied_new: list[str] = []
     if new_actors_staged:
         # A fresh TrunkLevelSource, LOADED before use -- TrunkLevelSource.save() hard-requires a
@@ -1193,11 +1329,10 @@ git commit -m "scene.py: extract _build_one_actor from _build_actors, behavior u
 - [ ] **Step 1: Write the failing test**
 
 ```python
-def test_shape_registry_excludes_spiral_and_common_opts():
+def test_shape_registry_excludes_spiral_extrude_revolve_and_common_opts():
     reg = builder_registry.shape_registry()
     ids = {s["id"] for s in reg}
-    assert "spiral" not in ids
-    assert {"cube", "cylinder", "cone", "sheet", "staircase", "extrude", "revolve"} <= ids
+    assert ids == {"cube", "cylinder", "cone", "sheet", "staircase"}
     cylinder = next(s for s in reg if s["id"] == "cylinder")
     param_names = {p["name"] for p in cylinder["params"]}
     assert param_names == {"height", "radius", "sides", "align_to_side", "axis"}
@@ -1211,6 +1346,16 @@ def test_shape_registry_param_carries_real_help_text():
     assert radius["help"] == "circumscribed radius"
     assert radius["type"] == "float"
     assert radius["required"] is True
+
+
+def test_shape_registry_label_is_the_shape_subparser_help_text():
+    # Regression: add_parser(name, help=...) does NOT set subparser.description -- an earlier
+    # version of this registry read subparser.description (always None) and silently fell back to
+    # the shape id itself, so every label was just "cylinder"/"cube"/etc. instead of the real
+    # help= text (spec.md "its own help= as the label").
+    reg = builder_registry.shape_registry()
+    cylinder = next(s for s in reg if s["id"] == "cylinder")
+    assert cylinder["label"] == "n-gon prism (height, radius, sides)"
 
 
 def test_shape_registry_every_entry_has_an_icon():
@@ -1245,7 +1390,11 @@ import argparse
 _COMMON_OPT_DESTS = {"at", "base_name", "csg", "solidity", "folder", "label", "texture",
                      "mover_class", "prop", "rotate"}
 
-_EXCLUDED_SHAPES = {"spiral"}   # multi-actor output, spec "Non-goals"
+_EXCLUDED_SHAPES = {
+    "spiral",    # multi-actor output, spec "Non-goals"
+    "extrude",   # repeated 2D point-list param, no flat-form representation, spec "Non-goals"
+    "revolve",   # same as extrude, plus a computed sweep angle/segment count
+}
 
 _ICONS = {
     "cube": "cube",
@@ -1253,8 +1402,6 @@ _ICONS = {
     "cone": "cone",
     "sheet": "sheet",
     "staircase": "staircase",
-    "extrude": "extrude",
-    "revolve": "revolve",
 }
 
 
@@ -1270,7 +1417,7 @@ def _param_type_name(action: argparse.Action) -> str:
     return "string"
 
 
-def _shape_entry(shape_id: str, subparser: argparse.ArgumentParser) -> dict:
+def _shape_entry(shape_id: str, subparser: argparse.ArgumentParser, label: str) -> dict:
     params = []
     for action in subparser._actions:
         if action.dest in ("help",) or action.dest in _COMMON_OPT_DESTS:
@@ -1287,7 +1434,7 @@ def _shape_entry(shape_id: str, subparser: argparse.ArgumentParser) -> dict:
         })
     return {
         "id": shape_id,
-        "label": subparser.description or subparser.prog.rsplit(" ", 1)[-1],
+        "label": label,
         "icon": _ICONS.get(shape_id, shape_id),
         "params": params,
     }
@@ -1316,11 +1463,18 @@ def shape_registry() -> list[dict]:
     build_sub = _find_subparsers_action(brush_sub).choices["build"]
     shape_sub = _find_subparsers_action(build_sub)
 
+    # `add_parser(name, help=...)` does NOT set `.description` on the created subparser -- argparse
+    # stores `help` on the PARENT subparsers action's own `_choices_actions` list instead (each a
+    # `dest`/`help` pair keyed by shape id), never on the subparser object itself. Verified directly:
+    # `bcyl.description` is `None` even though `bshape.add_parser("cylinder", help="n-gon prism...")`
+    # was called. Build the label lookup from there.
+    labels = {a.dest: (a.help or a.dest) for a in shape_sub._choices_actions}
+
     entries = []
     for shape_id, subparser in shape_sub.choices.items():
         if shape_id in _EXCLUDED_SHAPES:
             continue
-        entries.append(_shape_entry(shape_id, subparser))
+        entries.append(_shape_entry(shape_id, subparser, labels.get(shape_id, shape_id)))
     _registry_cache = entries
     return entries
 ```
@@ -1481,17 +1635,26 @@ Expected: FAIL — no routes exist yet.
 
 Imports (top of file). **Verified against the real current import block
 (`uedcli/serve/app.py:6-43`)** — `asdict` is already imported (line 13, `from dataclasses import
-asdict, dataclass` — use the bare `asdict(...)` everywhere below, NOT `asdict(...)`,
+asdict, dataclass` — use the bare `asdict(...)` everywhere below, NOT `dataclasses.asdict(...)`,
 since the `dataclasses` module itself is never imported). `Decimal` is imported (line 14) but
 `InvalidOperation` is not — add it to that same line. `TrunkLevelSource` and `normalize` are NOT
 currently imported anywhere in `app.py` — add both. `_build_one_actor` needs adding to the existing
 `from .scene import (...)` block (line 33-40) rather than referenced as `scene._build_one_actor`,
-since `app.py` never imports the `scene` module by its own name, only specific symbols from it:
+since `app.py` never imports the `scene` module by its own name, only specific symbols from it.
+**`builder_brush`/`builder_registry` are SIBLING modules** — both created directly in `uedcli/serve/`
+(same package as `app.py` itself, per "File Structure"), the same relationship `build_pin`/`edits`/
+`sessions` already have (real `app.py:28`: `from . import build_pin, edits, sessions`) — they need
+the ONE-DOT sibling-import form, NOT the two-dot parent-package form `normalize` needs (`normalize`
+is a real top-level `uedcli/` module, matching `app.py:22`'s existing `from .. import build_cache,
+config, packages, trunk`). Getting this wrong (`from .. import builder_brush`) raises `ImportError`
+at server startup, since `uedcli.builder_brush` doesn't exist — only `uedcli.serve.builder_brush`
+does:
 
 ```python
 from decimal import Decimal, InvalidOperation          # extend the existing line 14 import
 from ..cli.level_sources import TrunkLevelSource        # new
-from .. import builder_brush, builder_registry, normalize   # new
+from .. import normalize                                # new (top-level uedcli/ module)
+from . import builder_brush, builder_registry           # new (sibling modules in uedcli/serve/)
 from .scene import _build_one_actor                     # add to the existing `from .scene import (...)` block
 ```
 
@@ -1505,12 +1668,21 @@ New standalone routes (place near the other `/api/session/{id}/...` routes):
     def builder_brush_build(session_id: str, body: dict, request: Request) -> dict:
         # Claim-token gated like every other session-mutating route (`load`/`stage`/`discard`/
         # `save`) — this writes the session's builder-brush store, so it needs the same protection
-        # against a stale/superseded client mutating a session it no longer owns.
+        # against a stale/superseded client mutating a session it no longer owns. ALSO carries the
+        # same deleted-session re-check `session_stage`/`session_discard`/`session_save` each do
+        # under their lock ("Fix round 1, Finding 1", real `app.py:752-765`) — a DELETE racing this
+        # request's entry-to-lock window would otherwise resurrect `sessions/<sid>/` via
+        # `write_session_box`'s unconditional `mkdir` (same footgun `atomic_write_json` has
+        # elsewhere in this codebase).
         session = _require_session(session_id)
         token = request.headers.get("X-Claim-Token", "")
         with _claims.lock_for(session_id):
             if not _claims.check(session_id, token):
                 return _claim_conflict_response(session_id)
+            if sessions.get_session(_sessions_root, session_id) is None:
+                logger.info("builder_brush_build_dropped_session_deleted",
+                            extra={"session_id": session_id})
+                return JSONResponse(status_code=409, content={"error": "session deleted"})
             actor = builder_brush.build(_sessions_root, session_id, body["shape"],
                                         body.get("params", {}))
         search_files, index, defaults = _current_scene_inputs(session.level)
@@ -1533,6 +1705,10 @@ New standalone routes (place near the other `/api/session/{id}/...` routes):
         with _claims.lock_for(session_id):
             if not _claims.check(session_id, token):
                 return _claim_conflict_response(session_id)
+            if sessions.get_session(_sessions_root, session_id) is None:
+                logger.info("builder_brush_csg_dropped_session_deleted",
+                            extra={"session_id": session_id})
+                return JSONResponse(status_code=409, content={"error": "session deleted"})
             trunk_dir = Path(config.project_maps_dir(project)) / session.level
             level = TrunkLevelSource(trunk_dir).load()
             existing = set(level.actors)
@@ -1567,8 +1743,9 @@ builds `moves` and calls `edits.stage_locations` must split `actors` by whether 
             real_actor_moves: dict[str, str] = {}
             for name, props in actors.items():
                 if name == builder_brush.RESERVED_NAME:
-                    for prop_name, value in props.items():
-                        builder_brush.set_prop(_sessions_root, session_id, index, prop_name, value)
+                    # ONE batched call, not one per property (Task 6) -- an invalid second
+                    # property must never leave a valid first property already persisted.
+                    builder_brush.set_props(_sessions_root, session_id, index, props)
                     staged.append(name)
                     continue
                 extra = set(props) - {"Location"}
@@ -1591,7 +1768,7 @@ builds `moves` and calls `edits.stage_locations` must split `actors` by whether 
 **Confirmed against `uedcli/serve/app.py:736-737`**: the EXISTING `_parse_location(arr) -> tuple[
 Decimal, Decimal, Decimal]` takes a JSON array `[x, y, z]` (`Decimal(str(v)) for v in arr`) — but the
 generalized wire shape sends `"Location"` as a comma-separated STRING (`"10,20,30"`), the same text
-form `propedit`'s token grammar takes for the builder-brush's `set_prop` call, so the two paths stay
+form `propedit`'s token grammar takes for the builder-brush's `set_props` call, so the two paths stay
 uniform. `_parse_location` itself must NOT be changed (it's still used verbatim, unreached by this
 new string case, by nothing else in this diff — leave it exactly as-is to avoid touching an
 unrelated, already-tested function). Add a small SIBLING helper next to it instead:
@@ -1704,7 +1881,7 @@ git commit -m "Wire builder-brush routes: registry, build/add/subtract, stage/di
 ### Task 13: `api.ts` — generalize `postStage`, add builder-brush calls
 
 **Files:**
-- Modify: `web/src/api.ts:411-417` (`postStage`), and its 2 real call sites: `web/src/scene/
+- Modify: `web/src/api.ts:458-464` (`postStage`), and its 2 real call sites: `web/src/scene/
   Viewport3D.tsx:560`, `web/src/scene/OrthoViewport.tsx:435` (verified via `grep -rn "postStage("
   web/src` — `SaveBar.tsx` does NOT call `postStage`, it only imports `postDiscard`/`postSave`).
 - Modify: `web/src/api.test.ts` (confirmed to exist — `postStage`'s existing test file).
@@ -1763,14 +1940,14 @@ Expected: FAIL — `postStage` still sends `[number,number,number]`; `fetchBuild
 - [ ] **Step 3: Update `web/src/api.ts`**
 
 Change `postStage`'s type and body construction (matching the existing function's exact
-`request`/`withClaimToken` pattern from `api.ts:411-417`):
+`request`/`withClaimToken` pattern from `api.ts:458-464`):
 
 ```typescript
 export function postStage(
   sessionId: string,
   actors: Record<string, Record<string, string>>,
 ): Promise<{ staged: string[] }> {
-  return request(`/api/session/${sessionId}/stage`, withClaimToken({
+  return request(`/api/session/${encodeURIComponent(sessionId)}/stage`, withClaimToken({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ actors }),
@@ -1806,7 +1983,7 @@ export function postBuilderBrushBuild(
   shape: string,
   params: Record<string, unknown>,
 ): Promise<SceneActor> {
-  return request(`/api/session/${sessionId}/builder-brush/build`, withClaimToken({
+  return request(`/api/session/${encodeURIComponent(sessionId)}/builder-brush/build`, withClaimToken({
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ shape, params }),
@@ -1814,11 +1991,11 @@ export function postBuilderBrushBuild(
 }
 
 export function postBuilderBrushAdd(sessionId: string): Promise<{ name: string; actor: SceneActor }> {
-  return request(`/api/session/${sessionId}/builder-brush/add`, withClaimToken({ method: 'POST' }));
+  return request(`/api/session/${encodeURIComponent(sessionId)}/builder-brush/add`, withClaimToken({ method: 'POST' }));
 }
 
 export function postBuilderBrushSubtract(sessionId: string): Promise<{ name: string; actor: SceneActor }> {
-  return request(`/api/session/${sessionId}/builder-brush/subtract`, withClaimToken({ method: 'POST' }));
+  return request(`/api/session/${encodeURIComponent(sessionId)}/builder-brush/subtract`, withClaimToken({ method: 'POST' }));
 }
 ```
 
@@ -1836,6 +2013,31 @@ postStage(sessionId, { [name]: { Location: `${x},${y},${z}` } });
 
 Read each call site's surrounding code first (the exact variable names for `x`/`y`/`z` differ per
 file) rather than pattern-matching blindly.
+
+Also update `web/src/api.test.ts`'s existing `describe('postStage', ...)` block
+(`api.test.ts:170-184`), which asserts the OLD bare-tuple body shape
+(`postStage('sess-1', { Light0: [1, 2, 3], Light1: [4, 5, 6] })` →
+`body: JSON.stringify({ actors: { Light0: [1, 2, 3], ... } })`). It would keep passing at runtime
+even after the real signature changes (JS doesn't enforce the TS type), silently testing a shape
+`postStage` no longer produces. Rewrite it to the new call shape:
+
+```typescript
+describe('postStage', () => {
+  it('POSTs a JSON body {actors} with a prop-map per actor to the stage route', async () => {
+    const payload = { staged: ['Light0'] }
+    globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(payload), { status: 200 })) as unknown as typeof fetch
+
+    const got = await postStage('sess-1', { Light0: { Location: '1,2,3' } })
+
+    expect(got).toEqual(payload)
+    expect(globalThis.fetch).toHaveBeenCalledWith('/api/session/sess-1/stage', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ actors: { Light0: { Location: '1,2,3' } } }),
+    })
+  })
+})
+```
 
 - [ ] **Step 5: Run the frontend test suite for these 3 files**
 
