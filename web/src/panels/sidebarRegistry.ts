@@ -9,7 +9,7 @@
 import { createElement } from 'react'
 import type { ReactNode } from 'react'
 
-import type { SceneActor } from '../api'
+import type { AtlasRect, SceneActor } from '../api'
 import { Inspector } from './Inspector'
 import type { SurfaceSelection } from './Inspector'
 import { OrgPanel } from './OrgPanel'
@@ -33,6 +33,10 @@ export interface BuildSidebarPanelsArgs {
   orgActors: SceneActor[]
   selectedNames: ReadonlySet<string>
   onSelectOrgBatch: (names: string[], additive: boolean) => void
+  // Task 11: `SurfaceDetail`'s texture-name lookup. App.tsx already fetches `/atlas` for the
+  // viewports and holds it in its own `atlas` state -- this reuses that, never a second fetch.
+  // Optional so an atlas-less caller (this file's own tests) is unaffected.
+  atlasManifest?: Record<string, AtlasRect>
 }
 
 /** The launch registry (spec's Scope: Selection + Org/Search only, everything else is a later
@@ -45,7 +49,11 @@ export function buildSidebarPanels(args: BuildSidebarPanelsArgs): SidebarPanelDe
       icon: '▣',
       title: 'Selection',
       hasIndicator: args.hasUnseenSelection,
-      content: createElement(Inspector, { selected: args.selectedActors, selectedSurfaces: args.selectedSurfaces }),
+      content: createElement(Inspector, {
+        selected: args.selectedActors,
+        selectedSurfaces: args.selectedSurfaces,
+        atlasManifest: args.atlasManifest,
+      }),
     },
     {
       id: 'org',

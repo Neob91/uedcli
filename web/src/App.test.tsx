@@ -66,7 +66,11 @@ const LEVELS_PAYLOAD = { levels: [{ name: LEVEL_NAME, active: true }], current: 
 const SESSION_RECORD = { id: SESSION_ID, level: LEVEL_NAME, created_at: '2026-09-22T00:00:00Z', claim_token: 'tok-1' }
 const SESSIONS_LIST = { sessions: [{ id: SESSION_ID, level: LEVEL_NAME, created_at: '2026-09-22T00:00:00Z', last_active_at: '2026-09-22T00:00:00Z' }] }
 const SCENE = { polys: [], actors: [], geometry_pinned: false }
-const ATLAS = { width: 1, height: 1, manifest: [], png_base64: '' }
+// `manifest['3']` matches the coexistence describe block's own `POLY.tex_index` below -- lets the
+// "Task 11 wiring" test prove App's real `atlas` state reaches `SurfaceDetail`'s texture-name lookup
+// through `buildSidebarPanels`'s `atlasManifest` prop (sidebarRegistry.ts), not just a component-level
+// fixture. Harmless for every other test in this file: none asserts on atlas manifest content.
+const ATLAS = { width: 1, height: 1, manifest: { 3: { x: 0, y: 0, w: 8, h: 8, name: 'CoreTexMetal.Metal.Area51Wall_A' } }, png_base64: '' }
 const LIGHTMAP = { width: 1, height: 1, intensity: 1, manifest: [], png_base64: '' }
 const STATUS_UNBUILT = { changes_available: false, geometry_pinned: false, build_status: 'no_build' }
 
@@ -501,6 +505,8 @@ describe('App: actor + surface selection coexistence', () => {
     tu: [1, 0, 0],
     tv: [0, 1, 0],
     pan: [0, 0],
+    normal: [0, 0, 1],
+    area: 100,
     tex_index: 3,
     masked: false,
     two_sided: false,
@@ -552,6 +558,21 @@ describe('App: actor + surface selection coexistence', () => {
     act(() => quad.onSelectActor('Room', false))
     expect(screen.getByTestId('inspector')).toBeTruthy()
     expect(screen.queryByTestId('inspector-surface')).toBeNull()
+  })
+
+  // Task 11 wiring: App.tsx's own `atlas` state (fetched once for the viewports) must reach
+  // `SurfaceDetail`'s texture-name lookup through `buildSidebarPanels`'s `atlasManifest` prop
+  // (sidebarRegistry.ts:39). This is the one line connecting real App state to the live Inspector --
+  // nothing else in the suite exercises it end to end, so a future refactor could silently drop it
+  // (the prop is optional, so `tsc -b` and every prop-less test stay green) and every real surface's
+  // texture display would regress back to a bare `#index` with no test signal. Verified this test
+  // actually depends on that line: deleting `atlasManifest: args.atlasManifest` from
+  // `sidebarRegistry.ts` fails this exact assertion (falls back to `#3`), restoring it passes again.
+  it('wires App\'s real atlas manifest through to the Inspector\'s texture name (sidebarRegistry.ts:39)', async () => {
+    const quad = await renderSelectable()
+    act(() => quad.onSelectSurface('Room', 4, false))
+    expect(screen.getByText('CoreTexMetal.Metal.Area51Wall_A')).toBeTruthy()
+    expect(screen.queryByText('#3')).toBeNull()
   })
 
   // A batch actor select never clears surfaces, additive or replacing: UED22's actor batch verbs

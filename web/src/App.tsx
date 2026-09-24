@@ -552,8 +552,9 @@ function SessionEditor({ sessionId: routeSessionId }: { sessionId: string }) {
         orgActors: scene?.actors ?? [],
         selectedNames,
         onSelectOrgBatch: handleOrgSelect,
+        atlasManifest: atlas?.manifest,
       }),
-    [selectedActors, selectedSurfaceInfos, hasUnseenSelection, scene, selectedNames, handleOrgSelect],
+    [selectedActors, selectedSurfaceInfos, hasUnseenSelection, scene, selectedNames, handleOrgSelect, atlas],
   )
 
   // The real shading-mode gating signal (Task 19) -- derived from the /status polling this toolbar

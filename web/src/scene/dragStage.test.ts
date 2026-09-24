@@ -26,7 +26,6 @@ function actor(name: string, location: [number, number, number], overrides: Part
     order_value: '',
     csg_rank: 0,
     props: [],
-    categories: [],
     brush: null,
     sprite: null,
     radii: null,

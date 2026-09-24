@@ -38,7 +38,6 @@ function actorWithRadii(name: string, radii: SceneActor['radii']): SceneActor {
     order_value: 'm',
     csg_rank: 1,
     props: [],
-    categories: [],
     brush: null,
     sprite: null,
     radii,

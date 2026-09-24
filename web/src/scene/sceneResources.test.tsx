@@ -14,6 +14,8 @@ function quad(overrides: Partial<ScenePoly> = {}): ScenePoly {
     tu: [1, 0, 0],
     tv: [0, 1, 0],
     pan: [0, 0],
+    normal: [0, 0, 1],
+    area: 100,
     tex_index: -1,
     masked: false,
     two_sided: false,
@@ -33,7 +35,7 @@ const EMPTY_ATLAS: AtlasPayload = { width: 1, height: 1, manifest: {}, png_base6
 // many positions as calling buildGeometryData directly on the same inputs produces.
 describe('useBuiltGeometry', () => {
   it('builds a BufferGeometry whose position count matches buildGeometryData directly', () => {
-    const scene: ScenePayload = { polys: [quad()], actors: [], geometry_pinned: false }
+    const scene: ScenePayload = { polys: [quad()], actors: [], geometry_pinned: false, enums: {} }
     const expected = buildGeometryData(scene.polys, EMPTY_ATLAS, null)
 
     const { result, unmount } = renderHook(() =>
@@ -53,7 +55,7 @@ describe('useBuiltGeometry', () => {
     const litPoly = quad({
       lightmap: { origin: [0, 0, 0], u_step: [1, 0, 0], v_step: [0, 1, 0], u_size: 4, v_size: 4 },
     })
-    const scene: ScenePayload = { polys: [litPoly], actors: [], geometry_pinned: true }
+    const scene: ScenePayload = { polys: [litPoly], actors: [], geometry_pinned: true, enums: {} }
     const lightmap: LightmapPayload = {
       width: 8, height: 8, intensity: 1,
       manifest: { '0': { x: 0, y: 0, w: 4, h: 4 } },

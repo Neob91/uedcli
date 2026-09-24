@@ -296,8 +296,8 @@ def test_load_resolves_mesh_class_defaults_through_the_shared_memo(tmp_path, mon
     assert c.post(f"/api/session/{sess.id}/load", headers={"X-Claim-Token": token}).status_code == 200
     # `calls` stays empty here, and NOT because cube_room() has no mesh/mover actors -- the mocked
     # `_scene_inputs` above returns `search_files=[]`, and `resolve_mesh_scene_polys`/
-    # `resolve_mover_scene_polys` both short-circuit to `return [], [], []` BEFORE their per-actor
-    # loop whenever `search_files` is falsy (`preview_native.py:514`/`295`) -- so
+    # `resolve_mover_scene_polys` both short-circuit to `return [], [], [], []` BEFORE their
+    # per-actor loop whenever `search_files` is falsy (`preview_native.py:514`/`295`) -- so
     # `class_defaults.for_class` is never reached regardless of what actors the level has. The real
     # assertion this test makes is that /load's now-required `class_defaults` argument is actually
     # wired at both call sites -- a TypeError there would 500, not 200, and the domain-error handler

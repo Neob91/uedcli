@@ -86,8 +86,8 @@ class ClassCtx:
     load_enums: Callable[[Prop], tuple[str, ...]]
     _schema: dict[str, Prop] | None = None
     _defaults: dict[tuple[str, int], str] | None = None
-    _members: dict[int, list[Prop]] = field(default_factory=dict)
-    _enums: dict[int, tuple[str, ...]] = field(default_factory=dict)
+    _members: dict[tuple, list[Prop]] = field(default_factory=dict)
+    _enums: dict[tuple, tuple[str, ...]] = field(default_factory=dict)
 
     def schema(self) -> dict[str, Prop]:
         if self._schema is None:
@@ -100,7 +100,7 @@ class ClassCtx:
         return self._defaults
 
     def members(self, prop: Prop) -> list[Prop]:
-        key = id(prop)
+        key = _prop_type_key(prop)
         if key not in self._members:
             self._members[key] = self.load_members(prop)
         return self._members[key]
@@ -110,13 +110,28 @@ class ClassCtx:
             return ()                                # nothing to resolve — never load a package
         if prop.enum_value_names:                    # local enum, decoded eagerly
             return prop.enum_value_names
-        key = id(prop)                               # imported enum → cross-package resolve
+        key = _prop_type_key(prop)                   # imported enum → cross-package resolve
         if key not in self._enums:
             try:
                 self._enums[key] = self.load_enums(prop)
             except SchemaError:                      # unresolvable enum: un-enumerable, not fatal
                 self._enums[key] = ()
         return self._enums[key]
+
+
+def _prop_type_key(prop: Prop) -> tuple[str, str, int, str | None]:
+    """A stable cache key for "which struct/enum type does `prop` resolve to" — `prop.owner`,
+    `prop.name`, `prop.type_ref` and `prop.type_name` are exactly the fields
+    `cli.resources.struct_members`/`enum_names` (and `serve.scene`'s equivalents) read to resolve a
+    member list or enum-name list, so two Props with the same four values always resolve to the same
+    answer and are safe to share a cache entry.
+
+    NOT `id(prop)` (the bug this replaces): CPython commonly reuses a just-freed object's address for
+    the next allocation, so two structurally DIFFERENT ephemeral `Prop` objects (e.g. two different
+    static arrays' own per-element throwaway copies) can collide on the same `id()` — `members()`/
+    `enums()` would then silently return one struct/enum type's cached result for a completely
+    different array's elements (Critical 2)."""
+    return (prop.owner, prop.name, prop.type_ref, prop.type_name)
 
 
 _VR_STRUCTS = {"vector", "rotator"}

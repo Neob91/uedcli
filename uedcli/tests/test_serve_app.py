@@ -382,6 +382,45 @@ def test_scene_atlas_lightmap_never_trigger_a_build(tmp_path, monkeypatch):
     assert c.post("/api/level/TestLevel/rebuild").status_code == 404
 
 
+def test_scene_route_includes_payload_enums(tmp_path, monkeypatch):
+    """The `/scene` route's JSON response must carry `payload.enums` (a plain
+    `dict[str, list[str]]`, already JSON-serializable) alongside `polys`/`actors` -- a review found
+    the route building its dict by hand and dropping this field entirely. Task 13: re-pointed at the
+    session-scoped path (`GET /api/session/{id}/scene`), same as every other `/scene` test."""
+    _require_ued22()
+    from uedcli.serve import app as serve_app
+    from uedcli.serve import sessions
+    from uedcli.tests.conftest import cube_room
+    from uedcli.tests.test_serve_scene import DEFAULTS, _ued22_index
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [cube_room()])
+    project = SimpleNamespace(root=str(root), maps=None)
+
+    monkeypatch.setattr(serve_app, "_scene_inputs", lambda p: ([], _ued22_index(), DEFAULTS))
+    payloads = []
+    real_build_wireframe_payload = serve_app.build_wireframe_payload
+
+    def spy(*a, **k):
+        payload = real_build_wireframe_payload(*a, **k)
+        payloads.append(payload)
+        return payload
+
+    monkeypatch.setattr(serve_app, "build_wireframe_payload", spy)
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+
+    r = c.get(f"/api/session/{sess.id}/scene")
+    assert r.status_code == 200
+    body = r.json()
+
+    assert len(payloads) == 1
+    assert "enums" in body
+    assert isinstance(body["enums"], dict)
+    assert body["enums"] == payloads[0].enums
+
+
 def test_scene_and_atlas_share_one_trunk_read_even_cold(tmp_path, monkeypatch):
     """`/scene` and `/atlas` both call `_get_trunk` -- an unchanged trunk means ONE real trunk-read
     shared between them, cold-open included (no geometry pin needed for this sharing to hold --
@@ -845,10 +884,11 @@ def test_rebuild_populates_the_in_memory_build_result_cache(tmp_path, monkeypatc
     body = r.json()
     cached = app.state.build_result_cache.get(("unatco", body["geom_hash"], body["light_hash"]))
     assert cached is not None
-    polys, texture_table, owners = cached
+    polys, texture_table, owners, groups = cached
     assert isinstance(polys, list)
     assert isinstance(texture_table, list)
     assert isinstance(owners, list)
+    assert isinstance(groups, list)
 
 
 def test_rebuild_unknown_session_returns_a_clean_not_found(tmp_path):

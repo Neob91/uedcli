@@ -1233,3 +1233,50 @@ body {
   padding: 2px 4px;
   word-break: break-all;
 }
+
+/* A defaulted row (Task 10a's overrides-only/show-all toggle, "show all" revealing a row whose
+   stored_value is null) renders visually distinct from an explicit one -- dimmed + italic, plus the
+   small "default" tag below. */
+.inspector tr[data-default] td {
+  color: var(--fg-muted);
+  font-style: italic;
+}
+
+.inspector-default-tag {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 10px;
+  font-style: normal;
+}
+
+/* Task 10c: an actor's Labels row (`SceneActor.labels`) as individual chips -- same pill
+   convention as `.org-label-chip`/`.inspector-default-tag`, not clickable (read-only display). */
+.inspector-labels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.inspector-label-chip {
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg-muted);
+  font-size: 11px;
+}
+
+/* A struct/array row (Task 10b) nests its own `<details><table>` a level deeper than a category's --
+   indent it so a member/element row reads as belonging to its parent, not the category. */
+.inspector td > details {
+  margin: 2px 0;
+}
+
+.inspector td > details > table {
+  margin-left: 12px;
+  width: calc(100% - 12px);
+}

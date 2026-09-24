@@ -3,27 +3,19 @@
 // with a plain function export ("X export is incompatible"), which silently wedges a pane on the
 // next HMR update until a full page reload (the same failure class that broke point-actor rendering
 // this session -- see viewportRender.ts's module comment).
+import type { EffectiveProp } from '../api'
 
-// Groups props[i] under categories[i], preserving first-occurrence category order and
-// within-category prop order (both already stored/T3D order). A length mismatch is a boundary
-// invariant violation (the backend guarantees props.length === categories.length), not a
-// recoverable UI state.
-export function groupByCategory(
-  props: [string, string][],
-  categories: string[],
-): Map<string, [string, string][]> {
-  if (props.length !== categories.length) {
-    throw new Error(`groupByCategory: props.length (${props.length}) !== categories.length (${categories.length})`)
-  }
-  const groups = new Map<string, [string, string][]>()
-  props.forEach((prop, i) => {
-    const category = categories[i]
-    const rows = groups.get(category)
+// Groups props by each prop's own `.category` field, preserving first-occurrence category order
+// and within-category prop order (both already stored/T3D order).
+export function groupByCategory(props: EffectiveProp[]): Map<string, EffectiveProp[]> {
+  const groups = new Map<string, EffectiveProp[]>()
+  for (const prop of props) {
+    const rows = groups.get(prop.category)
     if (rows) {
       rows.push(prop)
     } else {
-      groups.set(category, [prop])
+      groups.set(prop.category, [prop])
     }
-  })
+  }
   return groups
 }
