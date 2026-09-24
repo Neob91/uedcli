@@ -21,7 +21,7 @@ Save flow.
 
 **Tech Stack:** Python (FastAPI, `uedcli/serve/`), TypeScript/React (`web/src/`), Vitest.
 
-**Spec:** `dev/docs/board/to-plan/gui-builder-brushes/spec.md`
+**Spec:** `dev/docs/board/to-build/gui-builder-brushes/spec.md`
 
 ## Global Constraints
 

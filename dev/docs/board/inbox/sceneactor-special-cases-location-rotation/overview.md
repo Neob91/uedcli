@@ -21,7 +21,7 @@ Location-specific staging with a generic per-prop staging mechanism. Ripples int
 staged-move code (`uedcli/serve/edits.py`), and whatever FE code currently reads
 `SceneActor.location`/`.rotation` directly — real scope, not a one-file rename.
 
-Raised while speccing `gui-builder-brushes` (`dev/docs/board/to-plan/gui-builder-brushes/`), which is
+Raised while speccing `gui-builder-brushes` (`dev/docs/board/to-build/gui-builder-brushes/`), which is
 deliberately NOT fixing this itself. That spec's builder brush IS exposed as a genuine `SceneActor`
 (reused as-is, not a bespoke shape — an earlier draft tried a bespoke response shape specifically to
 dodge this issue, then dropped it once "transparent, ordinary actor" became the actual design), so it
