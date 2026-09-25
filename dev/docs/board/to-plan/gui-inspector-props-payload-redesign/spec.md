@@ -8,7 +8,8 @@ text is identical across every actor of the same class. Measured on real content
 2.36 MB for that subset alone. Extrapolated to a full retail level (UNATCO ~1700 actors) that's
 ~32-68 MB of JSON per Load.
 
-This is v16. Every JSON worked example in this document — and, as of the v8 pass, every factual claim about
+This is v17, after an architecture pivot and four same-day fix rounds (see "What changed, v16 → v17"
+and the four "v17 … fix round" sections near the bottom). Every JSON worked example in this document — and, as of the v8 pass, every factual claim about
 the real corpus ANYWHERE in the document, prose included — is generated/verified from a script actually
 run against
 the real corpus (`.venv/bin/python3`, `uned/UED22/*.u`) in the pass that wrote it — not hand-typed —
@@ -76,7 +77,7 @@ carries, on every leaf, both `stored_value: str | None` and `default_value: str`
 `propedit.effective_value`, post the Critical-1 struct-member fix). `resolve_actor_props(actor, ctx)`
 walks the WHOLE class schema (`ctx.schema()`) unconditionally, for every actor, and returns every
 property whether stated or not. `uedcli/serve/scene.py::_build_actors` calls this once per actor and
-threads the full tree into `SceneActor.props`, shipped by `/api/level/{level}/scene`.
+threads the full tree into `SceneActor.props`, shipped by `/api/session/{session_id}/scene`.
 
 Two frontend behaviors this redesign must not silently regress, confirmed by reading the current code:
 
@@ -93,17 +94,31 @@ Two frontend behaviors this redesign must not silently regress, confirmed by rea
 
 ## Goals
 
-- No resolved shape or default text is sent more than once per class, ever — not per actor, not
-  repeated across multiple actors of the same class in one payload.
+- No resolved shape or default text is sent over the network more than once per class, ever — not
+  per actor, not repeated across multiple actors of the same class, not re-fetched across a session.
 - The frontend never re-derives a canonicalized display value itself (enum ordinal→name, quote
-  stripping) — every value it renders is already in final display form when it arrives from the
-  backend, whichever endpoint it came from.
+  stripping) — every value it renders is already in final display form once the shared resolver has
+  produced it, regardless of which side (client or server) ran that resolver.
+- **The Inspector never shows a spinner for connectivity reasons.** Resolving any class's shape and
+  defaults, once the level's referenced packages have loaded, must be synchronous and require no
+  network call — the owner's explicit requirement, and the reason v17 moves resolution client-side
+  (see "What changed, v16 → v17").
+- **One implementation of the resolution algorithm, scoped to the Inspector-props path this spec
+  owns** (owner ruling, 2026-09-24): `effective_props.py`'s walk (used by `/scene` today) is
+  superseded by the shared core — never a second, separately-maintained port of THAT logic. Other
+  class-default consumers already in this codebase (the viewport's radii/`bHiddenEd`/`bDirectional`
+  overlays, the CLI's own class-display, the write path's validation) use separate, narrower code
+  today and are deliberately OUT of scope here — matching the existing Non-goal below that already
+  excludes actor metadata. The owner's stated intent is that these eventually migrate too, once the
+  shared core is proven out by this feature — tracked, not committed to, at
+  `dev/docs/board/inbox/migrate-radii-bhiddened-bdirectional-and-cli/`. See
+  `dev/docs/board/to-spec/shared-rust-core-for-class-schema-resolution/` for this pass's real scope.
 - **No regression in which rows appear, how they're grouped, or their explicit/defaulted status.** The
   default (overrides-only) view keeps showing a partially-stated struct/array's unstated members inline
   with real defaults, exactly as it does today. A minor VALUE-FORMATTING correction (see §2 — dequoting
-  a raw quoted string) is an intentional, named side effect of moving canonicalization fully server-side
-  (the goal above this one), not something this redesign avoids — stated plainly, not hidden as a side
-  effect of something else.
+  a raw quoted string) is an intentional, named side effect of moving canonicalization fully into the
+  shared resolver (the goal above this one), not something this redesign avoids — stated plainly, not
+  hidden as a side effect of something else.
 - Struct AND enum type shape is normalized (defined once, referenced by key) — by ONE mechanism, not two:
   both are keyed on the TYPE'S OWN export record (`package.outer.name`, `outer` omitted when absent or
   the trivial `Object` root), never on the referencing PROPERTY's declaring class — verified against the
@@ -113,24 +128,175 @@ Two frontend behaviors this redesign must not silently regress, confirmed by rea
 
 - Not touching `polys`/`geometry_pinned`/actor metadata (folder, labels, sprite, radii) — those aren't
   class-constant, this redesign doesn't apply to them.
+- **Not migrating radii/`bHiddenEd`/`bDirectional` (`uedcli/serve/scene.py`'s own, separate
+  class-default resolvers) or the CLI/write path onto the shared core** — confirmed explicitly
+  (owner, 2026-09-24, same ruling as Goal 4 above): this pass's "one implementation" covers only
+  the Inspector-props path `effective_props.py` already owned. TODO, tracked not committed:
+  `dev/docs/board/inbox/migrate-radii-bhiddened-bdirectional-and-cli/`.
 - Not building the "reset to default" editing action (`dev/docs/board/someday/
-  gui-inspector-editing-write-back-for-props/`) — this spec's new endpoint is reusable by that future
-  work, but designing the editing flow itself is out of scope here.
+  gui-inspector-editing-write-back-for-props/`) — this spec's shared resolver is reusable by that
+  future work, but designing the editing flow itself is out of scope here.
 - Not adopting msgpack (investigated — see "Transport" below).
+- **Not extracting a package to its class-relevant subset server-side** — every requested package
+  downloads in full, raw, even an asset-heavy one where only a handful of its classes matter (§0's
+  Non-goal). An accepted cost, not an oversight.
+- **Not building a persistent (IndexedDB) client-side cache of raw package bytes** — this pass relies
+  on ETag/HTTP caching only ("for now," the owner's own phrasing); a persistent store surviving a
+  hard refresh with zero network at all stays a later hardening pass, not built here.
 
 ## Design
 
-### 1. New endpoint: `GET /api/package/{package_name}/class` — the ONLY source of shape
+**v17 is an architecture pivot, not a v16 refinement (2026-09-24).** Everything below — every
+corpus fact, the `(package, outer, name)` struct/enum identity scheme, the per-class-not-per-type
+defaults proof, the canonicalization rules, the `TYPED_FIELDS` handling — stays true and is reused
+as-is. What changes is WHO computes it and WHERE (full reasoning: "What changed, v16 → v17" at the
+bottom). v16 had the backend resolve every class in a package (Super-chain merge, default decode,
+canonicalization) and ship already-resolved JSON. Measured directly, not estimated: that resolution
+is real, unavoidable per-class work, not a caching bug — ~25-31ms/class with the existing
+persistent props cache warm, ~183ms/class cold — and a real level only uses a small fraction of a
+package's classes (28 of `DeusEx.u`'s 1166, in the one real subset measured), so resolving the
+WHOLE package eagerly on every request is genuine overwork regardless of caching. The owner's own
+reference point settled it: **UnrealEd itself doesn't do this** — it loads a package's raw bytes
+fast (parse + link, no resolution) and resolves one class's property grid lazily, only when an
+actor of that class is actually inspected, entirely in-process, with nothing to wait on over a
+network. **v17 reproduces that architecture**: the backend serves raw `.u` package bytes,
+unresolved, ETag-cached (§0); the frontend parses them and resolves one class at a time, lazily, on
+first inspection, entirely client-side — synchronously, with no network call, so the Inspector can
+never show a spinner for connectivity reasons (the owner's explicit requirement). Doing this
+without duplicating the resolution algorithm in two languages needs ONE implementation usable both
+server-side (`/scene`'s own route, natively — §1/§2; the CLI and write path keep their existing,
+separate code in THIS pass, an explicit scope call, see Goals/Non-goals) and client-side (the
+browser can't run Python) — split out as its own item,
+`dev/docs/board/to-spec/shared-rust-core-for-class-schema-resolution/`, since it's substantial,
+reusable infrastructure this spec depends on rather than owns.
 
-One call per package (route param named `package_name`, matching this project's existing
-`{level_name}` convention in `uedcli/serve/app.py`; no trailing slash, matching every other real route
-in that file). Response: `{"classes": {"<FQCN>": {...}, ...}, "types": {"<type_key>": {...}, ...}}` —
-`classes` holds one entry per resolvable class in the named package (an unresolvable class is OMITTED
-from the dict with a server-side stderr note — the SAME degrade convention `resolve_actor_props`
-already uses at the per-actor level, `effective_props.py:208-224`, `_build_actors`'s
-notes-collected-then-printed-once pattern — not silently skipped with no signal at all); `types` holds
-every struct/enum type definition referenced anywhere in this response, keyed once (§ below), even when
-many classes reference the same type.
+### 0. The raw-file endpoint — the only NEW backend surface this feature adds
+
+`GET /api/package/{package_name}/raw` (route param matching the project's existing `{level_name}`
+convention) serves the resolved backing `.u` file's bytes **verbatim** — `Content-Type:
+application/octet-stream`, no parsing, no resolution, no JSON.
+
+**Name resolution, stated precisely, not left to guesswork.** `config.composed_search_files`
+returns `list[(host_file, provenance)]`, deduped by CASE-FOLDED stem across all five package
+extensions it scans (`.u`/`.dx`/`.utx`/`.uax`/`.umx`) — it is a LIST, not a name→path map, and this
+route's job is a LOOKUP against that list, never a path join (a join would be a traversal hole;
+`t3dtree.check_safe_segment`'s existing convention is the reason this project treats that as a real
+concern elsewhere, and this route needs the same discipline). `{package_name}` matches
+case-insensitively (`Core`/`Engine`/`DeusEx` in an import table vs. `core.u`/`engine.u`/`DeusEx.u`
+on disk — real-corpus casing differs, confirmed by this doc's own `sUserInfo`/`SUserInfo`
+case-insensitive-FName precedent). **Only a `.u`-kind match is servable — a name resolving to a
+`.dx`/`.utx`/`.uax`/`.umx` file is a clean 404 naming the value**, not served as if this were a
+generic package-file endpoint; this route is `.u` bytes for resolution, nothing else, and the
+project's own no-silent-half-answers convention means a wrong-kind name fails loudly, not quietly.
+A name not on the search path at all is the same clean 404. **This conditional-GET/ETag/304
+handling is new code — nothing in `uedcli/serve/` implements it today** (Starlette's own
+`FileResponse` already computes a stat-derived ETag and answers `If-None-Match` with a `304` for
+free; this route still needs its own real-content-hash `ETag`, per the owner's ruling above, rather
+than that default).
+
+**`ETag` is a real content hash, per the owner's explicit instruction — "etag with checksum of
+.u," reaffirmed when asked directly whether a cheap stat-tuple would do.** `sha1` of the resolved
+file's own bytes (the same bytes the response body sends), NOT a stat-tuple proxy, hex-encoded,
+double-quoted per RFC 7232 (`ETag: "<40 hex chars>"`) — a STRONG validator (no `W/` prefix), correct
+here since the bytes served are byte-identical whenever the hash matches, not merely
+semantically-equivalent. Once `GZipMiddleware` (Transport, below) compresses the response body, the
+SAME `ETag` would otherwise label two different byte streams (identity vs. gzip) as equal — pair it
+with `Vary: Accept-Encoding` so a cache correctly treats the two encodings as distinct resources,
+not a correctness bug this spec leaves implicit. **Genuinely
+cheap to keep cheap, not a per-request tax**: computed once per `(realpath, size, mtime_ns)` and
+cached in-process (the same `_LOAD_CACHE`-by-stat pattern `upackage.load_package` already uses,
+`upackage.py:199-243`) — a request against an unchanged file reuses the cached hash; only a real
+content change (a different stat tuple) triggers a re-hash. This is a deliberately different
+tradeoff from `schema_cache.cache_key`'s own stat-only key: `cache_key` avoids hashing because its
+own docstring argues the hash would cost "about as much as the parse it saves" for a RESOLUTION
+cache — but this route does no resolution to save, and the owner wants the `ETag` to be a real
+checksum here specifically, not a proxy. `Cache-Control: no-cache` (always revalidate via a
+conditional GET, reusing the cached body on a `304`) — the validator is cheap once warm (a
+dict lookup, not a re-hash), so "always revalidate" costs a header-only round trip on every repeat
+visit, not a re-fetch. **Scoped honestly**: this guarantees freshness ACROSS page reloads/new
+sessions — it does NOT mean a class resolved once stays fresh for the rest of a single running
+session; §4's own in-memory per-class cache holds whatever it resolved at fetch time for that
+session's whole life, by design (re-resolving on every render would defeat the "resolve once,
+cache" mechanism the "never a spinner" requirement depends on). A `.u` edit mid-session is not
+picked up until the next reload — the same tradeoff v16's own design already had, not a new one
+this pivot introduces. No `SCHEMA_CACHE_VERSION` component is needed here (unlike v16's
+ETag) — a resolver CODE change no longer affects what this endpoint serves at all, since it serves
+raw bytes unconditionally; only a `.u` file edit does, and a real content hash catches that
+directly (it also makes moot a separate concern the review raised — a project-overlay swap
+changing WHICH file backs a name without its stat necessarily changing: a content hash catches
+that unconditionally, no realpath component needed to cover it).
+
+**gzip transport, real measured numbers** (superseding the "70-90%" estimate in the old Transport
+section — this is compressing raw binary package data, not JSON, so the ratio is worse but still
+substantial): `DeusEx.u` 1.92 MB → 0.38 MB (80% reduction), `Engine.u` 1.24 MB → 0.40 MB (68%),
+`Core.u` 0.06 MB → 0.02 MB. §4's real, CODE-filtered fetch closure (the 8 packages a class/struct/
+enum-only import walk actually needs, not the 3-package under-count an earlier draft of this
+section gave) totals **4.73 MB raw / 1.20 MB gzipped** — a genuinely reasonable one-time-per-session
+download. The large,
+asset-heavy packages compress far less (`DeusExCharacters.u` 19.2 MB → 13.4 MB, `DeusExSounds.u`
+17.6 MB → 15.9 MB — mostly already-packed binary mesh/sound/texture payload, not text) — see
+Non-goals below for the accepted cost this creates.
+
+**Non-goal, stated plainly, not smoothed over**: no backend-side extraction of a package to its
+class-relevant subset. A level whose actors reference even one class from an asset-heavy package
+(e.g. `DeusExCharacters.u`, 4 classes in 19.2 MB) downloads that package's FULL raw bytes to
+resolve those classes — an accepted cost for now, per the owner's explicit call ("I'm fine to
+download all necessary `.u` fully to the FE"), not an oversight. `Cache-Control: no-cache` means
+this is paid once per session per package (not once per class, not once per Level Load after the
+first), same amortization argument v16's own ETag design already made for its JSON payload.
+
+### 1. The shared resolver's output contract — struct/enum identity, per-class defaults
+
+This is the data shape the shared Rust core (native + WASM, see the item above) produces for ONE
+class — **not** an HTTP response shape (there is no longer a resolved-JSON endpoint; §0 above
+serves raw bytes only). One real entry point, not a whole-package batch (an earlier draft of this
+spec described a whole-package `resolve_package` call and was corrected — the whole-package-eager
+shape is exactly the v16 cost this redesign eliminates; nothing about the shared core requires or
+benefits from resolving more than one class at a time):
+
+```
+resolve_class(fqcn, parsed_packages) -> {
+  "class": {...},                          # this class's own top-level prop list (§3's shape)
+  "types": {"<type_key>": {...}, ...}      # every struct/enum type this class's shape references,
+}                                           # keyed once even if several members share one type
+```
+
+`parsed_packages` is whatever in-memory handle the caller already holds over the packages it
+parsed (§4 for the frontend's own fetch-then-parse sequence; `resolve_actor_props`'s own call into
+this, below, for `/scene`'s native use — see §2 for how that path gets its packages) — the core
+does not re-fetch or re-parse anything itself. **NOT called by the CLI or the write path in this
+pass** (Goal 4/Non-goals: that migration is explicitly out of scope, tracked separately at
+`dev/docs/board/inbox/migrate-radii-bhiddened-bdirectional-and-cli/`) — an earlier draft of this
+section said otherwise in three places and was wrong; this pass's only production native caller is
+`resolve_actor_props`, below. An unresolvable class is a caller-visible error (the SAME degrade
+convention `resolve_actor_props`
+already uses at the per-actor level today, `effective_props.py:208-224`, `_build_actors`'s
+notes-collected-then-printed-once pattern — not silently skipped with no signal at all), not a
+missing dict key to guess at.
+
+**This same shared core is also `/scene`'s OWN implementation now, not a second one — and the two
+entry points are not independent, `resolve_actor_props` is built ON `resolve_class`.**
+§2 covers the caching mechanics in full; the contract:
+
+```
+resolve_actor_props(actor, parsed_packages) -> (sparse_map, notes)
+```
+
+Internally, `resolve_actor_props` calls `resolve_class(actor.cls, parsed_packages)` (the SAME
+cached call the frontend also makes, §4) for that class's shape+defaults, then does its own
+actor-specific work on top — reading `actor.props`' raw stored text, keeping only the paths
+present, canonicalizing each. This is what makes "one implementation" true in substance, not just
+in name: the EXPENSIVE half (Super-chain walk, default decode) is shared code, cached once per
+distinct class regardless of which entry point asks for it first; only the CHEAP half (which paths
+this one actor states) is genuinely per-actor work. `resolve_class` runs BOTH natively (called by
+`resolve_actor_props`, for `/scene`) and via WASM (called directly by the frontend, lazily, §4);
+`resolve_actor_props` itself runs ONLY natively, by `/scene`'s own route handler — the frontend
+never calls it directly (an actor's own stated values arrive already resolved, via `/scene`'s
+JSON), so there is no reason to expose it to WASM. `notes` mirrors `resolve_actor_props`'s existing
+third return value (`effective_props.py`'s current `resolve_actor_props`, which this design
+supersedes) — a whole-class failure note, not a per-leaf one (§2 has the full degrade discussion).
+`uedcli/effective_props.py`'s existing Python walk is SUPERSEDED by this, not kept
+alongside it — `/scene`'s route stops calling it once this lands.
 
 **`types` is SHAPE ONLY — never `default_value`.** v5 put `default_value` inside `types[type_key]
 ["members"]`, the entry SHARED across every class/property that references it. This is wrong: defaults
@@ -430,12 +596,15 @@ scalar (no type-reference field) would contradict that. A struct-typed leaf carr
 "<type_key>"` (shape, from `types`, the parallel per-kind field name — see the `Core.Scale` example
 above for why this design uses per-kind field names rather than one shared `"type"`) plus its own
 per-member `default_value`s (this class's own defaults, never shared); an array-of-struct leaf carries
-`"element_type"` (shape, from `types` — unchanged, already kind-specific by construction since the
-array's own `element_kind` sibling field already says what its elements are) plus its own per-INDEX
-member defaults (§3); an array-of-ENUM leaf likewise carries `"element_type"` (the enum's own `types`
-key) plus a plain per-index `default_value`
-list (no static array of enums was found in the real corpus scanned so far — the shape is specified for
-completeness, not because a real worked example exists yet); an array-of-plain-SCALAR leaf (no shared
+`"element_type"` (shape, from `types`) plus its own per-INDEX member defaults (§3); an array-of-ENUM
+leaf likewise carries `"element_type"` (the enum's own `types` key) plus a plain per-index
+`default_value` list (no static array of enums was found in the real corpus scanned so far — the shape
+is specified for completeness, not because a real worked example exists yet). **Correction from an
+earlier draft**: neither array-of-struct nor array-of-enum carries an `element_kind` sibling field — that
+field exists ONLY on the array-of-plain-SCALAR leaf (below), where there's no `types` entry to ask
+instead. An `element_type`-bearing array has NO on-leaf discriminator for whether its elements are
+struct or enum; the frontend must resolve it indirectly via `types[element_type]["kind"]` (`"struct"` or
+`"enum"`) — stated explicitly in §4's walk, not left implicit. An array-of-plain-SCALAR leaf (no shared
 type at all — see the sub-bullet below) carries `element_kind` plus a plain list of per-index
 `default_value`s. This is a REAL structural change from today's `EffectiveProp`'s
 `StructProp`/`ArrayProp` shapes (an earlier draft said "the same shape minus `stored_value`," which was
@@ -484,31 +653,30 @@ per-class default resolution as every other leaf.
 `element_kind` matches today's `ArrayProp.element_kind` field (`effective_props.py`), `default_value`
 a plain list, index = list position (the class-schema tree's own array description is never sparse —
 only `/scene`'s per-actor overlay is, § below). **`category` is never JSON `null` anywhere on the wire,
-in any leaf, in either endpoint** — a `None`-categorized property renders the literal string
+in any leaf, from either resolver entry point** — a `None`-categorized property renders the literal string
 `"Uncategorized"`, exactly matching what `_category_for` already returns today and what
 `groupByCategory.ts`'s non-nullable `category: string` field on `EffectivePropBase` already requires
 (review finding I2: a raw `null` would form its own group and silently diverge from today's grouping).
 
-This reuses `resolve_actor_props`'s exact resolution walk (`_resolve_one`) with the `actor`-consuming
-leaf calls (`_raw_stored_text`, and `propedit.effective_value`'s stored-branch) skipped — `_resolve_one`
-already threads `actor` only into those two leaf calls, nothing structural above them depends on it, so
-a `resolve_class_schema(cls, ctx) -> list[EffectiveProp]` sibling function sharing the same recursive
-walk minus the two actor-touching calls is a small, real, contained refactor at that layer. What is NOT
-small: `ClassCtx`'s loader contract (`propedit/base.py`) currently returns SHAPES only —
-`load_members: Callable[[Prop], list[Prop]]`, `load_enums: Callable[[Prop], tuple[str, ...]]` — with no
-channel to surface the resolved TYPE IDENTITY this spec's normalization needs. `uedcli/serve/scene.py`'s
-`_struct_members_via` (line 580) already computes `tp, ti = resolve_type_export(...)` internally and
-then **discards** `(tp, ti)`, returning only `struct_members(...)`. Both `ClassCtx`'s loader signatures
-and both real construction sites (`serve/scene.py::_class_ctx_for`, `cli/resources.py`'s equivalent)
-need to change to also return the resolved identity, not just the shape — this is real implementation
-surface for the plan stage, not a detail to discover there for the first time.
+**Where this walk is implemented — pointer, not detail, per this spec's v17 scope split.** The
+existing Python walk (`resolve_actor_props`/`_resolve_one`, `effective_props.py`) is the reference
+implementation this behavior must match exactly (its `actor`-consuming leaf calls simply don't run
+for a class-only resolve — `_resolve_one` already threads `actor` only into two leaf calls, nothing
+structural above them depends on it). But the walk that actually SHIPS for this feature is the
+shared Rust core's port of that logic (native + WASM, `dev/docs/board/to-spec/
+shared-rust-core-for-class-schema-resolution/`), not a new Python sibling function — a Python-only
+`resolve_class_schema` would still leave the browser with nothing to call. The Python loader
+contract's existing gap (`ClassCtx`'s `load_members`/`load_enums` return shape only, never the
+resolved type IDENTITY `uedcli/serve/scene.py`'s `_struct_members_via` already computes and
+discards) is real implementation surface, but it belongs to the port, not to this spec — recorded
+there, not re-derived here.
 
 **`Location`/`MainScale`/`PostScale` are a real special case, not covered by the generic walk above —
 say so plainly, don't imply otherwise.** `_resolve_typed_fields` (`effective_props.py:115-178`) builds
 these three from `model.Actor` fields directly via `propedit.TYPED_FIELDS`, never from `ctx.schema()`.
 Their TRUE class defaults, though, come from `ctx.defaults()` alone (`_member_default`,
 `loc_defaults_text = ctx.defaults().get(("location", 0))` etc.) — no actor state needed for that half.
-The class-schema endpoint emits these three via a class-schema-only variant of `_resolve_typed_fields`
+The shared resolver emits these three via a class-schema-only variant of `_resolve_typed_fields`
 that skips `_stated_axes`/`tf.get(tok, actor.location)` (the actor-touching calls) and keeps only the
 `ctx.defaults()`-derived member defaults — a second small, contained function, not something the generic
 struct walk can absorb. `Location`'s own struct SHAPE is not a private copy: it references the SAME
@@ -698,137 +866,22 @@ verified against the real corpus, one open risk flagged (not silently resolved):
   estimate below accounts for, not hidden. `Core.Rotator`'s own members, also confirmed:
   `Pitch:IntProperty, Yaw:IntProperty, Roll:IntProperty` — matching §3's worked example exactly.
 
-**Caching**: NOT a content hash of the named package's `.u` file — `uedcli/schema_cache.py`'s own
-documented reasoning (`cache_key`'s docstring) already rejects that for real `.u` file sizes
-(`DeusExUI.u` 27.4 MB, `DeusExCharacters.u` 19.2 MB, real measured sizes) as "about as much [cost] as
-the parse it saves." It also wouldn't be CORRECT here: a class's resolved tree depends on more than its
-own package's bytes — `resolve_class_properties` walks the Super chain across packages, and
-`uedcli/config.py`'s `composed_search_files` lets a project overlay shadow a base package (stem-deduped,
-project-before-base keep-first) — editing an ancestor class in `Engine.u`, or changing which package
-wins a name on the composed search path, can change what THIS response resolves to while the named
-package's own file stays byte-identical.
-
-**The `ETag` IS a real checksum — the owner's own original instruction ("etag with checksum of .u"),
-stated precisely below so there's no room to misread it as a bare stat-tuple label.** It is NOT a
-content hash of the named package's `.u` file bytes (rejected earlier: `DeusExUI.u` is 27.4 MB,
-`DeusExCharacters.u` 19.2 MB — re-hashing multi-MB content on every request is real, avoidable cost,
-`schema_cache.py`'s own module docstring makes exactly this argument for its own on-disk cache key), and
-it covers the WHOLE composed search path's stat state, not one file (resolution genuinely depends on
-more than the named package: `resolve_class_properties` walks the Super chain across packages, and
-`uedcli/config.py`'s `composed_search_files` lets a project overlay shadow a base package — editing an
-ancestor class in `Engine.u`, or changing which package wins on the composed path, can change what THIS
-response resolves to while the named package's own file stays byte-identical). The real formula, mirroring
-`schema_cache.cache_key`'s own real code EXACTLY (`schema_cache.py:284-291`) — including the version
-component that formula includes and an earlier draft of this ETag recipe dropped, the one real gap in
-what was otherwise already a genuine hash:
-
-```python
-import hashlib
-from uedcli.schema_cache import SCHEMA_CACHE_VERSION
-
-def package_etag(u_files: list[str]) -> str:
-    """u_files: every `.u` file's realpath on the composed search path (ClassIndex.package_paths()),
-    NOT just the one named package — resolution's real inputs span all of them."""
-    stats = sorted(
-        (realpath, *_stat(realpath))          # (realpath, size, mtime_ns), os.stat only, no content read
-        for realpath in u_files
-    )                                          # sorted by realpath: deterministic regardless of
-                                                # filesystem enumeration order
-    key = f"{SCHEMA_CACHE_VERSION}\0" + "\0".join(
-        f"{realpath}\0{size}\0{mtime_ns}" for realpath, size, mtime_ns in stats
-    )
-    return hashlib.sha1(key.encode("utf-8", "surrogatepass")).hexdigest()
-```
-
-`SCHEMA_CACHE_VERSION` folded in (matching `cache_key`'s own real key string, which includes it as its
-FIRST component) means a resolver CODE change — a bundle-shape bump, a decoder fix, a `Prop`-layout
-change, anything that changes what this endpoint resolves without touching any `.u` file — invalidates
-the `ETag` too, not just a content edit; `schema_cache.py`'s own docstring states this is the version
-constant's whole purpose ("hand-bumped on ANY change to a bundle shape, a feeding decoder, the `Prop`
-layout, or the serialization"), and this design's own resolver changes (the §1 `ClassCtx` loader-contract
-change, the two known resolver-bug fixes in Open Questions, the `SheerAxis` canonicalization fix) are
-exactly the kind of change that constant already exists to cover — reusing it here needs no second
-version knob to remember to bump. **`os.stat` only, genuinely cheap** — `schema_cache.py` already pays
-this exact cost per package today (`cache_key`'s own docstring: "NOT a hash of the multi-MB file bytes
-... `os.stat` (~5 µs) is the change detector"); this formula is the same cost, summed once per package on
-the composed search path instead of once for the single named package.
-
-**The 304 short-circuit happens BEFORE the class resolution walk runs, not just before the response body
-is sent**: the server computes `package_etag` (cheap, stat-only, no content read) FIRST, compares it
-against the request's `If-None-Match`, and returns `304 Not Modified` immediately on a match — the
-(comparatively expensive) full-tree resolution for every class in the package never runs on a cache-hit
-request. `Cache-Control: max-age=86400` (24h, alongside the `ETag`) ships too, so the BROWSER actually
-persists and reuses the response across page loads within that window, not merely gets a freshness hint
-with nowhere durable to store it — 24h is a judgment call (project content changes are author-driven and
-infrequent within one editing session; revisit if that assumption proves wrong once measured against real
-usage); with the version component now folded in, a code-level resolver change is caught by the very next
-conditional GET after 24h regardless (same as a content change always was) — 24h still only controls HOW
-OFTEN that revalidation request happens, not whether staleness is eventually caught, so this value doesn't
-need to shrink just because the version-drift gap is now closed at the `ETag` level rather than the
-`max-age` level.
-
-Reuses `search_files`/`index` from `uedcli/serve/app.py`'s existing `_current_scene_inputs()` (the SAME
-cached-per-trunk `(search_files, index, defaults)` tuple `/scene`/`/atlas`/`/lightmap` already share) —
-**honestly scoped, not overclaimed**: `_current_scene_inputs()` (`app.py:248-272`) only returns the
-cached tuple when `_trunk_ref[0] is not None` — i.e. AFTER something has already triggered `/load`'s or
-`/scene`'s own bootstrap. On a genuinely cold server process (nothing loaded yet), the class-schema
-route pays the SAME one-time bootstrap cost (`config.composed_search_files` + `ClassIndex.from_project`)
-any other first request already pays today — not a NEW cost this endpoint introduces, and not
-avoidable without restructuring `_get_trunk`'s own bootstrap sequencing (out of scope here). Every
-SUBSEQUENT request, from this route or any other, reuses the same shared tuple.
-
-**Size and compute cost, reasoned through with real numbers, not left unmeasured on either axis:**
-
-- *Bytes*: **the response scales with CLASS COUNT, not `.u` FILE SIZE — a distinction an earlier draft
-  got backwards, naming the wrong worst case.** Real package file sizes vary hugely, but most of that
-  size is non-class content (textures/meshes/sounds packed into the same `.u` file) — script-verified
-  directly (`cls == 0` marks a class export): `DeusExUI.u` is the single BIGGEST file (27.4 MB) but has
-  exactly **1** class; `DeusExCharacters.u` is 19.2 MB with **4** classes; `DeusEx.u`, by far the
-  SMALLEST of the three as a file (1.9 MB), has **1166** classes — three orders of magnitude more than
-  either of the large files. `GET /api/package/DeusExUI/class` returns essentially nothing; the real
-  worst case for this endpoint is `DeusEx`, not `DeusExUI`/`DeusExCharacters`. The RESOLVED tree per
-  class is larger than the raw compiled bytes (property tags decode to fuller text), roughly comparable
-  in order of magnitude to this doc's existing ~40 KB/actor figure for a densely-propertied class — but
-  that figure is an upper bound proxy from the OLD per-actor design, which never benefited from
-  struct/array SHAPE dedup into `types` at all; **per-class DEFAULT text is not further deduped across
-  classes by `types`** (§1's C1 fix — a shared type's members might be referenced by many classes, but
-  each class's own default TEXT for those members is still emitted once per class, since it genuinely
-  differs, e.g. `Karkian` vs `Rat`'s `RotationRate`) — only the SHAPE (names/kinds/nesting) is shared.
-  The real win this redesign still delivers is eliminating PER-ACTOR duplication (the actual measured
-  cost, `/scene`'s current ~40 KB/actor for hundreds of actors of the same handful of classes) — that
-  reduction is unaffected by the C1 fix, since defaults were always resolved per-class even before this
-  redesign; what changes is WHERE that per-class resolution happens (once per class, in this new
-  endpoint, instead of redundantly re-derived and re-shipped for every actor instance of that class).
-  Requesting `DeusEx` (1166 classes) is plausibly tens of MB the first time — comparable to, and in the
-  `XAIParams`-shape-redundancy case (§1) possibly somewhat larger than naively expected — but still paid
-  ONCE per package instead of never amortized, which is the actual comparison that matters against
-  today's per-actor repetition; a request for `DeusExUI`/`DeusExCharacters` is trivial by comparison (1
-  and 4 classes respectively) despite their much larger FILE size, precisely because file size was never
-  the right proxy for this endpoint's cost.
-- *Compute*: `schema_cache.py`'s own module docstring already states its scope precisely: "v1 caches
-  only the discovery-path primitives — no tables, no defaults, no struct layouts (that is v2)." Its
-  PROPS blob (warmed by `class prewarm`, reused by `ctx.schema()`'s flat top-level walk) already covers
-  the CHEAP half of what this endpoint needs. The EXPENSIVE half — `ctx.members()` (struct member
-  resolution), `ctx.enums()` (cross-package enum resolution), `ctx.defaults()` (class default decode) —
-  has **no persistent cache today**, confirmed by reading `schema_cache.py` in full: nothing in its two
-  blobs (`_Disc`, the own-props bundle) stores struct layouts or default text. `class prewarm` (`cli/
-  commands/classes.py:337`, `load_package_schema(..., need_props=True)`) warms only the same flat
-  layer — it does NOT walk struct members or resolve defaults. **This is not a new caching problem this
-  redesign invents — it is this codebase's own already-documented next step ("that is v2"), and this
-  feature is the first thing motivating actually building it.** Proposed: extend `schema_cache.py` with
-  a THIRD blob (alongside `.disc`/`.prop`) holding the fully-resolved class-schema tree (members/enums/
-  defaults per class, the `resolve_class_schema` output above) — reusing the EXACT SAME per-package
-  stat-tuple key and invalidation `cache_key` already computes, no new invalidation mechanism, no
-  content hashing. Sizing this extension (a third `_dumps`/`_loads` pair, a bundle-shape bump to
-  `SCHEMA_CACHE_VERSION`, wiring `resolve_class_schema`'s output through it) is real work for the plan
-  stage, not asserted here as free — but it is a small, mechanically similar addition to an existing,
-  well-understood mechanism, not a new architecture. **Answer to "is the first request slow, and how
-  does it get warm"**: cold (nothing prewarmed, cache empty) — yes, real, uncached resolution cost for
-  every class in the package, same order of magnitude as this doc's own ~40 KB-per-densely-propertied-
-  class proxy suggests, times however many classes the package has; warm (this new third blob populated,
-  either by an explicit `class prewarm` run or simply by this endpoint itself having been hit once and
-  cached to disk) — the SAME cheap `os.stat`-keyed hit `schema_cache.py`'s existing two blobs already
-  give `ctx.schema()`.
+**Caching/compute cost — superseded by v17, kept only as a pointer.** Everything this subsection
+used to say (a backend `ETag` covering the whole composed search path, a `304` short-circuit before
+a resolution walk, a proposed third `schema_cache.py` blob for a persistent resolved-tree cache,
+per-package byte/compute-cost accounting for an eager whole-package resolve) described v16's
+backend-resolves-and-ships-JSON design and no longer applies. §0's raw-file serving replaces the
+whole "resolve then ship JSON" model with a real content-hash `ETag` on the served bytes (§0's own
+section, not restated here). What DOES still resolve server-side is `/scene`'s own
+`resolve_actor_props` native call (§2) — a per-actor, per-request resolve, same as it always was,
+just implemented in Rust now instead of Python; it is NOT the whole-package eager resolve this
+paragraph is superseding, and it is genuinely no more expensive than before. The CLASS-SHAPE-plus-
+DEFAULTS half specifically (`resolve_class`) IS now a client-side, per-class, resolve-once concern
+— the shared core resolves one class, once, on first inspection in the browser, and holds the
+result for the rest of the session; there is no "cold whole-package" cost to amortize anymore for
+THAT half, because nothing ever resolves a whole package eagerly under this design. The shared
+core's own performance characteristics (native and WASM, both entry points) belong to
+`dev/docs/board/to-spec/shared-rust-core-for-class-schema-resolution/`, not here.
 
 ### 2. `/scene`: a flat, sparse, per-actor VALUE map — no shape at all
 
@@ -839,15 +892,68 @@ its final CANONICALIZED display text (see below), keyed by the same dotted path 
 a list). A path with nothing stated anywhere beneath it is simply ABSENT from the dict — no `null`
 placeholder, no empty container entry.
 
-**How the sparse map is built, stated explicitly (an earlier draft left this implicit)**: by RE-WALKING
-`ctx.schema()` per actor, the same walk `resolve_actor_props` does today, keeping only the paths where
-`_raw_stored_text` returns non-`None` — NOT by shortcutting off `actor.props`' raw T3D lines directly.
-This matters: the existing walk already applies every exclusion this feature depends on — the top-level
-skip (`HARD_REJECT`/`TYPED_FIELDS`/`is_computed_key`/`_is_excluded_kind`, `effective_props.py:238-245`)
-and `_resolve_one`'s own recursive `_is_excluded_kind` guard (`:304`, which is what makes the exclusion
-apply to struct members and array elements too, not just top-level props) — for free, by construction.
-Shortcutting off `actor.props` directly would leak `Name`/`Brush`/computed keys/dynamic-array entries/
-object refs into the sparse map as orphan paths with no matching class-schema node — explicitly rejected.
+**How the sparse map is built, stated explicitly (an earlier draft left this implicit)**: `/scene`'s
+route calls the shared Rust core's `resolve_actor_props(actor, parsed_packages)` (§1) — natively,
+via the existing `uedcli_native` PyO3 extension, not Python's `effective_props.py` walk, which this
+change supersedes — by RE-WALKING the class schema per actor, keeping only the paths where a raw
+stored value exists, NOT by shortcutting off `actor.props`' raw T3D lines directly. The port must
+faithfully reproduce every exclusion Python's walk applies today — the top-level skip
+(`HARD_REJECT`/`TYPED_FIELDS`/`is_computed_key`/`_is_excluded_kind`, `effective_props.py:238-245`)
+and `_resolve_one`'s own recursive `_is_excluded_kind` guard (`:304`, which is what makes the
+exclusion apply to struct members and array elements too, not just top-level props) — for free, by
+construction, the same way the existing Python walk already does. Shortcutting off `actor.props`
+directly (in either language) would leak `Name`/`Brush`/computed keys/dynamic-array entries/object
+refs into the sparse map as orphan paths with no matching class-schema node — explicitly rejected.
+
+**The real regression this route has history with — corrected from an earlier draft of this
+paragraph, which misattributed it as a within-request per-actor-vs-per-class cost.** Read
+`build_scene_payload`'s own docstring in full (`scene.py:786-799`): the per-actor loop was NEVER
+the bottleneck — `_is_hidden_ed`'s `ClassDefaults` memo already amortized within one call (pinned
+by `test_build_scene_payload_amortizes_class_resolution_over_repeated_classes`, a DIFFERENT memo
+than `effective_props`'s own `ctx_cache`, which has NO regression test today — a real, separate gap
+this port should close, not inherit). **The actual ~28s WanChai-scale bug was one level UP**:
+`app.py`'s `scene()` route rebuilt `defaults`/`index` from scratch, via `_scene_inputs()`, on EVERY
+HTTP REQUEST — throwing away every memo `build_scene_payload` relied on and re-paying a full
+package-load-plus-Super-chain-walk-plus-defaults-decode per distinct class, per distinct REQUEST,
+warm trunk/geometry cache or not. Fixed (already landed, unrelated to this spec) by caching the
+`(search_files, index, defaults)` tuple ITSELF across requests (`scene_inputs_ref`, `app.py:161-
+174`). **Correction to an earlier draft of this paragraph**: `build_scene_payload`'s own OUTPUT is
+NOT also cached — that layer (`_payload_ref`/`_get_payload`) was real once but was removed entirely
+by the later persistent-GUI-sessions work (`test_serve_app.py`'s own note: "Solved-build state
+… is REMOVED ENTIRELY here"); `session_scene` (`app.py:649-664`) calls `build_scene_payload` fresh
+on EVERY request today. This makes cross-request persistence of the new per-FQCN cache MORE
+load-bearing, not less — `resolve_actor_props` genuinely runs once per actor per request, with
+nothing above it memoizing the whole payload away.
+
+**So the design answer here is cross-request persistence, not just within-one-build sharing —
+and it must NOT be tied to `ctx.generation`, corrected from an earlier draft that got the
+invalidation mechanism wrong.** `resolve_actor_props` does not independently re-walk the Super
+chain — it CALLS `resolve_class(actor.cls, parsed_packages)` (§1) for that class's shape+defaults,
+then does its own cheap, actor-specific work on top (read `actor.props`' raw stored text, keep only
+the paths present, canonicalize each). `ctx.generation` is the WRONG invalidation signal for this:
+it is driven by `TrunkWatcher`, watching the level's T3D TRUNK directory (`app.py`'s
+`_on_trunk_settled`), not the package search path — tying the per-FQCN cache to it would flush the
+cache on every ordinary actor edit (a milder instance of the exact regression this history is
+about) while never catching a real `.u` file change. **The correct answer: the per-FQCN cache
+lives and dies with the `(search_files, index, defaults)` TUPLE ITSELF** — built fresh alongside it
+(the `_get_trunk` bootstrap, and `/load`, the same two places that mint a new tuple today), held
+for as long as that tuple is, discarded and rebuilt wholesale when a new one replaces it. This
+answers the multi-package problem too: one class's resolution can touch several packages (its own,
+its ancestors', a struct/enum type's declaring package), so no per-class fine-grained key is
+needed — the WHOLE per-FQCN cache is scoped to one `(search_files, index, defaults)` generation of
+inputs, the same multi-package-dependency boundary v16's own abandoned `package_etag` formula
+already established for the identical problem (§0's history section). **Where the native call's
+`parsed_packages` comes from**: NOT §0's HTTP endpoint (that's for the browser; the backend doesn't
+fetch from itself) — the route passes the SAME `index`/`resolver()` mechanism `_class_ctx_for`
+already builds `ClassCtx` from today, and the Rust core does its own lazy, internally-cached
+package parse on first need (same lazy-resolver-callback shape as today's `ClassCtx`, just backed
+by Rust instead of Python) — via a caller-HELD handle/context object the route stores alongside its
+`(search_files, index, defaults)` tuple and can drop when that tuple is replaced, never a
+process-global static (a process-global would outlive the tuple it needs to be scoped to). **A new
+regression test is real, needed work for this port's own plan** (`ctx_cache`'s sharing guarantee
+has no test today, per above) — an amortization test asserting distinct-class resolutions don't
+grow with actor count, AND a cross-request test asserting a second `/scene` call against an
+unchanged trunk doesn't re-walk any class at all.
 
 **`Location`/`MainScale`/`PostScale` are NOT covered by the `ctx.schema()` walk above — they're
 `TYPED_FIELDS`, explicitly skipped by it (`effective_props.py:240`), and never mirrored into
@@ -877,8 +983,9 @@ resolve) has no direct analogue in a sparse VALUE-only map — a failed leaf sim
 entry, the same as an unstated one; there is no visible "this specific leaf failed to resolve" marker in
 the sparse shape (there was one in the old tree shape, an empty `StructProp`/`ArrayProp`). This is an
 accepted, minor loss of diagnostic granularity — the actor-level `note`/stderr degrade convention
-(`resolve_actor_props`'s third return value) still fires for a whole-class failure, just not for a
-single unresolvable leaf within an otherwise-fine class.
+(§1's `resolve_actor_props(actor, parsed_packages) -> (sparse_map, notes)`, the `notes` element)
+still fires for a whole-class failure, just not for a single unresolvable leaf within an
+otherwise-fine class.
 
 **One value per stated leaf, already canonical — no separate `stored_value`/`effective_value` split.**
 v1's split (raw `stored_value` + conditional `effective_value`) essentially never fired as designed
@@ -888,11 +995,11 @@ while silently reintroducing raw-vs-canonical ambiguity for the cases that actua
 stored text: enum ordinal→name (`_canonicalize_enum_text`) and `_dequote` (one wrapping quote pair
 stripped). **`structtext._maybe_comma_sugar` is NOT one of these** (a v2 draft wrongly listed it) — it
 has exactly two call sites, both on the WRITE path (`propedit/edit.py`'s `plan_edit`/`effective_match`),
-never called by `effective_value`'s read path, so it cannot produce a divergence here. Resolution: the
-sparse map's value at each path is `propedit.effective_value`'s own resolved text at that path (already
-the canonicalized stored text for a stated leaf — reusing the SAME resolution the class-schema
-endpoint's `default_value` already goes through for an unstated one), full stop. One field, one meaning,
-backend-resolved once.
+never called by `effective_value`'s read path, so it cannot produce a divergence here (the Rust port
+must not introduce it either). Resolution: the sparse map's value at each path is the shared
+resolver's own canonicalized text at that path — the SAME `resolve_class`/`resolve_actor_props`
+internals (§1) a class entry's `default_value` already goes through for an unstated leaf — full
+stop. One field, one meaning, resolved once by ONE implementation, called natively here.
 
 **Worked example** — `DeusEx.Rat` actor `Rat3`, `RotationRate=(Yaw=1234)`. **`payload.actors` stays a
 plain ARRAY, `name` an ordinary field on each element — NOT restructured into a name-keyed object.** An
@@ -925,15 +1032,16 @@ doesn't pin a test against the wrong value):
 { "props": { "LightType": "LT_Blink" } }
 ```
 
-(never `"3"` — canonicalization already happened server-side, same guarantee the class-schema
-endpoint's `default_value` already gives.)
+(never `"3"` — canonicalization already happened server-side, via the shared resolver's native
+call, same guarantee its `default_value` already gives.)
 
 **`ScenePayload.enums` is REMOVED entirely** (an earlier draft left this unstated). Enum value-name
-lists now live ONLY in the class-schema endpoint's `types` data (§1) — `resolve_actor_props`'s existing
-second return value (`ctx_by_type`, today unioned into `ScenePayload.enums` by `_build_actors`) has no
-successor in the new design; the per-actor accumulation this redesign removes goes with it.
+lists now live ONLY in the shared resolver's `types` data (§1, fetched/resolved client-side per
+class) — `resolve_actor_props`'s existing second return value (`ctx_by_type`, today unioned into
+`ScenePayload.enums` by `_build_actors`) has no successor in the new design; the per-actor
+accumulation this redesign removes goes with it.
 
-### 3. The class-schema `types`/class-entry worked example — corrected, real data, every number
+### 3. The shared resolver's `types`/class-entry worked example — corrected, real data, every number
 script-generated in this pass
 
 v6's own worked example still had a fabricated leaf: `InitialAlliances` was described as "`Engine.Actor`'s
@@ -977,88 +1085,64 @@ finding I3: an earlier draft deduplicated the 1-7 tail to one entry with no stat
 is undecodable against §4's positional-lookup frontend walk; the wire format is always a full list, one
 entry per real array index, list position = array index, no exceptions).
 
-A `GET /api/package/DeusEx/class` response fragment for `DeusEx.Karkian`'s `RotationRate` (`Core.Rotator`,
-real defaults DIFFERING from `DeusEx.Rat`'s own — the reason `default_value` cannot live on the shared
-`types` entry, §1), `InitialAlliances` (array-of-struct, real per-index defaults, the live collision's
-first side), and `AlliancesEx` (array-of-struct, all-defaulted in this class); plus `DeusEx.AllianceTrigger`
-demonstrating the collision's SECOND side (same struct name, different `outer`, correctly a different
-key):
+Three separate `resolve_class(fqcn, ...)` calls (§1's real per-class contract — corrected here from
+an earlier draft, which wrongly showed one shared whole-package envelope; each call below is a
+complete, independent return value, not a fragment of a larger response) for `DeusEx.Karkian`'s
+`RotationRate` (`Core.Rotator`, real defaults DIFFERING from `DeusEx.Rat`'s own — the reason
+`default_value` cannot live on the shared `types` entry, §1), `InitialAlliances` (array-of-struct,
+real per-index defaults, the live collision's first side), and `AlliancesEx` (array-of-struct,
+all-defaulted in this class); then `DeusEx.Rat`'s own call for the SAME `RotationRate` property,
+with a genuinely different default; then `DeusEx.AllianceTrigger`'s own call, demonstrating the
+collision's SECOND side (same struct name, different `outer`, correctly a different key):
+
+`resolve_class("DeusEx.Karkian", ...)`:
 
 ```json
 {
-  "classes": {
-    "DeusEx.Karkian": {
-      "props": [
-        {
-          "kind": "struct", "name": "RotationRate", "category": "Movement",
-          "struct_type": "Core.Rotator",
-          "default_value": { "Pitch": "4096", "Yaw": "30000", "Roll": "3072" }
-        },
-        {
-          "kind": "array", "name": "InitialAlliances", "category": "Alliances",
-          "element_type": "DeusEx.ScriptedPawn.InitialAllianceInfo", "array_dim": 8,
-          "default_value": [
-            { "AllianceName": "Greasel", "AllianceLevel": "1", "bPermanent": "True" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" }
-          ]
-        },
-        {
-          "kind": "array", "name": "AlliancesEx", "category": "Uncategorized",
-          "element_type": "DeusEx.ScriptedPawn.AllianceInfoEx", "array_dim": 16,
-          "default_value": [
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" }
-          ]
-        }
-      ]
-    },
-    "DeusEx.Rat": {
-      "props": [
-        {
-          "kind": "struct", "name": "RotationRate", "category": "Movement",
-          "struct_type": "Core.Rotator",
-          "default_value": { "Pitch": "4096", "Yaw": "65530", "Roll": "3072" }
-        }
-      ]
-    },
-    "DeusEx.AllianceTrigger": {
-      "props": [
-        {
-          "kind": "array", "name": "Alliances", "category": "AllianceTrigger",
-          "element_type": "DeusEx.AllianceTrigger.InitialAllianceInfo", "array_dim": 8,
-          "default_value": [
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
-            { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" }
-          ]
-        }
-      ]
-    }
+  "class": {
+    "props": [
+      {
+        "kind": "struct", "name": "RotationRate", "category": "Movement",
+        "struct_type": "Core.Rotator",
+        "default_value": { "Pitch": "4096", "Yaw": "30000", "Roll": "3072" }
+      },
+      {
+        "kind": "array", "name": "InitialAlliances", "category": "Alliances",
+        "element_type": "DeusEx.ScriptedPawn.InitialAllianceInfo", "array_dim": 8,
+        "default_value": [
+          { "AllianceName": "Greasel", "AllianceLevel": "1", "bPermanent": "True" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" }
+        ]
+      },
+      {
+        "kind": "array", "name": "AlliancesEx", "category": "Uncategorized",
+        "element_type": "DeusEx.ScriptedPawn.AllianceInfoEx", "array_dim": 16,
+        "default_value": [
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "AgitationLevel": "0", "bPermanent": "False" }
+        ]
+      }
+    ]
   },
   "types": {
     "Core.Rotator": {
@@ -1085,7 +1169,60 @@ key):
         { "kind": "float", "name": "AllianceLevel" },
         { "kind": "bool", "name": "bPermanent" }
       ]
-    },
+    }
+  }
+}
+```
+
+`resolve_class("DeusEx.Rat", ...)` — a SEPARATE call, own envelope, own `types` subset:
+
+```json
+{
+  "class": {
+    "props": [
+      {
+        "kind": "struct", "name": "RotationRate", "category": "Movement",
+        "struct_type": "Core.Rotator",
+        "default_value": { "Pitch": "4096", "Yaw": "65530", "Roll": "3072" }
+      }
+    ]
+  },
+  "types": {
+    "Core.Rotator": {
+      "kind": "struct",
+      "members": [
+        { "kind": "int", "name": "Pitch" },
+        { "kind": "int", "name": "Yaw" },
+        { "kind": "int", "name": "Roll" }
+      ]
+    }
+  }
+}
+```
+
+`resolve_class("DeusEx.AllianceTrigger", ...)` — the collision's second side:
+
+```json
+{
+  "class": {
+    "props": [
+      {
+        "kind": "array", "name": "Alliances", "category": "AllianceTrigger",
+        "element_type": "DeusEx.AllianceTrigger.InitialAllianceInfo", "array_dim": 8,
+        "default_value": [
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" },
+          { "AllianceName": "None", "AllianceLevel": "0", "bPermanent": "False" }
+        ]
+      }
+    ]
+  },
+  "types": {
     "DeusEx.AllianceTrigger.InitialAllianceInfo": {
       "kind": "struct",
       "members": [
@@ -1098,13 +1235,19 @@ key):
 }
 ```
 
-Both `DeusEx.Karkian` and `DeusEx.Rat` reference the SAME `"Core.Rotator"` `types` entry for SHAPE
-(defined exactly once), but carry their OWN, genuinely different `default_value` (`Yaw: "30000"` vs
-`"65530"`) — this is the entire C1 fix in one worked example. `DeusEx.ScriptedPawn.InitialAllianceInfo`
-and `DeusEx.AllianceTrigger.InitialAllianceInfo` are two DISTINCT `types` entries for the same struct
-NAME — a real, live corpus collision, correctly disambiguated by `outer` alone, no runtime
-collision-detection anywhere. `types` entries carry no `default_value` and no `category` anywhere at
-all (never present as a key, not even as `null` — both are per-class-per-occurrence, never
+**Each call's `types` is self-contained — only what THAT class's own shape references, not the
+whole package's.** `DeusEx.Karkian` and `DeusEx.Rat` each carry their OWN full `"Core.Rotator"`
+entry (identical shape, since it's the same real type) alongside their OWN, genuinely different
+`default_value` (`Yaw: "30000"` vs `"65530"`) — this is the entire C1 fix in one worked example.
+**The frontend accumulates `types` across calls into one session-wide map** (§4) — resolving both
+`Karkian` and `Rat` produces two identical `Core.Rotator` entries, which simply overwrite each
+other harmlessly (real shape data is deterministic per type, never per call) rather than needing
+any de-duplication logic. `DeusEx.ScriptedPawn.InitialAllianceInfo` (Karkian's call) and
+`DeusEx.AllianceTrigger.InitialAllianceInfo` (AllianceTrigger's call) are two DISTINCT type keys
+for the same struct NAME — a real, live corpus collision, correctly disambiguated by `outer` alone,
+no runtime collision-detection anywhere, and no collision in the accumulated map either, since the
+keys themselves already differ. `types` entries carry no `default_value` and no `category` anywhere
+at all (never present as a key, not even as `null` — both are per-class-per-occurrence, never
 type-intrinsic, §1) — note every `types` member above has ONLY `kind`/`name`, and (for a nested struct
 member) a `"struct_type"` ref (or `"enum_type"` for a nested enum member); no class-entry leaf above
 emits `"category": null` either, always the real
@@ -1113,14 +1256,55 @@ from the schema — `Karkian`'s `InitialAlliances`/`AlliancesEx` really are decl
 derived from how many elements any actor states (§2's sparse overlay) — this is what lets the frontend
 (§4) render an array's full slot count even when an actor states only some of them.
 
-### 4. Frontend: walk the class shape, overlay the actor's sparse map
+### 4. Frontend: fetch raw packages, resolve one class lazily, walk the shape
 
-`Inspector`'s per-actor render for class `C`: start from `C`'s own class entry in the class-schema
-response (already fetched — see fetch timing below) — its top-level prop list, each leaf already
+**Fetch strategy — raw `.u` bytes, the CODE-RELEVANT transitive package closure, eager at Load,
+ETag-cached (§0).** A class's Super chain can cross packages (e.g. `DeusEx.Karkian extends
+DeusEx.ScriptedPawn extends Engine.Pawn extends Engine.Actor extends Core.Object`), and this is
+NOT knowable in advance from the scene's actor list alone — the scene only says which package each
+actor's OWN class lives in, not which packages its ancestors live in. So package discovery is
+itself part of the shared core's job, following each package's own import table (`RawPackage`'s
+parsed imports already name every package a class references, `package_read.rs`) outward from the
+packages the scene's actors directly reference, fetching each newly discovered package's raw bytes
+(`GET /api/package/{name}/raw`) as it's found, repeating until the closure is exhausted.
+
+**The walk MUST filter to imports whose class is `Class`/`Struct`/`Enum` (or a `*Property` type
+reference) — never blindly follow every import.** Measured directly against the real corpus, an
+unfiltered walk from `DeusEx`+`Engine`+`Core` is **16 packages, 93.7 MB** — because most of a real
+package's import table is texture/mesh/sound references (`DeusEx.u` alone: 1132 `Texture` imports,
+428 `LodMesh`, 232 `Sound`, vs. 83 `Class`/5 `Struct`/5 `Enum`), and following them also pulls
+non-`.u` asset files, contradicting this endpoint's own "raw `.u` bytes" framing (§0). None of that
+content can ever matter to resolution — `ObjectProperty`/`ClassProperty`/similar are already an
+excluded kind everywhere in this design (§1's `_is_excluded_kind` filter) — so filtering the walk
+to code-relevant imports only loses nothing. Filtered, the real closure is **8 packages, 4.7 MB**
+(`core`, `engine`, `deusex`, `extension`, `consys`, `ipdrv`, `ubrowser`, `uwindow` — `extension.u`
+is real and needed, e.g. for `EHAlign`, §1's struct-member-enum discussion), not the 3-package
+estimate an earlier draft of this section gave. `Core.u`/`Engine.u` (0.06 MB / 1.24 MB raw) are the
+root of nearly every real Super chain and get discovered and fetched almost immediately regardless.
+Every fetch is the same ETag-cached, `GET /api/package/{name}/raw` call — no new request shape, no
+per-class round trip.
+
+**Resolution is lazy and per-class, entirely client-side, zero network.** Once the packages a
+class's Super chain needs are in memory (parsed already, or parsed on first use — a package's
+bytes only need parsing once per session, memoized alongside the fetch), the shared core's
+`resolve_class(fqcn, parsed_packages)` call (§1's contract) runs synchronously, in-process, with no `await`, no
+request — there is nothing left to wait on. The Inspector calls this the first time an actor of
+class `C` is selected, caches the result client-side for the rest of the session (a plain
+in-memory map, keyed by FQCN — no persistence needed; a page reload just re-resolves on next use,
+which is itself instant once the raw bytes are back in memory from §0's ETag cache), and every
+subsequent selection of a `C`-classed actor reads the cached result. **This is what makes the
+"never a spinner for connectivity" requirement literally true**: after the one eager raw-bytes
+fetch at Load, nothing the Inspector does for ANY class, ever, touches the network again.
+
+`Inspector`'s per-actor render for class `C`: start from `C`'s own resolved class entry (§1's
+`resolve_class(C, parsed_packages)`, from cache or resolved on first use as above) — its top-level prop list, each leaf already
 carrying its OWN per-class `default_value` (§1/§3's C1 fix: defaults live on the CLASS
 entry, never on the shared `types` entry). For a struct leaf, resolve its `"struct_type"` key; for an
 enum leaf, its `"enum_type"` key; for an array-of-struct/array-of-enum leaf, its `"element_type"` key —
-each against the response's `types` dict ONLY for SHAPE (member names/kinds/nesting —
+each against the response's `types` dict ONLY for SHAPE (member names/kinds/nesting — **an
+`element_type`-bearing array leaf carries no `element_kind` sibling to say which, unlike the plain-scalar
+array case below; the frontend reads `types[element_type]["kind"]` itself (`"struct"` or `"enum"`) to
+decide whether each element renders as a member tree or a plain value** —
 `types` entries can themselves reference other `types` entries for a nested struct-of-structs, resolved
 the same way, recursively, to whatever depth the real schema has) — never for default values, which the
 class entry's own leaf already carries. At each leaf, check the actor's sparse `props` map for that
@@ -1145,36 +1329,62 @@ gives the ordered value-name list, mirroring exactly how `ScenePayload.enums[enu
 this redesign removed it. **Stated explicitly rather than left to guesswork: nothing in the current
 Inspector actually reads this list for DISPLAY.** `shownValue` (`web/src/panels/effectiveProps.ts`,
 verified directly — it makes no reference to `enum_type`/`values` anywhere) already renders `stored_value
-?? default_value` directly, and both are already-canonicalized NAME text server-side (§1/§2's
-canonicalization guarantee) — there is no ordinal to look up. This mirrors today's `ScenePayload.enums`
+?? default_value` directly, and both are already-canonicalized NAME text by the time they reach this
+code — `stored_value` from `/scene`'s JSON (resolved server-side, §2), `default_value` from the
+shared resolver's own client-side WASM call (§1) — there is no ordinal to look up either way, by
+the SAME shared canonicalization logic underneath both. This mirrors today's `ScenePayload.enums`
 exactly (`Inspector.tsx`'s own comment already marks it "reserved for a future editing feature," unused
 for display) — the wire shape and its reference mechanism are fully specified for completeness and for
 that future editing work (an enum dropdown genuinely needs the value list), not because §4's own render
 walk consumes it today. An implementer should not read this silence as an oversight.
 
-**Fetch timing**: eager, at level load, one request per distinct package referenced by the scene's
-actor classes, in parallel with `/scene` itself. The class-schema data is needed for EVERY render,
-including the default view — eager-at-load is load-bearing, not an optimization: the Inspector cannot
-correctly render even the default view's struct/array rows without it. **In-flight UX**: class-schema
-fetches start alongside `/scene`, and a real actor selection requires at least one render cycle after
-`/scene` itself resolves — the class-schema fetch for any package already visible in the scene is
-expected to have landed before the user reaches for the Inspector in the overwhelming common case; a
-struct/array row simply doesn't expand until its package's fetch resolves (an ordinary async-data race,
-self-resolving within the render cycle after the fetch completes), no loading spinner specified. If a
-level references a package the composed search path doesn't have, this is a genuine `SchemaError` for
-every class in it — degrades the SAME way an unresolvable class already does (§1), not a new failure
-mode.
+**In-flight UX and fetch timing, stated honestly — this is NOT a simple "starts alongside /scene"
+race (an earlier draft of this paragraph claimed it was).** Package discovery is actor-class-driven
+(above), so the actor-referenced half of the closure genuinely cannot start until `/scene` itself
+has returned at least the scene's actor list. Two fetches DO start immediately, with no such
+dependency: `Core.u`/`Engine.u` (§4's own numbers show they're the root of nearly every real Super
+chain and are cheap regardless — prefetching them unconditionally, before `/scene` resolves, costs
+nothing and shrinks the dependent tail). The REST of the closure — a level's own directly-used
+packages, and whatever their Super chains/struct-enum references pull in beyond `Core`/`Engine` —
+starts only once `/scene`'s actor list is known, and a real actor selection requires at least one
+render cycle after that anyway, so in the overwhelming common case the fetch has already landed by
+the time the user reaches for the Inspector. If it hasn't (a slow initial load), a struct/array row
+simply doesn't expand until the fetch resolves — an ordinary async-data race for the Load-time
+closure, self-resolving within the render cycle after it completes, no loading spinner specified.
+
+**The "never a spinner" guarantee holds for every class present in the level at Load — not
+unconditionally forever, and that scope should be stated rather than implied.** Once the Load-time
+closure has landed, every class within it resolves instantly, with zero network, for the rest of
+the session (the lazy-resolve-then-cache mechanism above). A class introduced AFTER Load — a mid-
+session trunk change surfaced via the existing `TrunkWatcher`/`changes_available` mechanism, or a
+new actor from the `gui-builder-brushes` feature — could in principle belong to a package outside
+that closure; the frontend degrades the same way as any newly-discovered package (fetch it, same
+ETag-cached call, same async-race-not-spinner pattern above) rather than failing.
+
+**What the Inspector actually SHOWS for an unresolvable class, stated concretely, not left
+circular.** §1's degrade convention (a caller-visible error, not a silently-empty result) is a
+BACKEND-side rule about what `resolve_class` itself does when the core it's built into has a
+stderr/notes channel — the browser has neither. If a level references a package the composed
+search path doesn't have at all, `resolve_class` throws for every class in it; the Inspector
+catches this at the render boundary and shows that section as a clear, named error inline (e.g.
+"can't resolve DeusEx.SomeClass: package not found" in place of the property list) — never a
+silently empty props table, which the project's no-silent-half-answers convention forbids. This is
+the one real new user-facing error surface this redesign adds (today's design can't hit this case
+at all, since resolution always happened server-side, where a missing package fails the whole
+`/scene` request instead).
 
 ### Transport: gzip, not msgpack
 
-Investigated per owner request. `msgpack` gives a realistic ~20-40% size reduction for this payload
-shape — it does not deduplicate the dominant JSON cost (repeated object keys), which this redesign's
-own shape-normalization already attacks directly (§1/§2 remove almost all repeated keys structurally,
-not just compress them). Starlette's built-in `GZipMiddleware` (one line, zero frontend change) is
-still worth adding on top regardless, independent of this redesign, for whatever residual repetition
-remains — realistically 70-90%+ on this payload shape, likely still beating msgpack outright.
-Recommendation: add `GZipMiddleware` now; msgpack stays a later option only if parse SPEED (not size)
-turns out to matter after gzip + this redesign both land.
+Investigated per owner request, for whatever JSON this design still ships (`/scene`'s own sparse
+per-actor map, §2 — the large class-schema payload this investigation originally targeted no
+longer exists as JSON at all; §0 covers the raw `.u` transport's own gzip numbers separately).
+`msgpack` gives a realistic ~20-40% size reduction for this payload shape — it does not deduplicate
+the dominant JSON cost (repeated object keys), which `/scene`'s own sparse-map shape (§2) already
+minimizes structurally by only ever carrying stated leaves. Starlette's built-in `GZipMiddleware`
+(one line, zero frontend change) is still worth adding regardless — realistically 70-90%+ on this
+payload shape, likely still beating msgpack outright. Recommendation: add `GZipMiddleware` now (it
+also covers §0's raw-file responses, where the real, measured numbers are the ones that matter —
+see §0); msgpack stays a later option only if parse SPEED, not size, turns out to matter.
 
 ## What changed, v14 → v15 (controller-applied, small, no design change)
 
@@ -1202,6 +1412,199 @@ array-of-enum leaves) is UNCHANGED — it was already kind-specific by construct
 a rename would resolve there. No design change; every JSON worked example and every prose description of
 this field renamed consistently. Verified: all 12 JSON fences still parse.
 
+## What changed, v16 → v17 (architecture pivot, owner-directed)
+
+The owner asked, after v16 was otherwise clean: could the same resolution logic run client-side,
+synchronously, avoiding a per-class API call entirely — and could that be ONE implementation, not
+a second port duplicated in TypeScript? Investigated directly rather than guessed at, across
+several rounds:
+
+1. **Why is v16's own full-package resolve so expensive?** Benchmarked for real against the actual
+   corpus (`DeusEx.u`, 1166 classes): ~25-31ms/class with the existing persistent props cache warm,
+   ~183ms/class cold. Sharing resolution-cache dicts across a whole package's classes in one request
+   saves only ~12% on top of warm — not a fix, since most of the cost is genuine unique-per-class
+   work, not redundant recomputation. So v16's own proposed third `schema_cache.py` blob would have
+   amortized this to "once per package, ever" — but even warm and amortized, a full-package response
+   is still tens of seconds/tens of MB for `DeusEx.u`, because a real level only uses ~28-200 of its
+   1166 classes (measured on the `nyc_bar` 59-actor subset: 28 classes across 2 packages). Caching
+   fixes how OFTEN you pay a cost, not how MUCH you ship.
+2. **What does UnrealEd itself do, that we don't?** It loads all `EditPackages` fast (raw binary
+   parse + link, the same cheap operation `upackage.load_package` already does) and resolves one
+   class's property grid LAZILY, only when an actor of that class is actually inspected, entirely
+   in-process — never eagerly for a whole package. v16's design did the opposite: eager, whole-
+   package, server-side. Matching UnrealEd's own architecture means moving resolution client-side
+   and making it lazy per class, not fixing the eager whole-package cost in place.
+3. **Real file-size data settled the remaining scope question.** `Core.u`+`Engine.u`+`DeusEx.u` —
+   the three packages nearly every real actor's Super chain touches — total 3.2 MB raw / 0.8 MB
+   gzipped for 1288 classes combined: a fully reasonable one-time download. The large, asset-heavy
+   packages (`DeusExCharacters.u` 19.2 MB for 4 classes, `DeusExUI.u` 27.4 MB for 1) are the
+   exception, and the owner explicitly accepted downloading them in full anyway, for simplicity,
+   rather than building server-side class-subset extraction now.
+4. **"One implementation" needs one language runnable on both sides.** The backend still needs its
+   own resolver (CLI, the write path) — a second TypeScript port would be real duplication, exactly
+   what the owner ruled out. `uedcli-native` already has a Rust binary-parsing layer
+   (`package_read.rs`); porting the missing resolution/walk logic to Rust and compiling it both
+   natively (PyO3, already the codebase's existing pattern) and to WASM (new to `web/`, not
+   attempted here) gives one real implementation, used both ways. Split into its own item,
+   `dev/docs/board/to-spec/shared-rust-core-for-class-schema-resolution/`, since it's substantial,
+   reusable infrastructure this spec depends on rather than owns.
+
+Result: §0 (raw-file endpoint, replacing the old resolved-JSON endpoint entirely), §1 reframed as
+the shared resolver's output contract rather than an HTTP response shape (content unchanged — every
+corpus fact, worked example, and identity rule from v1-v16 carries over as-is), §4 rewritten around
+fetch-the-transitive-package-closure-then-resolve-lazily-client-side. §2 (`/scene`'s sparse map)
+keeps its WIRE SHAPE unchanged — but its RESOLUTION does move, per a fix in the first v17 review
+(below): `/scene`'s route now calls the same shared core natively, superseding
+`effective_props.py`'s Python walk, rather than keeping a second implementation running alongside
+the new one. The caching/compute-cost machinery v9-v16 built for the old server-resolves design
+(the real `ETag` formula, the proposed third `schema_cache.py` blob, the per-package compute-cost
+accounting) is superseded and removed from this spec; §0's raw-file `ETag` replaces it, and the
+shared core's own performance characteristics belong to its own item now, not here.
+
+## v17 fix round (same-day review findings, owner-directed on the two genuine forks)
+
+A review of the first v17 draft found 3 Critical and 8 Important findings — real gaps in the pivot
+itself, not nits. Fixed, all same design direction, no further pivot:
+
+- **The "backend does no resolution" claim was false** — §2's `/scene` build still walked the
+  class schema and resolved stated values in Python, a second implementation alongside the new
+  Rust/WASM one, violating the "one implementation" goal. Asked the owner directly: route
+  `/scene`'s resolution through the SAME shared core too, called natively (§1 now documents TWO
+  entry points sharing one crate: `resolve_class` for shape+defaults, called both natively and via
+  WASM; `resolve_actor_props` for `/scene`'s per-actor values, called only natively) — widens the
+  shared-rust-core item's scope, which its own `overview.md` now reflects.
+- **§1's own API contract was self-contradictory** — it specified a whole-PACKAGE resolve
+  (`resolve_package(bytes) -> {classes: every class, ...}`) while §4 called a per-CLASS entry
+  point. Fixed: §1 now specifies `resolve_class(fqcn, parsed_packages)` as the one real contract,
+  matching what §4 actually calls.
+- **The transitive package-fetch rule over-fetched by ~20x, measured for real**: following every
+  import (as originally specified) pulls in 16 packages / 93.7 MB from the real corpus, mostly
+  texture/mesh/sound references that can never affect resolution (already-excluded property
+  kinds). Fixed: the walk filters to `Class`/`Struct`/`Enum`-typed imports only — 8 packages /
+  4.7 MB, the real number (not the earlier, uncorrected "3 packages / 3.2 MB" estimate).
+- **The `ETag` was silently softened from the owner's own standing instruction.** The first v17
+  draft used a stat-tuple (no content hash), justified by `schema_cache.cache_key`'s own
+  reasoning — but that reasoning is about avoiding a RESOLUTION-cache cost this route no longer
+  pays; asked directly, the owner confirmed the original "etag with checksum of `.u`" instruction
+  still applies here specifically. Fixed: a real `sha1` of the served bytes, cached in-process by
+  stat so an unchanged file isn't re-hashed on every request (same caching PATTERN as before, but
+  a real content hash as the actual validator value).
+- Several smaller fixes: the "fetches start alongside `/scene`" claim was impossible as stated
+  (package discovery needs `/scene`'s own actor list first for anything beyond `Core`/`Engine`,
+  which now prefetch unconditionally); "never a spinner" is now scoped explicitly to the Load-time
+  package closure, with a stated degrade path for a class introduced later (a mid-session trunk
+  change, or the `gui-builder-brushes` feature); stale "class-schema endpoint" phrasing from the
+  v16 framing, left over in a few spots, corrected to describe the shared resolver instead; two
+  further honest, unresolved gaps recorded in Open Questions (client-side compute cost is
+  unbudgeted until real WASM benchmarks exist; cross-reload persistence assumes the browser
+  actually retains large — 18-27 MB — HTTP cache entries, unverified).
+
+All 12 JSON fences re-verified to still parse after this round.
+
+## v17 second fix round (re-review findings)
+
+A re-review of the first v17 fix round independently re-measured the 8-package/4.73MB closure
+(exact match, from two independent seed sets) and confirmed C1/C3 genuinely fixed, but found one
+more Critical and several Important gaps:
+
+- **§3's ONLY worked example of the resolver contract was still the superseded whole-package
+  shape** (a `"classes": {...}` map with three classes under one `"types"` dict), contradicting
+  §1's own corrected `resolve_class(fqcn, ...)` single-class contract — an implementer copying the
+  one concrete example would build exactly the eager whole-package resolve this pivot exists to
+  eliminate. Fixed: §3 now shows three separate `resolve_class(...)` calls, each a complete,
+  self-contained envelope, with a new paragraph explaining that `types` accumulates across calls
+  into one session-wide map (harmlessly overlapping for a shared type like `Core.Rotator`).
+- **Two fixed claims from the first round were still contradicted elsewhere in the same document**:
+  §1's own "§0's raw-file serving is the whole backend surface" line still said "the backend does
+  no resolution" (false since `/scene`'s `resolve_actor_props` is a real native resolve) and still
+  described the ETag as "os.stat-based" (already fixed to a real hash in §0, just not here) — both
+  corrected. §0's "never leaves the frontend holding stale class shape/defaults for an editing-
+  session-length window" claim was too strong — narrowed to what's actually true (fresh across
+  reloads; a resolved class stays cached, by design, for the rest of one running session).
+- **Asked the owner directly**: Goal 4's "one implementation... used by both the backend (CLI, the
+  write path) and the frontend" read as forcing the CLI's own class-display and the write path's
+  validation onto the shared core in this same pass — a much bigger scope. Confirmed: this pass
+  covers only the Inspector-props path (`effective_props.py`, superseded); radii/`bHiddenEd`/
+  `bDirectional` and the CLI/write path keep their existing code for now. Logged as a tracked, not
+  committed, follow-up: `dev/docs/board/inbox/migrate-radii-bhiddened-bdirectional-and-cli/`.
+- Smaller fixes: `resolve_actor_props`'s native `parsed_packages` now has a stated caching answer
+  (in-process, per-package, stat-keyed — the same pattern as every other cache in this document,
+  not a new re-parse-per-request cost against a request path with real regression history);
+  §0 now specifies case-insensitive name→file lookup against `composed_search_files`' own list
+  (never a path join), rejects a non-`.u` package kind with a named 404, and notes the ETag needs
+  RFC-correct quoting plus `Vary: Accept-Encoding` once gzip is added; the frontend's degrade for
+  an unresolvable class now says what the Inspector actually shows (an inline named error, never a
+  silently empty table); the `resolve_class` arity is now consistent everywhere it's called; the
+  stale "3.2 MB / 3-package" figure is corrected to the real, independently-reproduced "4.73 MB /
+  8-package" number throughout; the document's own opening self-identification ("This is v16")
+  is fixed to v17.
+
+All 14 JSON fences re-verified to still parse after this round.
+
+## v17 third fix round (re-review findings)
+
+A third review independently re-verified round 2's fixes (the §3 rewrite, all 14 fences, the ETag
+consistency, the 8-package/4.73MB numbers — all confirmed exactly, including from an independent
+re-measurement) and found the round-2 caching fix answered the wrong question, plus real leftover
+contradictions from the Goal-4 scope narrowing:
+
+- **The round-2 caching fix cached package PARSING, but the actual regression this route has
+  history with was resolution work thrown away and rebuilt.** (**This round's own root-cause claim
+  — "per-CLASS resolution repeated per actor, within one request" — was ITSELF corrected in the
+  v17 fourth fix round below: the real history is a CROSS-REQUEST rebuild, not a within-request
+  per-actor cost. Left here unedited as the accurate record of what this round actually found and
+  fixed at the time; read the fourth round's entry for the corrected story.**) Fixed here:
+  `resolve_actor_props` now explicitly calls `resolve_class` internally for the expensive
+  Super-chain-walk-plus-defaults half, doing only cheap actor-specific work (which paths are
+  stated, canonicalize) on top — this part of the fix stands. This is also what makes "one
+  implementation" true in substance: the two entry points are not independent walks, one is built
+  on the other.
+- **Three sentences (in `spec.md` and the sibling `overview.md`) still said the CLI/write path
+  natively call `resolve_class`, contradicting the Goal-4 scope ruling two rounds ago fixed
+  elsewhere.** Fixed: this pass's only production native caller of `resolve_class` is
+  `resolve_actor_props` (for `/scene`), stated consistently everywhere it's mentioned now.
+- Smaller fixes: `resolve_actor_props`'s signature gained its missing `notes` return value
+  (matching what §2 already relied on); the sibling item's port list gained the `Location`/
+  `MainScale`/`PostScale` statedness helpers and the `model.Actor`-across-PyO3 question, both
+  missing since the item's scope widened to cover `/scene`; the item's own overview no longer
+  implies the CLI/write path are wired in this pass; the main spec's `overview.md` was rewritten —
+  it still described the pre-round-1 "no resolution at all" architecture and never mentioned either
+  fix round or the Goal-4 ruling.
+
+## v17 fourth fix round (re-review findings)
+
+A fourth review verified round 3's fixes hold (Goal-4 scope consistent everywhere, all 14 fences
+valid) but found round 3's own regression-history attribution was itself wrong, plus a follow-on
+design error caused by trusting that wrong history — corrected in two passes within this same
+round, since the first correction attempt (below) itself needed a further fix once verified against
+real source a second time:
+
+- **Round 3 said the ~28s WanChai regression was "per-class resolution repeated per actor, within
+  one request." Reading `scene.py`'s own docstring in full shows this is backwards**: the per-actor
+  loop was never the bottleneck (`_is_hidden_ed`'s `ClassDefaults` memo already amortized within one
+  call, pinned by a real test — a DIFFERENT memo than `effective_props`'s own `ctx_cache`, which has
+  NO test today). The real bug was CROSS-REQUEST: `app.py`'s `/scene` route rebuilt `defaults`/
+  `index` from scratch on every HTTP request, discarding all memoized work. Fixed here: §2's caching
+  paragraph corrected, with the real citations.
+- **The first fix attempt (this same round) tied the new per-FQCN cache to `ctx.generation` —
+  independently re-verified against real source and found WRONG**: `ctx.generation` is driven by
+  `TrunkWatcher`, watching the T3D trunk directory, not the package search path; tying the cache to
+  it would flush on every ordinary actor edit (reintroducing a milder version of the same
+  regression) while never catching a real `.u` change. Corrected: the cache lives and dies with the
+  `(search_files, index, defaults)` tuple itself (`scene_inputs_ref`) — built alongside it, held for
+  as long as it is, discarded wholesale when a new one replaces it (`_get_trunk`'s bootstrap, or
+  `/load`). No generation involvement.
+- **A second real error, also independently caught**: this round's own first draft said the fix
+  "already landed" by caching BOTH `build_scene_payload`'s OUTPUT and its inputs tuple. The
+  output-caching layer (`_payload_ref`/`_get_payload`) was real once but was REMOVED ENTIRELY by
+  later work (`test_serve_app.py`'s own note) — `/scene` calls `build_scene_payload` fresh on every
+  request today, which makes the new per-FQCN cache MORE load-bearing than first stated, not less.
+  Corrected.
+- The sibling `shared-rust-core-for-class-schema-resolution/overview.md` gained the missing
+  ownership-shape requirement this design needs to actually be buildable: a caller-held context
+  object the route stores alongside `scene_inputs_ref` and can drop when it's replaced — not a
+  process-global static, which the earlier draft never ruled out.
+
 ## Open questions
 
 **The struct-key collision question from v3 is CLOSED**: `package.outer.name` (`OuterClass` omitted
@@ -1220,8 +1623,10 @@ two `sUserInfo` exports genuinely have different member shapes (vindicating v3's
 9 `XAIParams` exports share one identical shape, and `Core.Rotator`'s members match §3's worked example
 exactly. No open corpus-verification questions remain from this design's identity/shape mechanism.
 
-**Two known implementation-surface gaps, sized here honestly, not fully resolved — real work for the
-plan stage, not design questions with a choice to make**:
+**Two known implementation-surface gaps, sized here honestly, not fully resolved — real work for
+the shared-rust-core item's own plan stage now (§ "What changed, v16 → v17"), not a design question
+this spec itself needs to answer, but recorded here since the evidence was gathered against this
+spec's own investigation**:
 
 - **One shared root cause, two manifestations — `serve/scene.py`'s cross-package resolver helpers
   assume `prop.owner`'s first dot-segment is always a real package name, which fails whenever `prop` is
@@ -1245,23 +1650,42 @@ plan stage, not design questions with a choice to make**:
     degrading to a plain `ScalarProp(kind='byte')` today, with no `types` entry to reference (§1's
     enum-keying section above).
 
-  This redesign's own §1 refactor touches exactly this resolver pattern anyway (to also surface the
+  The shared-rust-core Rust port touches exactly this resolver pattern anyway (to also surface the
   resolved TYPE IDENTITY, not just member/enum shape) — both manifestations are worth fixing in the
   SAME pass, likely with one shared fix (resolve the containing STRUCT's own true package first, via
   the struct's own export record — the same `outer`-based mechanism this whole redesign already uses
   for struct/enum identity — rather than guessing a package name from `prop.owner`'s first dot-segment),
-  not deferred again, but genuinely sized at plan time, not asserted here as free.
+  not deferred again, but genuinely sized at that item's own plan time, not asserted here as free.
 - `propedit.effective_value` (not just `_resolve_one`) needs an actor-optional variant for the
-  class-schema endpoint's own default resolution — its FIRST statement is `_stored_map(actor)`, and
+  shared resolver's own default resolution — its FIRST statement is `_stored_map(actor)`, and
   `actor` threads through the rest of its body (the drill-down loop, `full_struct_text`'s merge), not
   isolable the way `_resolve_one`'s two leaf calls are. A synthetic empty-props actor, or a new
   actor-less entry point into `propedit.edit`, are both plausible — pick one at plan time with real
   code in front of you, not asserted here.
 
+**Two more real gaps, sized here honestly rather than asserted as free — real work for the plan
+stage, surfaced by v17's own review, not fully resolved by this design**:
+
+- **Client-side compute cost, once resolution moves off the server, is unbudgeted.** Because
+  resolution must be synchronous (§4's own requirement — a worker thread would reintroduce an
+  async wait), `parse_package` over a 1.9-27 MB file and each cold per-class resolve both run on
+  the browser's main thread. This document's only real timing data is the Python benchmark
+  (25-183ms/class) — there is no WASM equivalent yet, no answer for whether a cold resolve on a
+  complex class (well past `DeusEx.u`'s per-class average) could visibly freeze the UI for one
+  frame, and no decision on whether parsing happens at fetch time or lazily on first class-use
+  (§4 currently allows either). A freeze is not literally "a spinner," but it is the same kind of
+  stall the owner's requirement exists to prevent — real WASM benchmarks belong at plan time, once
+  the port exists to measure.
+- **Cross-reload persistence relies on an unverified browser assumption.** §4/Non-goals rely on
+  `Cache-Control: no-cache` plus the browser's own HTTP cache to make a reload's package fetches
+  cheap (a `304`, not a re-download) without building the IndexedDB persistence layer this pass
+  explicitly defers. Browsers are known to refuse or evict very large single cache entries, and
+  the packages this design explicitly accepts downloading in full (§0's Non-goal) run to 18-27 MB
+  — if the browser doesn't actually retain those, every reload re-downloads tens of MB instead of
+  taking a cheap conditional hit. Not measured here; worth a real check before relying on it.
+
 Everything else the prior review passes raised is resolved above by real investigation of the actual
-resolution/caching code, not left as a judgment call. The `schema_cache.py` third-blob extension (§1)
-remains a real, contained addition to an existing mechanism, sized at plan time rather than asserted
-here as free.
+resolution code, not left as a judgment call.
 
 ## Related
 
@@ -1272,8 +1696,26 @@ here as free.
   at plan time.
 - `dev/docs/board/someday/gui-inspector-editing-write-back-for-props/` — the deferred editing item
   whose own "reset to default... already available at no extra cost" claim was already flagged as
-  inaccurate. This spec's class-schema endpoint IS that real class-independent default resolution —
-  worth a follow-up correction to that item once this lands.
+  inaccurate. This spec's shared resolver IS that real class-independent default resolution — worth
+  a follow-up correction to that item once this lands.
+- `dev/docs/board/to-spec/shared-rust-core-for-class-schema-resolution/` — this spec DEPENDS ON it
+  (see `overview.md`'s `depends-on`): ALL resolution/walk logic (Super-chain merge, default decode,
+  canonicalization, struct/enum shape) is designed and built there, native + WASM, called from BOTH
+  entry points this spec relies on (`resolve_class` for shape+defaults, `resolve_actor_props` for
+  `/scene`'s own per-actor values — the v17 fix round widened that item's scope to cover the
+  second one too, closing the two-implementations gap the first review found). This spec owns the
+  raw-file endpoint (§0), `/scene`'s wire SHAPE (§2 — its resolution is the dependency's job now),
+  and the frontend's fetch/render integration around that core (§4). See "What changed, v16 → v17"
+  and the "v17 fix round" entry for the full split rationale.
+- `dev/docs/board/to-plan/gui-builder-brushes/` (a sibling worktree branch, not yet on master) —
+  reconciled 2026-09-24: no design conflict. That spec exposes UED22's builder brush as one ordinary
+  `SceneActor` by reusing `_build_actors`/`scene.py:571` as an opaque per-actor serializer — it never
+  reads or depends on `props`' internal shape, and keeps Location/Rotation as `SceneActor`'s dedicated
+  fields, same as this spec's own `TYPED_FIELDS` handling. Both specs substantially rewrite
+  `_build_actors` for different reasons (this one for the sparse leaf-path map; that one to synthesize
+  a one-actor overlay from a `_LoadedTrunk`), so whichever plan/build lands SECOND on master will hit a
+  real merge conflict there and must re-read the first's actual landed code, not plan against a stale
+  signature.
 
 ## What changed, v1 → v2 → v3 → v4 → v5 → v6 → v7 → v8 → v9 → v10 → v11 → v12 → v13 → v14
 
