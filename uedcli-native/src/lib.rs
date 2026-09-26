@@ -101,6 +101,36 @@ impl Built {
             })
             .collect()
     }
+
+    /// A handle for point-in-solid queries against this model. Build it once per solve.
+    fn solidity(&self) -> Solidity {
+        Solidity { model: collision::CollisionModel::level(&self.model) }
+    }
+}
+
+/// A built model prepared for point-in-solid queries. Holds the `CollisionModel` so it is built
+/// ONCE per solve: `CollisionModel::level` deep-clones the node and hull arrays
+/// (`collision.rs:102`), so rebuilding it per query would clone the whole tree per point.
+#[pyclass]
+struct Solidity {
+    model: collision::CollisionModel,
+}
+
+#[pymethods]
+impl Solidity {
+    /// True when `p` is inside SOLID space (see `CollisionModel::point_is_solid`).
+    fn point_is_solid(&self, p: (f32, f32, f32)) -> bool {
+        self.model.point_is_solid(model::Vec3::new(p.0, p.1, p.2))
+    }
+
+    /// True when ANY of `points` is inside solid. Bulk by design (never per-op): the caller's box
+    /// test samples 27 points at a time and its bisection runs that ~20 times per candidate, so
+    /// this is one crossing instead of 540.
+    fn any_point_solid(&self, points: Vec<(f32, f32, f32)>) -> bool {
+        points
+            .iter()
+            .any(|p| self.model.point_is_solid(model::Vec3::new(p.0, p.1, p.2)))
+    }
 }
 
 /// One world-soup FPoly marshalled to Python (see `Built::world_soup`).
@@ -947,6 +977,7 @@ mod tests {
 fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("BuildError", m.py().get_type_bound::<BuildError>())?;
     m.add_class::<Built>()?;
+    m.add_class::<Solidity>()?;
     m.add_function(wrap_pyfunction!(build_geometry, m)?)?;
     m.add_function(wrap_pyfunction!(build_geometry_bspcsg, m)?)?;
     m.add_function(wrap_pyfunction!(intersect_brushset, m)?)?;

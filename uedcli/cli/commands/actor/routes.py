@@ -37,6 +37,12 @@ def run(args):
     if args.sub == "diagram":
         from . import preview
         return preview.run(args)
+    if args.sub == "relation":
+        from . import relation
+        return relation.run(args)
+    if args.sub == "survey":
+        from . import survey
+        return survey.run(args)
     if args.sub in ("find", "show", "bbox", "rank"):
         from . import query
         return query.run(args)

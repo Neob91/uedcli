@@ -4,7 +4,7 @@ Branch: `worktree-geometry-alignment-skills`. Not merged to master.
 
 ## What's here
 
-A Claude Code plugin with two skills for using the `brush relation find/measure/set` family:
+A Claude Code plugin with two skills for using the `actor relation find/measure/set` family:
 
 - `skills/verifying-brush-relations/SKILL.md` — sweep every face of a room-shaped brush before/after
   a `brush vertex move`/`scale`/`apply-transform`, to catch collateral changes on faces you didn't

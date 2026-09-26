@@ -11,6 +11,8 @@ from ._arguments import (
     _preview_opts,
     _tree_flag,
 )
+from .actor_relation import add_relation_subparser
+from .actor_survey import add_survey_subparser
 
 
 def register(sub) -> None:
@@ -499,3 +501,6 @@ def register(sub) -> None:
                             "Multiple files concatenate in order; - is the sole value if present. "
                             "Mutually exclusive with the names source")
     _preview_opts(aprev)
+
+    add_relation_subparser(asub)
+    add_survey_subparser(asub)

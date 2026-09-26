@@ -15,6 +15,8 @@ Query, mutate, and organize actors. See also [diagram](diagram.md) for rendering
 | [`actor prop get`](prop.md) | query | print effective property values |
 | [`actor folder get`](folder.md) | query | print each actor's uedcli-side folder path |
 | [`actor label get`](label.md) | query | print each actor's uedcli-side labels |
+| [`actor relation find/compare/set`](relation.md) | query/mutate | exact geometric facts between a reference face and other actors, filtered search, and move-to-relationship |
+| [`actor survey`](survey.md) | query | every raw and CSG-resolved spatial fact about one actor |
 | [`actor add`](add.md) | mutate | write a T3D snippet into the trunk as new actors |
 | [`actor duplicate`](duplicate.md) | mutate | copy actors under fresh names, offset or anchored |
 | [`actor delete`](delete.md) | mutate | delete actors, restoring swept neighbours |

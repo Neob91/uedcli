@@ -203,7 +203,7 @@ also accepts `--tree KIND/NAME` (above) to edit a different box.
 |---|---|
 | [`reference/actor/`](reference/actor/README.md) | find/add/delete/move/rotate/prop/build, folders, labels |
 | [`reference/actor/diagram.md`](reference/actor/diagram.md) | the brush/actor viewer |
-| [`reference/brush/`](reference/brush/README.md) | poly/vertex/measure/core, clip/snap/replace, scale/apply-transform |
+| [`reference/brush/`](reference/brush/README.md) | poly/vertex/core, clip/snap/replace, scale/apply-transform |
 | [`reference/brush/build.md`](reference/brush/build.md) | parametric brush primitives (cube/cylinder/cone/sheet/staircase/spiral/extrude/revolve) |
 | [`reference/level/`](reference/level/README.md) | create/import/reimport/list/status/doctor/materialize/photo |
 | [`reference/class/`](reference/class/README.md) | actor-class discovery: list/show/preview/search/prewarm/classify |

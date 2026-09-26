@@ -4,7 +4,7 @@
 connectivity/containment graph: every brush and every non-brush actor as a node, and an edge between
 two nodes wherever their volumes geometrically touch or one contains the other. It answers "what's
 connected to what" across the WHOLE level in one pass — replaces manually pairing up
-[`brush relation measure`](../brush/relation.md) calls to trace a chain of rooms, or eyeballing which
+[`actor relation compare`](../actor/relation.md) calls to trace a chain of rooms, or eyeballing which
 brush a light sits inside. It's pure and offline: no editor, no native CSG build, just the trunk's own
 geometry and CSG order.
 
@@ -90,17 +90,17 @@ Subtract_Lobby [Engine.Brush Subtract] --contains--> NPC_Receptionist [DeusEx.Sc
   never participates in world CSG, so it has no solidity context to report. A non-brush actor also
   shows class only, for the same reason (it was never CSG-classified in the first place). The tag is
   space-separated from the name (not colon-glued), so `Name`/`Name:idx` right before it stays a clean
-  whitespace-delimited selector for `brush relation measure`.
+  whitespace-delimited selector for `actor relation compare`.
 - A `touches` edge between two brushes carries a rough size in parentheses: `touches(1.638e+04uu^2)`.
   When the two brushes share a single, clean flat boundary (one matched face pair), the size is the
   EXACT shared footprint area, and each brush name also gets a `:idx` suffix naming that boundary poly
   — e.g. `Subtract_Lobby:0 ... --touches(...)--> Subtract_Hallway:1 ...` means poly 0 of
   `Subtract_Lobby` is the matched face against poly 1 of `Subtract_Hallway`. That's the exact selector
-  grammar [`brush relation measure`](../brush/relation.md) takes, so you can drill straight in:
-  `uedcli brush relation measure Subtract_Lobby:0 Subtract_Hallway:1` for the full plane/normal/gap/
+  grammar [`actor relation compare`](../actor/relation.md) takes, so you can drill straight in:
+  `uedcli actor relation compare Subtract_Lobby:0 Subtract_Hallway:1` for the full plane/normal/gap/
   footprint detail. When the two brushes overlap as a genuine 3-D volume with no single shared face
   (e.g. two Subtracts overlapping diagonally), the size is a bounding-box estimate and neither name
-  gets an `:idx` — drill in with a plain `brush relation measure Subtract_A Subtract_B` instead, which
+  gets an `:idx` — drill in with a plain `actor relation compare Subtract_A Subtract_B` instead, which
   ranks every poly pair.
 - `contains` and `carved_by` edges never carry a size or a `:idx` — containment is a yes/no fact, not
   a matter of degree, and there's no second face-to-face question to ask beyond "yes, it's inside."
@@ -160,5 +160,5 @@ An unknown `--from` name is a clean error naming the value: `level graph: no suc
 `--tree KIND/NAME` analyzes a named level/stash/prefab tree instead of the ambient `$UEDCLI_LEVEL` —
 the same `--tree` flag [`level doctor`](doctor.md) and most other read verbs already take.
 
-See also: [`brush relation`](../brush/relation.md) (geometric detail on a pair of faces you already
+See also: [`actor relation`](../actor/relation.md) (geometric detail on a pair of faces you already
 know), [`level doctor`](doctor.md) (per-brush geometry/BSP problems, no cross-actor graph).

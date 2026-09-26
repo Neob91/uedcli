@@ -367,7 +367,7 @@ def test_compute_pairs_single_target_disjoint_never_reports_exactly_one():
 def test_compute_pairs_partial_disjoint_with_multiple_targets():
     # ref relates to Near but NOT Far -- only Far should be disjoint (a length-1 disjoint set,
     # which the single-target invariant above says can't happen there, but is normal here since
-    # `measure` never compares targets against each other, only each against ref).
+    # `compare` never compares targets against each other, only each against ref).
     ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
     near = _brush("Near", cube(64, 64, 8), loc=(0, 0, 8))          # flush on top -- relates
     far = _brush("Far", cube(16, 16, 16), loc=(500, 500, 500))
@@ -538,7 +538,7 @@ def test_find_candidates_near_miss_count_ignores_perpendicular_only_alignment():
 def test_passes_gap_and_plane_max_gap_zero_tolerates_float_dust():
     # A pair whose true gap is exactly 0 but carries float residual (e.g. from a rotated
     # placement) must still pass --max-gap 0 -- this is the exact false-negative a real subagent
-    # hit: measure reported "-0.000uu" (genuinely flush) but find --max-gap 0 found nothing.
+    # hit: compare reported "-0.000uu" (genuinely flush) but find --max-gap 0 found nothing.
     ref = _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0))
     top_a = _face_by_normal(ref.brush, (0.0, 0.0, 1.0))
     near = _brush("Near", cube(64, 64, 8), loc=(0, 0, 8))
@@ -669,3 +669,22 @@ def test_compute_set_translation_edge_u_min_explicit():
     name, ref_name, move = relation.compute_set_translation(
         level, f"Tgt:{bottom_tgt}", f"Ref:{top_ref}", edge_u=("min", 5.0))
     assert move[2] == pytest.approx(0.0, abs=1e-6)  # gap untouched
+
+
+def test_point_footprint_2d_classifies_inside_boundary_outside():
+    """A real point-in-polygon test. NOT `classify_footprint_2d`: fed a one-vertex 'polygon'
+    that function's `_clip_2d` degenerates to an always-true inside() test and returns
+    `contains_a_in_b` for every input, including a point 900uu away (spec, verified by hand)."""
+    from uedcli.relation import point_footprint_2d
+    square = [(0.0, 0.0), (10.0, 0.0), (10.0, 10.0), (0.0, 10.0)]
+    assert point_footprint_2d(square, (5.0, 5.0)) == "inside"
+    assert point_footprint_2d(square, (0.0, 5.0)) == "on_boundary"
+    assert point_footprint_2d(square, (900.0, 5.0)) == "outside"
+
+
+def test_point_footprint_2d_reuses_the_existing_point_on_segment_helper():
+    """Boundary detection calls `_point_on_segment(p, s0, s1)` (relation.py:165, that argument
+    order) rather than carrying a second copy of the tolerance logic."""
+    import inspect
+    from uedcli import relation
+    assert "_point_on_segment" in inspect.getsource(relation._point_on_any_edge)

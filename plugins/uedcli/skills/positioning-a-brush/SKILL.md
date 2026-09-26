@@ -9,7 +9,7 @@ description: Use when placing a new or moved UE1/Deus Ex brush against an existi
 
 Computing a target `Location` by eye (reading a face's coordinates, adding an offset by hand) is
 exactly the kind of spatial arithmetic that goes wrong — off by a few units, flush on one axis but
-not the other, or embedded inside the wall instead of resting against it. `brush relation
+not the other, or embedded inside the wall instead of resting against it. `actor relation
 measure`/`set` solve the placement directly from the geometric relationship you want, not from a
 coordinate you compute.
 
@@ -39,12 +39,12 @@ uedcli actor prop get Wall CsgOper
 uedcli brush build cube --width .. --breadth .. --height .. --at <rough x,y,z> --csg add|subtract ...
 
 # 2. Read the CURRENT relationship (picks the mating face, reads U/V mapping — see below)
-uedcli brush relation measure Wall:5 NewBrush --top all
+uedcli actor relation measure Wall:5 NewBrush --top all
 
 # 3. Move NewBrush to the exact target relationship
-uedcli brush relation set NewBrush:3 --relative-to Wall:5 --gap 0 --centroid-u 0 --centroid-v 0
+uedcli actor relation set NewBrush:3 --relative-to Wall:5 --gap 0 --centroid-u 0 --centroid-v 0
 # or, for a brush that must sit on the floor rather than centered vertically:
-uedcli brush relation set NewBrush:3 --relative-to Wall:5 --gap 0 --centroid-u 0 --edge-v-min 0
+uedcli actor relation set NewBrush:3 --relative-to Wall:5 --gap 0 --centroid-u 0 --edge-v-min 0
 ```
 
 - `--gap N` sets the signed perpendicular distance to the reference plane (`0` = flush).
@@ -88,7 +88,7 @@ than it's right.
 
 ```bash
 uedcli actor prop get Wall CsgOper
-uedcli brush relation measure Wall:5 NewBrush --top all
+uedcli actor relation measure Wall:5 NewBrush --top all
 ```
 
 **Verify after `set`, don't just trust the rule:** measure the OTHER (non-chosen) candidate face

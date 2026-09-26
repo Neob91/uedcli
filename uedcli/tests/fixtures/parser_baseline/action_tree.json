@@ -144,7 +144,9 @@
             "move",
             "prop",
             "rotate",
-            "diagram"
+            "diagram",
+            "relation",
+            "survey"
           ],
           "subparser_help": {
             "find": "print names of matching actors (one per line) for piping into name-taking verbs; with no filters, prints every actor",
@@ -161,7 +163,9 @@
             "move": "move actor(s) by a world delta (--by, any count) or one actor to an absolute point (--to)",
             "prop": "read, set, or clear an actor's properties model-side, validated against the actor's class schema (no editor). Sub-verbs: set / unset / get",
             "rotate": "rotate a group of actors around a pivot (PITCH,YAW,ROLL in unreal rotation units, 16384 = 90°)",
-            "diagram": "self-rendered orthographic wireframe of actors from $UEDCLI_LEVEL (brushes coloured by CSG op; point actors as sprites/markers). Model-side, host-only — no editor"
+            "diagram": "self-rendered orthographic wireframe of actors from $UEDCLI_LEVEL (brushes coloured by CSG op; point actors as sprites/markers). Model-side, host-only — no editor",
+            "relation": "cross-brush geometric relationships: compare/find/set",
+            "survey": "every raw and CSG-resolved spatial fact about one actor (brush or not): what it touches, contains, carves, connects to, and crosses into"
           }
         }
       ],
@@ -2894,6 +2898,578 @@
             }
           ],
           "subparsers": {}
+        },
+        "relation": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli actor relation",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_SubParsersAction",
+              "option_strings": [],
+              "dest": "relationsub",
+              "nargs": "A...",
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": null,
+              "mutex_group": null,
+              "subparser_choices": [
+                "compare",
+                "find",
+                "set"
+              ],
+              "subparser_help": {
+                "compare": "report the exact geometric relationship between a reference face selector and one or more target selectors (plane, normals, distance, footprint_2d overlap, deltas)",
+                "find": "print faces of one or more candidate brushes related to a reference face, filtered by gap/footprint/plane, as candidate:idx selectors",
+                "set": "translate an actor (by its Location) so it -- or one of its brush faces -- hits a target gap/centroid/edge offset from a reference face"
+              }
+            }
+          ],
+          "subparsers": {
+            "compare": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli actor relation compare",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "ref",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": true,
+                  "choices": null,
+                  "metavar": "REF_SELECTOR",
+                  "converter": null,
+                  "help": "reference face selector: a bare brush Name (all its polys) or Name:SELECTOR (SELECTOR = 'all' or comma indices). Sign conventions (distance, deltas) are relative to THIS selector",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "target",
+                  "nargs": "+",
+                  "const": null,
+                  "default": null,
+                  "required": true,
+                  "choices": null,
+                  "metavar": "TARGET_SELECTOR",
+                  "converter": null,
+                  "help": "one or more other targets: a face selector (same grammar as REF_SELECTOR) for a brush, or a non-brush actor's bare Name (compared by its Location), or '-' alone to read a newline list from stdin (e.g. `actor relation find`'s output; empty stdin: clean no-op). Repeated face selectors naming the same brush have their polys unioned into one comparison rather than duplicated; a repeated non-brush Name is not",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--top"
+                  ],
+                  "dest": "top",
+                  "nargs": null,
+                  "const": null,
+                  "default": 1,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": "_top_arg",
+                  "help": "max ranked candidate poly-pairs to show (default 1); 'all' shows every qualifying pair with no cap",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--allow-self"
+                  ],
+                  "dest": "allow_self",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "permit REF_SELECTOR and TARGET_SELECTOR to name the SAME brush (comparing two faces of one brush). Without it, naming the same brush on both sides is a clean exit 2 -- it usually means a typo or a copy-paste left the same name twice",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "find": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli actor relation find",
+              "mutex_groups": [],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "candidates",
+                  "nargs": "*",
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "NAME",
+                  "converter": null,
+                  "help": "candidate Name(s) to search -- a brush or a non-brush actor -- or '-' to read a newline name list from stdin (empty stdin: clean no-op). Omit entirely (no names, no '-') to search every OTHER BRUSH in the level",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--relative-to"
+                  ],
+                  "dest": "relative_to",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": true,
+                  "choices": null,
+                  "metavar": "REF[:idx]",
+                  "converter": null,
+                  "help": "the reference: a bare brush Name (rank against every one of its polys) or Name:idx (pin to exactly one reference poly)",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--max-gap"
+                  ],
+                  "dest": "max_gap",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "N",
+                  "converter": "float",
+                  "help": "keep only pairs whose perpendicular gap (absolute distance) is at most N world units (a tiny float-dust tolerance is built in, so a genuinely flush pair always passes --max-gap 0). Given without --footprint, also enables a stderr note when a same-plane candidate with NO footprint overlap sits within N of REF but is hidden by the default footprint filter",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--min-gap"
+                  ],
+                  "dest": "min_gap",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "N",
+                  "converter": "float",
+                  "help": "keep only pairs whose perpendicular gap (absolute distance) is at least N world units",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--footprint"
+                  ],
+                  "dest": "footprint",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "LIST",
+                  "converter": "_parse_footprint_list",
+                  "help": "comma-separated footprint_2d values to keep (none,vertex,edge,partial,contains,coincident -- 'contains' matches either direction). Omit: no filter",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--plane"
+                  ],
+                  "dest": "plane",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": [
+                    "coplanar",
+                    "parallel"
+                  ],
+                  "metavar": null,
+                  "converter": null,
+                  "help": "keep only pairs of this plane relationship. Omit: either",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--top"
+                  ],
+                  "dest": "top",
+                  "nargs": null,
+                  "const": null,
+                  "default": 1,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": "_top_arg",
+                  "help": "max ranked qualifying pairs to show PER CANDIDATE (default 1); 'all' shows every qualifying pair",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--allow-self"
+                  ],
+                  "dest": "allow_self",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "permit the reference's OWN brush among the candidates (finding other faces of the same brush related to its reference face). Without it, the reference's own brush is excluded from the default level-wide search and rejected if named explicitly",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreTrueAction",
+                  "option_strings": [
+                    "--json"
+                  ],
+                  "dest": "json",
+                  "nargs": 0,
+                  "const": true,
+                  "default": false,
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "emit each match's identity (ref, ref_poly, candidate, poly) as a JSON array on stdout, instead of bare candidate:idx lines; suppresses the plain-text match listing/summary on stderr (the near-miss note from --max-gap, if any, still prints). For the geometric detail (plane, normals, distance, footprint_2d, deltas) on a specific match, pipe into `actor relation compare REF -`",
+                  "mutex_group": null
+                }
+              ],
+              "subparsers": {}
+            },
+            "set": {
+              "class": "_CoordArgumentParser",
+              "prog": "uedcli actor relation set",
+              "mutex_groups": [
+                {
+                  "required": false,
+                  "members": [
+                    "centroid_u",
+                    "edge_u_min",
+                    "edge_u_max"
+                  ]
+                },
+                {
+                  "required": false,
+                  "members": [
+                    "centroid_v",
+                    "edge_v_min",
+                    "edge_v_max"
+                  ]
+                }
+              ],
+              "actions": [
+                {
+                  "class": "_HelpAction",
+                  "option_strings": [
+                    "-h",
+                    "--help"
+                  ],
+                  "dest": "help",
+                  "nargs": 0,
+                  "const": null,
+                  "default": {
+                    "__suppress__": true
+                  },
+                  "required": false,
+                  "choices": null,
+                  "metavar": null,
+                  "converter": null,
+                  "help": "show this help message and exit",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [],
+                  "dest": "target",
+                  "nargs": "+",
+                  "const": null,
+                  "default": null,
+                  "required": true,
+                  "choices": null,
+                  "metavar": "TARGET",
+                  "converter": null,
+                  "help": "what to move: a brush face as an exact BRUSH:idx (a bare BRUSH name or an index list is not allowed), or a non-brush actor's bare Name (its Location moves). Repeat, or pass the single token '-' to read a newline list from stdin (empty stdin: clean no-op) -- every target moves relative to the SAME --relative-to reference",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--relative-to"
+                  ],
+                  "dest": "relative_to",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": true,
+                  "choices": null,
+                  "metavar": "REF:idx",
+                  "converter": null,
+                  "help": "the fixed reference face, as an exact BRUSH:idx. Never moves",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--gap"
+                  ],
+                  "dest": "gap",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "N",
+                  "converter": "float",
+                  "help": "set the signed perpendicular distance to the reference plane to exactly N (along the reference's own normal; 0 = flush/coplanar). Omit: leave untouched",
+                  "mutex_group": null
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--centroid-u"
+                  ],
+                  "dest": "centroid_u",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "N",
+                  "converter": "float",
+                  "help": "set the footprint centroid's U offset from the reference to exactly N",
+                  "mutex_group": [
+                    0,
+                    0
+                  ]
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--edge-u-min"
+                  ],
+                  "dest": "edge_u_min",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "N",
+                  "converter": "float",
+                  "help": "set the offset between this face's U-min extent and the reference's to exactly N",
+                  "mutex_group": [
+                    0,
+                    1
+                  ]
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--edge-u-max"
+                  ],
+                  "dest": "edge_u_max",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "N",
+                  "converter": "float",
+                  "help": "set the offset between this face's U-max extent and the reference's to exactly N",
+                  "mutex_group": [
+                    0,
+                    2
+                  ]
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--centroid-v"
+                  ],
+                  "dest": "centroid_v",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "N",
+                  "converter": "float",
+                  "help": "set the footprint centroid's V offset from the reference to exactly N",
+                  "mutex_group": [
+                    1,
+                    0
+                  ]
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--edge-v-min"
+                  ],
+                  "dest": "edge_v_min",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "N",
+                  "converter": "float",
+                  "help": "set the offset between this face's V-min extent and the reference's to exactly N",
+                  "mutex_group": [
+                    1,
+                    1
+                  ]
+                },
+                {
+                  "class": "_StoreAction",
+                  "option_strings": [
+                    "--edge-v-max"
+                  ],
+                  "dest": "edge_v_max",
+                  "nargs": null,
+                  "const": null,
+                  "default": null,
+                  "required": false,
+                  "choices": null,
+                  "metavar": "N",
+                  "converter": "float",
+                  "help": "set the offset between this face's V-max extent and the reference's to exactly N",
+                  "mutex_group": [
+                    1,
+                    2
+                  ]
+                }
+              ],
+              "subparsers": {}
+            }
+          }
+        },
+        "survey": {
+          "class": "_CoordArgumentParser",
+          "prog": "uedcli actor survey",
+          "mutex_groups": [],
+          "actions": [
+            {
+              "class": "_HelpAction",
+              "option_strings": [
+                "-h",
+                "--help"
+              ],
+              "dest": "help",
+              "nargs": 0,
+              "const": null,
+              "default": {
+                "__suppress__": true
+              },
+              "required": false,
+              "choices": null,
+              "metavar": null,
+              "converter": null,
+              "help": "show this help message and exit",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [],
+              "dest": "name",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": true,
+              "choices": null,
+              "metavar": "NAME",
+              "converter": null,
+              "help": "the actor to survey — exactly one, never a set (both tiers are computed over a bounded neighborhood of this actor, which is what keeps the cost flat)",
+              "mutex_group": null
+            },
+            {
+              "class": "_StoreAction",
+              "option_strings": [
+                "--tree"
+              ],
+              "dest": "tree",
+              "nargs": null,
+              "const": null,
+              "default": null,
+              "required": false,
+              "choices": null,
+              "metavar": "KIND/NAME",
+              "converter": null,
+              "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+              "mutex_group": null
+            }
+          ],
+          "subparsers": {}
         }
       }
     },
@@ -2944,8 +3520,7 @@
             "intersect",
             "deintersect",
             "vertex",
-            "poly",
-            "relation"
+            "poly"
           ],
           "subparser_help": {
             "scale": "scale a group of BRUSH actors: set their MainScale (a negative axis mirrors). `mirror` is `brush scale --by -1,1,1` (no separate verb). A non-brush (point) actor is rejected",
@@ -2957,8 +3532,7 @@
             "intersect": "CSG-merge a piped brush SET into ONE brush against an EMPTY background: additives make solid, subtractives carve it, and the resulting solid's boundary is written as a single welded brush T3D to stdout. Needs at least one additive brush",
             "deintersect": "CSG-merge a piped brush SET into ONE brush against a SOLID background: the set's subtractives define voids and the VOID is written as a solid — the 'negative'/plug that exactly fills a carved doorway (pair with --mover-class for a door). Needs at least one subtractive brush",
             "vertex": "vertex query/edit (move-only; never add/delete)",
-            "poly": "per-surface (polygon) query/edit verbs",
-            "relation": "cross-brush geometric relationships: measure/find/set"
+            "poly": "per-surface (polygon) query/edit verbs"
           }
         }
       ],
@@ -7527,521 +8101,6 @@
                   "subparsers": {}
                 }
               }
-            }
-          }
-        },
-        "relation": {
-          "class": "_CoordArgumentParser",
-          "prog": "uedcli brush relation",
-          "mutex_groups": [],
-          "actions": [
-            {
-              "class": "_HelpAction",
-              "option_strings": [
-                "-h",
-                "--help"
-              ],
-              "dest": "help",
-              "nargs": 0,
-              "const": null,
-              "default": {
-                "__suppress__": true
-              },
-              "required": false,
-              "choices": null,
-              "metavar": null,
-              "converter": null,
-              "help": "show this help message and exit",
-              "mutex_group": null
-            },
-            {
-              "class": "_SubParsersAction",
-              "option_strings": [],
-              "dest": "relationsub",
-              "nargs": "A...",
-              "const": null,
-              "default": null,
-              "required": true,
-              "choices": null,
-              "metavar": null,
-              "converter": null,
-              "help": null,
-              "mutex_group": null,
-              "subparser_choices": [
-                "measure",
-                "find",
-                "set"
-              ],
-              "subparser_help": {
-                "measure": "report the exact geometric relationship between a reference face selector and one or more target selectors (plane, normals, distance, footprint_2d overlap, deltas)",
-                "find": "print faces of one or more candidate brushes related to a reference face, filtered by gap/footprint/plane, as candidate:idx selectors",
-                "set": "translate a brush (by its Location) so one of its faces hits a target gap/centroid/edge offset from a reference face"
-              }
-            }
-          ],
-          "subparsers": {
-            "measure": {
-              "class": "_CoordArgumentParser",
-              "prog": "uedcli brush relation measure",
-              "mutex_groups": [],
-              "actions": [
-                {
-                  "class": "_HelpAction",
-                  "option_strings": [
-                    "-h",
-                    "--help"
-                  ],
-                  "dest": "help",
-                  "nargs": 0,
-                  "const": null,
-                  "default": {
-                    "__suppress__": true
-                  },
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "show this help message and exit",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [],
-                  "dest": "ref",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": true,
-                  "choices": null,
-                  "metavar": "REF_SELECTOR",
-                  "converter": null,
-                  "help": "reference face selector: a bare brush Name (all its polys) or Name:SELECTOR (SELECTOR = 'all' or comma indices). Sign conventions (distance, deltas) are relative to THIS selector",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [],
-                  "dest": "target",
-                  "nargs": "+",
-                  "const": null,
-                  "default": null,
-                  "required": true,
-                  "choices": null,
-                  "metavar": "TARGET_SELECTOR",
-                  "converter": null,
-                  "help": "one or more other face selectors, same grammar as REF_SELECTOR, or '-' alone to read a newline selector list from stdin (e.g. `brush relation find`'s output; empty stdin: clean no-op). Repeated selectors naming the same brush have their polys unioned into one comparison rather than duplicated",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--top"
-                  ],
-                  "dest": "top",
-                  "nargs": null,
-                  "const": null,
-                  "default": 1,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": "_top_arg",
-                  "help": "max ranked candidate poly-pairs to show (default 1); 'all' shows every qualifying pair with no cap",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreTrueAction",
-                  "option_strings": [
-                    "--allow-self"
-                  ],
-                  "dest": "allow_self",
-                  "nargs": 0,
-                  "const": true,
-                  "default": false,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "permit REF_SELECTOR and TARGET_SELECTOR to name the SAME brush (comparing two faces of one brush). Without it, naming the same brush on both sides is a clean exit 2 -- it usually means a typo or a copy-paste left the same name twice",
-                  "mutex_group": null
-                }
-              ],
-              "subparsers": {}
-            },
-            "find": {
-              "class": "_CoordArgumentParser",
-              "prog": "uedcli brush relation find",
-              "mutex_groups": [],
-              "actions": [
-                {
-                  "class": "_HelpAction",
-                  "option_strings": [
-                    "-h",
-                    "--help"
-                  ],
-                  "dest": "help",
-                  "nargs": 0,
-                  "const": null,
-                  "default": {
-                    "__suppress__": true
-                  },
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "show this help message and exit",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [],
-                  "dest": "candidates",
-                  "nargs": "*",
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "NAME",
-                  "converter": null,
-                  "help": "candidate brush Name(s) to search, or '-' to read a newline name list from stdin (empty stdin: clean no-op). Omit entirely (no names, no '-') to search every OTHER brush in the level",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--relative-to"
-                  ],
-                  "dest": "relative_to",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": true,
-                  "choices": null,
-                  "metavar": "REF[:idx]",
-                  "converter": null,
-                  "help": "the reference: a bare brush Name (rank against every one of its polys) or Name:idx (pin to exactly one reference poly)",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--max-gap"
-                  ],
-                  "dest": "max_gap",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "N",
-                  "converter": "float",
-                  "help": "keep only pairs whose perpendicular gap (absolute distance) is at most N world units (a tiny float-dust tolerance is built in, so a genuinely flush pair always passes --max-gap 0). Given without --footprint, also enables a stderr note when a same-plane candidate with NO footprint overlap sits within N of REF but is hidden by the default footprint filter",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--min-gap"
-                  ],
-                  "dest": "min_gap",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "N",
-                  "converter": "float",
-                  "help": "keep only pairs whose perpendicular gap (absolute distance) is at least N world units",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--footprint"
-                  ],
-                  "dest": "footprint",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "LIST",
-                  "converter": "_parse_footprint_list",
-                  "help": "comma-separated footprint_2d values to keep (none,vertex,edge,partial,contains,coincident -- 'contains' matches either direction). Omit: no filter",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--plane"
-                  ],
-                  "dest": "plane",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": [
-                    "coplanar",
-                    "parallel"
-                  ],
-                  "metavar": null,
-                  "converter": null,
-                  "help": "keep only pairs of this plane relationship. Omit: either",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--top"
-                  ],
-                  "dest": "top",
-                  "nargs": null,
-                  "const": null,
-                  "default": 1,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": "_top_arg",
-                  "help": "max ranked qualifying pairs to show PER CANDIDATE (default 1); 'all' shows every qualifying pair",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreTrueAction",
-                  "option_strings": [
-                    "--allow-self"
-                  ],
-                  "dest": "allow_self",
-                  "nargs": 0,
-                  "const": true,
-                  "default": false,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "permit the reference's OWN brush among the candidates (finding other faces of the same brush related to its reference face). Without it, the reference's own brush is excluded from the default level-wide search and rejected if named explicitly",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreTrueAction",
-                  "option_strings": [
-                    "--json"
-                  ],
-                  "dest": "json",
-                  "nargs": 0,
-                  "const": true,
-                  "default": false,
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "emit each match's identity (ref, ref_poly, candidate, poly) as a JSON array on stdout, instead of bare candidate:idx lines; suppresses the plain-text match listing/summary on stderr (the near-miss note from --max-gap, if any, still prints). For the geometric detail (plane, normals, distance, footprint_2d, deltas) on a specific match, pipe into `brush relation measure REF -`",
-                  "mutex_group": null
-                }
-              ],
-              "subparsers": {}
-            },
-            "set": {
-              "class": "_CoordArgumentParser",
-              "prog": "uedcli brush relation set",
-              "mutex_groups": [
-                {
-                  "required": false,
-                  "members": [
-                    "centroid_u",
-                    "edge_u_min",
-                    "edge_u_max"
-                  ]
-                },
-                {
-                  "required": false,
-                  "members": [
-                    "centroid_v",
-                    "edge_v_min",
-                    "edge_v_max"
-                  ]
-                }
-              ],
-              "actions": [
-                {
-                  "class": "_HelpAction",
-                  "option_strings": [
-                    "-h",
-                    "--help"
-                  ],
-                  "dest": "help",
-                  "nargs": 0,
-                  "const": null,
-                  "default": {
-                    "__suppress__": true
-                  },
-                  "required": false,
-                  "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "show this help message and exit",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [],
-                  "dest": "target",
-                  "nargs": "+",
-                  "const": null,
-                  "default": null,
-                  "required": true,
-                  "choices": null,
-                  "metavar": "TARGET:idx",
-                  "converter": null,
-                  "help": "the face to move, as an exact BRUSH:idx (a bare name or index list is not allowed). Repeat, or pass the single token '-' to read a newline TARGET:idx list from stdin (empty stdin: clean no-op) -- every target moves relative to the SAME --relative-to reference",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--relative-to"
-                  ],
-                  "dest": "relative_to",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": true,
-                  "choices": null,
-                  "metavar": "REF:idx",
-                  "converter": null,
-                  "help": "the fixed reference face, as an exact BRUSH:idx. Never moves",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--gap"
-                  ],
-                  "dest": "gap",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "N",
-                  "converter": "float",
-                  "help": "set the signed perpendicular distance to the reference plane to exactly N (along the reference's own normal; 0 = flush/coplanar). Omit: leave untouched",
-                  "mutex_group": null
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--centroid-u"
-                  ],
-                  "dest": "centroid_u",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "N",
-                  "converter": "float",
-                  "help": "set the footprint centroid's U offset from the reference to exactly N",
-                  "mutex_group": [
-                    0,
-                    0
-                  ]
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--edge-u-min"
-                  ],
-                  "dest": "edge_u_min",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "N",
-                  "converter": "float",
-                  "help": "set the offset between this face's U-min extent and the reference's to exactly N",
-                  "mutex_group": [
-                    0,
-                    1
-                  ]
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--edge-u-max"
-                  ],
-                  "dest": "edge_u_max",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "N",
-                  "converter": "float",
-                  "help": "set the offset between this face's U-max extent and the reference's to exactly N",
-                  "mutex_group": [
-                    0,
-                    2
-                  ]
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--centroid-v"
-                  ],
-                  "dest": "centroid_v",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "N",
-                  "converter": "float",
-                  "help": "set the footprint centroid's V offset from the reference to exactly N",
-                  "mutex_group": [
-                    1,
-                    0
-                  ]
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--edge-v-min"
-                  ],
-                  "dest": "edge_v_min",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "N",
-                  "converter": "float",
-                  "help": "set the offset between this face's V-min extent and the reference's to exactly N",
-                  "mutex_group": [
-                    1,
-                    1
-                  ]
-                },
-                {
-                  "class": "_StoreAction",
-                  "option_strings": [
-                    "--edge-v-max"
-                  ],
-                  "dest": "edge_v_max",
-                  "nargs": null,
-                  "const": null,
-                  "default": null,
-                  "required": false,
-                  "choices": null,
-                  "metavar": "N",
-                  "converter": "float",
-                  "help": "set the offset between this face's V-max extent and the reference's to exactly N",
-                  "mutex_group": [
-                    1,
-                    2
-                  ]
-                }
-              ],
-              "subparsers": {}
             }
           }
         }

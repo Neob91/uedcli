@@ -1,4 +1,4 @@
-"""Cross-brush geometric relationships — `brush relation measure|find|set`. Pure Python, model-side,
+"""Cross-brush geometric relationships — `actor relation compare|find|set`. Pure Python, model-side,
 no editor, no native CSG. See dev/docs/superpowers/specs/2026-09-05-brush-relation-family-design.md."""
 from __future__ import annotations
 
@@ -85,7 +85,7 @@ def project_to_plane(world_verts: list[Vec3], normal: Vec3, *, origin: Vec3 | No
     arbitrary and unrelated point between the two polys, so two independently-defaulted
     projections land in unrelated coordinate frames and any overlap/containment/delta computed
     across them would be measuring a meaningless synthetic offset instead of true relative
-    position (caught via `brush measure relation` on a real Leg/Floor pair: an 8x8 corner overlap
+    position (caught via `actor relation compare` on a real Leg/Floor pair: an 8x8 corner overlap
     was misreported as one poly fully `contains`-ing the other)."""
     if origin is None:
         origin = world_verts[0]
@@ -172,6 +172,44 @@ def _point_on_segment(p: Vec2, s0: Vec2, s1: Vec2) -> bool:
     t = ((p[0] - s0[0]) * dx + (p[1] - s0[1]) * dy) / (seg_len * seg_len)
     slack = _TOUCH_EPS / seg_len
     return -slack <= t <= 1 + slack
+
+
+def _point_on_any_edge(poly: list[Vec2], p: Vec2) -> bool:
+    """True if `p` lies on any edge of `poly`, within `_TOUCH_EPS`. Calls the existing
+    `_point_on_segment(p, s0, s1)` -- one implementation of the tolerance logic, not two."""
+    return any(_point_on_segment(p, s0, s1) for s0, s1 in _edges(poly))
+
+
+def _point_in_polygon_2d(poly: list[Vec2], p: Vec2) -> bool:
+    """Ray-casting point-in-polygon, even-odd rule. Winding-agnostic, so the caller need not
+    `_ensure_ccw` first."""
+    inside = False
+    n = len(poly)
+    j = n - 1
+    for i in range(n):
+        xi, yi = poly[i]
+        xj, yj = poly[j]
+        if (yi > p[1]) != (yj > p[1]):
+            x_cross = xj + (p[1] - yj) * (xi - xj) / (yi - yj)
+            if p[0] < x_cross:
+                inside = not inside
+        j = i
+    return inside
+
+
+def point_footprint_2d(ref_uv: list[Vec2], point_uv: Vec2) -> str:
+    """Where `point_uv` sits relative to `ref_uv`'s footprint, in the same (U, V) frame
+    `project_to_plane` produces: `"inside"`, `"on_boundary"`, or `"outside"`.
+
+    Deliberately NOT a `classify_footprint_2d` branch. That function, fed a one-vertex "polygon",
+    treats it as a 1-edge clip polygon whose `inside()` test is vacuously true, so it returns
+    `contains_a_in_b` for every input -- dead centre, on an edge, or 900uu away alike. The
+    vocabulary is new on purpose too: `contains` is already taken in `footprint_2d`'s own value set
+    and in `_FOOTPRINT_FILTER_ALIASES`/`_FOOTPRINT_2D_RANK`/`_FOOTPRINT_2D_LABELS`, so reusing it
+    would collide with live tables, not just live words."""
+    if _point_on_any_edge(ref_uv, point_uv):
+        return "on_boundary"
+    return "inside" if _point_in_polygon_2d(ref_uv, point_uv) else "outside"
 
 
 def _shares_vertex(a: list[Vec2], b: list[Vec2]) -> bool:
@@ -391,6 +429,58 @@ def _pairs_between(actor_a, idxs_a: set, actor_b, idxs_b: set) -> list:
     return candidates
 
 
+@dataclass(frozen=True)
+class PointPair:
+    """One REF face against one NON-BRUSH actor's `Location` -- the point analogue of `PairFace`.
+    A point has no poly, no area and no edge extent, so this carries strictly fewer fields than
+    `PairFace` rather than filling the missing ones with sentinels."""
+    brush_a: str
+    poly_a: int
+    actor_b: str
+    distance: float
+    point_footprint: str
+    centroid_u: float
+    centroid_v: float
+    footprint_gap: float
+
+
+_POINT_FOOTPRINT_RANK = {"inside": 0, "on_boundary": 1, "outside": 2}
+
+
+def _point_pair_sort_key(pair: PointPair) -> tuple:
+    """Same shape as `_candidate_sort_key`: footprint quality first, then perpendicular distance,
+    then the ref poly index as a deterministic tie-break."""
+    return (_POINT_FOOTPRINT_RANK[pair.point_footprint], abs(pair.distance), pair.poly_a)
+
+
+def point_pairs_between(ref_actor, ref_idxs: set, point_actor) -> list[PointPair]:
+    """Every (ref poly, point) pairing, ranked best-first. `point_actor.location` is required -- an
+    actor with no Location has no position to compare and yields no pairs at all. Never a
+    substituted origin: a silently-defaulted (0,0,0) would report a confident, wrong distance."""
+    if point_actor.location is None:
+        return []
+    point = tuple(float(c) for c in point_actor.location)
+    out: list[PointPair] = []
+    for idx in sorted(ref_idxs):
+        poly = ref_actor.brush.polys[idx]
+        try:
+            normal = polyalign._world_normal(ref_actor, poly, ref=f"{ref_actor.name}:{idx}")
+        except polyalign.PolyAlignError:
+            continue                      # a degenerate ref face has no plane to compare against
+        world = polyalign._world_verts(ref_actor, poly)
+        distance = _dot(_sub(point, world[0]), normal)
+        ref_uv = project_to_plane(world, normal)
+        point_uv = project_to_plane([point], normal, origin=world[0])[0]
+        fp = point_footprint_2d(ref_uv, point_uv)
+        gap = _footprint_bbox_gap(ref_uv, [point_uv]) if fp == "outside" else 0.0
+        out.append(PointPair(brush_a=ref_actor.name, poly_a=idx, actor_b=point_actor.name,
+                              distance=distance, point_footprint=fp,
+                              centroid_u=point_uv[0], centroid_v=point_uv[1],
+                              footprint_gap=gap))
+    out.sort(key=_point_pair_sort_key)
+    return out
+
+
 def compute(level, names: list[str], *, top: int | None = 1) -> RelationReport:
     if top is not None and top < 1:
         raise RelationError(f"--top must be a positive integer or 'all', got {top!r}")
@@ -428,7 +518,7 @@ def compute(level, names: list[str], *, top: int | None = 1) -> RelationReport:
     )
 
 
-# --------------------------------------------------------------------- brush relation measure
+# --------------------------------------------------------------------- actor relation compare
 
 def _resolve_measure_selector(level, token: str):
     """Bare `Name` (all its polys) or `Name:SELECTOR` -> (canonical_name, actor, index set).
@@ -453,7 +543,7 @@ def _resolve_measure_selector(level, token: str):
 
 def compute_pairs(level, ref_token: str, target_tokens: list[str], *, top: int | None = 1,
                    allow_self: bool = False) -> RelationReport:
-    """`brush relation measure REF TARGET...` -- one ref selector against one or more target
+    """`actor relation compare REF TARGET...` -- one ref selector against one or more target
     selectors (each a bare brush Name, all its polys, or `Name:SELECTOR`). Repeated target tokens
     naming the SAME brush have their poly-index sets UNIONED into one group rather than producing
     duplicates -- e.g. piping `Near:5` and `Near:3` (two rows of one `find --top all` candidate)
@@ -473,7 +563,7 @@ def compute_pairs(level, ref_token: str, target_tokens: list[str], *, top: int |
         target_name, target_actor, target_idxs = _resolve_measure_selector(level, tok)
         if target_name == ref_name and not allow_self:
             raise RelationError(
-                f"brush relation measure: target {target_name!r} is the reference's own brush "
+                f"actor relation compare: target {target_name!r} is the reference's own brush "
                 f"-- pass --allow-self to compare two faces of one brush")
         if target_name in merged:
             merged[target_name] = (target_actor, merged[target_name][1] | target_idxs)
@@ -499,7 +589,42 @@ def compute_pairs(level, ref_token: str, target_tokens: list[str], *, top: int |
                            pair_count=len(order))
 
 
-# --------------------------------------------------------------------- brush relation find
+def compute_point_pairs(level, ref_token: str, point_names: list[str]) -> list[PointPair]:
+    """`actor relation compare REF POINT_ACTOR...` -- one ref selector against one or more NON-BRUSH
+    actors, each reported at its best-ranked ref face. Raises `RelationError` naming the offender for
+    a bad ref token, an actor with no `Location`, or a ref whose every face is degenerate."""
+    ref_name, ref_actor, ref_idxs = _resolve_measure_selector(level, ref_token)
+    out: list[PointPair] = []
+    for name in point_names:
+        actor = level.actors[name]
+        if actor.location is None:
+            raise RelationError(
+                f"actor relation compare: {name!r} states no Location, so it has no position to "
+                f"compare against {ref_name!r}")
+        pairs = point_pairs_between(ref_actor, ref_idxs, actor)
+        if not pairs:
+            raise RelationError(
+                f"actor relation compare: no selected face of {ref_name!r} has a usable plane to "
+                f"compare {name!r} against (every one is degenerate)")
+        out.append(pairs[0])
+    return out
+
+
+def format_point_report(pairs: list[PointPair]) -> str:
+    """One block per point target. Deliberately a DIFFERENT field set from `format_report`: a point
+    has no footprint area and no edge extent, so `footprint_2d`/`edge_u`/`edge_v` are absent rather
+    than printed blank, and the point-only classification prints under its own key."""
+    lines: list[str] = []
+    for p in pairs:
+        lines.append(f"{p.brush_a}:{p.poly_a} <-> {p.actor_b}")
+        lines.append(f"  distance: {_fmt(p.distance)}")
+        lines.append(f"  point_footprint: {p.point_footprint}")
+        lines.append(f"  centroid_u: {_fmt(p.centroid_u)}")
+        lines.append(f"  centroid_v: {_fmt(p.centroid_v)}")
+    return "\n".join(lines)
+
+
+# --------------------------------------------------------------------- actor relation find
 
 _FOOTPRINT_FILTER_ALIASES = {"contains": {"contains_a_in_b", "contains_b_in_a"}}
 
@@ -552,7 +677,7 @@ def find_candidates(level, ref_token: str, candidate_names: list, *,
                      max_gap: float | None = None, min_gap: float | None = None,
                      footprint: set | None = None, plane: str | None = None,
                      top: int | None = 1) -> FindResult:
-    """`brush relation find` -- rank every brush in `candidate_names` (already resolved to
+    """`actor relation find` -- rank every brush in `candidate_names` (already resolved to
     canonical brush-actor names by the caller) against `ref_token` (bare `Name` or `Name:idx`),
     keeping only poly pairs that satisfy every given predicate. `top` caps how many pairs per
     candidate are kept. Raises `RelationError` naming the offender for a bad `ref_token`, a bad
@@ -591,7 +716,39 @@ def find_candidates(level, ref_token: str, candidate_names: list, *,
     return FindResult(matches=results, near_miss_count=len(near_miss_faces))
 
 
-# --------------------------------------------------------------------- brush relation set
+def find_point_candidates(level, ref_token: str, point_names: list[str], *,
+                           max_gap: float | None = None, min_gap: float | None = None,
+                           footprint: set | None = None,
+                           plane: str | None = None) -> list[PointPair]:
+    """`actor relation find`'s non-brush half: rank each named NON-BRUSH actor's `Location` against
+    `ref_token`'s faces, keeping at most ONE row per actor whatever `--top` says -- the project
+    owner decided that directly (Step 1).
+
+    Predicate rules, exactly as the spec states them:
+    * an explicit `--footprint` or `--plane` excludes every point candidate -- a face-pair predicate
+      has nothing to test against a point. Not an error: a mixed brush/point candidate set is
+      normal, and the filter simply narrows to the brush ones.
+    * the IMPLICIT footprint filter `_passes_predicates` applies when `--footprint` is omitted
+      (excluding `footprint_2d == "none"`) does NOT apply here -- "no footprint overlap" is not a
+      meaningful exclusion for something with no footprint.
+    * `--max-gap`/`--min-gap` apply normally, on `abs(distance)`, with the same `_GAP_EPS` slack
+      `_passes_gap_and_plane` uses, so a genuinely flush point still passes `--max-gap 0`.
+    * a point candidate never contributes to the near-miss count, which is footprint-keyed."""
+    if footprint is not None or plane is not None:
+        return []
+    ref_name, ref_actor, ref_idxs = _resolve_measure_selector(level, ref_token)
+    out: list[PointPair] = []
+    for name in point_names:
+        pairs = point_pairs_between(ref_actor, ref_idxs, level.actors[name])
+        kept = [p for p in pairs
+                if (max_gap is None or abs(p.distance) <= max_gap + _GAP_EPS)
+                and (min_gap is None or abs(p.distance) >= min_gap - _GAP_EPS)]
+        if kept:
+            out.append(kept[0])
+    return out
+
+
+# --------------------------------------------------------------------- actor relation set
 
 def _resolve_exact_face(level, token: str, label: str):
     """`BRUSH:idx` only -- a bare name or a comma/`all` selector is rejected, since a translation
@@ -618,7 +775,7 @@ def _resolve_exact_face(level, token: str, label: str):
 def _edge_extent(poly_ref, poly_target, *, axis: int, mode: str) -> float:
     """The offset between TARGET's `mode` (`'min'`/`'max'`) extent on `axis` (0=U, 1=V) and REF's
     corresponding extent, in the shared UV frame. `compute_deltas` only reports whichever of
-    min/max is currently CLOSER; `brush relation set` needs either one, explicitly picked."""
+    min/max is currently CLOSER; `actor relation set` needs either one, explicitly picked."""
     ref_vals = [p[axis] for p in poly_ref]
     target_vals = [p[axis] for p in poly_target]
     pick = min if mode == "min" else max
@@ -629,7 +786,7 @@ def compute_set_translation(level, target_token: str, ref_token: str, *,
                              gap: float | None = None,
                              centroid_u: float | None = None, centroid_v: float | None = None,
                              edge_u=None, edge_v=None):
-    """`brush relation set TARGET --relative-to REF` -- resolves both exact faces, checks they
+    """`actor relation set TARGET --relative-to REF` -- resolves both exact faces, checks they
     share a plane relationship, and returns `(target_name, ref_name, move)` where `move` is the
     world-space `(dx, dy, dz)` delta to add to TARGET's Location so the requested degree(s) of
     freedom land exactly on their target value(s); an omitted degree of freedom's delta is 0.
@@ -638,19 +795,19 @@ def compute_set_translation(level, target_token: str, ref_token: str, *,
     if (gap is None and centroid_u is None and centroid_v is None
             and edge_u is None and edge_v is None):
         raise RelationError(
-            "brush relation set: at least one of --gap/--centroid-u/--centroid-v/--edge-u-min/"
+            "actor relation set: at least one of --gap/--centroid-u/--centroid-v/--edge-u-min/"
             "--edge-u-max/--edge-v-min/--edge-v-max is required")
     target_name, target_actor, target_idx = _resolve_exact_face(level, target_token, "TARGET")
     ref_name, ref_actor, ref_idx = _resolve_exact_face(level, ref_token, "--relative-to")
     if target_name == ref_name:
         raise RelationError(
-            f"brush relation set: TARGET and REF must be different brushes, both are {target_name!r}")
+            f"actor relation set: TARGET and REF must be different brushes, both are {target_name!r}")
     ref_poly = ref_actor.brush.polys[ref_idx]
     target_poly = target_actor.brush.polys[target_idx]
     rel = plane_relationship(ref_actor, ref_poly, target_actor, target_poly)
     if rel is None:
         raise RelationError(
-            f"brush relation set: {target_name}:{target_idx} and {ref_name}:{ref_idx} are not "
+            f"actor relation set: {target_name}:{target_idx} and {ref_name}:{ref_idx} are not "
             f"parallel/coplanar -- no defined normal direction or in-plane frame to move along")
     normal = rel.normal_a
     u_axis, v_axis = _plane_basis(normal)
@@ -661,6 +818,68 @@ def compute_set_translation(level, target_token: str, ref_token: str, *,
     deltas = compute_deltas(uv_ref, uv_target)
 
     delta_n = (gap - rel.distance) if gap is not None else 0.0
+    if centroid_u is not None:
+        delta_u = centroid_u - deltas.centroid_u
+    elif edge_u is not None:
+        mode, want = edge_u
+        delta_u = want - _edge_extent(uv_ref, uv_target, axis=0, mode=mode)
+    else:
+        delta_u = 0.0
+    if centroid_v is not None:
+        delta_v = centroid_v - deltas.centroid_v
+    elif edge_v is not None:
+        mode, want = edge_v
+        delta_v = want - _edge_extent(uv_ref, uv_target, axis=1, mode=mode)
+    else:
+        delta_v = 0.0
+
+    move = tuple(delta_n * normal[i] + delta_u * u_axis[i] + delta_v * v_axis[i] for i in range(3))
+    return target_name, ref_name, move
+
+
+def compute_point_set_translation(level, target_name: str, ref_token: str, *,
+                                   gap: float | None = None,
+                                   centroid_u: float | None = None, centroid_v: float | None = None,
+                                   edge_u=None, edge_v=None):
+    """`actor relation set POINT_ACTOR --relative-to REF:idx` -- the non-brush half of
+    `compute_set_translation`, same `(target_name, ref_name, move)` return.
+
+    The point stands in for the second face everywhere the brush path used one: there is no
+    `plane_relationship` call (a point defines no plane of its own), so REF's own world normal IS
+    the normal, and `compute_deltas`/`_edge_extent` take a one-element UV list.
+
+    `--edge-u-min`/`--edge-u-max`/`--edge-v-*` stay MEANINGFUL against a point target and are kept,
+    not refused: `_edge_extent` computes `pick(target) - pick(ref)`, and while the point's own min
+    and max collapse to one value, REF's do not -- so "put this actor 8uu from the reference
+    face's U-min edge" is a real instruction, distinct from "put its centroid 8uu from the reference
+    centroid"."""
+    if (gap is None and centroid_u is None and centroid_v is None
+            and edge_u is None and edge_v is None):
+        raise RelationError(
+            "actor relation set: at least one of --gap/--centroid-u/--centroid-v/--edge-u-min/"
+            "--edge-u-max/--edge-v-min/--edge-v-max is required")
+    ref_name, ref_actor, ref_idx = _resolve_exact_face(level, ref_token, "--relative-to")
+    target = level.actors[target_name]
+    if target.location is None:
+        raise RelationError(
+            f"actor relation set: {target_name!r} states no Location, so there is nothing to "
+            f"translate")
+    ref_poly = ref_actor.brush.polys[ref_idx]
+    try:
+        normal = polyalign._world_normal(ref_actor, ref_poly, ref=f"{ref_name}:{ref_idx}")
+    except polyalign.PolyAlignError as e:
+        raise RelationError(
+            f"actor relation set: {ref_name}:{ref_idx} is degenerate (zero area), so it defines no "
+            f"normal to move along") from e
+    u_axis, v_axis = _plane_basis(normal)
+    ref_world = polyalign._world_verts(ref_actor, ref_poly)
+    point = tuple(float(c) for c in target.location)
+    uv_ref = project_to_plane(ref_world, normal)
+    uv_target = project_to_plane([point], normal, origin=ref_world[0])
+    distance = _dot(_sub(point, ref_world[0]), normal)
+    deltas = compute_deltas(uv_ref, uv_target)
+
+    delta_n = (gap - distance) if gap is not None else 0.0
     if centroid_u is not None:
         delta_u = centroid_u - deltas.centroid_u
     elif edge_u is not None:

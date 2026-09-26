@@ -175,4 +175,4 @@ that brush's faces, so printing one would hand the next verb a wider set than it
 are canonical and `all` is expanded, so `brush poly pan wall:all …` prints `WALL:0 … WALL:5`, ready
 to feed the next verb's `-`.
 
-See also: [`brush vertex`](vertex.md), [`brush relation`](relation.md), [`actor diagram`](../actor/diagram.md), [Textures & surfaces](../../leveldesign/general/textures-and-surfaces.md) (the level-design craft of texture alignment).
+See also: [`brush vertex`](vertex.md), [`actor relation`](../actor/relation.md), [`actor diagram`](../actor/diagram.md), [Textures & surfaces](../../leveldesign/general/textures-and-surfaces.md) (the level-design craft of texture alignment).

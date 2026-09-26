@@ -1634,6 +1634,51 @@ def test_solve_movers_excluded_from_csg_and_returned_separately():
     assert {a.name for _v, a, _p in solved.mover_polys} == {"Door"}
 
 
+def test_solve_world_probe_returns_surfaces_and_a_solidity_handle():
+    """One native solve, two answers. `solve_world_surfaces` keeps its own exact behavior — the
+    shipped `actor diagram --mode fullbright` path must not move."""
+    room = make_brush_actor("Room", cube(1024, 1024, 1024), csg="subtract")
+    inner = make_brush_actor("Inner", cube(256, 256, 256), csg="add")
+    actors = [room, inner]
+    probe = pn.solve_world_probe(actors, IDX)
+    assert len(probe.world_surfaces) == len(_solve(actors).world_surfaces)
+    assert probe.solidity is not None
+    assert probe.solidity.point_is_solid((0.0, 0.0, 0.0)) in (True, False)
+
+
+def test_solve_world_probe_on_a_set_with_no_world_csg_brush_has_no_solidity():
+    """A complete answer, not a partial one: a set with no world CSG brush resolves to no faces and
+    no solid, so there is nothing to query."""
+    probe = pn.solve_world_probe([Actor(name="Light1", cls="Engine.Light")], IDX)
+    assert probe.world_surfaces == []
+    assert probe.solidity is None
+
+
+def test_solve_world_surfaces_not_built_message_is_unchanged_by_the_extraction(monkeypatch):
+    """The shipped user-facing text on `actor diagram --mode fullbright`'s path. Extracting
+    `_solve_world` must not reword it, so it is pinned here verbatim — nothing pinned it before.
+    `UEDCLI_NATIVE_EXT_FRESH=0` makes `native_ext.import_native` raise `NativeExtensionStaleError`,
+    which subclasses `ImportError` (`test_native_ext.py`), so the not-built branch is reached
+    without uninstalling anything."""
+    monkeypatch.setenv("UEDCLI_NATIVE_EXT_FRESH", "0")
+    room = make_brush_actor("Room", cube(256, 256, 256), csg="subtract")
+    with pytest.raises(pn.NativePreviewError) as excinfo:
+        pn.solve_world_surfaces([room], IDX)
+    assert str(excinfo.value) == (
+        "the uedcli_native extension is not built — `actor diagram --mode fullbright` needs it "
+        "(build with `maturin develop`, or run bin/test once)")
+
+
+def test_solve_world_probe_not_built_message_names_actor_survey(monkeypatch):
+    """The NEW path gets its own feature name in the same sentence — the only difference between
+    the two messages."""
+    monkeypatch.setenv("UEDCLI_NATIVE_EXT_FRESH", "0")
+    room = make_brush_actor("Room", cube(256, 256, 256), csg="subtract")
+    with pytest.raises(pn.NativePreviewError) as excinfo:
+        pn.solve_world_probe([room], IDX)
+    assert "`actor survey` needs it" in str(excinfo.value)
+
+
 # ── Per-poly render attrs shipped to both renderers (render.rs + the web) ──────────────────────
 # `build_scene` resolves each poly's cull side + blend once from the merged PolyFlags; render.rs and
 # the web viewport consume the SAME values instead of re-deriving flag logic.

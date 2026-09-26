@@ -27,7 +27,7 @@ def _project(tmp_path, monkeypatch, actors, name="lvl"):
 
 def _ns(proj, target, relative_to, **overrides):
     defaults = dict(
-        cmd="brush", sub="relation", relationsub="set",
+        cmd="actor", sub="relation", relationsub="set",
         project=str(proj), tree=None, target=target, relative_to=relative_to,
         gap=None, centroid_u=None, centroid_v=None,
         edge_u_min=None, edge_u_max=None, edge_v_min=None, edge_v_max=None,
@@ -147,3 +147,83 @@ def test_set_duplicate_canonical_target_exits_2_nothing_saved(tmp_path, monkeypa
     assert "Tgt" in err.err
     lvl, _ = trunk.read_level(proj / "maps" / "lvl")
     assert lvl.actors["Tgt"].location == (Decimal(0), Decimal(0), Decimal(8))
+
+
+def _light(name, loc):
+    from uedcli.model import Actor
+    return Actor(name=name, cls="Engine.Light",
+                 location=tuple(Decimal(str(c)) for c in loc))
+
+
+def _plus_y_face(actor) -> int:
+    """The index of the brush's +Y face: the one all of whose vertices sit at the brush's own
+    maximum local Y. `cube(200, 8, 200)` puts that at y = +4."""
+    ymax = max(v[1] for p in actor.brush.polys for v in p.vertices)
+    return next(i for i, p in enumerate(actor.brush.polys)
+                if all(v[1] == ymax for v in p.vertices))
+
+
+def test_set_moves_a_point_actor_to_an_exact_gap(tmp_path, monkeypatch, capsys):
+    """Wall is a 200x8x200 box at the origin, so its +Y face sits at y=4 with normal +Y. --gap 8
+    puts MyLight at y=12 exactly; X and Z are untouched because no U/V flag was given."""
+    wall = make_brush_actor("Wall", cube(200, 8, 200),
+                            location=tuple(Decimal(str(c)) for c in (0, 0, 0)))
+    actors = [wall, _light("MyLight", (0, 40, 0))]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, ["MyLight"], f"Wall:{_plus_y_face(wall)}", gap=8.0)
+    assert dispatch.dispatch(ns) == 0
+    lvl, _ = trunk.read_level(proj / "maps" / "lvl")
+    moved = lvl.actors["MyLight"]
+    assert moved.location[1] == Decimal("12")
+    assert moved.location[0] == Decimal("0") and moved.location[2] == Decimal("0")
+
+
+def test_set_edge_and_centroid_flags_differ_against_a_point_target(tmp_path, monkeypatch):
+    """--edge-u-min and --centroid-u are genuinely different offsets against a point target:
+    `_edge_extent` computes pick(target) - pick(ref), and while the POINT's own min/max/centroid all
+    collapse to one value, REF's do not."""
+    wall = make_brush_actor("Wall", cube(200, 8, 200),
+                            location=tuple(Decimal(str(c)) for c in (0, 0, 0)))
+    ref = f"Wall:{_plus_y_face(wall)}"
+    results = {}
+    for flag in ("edge_u_min", "centroid_u"):
+        actors = [wall, _light("MyLight", (0, 40, 0))]
+        proj = _project(tmp_path, monkeypatch, actors, name=f"lvl_{flag}")
+        ns = _ns(proj, ["MyLight"], ref)
+        setattr(ns, flag, 8.0)
+        assert dispatch.dispatch(ns) == 0
+        lvl, _ = trunk.read_level(proj / "maps" / f"lvl_{flag}")
+        results[flag] = lvl.actors["MyLight"].location
+    assert results["edge_u_min"] != results["centroid_u"]
+
+
+def test_set_rejects_an_idx_on_a_non_brush_target(tmp_path, monkeypatch, capsys):
+    wall = make_brush_actor("Wall", cube(200, 8, 200),
+                            location=tuple(Decimal(str(c)) for c in (0, 0, 0)))
+    actors = [wall, _light("MyLight", (0, 40, 0))]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, ["MyLight:0"], f"Wall:{_plus_y_face(wall)}", gap=8.0)
+    assert dispatch.dispatch(ns) == 2
+    assert "MyLight" in capsys.readouterr().err
+
+
+def test_set_mixed_brush_and_point_targets_all_or_nothing(tmp_path, monkeypatch, capsys):
+    """A bad point target after a good brush target must abort before anything is mutated or
+    printed -- the same atomicity `actor relation compare` needed a fix round to establish
+    (fbe29cd1): compute/validate every target BEFORE mutating or printing any of them."""
+    from uedcli.model import Actor
+    wall = make_brush_actor("Wall", cube(200, 8, 200),
+                            location=tuple(Decimal(str(c)) for c in (0, 0, 0)))
+    tgt = make_brush_actor("Tgt", cube(200, 8, 200),
+                           location=tuple(Decimal(str(c)) for c in (0, 40, 0)))
+    no_loc = Actor(name="NoLoc", cls="Engine.Light")   # states no Location
+    actors = [wall, tgt, no_loc]
+    proj = _project(tmp_path, monkeypatch, actors)
+    bottom_tgt = next(i for i, p in enumerate(tgt.brush.polys) if p.normal == (0.0, -1.0, 0.0))
+    ns = _ns(proj, [f"Tgt:{bottom_tgt}", "NoLoc"], f"Wall:{_plus_y_face(wall)}", gap=8.0)
+    assert dispatch.dispatch(ns) == 2
+    out = capsys.readouterr()
+    assert out.out == ""
+    assert "NoLoc" in out.err
+    lvl, _ = trunk.read_level(proj / "maps" / "lvl")
+    assert lvl.actors["Tgt"].location == (Decimal(0), Decimal(40), Decimal(0))

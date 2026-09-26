@@ -31,7 +31,7 @@ room through a connecting gap — an internal doorway wall can look like a candi
 too. Before moving anything, measure each candidate face against the level's OTHER rooms:
 
 ```bash
-uedcli brush relation measure <target> <neighboring-room> --top all
+uedcli actor relation measure <target> <neighboring-room> --top all
 ```
 
 A face that's `coincident`/`contains`-overlapping ANOTHER subtract brush's own volume is an internal
@@ -51,16 +51,16 @@ reserve stopping to ask for uncertainty that survives checking all three.
 ```bash
 # BEFORE the edit — the brush's WHOLE relation set, no face pin, EVERY footprint category
 # (the default filter drops zero-overlap pairs, which can hide a real regression)
-uedcli brush relation find --relative-to <target> --top all --max-gap 200 \
+uedcli actor relation find --relative-to <target> --top all --max-gap 200 \
   --footprint none,vertex,edge,partial,contains,coincident > before.txt
-uedcli brush relation measure <target> - --top all < before.txt > before_detail.txt
+uedcli actor relation measure <target> - --top all < before.txt > before_detail.txt
 
 # ... perform the edit ...
 
 # AFTER — identical commands
-uedcli brush relation find --relative-to <target> --top all --max-gap 200 \
+uedcli actor relation find --relative-to <target> --top all --max-gap 200 \
   --footprint none,vertex,edge,partial,contains,coincident > after.txt
-uedcli brush relation measure <target> - --top all < after.txt > after_detail.txt
+uedcli actor relation measure <target> - --top all < after.txt > after_detail.txt
 
 # find's output is rank-ordered, not sorted -- sort before diffing, or trust the stderr
 # counts ("N face(s) matched across M candidate(s)") as the real set-level check.
@@ -145,7 +145,7 @@ This check is scoped to cross-brush RELATIONS — it doesn't cover texture/flag 
 - **Scoping the sweep to "near the edited wall."** A companion or affected face can be anywhere on
   the brush, or 90° from the one edited — sweep every face.
 - **Trusting `level doctor`.** It's a static per-brush geometry checker; nothing in it evaluates
-  cross-brush relations.
+  cross-actor relations.
 - **Assuming an empty BEFORE snapshot means "nothing nearby."** A candidate with zero footprint
   overlap is invisible by default even at a small real-world gap. Use the explicit
   `--footprint none,...,coincident` form for that visibility.
@@ -162,37 +162,9 @@ This check is scoped to cross-brush RELATIONS — it doesn't cover texture/flag 
 - **Repositioning an engulfed point actor to "somewhere else" without checking the new spot is
   clear.**
 
-## Known limitation
+## Non-brush actors
 
-`brush relation`'s candidates are brush actors only. A point-actor decoration (a mesh, a light, a
-switch) is invisible to the whole family: `brush vertex move`/`scale` never carries a mounted actor
-along, so one flush on a wall you widen stays at its old coordinates.
-
-Before the edit, capture the moved face's OLD extent. Then, both before and after, sweep a thin
-slab through the face's plane (a few uu of thickness) spanning that extent:
-
-```bash
-uedcli actor find --overlapping-bbox=<face plane ± a few uu, old extent> --kind point
-uedcli actor find --overlapping-bbox=<new face plane ± a few uu, new extent> --kind point
-```
-
-An actor caught in the OLD slab but not the NEW one was mounted on the face you moved and is now
-detached — reposition it (or confirm it was never mounted). **Verify the new position is actually
-clear** via `actor find --overlapping-bbox=<new bbox> --kind brush` against nearby solids —
-"somewhere else" is not the same as "somewhere clear."
-
-**The same blind spot cuts the other way: growing a brush can push it INTO a point actor that was
-already standing nearby, unrelated to the face you moved.** The slab sweep above doesn't catch
-this, since it's scoped to the moved face's own plane. Sweep the brush's OWN full bbox instead,
-before and after:
-
-```bash
-uedcli actor bbox <target>          # BEFORE -- the old volume
-uedcli actor find --overlapping-bbox=<old bbox> --kind point > before_engulf.txt
-# ... perform the edit ...
-uedcli actor bbox <target>          # AFTER -- the new, grown volume
-uedcli actor find --overlapping-bbox=<new bbox> --kind point > after_engulf.txt
-diff before_engulf.txt after_engulf.txt
-```
-
-Any point actor appearing in the AFTER list but not the BEFORE one is newly engulfed.
+A non-brush actor (light, mesh, switch, ...) is a real candidate for `actor relation find` and a
+real TARGET for `actor relation compare`/`set` — pass its bare Name where a brush selector would
+go. `--relative-to`/REF is still a face selector (`BRUSH:idx`), since a face is what you align
+against.

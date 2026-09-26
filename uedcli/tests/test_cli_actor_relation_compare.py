@@ -28,7 +28,7 @@ def _project(tmp_path, monkeypatch, actors, name="lvl"):
 def _ns(proj, ref, target, top=1, allow_self=False):
     targets = [target] if isinstance(target, str) else target   # nargs="+" always gives a list
     return argparse.Namespace(
-        cmd="brush", sub="relation", relationsub="measure",
+        cmd="actor", sub="relation", relationsub="compare",
         project=str(proj), tree=None, ref=ref, target=targets, top=top, allow_self=allow_self,
     )
 
@@ -150,3 +150,81 @@ def test_relation_bad_target_mid_list_prints_nothing(tmp_path, monkeypatch, caps
     out, err = capsys.readouterr()
     assert out == ""
     assert "NoSuchBrush" in err
+
+
+def test_compare_is_the_only_spelling(tmp_path, monkeypatch, capsys):
+    """`compare` does measure's job; `measure` is gone outright, no alias."""
+    actors = [
+        _brush("LegFoot", cube(16, 16, 4), loc=(0, 0, 4)),
+        _brush("FloorPad", cube(200, 200, 8), loc=(0, 0, -8)),
+    ]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, "LegFoot", "FloorPad")
+    ns.relationsub = "compare"
+    assert dispatch.dispatch(ns) == 0
+    assert "LegFoot <-> FloorPad" in capsys.readouterr().out
+
+    stale = _ns(proj, "LegFoot", "FloorPad")
+    stale.relationsub = "measure"
+    assert dispatch.dispatch(stale) == 2
+
+
+def _light(name, loc):
+    from uedcli.model import Actor
+    return Actor(name=name, cls="Engine.Light",
+                 location=tuple(Decimal(str(c)) for c in loc))
+
+
+def test_compare_reports_a_point_target_inside_the_ref_footprint(tmp_path, monkeypatch, capsys):
+    actors = [_brush("Wall", cube(200, 8, 200), loc=(0, 0, 0)), _light("MyLight", (0, 20, 0))]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, "Wall", "MyLight")
+    ns.relationsub = "compare"
+    assert dispatch.dispatch(ns) == 0
+    out = capsys.readouterr().out
+    assert "MyLight" in out
+    assert "point_footprint: inside" in out
+    assert "distance:" in out
+    assert "centroid_u:" in out and "centroid_v:" in out
+    assert "footprint_2d" not in out     # not the brush-vs-brush vocabulary
+    assert "edge_u" not in out           # a point has no edge extent to report
+
+
+def test_compare_reports_a_point_target_outside_the_ref_footprint(tmp_path, monkeypatch, capsys):
+    actors = [_brush("Wall", cube(200, 8, 200), loc=(0, 0, 0)), _light("FarLight", (900, 20, 0))]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, "Wall", "FarLight")
+    ns.relationsub = "compare"
+    assert dispatch.dispatch(ns) == 0
+    assert "point_footprint: outside" in capsys.readouterr().out
+
+
+def test_compare_point_target_with_no_location_exits_2(tmp_path, monkeypatch, capsys):
+    """No Location means no position to compare. Exit 2 naming the actor — never a substituted
+    origin, which would report a confident, wrong distance."""
+    from uedcli.model import Actor
+    actors = [_brush("Wall", cube(200, 8, 200), loc=(0, 0, 0)),
+              Actor(name="Nowhere", cls="Engine.Light")]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, "Wall", "Nowhere")
+    ns.relationsub = "compare"
+    assert dispatch.dispatch(ns) == 2
+    assert "Nowhere" in capsys.readouterr().err
+
+
+def test_compare_mixed_targets_failing_point_leaves_stdout_empty(tmp_path, monkeypatch, capsys):
+    """A valid brush target alongside a failing point target must not print the brush report
+    before the point failure aborts -- all-or-nothing, exactly like a bad brush target mid-list."""
+    from uedcli.model import Actor
+    actors = [
+        _brush("Wall", cube(200, 8, 200), loc=(0, 0, 0)),
+        _brush("Floor", cube(200, 200, 8), loc=(0, 0, -8)),
+        Actor(name="Nowhere", cls="Engine.Light"),
+    ]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, "Wall", ["Floor", "Nowhere"])
+    ns.relationsub = "compare"
+    assert dispatch.dispatch(ns) == 2
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert "Nowhere" in err

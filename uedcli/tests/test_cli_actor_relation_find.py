@@ -27,7 +27,7 @@ def _project(tmp_path, monkeypatch, actors, name="lvl"):
 
 def _ns(proj, candidates, relative_to, **overrides):
     defaults = dict(
-        cmd="brush", sub="relation", relationsub="find",
+        cmd="actor", sub="relation", relationsub="find",
         project=str(proj), tree=None, candidates=candidates, relative_to=relative_to,
         max_gap=None, min_gap=None, footprint=None, plane=None, top=1, allow_self=False, json=False,
     )
@@ -126,7 +126,7 @@ def test_find_json_names_the_matched_ref_poly(tmp_path, monkeypatch, capsys):
 def test_find_stderr_is_one_aggregate_line_not_per_match(tmp_path, monkeypatch, capsys):
     # stderr is a terse count, matching every other query verb's convention (poly.py's
     # `_print_poly_selectors`/`_find`) -- geometric/identity detail per match lives in --json only,
-    # or in `relation measure` for full geometry. No per-match "ref:idx <-> cand:idx" echo here.
+    # or in `relation compare` for full geometry. No per-match "ref:idx <-> cand:idx" echo here.
     actors = [
         _brush("Wall", cube(64, 64, 8), loc=(0, 0, 0)),
         _brush("Near", cube(64, 64, 8), loc=(0, 0, 8)),
@@ -179,3 +179,71 @@ def test_find_near_miss_note_still_prints_under_json(tmp_path, monkeypatch, caps
     out, err = capsys.readouterr()
     assert out.strip() == "[]"
     assert "6 candidate face(s) nearby with no footprint overlap" in err
+
+
+def _light(name, loc):
+    """A non-brush point actor at `loc`. No collision props: `find` ranks on Location alone."""
+    from uedcli.model import Actor
+    return Actor(name=name, cls="Engine.Light",
+                 location=tuple(Decimal(str(c)) for c in loc))
+
+
+def test_find_accepts_an_explicitly_named_point_candidate(tmp_path, monkeypatch, capsys):
+    actors = [make_brush_actor("Wall", cube(200, 8, 200),
+                               location=tuple(Decimal(str(c)) for c in (0, 0, 0))),
+              _light("MyLight", (0, 20, 0))]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, candidates=["MyLight"], relative_to="Wall", max_gap=40.0)
+    assert dispatch.dispatch(ns) == 0
+    out = capsys.readouterr()
+    assert "MyLight" in out.out
+    assert "MyLight:" not in out.out          # a point candidate never gets a :idx
+    assert "skipping non-brush actor" not in out.err
+
+
+def test_find_default_candidate_set_stays_brush_only(tmp_path, monkeypatch, capsys):
+    """Omitting candidates scans brushes only — unchanged, per the spec's explicit carve-out."""
+    actors = [make_brush_actor("Wall", cube(200, 8, 200),
+                               location=tuple(Decimal(str(c)) for c in (0, 0, 0))),
+              make_brush_actor("Shelf", cube(40, 8, 40),
+                               location=tuple(Decimal(str(c)) for c in (0, 8, 0))),
+              _light("MyLight", (0, 20, 0))]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, candidates=[], relative_to="Wall", max_gap=40.0)
+    assert dispatch.dispatch(ns) == 0
+    assert "MyLight" not in capsys.readouterr().out
+
+
+def test_find_explicit_footprint_filter_excludes_a_point_candidate(tmp_path, monkeypatch, capsys):
+    actors = [make_brush_actor("Wall", cube(200, 8, 200),
+                               location=tuple(Decimal(str(c)) for c in (0, 0, 0))),
+              _light("MyLight", (0, 20, 0))]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, candidates=["MyLight"], relative_to="Wall", max_gap=40.0,
+             footprint={"partial"})
+    assert dispatch.dispatch(ns) == 0
+    assert "MyLight" not in capsys.readouterr().out
+
+
+def test_find_json_emits_null_poly_for_a_point_candidate(tmp_path, monkeypatch, capsys):
+    import json
+    actors = [make_brush_actor("Wall", cube(200, 8, 200),
+                               location=tuple(Decimal(str(c)) for c in (0, 0, 0))),
+              _light("MyLight", (0, 20, 0))]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, candidates=["MyLight"], relative_to="Wall", max_gap=40.0, json=True)
+    assert dispatch.dispatch(ns) == 0
+    rows = json.loads(capsys.readouterr().out)
+    assert any(r["candidate"] == "MyLight" and r["poly"] is None for r in rows)
+
+
+def test_find_emits_one_row_per_point_candidate_even_under_top_all(tmp_path, monkeypatch, capsys):
+    """The project owner decided this directly: a bare name with no :idx has nothing to distinguish
+    N rows, so a point candidate emits exactly one, whatever --top says."""
+    actors = [make_brush_actor("Wall", cube(200, 8, 200),
+                               location=tuple(Decimal(str(c)) for c in (0, 0, 0))),
+              _light("MyLight", (0, 20, 0))]
+    proj = _project(tmp_path, monkeypatch, actors)
+    ns = _ns(proj, candidates=["MyLight"], relative_to="Wall", max_gap=40.0, top="all")
+    assert dispatch.dispatch(ns) == 0
+    assert capsys.readouterr().out.count("MyLight") == 1

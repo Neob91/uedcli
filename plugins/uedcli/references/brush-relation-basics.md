@@ -1,16 +1,16 @@
-# `brush relation` basics
+# `actor relation` basics
 
 Mechanics shared by every skill in the `uedcli` plugin. Not a skill itself — linked from
 skills that need it.
 
 ## The two-stage split
 
-- **`brush relation find --relative-to REF[:idx] [candidates...] [--max-gap N] [--min-gap N]
+- **`actor relation find --relative-to REF[:idx] [candidates...] [--max-gap N] [--min-gap N]
   [--footprint LIST] [--plane {coplanar,parallel}] [--top N|all] [--json]`** — searches for
   candidate faces related to REF. Reports IDENTITY ONLY: stdout is `candidate:poly` lines
   (pipeable), stderr is one aggregate count, `--json` gives `{ref, ref_poly, candidate, poly}`.
   No geometry — filters by gap/footprint/plane but never shows the numbers.
-- **`brush relation measure REF TARGET...`** (or `REF -` to read TARGET selectors from stdin,
+- **`actor relation measure REF TARGET...`** (or `REF -` to read TARGET selectors from stdin,
   e.g. piped straight from `find`) — the only source of geometric detail: for each ref-vs-target
   pair, plane relationship (`coplanar`/`parallel`), both faces' outward normals, signed
   perpendicular distance, 2-D footprint classification, and centroid/edge deltas.

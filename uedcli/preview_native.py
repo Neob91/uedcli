@@ -1203,20 +1203,23 @@ class SolvedWorld:
     mover_polys: list     # list[(world_verts, actor, poly)]
 
 
-def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
-    """Run the native CSG solve over an ad-hoc actor list (in the order given — the actor-set order
-    IS the CSG evaluation order) through the FAITHFUL `build_geometry_bspcsg` core, and return the
-    surviving world surfaces + the movers. This is the `actor diagram --mode fullbright` engine: the
-    world is solved in isolation from a SOLID world, so an add not inside subtracted space leaves no
-    surface. `index` is a `classindex.ClassIndex`; movers are excluded from world CSG (raising
-    `classindex.ClassRefError` straight through on an unresolvable class). Raises `NativePreviewError`
-    if the native extension is not built."""
+def _solve_world(actors, index, *, needs: str):
+    """The shared body of `solve_world_surfaces`/`solve_world_probe`: filter `actors` to the world
+    CSG brushes (movers and the builder brush excluded, a non-world CsgOper skipped), build them
+    natively in the order given -- the actor-set order IS the CSG evaluation order -- and parse the
+    result back. Returns `(built, model, join)`, or `(None, None, [])` when the set carries no world
+    CSG brush at all. Raises `NativePreviewError` if the extension is not built or the solve fails.
+
+    `needs` names the caller's user-facing feature in the not-built message. It is a parameter and
+    not a fixed string so that `solve_world_surfaces`'s message stays BYTE-IDENTICAL to the one it
+    ships today -- that text is what a user sees when `actor diagram --mode fullbright` hits an
+    unbuilt extension, and this extraction must not reword it."""
     try:
         from uedcli.native_ext import import_native
         uedcli_native = import_native()
     except ImportError:
         raise NativePreviewError(
-            "the uedcli_native extension is not built — `actor diagram --mode fullbright` needs it "
+            f"the uedcli_native extension is not built — {needs} needs it "
             "(build with `maturin develop`, or run bin/test once)") from None
 
     brushes, join = [], []
@@ -1229,31 +1232,68 @@ def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
             continue
         brushes.append(_marshal_brush(actor))
         join.append(actor)
+    if not brushes:
+        return None, None, []
+    try:
+        built = uedcli_native.build_geometry_bspcsg(brushes)
+        body = uedcli_native.serialize_model(built)
+    except uedcli_native.BuildError as ex:
+        raise NativePreviewError(f"native CSG solve failed: {ex}") from ex
+    from .native.umodel import parse_model_body
+    return built, parse_model_body(body, 0, len(body)), join
 
-    world_surfaces: list[SolvedSurface] = []
-    if brushes:
-        try:
-            built = uedcli_native.build_geometry_bspcsg(brushes)
-            body = uedcli_native.serialize_model(built)
-        except uedcli_native.BuildError as ex:
-            raise NativePreviewError(f"native CSG solve failed: {ex}") from ex
-        from .native.umodel import parse_model_body
-        model = parse_model_body(body, 0, len(body))
-        for world_verts, i_actor, i_brush_poly, poly_flags, _i_surf in _node_polys(model):
-            if 0 <= i_actor < len(join):
-                actor = join[i_actor]
-                if 0 <= i_brush_poly < len(actor.brush.polys):
-                    world_surfaces.append(SolvedSurface(actor, i_brush_poly, world_verts, poly_flags))
-                else:                                    # out-of-range poly → grey (M5)
-                    world_surfaces.append(SolvedSurface(None, None, world_verts, poly_flags))
-            else:                                        # out-of-range owner → grey (M5)
-                world_surfaces.append(SolvedSurface(None, None, world_verts, poly_flags))
 
+def _surfaces_from(model, join) -> list:
+    """`model`'s surviving node polys as `SolvedSurface`s, joined back to their source brush poly.
+    An out-of-range owner or poly index yields a surface with `actor`/`poly_index` None (it renders
+    flat grey and names no actor) -- the same guard `solve_world_surfaces` has always applied."""
+    out = []
+    for world_verts, i_actor, i_brush_poly, poly_flags, _i_surf in _node_polys(model):
+        if 0 <= i_actor < len(join) and 0 <= i_brush_poly < len(join[i_actor].brush.polys):
+            out.append(SolvedSurface(join[i_actor], i_brush_poly, world_verts, poly_flags))
+        else:
+            out.append(SolvedSurface(None, None, world_verts, poly_flags))
+    return out
+
+
+def solve_world_surfaces(actors, index, search_files=None) -> SolvedWorld:
+    """Run the native CSG solve over an ad-hoc actor list (in the order given — the actor-set order
+    IS the CSG evaluation order) through the FAITHFUL `build_geometry_bspcsg` core, and return the
+    surviving world surfaces + the movers. This is the `actor diagram --mode fullbright` engine: the
+    world is solved in isolation from a SOLID world, so an add not inside subtracted space leaves no
+    surface. `index` is a `classindex.ClassIndex`; movers are excluded from world CSG (raising
+    `classindex.ClassRefError` straight through on an unresolvable class). Raises `NativePreviewError`
+    if the native extension is not built."""
+    _built, model, join = _solve_world(actors, index, needs="`actor diagram --mode fullbright`")
+    world_surfaces = [] if model is None else _surfaces_from(model, join)
     mover_polys = []
     for actor in actors:
         if actor.brush is not None and movers.is_mover(actor, index):
             mover_polys += _mover_actor_world_polys(actor)
     return SolvedWorld(world_surfaces=world_surfaces, mover_polys=mover_polys)
+
+
+@dataclass(frozen=True)
+class WorldProbe:
+    """One native CSG solve, kept in the form `actor survey`'s csg tier needs: the surviving world
+    surfaces (the same `SolvedSurface` objects `solve_world_surfaces` returns) AND a point-in-solid
+    handle over the SAME built model, from the same single `build_geometry_bspcsg` call.
+
+    `solidity` is None when the actor set carried no world CSG brush. That is a complete answer, not
+    a partial one -- an empty world has no faces and no solid, so there is nothing to query."""
+    world_surfaces: list
+    solidity: object | None
+
+
+def solve_world_probe(actors, index) -> WorldProbe:
+    """`solve_world_surfaces`'s sibling for `actor survey`: same solve, same surfaces, plus the
+    solidity handle the csg tier's `crosses`/`connects` need. Movers are excluded from world CSG
+    here exactly as they are there -- a Mover's own matter is read from its authored brush, never
+    from the world model."""
+    built, model, join = _solve_world(actors, index, needs="`actor survey`")
+    if built is None:
+        return WorldProbe(world_surfaces=[], solidity=None)
+    return WorldProbe(world_surfaces=_surfaces_from(model, join), solidity=built.solidity())
 
 
 def render_shots(*, level, shots: list[Shot], out_dir: Path, index, defaults,

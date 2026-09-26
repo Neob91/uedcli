@@ -570,7 +570,7 @@ def classify_pair(name_a, actor_a, name_b, actor_b, *, order_index: dict, class_
     a_is_sub = query.csg_is_subtract(actor_a)
     b_is_sub = query.csg_is_subtract(actor_b)
     # Only `touches` edges carry the geometric-match annotation (a `:idx` selector into
-    # `brush relation measure`, plus its size) -- `contains`/`carved_by` are a yes/no containment
+    # `actor relation compare`, plus its size) -- `contains`/`carved_by` are a yes/no containment
     # fact with nothing to drill into (spec "Output format"), so they must NOT inherit this.
     touch_kwargs = dict(matched_pair=ov.matched_pair, area_estimate=ov.area_estimate)
 
@@ -750,7 +750,7 @@ def _node_bracket(tag: "NodeTag") -> str:
     """`[Package.Class]` for a non-brush actor or a Mover (no solidity context to report), else
     `[Package.Class Kind]` -- space-separated, not colon-glued, so the `Name`/`Name:idx` token
     right before it stays a clean whitespace-delimited copy-paste selector for
-    `brush relation measure`, and `[` never collides with the `touches(...)` size annotation's own
+    `actor relation compare`, and `[` never collides with the `touches(...)` size annotation's own
     parens on the same line."""
     return f"[{tag.fqcn} {tag.csg_kind}]" if tag.csg_kind else f"[{tag.fqcn}]"
 
@@ -761,7 +761,7 @@ def format_text(edges: list["Edge"], nodes: dict[str, "NodeTag"]) -> str:
     tag after every name (see `_node_bracket`; unlike `eventgraph`'s own `(Class)`, always fully
     qualified -- direction/asset-catalog.md's "class -> Package.Class" identity rule). A `touches`
     edge with a matched face pair prints `Name:idx` selectors so the line is directly pipeable into
-    `brush relation measure`; a `touches` edge with an area estimate but no matched pair prints bare
+    `actor relation compare`; a `touches` edge with an area estimate but no matched pair prints bare
     names with the size still shown. `contains`/`carved_by` edges never carry `matched_pair`/
     `area_estimate` (`classify_pair` never sets them for those relations) -- and this function ALSO
     gates the `:idx` selector on `relation == "touches"` itself (defense in depth, not just trusting

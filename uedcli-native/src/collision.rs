@@ -249,6 +249,33 @@ impl CollisionModel {
         let mut info = BoxCheck::new(self, loc, loc, extent);
         info.box_point_check(0, 0, self.root_outside)
     }
+
+    /// Is `loc` inside SOLID space?  The ZERO-EXTENT form of the engine's own collision walk:
+    /// `FBspNode::IsCsg` plus the walker's running "outside" state, never a leaf index and never a
+    /// `PolyFlags` read (`linecheck.rs`'s `is_csg`/`child`/`combine_state`, and this type's own
+    /// entry state).  Going FRONT of a CSG-solid node proves open space, BACK of one proves solid,
+    /// a non-CSG node passes the state through unchanged.
+    ///
+    /// Deliberately NOT `point_check` with a zero extent: that is the BOX path, it decides via the
+    /// terminal leaf's `iCollisionBound` hull, and it answers the opposite question (true = free).
+    /// It is also the half `dev/docs/spikes/2026-09-23-actor-survey-csg-kind-and-cost/spike.md` §1
+    /// records as untraced for a thin semisolid slab.  Nor `point_region`: a semisolid's nodes are
+    /// added after the zone pass, so `PointRegion` reports a semisolid's interior as void — pinned
+    /// by `uedcli/tests/test_csg_kind_facts.py`.
+    pub fn point_is_solid(&self, loc: Vec3) -> bool {
+        if self.nodes.is_empty() {
+            return !self.root_outside;
+        }
+        let mut state = self.root_outside;
+        let mut i_node = 0i32;
+        while i_node != -1 {
+            let node = &self.nodes[i_node as usize];
+            let side = if plane_dot(&node.plane, &loc) >= 0.0 { FRONT } else { BACK };
+            state = combine_state(side, state, is_csg(node, 0, false));
+            i_node = child(node, side);
+        }
+        !state
+    }
 }
 
 /// `FBoxLineCheckInfo` / `FBoxPointCheckInfo` (§1.1): the sweep state plus the current leaf's hulls.
@@ -833,6 +860,37 @@ mod tests {
         let inside = w.point_region(Vec3::new(0.0, 0.0, 0.0));
         assert!(inside > 0, "an open leaf has a non-zero zone (got {inside})");
         assert_eq!(w.point_region(Vec3::new(600.0, 0.0, 0.0)), 0, "solid side → zone 0");
+    }
+
+    #[test]
+    fn point_is_solid_on_an_empty_model_is_the_inverse_of_root_outside() {
+        let mut m = Model::default();
+        m.root_outside = false; // a DX level: solid world, Subtract carves
+        let cm = CollisionModel::level(&m);
+        assert!(cm.point_is_solid(Vec3::new(0.0, 0.0, 0.0)));
+        m.root_outside = true;
+        let cm = CollisionModel::level(&m);
+        assert!(!cm.point_is_solid(Vec3::new(0.0, 0.0, 0.0)));
+    }
+
+    #[test]
+    fn point_is_solid_walks_a_real_room() {
+        let m = CollisionModel::level(&room());
+        assert!(!m.point_is_solid(Vec3::new(0.0, 0.0, 0.0)), "room interior is open");
+        assert!(m.point_is_solid(Vec3::new(400.0, 0.0, 0.0)), "outside the room is solid");
+    }
+
+    #[test]
+    fn point_is_solid_on_the_plane_uses_the_ge_zero_tie_break() {
+        // `room()`'s +X wall sits at x = 256 (box_brush(256, ...)'s +X face) -- a point placed
+        // EXACTLY there has `plane_dot == 0.0` at that node, so the `>= 0.0` FRONT/BACK test
+        // (collision.rs's point_is_solid, matching solidity.py:45's `>= 0.0`) puts it on the SAME
+        // side as the room's OPEN interior (x = 0.0, asserted above), not the solid exterior
+        // (x = 400.0). A silent `>=` -> `>` flip puts this point on the opposite (BACK) side of
+        // that node instead, so it would trip this assertion while every off-plane test above
+        // (which never lands exactly on a splitting plane) stays green.
+        let m = CollisionModel::level(&room());
+        assert!(!m.point_is_solid(Vec3::new(256.0, 0.0, 0.0)), "a point ON the wall plane is open under >= 0.0");
     }
 
     #[test]
