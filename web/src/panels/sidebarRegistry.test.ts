@@ -18,7 +18,7 @@ function actor(name: string, folder: string | null = null): SceneActor {
     labels: [],
     order_value: 'm',
     csg_rank: 1,
-    props: [],
+    props: {},
     brush: null,
     sprite: null,
     radii: null,
@@ -36,6 +36,7 @@ describe('buildSidebarPanels', () => {
       orgActors: [],
       selectedNames: new Set(),
       onSelectOrgBatch: vi.fn(),
+      resolveClass: () => 'pending',
     })
     expect(panels.map((p) => p.id)).toEqual(['selection', 'org'])
     expect(panels[0].icon).toBe('▣')
@@ -52,6 +53,7 @@ describe('buildSidebarPanels', () => {
       orgActors: [],
       selectedNames: new Set(),
       onSelectOrgBatch: vi.fn(),
+      resolveClass: () => 'pending',
     })
     render(selectionPanel.content)
     expect(screen.getByRole('heading', { name: 'Room' })).toBeTruthy()
@@ -65,6 +67,7 @@ describe('buildSidebarPanels', () => {
       orgActors: [actor('Torch1')],
       selectedNames: new Set(),
       onSelectOrgBatch: vi.fn(),
+      resolveClass: () => 'pending',
     })
     render(orgPanel.content)
     expect(screen.getByTestId('org-panel')).toBeTruthy()
@@ -79,6 +82,7 @@ describe('buildSidebarPanels', () => {
       orgActors: [actor('Loose1')],
       selectedNames: new Set(),
       onSelectOrgBatch,
+      resolveClass: () => 'pending',
     })
     render(orgPanel.content)
     screen.getByTestId('org-folder-no-folder').click()
@@ -93,6 +97,7 @@ describe('buildSidebarPanels', () => {
       orgActors: [],
       selectedNames: new Set(),
       onSelectOrgBatch: vi.fn(),
+      resolveClass: () => 'pending',
     })
     expect(withDot[0].hasIndicator).toBe(true)
 
@@ -103,6 +108,7 @@ describe('buildSidebarPanels', () => {
       orgActors: [],
       selectedNames: new Set(),
       onSelectOrgBatch: vi.fn(),
+      resolveClass: () => 'pending',
     })
     expect(withoutDot[0].hasIndicator).toBe(false)
   })
@@ -115,6 +121,7 @@ describe('buildSidebarPanels', () => {
       orgActors: [],
       selectedNames: new Set(),
       onSelectOrgBatch: vi.fn(),
+      resolveClass: () => 'pending',
     })
     expect(panels[1].hasIndicator).toBe(false)
   })

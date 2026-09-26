@@ -151,9 +151,9 @@ def test_atlas_route_manifest_name_carries_the_real_group_identity(tmp_path, mon
     `resolve_mover_scene_polys`), so this needs no native CSG rebuild to reach the route, just a real
     fixture with a genuinely grouped texture (`CoreTexWater.utx`'s `dirtywater`, `Group=water`).
 
-    A real `ClassIndex` (not `StubClassIndex`) -- `_build_actors`'s own `_class_ctx_for` needs a
-    real `.resolver()`, which `StubClassIndex` doesn't have (a pre-existing gap, unrelated to this
-    change -- confirmed still failing identically on master with `StubClassIndex` here)."""
+    A real `ClassIndex` (not `StubClassIndex`) -- `_build_actors`'s own `resolve_actor_props_native`
+    needs a real `.resolver()`, which `StubClassIndex` doesn't have (a pre-existing gap, unrelated to
+    this change -- confirmed still failing identically on master with `StubClassIndex` here)."""
     import glob
     import os
     from pathlib import Path

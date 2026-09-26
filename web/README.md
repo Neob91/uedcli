@@ -1,5 +1,9 @@
 # React + TypeScript + Vite
 
+`npm test`/`npm run build` need Docker: their `pretest`/`prebuild` hooks run `bin/ensure_wasm.sh`,
+which builds the `resolve-wasm` WASM artifact in a container (mirrors `bin/test`'s own Docker-only
+note for `uedcli_native`).
+
 This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:

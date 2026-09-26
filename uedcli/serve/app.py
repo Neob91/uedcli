@@ -7,6 +7,7 @@ import asyncio
 import base64
 import functools
 import logging
+import os
 import threading
 from collections import OrderedDict
 from contextlib import asynccontextmanager
@@ -15,6 +16,7 @@ from decimal import Decimal
 from pathlib import Path
 
 from fastapi import FastAPI, Response, WebSocket, WebSocketDisconnect
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
@@ -25,7 +27,7 @@ from ..cli import resources
 from ..cli.errors import CommandError
 from ..preview_native import build_scene
 from ..preview_native import resolve_actor_sprites, resolve_mesh_scene_polys, resolve_mover_scene_polys
-from . import build_pin, edits, sessions
+from . import build_pin, edits, package_raw, sessions
 from .claims import ClaimRegistry
 from .errors import error_to_status
 from .levels import levels_payload
@@ -172,6 +174,17 @@ class LevelContext:
     watcher: TrunkWatcher
     connections: set
     scene_inputs_ref: list    # [tuple | None]
+    # gui-inspector-props-payload-redesign spec §2: the per-FQCN native resolution context this
+    # level's /scene route resolves classes through. Scoped to scene_inputs_ref's own generation --
+    # built alongside it (below), held for as long as it is, discarded wholesale when a new one
+    # replaces it. Never a process-global static (that would outlive the tuple it needs to be
+    # scoped to).
+    resolve_ctx_ref: list     # [uedcli_native.PyResolutionContext | None]
+    # gui-inspector-props-payload-redesign final fix wave, Finding 4: per-FQCN memo of
+    # effective_props_native.resolve_actor_props_native's own parsed resolve_class_json result.
+    # Scoped and reset identically to resolve_ctx_ref (same generation) -- resolve_ctx_ref's own
+    # per-FQCN Rust-side cache doesn't cover the JSON serialize+parse round-trip repeated per actor.
+    class_cache_ref: list     # [dict[str, dict]]
 
 
 def create_app(project, level: str | None = None, *, fault_route: bool = False) -> FastAPI:
@@ -318,7 +331,8 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
                                    lambda: _on_trunk_settled(_level_contexts[level_name]))
             ctx = LevelContext(level_name=level_name, trunk_ref=[None], generation=[0],
                                changes_available=[False], trunk_lock=threading.Lock(),
-                               watcher=watcher, connections=set(), scene_inputs_ref=[None])
+                               watcher=watcher, connections=set(), scene_inputs_ref=[None],
+                               resolve_ctx_ref=[None], class_cache_ref=[{}])
             _level_contexts[level_name] = ctx
             return ctx
 
@@ -380,8 +394,15 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
                                      mover_groups=mover_groups)
                 # Written BEFORE `ctx.trunk_ref[0]` (same reasoning `_current_scene_inputs` relies
                 # on): a lock-free reader must never observe the NEW trunk paired with the
-                # PREVIOUS `ctx.scene_inputs_ref[0]`.
+                # PREVIOUS `ctx.scene_inputs_ref[0]`/`ctx.resolve_ctx_ref[0]`.
                 ctx.scene_inputs_ref[0] = (search_files, index, defaults)
+                from ..native_ext import import_native
+                # class_cache_ref written BEFORE resolve_ctx_ref (reader reads resolve_ctx_ref
+                # first, class_cache_ref second, session_scene:702-703) -- same lock-free-read
+                # reasoning as scene_inputs_ref/trunk_ref above, so a reader observing a NEW
+                # resolve_ctx_ref never pairs it with a STALE class_cache_ref.
+                ctx.class_cache_ref[0] = {}
+                ctx.resolve_ctx_ref[0] = import_native().PyResolutionContext()
                 ctx.trunk_ref[0] = built
                 return built
 
@@ -476,6 +497,11 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
                 ctx.watcher.stop()
 
     app = FastAPI(lifespan=_lifespan)
+    # Real, measured numbers (spec §0): DeusEx.u 1.92MB->0.38MB, Engine.u 1.24MB->0.40MB -- this is
+    # raw binary package data, not JSON, so gzip is worth it on the /raw route specifically; it also
+    # covers every other JSON response for free (Transport section: still worth it even though it no
+    # longer dominates this feature's own payload).
+    app.add_middleware(GZipMiddleware, minimum_size=500)
     # Recorded regardless of whether a startup level was given (plan Task 12) -- e.g. for the
     # frontend's fallback default on a bare URL with no session id.
     app.state.default_level = level
@@ -525,6 +551,31 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         # GET /api/levels (quad-layout Part 7, Task 24) -- reuses level_sources.list_levels, the
         # same enumeration `level list`/`level list --json` already use, not a second one.
         return levels_payload(maps_root, level)
+
+    @app.get("/api/package/{package_name}/raw")
+    def package_raw_route(package_name: str, request: Request) -> Response:
+        # Recomputed per request, same "cheap, no CSG solve here" reasoning as `_scene_inputs`
+        # (`uedcli/serve/app.py:135-145`) -- a project's on-disk games config can change without a
+        # `serve` restart.
+        user_config = config.load_user_config()
+        search_files = config.composed_search_files(project, user_config)
+        path = package_raw.find_u_file(search_files, package_name)  # raises PackageRawError -> 404
+        realpath = os.path.realpath(path)
+        st = os.stat(realpath)
+        key = (realpath, st.st_size, st.st_mtime_ns)
+        etag, buf = package_raw.cached_etag_and_bytes_if_needed(key, realpath)
+        quoted = f'"{etag}"'
+        headers = {"ETag": quoted, "Cache-Control": "no-cache"}
+        if request.headers.get("if-none-match") == quoted:
+            # GZipMiddleware adds Vary: Accept-Encoding while processing a response BODY -- a 304 has
+            # none, so the middleware never touches it and this route must add it itself. The 200
+            # path below deliberately does NOT set it here (already covered by the middleware; adding
+            # it here too would duplicate it).
+            return Response(status_code=304, headers={**headers, "Vary": "Accept-Encoding"})
+        if buf is None:
+            with open(realpath, "rb") as f:
+                buf = f.read()
+        return Response(content=buf, media_type="application/octet-stream", headers=headers)
 
     @app.get("/api/session/{session_id}/status")
     def session_status(session_id: str) -> dict:
@@ -651,15 +702,18 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         session = _require_session(session_id)
         search_files, index, defaults = _current_scene_inputs(session.level)
         trunk_state = _get_trunk(session.level, search_files, index, defaults)
+        ctx = _get_or_create_level_context(session.level)
+        resolve_ctx = ctx.resolve_ctx_ref[0]
+        class_cache = ctx.class_cache_ref[0]
         geometry = _resolve_session_geometry(session_id, session.level)
         if geometry is None:
-            payload = build_wireframe_payload(trunk_state, index, defaults)
+            payload = build_wireframe_payload(trunk_state, index, defaults, resolve_ctx, class_cache)
         else:
-            payload = build_scene_payload(trunk_state, geometry, index, defaults)
+            payload = build_scene_payload(trunk_state, geometry, index, defaults, resolve_ctx,
+                                          class_cache)
         return {
             "polys": [asdict(p) for p in payload.polys],
             "actors": [asdict(a) for a in payload.actors],
-            "enums": payload.enums,
             "geometry_pinned": geometry is not None,
         }
 
@@ -805,6 +859,11 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
             # branch): a concurrent `/scene`/`/atlas`/`/lightmap` must never observe the NEW trunk
             # paired with the PREVIOUS `ctx.scene_inputs_ref[0]`.
             ctx.scene_inputs_ref[0] = (search_files, index, defaults)   # seeds /scene,/atlas,/lightmap
+            from ..native_ext import import_native
+            # class_cache_ref before resolve_ctx_ref -- same lock-free-read ordering as
+            # _get_trunk's bootstrap branch above.
+            ctx.class_cache_ref[0] = {}
+            ctx.resolve_ctx_ref[0] = import_native().PyResolutionContext()
             ctx.trunk_ref[0] = loaded
             ctx.changes_available[0] = False
             # Task 13's own plan text: Load bumps this session's high-water mark of the trunk

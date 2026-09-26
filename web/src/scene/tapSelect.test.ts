@@ -35,7 +35,7 @@ function actor(name: string, overrides: Partial<SceneActor> = {}): SceneActor {
     labels: [],
     order_value: 'm',
     csg_rank: 1,
-    props: [],
+    props: {},
     brush: FAKE_BRUSH,
     sprite: null,
     radii: null,

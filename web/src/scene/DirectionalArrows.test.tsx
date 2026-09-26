@@ -29,7 +29,7 @@ function actor(name: string, directional_arrow: SceneActor['directional_arrow'])
     labels: [],
     order_value: name,
     csg_rank: 1,
-    props: [],
+    props: {},
     brush: null,
     sprite: null,
     radii: null,

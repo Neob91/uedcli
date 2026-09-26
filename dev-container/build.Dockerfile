@@ -11,9 +11,11 @@
 # matches the old bind-mounted-target-dir behavior.
 #
 # Targets:
-#   test          -- `cargo test --quiet`; a failing test fails the build (non-zero exit), same as
-#                     the old `docker run ... cargo test` did.
+#   test          -- `cargo test --workspace --quiet`; a failing test fails the build (non-zero
+#                     exit), same as the old `docker run ... cargo test` did.
 #   wheel-export  -- a `scratch` stage holding just the built wheel, for `--output type=local`.
+#   wasm-export   -- a `scratch` stage holding the built resolve-wasm .wasm + JS glue + .d.ts,
+#                     for `--output type=local`.
 FROM uedcli-rust-build:latest AS src
 COPY . /io
 WORKDIR /io
@@ -21,7 +23,7 @@ ENV CARGO_HOME=/io/target/.cargo
 
 FROM src AS test
 RUN --mount=type=cache,id=uedcli-native-cargo-target,target=/io/target,sharing=locked \
-    cargo test --quiet
+    cargo test --workspace --quiet
 
 FROM src AS wheel
 RUN --mount=type=cache,id=uedcli-native-cargo-target,target=/io/target,sharing=locked \
@@ -29,3 +31,12 @@ RUN --mount=type=cache,id=uedcli-native-cargo-target,target=/io/target,sharing=l
 
 FROM scratch AS wheel-export
 COPY --from=wheel /tmp/wheels /
+
+FROM src AS wasm
+RUN --mount=type=cache,id=uedcli-native-cargo-target,target=/io/target,sharing=locked \
+    cargo build --target wasm32-unknown-unknown --release -p resolve-wasm && \
+    wasm-bindgen --target web --out-dir /tmp/wasm-pkg \
+      target/wasm32-unknown-unknown/release/resolve_wasm.wasm
+
+FROM scratch AS wasm-export
+COPY --from=wasm /tmp/wasm-pkg /

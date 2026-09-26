@@ -16,6 +16,11 @@ crate-type = ["cdylib", "rlib"]
 # `.so` doesn't link libpython (the correct extension-module behaviour).  See spec §8.2-3.
 pyo3 = { version = "0.22", features = ["abi3-py312"] }
 rayon = "1"
+resolve-core = { path = "resolve-core" }
+serde_json = "1"
+
+[workspace]
+members = [".", "resolve-core", "resolve-wasm"]
 
 [features]
 extension-module = ["pyo3/extension-module"]

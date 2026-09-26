@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 
+from .package_raw import PackageRawError
 from ..classindex import ClassRefError
 from ..config import ConfigError
 from ..driver import DriverError
@@ -38,6 +39,14 @@ def error_to_status(exc: Exception) -> tuple[int, str]:
         # the problem, consistent with every other validation failure in that route, rather than
         # falling through to the `TypeError` backstop (an unlogged 500).
         return 422, f"invalid JSON body: {exc}"
+    if isinstance(exc, PackageRawError):
+        # gui-inspector-props-payload-redesign spec §0: a package name absent from the search path,
+        # or one resolving to a non-.u kind -- both a clean 404 naming the value. Deliberately a
+        # plain domain exception classified here (not `fastapi.HTTPException`): FastAPI registers
+        # its OWN default handler for that type, keyed by exact-type MRO lookup ahead of this app's
+        # `@app.exception_handler(Exception)` -- an HTTPException would bypass this classifier
+        # entirely and render `{"detail": ...}` instead of this project's `{"error": ...}` shape.
+        return 404, exc.message
     if isinstance(exc, CommandError):                 # incl. ProjectError, LevelSelectionError
         return 422, exc.message
     if isinstance(exc, ConfigError):

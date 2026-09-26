@@ -34,7 +34,7 @@ function actor(
     labels: [],
     order_value: 'm',
     csg_rank: 1,
-    props: [],
+    props: {},
     brush: FAKE_BRUSH, // a brush actor by default -- most fixtures here exercise brush-select rules
     sprite: null,
     radii: null,

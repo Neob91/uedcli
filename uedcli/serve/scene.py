@@ -19,7 +19,7 @@ import sys
 from dataclasses import dataclass, field
 from decimal import Decimal
 
-from .. import effective_props, propedit, uprops
+from .. import effective_props_native, uprops
 from ..model import Level
 from ..movers import is_mover
 from ..preview import _CSG_PALETTE, classify_brush, world_light_radius, world_sound_radius
@@ -236,12 +236,12 @@ class SceneActor:
     actor's polys already ride in `ScenePayload.polys`, joined by CSG, not by actor). `csg_rank` is
     the actor's 1-based position in `level.order` (rank 1 = evaluated/carved first) — a
     human-readable stand-in for `order_value`'s opaque LexoRank string, which stays in the payload
-    too (kept for a future audit-diff, not shown in the Inspector). `props` is the actor's complete
-    resolved `EffectiveProp` tree (`effective_props.resolve_actor_props`) — schema + stored/default
-    value, struct/array members already expanded, each entry carrying its own `category`
-    ("Uncategorized" for a bare `var()` with none) — replaces the old flat
-    `list[(key, raw-text-value)]` + parallel `categories` array. `brush` is the selection-highlight
-    geometry (None for a non-brush actor — a separate task's concern).
+    too (kept for a future audit-diff, not shown in the Inspector). `props` is the actor's flat,
+    sparse dotted-path-to-canonicalized-value map (`effective_props_native.resolve_actor_props_native`)
+    — a path with nothing stated anywhere beneath it is simply absent, no placeholder. The frontend
+    resolves class SHAPE and per-class DEFAULTS itself, client-side (gui-inspector-props-payload-
+    redesign spec §4) — this field carries only what the actor itself states. `brush` is the
+    selection-highlight geometry (None for a non-brush actor — a separate task's concern).
     `sprite` is None for a brush actor, and for a point actor whose `DT_Sprite` billboard didn't
     resolve — the client then falls back to a generic marker (`markers.ts`).
     `radii` is None for a brush actor and for any actor that clears neither the collision nor the
@@ -261,7 +261,7 @@ class SceneActor:
     labels: list[str]
     order_value: str
     csg_rank: int
-    props: list[effective_props.EffectiveProp]
+    props: dict[str, str]
     brush: BrushHighlight | None
     sprite: ActorSprite | None
     radii: ActorRadii | None
@@ -273,7 +273,6 @@ class SceneActor:
 class ScenePayload:
     polys: list[ScenePoly]
     actors: list[SceneActor]
-    enums: dict[str, list[str]]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -574,93 +573,35 @@ def _resolve_directional_arrows(level: Level, defaults, index,
     return arrows
 
 
-def _struct_members_via(resolver, prop) -> list[uprops.Prop]:
-    """Port of cli/resources.py::struct_members, parameterized on `resolver` instead of `project` --
-    scene.py has no CLI args/project to resolve one from, only index.resolver()."""
-    owner_pkg_name = prop.owner.split(".", 1)[0]
-    path = resolver(owner_pkg_name)
-    if path is None:
-        raise uprops.SchemaError(f"package {owner_pkg_name!r} not found on the schema search path "
-                                 f"(needed to resolve {prop.owner}.{prop.name})")
-    dp = uprops.load_package(path, name=owner_pkg_name)
-    tp, ti = uprops.resolve_type_export(dp, prop.type_ref, "Struct", resolver=resolver, _pkgs={})
-    return uprops.struct_members(tp, ti, owner=prop.type_name or prop.name)
-
-
-def _enum_names_via(resolver, prop) -> tuple[str, ...]:
-    """Port of cli/resources.py::enum_names, same reparameterization."""
-    owner_pkg_name = prop.owner.split(".", 1)[0]
-    path = resolver(owner_pkg_name)
-    if path is None:
-        raise uprops.SchemaError(f"package {owner_pkg_name!r} not found on the schema search path "
-                                 f"(needed to resolve {prop.owner}.{prop.name})")
-    dp = uprops.load_package(path, name=owner_pkg_name)
-    return uprops.resolve_enum_names(prop, dp, resolver=resolver)
-
-
-def _class_ctx_for(cls: str, index) -> propedit.ClassCtx:
-    """The same lazy per-class schema bundle `cli/resources.py::class_ctx` builds for the CLI,
-    sourced from the GUI-serve `index`'s own resolver instead of CLI `args`.
-
-    `index.resolver` is looked up defensively (`getattr(..., None)`, matching the guarded lookup the
-    since-deleted `_class_category_map` used) rather than called unconditionally: a real
-    `classindex.ClassIndex` always has `.resolver()`, but a test/offline stand-in may not (a real
-    regression here previously let a bare `AttributeError` reach `_domain_error_handler` as an
-    unclassified exception -- `test_atlas_route_returns_200_with_a_json_safe_payload`). A missing
-    resolver degrades LAZILY: every loader closure raises `uprops.SchemaError` only when actually
-    called, so `resolve_actor_props`'s existing class-level `except SchemaError` degrade (the SAME
-    convention `_is_hidden_ed`/`_actor_radii` use) handles it per-actor, never a 500 for the whole
-    payload."""
-    resolver_fn = getattr(index, "resolver", None)
-    if resolver_fn is None:
-        def _no_resolver(*_a, **_kw):
-            raise uprops.SchemaError(
-                f"{cls}: class index has no schema resolver -- cannot resolve effective props")
-        return propedit.ClassCtx(cls=cls, load_schema=_no_resolver, load_defaults=_no_resolver,
-                                 load_members=_no_resolver, load_enums=_no_resolver)
-    resolver = resolver_fn()
-    return propedit.ClassCtx(
-        cls=cls,
-        load_schema=lambda: {p.name.casefold(): p for p in
-                            uprops.resolve_class_properties(cls, resolver=resolver)},
-        # dict, NOT the raw list resolve_class_properties returns -- ClassCtx.schema()'s contract
-        # (propedit/base.py) is dict[str, Prop], and Task 4's `for prop in ctx.schema().values()`
-        # depends on it.
-        load_defaults=lambda: uprops.resolve_class_defaults(cls, resolver=resolver),
-        load_members=lambda p: _struct_members_via(resolver, p),
-        load_enums=lambda p: _enum_names_via(resolver, p),
-    )
-
-
 def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset: int,
                   index, radii_map: dict[str, ActorRadii],
-                  arrow_map: dict[str, DirectionalArrow]
-                  ) -> tuple[list[SceneActor], dict[str, list[str]]]:
+                  arrow_map: dict[str, DirectionalArrow], resolve_ctx, class_cache: dict
+                  ) -> list[SceneActor]:
     """The actor-metadata list (inspector/organization panel + selection highlight + sprite +
     collision/light radii), built from `trunk` alone -- shared by both `build_scene_payload`
     (geometry pinned, `tex_offset = len(geometry.texture_table)`) and `build_wireframe_payload` (no
     geometry, `tex_offset = 0`). `radii_map`/`arrow_map` are `_resolve_actor_radii`/
-    `_resolve_directional_arrows`'s own output, gathered once by the caller. `notes` collects a
-    stderr line per actor whose class-level schema resolution failed (`resolve_actor_props`'s own
-    class-unresolvable degrade, same convention as `_is_hidden_ed`/`_actor_radii`) -- printed once,
-    after the loop, rather than per-actor, so the loop itself stays a pure resolve step.
-    `ctx_cache` memoizes `_class_ctx_for` per class -- a `ClassCtx` is purely schema-derived (no
-    actor state), so it's safe to share across every actor of one class: a level can have
-    hundreds of actors across a handful of distinct classes, and re-resolving the whole schema
-    chain (package load + Super-chain walk) per ACTOR instead of per distinct CLASS is the exact
-    O(actors) regression `_is_hidden_ed`'s own docstring already fought once for `ClassDefaults`.
+    `_resolve_directional_arrows`'s own output, gathered once by the caller. `resolve_ctx` is the
+    level's own per-FQCN native resolution context (`app.py`'s `LevelContext.resolve_ctx_ref`,
+    gui-inspector-props-payload-redesign spec §2) -- SceneActor.props is now the flat sparse
+    `dict[str, str]` `effective_props_native.resolve_actor_props_native` returns, not the old
+    whole-class-schema `EffectiveProp` tree. `class_cache` (`LevelContext.class_cache_ref`, same
+    scoping as `resolve_ctx`) memoizes that function's own parsed resolve_class_json result per FQCN,
+    across actors AND across requests. `notes` collects a stderr line per actor whose
+    class-level schema resolution failed -- printed once, after the loop, same convention as
+    `_is_hidden_ed`/`_actor_radii`.
 
-    `payload_enums` unions every actor's `ctx_by_type` (`resolve_actor_props`'s second return
-    value) into one payload-wide dict -- the same `enum_type` key always maps to the same ordinal-
-    ordered tag list regardless of which actor seeded it first (it's derived purely from the
-    class's own schema / the fixed `ESheerAxis` constant, never actor state), so a later actor's
-    entry safely overwrites an earlier one for the same key."""
+    `resolver` is built ONCE here (not per actor): `resolve_actor_props_native`'s own
+    `_populate_for_class` call needs a `(package_name) -> path | None` function, same defensive
+    "missing .resolver()" handling `_class_ctx_for` used to have (a test/offline `index` double may
+    have none) -- degrading to a per-actor note via `resolve_actor_props_native`'s own
+    `resolver is None` branch rather than crashing."""
     level = trunk.level
     ranks = trunk.ranks
     actor_sprites = trunk.actor_sprites
     notes: list[str] = []
-    ctx_cache: dict[str, propedit.ClassCtx] = {}
-    payload_enums: dict[str, list[str]] = {}
+    resolver_fn = getattr(index, "resolver", None)
+    resolver = resolver_fn() if resolver_fn is not None else None
     actors = []
     for csg_rank, name in enumerate(level.order, start=1):
         actor = level.actors.get(name)
@@ -673,12 +614,10 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
             local_idx, width, height = raw
             sprite = ActorSprite(tex_index=tex_offset + local_idx, width=width, height=height)
         cls = actor.cls or ""
-        if cls not in ctx_cache:
-            ctx_cache[cls] = _class_ctx_for(cls, index)
-        props, actor_enum_types, note = effective_props.resolve_actor_props(actor, ctx_cache[cls])
+        props, note = effective_props_native.resolve_actor_props_native(
+            actor, resolve_ctx, resolver, class_cache)
         if note:
             notes.append(note)
-        payload_enums.update(actor_enum_types)
         # Computed once here (not inside `_brush_highlight`) since `SceneActor.is_mover` needs it
         # too — a non-brush actor is never a Mover (`Engine.Mover` descends from `Engine.Brush`), so
         # `is_mover` is only invoked, and can only raise `ClassRefError`, for a brush actor.
@@ -695,7 +634,7 @@ def _build_actors(trunk: _LoadedTrunk, hidden_ed: dict[str, bool], *, tex_offset
             directional_arrow=arrow_map.get(name)))
     for line in notes:
         print(line, file=sys.stderr)
-    return actors, payload_enums
+    return actors
 
 
 def filtered_geometry_polys(level: Level, geometry: _BuiltGeometry, hidden_ed: dict[str, bool]
@@ -769,8 +708,8 @@ def _wrap_mover_scene_polys(trunk: _LoadedTrunk, *, tex_offset: int) -> list[Sce
     ]
 
 
-def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, defaults
-                        ) -> ScenePayload:
+def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, defaults, resolve_ctx,
+                        class_cache: dict) -> ScenePayload:
     """Assemble a `ScenePayload` from two ALREADY-BUILT pieces — `trunk` (`_LoadedTrunk`: the level,
     its per-actor ranks, and `resolve_actor_sprites`' raw output) and `geometry` (`_BuiltGeometry`:
     `build_scene`'s solved polys/texture table/owners) — instead of loading or building anything
@@ -856,8 +795,9 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     # involved) -- `/api/level/{level}/atlas` (`app.py`'s `atlas` route) appends that SAME
     # `resolve_actor_sprites` result onto `geometry.texture_table` in the same order, so
     # `tex_offset + local_index` names the same atlas rect on both endpoints.
-    actors, payload_enums = _build_actors(trunk, hidden_ed, tex_offset=len(texture_table),
-                                          index=index, radii_map=radii_map, arrow_map=arrow_map)
+    actors = _build_actors(trunk, hidden_ed, tex_offset=len(texture_table),
+                           index=index, radii_map=radii_map, arrow_map=arrow_map,
+                           resolve_ctx=resolve_ctx, class_cache=class_cache)
     # Mesh-actor and Mover triangles: appended AFTER the filtered world/BSP polys above, never mixed
     # in or reordered among them -- `/lightmap`'s manifest indexes `filtered`'s polys by ARRAY
     # POSITION (`app.py`'s `/lightmap` route docstring), and neither a mesh nor a Mover poly ever
@@ -868,10 +808,11 @@ def build_scene_payload(trunk: _LoadedTrunk, geometry: _BuiltGeometry, index, de
     scene_polys += _wrap_mesh_scene_polys(trunk, tex_offset=len(texture_table) + len(trunk.sprite_table))
     scene_polys += _wrap_mover_scene_polys(
         trunk, tex_offset=len(texture_table) + len(trunk.sprite_table) + len(trunk.mesh_texture_table))
-    return ScenePayload(polys=scene_polys, actors=actors, enums=payload_enums)
+    return ScenePayload(polys=scene_polys, actors=actors)
 
 
-def build_wireframe_payload(trunk: _LoadedTrunk, index, defaults) -> ScenePayload:
+def build_wireframe_payload(trunk: _LoadedTrunk, index, defaults, resolve_ctx,
+                           class_cache: dict) -> ScenePayload:
     """The cold-open / no-Rebuild-yet payload (gui-explicit-rebuild spec §4): no solved geometry is
     pinned, so `polys` carries ONLY mesh-actor and Mover triangles (`trunk.mesh_polys`/
     `trunk.mover_polys`, both Load-owned, no CSG dependency) -- world/BSP surfaces genuinely don't
@@ -889,9 +830,10 @@ def build_wireframe_payload(trunk: _LoadedTrunk, index, defaults) -> ScenePayloa
     hidden_ed = _resolve_hidden_ed(trunk.level, defaults)
     radii_map = _resolve_actor_radii(trunk.level, defaults, hidden_ed)
     arrow_map = _resolve_directional_arrows(trunk.level, defaults, index, hidden_ed)
-    actors, payload_enums = _build_actors(trunk, hidden_ed, tex_offset=0, index=index,
-                                          radii_map=radii_map, arrow_map=arrow_map)
+    actors = _build_actors(trunk, hidden_ed, tex_offset=0, index=index,
+                           radii_map=radii_map, arrow_map=arrow_map, resolve_ctx=resolve_ctx,
+                           class_cache=class_cache)
     polys = _wrap_mesh_scene_polys(trunk, tex_offset=len(trunk.sprite_table))
     polys += _wrap_mover_scene_polys(
         trunk, tex_offset=len(trunk.sprite_table) + len(trunk.mesh_texture_table))
-    return ScenePayload(polys=polys, actors=actors, enums=payload_enums)
+    return ScenePayload(polys=polys, actors=actors)

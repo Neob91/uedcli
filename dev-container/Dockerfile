@@ -10,10 +10,16 @@ RUN apt-get update \
  && apt-get install -y --no-install-recommends build-essential \
  && rm -rf /var/lib/apt/lists/*
 
-# Rust toolchain + maturin (builds the extension module into an abi3 wheel).
+# Rust toolchain + maturin (builds the extension module into an abi3 wheel) + the wasm32 target
+# and wasm-bindgen-cli (builds resolve-wasm -- see build.Dockerfile's wasm/wasm-export stages).
+# wasm-bindgen-cli's version MUST match resolve-wasm/Cargo.toml's wasm-bindgen dependency
+# byte-for-byte -- a CLI/crate version skew fails the wasm build with an opaque schema-mismatch
+# error.
 ENV RUSTUP_HOME=/opt/rustup CARGO_HOME=/opt/cargo PATH=/opt/cargo/bin:$PATH
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \
     | sh -s -- -y --default-toolchain stable --profile minimal \
+ && rustup target add wasm32-unknown-unknown \
+ && cargo install wasm-bindgen-cli --version =0.2.100 --locked \
  && pip install --no-cache-dir 'maturin>=1,<2'
 
 # The crate is bind-mounted at /io; the registry cache + target go under /io/target (a

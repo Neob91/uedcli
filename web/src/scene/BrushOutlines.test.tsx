@@ -17,7 +17,7 @@ function brushActor(name: string, isMover: boolean): SceneActor {
     labels: [],
     order_value: 'm',
     csg_rank: 1,
-    props: [],
+    props: {},
     brush: { csg_class: 'add', color: [0, 255, 0], polys: [[0, 0, 0, 1, 0, 0, 1, 1, 0]], local_origin: [0, 0, 0] },
     sprite: null,
     radii: null,

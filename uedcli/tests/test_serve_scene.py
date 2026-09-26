@@ -11,6 +11,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from fastapi.testclient import TestClient
 
 from uedcli import config, trunk
 from uedcli.classdefaults import ClassDefaults
@@ -49,6 +50,10 @@ def _ued22_index() -> ClassIndex:
     need a real resolver, which the offline `StubClassIndex` doesn't implement."""
     files = [(os.path.splitext(os.path.basename(f))[0], f) for f in glob.glob(str(UED22 / "*.u"))]
     return ClassIndex.from_files(files)
+
+
+def _fresh_resolve_ctx():
+    return uedcli_native.PyResolutionContext()
 
 
 def _write_fixture_trunk(tmp_path) -> tuple:
@@ -111,7 +116,7 @@ def test_build_scene_payload_has_polys_and_actors(tmp_path):
     # a plain brush -- `StubClassIndex` has no `.resolver()`.
     index = _ued22_index()
     trunk_state, geometry = _load_and_build_for(project, level_name, index, DEFAULTS, [])
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
 
     assert payload.polys
     for poly in payload.polys:
@@ -124,12 +129,11 @@ def test_build_scene_payload_has_polys_and_actors(tmp_path):
     assert room_actor.bbox_lo != room_actor.bbox_hi           # a real, non-degenerate box
     assert room_actor.csg_rank == 1                            # the sole actor: rank 1 of 1
     assert room_actor.order_value == "m"
-    # `props` is now the resolved `EffectiveProp` tree (Task 4), not a flat (key, value) list -- every
-    # entry has a real `.name`/`.category`, and `Location` is always present (synthesized via
-    # `_resolve_typed_fields`, unconditional).
-    assert isinstance(room_actor.props, list) and room_actor.props
-    assert all(hasattr(p, "name") and hasattr(p, "category") for p in room_actor.props)
-    assert any(p.name == "Location" for p in room_actor.props)
+    # `props` is now a flat, sparse dotted-path -> canonicalized-value map
+    # (gui-inspector-props-payload-redesign spec §2) -- `Location` is always present (nothing in
+    # `location_text` to invalidate the self-invalidation rule, so every axis reads as stated).
+    assert isinstance(room_actor.props, dict) and room_actor.props
+    assert "Location.X" in room_actor.props
 
     # Bug 2: every brush actor ships its own authored (pre-CSG) polys + CSG colour for the
     # selection highlight -- `cube_room()` is a plain CSG_Subtract room, so "subtract"/gold.
@@ -167,7 +171,7 @@ def test_build_scene_payload_csg_rank_matches_level_order(tmp_path):
 
     index = _ued22_index()
     trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
 
     by_name = {a.name: a for a in payload.actors}
     assert by_name["Light0"].csg_rank == 1
@@ -202,37 +206,10 @@ def test_build_scene_payload_degrades_gracefully_on_unresolvable_actor_class():
     geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=[], texture_table=[], owners=[])
 
     index = _ued22_index()   # real, resolver-capable index -- just doesn't know this made-up class
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)   # must NOT raise
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})   # must NOT raise
 
     thing_actor = next(a for a in payload.actors if a.name == "Thing")
-    assert thing_actor.props == []
-
-
-def test_build_scene_payload_categories_from_real_schema(tmp_path):
-    """Declared properties get their real UnrealEd categories, live-verified against the committed
-    `uned/UED22` corpus. Task 4's schema walk covers EVERY property the class declares (own +
-    inherited, filtered by `HARD_REJECT`/`is_computed_key`/array-or-pointer-kind) -- not just the
-    actor's own stored ones the old flat `props`/`categories` pair showed -- so this checks specific
-    entries by name rather than asserting the whole list. `CsgOper` resolves to `Engine.Brush`'s own
-    bare-`var()` category `"Brush"`, and is one of `cube_room()`'s own stored props (so
-    `stored_value` is non-None). `Brush` (the actor's internal builder-brush binding) is
-    `HARD_REJECT`ed -- same as `Name` -- so unlike the old raw-props list it no longer appears at
-    all."""
-    from uedcli.effective_props import _FALLBACK_CATEGORY
-    from uedcli.serve.scene import build_scene_payload
-
-    project, level_name = _write_fixture_trunk(tmp_path)
-    index = _ued22_index()
-    trunk_state, geometry = _load_and_build_for(project, level_name, index, DEFAULTS, [])
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
-
-    room_actor = next(a for a in payload.actors if a.name == "Room")
-    by_name = {p.name: p for p in room_actor.props}
-    assert by_name["CsgOper"].category == "Brush"
-    assert by_name["CsgOper"].stored_value is not None
-    assert "Brush" not in by_name                          # HARD_REJECT'd, never reaches the walk
-    location = by_name["Location"]
-    assert location.category == "Movement" and location.kind == "struct"
+    assert thing_actor.props == {}
 
 
 def test_location_prop_synthesis():
@@ -259,13 +236,12 @@ def test_location_prop_synthesis():
     geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=[], texture_table=[], owners=[])
 
     index = _ued22_index()
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
 
     room_actor = next(a for a in payload.actors if a.name == "Room")
-    location = room_actor.props[0]
-    assert location.name == "Location" and location.category == "Movement"
-    x, y, z = location.members
-    assert x.stored_value == "-1664.5" and y.stored_value == "0" and z.stored_value == "2400.25"
+    assert room_actor.props["Location.X"] == "-1664.5"
+    assert room_actor.props["Location.Y"] == "0"
+    assert room_actor.props["Location.Z"] == "2400.25"
 
 
 def test_brush_highlight_local_origin_is_location_minus_prepivot():
@@ -293,7 +269,7 @@ def test_brush_highlight_local_origin_is_location_minus_prepivot():
                                mover_texture_table=[], mover_groups=[])
     geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=[], texture_table=[], owners=[])
 
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
 
     room_actor = next(a for a in payload.actors if a.name == "Room")
     assert room_actor.brush is not None
@@ -306,7 +282,7 @@ def test_brush_highlight_local_origin_is_location_minus_prepivot():
                                 sprite_table=[], actor_sprites={}, mesh_polys=[], mesh_owners=[],
                                 mesh_texture_table=[], mover_polys=[], mover_owners=[],
                                 mover_texture_table=[], mover_groups=[])
-    payload2 = build_scene_payload(trunk_state2, geometry, index, DEFAULTS)
+    payload2 = build_scene_payload(trunk_state2, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
     plain_actor = next(a for a in payload2.actors if a.name == "PlainRoom")
     assert plain_actor.brush.local_origin == plain_actor.location
 
@@ -337,7 +313,7 @@ def test_build_scene_payload_filters_bhiddened_actors_and_keeps_bhidden_ones(tmp
 
     index = _ued22_index()
     trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
 
     names = {a.name for a in payload.actors}
     assert "HiddenEdLight" not in names             # bHiddenEd: dropped from the GUI entirely
@@ -366,7 +342,7 @@ def test_build_scene_payload_resolves_actor_sprite_from_real_texture(tmp_path):
     index = _ued22_index()
     search_files = [str(FIXTURES / "LUM_InfoPortraits.utx")]
     trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, search_files)
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
 
     light_actor = next(a for a in payload.actors if a.name == "Light0")
     assert light_actor.sprite is not None
@@ -394,7 +370,7 @@ def test_build_scene_payload_actor_sprite_none_without_dt_sprite(tmp_path):
 
     index = _ued22_index()
     trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
 
     plain_actor = next(a for a in payload.actors if a.name == "Note0")
     assert plain_actor.sprite is None
@@ -440,7 +416,7 @@ def test_build_scene_payload_resolves_collision_and_light_radii(tmp_path):
 
     index = _ued22_index()
     trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
     by_name = {a.name: a for a in payload.actors}
 
     assert by_name["Lamp0"].radii is not None
@@ -489,7 +465,7 @@ def test_build_scene_payload_resolves_directional_arrow_from_real_class_defaults
 
     index = _ued22_index()
     trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
     by_name = {a.name: a for a in payload.actors}
 
     assert by_name["Patrol0"].directional_arrow == DirectionalArrow(
@@ -498,81 +474,6 @@ def test_build_scene_payload_resolves_directional_arrow_from_real_class_defaults
         require_selection=False, lines=_IDENTITY_ARROW_LINES)
     assert by_name["Lamp0"].directional_arrow is None
     assert by_name["Room"].directional_arrow is None    # Engine.Brush inherits Actor's own False
-
-
-def test_build_scene_payload_collects_enum_types(tmp_path):
-    """`ScenePayload.enums` unions every actor's `ctx_by_type` (Task 4's `resolve_actor_props`
-    second return value) across the whole level -- `Engine.Light`'s own `LightType` field is a real
-    `ByteProperty` enum, so it seeds `"Engine.Actor.ELightType"` with its ordinal-ordered tag list
-    (`LT_None` is ordinal 0)."""
-    from uedcli.serve.scene import build_scene_payload
-
-    root = tmp_path / "proj"
-    maps_dir = root / "maps" / "TestLevel"
-    maps_dir.mkdir(parents=True)
-    room = cube_room()
-    light = Actor(name="Lamp0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)),
-                 props=[("LightType", "LT_Steady")])
-    level = Level(actors={room.name: room, light.name: light}, order=[room.name, light.name])
-    trunk.write_level(maps_dir, level, {room.name: "m", light.name: "n"})
-    project = SimpleNamespace(root=str(root), maps=None)
-
-    index = _ued22_index()
-    trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
-
-    assert "Engine.Actor.ELightType" in payload.enums
-    assert payload.enums["Engine.Actor.ELightType"][0] == "LT_None"   # ordinal 0 first
-
-
-def test_build_scene_payload_collects_sheeraxis_even_with_no_brush():
-    """Task 3 seeds `typedprops.ESheerAxis` unconditionally for every actor (not schema-resolved --
-    a fixed Python enum constant) -- confirm it survives all the way to the payload even for a level
-    with no brush actors at all (every actor still gets 3 typed-field entries resolved). No CSG
-    solve is possible for a brush-less level (`build_scene` raises `NativePreviewError`), so this
-    builds `_LoadedTrunk`/`_BuiltGeometry` directly with empty geometry -- same pattern as
-    `test_build_scene_payload_degrades_gracefully_on_unresolvable_actor_class` above."""
-    from uedcli.serve.scene import _BuiltGeometry, _LoadedTrunk, build_scene_payload
-
-    light = Actor(name="Lamp0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)),
-                 props=[])
-    level = Level(actors={light.name: light}, order=[light.name])
-    trunk_state = _LoadedTrunk(level=level, ranks={light.name: "n"}, folders={light.name: None},
-                               sprite_table=[], actor_sprites={}, mesh_polys=[], mesh_owners=[],
-                               mesh_texture_table=[], mover_polys=[], mover_owners=[],
-                               mover_texture_table=[], mover_groups=[])
-    geometry = _BuiltGeometry(geom_hash=None, light_hash=None, polys=[], texture_table=[], owners=[])
-
-    index = _ued22_index()
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
-
-    assert "typedprops.ESheerAxis" in payload.enums
-
-
-def test_build_wireframe_payload_collects_enum_types(tmp_path):
-    """The cold-open path (no solved geometry pinned) must also populate `ScenePayload.enums` --
-    an earlier draft of this task only threaded `_build_actors`'s new return shape through
-    `build_scene_payload`, which would have left `build_wireframe_payload` broken outright (a
-    missing required kwarg on a frozen dataclass is a `TypeError`, not a silent gap)."""
-    from uedcli.serve.scene import build_wireframe_payload
-
-    root = tmp_path / "proj"
-    maps_dir = root / "maps" / "TestLevel"
-    maps_dir.mkdir(parents=True)
-    room = cube_room()
-    light = Actor(name="Lamp0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)),
-                 props=[("LightType", "LT_Steady")])
-    level = Level(actors={room.name: room, light.name: light}, order=[room.name, light.name])
-    trunk.write_level(maps_dir, level, {room.name: "m", light.name: "n"})
-    project = SimpleNamespace(root=str(root), maps=None)
-
-    index = _ued22_index()
-    trunk_state, _geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
-    payload = build_wireframe_payload(trunk_state, index, DEFAULTS)
-
-    assert "Engine.Actor.ELightType" in payload.enums
-    assert payload.enums["Engine.Actor.ELightType"][0] == "LT_None"
-    assert "typedprops.ESheerAxis" in payload.enums
 
 
 def test_actor_radii_light_radius_zero_is_treated_as_unset():
@@ -805,7 +706,7 @@ def test_build_scene_payload_hides_a_bhiddened_add_brushs_own_surfaces(tmp_path)
 
     index = _ued22_index()
     trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
 
     assert "Pillar" not in {a.name for a in payload.actors}
     owners = {p.owner for p in payload.polys}
@@ -831,7 +732,7 @@ def test_build_scene_payload_keeps_a_bhiddened_subtracts_own_surfaces(tmp_path):
 
     index = _ued22_index()
     trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
 
     assert "Room" not in {a.name for a in payload.actors}         # dropped from the actor list...
     assert payload.polys and {p.owner for p in payload.polys} == {"Room"}   # ...but its walls stay
@@ -859,7 +760,7 @@ def test_build_scene_payload_hides_a_bhiddened_movers_own_surfaces(tmp_path):
 
     index = _ued22_index()
     trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
-    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS)
+    payload = build_scene_payload(trunk_state, geometry, index, DEFAULTS, _fresh_resolve_ctx(), {})
 
     assert "Door" not in {a.name for a in payload.actors}
     owners = {p.owner for p in payload.polys}
@@ -890,11 +791,67 @@ def test_build_scene_payload_amortizes_class_resolution_over_repeated_classes(tm
         fresh_defaults = ClassDefaults(_defaults_resolver)
         index = _ued22_index()
         trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, fresh_defaults, [])
-        build_scene_payload(trunk_state, geometry, index, fresh_defaults)
+        build_scene_payload(trunk_state, geometry, index, fresh_defaults, _fresh_resolve_ctx(), {})
         return fresh_defaults.resolutions
 
     # Distinct classes touched (Engine.Brush + Engine.Light) never grows with actor count.
     assert _resolutions_for(5) == _resolutions_for(25)
+
+
+def test_build_scene_payload_amortizes_class_resolution_over_repeated_actors_native(tmp_path):
+    """gui-inspector-props-payload-redesign spec §2: `resolve_ctx`'s own resolutions_performed()
+    counter must not grow with actor count -- only with distinct CLASS count. `effective_props.py`'s
+    old ctx_cache had no test for this at all (spec's own Open Questions); this is that missing
+    regression test, ported to the native resolve context."""
+    import uedcli_native
+
+    from uedcli.serve.scene import build_scene_payload
+
+    def _resolutions_for(n_lights: int) -> int:
+        root = tmp_path / f"proj{n_lights}"
+        maps_dir = root / "maps" / "TestLevel"
+        maps_dir.mkdir(parents=True)
+        room = cube_room()
+        lights = [Actor(name=f"Light{i}", cls="Engine.Light",
+                        location=(Decimal(0), Decimal(0), Decimal(0))) for i in range(n_lights)]
+        level = Level(actors={room.name: room, **{a.name: a for a in lights}},
+                     order=[room.name] + [a.name for a in lights])
+        ranks = {room.name: "m", **{a.name: f"n{i:03d}" for i, a in enumerate(lights)}}
+        trunk.write_level(maps_dir, level, ranks)
+        project = SimpleNamespace(root=str(root), maps=None)
+        index = _ued22_index()
+        trunk_state, geometry = _load_and_build_for(project, "TestLevel", index, DEFAULTS, [])
+        resolve_ctx = uedcli_native.PyResolutionContext()
+        build_scene_payload(trunk_state, geometry, index, DEFAULTS, resolve_ctx, {})
+        return resolve_ctx.resolutions_performed()
+
+    # Distinct classes touched (Engine.Brush + Engine.Light) never grows with actor count.
+    assert _resolutions_for(5) == _resolutions_for(25)
+
+
+def test_scene_route_reuses_resolve_ctx_across_requests_without_reresolving(tmp_path, monkeypatch):
+    """gui-inspector-props-payload-redesign spec §2: a second /scene call against an UNCHANGED
+    trunk must not re-walk any class at all -- resolve_ctx lives on LevelContext.resolve_ctx_ref,
+    paired with scene_inputs_ref, not rebuilt per request."""
+    from uedcli.serve import app as serve_app
+    from uedcli.serve import sessions
+
+    # `_write_fixture_trunk` (uedcli/tests/test_serve_scene.py:54) takes one arg (tmp_path), builds
+    # its own fixed one-room level, and returns (project, level_name) -- it does not take a level
+    # name or actor list.
+    project, level_name = _write_fixture_trunk(tmp_path)
+
+    monkeypatch.setattr(serve_app, "_scene_inputs", lambda p: ([], _ued22_index(), DEFAULTS))
+    app = serve_app.create_app(project, level_name)
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, level_name)
+
+    assert c.get(f"/api/session/{sess.id}/scene").status_code == 200
+    ctx = app.state.get_or_create_level_context(level_name)
+    resolved_after_first = ctx.resolve_ctx_ref[0].resolutions_performed()
+
+    assert c.get(f"/api/session/{sess.id}/scene").status_code == 200
+    assert ctx.resolve_ctx_ref[0].resolutions_performed() == resolved_after_first
 
 
 def _build_test_poly(verts, tu, tv):

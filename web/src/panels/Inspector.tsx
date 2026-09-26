@@ -1,18 +1,21 @@
 // Read-only property inspector (spec, "Selection & inspector"): name/class/transform/folder/
 // labels/csg_rank (the actor's 1-based CSG-order position -- a human-readable stand-in for the
-// opaque order_value LexoRank string, which stays off-screen), then the full resolved property set
-// (SceneActor.props, EffectiveProp[]) grouped into UnrealEd-style categories as collapsible
-// sections, with a name-substring search box and an overrides-only/show-all toggle over the same
-// list. Draws only what it's handed -- no model/diff logic here. Struct/array-kind props expand
-// into nested rows (one `<details>` level per struct/array, recursively for a struct-of-structs or
-// array-of-structs); `bool` renders a disabled (read-only) checkbox and `enum` renders its resolved
-// value as plain text -- the backend already canonicalizes it to the tag's own name, so there's no
-// ordinal to look up (`enums` stays unused here, reserved for a future editing feature).
+// opaque order_value LexoRank string, which stays off-screen), then the resolved property set --
+// `resolveClass` gives this actor's class shape+defaults (classResolver.ts), `buildDisplayProps`
+// walks it against the actor's own sparse `SceneActor.props` (resolveDisplayProps.ts) into the same
+// EffectiveProp[] tree grouped into UnrealEd-style categories as collapsible sections, with a
+// name-substring search box and an overrides-only/show-all toggle over the same list. Struct/
+// array-kind props expand into nested rows (one `<details>` level per struct/array, recursively for
+// a struct-of-structs or array-of-structs); `bool` renders a disabled (read-only) checkbox and
+// `enum` renders its resolved value as plain text -- the backend already canonicalizes it to the
+// tag's own name, so there's no ordinal to look up.
 import { useState } from 'react'
 import type { AtlasRect, EffectiveProp, ScenePoly, SceneActor } from '../api'
+import type { ClassResolveResult } from '../scene/classResolver'
 import { surfaceKey } from '../scene/selectionSet'
 import { filterOverridesOnly, isExplicit, searchMatch, shownValue } from './effectiveProps'
 import { groupByCategory } from './groupByCategory'
+import { buildDisplayProps } from './resolveDisplayProps'
 
 /** One selected SURFACE (single polygon) -- GUI.md "Selection & the Inspector": a distinct
  * selection kind from a whole-actor selection (`SceneActor`), owner-answered as "highlight + inspect
@@ -39,14 +42,12 @@ export interface InspectorProps {
   // that crossed kinds -- GUI-PARITY.md "Actor + surface selection coexist"), and then both sections
   // render, actors first. Defaults to empty so every existing actor-only call site is unaffected.
   selectedSurfaces?: SurfaceSelection[]
-  // ScenePayload.enums (type name -> ordered tag list). Unused: Task 10b confirmed an `enum`
-  // EffectiveProp already carries its resolved value as the canonical tag NAME (see
-  // `_resolve_one`'s ByteProperty/enum branch in effective_props.py), so display needs no
-  // ordinal->name lookup. Kept as an accepted-but-unused prop for API compatibility with existing
-  // call sites (sidebarRegistry.ts, this file's own tests); reserved for a future EDITING feature
-  // (an enum dropdown would need the tag list to populate its options). Optional so an existing
-  // actor-only call site is unaffected.
-  enums?: Record<string, string[]>
+  // Resolves one actor's class shape+defaults (gui-inspector-props-payload-redesign spec §4) --
+  // synchronous, cache-first, 'pending' until the owning package has loaded, an `{error}` for a
+  // genuinely unresolvable class. Defaults to a permanently-pending stub so a call site that
+  // doesn't care about props content (this file's own multi-select/folder/labels tests) needs no
+  // change.
+  resolveClass?: (fqcn: string) => ClassResolveResult
   // ScenePayload's companion `/atlas` manifest (AtlasPayload.manifest, keyed by `String(tex_index)`,
   // the SAME lookup convention `geometry.ts`'s `polyUVs` already uses) -- `SurfaceDetail` needs it to
   // resolve a real texture GROUP name instead of a bare `#index`. Reused, not re-fetched: App.tsx
@@ -205,12 +206,13 @@ function PropRow({ prop, displayName, expandOnSearch = false }:
  * a component whose tree position changes, which used to silently wipe local search/show-all state
  * the instant a Ctrl+click added or removed a surface selection alongside an actor one. Lifting the
  * state up survives that remount since the parent (whose own position never moves) keeps holding it. */
-function ActorSection({ actors, search, onSearchChange, showAll, onShowAllChange }: {
+function ActorSection({ actors, search, onSearchChange, showAll, onShowAllChange, resolveClass }: {
   actors: SceneActor[]
   search: string
   onSearchChange: (value: string) => void
   showAll: boolean
   onShowAllChange: (value: boolean) => void
+  resolveClass: (fqcn: string) => ClassResolveResult
 }) {
   if (actors.length > 1) {
     return (
@@ -227,9 +229,23 @@ function ActorSection({ actors, search, onSearchChange, showAll, onShowAllChange
 
   const actor = actors[0]
   const query = search.trim()
-  const overridesFiltered = showAll ? actor.props : filterOverridesOnly(actor.props)
-  const visibleProps = query === '' ? overridesFiltered : overridesFiltered.filter((p) => searchMatch(p, query))
-  const groups = groupByCategory(visibleProps)
+  const resolved = resolveClass(actor.cls)
+  // spec §4: an ordinary async-data race for the Load-time closure, self-resolving within the
+  // render cycle after it completes -- no loading spinner. A genuinely unresolvable class (a
+  // package missing from the search path entirely) is the one new user-facing error surface this
+  // redesign adds -- a clear, named error inline, never a silently empty props table. Either way,
+  // the REST of the actor's own metadata (name/class/location/folder/labels/order) still renders
+  // unconditionally below -- only the props section itself switches on `resolved`.
+  const displayProps = resolved === 'pending' || 'error' in resolved
+    ? null
+    : buildDisplayProps(resolved, actor.props)
+  const overridesFiltered = displayProps === null
+    ? null
+    : (showAll ? displayProps : filterOverridesOnly(displayProps))
+  const visibleProps = overridesFiltered === null
+    ? null
+    : (query === '' ? overridesFiltered : overridesFiltered.filter((p) => searchMatch(p, query)))
+  const groups = visibleProps === null ? null : groupByCategory(visibleProps)
 
   return (
     <div className="inspector" data-testid="inspector">
@@ -273,7 +289,13 @@ function ActorSection({ actors, search, onSearchChange, showAll, onShowAllChange
         </label>
       </div>
       <div className="inspector-props" data-testid="inspector-props">
-        {Array.from(groups).map(([category, rows]) => (
+        {resolved === 'pending' && (
+          <p data-testid="inspector-props-pending">Loading properties…</p>
+        )}
+        {resolved !== 'pending' && 'error' in resolved && (
+          <p data-testid="inspector-props-error">{resolved.error}</p>
+        )}
+        {groups !== null && Array.from(groups).map(([category, rows]) => (
           <details open={query !== ''} key={category}>
             <summary>{category} ({rows.length})</summary>
             <table>
@@ -290,7 +312,8 @@ function ActorSection({ actors, search, onSearchChange, showAll, onShowAllChange
   )
 }
 
-export function Inspector({ selected, selectedSurfaces = [], atlasManifest = {} }: InspectorProps) {
+export function Inspector({ selected, selectedSurfaces = [], atlasManifest = {},
+    resolveClass = () => 'pending' }: InspectorProps) {
   // Lifted out of ActorSection (Inspector review finding): ActorSection renders at a different tree
   // position depending on whether a surface selection coexists (bare below vs. nested inside
   // .inspector-sections further down), and React remounts a component whose position moves -- state
@@ -311,7 +334,7 @@ export function Inspector({ selected, selectedSurfaces = [], atlasManifest = {} 
   if (selectedSurfaces.length === 0) {
     return (
       <ActorSection actors={selected} search={search} onSearchChange={setSearch}
-        showAll={showAll} onShowAllChange={setShowAll} />
+        showAll={showAll} onShowAllChange={setShowAll} resolveClass={resolveClass} />
     )
   }
 
@@ -320,7 +343,7 @@ export function Inspector({ selected, selectedSurfaces = [], atlasManifest = {} 
   return (
     <div className="inspector-sections" data-testid="inspector-sections">
       <ActorSection actors={selected} search={search} onSearchChange={setSearch}
-        showAll={showAll} onShowAllChange={setShowAll} />
+        showAll={showAll} onShowAllChange={setShowAll} resolveClass={resolveClass} />
       <SurfaceSection surfaces={selectedSurfaces} atlasManifest={atlasManifest} />
     </div>
   )

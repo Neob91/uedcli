@@ -25,7 +25,7 @@ function actor(radii: SceneActor['radii']): SceneActor {
     labels: [],
     order_value: 'A',
     csg_rank: 1,
-    props: [],
+    props: {},
     brush: null,
     sprite: null,
     radii,

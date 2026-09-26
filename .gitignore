@@ -60,3 +60,7 @@ uned/UT99Assets
 
 # Same, for `dev/scripts/install-unreal-assets.sh` (original 1998/Gold Unreal).
 uned/UnrealAssets
+
+# resolve-wasm's built .wasm + JS glue (bin/ensure_wasm.sh) -- regenerated, never committed, same
+# as the PyO3 wheel under uedcli-native/target/wheels.
+web/src/wasm/

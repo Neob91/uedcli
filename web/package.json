@@ -5,9 +5,11 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "prebuild": "../bin/ensure_wasm.sh",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
+    "pretest": "../bin/ensure_wasm.sh",
     "test": "vitest run"
   },
   "dependencies": {

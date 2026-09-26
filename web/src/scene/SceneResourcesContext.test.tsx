@@ -29,7 +29,7 @@ function quad(overrides: Partial<ScenePoly> = {}): ScenePoly {
   }
 }
 
-const SCENE: ScenePayload = { polys: [quad()], actors: [], geometry_pinned: false, enums: {} }
+const SCENE: ScenePayload = { polys: [quad()], actors: [], geometry_pinned: false }
 const ATLAS: AtlasPayload = { width: 1, height: 1, manifest: {}, png_base64: '' }
 
 // Records every bufferGeometry object it sees (by identity, via a shared list) into a testid'd span
@@ -102,7 +102,7 @@ describe('SceneResourcesProvider / useSceneResourcesContext', () => {
 function moverActor(name: string): SceneActor {
   return {
     name, cls: 'Engine.Mover', bbox_lo: [0, 0, 0], bbox_hi: [1, 1, 1], location: [0, 0, 0],
-    rotation: [0, 0, 0], folder: null, labels: [], order_value: 'm', csg_rank: 1, props: [],
+    rotation: [0, 0, 0], folder: null, labels: [], order_value: 'm', csg_rank: 1, props: {},
     brush: null, sprite: null, radii: null, is_mover: true,
     directional_arrow: null,
   }
@@ -127,7 +127,6 @@ describe('SceneResourcesProvider -- Mover polys split out of the default geometr
         moverActor('Door1'),
       ],
       geometry_pinned: true,
-      enums: {},
     }
     render(
       <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null}>
@@ -140,7 +139,7 @@ describe('SceneResourcesProvider -- Mover polys split out of the default geometr
   })
 
   it('an owner-less poly (no source actor) stays in the default geometry, never treated as a Mover\'s', () => {
-    const scene: ScenePayload = { polys: [quad({ owner: null })], actors: [moverActor('Door1')], geometry_pinned: true, enums: {} }
+    const scene: ScenePayload = { polys: [quad({ owner: null })], actors: [moverActor('Door1')], geometry_pinned: true }
     render(
       <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null}>
         <GeometrySplitProbe />
@@ -160,7 +159,7 @@ const BRUSH_HIGHLIGHT: BrushHighlight = { csg_class: 'add', color: [0, 0, 255], 
 function meshActor(name: string): SceneActor {
   return {
     name, cls: 'DeusEx.OfficeChair', bbox_lo: [0, 0, 0], bbox_hi: [1, 1, 1], location: [0, 0, 0],
-    rotation: [0, 0, 0], folder: null, labels: [], order_value: 'a', csg_rank: 1, props: [],
+    rotation: [0, 0, 0], folder: null, labels: [], order_value: 'a', csg_rank: 1, props: {},
     brush: null, sprite: null, radii: null, is_mover: false,
     directional_arrow: null,
   }
@@ -183,7 +182,7 @@ function MeshWireframeProbe() {
 
 describe('SceneResourcesProvider -- mesh actor wireframe geometry', () => {
   it("a mesh actor's own triangle produces a non-empty wireframe", () => {
-    const scene: ScenePayload = { polys: [triangle({ owner: 'Statue1' })], actors: [meshActor('Statue1')], geometry_pinned: true, enums: {} }
+    const scene: ScenePayload = { polys: [triangle({ owner: 'Statue1' })], actors: [meshActor('Statue1')], geometry_pinned: true }
     render(
       <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null}>
         <MeshWireframeProbe />
@@ -198,7 +197,6 @@ describe('SceneResourcesProvider -- mesh actor wireframe geometry', () => {
       polys: [triangle({ owner: 'Statue1' }), triangle({ owner: 'Wall1' })],
       actors: [meshActor('Statue1'), brushActor('Wall1')],
       geometry_pinned: true,
-      enums: {},
     }
     render(
       <SceneResourcesProvider scene={withBrush} atlas={ATLAS} lightmap={null}>
@@ -209,7 +207,7 @@ describe('SceneResourcesProvider -- mesh actor wireframe geometry', () => {
   })
 
   it('an owner-less poly (no source actor) is excluded from the mesh wireframe', () => {
-    const scene: ScenePayload = { polys: [triangle({ owner: null })], actors: [meshActor('Statue1')], geometry_pinned: true, enums: {} }
+    const scene: ScenePayload = { polys: [triangle({ owner: null })], actors: [meshActor('Statue1')], geometry_pinned: true }
     render(
       <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null}>
         <MeshWireframeProbe />
@@ -238,7 +236,7 @@ function BodyPositionProbe() {
 
 describe('SceneResourcesProvider -- stagedOffsets moves a mesh actor\'s own rendered body', () => {
   it("translates a staged mesh actor's solid triangles AND its wireframe by the staged delta", () => {
-    const scene: ScenePayload = { polys: [triangle({ owner: 'Statue1' })], actors: [meshActor('Statue1')], geometry_pinned: true, enums: {} }
+    const scene: ScenePayload = { polys: [triangle({ owner: 'Statue1' })], actors: [meshActor('Statue1')], geometry_pinned: true }
     render(
       <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null} stagedOffsets={{ Statue1: [10, 0, 0] }}>
         <BodyPositionProbe />
@@ -253,7 +251,7 @@ describe('SceneResourcesProvider -- stagedOffsets moves a mesh actor\'s own rend
   })
 
   it('leaves the body untouched when no offset is staged for it', () => {
-    const scene: ScenePayload = { polys: [triangle({ owner: 'Statue1' })], actors: [meshActor('Statue1')], geometry_pinned: true, enums: {} }
+    const scene: ScenePayload = { polys: [triangle({ owner: 'Statue1' })], actors: [meshActor('Statue1')], geometry_pinned: true }
     render(
       <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null} stagedOffsets={{}}>
         <BodyPositionProbe />
@@ -267,7 +265,6 @@ describe('SceneResourcesProvider -- stagedOffsets moves a mesh actor\'s own rend
       polys: [triangle({ owner: 'Wall1' })],
       actors: [brushActor('Wall1')],
       geometry_pinned: true,
-      enums: {},
     }
     render(
       <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null} stagedOffsets={{ Wall1: [10, 0, 0] }}>
@@ -298,7 +295,7 @@ function GeometryIdentityProbe({ seen }: { seen: { current: { buf: unknown[]; pi
 
 describe('SceneResourcesProvider -- a staged mesh-actor move does NOT rebuild the geometry objects', () => {
   it('bufferGeometry/meshPickGeometry/meshEdgePickGeometry keep the SAME identity across a staged-offset change', () => {
-    const scene: ScenePayload = { polys: [triangle({ owner: 'Statue1' })], actors: [meshActor('Statue1')], geometry_pinned: true, enums: {} }
+    const scene: ScenePayload = { polys: [triangle({ owner: 'Statue1' })], actors: [meshActor('Statue1')], geometry_pinned: true }
     const seen = { current: { buf: [] as unknown[], pick: [] as unknown[], edge: [] as unknown[] } }
     const { rerender } = render(
       <SceneResourcesProvider scene={scene} atlas={ATLAS} lightmap={null} stagedOffsets={{}}>

@@ -1,7 +1,15 @@
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { readFileSync } from 'node:fs'
+
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import App from './App'
+
+// classResolver.ts's own package/WASM substrate (`../uned/UED22`, same fixture set
+// classResolver.test.ts already reads from) -- App.tsx's `prefetchCoreEngine()` (Task 6) fetches
+// Core/Engine unconditionally on every mount, so every test here needs these two routes answered,
+// not just the ones that care about resolved props.
+const UED22 = '../uned/UED22'
 
 /** `subscribeChangesAvailable`'s real implementation (reload.ts) opens a genuine WebSocket, which
  * jsdom will try (and fail) to actually connect over the network -- irrelevant noise for these
@@ -101,6 +109,19 @@ function mockFetch(extra?: (url: string, init?: RequestInit) => Response | Promi
     if (url.endsWith('/lightmap')) return jsonResponse(LIGHTMAP)
     if (url.endsWith('/status')) return jsonResponse(STATUS_UNBUILT)
     if (url.endsWith('/staged')) return jsonResponse({})
+    if (url.endsWith('.wasm')) {
+      // Vite's import-analysis plugin rewrites resolve_wasm.js's own `new URL('resolve_wasm_bg.wasm',
+      // import.meta.url)` to a fake jsdom origin with nothing listening behind it -- serve the real
+      // compiled bytes directly, same technique classResolver.test.ts already uses for this exact
+      // WASM module.
+      return new Response(readFileSync('src/wasm/resolve_wasm_bg.wasm'))
+    }
+    const pkg = /\/api\/package\/([^/]+)\/raw$/.exec(url)
+    if (pkg) {
+      const name = decodeURIComponent(pkg[1])
+      const file = name === 'Core' ? 'core.u' : `${name}.u` // real on-disk name is lowercase core.u
+      return new Response(readFileSync(`${UED22}/${file}`), { status: 200 })
+    }
     throw new Error(`unexpected fetch: ${url}`)
   }) as unknown as typeof fetch
 }
@@ -491,8 +512,7 @@ describe('App: actor + surface selection coexistence', () => {
     labels: [],
     order_value: 'm',
     csg_rank: 1,
-    props: [],
-    categories: [],
+    props: {},
     brush: null,
     sprite: null,
     radii: null,
@@ -837,5 +857,87 @@ describe('App: superseded takeover', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(screen.getByText(TAKEOVER_TEXT)).toBeTruthy())
+  })
+})
+
+// Regression (found in review, gui-inspector-props-payload-redesign Task 6): `sidebarPanels`'s
+// `useMemo` (App.tsx) originally didn't list `resolverTick` among its deps, so React kept reusing
+// the cached `<Inspector>` element across a resolver-tick-only re-render -- a selection made while a
+// class's package was still loading got stuck showing "Loading properties..." forever, even after
+// the package actually finished loading, because nothing else in the memo's deps ever changed again.
+// This exercises the REAL classResolver.ts (real fetch + real WASM parse of the on-disk `DeusEx.u`),
+// not a mock, so it proves the actual end-to-end wiring, not just the memo mechanism in isolation.
+// The one thing under this test's own control is WHEN the `DeusEx` package's fetch resolves -- real
+// WASM-parse timing is fast enough that a selection made right after mount can easily land AFTER the
+// package has already loaded in the background, which would make the "still pending" assertion below
+// flaky/vacuous. Gating that one fetch deterministically keeps the test meaningful without touching
+// classResolver.ts's own module code at all.
+describe('App: Inspector props refresh once a pending class resolves', () => {
+  it('an actor selected before its class package has loaded stops showing "Loading properties..." once the package lands', async () => {
+    quadProps.current = null
+    // A class from a package no other test in this file ever touches -- Core/Engine are already
+    // loaded (globally, module-level) by the time this test runs (every earlier test's App mount
+    // calls `prefetchCoreEngine`), so only a fresh, DeusEx-owned class actually starts 'pending'.
+    const KARKIAN_ACTOR = {
+      name: 'Karkian1',
+      cls: 'DeusEx.Karkian',
+      bbox_lo: [0, 0, 0] as [number, number, number],
+      bbox_hi: [1, 1, 1] as [number, number, number],
+      location: [0, 0, 0] as [number, number, number],
+      rotation: [0, 0, 0] as [number, number, number],
+      folder: null,
+      labels: [],
+      order_value: 'm',
+      csg_rank: 1,
+      props: {},
+      brush: null,
+      sprite: null,
+      radii: null,
+      is_mover: false,
+      directional_arrow: null,
+    }
+
+    let releaseDeusEx: (() => void) | null = null
+    const deusExGate = new Promise<void>((resolve) => { releaseDeusEx = resolve })
+
+    mockFetch((url) => {
+      if (url.endsWith('/scene')) {
+        return jsonResponse({ polys: [], actors: [KARKIAN_ACTOR], geometry_pinned: false })
+      }
+      if (/\/api\/package\/DeusEx\/raw$/.test(url)) {
+        // Held open until this test explicitly releases it -- keeps resolveClassSync('DeusEx.Karkian')
+        // genuinely 'pending' for as long as the test needs, rather than racing real parse timing.
+        return deusExGate.then(() => new Response(readFileSync(`${UED22}/DeusEx.u`), { status: 200 }))
+      }
+      return undefined
+    })
+    render(<App />)
+    await waitFor(() => expect(quadProps.current).not.toBeNull())
+    act(() => quadProps.current!.onSelectActor('Karkian1', false))
+
+    // The gate is still held closed -- DeusEx's fetch (and so its class resolution) cannot have
+    // completed yet.
+    expect(screen.getByTestId('inspector-props-pending')).toBeTruthy()
+
+    // Release the gate: DeusEx.u's real bytes now reach classResolver.ts's real fetch/WASM-parse
+    // path, exactly as a real package landing would.
+    await act(async () => {
+      releaseDeusEx!()
+      await deusExGate
+    })
+
+    // Once ensureClosureForClasses's real promise settles, the Inspector must actually pick it up --
+    // this is exactly what a missing `resolverTick` dependency broke (this waitFor would time out
+    // without the App.tsx fix, since sidebarPanels's memoized <Inspector> element would never be
+    // recreated).
+    await waitFor(() => expect(screen.queryByTestId('inspector-props-pending')).toBeNull(), { timeout: 5000 })
+    expect(screen.queryByTestId('inspector-props-error')).toBeNull()
+
+    // Every prop is at its class default here (`props: {}`, no explicit override) -- "Show all"
+    // reveals them, proving real resolved prop rows actually rendered, not just an empty group list.
+    fireEvent.click(screen.getByLabelText('Show all'))
+    const propsPanel = within(screen.getByTestId('inspector-props'))
+    expect(screen.getByTestId('inspector-props').querySelectorAll('details').length).toBeGreaterThan(0)
+    expect(propsPanel.getByText('RotationRate')).toBeTruthy()
   })
 })

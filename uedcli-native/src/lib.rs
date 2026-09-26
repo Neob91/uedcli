@@ -21,7 +21,7 @@ mod mesh_read;
 mod model;
 mod model_read;
 mod model_write;
-mod package_read;
+pub use resolve_core::package_read;
 mod passes;
 mod paths;
 mod paths_py;
@@ -42,6 +42,9 @@ create_exception!(uedcli_native, BuildError, pyo3::exceptions::PyException);
 create_exception!(uedcli_native, PathError, pyo3::exceptions::PyException);
 /// A malformed/truncated UE1 package, naming the offending value (`package_read::parse_package`).
 create_exception!(uedcli_native, PackageError, pyo3::exceptions::PyException);
+/// A class-schema resolution failure, naming the offending value (`resolve_core::resolve::
+/// ResolveError`) -- unresolvable class, missing package, malformed schema/package.
+create_exception!(uedcli_native, ResolutionError, pyo3::exceptions::PyException);
 
 fn map_err(e: model::BuildError) -> PyErr {
     BuildError::new_err(e.to_string())
@@ -49,6 +52,11 @@ fn map_err(e: model::BuildError) -> PyErr {
 
 fn map_pkg_err(e: model::BuildError) -> PyErr {
     PackageError::new_err(e.to_string())
+}
+
+fn map_resolve_err(e: resolve_core::resolve::ResolveError) -> PyErr {
+    ResolutionError::new_err(e.to_string()) // ResolveError's own Display impl (Task 2, Step 6)
+                                             // already names the offending value per variant.
 }
 
 /// An opaque handle to a built model (the `Built`/handle of §8.1).  Python never sees the
@@ -912,6 +920,64 @@ fn render_frame(
     Ok(PyBytes::new_bound(py, &img).unbind())
 }
 
+/// The PyO3 wrapper around `resolve_core::ResolutionContext` (Task 3): the stateful, push-based
+/// package cache `resolve_class_json`/`resolve_actor_props_json` read from. THIN by design (§8.2)
+/// -- every method delegates straight to the wrapped context.
+#[pyclass]
+struct PyResolutionContext(resolve_core::ResolutionContext);
+
+#[pymethods]
+impl PyResolutionContext {
+    #[new]
+    fn new() -> Self {
+        Self(resolve_core::ResolutionContext::new())
+    }
+    fn add_package(&mut self, name: &str, buf: Vec<u8>) -> PyResult<()> {
+        self.0.add_package(name, buf).map_err(map_resolve_err)
+    }
+    fn has_package(&self, name: &str) -> bool {
+        self.0.has_package(name)
+    }
+    /// Exposed so the sibling item's `_populate_for_class` (spec §3) can call it from its own
+    /// `except SchemaError` branch -- see Task 3's poisoning decision for why this method must
+    /// exist on the Python-visible context, not just the Rust one.
+    fn poison(&mut self, reason: String) {
+        self.0.poison(reason)
+    }
+    fn package_imports(&self, name: &str) -> PyResult<Vec<String>> {
+        self.0.package_imports(name).map_err(map_resolve_err)
+    }
+    fn resolutions_performed(&self) -> usize {
+        self.0.resolutions_performed()
+    }
+}
+
+/// `resolve_class_json` -- `resolve_core::resolve::resolve_class`, serialized to a JSON string
+/// (spec §4). Errors surface as `ResolutionError` (never a traceback).
+#[pyfunction]
+fn resolve_class_json(ctx: &mut PyResolutionContext, fqcn: &str) -> PyResult<String> {
+    let resolved = resolve_core::resolve::resolve_class(fqcn, &mut ctx.0).map_err(map_resolve_err)?;
+    serde_json::to_string(&resolved).map_err(|e| ResolutionError::new_err(e.to_string()))
+}
+
+/// `resolve_actor_props_json` -- `resolve_core::resolve::resolve_actor_props`, serialized to a
+/// JSON string (spec §4). `actor_props` is the caller's flat `(path, stated_text)` list -- the
+/// caller (not this function) is responsible for pre-computing `Location`/`MainScale`/`PostScale`
+/// STATEDNESS entries and appending them BEFORE this call (see the module-level note above this
+/// function's Python binding in the task brief); this function stays agnostic to where an entry
+/// came from. Never raises `ResolutionError` itself -- `resolve_actor_props` never returns `Err`,
+/// only the JSON serialize step can fail here.
+#[pyfunction]
+fn resolve_actor_props_json(
+    ctx: &mut PyResolutionContext,
+    actor_name: &str,
+    actor_cls: &str,
+    actor_props: Vec<(String, String)>,
+) -> PyResult<String> {
+    let r = resolve_core::resolve::resolve_actor_props(actor_name, actor_cls, &actor_props, &mut ctx.0);
+    serde_json::to_string(&r).map_err(|e| ResolutionError::new_err(e.to_string()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -999,5 +1065,9 @@ fn uedcli_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<paths_py::PlacementOut>()?;
     m.add_function(wrap_pyfunction!(paths_py::build_path_graph, m)?)?;
     m.add_function(wrap_pyfunction!(paths_py::place_path_nodes, m)?)?;
+    m.add("ResolutionError", m.py().get_type_bound::<ResolutionError>())?;
+    m.add_class::<PyResolutionContext>()?;
+    m.add_function(wrap_pyfunction!(resolve_class_json, m)?)?;
+    m.add_function(wrap_pyfunction!(resolve_actor_props_json, m)?)?;
     Ok(())
 }

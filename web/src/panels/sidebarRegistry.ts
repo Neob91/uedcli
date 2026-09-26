@@ -10,6 +10,7 @@ import { createElement } from 'react'
 import type { ReactNode } from 'react'
 
 import type { AtlasRect, SceneActor } from '../api'
+import type { ClassResolveResult } from '../scene/classResolver'
 import { Inspector } from './Inspector'
 import type { SurfaceSelection } from './Inspector'
 import { OrgPanel } from './OrgPanel'
@@ -37,6 +38,7 @@ export interface BuildSidebarPanelsArgs {
   // viewports and holds it in its own `atlas` state -- this reuses that, never a second fetch.
   // Optional so an atlas-less caller (this file's own tests) is unaffected.
   atlasManifest?: Record<string, AtlasRect>
+  resolveClass: (fqcn: string) => ClassResolveResult
 }
 
 /** The launch registry (spec's Scope: Selection + Org/Search only, everything else is a later
@@ -53,6 +55,7 @@ export function buildSidebarPanels(args: BuildSidebarPanelsArgs): SidebarPanelDe
         selected: args.selectedActors,
         selectedSurfaces: args.selectedSurfaces,
         atlasManifest: args.atlasManifest,
+        resolveClass: args.resolveClass,
       }),
     },
     {

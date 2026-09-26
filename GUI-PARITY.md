@@ -1480,7 +1480,7 @@ text.** `u-format.md`'s own note that "UCC stores the source only up to (not inc
 class that sets it — confirmed empirically (a raw regex scan of `Engine.u`/`DeusEx.u`'s ScriptText
 for `bDirectional\s*=\s*True` found zero hits, even though the binary tail decode below finds nine).
 So this needed a real UClass-tail defaults decoder, not a text search. Built one from scratch
-(`harness/upkg_min.py`, ported directly from `uedcli-native/src/package_read.rs`'s
+(`harness/upkg_min.py`, ported directly from `uedcli-native/resolve-core/src/package_read.rs`'s
 `read_compact_index`/`read_property_tags` and `uedcli/uprops/ufield.py`'s `_walk_expr` bytecode
 walker — this sandbox's rootless docker cannot bind-mount `/workspace` at all (confirmed: even a
 mount of a throwaway `/tmp` dir returns "no such file" inside the container — the daemon shares no

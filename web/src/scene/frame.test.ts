@@ -15,7 +15,7 @@ function actor(lo: [number, number, number], hi: [number, number, number]): Scen
     labels: [],
     order_value: 'm',
     csg_rank: 1,
-    props: [],
+    props: {},
     brush: null,
     sprite: null,
     radii: null,

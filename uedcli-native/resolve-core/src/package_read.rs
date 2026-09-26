@@ -8,7 +8,7 @@
 //! name decode (a real wire feature `upackage.py` currently rejects) — one decoder, no per-game
 //! branch. See `dev/docs/board/to-plan/unify-ue1-package-read-primitives-into-one-rust/spec.md`.
 
-use crate::model::BuildError;
+use crate::BuildError;
 
 /// FCompactIndex: signed, variable-length (UE1). Mirrors `upackage.read_compact_index` exactly,
 /// including its continuation-shift schedule (breaks after the byte at shift>=27, so at most 5

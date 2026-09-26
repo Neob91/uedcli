@@ -108,7 +108,7 @@ export type EffectiveProp = EffectivePropBase &
       }
     | {
         kind: 'enum'
-        enum_type: string // key into ScenePayload.enums
+        enum_type: string // key into TypeShape's own enum values (classResolver.ts), not on this leaf
         stored_value: string | null
         default_value: string
       }
@@ -134,7 +134,11 @@ export interface SceneActor {
   labels: string[]
   order_value: string
   csg_rank: number // 1-based position in level.order (CSG evaluation order); order_value's human-readable stand-in
-  props: EffectiveProp[] // resolved property list, for the inspector's props view
+  // Flat, sparse dotted-path -> already-canonicalized-value map (gui-inspector-props-payload-
+  // redesign spec §2) -- a path with nothing stated anywhere beneath it is simply absent, no
+  // placeholder. Class SHAPE and per-class DEFAULTS are resolved client-side (classResolver.ts +
+  // resolveDisplayProps.ts), never shipped here.
+  props: Record<string, string>
   brush: BrushHighlight | null // selection-highlight geometry; null for a non-brush actor
   sprite: ActorSprite | null // resolved DT_Sprite billboard; null -> client draws a generic marker
   radii: ActorRadii | null // collision/light radii; null for a brush actor or one that clears neither gate
@@ -154,7 +158,44 @@ export interface ScenePayload {
   // no-Rebuild-yet response: `polys` is genuinely empty, not an error -- uedcli/serve/app.py's
   // `scene` route).
   geometry_pinned: boolean
-  enums: Record<string, string[]> // enum type name -> ordered tag list, keyed by EffectiveProp['enum_type']
+}
+
+/** The shared Rust resolver's own wire shape for ONE class (uedcli-native/resolve-core/src/
+ * resolve.rs's ResolvedProp/TypeShape/TypeMember Serialize impls, gui-inspector-props-payload-
+ * redesign spec §1/§3) -- produced by resolve_class_json (native, PyO3) and resolveClass (WASM),
+ * byte-identical between the two (spec's own cross-implementation determinism requirement). This is
+ * NOT an HTTP response shape -- there is no resolved-JSON endpoint any more; the frontend gets this
+ * by parsing raw .u bytes itself (classResolver.ts) and the native side never ships it over HTTP
+ * either (only /scene's own already-resolved sparse SceneActor.props crosses the wire). */
+export type ScalarKind = 'int' | 'float' | 'bool' | 'byte' | 'name' | 'string'
+
+export type DefaultValue = string | { [member: string]: DefaultValue } | DefaultValue[]
+
+export type ResolvedProp =
+  | { kind: ScalarKind; name: string; category: string; default_value: string }
+  | { kind: 'enum'; name: string; category: string; enum_type: string; default_value: string }
+  | { kind: 'struct'; name: string; category: string; struct_type: string; default_value: DefaultValue }
+  | {
+      kind: 'array'
+      name: string
+      category: string
+      array_dim: number
+      default_value: DefaultValue[]
+      element_kind?: ScalarKind
+      element_type?: string
+    }
+
+export type TypeMember =
+  | { kind: ScalarKind; name: string; array_dim?: number }
+  | { kind: 'struct'; name: string; struct_type: string }
+  | { kind: 'enum'; name: string; enum_type: string }
+  | { kind: 'array'; name: string; array_dim: number; element_type: string }
+
+export type TypeShape = { kind: 'struct'; members: TypeMember[] } | { kind: 'enum'; values: string[] }
+
+export interface ClassResolution {
+  class: { props: ResolvedProp[] }
+  types: Record<string, TypeShape>
 }
 
 export interface AtlasRect {

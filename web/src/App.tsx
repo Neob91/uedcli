@@ -17,6 +17,7 @@ import { unionBBox } from './scene/frame'
 import { applyStagedOffsets } from './scene/dragStage'
 import { QuadLayout } from './scene/QuadLayout'
 import { clearSelection, parseSurfaceKey, surfaceKey, toggleSelection } from './scene/selectionSet'
+import { ensureClosureForClasses, prefetchCoreEngine, resolveClassSync } from './scene/classResolver'
 import { SessionDropdown } from './session/SessionDropdown'
 import { SessionLabel } from './session/SessionLabel'
 import { SessionPicker } from './session/SessionPicker'
@@ -117,6 +118,19 @@ function SessionEditor({ sessionId: routeSessionId }: { sessionId: string }) {
     setClaimToken(claimToken)
   }, [claimToken])
   const [scene, setScene] = useState<ScenePayload | null>(null)
+  // gui-inspector-props-payload-redesign spec §4: Core/Engine start fetching immediately, with no
+  // dependency on `scene` -- they're the root of nearly every real Super chain and are cheap
+  // regardless (spec's own measured numbers).
+  const [resolverTick, setResolverTick] = useState(0)
+  useEffect(() => {
+    prefetchCoreEngine()
+  }, [])
+
+  useEffect(() => {
+    if (scene === null) return
+    const classes = scene.actors.map((a) => a.cls)
+    void ensureClosureForClasses(classes).then(() => setResolverTick((t) => t + 1))
+  }, [scene])
   const [atlas, setAtlas] = useState<AtlasPayload | null>(null)
   const [lightmap, setLightmap] = useState<LightmapPayload | null>(null)
   const [status, setStatus] = useState<StatusPayload | null>(null)
@@ -553,8 +567,15 @@ function SessionEditor({ sessionId: routeSessionId }: { sessionId: string }) {
         selectedNames,
         onSelectOrgBatch: handleOrgSelect,
         atlasManifest: atlas?.manifest,
+        resolveClass: resolveClassSync,
       }),
-    [selectedActors, selectedSurfaceInfos, hasUnseenSelection, scene, selectedNames, handleOrgSelect, atlas],
+    // `resolverTick` is otherwise unread -- its only job is forcing this memo (and so the Inspector
+    // element it caches) to recompute once `ensureClosureForClasses`/`prefetchCoreEngine` resolves.
+    // Without it here, a selection made while a class's package is still loading would show "Loading
+    // properties..." and then never update once the package actually lands, since `resolveClassSync`
+    // is only ever re-invoked when ONE of these deps changes -- React reuses the cached `<Inspector>`
+    // element otherwise (bug found in review, gui-inspector-props-payload-redesign Task 6).
+    [selectedActors, selectedSurfaceInfos, hasUnseenSelection, scene, selectedNames, handleOrgSelect, atlas, resolverTick],
   )
 
   // The real shading-mode gating signal (Task 19) -- derived from the /status polling this toolbar

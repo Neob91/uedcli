@@ -2,19 +2,7 @@
 //! the Python `uedcli.native.umodel.Model`.  `model_write::serialize` turns it into the
 //! UModel serial body, pinned byte-identical to the Python oracle (§6 gate 5).
 
-/// A build failure carrying the offending value; `lib.rs` maps this to a Python exception.
-#[derive(Debug, Clone)]
-pub struct BuildError(pub String);
-
-impl std::fmt::Display for BuildError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
-
-impl std::error::Error for BuildError {}
-
-pub type BResult<T> = Result<T, BuildError>;
+pub use resolve_core::{BResult, BuildError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Vec3 {

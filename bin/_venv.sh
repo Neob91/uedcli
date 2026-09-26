@@ -63,7 +63,8 @@ ensure_native_ext() {
   [ -n "${UEDCLI_SKIP_NATIVE:-}" ] && return 0
   [ -d "$_NATIVE_DIR" ] || return 0
   local hash
-  hash="$(cat "$_NATIVE_DIR/Cargo.toml" "$_NATIVE_DIR"/src/*.rs 2>/dev/null | sha256sum | cut -d' ' -f1)"
+  hash="$(find "$_NATIVE_DIR" -path "$_NATIVE_DIR/target" -prune -o \( -name '*.rs' -o -name 'Cargo.toml' \) -print \
+    | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)"
   if [ "$(cat "$_NATIVE_MARKER" 2>/dev/null || true)" = "$hash" ] \
      && "$PY" -c "import uedcli_native" >/dev/null 2>&1; then
     export UEDCLI_NATIVE_EXT_FRESH=1
@@ -102,6 +103,47 @@ ensure_native_ext() {
     || { echo "uedcli: pip install of uedcli_native failed" >&2; return 0; }
   printf '%s' "$hash" > "$_NATIVE_MARKER"
   export UEDCLI_NATIVE_EXT_FRESH=1
+}
+
+# --- resolve-wasm artifact (web/src/wasm) — built in a container (no host Rust/wasm-bindgen) -----
+_WASM_MARKER="$VENV/.uedcli-native-wasm"
+_WASM_OUT="$UEDCLI_DIR/web/src/wasm"
+
+ensure_wasm_artifact() {
+  [ -n "${UEDCLI_SKIP_NATIVE:-}" ] && return 0
+  [ -d "$_NATIVE_DIR/resolve-wasm" ] || return 0
+  local hash
+  hash="$(find "$_NATIVE_DIR/resolve-core" "$_NATIVE_DIR/resolve-wasm" -path '*/target' -prune -o \
+    \( -name '*.rs' -o -name 'Cargo.toml' \) -print | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)"
+  if [ "$(cat "$_WASM_MARKER" 2>/dev/null || true)" = "$hash" ] && [ -f "$_WASM_OUT/resolve_wasm_bg.wasm" ]; then
+    return 0
+  fi
+  # Past this point the existing artifact (if any) is confirmed STALE or MISSING. Remove the
+  # marker FIRST, before attempting a rebuild -- this is the refuse-at-use signal spec §5 requires
+  # (mirroring ensure_native_ext's own "default to stale, only flip to fresh on real success"
+  # pattern at `_venv.sh:72-75`): if the rebuild below fails for ANY reason, no later check can
+  # mistake the old bytes for current ones, because the marker they'd be compared against is gone.
+  rm -f "$_WASM_MARKER"
+  if ! _ensure_build_image; then
+    echo "uedcli: docker not available -- WASM artifact missing/stale; npm test/build will fail" >&2
+    return 1   # NOT return 0 -- unlike ensure_native_ext (whose Python callers tolerate a missing
+  fi             # extension via UEDCLI_NATIVE_EXT_FRESH), nothing downstream can gracefully run
+                  # without a WASM artifact at all, so silently returning success here is exactly
+                  # the "stale build with no signal" failure mode spec §5 names.
+  find "$_NATIVE_DIR" -path "$_NATIVE_DIR/target" -prune -o -type f -exec touch {} + \
+    || { echo "uedcli: cannot refresh resolve-wasm source mtimes" >&2; return 1; }
+  mkdir -p "$_WASM_OUT"
+  docker buildx build --target wasm-export \
+    --output "type=local,dest=$_WASM_OUT" \
+    -f "$_BUILD_DOCKERFILE" "$_NATIVE_DIR" >&2 \
+    || { echo "uedcli: resolve-wasm build failed" >&2; return 1; }
+  # A zero-exit `docker buildx build` doesn't guarantee the expected file landed (a renamed
+  # wasm-bindgen output, an empty export stage) -- mirror ensure_native_ext's own guard
+  # (`_venv.sh:99-100`, `[ -n "$whl" ] || { …; return 0; }`) rather than trusting the exit code
+  # alone; write the marker ONLY once the real file is confirmed present.
+  [ -f "$_WASM_OUT/resolve_wasm_bg.wasm" ] \
+    || { echo "uedcli: resolve-wasm build produced no artifact at $_WASM_OUT/resolve_wasm_bg.wasm" >&2; return 1; }
+  printf '%s' "$hash" > "$_WASM_MARKER"
 }
 
 # Rust goldens — the pure-core `cargo test`, run in the build image (needs Rust + libpython).
