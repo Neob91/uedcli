@@ -606,8 +606,9 @@ def register(sub) -> None:
         "BRUSH:idx lines `poly find` prints; empty stdin is a clean no-op)")
 
     pawall = pamode.add_parser(
-        "wall", help="stamp a world-projected frame on each VERTICAL face (brickwork does not reset "
-                     "at each brush edge)")
+        "wall", help="give each VERTICAL face a unit texture frame along its own horizontal run "
+                     "and downward slope -- never stretches, even on a diagonal wall (`brush "
+                     "poly align wall-pan` afterwards syncs the vertical phase across a set)")
     pawall.add_argument("targets", nargs="*", metavar="BRUSH:SELECTOR", help=_ALIGN_TARGETS_HELP)
     _tree_flag(pawall)
 
@@ -644,3 +645,12 @@ def register(sub) -> None:
                         "every offender")
     paone.add_argument("targets", nargs="*", metavar="BRUSH:SELECTOR", help=_ALIGN_TARGETS_HELP)
     _tree_flag(paone)
+
+    pawallpan = pamode.add_parser(
+        "wall-pan", help="slide each wall face's texture anchor along its own V to world Z=0, so "
+                        "every wall's vertical phase agrees -- leaves TextureU/TextureV/Pan "
+                        "untouched (UnrealEd's WALLPAN; despite the name, this does NOT write "
+                        "Pan -- see `brush poly pan` for that). Needs a near-vertical face with a "
+                        "vertical TextureV component, else exit 2 naming why.")
+    pawallpan.add_argument("targets", nargs="*", metavar="BRUSH:SELECTOR", help=_ALIGN_TARGETS_HELP)
+    _tree_flag(pawallpan)

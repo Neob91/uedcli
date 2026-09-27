@@ -4,30 +4,115 @@ Why the alignment code is the way it is. Sibling of [`surface.md`](surface.md). 
 agents maintain this freely. Owner product decisions live in `../direction/conventions.md` (once
 confirmed) and are parked meanwhile on `dev/docs/board/inbox/`; this file holds the engineering.
 
-`align` has three modes. `wall`/`floor` reproduce the editor's `POLY TEXALIGN` projection family
-(`FLOOR`/`WALLX`/`WALLY`), measured in [`../unrealed/texalign.md`](../unrealed/texalign.md); that
-doc is the authority for their math. `run` (a continuous texture along a connected strip of faces)
-has no editor analogue and is uedcli's own — this file is about its algorithm.
+`align` has five modes. `floor` reproduces the editor's `POLY TEXALIGN` `FLOOR` projection, measured
+in [`../unrealed/texalign.md`](../unrealed/texalign.md); that doc is the authority for its math.
+`wall` used to reproduce `WALLX`/`WALLY` the same way — it now reproduces `WALLDIR` instead (board
+item `align-wall-walldir-style-axes-split-off-a-wall`), and `wall-pan` is new, reproducing `WALLPAN`.
+`run` (a continuous texture along a connected strip of faces) and `one-tile` have no editor analogue
+and are uedcli's own — this file is about their algorithms.
 
 ---
 
-## `wall`/`floor`: a per-face world-projected stamp, no set relationship
+## `floor`: a per-face world-projected stamp, no set relationship
 
 Each face's frame is a pure function of its own plane and the world axes: the texture anchored where
-the plane crosses the projection axis, U/V the other two world axes projected in and negated, `Pan`
-zeroed. So a set is simply a batch — aligning face A alone and face B alone gives byte-identical
-frames, and re-running changes nothing.
+the plane crosses the Z axis, U/V the other two world axes projected in and negated, `Pan` zeroed.
+So a set is simply a batch — aligning face A alone and face B alone gives byte-identical frames, and
+re-running changes nothing.
 
-**Why it is this way.** The projection family is what makes a texture flow across a whole wall or
-floor on one world grid regardless of brush boundaries, which is the point of the verb.
+**Why it is this way.** The projection family is what makes a texture flow across a whole floor on
+one world grid regardless of brush boundaries, which is the point of the verb.
 
 **Rejected.** A seed-anchored frame (the pre-2026-07-26 code, anchored on the first face's centroid):
 its result depended on which face came first, so two invocations over subsets of one plane
 disagreed. **Rejected.** The coplanarity and co-orientation guards: a world-derived frame removes
 their motivation — faces on different planes legitimately share one grid, and two opposite-facing
 coplanar faces get an identical frame (the texture reads mirrored on the back, which is the family's
-defined polarity-blind behaviour, not a fault). The `|N·A| > 0.05` guard stays, because `d/N·A`
-diverges as the face turns edge-on to the projection axis.
+defined polarity-blind behaviour, not a fault). The `|N·Z| > 0.05` guard stays, because `d/N·Z`
+diverges as the face turns edge-on to Z. (`wall` shared this same world-axis-projection code and
+these same rulings until it was redefined onto `WALLDIR` — see below; they still apply to `floor`
+unchanged, and to `wall`'s history.)
+
+---
+
+## `wall`: `WALLDIR`, the visible normal, and why it needed its own normal helper
+
+Redefined from `WALLX`/`WALLY` (the same world-axis family as `floor`, above) onto UnrealEd's
+`WALLDIR`: a unit frame from the face's own horizontal run and downward slope, anchored on the
+face's own centroid, never stretching. Full derivation, the formulas, and the review history that
+found three real correctness bugs in three successive drafts of the design are in the spec —
+`../board/to-build/align-wall-walldir-style-axes-split-off-a-wall/spec.md` (revision 4) — not
+repeated here; this section is the short version plus what a future maintainer needs to not
+reintroduce those bugs.
+
+**`WALLDIR` is sign-sensitive; `WALLX`/`WALLY`/`FLOOR` are not.** Flipping the face normal flips
+`WALLDIR`'s `TextureU` but not `TextureV` (the `TextureV.Z > 0` flip cancels the same way both
+times) — verified algebraically. So unlike `floor`, `wall` cannot use just any normal with the right
+axis and a don't-care sign; it needs the one the author actually sees, matching why `rotate` needed
+it (`../rationale/surface.md` "`rotate` turns against the visible surface normal").
+
+**`_oriented_world_normal` exists because NEITHER existing normal helper is right here, and is
+deliberately NOT built by sharing code with either.** `polyalign._world_normal` (Newell recomputed
+on world vertices) is what `floor` uses and is WRONG for `wall`: it flips sign under a mirrored
+(negative-determinant) brush, because `Newell(L·v) = det(L)·(L⁻¹)ᵀ·Newell(v)` — invisible to `floor`
+only because that whole family cancels any sign error, from any source. `query.visible_normal` gets
+the geometry right (the covariant transform `(L⁻¹)ᵀ` on the LOCAL normal) but the wrong HANDLING for
+`wall`'s needs: it silently returns `(0,0,0)` for a degenerate transform or zero-area face (fine for
+its own callers, a division-by-zero crash waiting to happen here), and it composes with
+`csg_is_subtract`, which silently treats `CSG_Intersect`/`CSG_Deintersect` as "not subtract" (a
+silent half-answer `wall` cannot inherit). `_oriented_world_normal` reuses `query.visible_normal`'s
+covariant-transform MATH (independently known correct) without its zero-defaulting HANDLING — it
+raises, naming the face or brush, instead.
+
+**`query.csg_sign` is exact-case and does NOT call `query._csg_oper`/`csg_is_subtract`, on purpose.**
+Those match `CsgOper` case-insensitively (with their own regression pinning it); `surface.
+_visible_normal` (the `rotate` precedent) matches exact-case. Building `csg_sign` on top of the
+case-insensitive lookup would have silently WIDENED `rotate`'s refusal behaviour the moment
+`surface._visible_normal` was refactored to call it — caught in spec review before it shipped, not
+after.
+
+**The mirrored-brush question `rotate` leaves open does not apply here, by construction.**
+`rotate`'s visible-normal is LOCAL (never reads `MainScale`/`PostScale`), so it cannot see a mirrored
+brush's reversed rendered winding — a documented, unmeasured gap (`../rationale/surface.md`).
+`_oriented_world_normal` computes Newell on the ACTUAL WORLD vertex positions (full transform
+applied, mirroring included), so the winding it sees already IS the one the engine renders; there is
+no separate correction to be missing. Still reasoned, not measured against a corpus fixture (none
+carries a mirrored brush) — a `rules/spikes.md` job if it ever needs confirming live.
+
+**Anchor: the face's own centroid, at `(U,V)=(0,0)`, needing no precedent.** `wall` is a
+from-scratch derive — there is no existing frame the way `wall-pan` assumes one — so there is
+nothing for an anchor choice to preserve; centroid-at-origin is simply the plainest anchor
+available. (An earlier spec draft cited `rotate`/`scale`'s centroid re-anchor as precedent for this
+and review caught it as false: those two preserve the centroid's PRE-EXISTING `(U,V)`, not zero,
+which has no analogue in a from-scratch derive.)
+
+---
+
+## `wall-pan`: an anchor-only slide on an EXISTING frame, in WORLD space
+
+Reproduces `WALLPAN`: slides `Origin` along the CURRENT `TextureV` until its world Z reaches zero,
+touching nothing else. Unlike every other `align` mode, it does not derive a fresh frame — the frame
+must already exist (typically from `wall`).
+
+**Reads/writes via `world_uv_frame`/`_write_world_frame`, never `surface._frame`'s local fields.**
+`WALLPAN`'s real target — UnrealEd's `Model->Surfs` — is a WORLD-space surface. Reading/writing the
+LOCAL `poly.origin`/`texture_u`/`texture_v` fields directly would slide the brush's LOCAL Z to zero,
+which only coincides with WORLD Z=0 when the brush sits at the world origin with no rotation — wrong
+on any placed or rotated brush. (An earlier spec draft proposed the local fields, by analogy with
+`rotate`/`scale`; caught in review before it shipped.)
+
+**Needs its own missing-frame check, because `world_uv_frame` silently defaults instead of
+raising.** A `None` `Origin` silently becomes local zero; a missing OR present-but-all-zero
+`TextureU`/`TextureV` silently becomes a synthesized `_tex_basis` frame (`texframe.py`'s own
+`_zero()` test, which `wall-pan`'s pre-check mirrors exactly — catching a PRESENT-but-zero axis,
+not just a `None` one, took two review passes to get right). Calling `world_uv_frame` directly on a
+never-aligned face would silently proceed with a synthesized frame instead of naming an error — a
+silent half-answer `direction/conventions.md` forbids.
+
+**Target grammar matches `align`'s (a bare brush Name is accepted), not `pan`/`rotate`/`scale`'s
+narrower one.** Phase-syncing every wall face of a brush to world Z=0 is the normal use of this
+verb, not a blanket edit an author would regret the way a blanket scale/rotate would be
+(`../rationale/surface.md` "the target grammar is narrower than align's").
 
 ---
 

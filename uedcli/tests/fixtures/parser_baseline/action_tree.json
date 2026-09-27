@@ -7829,13 +7829,15 @@
                     "wall",
                     "floor",
                     "run",
-                    "one-tile"
+                    "one-tile",
+                    "wall-pan"
                   ],
                   "subparser_help": {
-                    "wall": "stamp a world-projected frame on each VERTICAL face (brickwork does not reset at each brush edge)",
+                    "wall": "give each VERTICAL face a unit texture frame along its own horizontal run and downward slope -- never stretches, even on a diagonal wall (`brush poly align wall-pan` afterwards syncs the vertical phase across a set)",
                     "floor": "stamp a world-projected frame on each HORIZONTAL face (floor/ceiling)",
                     "run": "lay one continuous texture along a connected RUN of faces: U follows the run, V across it, phase carried across every seam. Wraps a cylinder, walks a wall run or a curved/flat bend; derives its own walk order from geometry, so the order faces are passed in does not matter. Exclude a cylinder's caps",
-                    "one-tile": "fit exactly ONE texture tile to each face, independently (a sign, a monitor, a light panel) — stretches non-uniformly to fill, no shared frame, no orientation guard (any face works). Needs a project on the package path: every face's bound texture must resolve, or exit 2 naming every offender"
+                    "one-tile": "fit exactly ONE texture tile to each face, independently (a sign, a monitor, a light panel) — stretches non-uniformly to fill, no shared frame, no orientation guard (any face works). Needs a project on the package path: every face's bound texture must resolve, or exit 2 naming every offender",
+                    "wall-pan": "slide each wall face's texture anchor along its own V to world Z=0, so every wall's vertical phase agrees -- leaves TextureU/TextureV/Pan untouched (UnrealEd's WALLPAN; despite the name, this does NOT write Pan -- see `brush poly pan` for that). Needs a near-vertical face with a vertical TextureV component, else exit 2 naming why."
                   }
                 }
               ],
@@ -8046,6 +8048,63 @@
                 "one-tile": {
                   "class": "_CoordArgumentParser",
                   "prog": "uedcli brush poly align one-tile",
+                  "mutex_groups": [],
+                  "actions": [
+                    {
+                      "class": "_HelpAction",
+                      "option_strings": [
+                        "-h",
+                        "--help"
+                      ],
+                      "dest": "help",
+                      "nargs": 0,
+                      "const": null,
+                      "default": {
+                        "__suppress__": true
+                      },
+                      "required": false,
+                      "choices": null,
+                      "metavar": null,
+                      "converter": null,
+                      "help": "show this help message and exit",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreAction",
+                      "option_strings": [],
+                      "dest": "targets",
+                      "nargs": "*",
+                      "const": null,
+                      "default": null,
+                      "required": false,
+                      "choices": null,
+                      "metavar": "BRUSH:SELECTOR",
+                      "converter": null,
+                      "help": "faces to align: BRUSH:SELECTOR (SELECTOR = 'all' or comma indices) or a bare brush Name (= all its polys). Use `-` to read the set from stdin instead (bare names, or the BRUSH:idx lines `poly find` prints; empty stdin is a clean no-op)",
+                      "mutex_group": null
+                    },
+                    {
+                      "class": "_StoreAction",
+                      "option_strings": [
+                        "--tree"
+                      ],
+                      "dest": "tree",
+                      "nargs": null,
+                      "const": null,
+                      "default": null,
+                      "required": false,
+                      "choices": null,
+                      "metavar": "KIND/NAME",
+                      "converter": null,
+                      "help": "operate on this tree instead of $UEDCLI_LEVEL: KIND/NAME where KIND is level|stash|prefab and NAME is the level/stash/prefab name (may be nested, e.g. stash/hangar/arch). Default: the level named by $UEDCLI_LEVEL.",
+                      "mutex_group": null
+                    }
+                  ],
+                  "subparsers": {}
+                },
+                "wall-pan": {
+                  "class": "_CoordArgumentParser",
+                  "prog": "uedcli brush poly align wall-pan",
                   "mutex_groups": [],
                   "actions": [
                     {

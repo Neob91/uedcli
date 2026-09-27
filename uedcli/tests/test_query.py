@@ -1,3 +1,4 @@
+from dataclasses import replace
 from decimal import Decimal
 
 import pytest
@@ -8,7 +9,7 @@ from uedcli.query import (list_actors, show_actor, describe,
                           decode_flags, list_polys, format_polys,
                           list_vertices, format_vertices,
                           _class_matches, resolve_actor_name, resolve_actor_names,
-                          csg_kind)
+                          csg_kind, csg_is_subtract, csg_sign)
 from uedcli.tests.conftest import read_fixture
 
 
@@ -484,7 +485,6 @@ def _with_csg_oper(actor: Actor, oper: str) -> Actor:
     to reach the Intersect/Deintersect branches, which real trunk content never carries (they're
     editor-only scaffolding) but which `csg_kind` must still classify correctly rather than
     silently falling through to `"add"`."""
-    from dataclasses import replace
     props = [p for p in actor.props if p[0] != "CsgOper"] + [("CsgOper", oper)]
     return replace(actor, props=props)
 
@@ -535,3 +535,40 @@ def test_csg_kind_case_insensitive_csgoper():
     # case-insensitively (query._csg_oper); csg_kind must too.
     a = _with_csg_oper(make_brush_actor("A", cube(64, 64, 64), csg="add"), "csg_subtract")
     assert csg_kind(a, is_mover=False) == "subtract"
+
+
+def test_csg_sign_add():
+    a = make_brush_actor("A", cube(64, 64, 64), csg="add")
+    assert csg_sign(a) == 1.0
+
+
+def test_csg_sign_absent_csgoper_is_add():
+    a = make_brush_actor("A", cube(64, 64, 64), csg="add")
+    a = replace(a, props=[p for p in a.props if p[0] != "CsgOper"])
+    assert csg_sign(a) == 1.0
+
+
+def test_csg_sign_subtract():
+    a = make_brush_actor("A", cube(64, 64, 64), csg="subtract")
+    assert csg_sign(a) == -1.0
+
+
+def test_csg_sign_refuses_intersect():
+    a = _with_csg_oper(make_brush_actor("A", cube(64, 64, 64), csg="add"), "CSG_Intersect")
+    with pytest.raises(ValueError, match="CSG_Intersect"):
+        csg_sign(a)
+
+
+def test_csg_sign_refuses_deintersect():
+    a = _with_csg_oper(make_brush_actor("A", cube(64, 64, 64), csg="add"), "CSG_Deintersect")
+    with pytest.raises(ValueError, match="CSG_Deintersect"):
+        csg_sign(a)
+
+
+def test_csg_sign_is_exact_case_unlike_csg_is_subtract():
+    # csg_is_subtract (and csg_kind) match CsgOper case-INSENSITIVELY; csg_sign deliberately does
+    # NOT -- a foreign-cased value must be REFUSED, not silently accepted as Subtract.
+    a = _with_csg_oper(make_brush_actor("A", cube(64, 64, 64), csg="add"), "csg_subtract")
+    assert csg_is_subtract(a) is True         # the existing, case-insensitive helper: True
+    with pytest.raises(ValueError, match="csg_subtract"):
+        csg_sign(a)                            # the new, exact-case helper: refuses

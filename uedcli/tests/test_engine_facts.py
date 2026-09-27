@@ -849,13 +849,15 @@ def test_texalign_pan_handling_matches_the_editor_against_a_non_zero_pan():
 # reference model — the cheapest thing that catches a dropped negation, a swapped axis or a wrong
 # derived axis. A face square to its projection axis is unit; a tilted one carries the |proj| stretch.
 
-def _align_world_frame(verts, mode):
+def _align_world_frame(verts, mode, csg="add"):
     """Run `brush poly align <mode>` on a unrotated brush at the origin whose one poly has exactly
-    `verts` (there the stored frame IS the world frame) and return `(origin, tu, tv, pan)`."""
+    `verts` (there the stored frame IS the world frame) and return `(origin, tu, tv, pan)`. `csg`
+    matters only for `wall` (sign-sensitive, `_walldir_align`'s `csg_sign`); `floor`/`run`/
+    `one-tile` are invariant under it."""
     from uedcli import polyalign
     from uedcli.builders import make_brush_actor
     from uedcli.model import Brush, Level, Polygon
-    a = make_brush_actor("F", Brush("Model", [Polygon(vertices=[tuple(v) for v in verts])]))
+    a = make_brush_actor("F", Brush("Model", [Polygon(vertices=[tuple(v) for v in verts])]), csg=csg)
     lv = Level()
     lv.actors[a.name] = a
     lv.order = [a.name]
@@ -889,37 +891,47 @@ def test_align_floor_reproduces_editor_FLOOR_on_every_guarded_face():
     assert checked >= 15, f"only {checked} floor faces checked"
 
 
-def test_align_wall_reproduces_editor_WALLX_WALLY_and_pins_the_derived_axis():
-    """`brush poly align wall` derives its projection axis (|N.X| ≥ |N.Y| ⇒ X else Y) and reproduces
-    the corresponding editor mode. A wrong derivation picks the wrong golden and fails. Faces failing
-    the derived-axis guard are skipped — the editor leaves them untouched, so comparing exit 2 to an
-    untouched golden would fail a correct implementation (§4.2)."""
+def test_align_wall_reproduces_editor_WALLDIR_axes():
+    """`brush poly align wall` was redefined (board item
+    `align-wall-walldir-style-axes-split-off-a-wall`) from the `WALLX`/`WALLY` world-axis
+    projection to UnrealEd's `WALLDIR` — unit axes derived from the wall's own direction, never
+    stretching. The old WALLX/WALLY-golden-pinning tests this replaces asserted a property `wall`
+    no longer has; this pins `wall`'s `TextureU`/`TextureV`/`Pan` against the SAME spike's
+    already-captured (but previously unused) `WALLDIR` golden instead — real editor output, not a
+    hand-derived expectation.
+
+    Origin is NOT compared: the editor's `WALLDIR` tweaks an EXISTING frame in place and leaves
+    `Origin` untouched (`unrealed/texalign.md`), so the golden's `base` reflects whatever Origin a
+    prior step in that spike's sequence had already set — a precondition this test does not
+    reproduce. `wall` is a from-scratch derive that deliberately anchors on the face's own
+    centroid instead (spec.md "Anchor") — a different, new design choice, not an attempt to
+    reproduce the editor's in-place-preserve semantics. `align wall-pan` (UnrealEd's `WALLPAN`)
+    is the anchor half of the pair; it has its own tests in `test_polyalign.py`.
+
+    `wall` is sign-sensitive (unlike the old WALLX/WALLY family), so unlike `floor`'s golden test
+    this one must reconstruct each face's real CsgOper: the spike records BOTH `n_poly` (raw
+    polygon winding) and `n_surf` (the CSG surface normal the live editor actually aligned
+    against) — where they're opposite, that face's brush was subtractive (`Room:*` — 6 of the 44
+    faces), and the test fixture must be built `csg="subtract"` too, or its raw winding (which
+    always matches `n_poly`, `_align_world_frame` never flips it) would feed `wall` the wrong
+    sign relative to what the golden's `WALLDIR` output reflects."""
     import json
     golden = json.loads((_TEXALIGN_SPIKE / "measured.json").read_text())
     checked = 0
     for ref, face in golden["faces"].items():
         n = face["n_surf"]
-        axis = 0 if abs(n[0]) >= abs(n[1]) else 1           # wall's own derivation
-        if abs(n[axis]) <= 0.05:
-            continue
-        want = golden["modes"]["WALLX" if axis == 0 else "WALLY"][ref]
-        got = _align_world_frame(face["verts"], "wall")
-        _assert_editor_frame(f"wall(A={'XY'[axis]}) {ref}", got, want)
+        if abs(n[2]) >= 0.95:                               # wall's own guard — editor leaves it
+            continue                                        # untouched, so skip rather than exit-2-vs-golden
+        want = golden["modes"]["WALLDIR"][ref]
+        is_subtract = all(abs(a + b) < 1e-6 for a, b in zip(face["n_poly"], face["n_surf"]))
+        csg = "subtract" if is_subtract else "add"
+        _, tu, tv, pan = _align_world_frame(face["verts"], "wall", csg=csg)
+        for name, g, w in (("TextureU", tu, want["tu"]), ("TextureV", tv, want["tv"])):
+            assert all(abs(x - y) <= 2e-3 for x, y in zip(g, w)), \
+                f"wall {ref}: {name} got {g}, editor WALLDIR wrote {w}"
+        assert list(pan) == list(want["pan"]), f"wall {ref}: Pan got {pan}, editor wrote {want['pan']}"
         checked += 1
     assert checked >= 10, f"only {checked} wall faces checked"
-
-
-def test_align_wall_tie_break_picks_x_on_a_measured_corner():
-    """The |N.X| == |N.Y| tie resolves to X — pinned on SlantXYZ:3, a MEASURED corner normal
-    (0.577, 0.577, 0.577) whose WALLX and WALLY goldens differ, so a tie resolved the wrong way
-    would pick WALLY and fail (§4.2)."""
-    import json
-    golden = json.loads((_TEXALIGN_SPIKE / "measured.json").read_text())
-    face = golden["faces"]["SlantXYZ:3"]
-    assert abs(face["n_surf"][0]) == abs(face["n_surf"][1])         # a genuine tie
-    assert golden["modes"]["WALLX"]["SlantXYZ:3"]["tu"] != golden["modes"]["WALLY"]["SlantXYZ:3"]["tu"]
-    got = _align_world_frame(face["verts"], "wall")
-    _assert_editor_frame("wall tie SlantXYZ:3", got, golden["modes"]["WALLX"]["SlantXYZ:3"])
 
 
 def test_align_floor_is_invariant_under_normal_reversal():

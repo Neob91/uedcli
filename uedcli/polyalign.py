@@ -1,12 +1,19 @@
 """Continuous texture alignment across a set of faces — `brush poly align` + the `brush poly find`
 producer that feeds it. Pure model-side texture-vector math (no editor).
 
-`wall`/`floor` REPRODUCE the editor's `POLY TEXALIGN` projection family (`FLOOR`/`WALLX`/`WALLY`),
-measured 2026-07-26 (`dev/docs/unrealed/texalign.md`): a world-axis-anchored frame at `|proj|`
-density, polarity-blind by construction. `run` (cylinder wrap) has no editor analogue and is uedcli's
-own. UnrealEd's verb needs a built BSP and acts on the CSG surface normal; this module is model-side
-and uses the brush polygon's normal — harmless for `wall`/`floor` because the whole family is
-invariant under `n → −n`.
+`floor` REPRODUCES the editor's `POLY TEXALIGN` `FLOOR` projection (`dev/docs/unrealed/texalign.md`,
+measured 2026-07-26): a world-axis-anchored frame at `|proj|` density, polarity-blind by
+construction — harmless that this module uses the brush polygon's raw normal (UnrealEd acts on the
+built CSG surface normal instead) because the whole `FLOOR`/`WALLX`/`WALLY` family is invariant under
+`n → −n`. `wall` instead reproduces the editor's `WALLDIR` (board item
+`align-wall-walldir-style-axes-split-off-a-wall`; it used to reproduce `WALLX`/`WALLY` too, world-axis
+anchored and `|proj|`-stretching like `floor` still is — that changed because `WALLDIR` never
+stretches and is what a verb named `wall` should give): a unit frame derived from the face's own
+horizontal run and downward slope, anchored on the face's own centroid, with NO shared-grid guarantee
+across a set (`wall-pan`, reproducing `WALLPAN`, provides that separately). `WALLDIR` is NOT invariant
+under `n → −n`, so `wall` cannot use the raw polygon normal the way `floor` does — it uses the VISIBLE
+normal instead (`_oriented_world_normal` composed with `query.csg_sign`; see `_walldir_align`). `run`
+(cylinder wrap) has no editor analogue and is uedcli's own.
 
 Design authority: dev/docs/direction/conventions.md 2026-07-18 21:40 UTC (`poly align` v1 scope + face-selection
 grammar) and board item `poly-align-brush-poly-find-built` (UV math + algorithms).
@@ -29,10 +36,10 @@ import sys
 from decimal import Decimal
 from typing import Callable
 
-from . import rotation
+from . import rotation, transform
 from .facing_spec import FacingSpec, match_facing
 from .model import Actor, Level
-from .query import resolve_actor_name, visible_normal
+from .query import csg_sign, resolve_actor_name, visible_normal
 from .surface import parse_poly_selector, resolve_polys
 from .texframe import newell, world_uv_frame
 
@@ -123,6 +130,33 @@ def _world_normal(actor: Actor, poly, ref: str) -> tuple[float, float, float]:
     if _len(n) < 1e-9:
         raise PolyAlignError(f"brush poly align: face {ref} is degenerate (zero area)")
     return _unit(n)
+
+
+def _oriented_world_normal(actor: Actor, poly, ref: str, verb: str) -> tuple[float, float, float]:
+    """The face's WORLD-space unit normal, correct under rotation, scale, shear AND REFLECTION —
+    unlike `_world_normal` (Newell recomputed on `_world_verts`), which flips sign under a
+    mirrored (negative-determinant) brush transform: `Newell(L·v) = det(L)·(L⁻¹)ᵀ·Newell(v)`.
+    Computes the LOCAL Newell normal, then maps it through the actor's covariant transform
+    `(L⁻¹)ᵀ` (`transform.covariant_axes`) — the same map `query.visible_normal` uses, reused here
+    for its MATH only, not its HANDLING: unlike that function, this one RAISES (naming `ref`/the
+    brush) for a zero-area face or a degenerate transform, rather than silently returning
+    `(0,0,0)` — `wall` cannot tolerate a silent zero, which would pass its `|N.Z|<0.95` guard and
+    crash `WALLDIR`'s `normalize()` instead.
+
+    Does NOT apply any CsgOper sign — callers compose this with `query.csg_sign(actor)`
+    themselves, kept as two independent, separately-correct pieces (`dev/docs/board/to-build/
+    align-wall-walldir-style-axes-split-off-a-wall/spec.md` "Sign of N")."""
+    n_local = newell([(float(v[0]), float(v[1]), float(v[2])) for v in poly.vertices])
+    if _len(n_local) < 1e-9:
+        raise PolyAlignError(f"{verb}: face {ref} is degenerate (zero area) — it has no face plane")
+    L = rotation.actor_linear(actor)
+    if L is None:
+        return _unit(n_local)
+    try:
+        transform.reject_degenerate(L, getattr(actor, "name", "?"))
+    except transform.DegenerateTransformError as e:
+        raise PolyAlignError(str(e)) from e
+    return _unit(rotation.matvec(transform.covariant_axes(L), n_local))
 
 
 def _write_world_frame(actor: Actor, poly, base_w, tu_w, tv_w, pan) -> None:
@@ -308,6 +342,100 @@ def _projection_guard_message(mode: str, failures) -> str:
             f"20× and anchored thousands of uu away. Filter the set first, e.g. "
             f"`brush poly find <brush> --facing {'floor' if mode == 'floor' else 'wall'} | "
             f"brush poly align {mode} -`")
+
+
+# --------------------------------------------------------------------- WALLDIR (wall)
+
+def _centroid_w(wv) -> tuple[float, float, float]:
+    n = len(wv)
+    return (sum(v[0] for v in wv) / n, sum(v[1] for v in wv) / n, sum(v[2] for v in wv) / n)
+
+
+def _walldir_align(level: Level, targets) -> list[str]:
+    """`wall`, redefined on UnrealEd's `WALLDIR`: each face gets a UNIT texture frame from its own
+    horizontal run and downward slope — never stretches, unlike the `WALLX`/`WALLY` family
+    `floor` still uses (`_projected_align`). Anchored on the face's own centroid at (U,V)=(0,0)
+    (a from-scratch derive; there is nothing to preserve), so unlike `floor`/`run` there is NO
+    shared-grid promise across a set (`align wall-pan` provides phase-syncing separately).
+    Sign-sensitive (unlike `floor`), so uses the VISIBLE normal: `_oriented_world_normal`
+    (reflection-correct) composed with `csg_sign` (exact-case, refuses Intersect/Deintersect) —
+    see `dev/docs/board/to-build/align-wall-walldir-style-axes-split-off-a-wall/spec.md`
+    "Sign of N" for why neither `_world_normal` nor `query.visible_normal` alone is correct here."""
+    verb = "brush poly align wall"
+    faces = [(bn, i, level.actors[bn], level.actors[bn].brush.polys[i]) for bn, i in targets]
+    prepared, failures = [], []
+    for bn, i, a, p in faces:
+        ref = f"{bn}:{i}"
+        base_n = _oriented_world_normal(a, p, ref, verb)          # raises naming ref/brush
+        try:
+            n = _scale(base_n, csg_sign(a))
+        except ValueError as e:
+            raise PolyAlignError(f"{verb}: face {ref} is on a brush with {e}") from e
+        if abs(n[2]) >= 0.95:
+            failures.append((ref, n))
+        else:
+            prepared.append((a, p, ref, n))
+    if failures:
+        listed = ", ".join(f"`{ref}` (|N.Z| = {abs(n[2]):.3f})" for ref, n in failures)
+        raise PolyAlignError(
+            f"{verb}: {len(failures)} face(s) too close to horizontal for a WALLDIR frame — "
+            f"{listed}; filter the set first, e.g. `brush poly find <brush> --facing wall | "
+            f"brush poly align wall -`")
+    for a, p, ref, n in prepared:
+        # WALLDIR: TextureU = normalize((N.y, -N.x, 0)); TextureV = normalize(TextureU x N);
+        # if TextureV.Z > 0: negate both.
+        tu = _unit((n[1], -n[0], 0.0))
+        tv = _unit(_cross(tu, n))
+        if tv[2] > 0.0:
+            tu, tv = _neg(tu), _neg(tv)
+        wv = _world_verts(a, p)
+        _write_world_frame(a, p, _centroid_w(wv), tu, tv, (0, 0))
+    return sorted({bn for bn, _ in targets})
+
+
+def _zero_mag(v) -> bool:
+    return v is None or (abs(v[0]) + abs(v[1]) + abs(v[2])) < 1e-12
+
+
+def _wall_pan_align(level: Level, targets) -> list[str]:
+    """`wall-pan`, reproducing UnrealEd's `WALLPAN`: slide each face's EXISTING world frame's
+    anchor along its own `TextureV` until its world Z reaches zero — `TextureU`/`TextureV`/`Pan`
+    untouched (this is the one `align` mode that does NOT zero `Pan`). Operates on the frame a
+    face ALREADY has (typically written by `align wall`), unlike every other `align` mode, which
+    derives one fresh — so it needs its OWN missing-frame check `world_uv_frame` doesn't give
+    you: a `None` Origin/TextureU/TextureV, or a PRESENT-but-all-zero TextureU/TextureV (mirroring
+    `world_uv_frame`'s own `_zero()` threshold, `texframe.py`), is a named error, not a silently
+    synthesized frame."""
+    verb = "brush poly align wall-pan"
+    faces = [(bn, i, level.actors[bn], level.actors[bn].brush.polys[i]) for bn, i in targets]
+
+    missing = [f"{bn}:{i}" for bn, i, a, p in faces
+              if p.origin is None or _zero_mag(p.texture_u) or _zero_mag(p.texture_v)]
+    if missing:
+        raise PolyAlignError(
+            f"{verb}: {len(missing)} face(s) have no existing texture frame to slide — "
+            f"{', '.join(missing)}; run `brush poly align wall` (or `set`) first")
+
+    prepared, failures = [], []
+    for bn, i, a, p in faces:
+        ref = f"{bn}:{i}"
+        n = _oriented_world_normal(a, p, ref, verb)       # sign-blind guard below; no csg_sign needed
+        if abs(n[2]) >= 0.95:
+            failures.append((ref, "horizontal"))
+            continue
+        base_w, tu_w, tv_w, pan = _uv_frame_guarded(a, p)
+        if abs(tv_w[2]) <= 0.05:
+            failures.append((ref, "no vertical TextureV component"))
+            continue
+        prepared.append((a, p, base_w, tu_w, tv_w, pan))
+    if failures:
+        listed = ", ".join(f"`{ref}` ({why})" for ref, why in failures)
+        raise PolyAlignError(f"{verb}: {len(failures)} face(s) cannot be phase-slid — {listed}")
+
+    for a, p, base_w, tu_w, tv_w, pan in prepared:
+        new_base_w = _add(base_w, _scale(tv_w, -base_w[2] / tv_w[2]))
+        _write_world_frame(a, p, new_base_w, tu_w, tv_w, pan)
+    return sorted({bn for bn, _ in targets})
 
 
 # --------------------------------------------------------------------- fit-to-poly (one-tile)
@@ -663,26 +791,34 @@ def align(level: Level, tokens: list[str], mode: str, *,
           turn: int = 0, fit_perimeter: bool = False,
           resolve_dims: Callable[[str], tuple[int, int]] | None = None) -> list[str]:
     """Align the texture frames of the faces named by `tokens` (bare names / `BRUSH:SELECTOR`) in
-    `mode` (`wall`|`floor`|`run`|`one-tile`). `wall`/`floor` write the editor's projection frame
-    (`|proj|` density, ≤ 1); `run` walks a connected run laying one continuous texture along it at
-    unit density, `--turn` rotating the frame in unreal rotation units; `one-tile` fits exactly one
-    texture tile to each face independently. Every mode zeroes `Pan`. Returns the sorted touched
-    brush names; `run` also prints the worst seam shear to stderr. `turn`/`fit_perimeter` are
-    run-only (argparse enforces it via the subcommand). `resolve_dims` (a `ref -> (USize, VSize)`
-    callable that RAISES `ValueError` naming the ref and why on failure) is required for `one-tile`
-    and for `run` when `fit_perimeter` is set — the CLI builds it once per invocation over the
-    project's package path; `polyalign` never imports a resolver itself. Empty `tokens` ⇒ `[]` (a
-    clean no-op). Raises `PolyAlignError` (a `ValueError`) naming the offender for every failure
-    path."""
+    `mode` (`wall`|`floor`|`run`|`one-tile`|`wall-pan`). `wall` writes a `WALLDIR`-style unit
+    frame from the face's own horizontal run and downward slope (never stretches; no shared-grid
+    guarantee across a set — see `wall-pan`); `floor` writes the editor's `FLOOR` projection frame
+    (`|proj|` density, ≤ 1, world-axis anchored, so a set DOES share one grid); `run` walks a
+    connected run laying one continuous texture along it at unit density, `--turn` rotating the
+    frame in unreal rotation units; `one-tile` fits exactly one texture tile to each face
+    independently; `wall-pan` slides an EXISTING frame's anchor to world `Z=0`, touching nothing
+    else. Every mode zeroes `Pan` EXCEPT `wall-pan`, which is anchor-only and leaves `Pan`
+    (`TextureU`/`TextureV` too) exactly as it found them. Returns the sorted touched brush names;
+    `run` also prints the worst seam shear to stderr. `turn`/`fit_perimeter` are run-only (argparse
+    enforces it via the subcommand). `resolve_dims` (a `ref -> (USize, VSize)` callable that
+    RAISES `ValueError` naming the ref and why on failure) is required for `one-tile` and for `run`
+    when `fit_perimeter` is set — the CLI builds it once per invocation over the project's package
+    path; `polyalign` never imports a resolver itself. Empty `tokens` ⇒ `[]` (a clean no-op).
+    Raises `PolyAlignError` (a `ValueError`) naming the offender for every failure path."""
     targets = resolve_align_targets(level, tokens)
     if not targets:
         return []
     if mode == "run":
         return _run_align(level, targets, turn, fit_perimeter, resolve_dims)
-    if mode in ("wall", "floor"):
+    if mode == "wall":
+        return _walldir_align(level, targets)
+    if mode == "floor":
         return _projected_align(level, targets, mode)
     if mode == "one-tile":
         return _one_tile_align(level, targets, resolve_dims)
+    if mode == "wall-pan":
+        return _wall_pan_align(level, targets)
     raise PolyAlignError(f"brush poly align: unknown mode {mode!r}")
 
 

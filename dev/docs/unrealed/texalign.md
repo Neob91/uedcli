@@ -173,22 +173,21 @@ substrate; other UnrealEd builds were not checked.
 ## How uedcli differs
 
 uedcli aligns surfaces model-side and does not drive `POLY TEXALIGN` at all (it would need a live
-editor and a built BSP). `brush poly align --wall|--floor` with `--fresh-frame` synthesizes a frame
-from `builders._tex_basis(n̂)` at unit density anchored at the seed face's centroid; without
-`--fresh-frame` it adopts the seed face's frame. That is not any of the editor's rules:
+editor and a built BSP). As of the `align-wall-walldir-style-axes-split-off-a-wall` rework,
+`brush poly align`'s modes now reproduce THREE of this doc's own measured editor modes directly,
+not the `_tex_basis`-synthesized frame this table used to compare against (that code path is
+gone):
 
-| face                     | editor mode | UnrealEd `TU / TV`        | uedcli `_tex_basis` `TU / TV` | relationship
-|--------------------------|-------------|---------------------------|-------------------------------|---
-| +X wall                  | `WALLDIR`   | `(0,1,0) / (0,0,−1)`      | `(0,1,0) / (0,0,1)`           | V flipped (uedcli's V points up)
-| −X wall                  | `WALLDIR`   | `(0,−1,0) / (0,0,−1)`     | `(0,1,0) / (0,0,−1)`          | U mirrored
-| +Y wall                  | `WALLDIR`   | `(−1,0,0) / (0,0,−1)`     | `(1,0,0) / (0,0,−1)`          | U mirrored
-| −Y wall                  | `WALLDIR`   | `(1,0,0) / (0,0,−1)`      | `(1,0,0) / (0,0,1)`           | V flipped
-| yawed wall `(0.6,0.8,0)` | `WALLDIR`   | `(−0.8,0.6,0) / (0,0,−1)` | `(0,0,1) / (0.8,−0.6,0)`      | different axes (uedcli's U runs vertically)
-| floor `(0,0,1)`          | `FLOOR`     | `(−1,0,0) / (0,−1,0)`     | `(1,0,0) / (0,1,0)`           | 180° rotation
-| ceiling `(0,0,−1)`       | `FLOOR`     | `(−1,0,0) / (0,−1,0)`     | `(1,0,0) / (0,−1,0)`          | U mirrored
+- `floor` == `FLOOR` above, exactly (world-Z-anchored, `|proj|`-density, polarity-blind).
+- `wall` == `WALLDIR` above, exactly (unit axes from the wall's own direction, never stretches),
+  except anchored on the face's own centroid rather than leaving `Origin` untouched — `WALLDIR` is
+  an in-place tweak of an EXISTING editor frame and has no anchor of its own; `wall` is a
+  from-scratch derive with nothing to preserve, so centroid-at-origin is uedcli's own choice for
+  that one axis of the behavior. Sign-sensitive like the real `WALLDIR` (uses the visible normal).
+- `wall-pan` == `WALLPAN` above, exactly (anchor-only Z=0 slide, `TextureU`/`TextureV`/`Pan`
+  untouched).
 
-Plus: uedcli anchors on the seed face's centroid where the editor's projection modes anchor on a
-world axis, so uedcli's result depends on which face was listed first and two invocations on one
-plane need not agree. uedcli has no analogue of `WALLX`/`WALLY`/`WALLPAN`/`CLAMP`, and `--ring`
-(cylinder wrap) has no analogue in the editor. Whether any of this should change is a product
-question, parked on `board/inbox/` for the `poly-surface-verbs` spec.
+uedcli still has no analogue of `WALLX`/`WALLY`/`CLAMP`, and `run` (a connected-run walk, any
+number of brushes, cylinder wrap included) and `one-tile` (fit one tile per face) have no editor
+analogue at all. Whether `floor` should also move off `FLOOR` onto something else, and whether
+`run`/`one-tile` should change, stays parked on `board/inbox/the-per-surface-verb-split`.

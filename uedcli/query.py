@@ -308,6 +308,25 @@ def csg_is_subtract(actor) -> bool:
     return _csg_oper(actor).casefold() == "csg_subtract"
 
 
+def csg_sign(actor) -> float:
+    """+1.0 for CsgOper == 'CSG_Add' (or absent), -1.0 for CsgOper == 'CSG_Subtract' — EXACT key
+    and value match, deliberately NOT `_csg_oper`'s case-insensitive lookup (that lookup backs
+    `csg_is_subtract`/`csg_kind`, which are fine treating a foreign-cased value leniently; a
+    caller of THIS function has no sign to derive for one, so leniency here would be a silent
+    half-answer, `direction/conventions.md`). Raises ValueError naming the value for
+    CSG_Intersect/CSG_Deintersect/anything else — live-editor-only operations with no defined
+    inside/outside. Mirrors `surface._visible_normal`'s existing exact-case refusal
+    (`rationale/surface.md` "rotate turns against the visible surface normal")."""
+    oper = next((v for k, v in actor.props if k == "CsgOper"), "CSG_Add")
+    if oper == "CSG_Add":
+        return 1.0
+    if oper == "CSG_Subtract":
+        return -1.0
+    raise ValueError(
+        f"CsgOper={oper!r} is neither CSG_Add nor CSG_Subtract — no defined visible surface to "
+        f"derive a sign from")
+
+
 _CSG_KINDS = frozenset({"add", "subtract", "semisolid", "nonsolid", "intersect", "deintersect", "mover"})
 
 

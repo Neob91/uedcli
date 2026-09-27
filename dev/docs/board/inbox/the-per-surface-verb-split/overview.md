@@ -49,3 +49,11 @@ spec §3.1 ruling 11 — makes it one of these verbs; the two items must state t
 > **`--ring` is renamed `run`.** The mode is no longer cylinder-only — it walks any connected run
 > of faces, including a 90° arc and a flat curved bed — and a 90° arc is not a ring, so an author
 > would not find the old flag. `run` is already the codebase's own word for it.
+
+---
+
+**Update (board item `align-wall-walldir-style-axes-split-off-a-wall`):** `dev/docs/unrealed/
+texalign.md`'s closing "whether any of this should change" question is now resolved for the
+`wall` slice specifically — `wall` no longer reproduces `WALLX`/`WALLY`, it reproduces `WALLDIR`,
+plus a new `wall-pan` verb reproducing `WALLPAN`. `floor`/`run`/`one-tile` are unchanged and this
+question stays open for them.

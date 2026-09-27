@@ -14,11 +14,11 @@ from unittest import mock
 
 import pytest
 
-from uedcli import polyalign, query
+from uedcli import polyalign, query, transform
 from uedcli.builders import cube, cylinder, make_brush_actor, revolve
 from uedcli.cli.dispatch import dispatch
 from uedcli.facing_spec import parse_facing_spec as _fs
-from uedcli.model import Level
+from uedcli.model import Level, Polygon
 
 
 def _D(*xyz):
@@ -100,42 +100,74 @@ def _run_seam_shear(actor, idxs):
     return du, dv
 
 
+# --------------------------------------------------------------------- _oriented_world_normal
+
+def test_oriented_world_normal_unrotated_matches_raw_winding():
+    a = _brush("W", cube(64, 64, 64), loc=(0, 0, 0))
+    p = a.brush.polys[polyalign.find_faces(a, "W", facing=_fs("nx:1"))[0]]
+    n = polyalign._oriented_world_normal(a, p, "W:0", "test")
+    assert n == pytest.approx((1.0, 0.0, 0.0), abs=1e-9)
+
+
+def test_oriented_world_normal_rotated_90_about_z():
+    # The LOCAL +X face (cube()'s poly index 0, by its deterministic face order -- builders.py
+    # "faces = [... (1,0,0) # +X ..." is polys[0]) on a brush yawed 90 degrees (Yaw=16384) faces
+    # +Y OR -Y in WORLD space depending on this engine's yaw handedness -- this test's purpose is
+    # confirming a rotation is APPLIED at all (the `L is None` fast path is NOT taken), not
+    # pinning the handedness convention itself. Selecting the face by INDEX (not `find_faces
+    # facing=...`, which is itself WORLD-space and would tautologically "chase" the rotation to
+    # whatever face currently faces +X, defeating the point of this test) is deliberate.
+    a = _brush("W", cube(64, 64, 64), loc=(0, 0, 0), rot=(0, 16384, 0))
+    p = a.brush.polys[0]
+    n = polyalign._oriented_world_normal(a, p, "W:0", "test")
+    assert abs(n[0]) < 1e-6 and abs(abs(n[1]) - 1.0) < 1e-6 and abs(n[2]) < 1e-6
+
+
+def test_oriented_world_normal_scaled_brush_stays_unit_and_correctly_directed():
+    # MainScale/PostScale are TYPED Actor fields (`model.py`), never mirrored into `props`.
+    a = _brush("W", cube(64, 64, 64), loc=(0, 0, 0))
+    a.main_scale = transform.parse_fscale("(SheerAxis=SHEER_ZX,Scale=(X=1.0,Y=2.0,Z=1.0))")
+    p = a.brush.polys[polyalign.find_faces(a, "W", facing=_fs("ny:1"))[0]]   # ny:1 = +Y face
+    n = polyalign._oriented_world_normal(a, p, "W:0", "test")
+    assert abs(polyalign._len(n) - 1.0) < 1e-9
+    assert n[1] > 0.99                                   # still points +Y, not skewed by the scale
+
+
+def test_oriented_world_normal_mirrored_brush_flips_correctly():
+    # A brush mirrored on X (MainScale.X = -1, determinant -1). The world-space +Y face's true
+    # outward normal is still +Y; this is the case that broke a Newell-on-world-vertices
+    # computation in review (`Newell(L.v) = det(L).(L^-1)^T.Newell(v)` flips sign for det(L) < 0).
+    a = _brush("W", cube(64, 64, 64), loc=(0, 0, 0))
+    a.main_scale = transform.parse_fscale("(SheerAxis=SHEER_ZX,Scale=(X=-1.0,Y=1.0,Z=1.0))")
+    p = a.brush.polys[polyalign.find_faces(a, "W", facing=_fs("ny:1"))[0]]   # ny:1 = +Y face
+    n = polyalign._oriented_world_normal(a, p, "W:0", "test")
+    assert n == pytest.approx((0.0, 1.0, 0.0), abs=1e-6)
+
+
+def test_oriented_world_normal_zero_area_face_raises_naming_ref():
+    a = _brush("W", cube(64, 64, 64), loc=(0, 0, 0))
+    degenerate = Polygon(vertices=[(0.0, 0.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)])
+    with pytest.raises(polyalign.PolyAlignError, match="W:9"):
+        polyalign._oriented_world_normal(a, degenerate, "W:9", "brush poly align wall")
+
+
+def test_oriented_world_normal_degenerate_scale_raises_naming_brush():
+    # Select the +Y face by INDEX (cube()'s poly 2, confirmed deterministic), not via
+    # `find_faces(facing=...)`: `query.visible_normal` (which `find_faces` uses) returns
+    # `(0,0,0)` for a degenerate transform, so a facing filter matches nothing and `[0]` raises
+    # IndexError before this test's own scenario is even reached.
+    a = _brush("W", cube(64, 64, 64), loc=(0, 0, 0))
+    a.main_scale = transform.parse_fscale("(SheerAxis=SHEER_ZX,Scale=(X=0.0,Y=1.0,Z=1.0))")
+    p = a.brush.polys[2]
+    with pytest.raises(polyalign.PolyAlignError, match="W"):
+        polyalign._oriented_world_normal(a, p, "W:0", "brush poly align wall")
+
+
 # --------------------------------------------------------------------- coplanar wall/floor
 
-def test_wall_two_brushes_uv_continuous_across_seam():
-    """Two side-by-side wall brushes sharing an edge → one shared world frame → the seam is
-    seamless. Multi-brush, so the per-brush inverse-transform (not identical stored fields) is
-    exercised."""
-    a1 = _brush("W1", cube(64, 8, 128), loc=(32, 0, 0))
-    a2 = _brush("W2", cube(64, 8, 128), loc=(96, 0, 0))
-    lv = _level(a1, a2)
-    f1 = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
-    f2 = polyalign.find_faces(a2, "W2", facing=_fs("ny:1"))[0]
-    touched = polyalign.align(lv, [f"W1:{f1}", f"W2:{f2}"], "wall")
-    assert touched == ["W1", "W2"]
-    _assert_seam_continuous(a1, a1.brush.polys[f1], a2, a2.brush.polys[f2])
-
-
-def test_wall_continuous_when_second_brush_is_rotated():
-    """The continuity is defined in WORLD space and written back via each brush's OWN inverse
-    rotation. A rotated neighbour whose stored frame differs must still be seamless in the world."""
-    a1 = _brush("W1", cube(64, 8, 128), loc=(0, 0, 0))
-    # W2 pitched 180° about Y (its +Y face still faces +Y, but the stored texture frame rotates),
-    # stacked directly above so the two +Y faces are coplanar (y=4) and share the z=64 edge.
-    a2 = _brush("W2", cube(64, 8, 128), loc=(0, 0, 128), rot=(32768, 0, 0))
-    lv = _level(a1, a2)
-    f1 = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
-    f2 = polyalign.find_faces(a2, "W2", facing=_fs("ny:1"))[0]
-    polyalign.align(lv, [f"W1:{f1}", f"W2:{f2}"], "wall")
-    # rotated brush ⇒ stored TextureU differs from W1's, but world mapping matches
-    assert a2.brush.polys[f2].texture_u != a1.brush.polys[f1].texture_u
-    _assert_seam_continuous(a1, a1.brush.polys[f1], a2, a2.brush.polys[f2])
-
-
-def test_wall_zeroes_pan_and_is_unit_on_a_face_square_to_its_axis():
-    # The projection family writes Pan=(0,0) and, on a face square to its projection axis, unit axes
-    # (a +Y wall projects down Y; proj(X̂)/proj(Ẑ) are then unit). The |proj|-density stretch on a
-    # TILTED face is pinned against the editor golden in test_engine_facts (align_wall/floor parity).
+def test_wall_zeroes_pan_and_gives_unit_axes():
+    # WALLDIR zeroes Pan and, on EVERY non-horizontal face (not just one "square" to a world
+    # axis, as the old WALLX/WALLY projection family required), gives unit TextureU/TextureV.
     a1 = _brush("W1", cube(64, 8, 128), loc=(32, 0, 0))
     lv = _level(a1)
     f1 = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
@@ -144,11 +176,11 @@ def test_wall_zeroes_pan_and_is_unit_on_a_face_square_to_its_axis():
     p = a1.brush.polys[f1]
     assert p.pan == (0, 0)
     assert abs(polyalign._len(p.texture_u) - 1.0) < 1e-6   # unit ⇒ 1 texel/world-unit
+    assert abs(polyalign._len(p.texture_v) - 1.0) < 1e-6
 
 
 def test_wall_rejects_horizontal_face_on_the_projection_guard():
-    # A horizontal face (N ≈ ±Z) ties |N.X| = |N.Y| = 0, so `wall` derives axis X and the
-    # |N.X| > 0.05 guard fails — exit 2 (the old "use floor" advice is gone; filter upstream).
+    # A horizontal face (N ≈ ±Z) fails WALLDIR's |N.Z| < 0.95 guard — exit 2.
     a1 = _brush("W1", cube(64, 64, 8), loc=(0, 0, 0))
     lv = _level(a1)
     f = polyalign.find_faces(a1, "W1", facing=_fs("nz:1"))[0]
@@ -176,9 +208,8 @@ def test_wall_guard_names_every_failing_face():
     assert f"W1:{top}" in msg and f"W1:{bot}" in msg      # nothing written; both named
 
 
-def test_wall_two_planes_each_get_their_own_projected_frame():
-    # Replaces the deleted coplanarity guard: a +X and a +Y face in ONE `wall` invocation each get
-    # their own world-projected frame (different axes), instead of being rejected as "not coplanar".
+def test_wall_two_planes_each_get_their_own_frame():
+    # A +X and a +Y face in ONE `wall` invocation each get their own frame (different axes).
     a1 = _brush("W1", cube(64, 64, 128), loc=(0, 0, 0))
     lv = _level(a1)
     fpx = polyalign.find_faces(a1, "W1", facing=_fs("nx:1"))[0]
@@ -190,23 +221,11 @@ def test_wall_two_planes_each_get_their_own_projected_frame():
     assert tux != tuy                                        # each keyed to its own plane
 
 
-def test_wall_opposite_faces_get_an_identical_world_frame():
-    # Replaces the deleted co-orientation guard: two coplanar faces pointing OPPOSITE ways get a
-    # byte-identical world frame (the projection family is invariant under n → −n). The visual
-    # consequence — a texture mirrored on the back face — is the editor's own behaviour (ruling 9).
-    a1 = _brush("W1", cube(64, 8, 128), loc=(0, 0, 0))    # +Y face at y=4
-    a2 = _brush("W2", cube(64, 8, 128), loc=(0, 8, 0))    # its -Y face at y=4 (same plane, opposite)
-    lv = _level(a1, a2)
-    f1 = polyalign.find_faces(a1, "W1", facing=_fs("ny:1"))[0]
-    f2 = polyalign.find_faces(a2, "W2", facing=_fs("ny:-1"))[0]
-    polyalign.align(lv, [f"W1:{f1}", f"W2:{f2}"], "wall")   # no error
-    # A shared world corner maps to the same (U,V) from either face ⇒ one continuous world frame.
-    _assert_seam_continuous(a1, a1.brush.polys[f1], a2, a2.brush.polys[f2])
-
-
 def test_wall_frame_is_set_independent_and_idempotent():
-    # A world-anchored frame does not depend on which faces were selected together or on order, and
-    # re-running changes nothing (§2.3, the property the ruling is for).
+    # A from-scratch per-face derive does not depend on which faces were selected together or on
+    # order, and re-running changes nothing. (Unlike `floor`, `wall` is centroid-anchored per
+    # face, not world-anchored -- this is about the DERIVE being independent of the SET, not
+    # about a shared world grid.)
     def _frame(a):
         p = a.brush.polys[polyalign.find_faces(a, a.name, facing=_fs("ny:1"))[0]]
         return (p.origin, p.texture_u, p.texture_v, p.pan)
@@ -224,6 +243,183 @@ def test_wall_frame_is_set_independent_and_idempotent():
     fx = polyalign.find_faces(withset, "W", facing=_fs("nx:1"))[0]
     polyalign.align(lv2, [f"W:{fx}", f"W:{fy}"], "wall")
     assert _frame(withset) == once                        # set-independent
+
+
+def test_wall_matches_walldir_yawed_face():
+    # texalign.md's own measured example: N=(0.6,0.8,0) -> TextureU=(-0.8,0.6,0), TextureV=(0,0,-1).
+    # Hand-verified via Newell: edge sums give (120,160,0), normalizing to exactly (0.6,0.8,0).
+    a = _brush_from_quads("W", [[(0, 0, 0), (-8, 6, 0), (-8, 6, 10), (0, 0, 10)]])
+    lv = _level(a)
+    polyalign.align(lv, ["W:0"], "wall")
+    p = a.brush.polys[0]
+    assert p.texture_u == pytest.approx((-0.8, 0.6, 0.0), abs=1e-6)
+    assert p.texture_v == pytest.approx((0.0, 0.0, -1.0), abs=1e-6)
+    assert p.pan == (0, 0)
+
+
+def test_wall_no_longer_stretches_on_a_diagonal_face():
+    # The align-wall-skews-texture-on-45deg-diagonal-faces repro: a 45-degree-yawed vertical face
+    # used to get |TextureU| != |TextureV| under WALLX/WALLY. Under WALLDIR both are always unit.
+    # cube()'s poly 0 is the LOCAL +X face (deterministic builder order) -- selected by index, not
+    # `find_faces(facing=...)`, which is itself WORLD-space and would chase the rotation to
+    # whatever face currently faces +X rather than testing the originally-+X one.
+    a = _brush("W", cube(64, 64, 64), loc=(0, 0, 0), rot=(0, 8192, 0))   # 45-degree yaw
+    lv = _level(a)
+    polyalign.align(lv, ["W:0"], "wall")
+    p = a.brush.polys[0]
+    assert abs(polyalign._len(p.texture_u) - 1.0) < 1e-6
+    assert abs(polyalign._len(p.texture_v) - 1.0) < 1e-6
+
+
+def test_wall_on_scaled_brush_gives_unit_world_axes():
+    # Positive-determinant scale, distinct from the mirrored/negative-determinant case below.
+    # Scaling X while testing the +Y face (rather than scaling Y, which would leave the LOCAL
+    # axes accidentally unit too, hiding a bug) -- assert on the WORLD frame, which is always
+    # unit under WALLDIR regardless of scale; LOCAL storage is not.
+    a = _brush("W", cube(64, 64, 64), loc=(0, 0, 0))
+    a.main_scale = transform.parse_fscale("(SheerAxis=SHEER_ZX,Scale=(X=2.0,Y=1.0,Z=1.0))")
+    f = polyalign.find_faces(a, "W", facing=_fs("ny:1"))[0]
+    lv = _level(a)
+    polyalign.align(lv, [f"W:{f}"], "wall")
+    p = a.brush.polys[f]
+    _, tu_w, tv_w, _ = polyalign._uv_frame_guarded(a, p)
+    assert abs(polyalign._len(tu_w) - 1.0) < 1e-6
+    assert abs(polyalign._len(tv_w) - 1.0) < 1e-6
+
+
+def test_wall_on_mirrored_brush_turns_the_same_visible_way():
+    # An unmirrored and a mirrored (MainScale.X=-1) brush's +Y face should turn the SAME visible
+    # way under `wall` -- the regression that would have caught the round-2 `_world_normal` sign
+    # bug found in spec review. Compare WORLD-space frames (`_uv_frame_guarded`), not LOCAL
+    # `.texture_u` storage: the mirrored actor's LOCAL storage genuinely differs from its WORLD
+    # value by construction (same local/world distinction the `wall-pan` tests below rely on) --
+    # comparing local-to-local across an unscaled and a scaled actor is apples to oranges and
+    # would spuriously fail even with a correct implementation.
+    plain = _brush("Wp", cube(64, 64, 64), loc=(0, 0, 0))
+    mirrored = _brush("Wm", cube(64, 64, 64), loc=(200, 0, 0))
+    mirrored.main_scale = transform.parse_fscale("(SheerAxis=SHEER_ZX,Scale=(X=-1.0,Y=1.0,Z=1.0))")
+    fp = polyalign.find_faces(plain, "Wp", facing=_fs("ny:1"))[0]
+    fm = polyalign.find_faces(mirrored, "Wm", facing=_fs("ny:1"))[0]
+    lv = _level(plain, mirrored)
+    polyalign.align(lv, [f"Wp:{fp}", f"Wm:{fm}"], "wall")
+    _, tu_p, _, _ = polyalign._uv_frame_guarded(plain, plain.brush.polys[fp])
+    _, tu_m, _, _ = polyalign._uv_frame_guarded(mirrored, mirrored.brush.polys[fm])
+    assert tu_p == pytest.approx(tu_m, abs=1e-6)
+
+
+def test_wall_on_subtractive_brush_turns_the_visible_way():
+    add_a = _brush("Wa", cube(64, 64, 64), loc=(0, 0, 0), csg="add")
+    sub_a = _brush("Ws", cube(64, 64, 64), loc=(200, 0, 0), csg="subtract")
+    fa = polyalign.find_faces(add_a, "Wa", facing=_fs("ny:1"))[0]
+    fs = polyalign.find_faces(sub_a, "Ws", facing=_fs("ny:1"))[0]
+    lv = _level(add_a, sub_a)
+    polyalign.align(lv, [f"Wa:{fa}", f"Ws:{fs}"], "wall")
+    assert add_a.brush.polys[fa].texture_u == pytest.approx(
+        sub_a.brush.polys[fs].texture_u, abs=1e-6)
+
+
+def _with_csg_oper_polyalign(actor, oper):
+    from dataclasses import replace
+    props = [p for p in actor.props if p[0] != "CsgOper"] + [("CsgOper", oper)]
+    return replace(actor, props=props)
+
+
+def test_wall_refuses_intersect_csgoper():
+    a = _brush("W", cube(64, 64, 64), loc=(0, 0, 0))
+    a = _with_csg_oper_polyalign(a, "CSG_Intersect")
+    f = polyalign.find_faces(a, "W", facing=_fs("ny:1"))[0]
+    lv = _level(a)
+    with pytest.raises(polyalign.PolyAlignError, match="CSG_Intersect"):
+        polyalign.align(lv, [f"W:{f}"], "wall")
+
+
+def test_wall_on_degenerate_scale_exits_naming_brush_not_a_traceback():
+    # +Y face selected by INDEX (cube()'s poly 2) -- `query.visible_normal` returns (0,0,0) for a
+    # degenerate transform, so a `find_faces(facing=...)` filter would match nothing.
+    a = _brush("W", cube(64, 64, 64), loc=(0, 0, 0))
+    a.main_scale = transform.parse_fscale("(SheerAxis=SHEER_ZX,Scale=(X=0.0,Y=1.0,Z=1.0))")
+    lv = _level(a)
+    with pytest.raises(polyalign.PolyAlignError, match="W"):
+        polyalign.align(lv, ["W:2"], "wall")
+
+
+# --------------------------------------------------------------------- wall-pan
+
+def test_wall_pan_slides_origin_to_world_z_zero_on_a_placed_rotated_brush():
+    # loc.Z != 0 AND a real yaw -- the case that distinguishes a correct WORLD-Z slide from
+    # reading/writing `poly.origin`'s LOCAL Z directly, which would target local Z=0, NOT world
+    # Z=0 once the brush is placed away from the origin and/or rotated. cube()'s poly 3 is the
+    # LOCAL -Y face (deterministic builder order); selected by INDEX for the same reason
+    # `test_wall_no_longer_stretches_on_a_diagonal_face` above uses one (a `find_faces
+    # facing=...)` filter is WORLD-space and would chase the rotation).
+    a = _brush("W", cube(64, 8, 128), loc=(100, 50, 37), rot=(0, 8192, 0))
+    lv = _level(a)
+    polyalign.align(lv, ["W:3"], "wall")                  # give it a real WALLDIR frame first
+    p = a.brush.polys[3]
+    tu_before, tv_before, pan_before = p.texture_u, p.texture_v, p.pan
+    polyalign.align(lv, ["W:3"], "wall-pan")
+    base_w, _, _, _ = polyalign._uv_frame_guarded(a, p)
+    assert abs(base_w[2]) < 1e-6                          # WORLD Z, not local Z
+    assert p.texture_u == pytest.approx(tu_before, abs=1e-9)
+    assert p.texture_v == pytest.approx(tv_before, abs=1e-9)
+    assert p.pan == pan_before
+
+
+def test_wall_pan_preserves_a_nonzero_seed_pan():
+    a = _brush("W", cube(64, 8, 128), loc=(0, 0, 40))
+    f = polyalign.find_faces(a, "W", facing=_fs("ny:1"))[0]
+    lv = _level(a)
+    polyalign.align(lv, [f"W:{f}"], "wall")
+    a.brush.polys[f].pan = (7, 13)
+    polyalign.align(lv, [f"W:{f}"], "wall-pan")
+    assert a.brush.polys[f].pan == (7, 13)
+
+
+def test_wall_pan_rejects_face_with_horizontal_texture_v():
+    a = _brush("W", cube(64, 8, 128), loc=(0, 0, 40))
+    f = polyalign.find_faces(a, "W", facing=_fs("ny:1"))[0]
+    lv = _level(a)
+    p = a.brush.polys[f]
+    p.origin, p.texture_u, p.texture_v = (0.0, 4.0, 0.0), (1.0, 0.0, 0.0), (0.0, 1.0, 0.0)
+    with pytest.raises(polyalign.PolyAlignError, match="vertical TextureV component"):
+        polyalign.align(lv, [f"W:{f}"], "wall-pan")
+
+
+def test_wall_pan_rejects_missing_origin_naming_the_face():
+    # NOTE: `cube()` (like every builder) already stamps a synthesized `_tex_basis` frame onto
+    # every face (`builders._face`) -- a freshly built brush is NEVER frame-less. Null the frame
+    # out explicitly to reach the "never aligned" case this test targets.
+    a = _brush("W", cube(64, 8, 128), loc=(0, 0, 0))
+    f = polyalign.find_faces(a, "W", facing=_fs("ny:1"))[0]
+    p = a.brush.polys[f]
+    p.origin = p.texture_u = p.texture_v = None
+    lv = _level(a)
+    with pytest.raises(polyalign.PolyAlignError, match=f"W:{f}"):
+        polyalign.align(lv, [f"W:{f}"], "wall-pan")
+
+
+def test_wall_pan_rejects_present_but_zero_texture_axes_naming_the_face():
+    # A present-but-all-zero TextureU/TextureV must be caught too -- world_uv_frame's own _zero()
+    # test silently defaults this exactly like a missing frame.
+    a = _brush("W", cube(64, 8, 128), loc=(0, 0, 0))
+    f = polyalign.find_faces(a, "W", facing=_fs("ny:1"))[0]
+    lv = _level(a)
+    p = a.brush.polys[f]
+    p.origin, p.texture_u, p.texture_v = (0.0, 4.0, 0.0), (0.0, 0.0, 0.0), (0.0, 0.0, 0.0)
+    with pytest.raises(polyalign.PolyAlignError, match=f"W:{f}"):
+        polyalign.align(lv, [f"W:{f}"], "wall-pan")
+
+
+def test_wall_pan_accepts_bare_brush_name():
+    # A single-quad brush (no horizontal faces) so a bare "W" (= all its polys) is entirely
+    # wall-eligible -- a `cube()` brush's bare name would include its horizontal top/bottom
+    # faces, which fail BOTH `wall`'s and `wall-pan`'s `|N.Z|<0.95` guard. Exercises `wall-pan`'s
+    # WIDER target grammar (a bare brush Name), which `rotate`/`scale` deliberately do NOT accept.
+    a = _brush_from_quads("W", [[(0, 0, 0), (64, 0, 0), (64, 0, 128), (0, 0, 128)]])
+    lv = _level(a)
+    polyalign.align(lv, ["W"], "wall")
+    touched = polyalign.align(lv, ["W"], "wall-pan")       # bare name, not W:SELECTOR
+    assert touched == ["W"]
 
 
 # --------------------------------------------------------------------- ring

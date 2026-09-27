@@ -115,29 +115,45 @@ then `actor diagram <brush> --highlight <brush>:N` (below) to see it emphasised 
 
 ### Continuous texture alignment (`brush poly align`)
 
-**`brush poly align <mode> (targets…|-)`**, with `<mode>` one of **`wall`**, **`floor`**, **`run`** or
-**`one-tile`**, sets each face's texture frame (offline texture-vector math — `wall`/`floor`/`run`
-flow continuously across a set, `one-tile` fits each face independently; `wall`/`floor` reproduce
-the editor's projection modes, `run`/`one-tile` are uedcli's own). The mode is a **subcommand**, so
-`brush poly align run -h` lists exactly the flags that apply. The face set is `BRUSH:SELECTOR`
-positionals (or a bare brush Name = all its polys) **or** `-` reading the set from stdin (bare names,
-or the `BRUSH:idx` lines `poly find` prints); empty stdin is a clean no-op. Every mode zeroes `Pan`.
-The touched faces → stdout as `BRUSH:idx` selectors, a summary → stderr.
+**`brush poly align <mode> (targets…|-)`**, with `<mode>` one of **`wall`**, **`floor`**, **`run`**,
+**`one-tile`** or **`wall-pan`**, sets each face's texture frame (offline texture-vector math — most
+modes derive a fresh frame from geometry; `wall-pan` instead slides an EXISTING one). The mode is a
+**subcommand**, so `brush poly align run -h` lists exactly the flags that apply. The face set is
+`BRUSH:SELECTOR` positionals (or a bare brush Name = all its polys) **or** `-` reading the set from
+stdin (bare names, or the `BRUSH:idx` lines `poly find` prints); empty stdin is a clean no-op. Every
+mode zeroes `Pan` EXCEPT `wall-pan`, which leaves it untouched. The touched faces → stdout as
+`BRUSH:idx` selectors, a summary → stderr.
 
-- **`wall`** / **`floor`** — each face gets a **world-space** frame that reproduces UnrealEd's
-  `POLY TEXALIGN` `WALLX`/`WALLY`/`FLOOR` (measured 2026-07-26): the texture anchored where the face's
-  plane crosses a world axis, its U/V the other two world axes projected into the face. `floor`
-  projects down Z; `wall` projects down whichever of X/Y the face faces more. Because the anchor is a
-  **world axis, not the face**, faces on the same plane — or different planes at the same height —
-  share one continuous grid, and the result does not depend on which faces were selected together or
-  in what order. A face too near edge-on to its projection axis (`|N·axis| ≤ 0.05`) is a hard error
-  naming every offender (`brush poly find --facing` filters upstream). A tilted face carries the
-  planar-projection stretch (`|TextureU| = |proj| ≤ 1`); a face square to its axis is unit.
+- **`floor`** — each face gets a **world-space** frame that reproduces UnrealEd's `POLY TEXALIGN`
+  `FLOOR` (measured 2026-07-26): the texture anchored where the face's plane crosses the world Z
+  axis, its U/V the other two world axes projected into the face. Because the anchor is a **world
+  axis, not the face**, faces on the same plane — or different planes at the same height — share one
+  continuous grid, and the result does not depend on which faces were selected together or in what
+  order. A face too near edge-on to Z (`|N·Z| ≤ 0.05`) is a hard error naming every offender (`brush
+  poly find --facing` filters upstream). A tilted face carries the planar-projection stretch
+  (`|TextureU| = |proj| ≤ 1`); a face square to Z is unit.
   ⚠ Two coplanar faces pointing **opposite** ways get an identical frame, so the texture reads
   **mirrored** on the back one — this is the editor's own polarity-blind behaviour, not a bug.
-  ⚠ **Destructive on imported content:** real maps carry deliberate texel scales and pans; `wall`/
-  `floor` replace them with the projection's density and zero the pan. Re-scale afterwards with
-  `brush poly scale` if you need a specific density.
+  ⚠ **Destructive on imported content:** real maps carry deliberate texel scales and pans; `floor`
+  replaces them with the projection's density and zeroes the pan. Re-scale afterwards with `brush
+  poly scale` if you need a specific density.
+- **`wall`** — each VERTICAL face gets a **unit** texture frame from its own horizontal run and
+  downward slope, reproducing UnrealEd's `POLY TEXALIGN` `WALLDIR` — it never stretches, even on a
+  diagonal or angled wall (unlike `floor`'s world-axis projection). The turn direction follows the
+  face's **visible** side (flips on a subtractive brush's inner wall, same as `brush poly rotate`).
+  Anchored on the face's own centroid: unlike `floor`, there is **no shared-grid guarantee** across a
+  set — two separately-aligned wall faces can end up out of phase with each other. Use **`brush poly
+  align wall-pan`** afterwards to sync the vertical phase across a set (below). A face too near
+  horizontal (`|N·Z| ≥ 0.95`) is a hard error naming every offender.
+  ⚠ **Destructive on imported content**, same caveat as `floor` above.
+- **`wall-pan`** — slides each face's **existing** texture anchor along its own `TextureV` until it
+  reaches world `Z=0`, reproducing UnrealEd's `POLY TEXALIGN` `WALLPAN` — so a set of `wall`-aligned
+  faces reads with one consistent vertical phase. Leaves `TextureU`/`TextureV`/`Pan` exactly as they
+  were (the one `align` mode that does not zero `Pan`) — despite the name, it does **not** touch
+  `Pan` (see `brush poly pan` for that). Needs an existing frame (run `wall` or `set` first) and a
+  near-vertical face whose current `TextureV` has a vertical component, else exit 2 naming why.
+  Accepts a bare brush Name (unlike `pan`/`rotate`/`scale`, which require `BRUSH:SELECTOR`) since a
+  whole-brush phase sync is the normal use, not a blanket edit to second-guess.
 - **`run`** — lay one texture **continuously along a connected run** of faces: U follows the run, V
   across it, the phase carried across every seam. It wraps a cylinder (U advances by each facet's
   chord `2·r·sin(π/N)`, V along the axis), walks a wall run, or follows a flat/curved **bend**.
@@ -148,7 +164,8 @@ The touched faces → stdout as `BRUSH:idx` selectors, a summary → stderr.
   every side) or is **disconnected** exits 2 naming the faces, with the hint to exclude caps via
   `brush poly find <brush> --item Side`. V runs **down** (a UE1 texture's `V=0`
   row is its top). On a subtractive brush's inner wall U reads mirrored (the same polarity-blindness
-  as `wall`/`floor`), so a run and the walls around it stay consistent.
+  as `floor`) — `wall` does NOT share this: it follows the visible side instead, so a `run` and the
+  `wall` faces around it can read oppositely on a subtractive brush's inner surface.
 - **`--turn UU`** (`run` only) rotates the texture uniformly in each face's own run frame, in unreal
   rotation units (16384 = 90°). Any angle is allowed. A **cylinder** run stays exact at every angle;
   a **flat bend** shears at its seams (one axis at a quarter turn, both otherwise) — `run` reports the

@@ -1864,31 +1864,45 @@ OR relative, in a PRE-PASS naming every offender before anything is written; `sc
 guard because it preserves direction. Derivations, measurements and the rejected alternatives are
 in [`rationale/surface.md`](rationale/surface.md).
 
-**Surface texture alignment** (`polyalign.py`, build item 11 — `direction/conventions.md`, 2026-07-18 21:40 UTC)
-makes one texture flow **continuously** across a set of faces instead of restarting at each brush
-edge. It is uedcli's OWN alignment, **not** a port of the editor's: UnrealEd's own verb is
-`POLY TEXALIGN` (there is no `TEXTURE ALIGN`), and its rules were measured on 2026-07-26 and agree
-with `_tex_basis` on none of seven face directions, besides anchoring on a world axis where uedcli
-anchors on the seed face's centroid — see [`unrealed/texalign.md`](unrealed/texalign.md)
-"How uedcli differs". Two verbs:
+**Surface texture alignment** (`polyalign.py`, build item 11 — `direction/conventions.md`,
+2026-07-18 21:40 UTC; `wall`'s WALLDIR rework — board item
+`align-wall-walldir-style-axes-split-off-a-wall`) makes one texture flow **continuously** across a
+set of faces instead of restarting at each brush edge, or (`wall`) gives a single face a
+never-stretching frame. `floor`/`run`/`one-tile` are uedcli's OWN alignment (not a port of the
+editor's `POLY TEXALIGN`); `wall`/`wall-pan` DO reproduce two of the editor's own modes
+(`WALLDIR`/`WALLPAN`), and `floor` reproduces a third (`FLOOR`) — see
+[`unrealed/texalign.md`](unrealed/texalign.md). Two verbs, `align`'s mode a **subcommand**
+(`wall|floor|run|one-tile|wall-pan`), not a flag:
 - **`brush poly find <brush> [--item][--facing][--texture][--json]`** — a stateless PRODUCER
   printing matching faces as `BRUSH:idx` selectors (one/line, summary→stderr), so
-  `brush poly find Tower --item Side | brush poly align --ring -` skips a cylinder's caps.
-- **`brush poly align (--wall|--floor|--ring) [--fresh-frame][--fit-perimeter] (targets…|-)`** —
-  reads its face set from `BRUSH:SELECTOR`/bare-name positionals or stdin `-` (bare names or the
-  producer's `BRUSH:idx` lines; empty stdin → clean no-op). The **UV convention** it implements is
+  `brush poly find Tower --item Side | brush poly align run -` skips a cylinder's caps.
+- **`brush poly align <mode> [flags] (targets…|-)`** — reads its face set from
+  `BRUSH:SELECTOR`/bare-name positionals or stdin `-` (bare names or the producer's `BRUSH:idx`
+  lines; empty stdin → clean no-op). The **UV convention** every mode writes is
   `U = (Vertex − Origin)·TextureU + PanU` (texel scale in `|TextureU|`; verified against
   `render.rs`/`texframe.world_uv_frame`, pinned by `unrealed/t3d.md` + a `test_polyalign`
-  engine-fact). Continuity is defined in **world space**: the seed/first face's world frame
-  (`texframe.world_uv_frame`) is written into each face by **inverse-transforming it through
-  that face's own brush rotation** (`rotation.actor_matrix` + `rotation.inverse`) — NOT by copying
-  identical stored fields, which would only align faces of one brush. The continuity offset lives in
-  the float `Origin`, so `Pan` stays the seed's integer. `--wall`/`--floor` demand a strictly
-  coplanar set (with a vertical/horizontal orientation guard distinguishing the two flags); `--ring`
-  advances U by each facet's chord `2r·sin(π/N)` around the side ring (V along the axis), leaving the
-  closing seam by default (`--fit-perimeter` snaps the scale for an exact meet). Frame source is
-  **adopt-seed** by default (continue the seed's dialled-in `TextureU/V`+`Pan`); `--fresh-frame`
-  synthesizes a canonical 1-texel/unit frame from the face normal.
+  engine-fact).
+  - `floor` reproduces the editor's `FLOOR`: a world-Z-anchored `|proj|`-density frame, so a set
+    shares one continuous grid regardless of brush boundaries; a face too near edge-on to Z exits 2
+    naming every offender.
+  - `wall` reproduces the editor's `WALLDIR`: a unit frame from the face's own horizontal run and
+    downward slope, never stretching — anchored on the face's own centroid, so (unlike `floor`)
+    there is NO shared-grid guarantee across a set. Sign-sensitive (unlike `floor`), so it uses the
+    VISIBLE normal (flips on a subtractive brush's inner wall, matching `rotate`) rather than the
+    raw polygon winding.
+  - `wall-pan` reproduces the editor's `WALLPAN`: slides an EXISTING frame's anchor along its own
+    `TextureV` to world `Z=0`, touching nothing else (the one mode that does not zero `Pan`) — the
+    companion that gives a `wall`-aligned set a consistent vertical phase.
+  - `run` (uedcli's own) walks a connected, possibly multi-brush RUN of faces — a cylinder ring, a
+    flat bend, or a wall run — laying one continuous texture along it (U along the run, V across),
+    the phase carried across every seam by writing each face's world frame
+    (`texframe.world_uv_frame`) inverse-transformed through that face's own brush transform
+    (`rotation.actor_linear` + `rotation.inverse`, honouring scale/shear, not just rotation) — NOT
+    by copying identical stored fields, which would only align faces of one brush. `--turn UU`
+    rotates the run frame; `--fit-perimeter` snaps density so a closed run's loop closes on a whole
+    number of tiles.
+  - `one-tile` (uedcli's own) fits exactly one texture tile per face, independently — no shared
+    frame, no orientation guard.
 
 **Shape replace** (`brush replace <name> -`) is the same model-side pattern for a whole-shape swap:
 read a generator T3D snippet from stdin (`-` is the sole shape source — the `build → add -`
