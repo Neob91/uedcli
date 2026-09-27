@@ -55,17 +55,25 @@ Combinations: `Fake Backdrop` + `Unlit` shows sky; `Mirror` + `Unlit`; a glass s
 ## Alignment & scrolling
 
 - Align with `brush poly align wall|floor|run`. After any CSG change a rebuild can disturb
-  texturing — re-align after rebuilding. `wall`/`floor` reproduce UnrealEd's `WALLX`/`WALLY`/`FLOOR`
-  projection (world-axis-anchored, measured 2026-07-26), so a face aligned here matches the editor's
-  GUI; `run` (cylinder wrap) is uedcli's own. ⚠ `wall`/`floor` are **destructive on imported
-  content**: they replace a face's authored texel scale and pan with the projection's own — re-scale
-  with `brush poly scale` afterwards if you need a specific density. Two coplanar faces pointing
-  opposite ways come out **mirrored** on the back one (the editor's own polarity-blind behaviour).
+  texturing — re-align after rebuilding. `floor` reproduces UnrealEd's `FLOOR` projection
+  (world-axis-anchored, measured 2026-07-26), so a floor/ceiling face aligned here matches the
+  editor's GUI, and any set of floor faces shares one continuous grid. `wall` reproduces UnrealEd's
+  `WALLDIR` instead: a **unit** frame from the face's own horizontal run and downward slope — it
+  never stretches, even on a diagonal wall, but each face is aligned on its own (no shared-grid
+  guarantee across a set — use `brush poly align wall-pan` afterwards to sync the vertical phase of
+  a set of wall-aligned faces to one another). `run` (cylinder wrap, or any connected run of faces)
+  is uedcli's own. ⚠ `wall`/`floor` are **destructive on imported content**: they replace a face's
+  authored texel scale and pan with their own — re-scale with `brush poly scale` afterwards if you
+  need a specific density. On `floor`, two coplanar faces pointing opposite ways come out
+  **mirrored** on the back one (the editor's own polarity-blind behaviour); `wall` follows the
+  visible side instead, so it does not mirror this way.
 - Pan with `brush poly pan --to U,V` (absolute) or `--by dU,dV` (relative), in whole texels. Pan
-  after aligning, never before — every align mode stamps `Pan` on the faces it touches, so a pan
-  applied first is discarded. Pan the whole of an aligned run or none of it: panning a subset shifts
-  those faces relative to their neighbours and breaks the seams (easy to do by accident, since
-  `brush poly find` filters).
+  after aligning, never before — every align mode except `wall-pan` stamps `Pan` on the faces it
+  touches, so a pan applied first is discarded. (`wall-pan` is different: it only slides the
+  anchor to sync a wall set's vertical phase, and leaves `Pan` — and `TextureU`/`TextureV` — exactly
+  as they were.) Pan the whole of an aligned run or none of it: panning a subset shifts those faces
+  relative to their neighbours and breaks the seams (easy to do by accident, since `brush poly find`
+  filters).
 - Rotate with `brush poly rotate --by UU`, in unreal rotation units (16384 = a quarter turn). The
   turn follows the face's visible surface normal, so it looks the same from where you stand whether
   the face is the outside of an added pillar or the inside of a subtracted room — uedcli flips the
