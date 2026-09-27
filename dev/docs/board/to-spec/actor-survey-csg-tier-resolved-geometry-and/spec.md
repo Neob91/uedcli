@@ -80,11 +80,15 @@ kind/order logic.
 | `touches` | flush resolved-solid contact, no penetration | symmetric |
 | `connects` | two Subtracts' voids are continuous | symmetric |
 
-- **`crosses` must use resolved matter, not authored cells.** The bug that started this: `_source_cells`
-  (`actor_survey.py:975-977`) feeds `penetration_depth` authored `decompose_convex` cells, so an Add
-  whose matter a later Subtract carved away still "crosses" an actor in that carved void
-  (`Brush196 --crosses--> Brush184`). Gate/clip the source by `resolved_matter_of`. Tracked in
-  depends-on item `actor-survey-crosses-false-positive-when-a`.
+- **`crosses` must use resolved matter, not authored cells** (the bug that started this whole item;
+  concrete case in the worked example at the end). `_source_cells` (`actor_survey.py:975-977`) feeds
+  `penetration_depth` authored `decompose_convex` cells with no resolved filter, so an Add whose matter
+  a later Subtract carved away still "crosses" an actor in that carved void
+  (`Brush196 --crosses--> Brush184`). Fix: filter the source by `resolved_matter_of` as a
+  **point-membership filter on the straddle points / footprint**, NOT by reshaping the source convex
+  cells — `resolved_matter_of` of an Add is "authored body minus later subtracts", possibly non-convex,
+  which would break `_convex_hull_2d`'s per-cell convex footprint (`actor_survey.py:986-1017`). This is
+  the correctness-critical, build-first part of this item.
 - **`occupies` replaces csg `contains` and covers non-matter actors too.** csg `contains` was
   `containment_winner` over *authored* shapes (`actor_survey.py:1990-2025`) — a geometric test wearing
   a csg label (why it named the outer `Brush190`). `occupies(X, S)` is the resolved relation **X sits
@@ -106,7 +110,7 @@ kind/order logic.
     **(i)** X's own matter survives at p (`resolved_matter_of(X, p)` True); **(ii)** S carved p
     (`_was_solid_before(S, p)` True); **(iii)** p is void when X is excluded. Both sides matter — (i) is
     the "closed with X included" half the earlier one-sided wording dropped. **Without (i) the test
-    over-fires the depends-on bug itself:** for order `sub1 → A → sub2` with sub2 re-carving A, a point
+    over-fires the carved-away-Add bug itself:** for order `sub1 → A → sub2` with sub2 re-carving A, a point
     in `A ∩ sub1 ∩ sub2` passes (ii)+(iii) though A has no surviving matter there (`resolved_matter_of(A,p)`
     is False). (i) also restores `carves`/`occupies` mutual exclusivity for an S-after-X pair. Per-`S`
     by construction (no `containment_winner`/authored-box fallback); catches a floating pillar.
@@ -173,7 +177,7 @@ kind/order logic.
   collision cylinder reaches solid) and no `touches` (non-brush authors no surviving face,
   `crosses_target_eligible` is False for non-brush, `actor_survey.py:828-834`). Its resolved tie to the
   room is `occupies` via the authored point-in-carve test (above) — *not* raw `encloses` against the
-  Subtract's authored box, which is the authored≠resolved signal the depends-on bug warns about. This
+  Subtract's authored box, which is the authored≠resolved signal the `crosses` fix targets. This
   is why the earlier "drop csg `contains` and lose non-matter containment" option was rejected.
 - **A nonsolid *brush* in a void reads `occupies` by shape (owner ruling).** A Nonsolid brush
   contributes no matter and is not a point actor, so it takes no `crosses`/`touches` and is only ever a
@@ -219,3 +223,24 @@ kind/order logic.
 
 Correctness first: `crosses` resolved-matter fix and csg `contains`→`occupies`. Then raw rework +
 output shape. Measurement-in-survey → `someday/`.
+
+## Worked example — the `crosses` false positive (regression fixture)
+
+The bug that started this item. In `19_Multiport`, `uedcli actor survey Brush184` reports:
+
+```
+raw Brush184 [Semisolid] --touches(6.554e+04uu^2)--> Brush196 [Add]
+csg Brush196 [Add] --crosses(9.19e+03uu)--> Brush184 [Semisolid]
+```
+
+Expected (owner): csg **no relation** between Brush196 and Brush184; raw **Brush196 `encloses`
+Brush184** (Brush196's authored volume fully envelops it).
+
+Trunk order (confirmed from `order_value`): `Brush190 (Subtract) → Brush196 (Add) → Brush269 (Subtract)
+→ Brush184 (semisolid Add)`. Brush269 is a Subtract *later* than Brush196, so it carves Brush196's
+matter, and Brush269 fully encloses Brush184 (the survey's own raw containment fact). So Brush269's void
+holds Brush184 and is carved out of Brush196 — in the resolved world Brush196 has no surviving matter
+adjacent to Brush184, carved void lies between them. (Brush190 precedes Brush196, so it does not carve
+it and is not the cause.) `crosses` fires only because `_source_cells` feeds authored cells — the fix
+above (source filtered by `resolved_matter_of`) is what makes it silent. Pin this shape as the `crosses`
+regression fixture.
