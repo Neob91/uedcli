@@ -4,18 +4,22 @@ kind = "implement"
 summary = "align wall: WALLDIR-style axes, split off a wall-pan anchor verb"
 +++
 
-# align wall: WALLDIR-style axes, split off a wall-pan anchor verb
+# align wall: WALLDIR-style axes, split off a wall-pan anchor verb — DONE
 
-Spec: `spec.md`.
+`brush poly align wall` redefined from UnrealEd's `WALLX`/`WALLY` (world-axis projection,
+stretches on tilted faces) onto UnrealEd's `WALLDIR` (unit axes from the wall's own direction,
+never stretches, centroid-anchored, no shared-grid guarantee across a set). New verb
+`brush poly align wall-pan`, reproducing UnrealEd's `WALLPAN` (slides an existing frame's anchor
+to world Z=0, touching nothing else — the one `align` mode that doesn't zero `Pan`).
 
-Supersedes the diagnosis on `to-build/align-wall-skews-texture-on-45deg-diagonal-faces`: that
-item's repro (a diagonal ramp face skewing under `align wall` + `scale`) is not a bug — `align
-wall` faithfully reproduces UnrealEd's real `WALLX`/`WALLY` `POLY TEXALIGN` stretch, pinned by
-`test_polyalign.py` and measured in `dev/docs/unrealed/texalign.md`. What the item actually wants
-is a different UnrealEd mode, `WALLDIR` (unit axes, never stretches, direction from the wall's own
-plane rather than a world axis) — confirmed with the owner in chat 2026-09-27: `align wall` should
-have worked like `WALLDIR` from the start. This item redefines `align wall` accordingly and adds
-`align wall-pan` (UnrealEd's `WALLPAN`) as a separate, composable anchor verb — the owner's own
-suggestion, and it mirrors how UnrealEd itself splits the two.
+New: `query.csg_sign` (exact-case CsgOper sign), `polyalign._oriented_world_normal`
+(reflection-correct world normal — `wall` is sign-sensitive, unlike `floor`, so needed a normal
+helper neither `_world_normal` nor `query.visible_normal` could supply directly). Spec went
+through 4 revisions / 3 review rounds (each caught a real bug); plan through 2 review rounds; a
+final build-diff review found nothing. Docs updated: `docs/reference/brush/poly.md`,
+`polyalign.py` module docstring, `rationale/polyalign.md`, `architecture.md`,
+`unrealed/texalign.md` (the last two owner-approved and fact-checked before writing).
 
-Once this ships, fold `align-wall-skews-texture-on-45deg-diagonal-faces` into `done/` pointing here.
+Supersedes `align-wall-skews-texture-on-45deg-diagonal-faces` (folded into `done/`, pointing
+here) — that item's repro wasn't a bug, `wall` was faithfully reproducing `WALLX`/`WALLY`; the
+owner confirmed the actual want was `WALLDIR`.
