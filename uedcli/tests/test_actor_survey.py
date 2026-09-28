@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import dataclasses
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 
@@ -387,6 +388,35 @@ def test_csg_faces_drops_a_face_that_only_shares_one_coordinate_band_with_the_re
     assert ("Wall", (1.0, 0.0, 0.0), 256.0) not in planes  # 106uu away — never a candidate
 
 
+def test_csg_faces_snaps_noisy_native_solve_output_before_deriving_the_face_plane():
+    """Bug 1's REAL site: the live UNATCO false-positive (`Brush186`'s Y-extent computed as
+    `576.000162` instead of `576.0`) came from `csg_faces` reading `surf.world_verts` straight off
+    the native solve's own point pool, unsnapped -- not from `decompose_convex`, its sibling (already
+    pinned by `test_actorgraph.test_decompose_convex_snaps_pre_existing_authored_float_noise`). Built
+    directly against a synthetic `WorldProbe`/`SolvedSurface` carrying noisy verts (bypassing the
+    native solve entirely, same shape of input a real solve hands `csg_faces`) so this pins the
+    actual bug site rather than only the sibling function."""
+    from uedcli.model import Actor
+    from uedcli.preview_native import SolvedSurface, WorldProbe
+
+    actor = Actor(name="Brush186", cls="Engine.Brush")
+    noisy_z = 576.000162   # the real UNATCO repro's own noisy value, not a fresh magic number
+    ring = [(0.0, 0.0, noisy_z), (512.0, 0.0, noisy_z),
+            (512.0, 512.0, noisy_z), (0.0, 512.0, noisy_z)]
+    probe = WorldProbe(world_surfaces=[SolvedSurface(actor=actor, poly_index=0, world_verts=ring,
+                                                     poly_flags=0)],
+                       solidity=None)
+    region = ((-100.0, -100.0, 500.0), (600.0, 600.0, 600.0))
+
+    faces = actor_survey.csg_faces(probe, region)
+
+    assert len(faces) == 1
+    face = faces[0]
+    assert face.owner == "Brush186"
+    assert face.offset == 576.0                        # not 576.000162
+    assert all(v[2] == 576.0 for v in face.verts)       # the stored ring is snapped too
+
+
 def test_collision_extent_needs_both_collide_and_block():
     """`bCollideActors` alone is not a claim about matter: a DataLinkTrigger (R=520), a FlagTrigger
     (R=630), a Teleporter all set it so they can be touched, block nothing, and are routinely sized
@@ -623,6 +653,26 @@ def test_crosses_fires_for_a_semisolid_partially_overlapping_an_add():
         facts = actor_survey.crosses_facts_for(ctx)
         fact = next((f for f in facts if f.src == "Spike" and f.dst == "B"), None)
         assert fact is not None, f"surveying {surveyed}"
+
+
+def test_source_cells_snaps_a_noisy_point_actors_location():
+    """Fix 3: `actor.location` is exact Decimal parsed straight from T3D text -- never snapped on
+    read (`model.parse_t3d` is schema-free, architecture.md "Coords") -- so a point actor's Location
+    can carry the same class of authored float noise Bug 1 fixed for brush vertices (same T3D-export
+    provenance). `_source_cells`'s non-brush branch must snap it too, for consistency with the brush
+    path (`decompose_convex`/`csg_faces` both snap their own world verts). Built directly against
+    `_source_cells` (bypassing a full crosses survey, analogous to the existing collision-cylinder
+    `crosses` fixtures' own R=16 Keypad) so this pins the snap itself."""
+    coll = [("bCollideActors", "True"), ("bBlockActors", "True"),
+            ("CollisionRadius", "16"), ("CollisionHeight", "16")]
+    noisy = scen.point("Keypad", (504.000162, 0, 0), cls="DeusEx.Keypad1", props=coll)
+    ctx = SimpleNamespace(defaults=scen.stub_defaults())
+
+    groups = actor_survey._source_cells(ctx, noisy)
+
+    assert groups is not None
+    xs = {v[0] for v in groups[0].vertices}
+    assert max(xs) == 520.0     # snapped 504.0 + R=16, not the noisy 504.000162 + 16
 
 
 def test_crosses_fires_for_a_flush_mounted_collision_extent():
@@ -1607,6 +1657,56 @@ def test_partition_by_brushes_splits_a_cell_around_a_carving_subtract():
     # Pillar is 128x128x512 = 8388608 total; Cutter takes its right half over part of its height.
     assert sum(actor_survey.cell_volume(p) for p in pieces) == pytest.approx(
         actor_survey.cell_volume(pillar_cell))
+
+
+def _wedge_cell():
+    """A convex cell straddling x=0 everywhere (x in [-2, 10]) whose SOLID-side reach past x=0
+    varies with y -- flush with the plane at y=0 (x <= 0 there, no reach at all) and deep at y=10
+    (x <= 10) -- via one extra diagonal half-space on top of a box. A plain axis-aligned BOX cannot
+    exhibit this (`penetration_depth`'s own docstring: a box's depth is uniform across its whole
+    footprint), so this is the shape Bug 2's fix (bounding depth to the LOCAL overlap) is actually
+    for -- real UNATCO content is not all axis-aligned."""
+    from uedcli import actorgraph
+    s = 0.7071067811865476   # 1/sqrt(2) -- the diagonal cutting plane's UNIT normal
+    half_spaces = [
+        ((1.0, 0.0, 0.0), 12.0), ((-1.0, 0.0, 0.0), 2.0),
+        ((0.0, 1.0, 0.0), 10.0), ((0.0, -1.0, 0.0), 0.0),
+        ((0.0, 0.0, 1.0), 10.0), ((0.0, 0.0, -1.0), 0.0),
+        ((s, -s, 0.0), 0.0),                  # (x - y)/sqrt2 <= 0  =>  x <= y
+    ]
+    cell = actor_survey._polytope_from_planes(half_spaces, None)
+    return actorgraph.ConvexCell(vertices=cell.vertices, half_spaces=cell.half_spaces)
+
+
+def _narrow_face_on_x0(y_lo: float, y_hi: float) -> actor_survey.CsgFace:
+    """A small `CsgFace` on the x=0 plane spanning `y in [y_lo, y_hi]` -- narrow enough that only
+    the wedge's own LOCAL cross-section there is a candidate "depth", never a distant corner's."""
+    return actor_survey.CsgFace(owner="Target", normal=(1.0, 0.0, 0.0), offset=0.0, verts=[
+        (0.0, y_lo, 4.9), (0.0, y_hi, 4.9), (0.0, y_hi, 5.1), (0.0, y_lo, 5.1)])
+
+
+def test_penetration_depth_does_not_fire_where_the_local_slice_never_reaches_solid(monkeypatch):
+    """Bug 2, live UNATCO repro: the OLD code gated existence on a footprint OVERLAP check (does
+    the cell's silhouette touch the face's footprint at all) but then read `min(past)`/`max(past)`
+    from the cell's ENTIRE point set -- so a face touching the wedge's flush end (y~0, where the
+    wedge's solid-side reach past x=0 is exactly zero) still 'crossed', because the SAME cell's far,
+    unrelated deep end (y~10) supplied a `max(past)` of 10 and the cell's flat back face at x=-2
+    supplied a `min(past)` of -2. Bounding `past` to the region that actually overlaps this face
+    (the 3-D clip to the lateral prism over the overlap) fixes this: the local slice near y=0 has
+    no real solid-side reach, and `penetration_depth` correctly reports no crossing there."""
+    monkeypatch.setattr(actor_survey, "face_outward_sign", lambda ctx, face: 1.0)
+    group = _wedge_cell()
+    assert actor_survey.penetration_depth(None, [group], _narrow_face_on_x0(0.0, 0.01)) is None
+
+
+def test_penetration_depth_tracks_the_local_depth_not_a_distant_corner(monkeypatch):
+    """Same wedge, the genuine deep end (y~9.5): this one really does cross, and by roughly its own
+    local amount (~9.6, not the cell's unrelated flat-back `-2` or some other face's own reach)."""
+    monkeypatch.setattr(actor_survey, "face_outward_sign", lambda ctx, face: 1.0)
+    group = _wedge_cell()
+    depth = actor_survey.penetration_depth(None, [group], _narrow_face_on_x0(9.4, 9.6))
+    assert depth is not None
+    assert 9.0 < depth <= 9.6
 
 
 def test_is_void_excluding_matches_the_native_solidity_oracle_with_no_exclusion():

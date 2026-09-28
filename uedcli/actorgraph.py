@@ -28,6 +28,29 @@ _SINGULAR_EPS = 1e-9
 _VERTEX_EPS = _SPLIT_EPS * 10
 
 
+# Float twin of `emit.CLEAN_EPS` (0.001), for this module's own read-only CSG-analysis pipeline.
+# `model.parse_t3d` is schema-free and never snaps (`emit.clean` runs on the WRITE path only, per
+# architecture.md's "Coords: exact Decimal, fractions preserved"), so a real level's authored T3D
+# can carry ~1e-4 uu of pre-existing float noise straight through to `decompose_convex`'s world
+# verts -- e.g. a `PrePivot`/vertex pair that should cancel to an exact integer but doesn't quite
+# (live UNATCO repro: `Brush186`'s Y-extent computed as `576.000162` instead of the clearly-intended
+# `576.0`). Left unsnapped, that noise registers as a nonzero footprint overlap between two brushes
+# that are actually flush. Same 0.001 threshold as `emit.clean`, no new tolerance invented.
+_SNAP_EPS = 0.001
+
+
+def _snap_coord(v: Vec3) -> Vec3:
+    """`v`, each component snapped to its nearest integer when within `_SNAP_EPS` of it -- the float
+    twin of `emit.clean`'s Decimal snap (same logic, floats instead of Decimals, no 6-dp
+    quantization step since this is read-only analysis, never re-emitted as T3D). A genuine
+    fraction (a semisolid's `70.71`) is nowhere near an integer and passes through unchanged."""
+    out = []
+    for c in v:
+        nearest = round(c)
+        out.append(float(nearest) if abs(c - nearest) <= _SNAP_EPS else c)
+    return (out[0], out[1], out[2])
+
+
 class DegenerateBrushError(ValueError):
     """A brush whose PolyList doesn't bound a valid closed solid (self-intersecting/non-manifold) --
     the self-split has no well-defined 'inside' to decompose. Named after the actor; never a bare
@@ -229,7 +252,12 @@ def decompose_convex(actor, *, cache: dict[str, list[ConvexCell]] | None = None)
     wrapper (Task 6) is what remembers a bad brush so it isn't re-probed."""
     if cache is not None and actor.name in cache:
         return cache[actor.name]
-    polys = [polyalign._world_verts(actor, p) for p in actor.brush.polys if len(p.vertices) >= 3]
+    # Snapped HERE, not inside `polyalign._world_verts` itself: that function is shared with
+    # `brush poly align`'s texture-vector math, which must stay byte-for-byte on its own (already
+    # tested, already shipped) fixtures -- confining the snap to this CSG-analysis caller keeps
+    # that path provably untouched (see `_snap_coord`'s own docstring for why the snap exists here).
+    polys = [[_snap_coord(v) for v in polyalign._world_verts(actor, p)]
+             for p in actor.brush.polys if len(p.vertices) >= 3]
     tree = _build_solid_bsp(polys, [], inside=True, ref=actor.name)
     leaves = _collect_solid_leaves(tree)
     if not leaves:

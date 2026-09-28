@@ -735,15 +735,25 @@ def csg_faces(probe, region) -> list:
     owner plus plane coincidence within `CSG_TOLERANCE`, by a linear scan per owner rather than by
     rounding to a grid -- a rounded key decides two planes 0.001 uu apart differently depending on
     which side of a bucket boundary they fall, and the neighborhood's face count is small enough
-    (hundreds) that the exact test costs nothing."""
+    (hundreds) that the exact test costs nothing.
+
+    `surf.world_verts` is snapped (`actorgraph._snap_coord`) before anything else reads it: it comes
+    straight from the native solve's own point pool, which carries the SAME pre-existing authored
+    float noise `decompose_convex` snaps for its own world verts (a `PrePivot`/vertex pair that
+    should cancel to an exact integer but doesn't quite) -- unsnapped, a resolved face's own edge can
+    sit a fraction of a uu off the brush's clearly-intended boundary, which is exactly what let a
+    flush-adjacent brush register a nonzero footprint overlap (live UNATCO repro, `Brush186`'s
+    Y-extent `576.000162` instead of `576.0`). Snapped BEFORE `_canonical_plane` so the face's own
+    normal/offset are derived from the cleaned ring, not the noisy one."""
     lo, hi = (tuple(float(c) for c in region[0]), tuple(float(c) for c in region[1]))
     by_owner: dict = {}
     for surf in probe.world_surfaces:
         if surf.actor is None:
             continue
-        if not _ring_meets_region(surf.world_verts, lo, hi):
+        verts = [actorgraph._snap_coord(v) for v in surf.world_verts]
+        if not _ring_meets_region(verts, lo, hi):
             continue
-        plane = _canonical_plane(surf.world_verts)
+        plane = _canonical_plane(verts)
         if plane is None:
             continue
         normal, offset = plane
@@ -751,8 +761,7 @@ def csg_faces(probe, region) -> list:
         if any(abs(sum(normal[i] * f.normal[i] for i in range(3)) - 1.0) <= 1e-6
                and abs(offset - f.offset) <= CSG_TOLERANCE for f in seen):
             continue
-        seen.append(CsgFace(owner=surf.actor.name, normal=normal, offset=offset,
-                             verts=[tuple(float(c) for c in v) for v in surf.world_verts]))
+        seen.append(CsgFace(owner=surf.actor.name, normal=normal, offset=offset, verts=verts))
     return [f for faces in by_owner.values() for f in faces]
 
 
@@ -1008,12 +1017,19 @@ def extent_reaches_solid(ctx: SurveyContext, loc, radius: float, height: float) 
     return ctx.probe.solidity.any_point_solid(cylinder_sample_points(loc, radius, height))
 
 
-def _source_cells(ctx: SurveyContext, actor) -> list[list[tuple[float, float, float]]] | None:
-    """The world-space points that stand for `actor`'s own contributed matter, grouped by convex
-    PIECE, or None when it has none. A BRUSH (Mover included -- its private model is treated exactly
-    like an Add's, owner ruling Round 8) contributes one group per `decompose_convex` cell, kept
-    SEPARATE rather than flattened together; a NON-BRUSH actor contributes one group, the 27 sample
-    points of its collision cylinder.
+def _source_cells(ctx: SurveyContext, actor) -> list["actorgraph.ConvexCell"] | None:
+    """The convex PIECES that stand for `actor`'s own contributed matter, or None when it has none.
+    A BRUSH (Mover included -- its private model is treated exactly like an Add's, owner ruling
+    Round 8) contributes one `actorgraph.ConvexCell` per `decompose_convex` cell, kept SEPARATE
+    rather than flattened together; a NON-BRUSH actor contributes one group, the 27 sample points of
+    its collision cylinder wrapped in a `ConvexCell` with an EMPTY `half_spaces` -- there is no exact
+    half-space bound for a sampled circle, and `penetration_depth`'s own local-depth clip (see its
+    docstring) reads that emptiness as "no known bound, fall back to the plain per-point reach."
+
+    Returning the real `ConvexCell` (not just its bare vertices, as before Task 12's own locality
+    fix) is what lets `penetration_depth` clip a brush piece to the region that ACTUALLY overlaps a
+    face's footprint before measuring depth, using `half_spaces` -- see that function's docstring
+    for why a footprint OVERLAP check alone does not bound the depth NUMBER.
 
     The grouping is load-bearing for `penetration_depth`, not cosmetic: an L- or U-shaped brush
     decomposes into more than one cell precisely because its overall vertex set is NOT convex --
@@ -1044,14 +1060,19 @@ def _source_cells(ctx: SurveyContext, actor) -> list[list[tuple[float, float, fl
         for cell in cells:
             for piece in _partition_by_brushes(cell, later_subtracts, ctx):
                 if resolved_matter_of(ctx, actor, _piece_centroid(piece)):
-                    groups.append([tuple(float(c) for c in v) for v in piece.vertices])
+                    groups.append(piece)
         return groups or None
     ext = collision_extent(actor, ctx.defaults)
     if ext is None or actor.location is None:
         return None
     radius, height = ext
-    loc = tuple(float(c) for c in actor.location)
-    return [cylinder_sample_points(loc, radius, height)]
+    # Snapped like a brush's own vertices (Bug 1): `actor.location` is exact Decimal parsed straight
+    # from T3D text (`model.parse_t3d` is schema-free, architecture.md "Coords"), so it can carry the
+    # same class of authored float noise a brush vertex can -- and an unsnapped near-integer Location
+    # hits the same exact-zero-area footprint gate this whole fix targets.
+    loc = actorgraph._snap_coord(tuple(float(c) for c in actor.location))
+    return [actorgraph.ConvexCell(vertices=cylinder_sample_points(loc, radius, height),
+                                  half_spaces=[])]
 
 
 def _convex_hull_2d(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -1120,6 +1141,41 @@ def face_outward_sign(ctx: SurveyContext, face: CsgFace) -> float | None:
     return 1.0 if solid_plus else -1.0
 
 
+def _overlap_lateral_planes(overlap: list[tuple[float, float]], u_axis, v_axis,
+                            origin) -> list[tuple[tuple[float, float, float], float]]:
+    """`overlap` (a CCW-wound 2-D polygon in the `(u_axis, v_axis)` frame anchored at `origin`),
+    lifted one 3-D half-space per edge: zero component along `u_axis x v_axis` (the face's own
+    normal), so each bounds the LATERAL extent only, leaving the along-normal reach unconstrained --
+    intersecting a cell against every one of them (`_clip_cell`, repeated) clips it to the prism over
+    `overlap`. Matches `relation._clip_2d`'s own CCW "inside" convention (`edx*(p.y-cy0) -
+    edy*(p.x-cx0) >= 0`) rewritten as `dot(n, p) <= d`, the form `_clip_cell` takes.
+
+    `(nu, nv)` is normalized to unit length before it becomes `normal_3d` -- every other half-space
+    builder in this module (`decompose_convex`, `_cell_intersection`) hands `_polytope_from_planes`
+    unit normals, and `_polytope_from_planes`'s vertex filter uses a fixed ABSOLUTE epsilon
+    (`actorgraph._VERTEX_EPS`), so a raw, unnormalized `(edy, -edx)` inflates the real per-plane
+    slack to `eps / |edge|`: a short overlap edge -- exactly the hairline-overlap case this whole fix
+    targets -- can blow that slack up to several times `CSG_TOLERANCE`. Unit normals also keep
+    `_same_plane` (which assumes them, `abs(dot(n, n') - 1.0) <= 1e-6`) working on these planes."""
+    planes = []
+    n = len(overlap)
+    for i in range(n):
+        cx0, cy0 = overlap[i]
+        cx1, cy1 = overlap[(i + 1) % n]
+        edx, edy = cx1 - cx0, cy1 - cy0
+        length = (edx * edx + edy * edy) ** 0.5
+        if length == 0.0:
+            continue           # a duplicate/degenerate vertex pair (Sutherland-Hodgman can emit one
+                                # on a tangent clip) contributes no real constraint -- skip it rather
+                                # than pass a zero-normal "plane" into `_clip_cell`
+        nu, nv = edy / length, -edx / length              # inside: nu*u + nv*v <= d
+        d = nu * cx0 + nv * cy0
+        normal_3d = tuple(nu * u_axis[k] + nv * v_axis[k] for k in range(3))
+        offset_3d = d + sum(normal_3d[k] * origin[k] for k in range(3))
+        planes.append((normal_3d, offset_3d))
+    return planes
+
+
 def penetration_depth(ctx: SurveyContext, cells, face: CsgFace) -> float | None:
     """How far a source's own matter reaches past `face` INTO the solid it bounds, or None when it
     does not: the source has to have SOME point past the plane by more than `CSG_TOLERANCE` on the
@@ -1173,19 +1229,39 @@ def penetration_depth(ctx: SurveyContext, cells, face: CsgFace) -> float | None:
     because Sutherland-Hodgman produces the true intersection polygon, vertices ON the clip edge
     included, rather than asking a single point "in or out" of a ring it may sit exactly on.
 
-    Per-point testing is retained ONLY for the actual depth NUMBER, once overlap and straddle are
-    established: the reported depth is `max(past)` over the qualifying cell's own points (the
-    existing "signed distance past the plane on the solid side" computation, unchanged). This is
-    exact for every source kind this module ships (a brush's own convex cell, or the collision
-    cylinder), because both are geometrically convex and every one of this project's face normals and
-    source shapes is axis-aligned: the farthest-reaching cross-section of an axis-aligned convex
-    source, measured along an axis-aligned face normal, spans that source's ENTIRE silhouette (not
-    just one corner) -- so whenever the silhouette meets the face's footprint at all, the true deepest
-    point is reachable somewhere inside that meet, and `max(past)` over the cell's point set never
-    overstates it. A source or a face at an arbitrary (non-axis-aligned) angle could in principle have
-    its single deepest point fall outside the actual overlap region, over-reporting the depth; nothing
-    in this plan's fixtures exercises that, and it is not solved here -- if a rotated case turns up,
-    report it rather than reaching for a nearest-owner-style narrowing on your own.
+    **Bounded to the LOCAL overlap, not just gated on it.** Round-N finding, live UNATCO repro: a
+    footprint OVERLAP check only answers "does this cell's silhouette touch the face's footprint AT
+    ALL", a yes/no gate -- it does not bound the depth NUMBER to the region that actually overlaps.
+    `max(past)`/`min(past)` over the cell's ENTIRE own point set (every corner, however far from the
+    footprint touch) can pull in a corner that has nothing to do with the touch itself: a large,
+    elongated brush piece grazing a small target at one hairline corner still carries its own
+    far corner, hundreds of uu away, into `max(past)` -- reporting that unrelated distance as the
+    "depth" of a graze, and (worse) letting that far corner's own void-side reach satisfy the
+    both-sides straddle check for a touch that, locally, may not straddle at all. This is exactly
+    the gap this function's own docstring used to flag and defer ("if a rotated case turns up,
+    report it rather than reaching for a nearest-owner-style narrowing on your own") -- the
+    "axis-aligned source spans its entire silhouette uniformly" argument that used to justify
+    skipping this only holds for a source that is a plain axis-aligned BOX; a convex piece left over
+    from carving against a non-axis-aligned neighbor is not guaranteed to be one, and real UNATCO
+    content is not all axis-aligned.
+
+    Fixed by clipping the cell's own 3-D volume to the LATERAL prism over `overlap` (its footprint
+    intersected with the face's own ring, computed above) before ever reading `past` -- reusing
+    `_clip_cell` (the same primitive `_partition_by_brushes`/`authored_shape_contains` already use),
+    once per edge of `overlap` lifted to a 3-D half-space with zero component along `face.normal`
+    (so it bounds the LATERAL extent only, leaving the along-normal reach free). `past` is then read
+    off the CLIPPED polytope's own vertices -- exact for any convex cell shape, not just a uniform
+    box, because the clip is a genuine 3-D polytope intersection, not a per-point (u,v)-membership
+    filter (which does NOT work here: every corner of a box shares the same handful of (u,v)
+    footprint locations regardless of depth, so filtering individual corners by whether their OWN
+    projection lands inside `overlap` would exclude every one of them just as often as it excludes
+    the right ones -- the bound has to come from clipping the shape itself, not from selecting which
+    of its existing vertices to keep).
+
+    Only for a group that carries real `half_spaces` (a brush's own decomposed cell): a sampled
+    collision cylinder (`_source_cells`'s non-brush branch) has none -- there is no exact half-space
+    bound for a sampled circle -- and keeps the plain per-point reach unchanged; that source kind is
+    always a small, bounded actor extent and does not exhibit this gap in practice.
 
     `project_to_plane` defaults its origin to the polygon's first vertex, so the ring and each cell's
     points MUST be projected against the same explicit origin or the two land in unrelated frames
@@ -1201,18 +1277,30 @@ def penetration_depth(ctx: SurveyContext, cells, face: CsgFace) -> float | None:
     sign = face_outward_sign(ctx, face)
     if sign is None:
         return None
-    ring_uv = relation._ensure_ccw(relation.project_to_plane(face.verts, face.normal,
-                                                             origin=face.verts[0]))
+    origin = face.verts[0]
+    ring_uv = relation._ensure_ccw(relation.project_to_plane(face.verts, face.normal, origin=origin))
+    u_axis, v_axis = relation._plane_basis(relation._norm(face.normal))
     best = None
-    for points in cells:
-        footprint_uv = _convex_hull_2d(relation.project_to_plane(points, face.normal,
-                                                                 origin=face.verts[0]))
+    for group in cells:
+        points = group.vertices
+        footprint_uv = _convex_hull_2d(relation.project_to_plane(points, face.normal, origin=origin))
         if len(footprint_uv) < 3:
             continue
         overlap = relation._clip_2d(footprint_uv, ring_uv)
         if len(overlap) < 3 or relation._shoelace_area(overlap) == 0.0:
             continue           # this cell's own silhouette never meets this face's footprint
-        past = [sign * (sum(face.normal[i] * p[i] for i in range(3)) - face.offset) for p in points]
+        depth_points = points
+        if group.half_spaces:
+            bounded = group
+            for normal_3d, offset_3d in _overlap_lateral_planes(overlap, u_axis, v_axis, origin):
+                bounded = _clip_cell(bounded, normal_3d, offset_3d)
+                if bounded is None:
+                    break
+            if bounded is None:
+                continue        # the 3-D overlap has no real volume (a boundary-only 2-D touch)
+            depth_points = bounded.vertices
+        past = [sign * (sum(face.normal[i] * p[i] for i in range(3)) - face.offset)
+                for p in depth_points]
         cell_max = max(past)
         if cell_max <= CSG_TOLERANCE or min(past) >= 0.0:
             continue           # doesn't reach solid, or never has matter on the void side either
@@ -1482,8 +1570,8 @@ def plane_slices(ctx: SurveyContext, actor, normal, offset: float) -> list:
             return []
         origin = tuple(normal[i] * offset for i in range(3))
         out = []
-        for points in groups:
-            hull = _convex_hull_2d(relation.project_to_plane(points, normal, origin=origin))
+        for group in groups:
+            hull = _convex_hull_2d(relation.project_to_plane(group.vertices, normal, origin=origin))
             if len(hull) >= 3:
                 out.append(hull)
         return out

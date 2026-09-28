@@ -39,6 +39,41 @@ def _l_shaped_brush():
     return _brush("L", brush)
 
 
+def test_snap_coord_kills_small_noise_but_preserves_real_fractions():
+    """The float twin of `emit.clean`: within `_SNAP_EPS` of an integer snaps to it, a genuine
+    fraction (a semisolid's `70.71`) passes through untouched."""
+    assert actorgraph._snap_coord((576.000162, -0.0008, 70.71)) == (576.0, 0.0, 70.71)
+    assert actorgraph._snap_coord((511.999969, 0.0, 32.5)) == (512.0, 0.0, 32.5)
+
+
+def test_decompose_convex_snaps_pre_existing_authored_float_noise():
+    """Live UNATCO repro (Bug 1): `Brush186`'s authored T3D carries a `PrePivot`/vertex pair that
+    should cancel to an exact integer Y-extent but doesn't quite -- 576.000162 instead of 576.0.
+    `model.parse_t3d` never snaps (the read path is schema-free, `emit.clean` runs on write only,
+    architecture.md), so this module's own `decompose_convex` is the one place that must, else a
+    brush this close to flush-adjacent to its neighbor registers a nonzero footprint overlap where
+    there should be none. Built directly as an `Actor`/`Brush` (not via `make_brush_actor`, which
+    itself calls `emit.clean` on every vertex -- that would launder the very noise this test needs
+    to reach `decompose_convex` unsnapped, same as a real parsed level would hand it one)."""
+    from uedcli.model import Actor
+    from uedcli.transform import IDENTITY
+    # `builders.cube`'s own correctly-wound faces, at the exact real-world noisy half-breadth
+    # (1.000162 instead of the clearly-intended 1.0) -- converted to Decimal WITHOUT `emit.clean`
+    # (that is `make_brush_actor`'s job, which this test deliberately bypasses).
+    brush = cube(2.0, 2.000162, 2.0)
+    for p in brush.polys:
+        p.vertices = [(Decimal(str(x)), Decimal(str(y)), Decimal(str(z))) for x, y, z in p.vertices]
+    actor = Actor(name="Noisy", cls="Engine.Brush", props=[("CsgOper", "CSG_Add")],
+                 location=(Decimal(0), Decimal(0), Decimal(0)), brush=brush,
+                 main_scale=IDENTITY, post_scale=IDENTITY)
+
+    cells = actorgraph.decompose_convex(actor)
+
+    assert len(cells) == 1
+    ys = {v[1] for v in cells[0].vertices}
+    assert ys == {-1.0, 1.0}, f"noise not snapped: {ys}"
+
+
 def test_convex_brush_decomposes_to_one_cell():
     a = _brush("A", cube(64, 64, 64))
     cells = actorgraph.decompose_convex(a)
