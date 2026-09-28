@@ -568,6 +568,7 @@ function SessionEditor({ sessionId: routeSessionId }: { sessionId: string }) {
         onSelectOrgBatch: handleOrgSelect,
         atlasManifest: atlas?.manifest,
         resolveClass: resolveClassSync,
+        sessionId,
       }),
     // `resolverTick` is otherwise unread -- its only job is forcing this memo (and so the Inspector
     // element it caches) to recompute once `ensureClosureForClasses`/`prefetchCoreEngine` resolves.
@@ -575,7 +576,11 @@ function SessionEditor({ sessionId: routeSessionId }: { sessionId: string }) {
     // properties..." and then never update once the package actually lands, since `resolveClassSync`
     // is only ever re-invoked when ONE of these deps changes -- React reuses the cached `<Inspector>`
     // element otherwise (bug found in review, gui-inspector-props-payload-redesign Task 6).
-    [selectedActors, selectedSurfaceInfos, hasUnseenSelection, scene, selectedNames, handleOrgSelect, atlas, resolverTick],
+    // `sessionId` (board item gui-copy-selected-actors-as-t3d-to-clipboard): without it, the Copy
+    // button's `disabled` state would not be guaranteed to flip the instant `sessionId` resolves
+    // from null to a real id, since nothing else in this list is guaranteed to change at that exact
+    // moment -- same class of bug `resolverTick` above was added to fix.
+    [selectedActors, selectedSurfaceInfos, hasUnseenSelection, scene, selectedNames, handleOrgSelect, atlas, resolverTick, sessionId],
   )
 
   // The real shading-mode gating signal (Task 19) -- derived from the /status polling this toolbar

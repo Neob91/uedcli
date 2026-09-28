@@ -518,6 +518,16 @@ export function postDiscard(sessionId: string, actors?: string[]): Promise<{ sta
   }))
 }
 
+/** Fetches a `Begin Map…End Map` T3D snippet for the given actors, in CSG order, reflecting any
+ * staged Location (uedcli/serve/app.py `session_t3d`). Read-only: no claim token. */
+export function postCopyT3d(sessionId: string, actors: string[]): Promise<{ t3d: string }> {
+  return request(`/api/session/${encodeURIComponent(sessionId)}/t3d`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ actors }),
+  })
+}
+
 /** Writes staged moves to the trunk (uedcli/serve/app.py `session_save`). `resolutions` answers a
  * save-conflict entry (staged vs. trunk) by actor name; default `{}` matches the backend's own
  * default. Same claim-token requirement as `postLoad` above. */

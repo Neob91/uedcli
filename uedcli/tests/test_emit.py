@@ -3,7 +3,7 @@ from decimal import Decimal
 import pytest
 
 from uedcli.model import Actor, Brush, CoordinateError, Polygon, parse_t3d
-from uedcli.emit import emit_actor, emit_actor_t3d, emit_brush_block, emit_map, snap, clean, fmt_vertex, fmt_loc, quote_group
+from uedcli.emit import emit_actor, emit_actor_t3d, emit_brush_block, emit_map, emit_map_with_carriers, snap, clean, fmt_vertex, fmt_loc, quote_group
 from uedcli.tests.conftest import read_fixture
 
 
@@ -276,3 +276,28 @@ def test_a_zero_pan_parsed_back_is_the_same_surface_as_one_never_panned():
     a.brush = Brush(model_name="Model0", polys=[p])
     back = parse_t3d(emit_map([a]))
     assert back.actors["B"].brush.polys[0].pan is None
+
+
+def test_emit_map_with_carriers_wraps_begin_end_map():
+    actor = Actor(name="Light0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)))
+    out = emit_map_with_carriers([actor])
+    assert out.startswith("Begin Map\n")
+    assert out.endswith("End Map\n")
+
+
+def test_emit_map_with_carriers_includes_folder_and_labels():
+    actor = Actor(name="Light0", cls="Engine.Light", location=(Decimal(0), Decimal(0), Decimal(0)),
+                  folder="Lights/Hallway", labels=frozenset({"needs_review"}))
+    out = emit_map_with_carriers([actor])
+    assert "uedcli-folder:" in out
+    assert "uedcli-labels:" in out
+
+
+def test_emit_map_with_carriers_matches_emit_actor_t3d_per_actor():
+    a = Actor(name="Light0", cls="Engine.Light",
+              location=(Decimal(1), Decimal(2), Decimal(3)))
+    b = Actor(name="Light1", cls="Engine.Light",
+              location=(Decimal(4), Decimal(5), Decimal(6)))
+    out = emit_map_with_carriers([a, b])
+    body = "\n".join(emit_actor_t3d(x).rstrip("\n") for x in [a, b])
+    assert out == f"Begin Map\n{body}\nEnd Map\n"

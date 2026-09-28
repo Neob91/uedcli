@@ -2037,3 +2037,96 @@ def test_session_stage_evicts_unreferenced_blobs_over_budget(tmp_path):
     own_hash = staged["Brush1"].blob_hash
     own_blob = app.state.staging_store.blobs_root / own_hash[:2] / own_hash
     assert own_blob.exists()          # this session's own just-staged blob survives (live)
+
+
+# --------------------------------------------------------- GUI clipboard-copy (POST .../t3d)
+# board item gui-copy-selected-actors-as-t3d-to-clipboard: a Begin Map...End Map T3D snippet for
+# the given actor names, CSG-ordered, staged-Location-overlaid, pasteable into real UnrealEd.
+
+def test_session_t3d_unknown_session_422(tmp_path):
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local()])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    c = TestClient(app, raise_server_exceptions=False)
+    resp = c.post("/api/session/does-not-exist/t3d", json={"actors": ["Room"]})
+    assert resp.status_code == 422
+
+
+def test_session_t3d_empty_actors_422(tmp_path):
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local()])
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = create_app(project, "TestLevel")
+    c = TestClient(app, raise_server_exceptions=False)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    resp = c.post(f"/api/session/{sess.id}/t3d", json={"actors": []})
+    assert resp.status_code == 422
+
+
+def test_session_t3d_unknown_actor_names_422_names_all(tmp_path, monkeypatch):
+    _require_ued22()
+    from uedcli.serve import app as serve_app
+    from uedcli.tests.test_serve_scene import DEFAULTS, _ued22_index
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local()])
+    project = SimpleNamespace(root=str(root), maps=None)
+    monkeypatch.setattr(serve_app, "_scene_inputs", lambda p: ([], _ued22_index(), DEFAULTS))
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app, raise_server_exceptions=False)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+
+    resp = c.post(f"/api/session/{sess.id}/t3d",
+                  json={"actors": ["NoSuchActor", "AlsoMissing"]})
+    assert resp.status_code == 422
+    assert "NoSuchActor" in resp.json()["error"]
+    assert "AlsoMissing" in resp.json()["error"]
+
+
+def test_session_t3d_happy_path_csg_order_dedup_no_bselected(tmp_path, monkeypatch):
+    # Fixture trunk order is [ActorA, ActorB] (`_write_fixture_trunk` sets `level.order` from list
+    # order) -- request them reversed AND with ActorA repeated, and assert the response still
+    # comes back CSG-ordered with ActorA appearing once.
+    _require_ued22()
+    from uedcli.serve import app as serve_app
+    from uedcli.tests.test_serve_scene import DEFAULTS, _ued22_index
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel",
+                        [_cube_room_local("ActorA"), _cube_room_local("ActorB")])
+    project = SimpleNamespace(root=str(root), maps=None)
+    monkeypatch.setattr(serve_app, "_scene_inputs", lambda p: ([], _ued22_index(), DEFAULTS))
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+
+    resp = c.post(f"/api/session/{sess.id}/t3d",
+                  json={"actors": ["ActorB", "ActorA", "ActorA"]})
+    assert resp.status_code == 200
+    t3d = resp.json()["t3d"]
+    assert t3d.startswith("Begin Map\n")
+    assert t3d.endswith("End Map\n")
+    assert t3d.index("Name=ActorA") < t3d.index("Name=ActorB")
+    assert t3d.count("Begin Actor") == 2                # ActorA not double-emitted
+    assert "bSelected" not in t3d
+
+
+def test_session_t3d_reflects_staged_location(tmp_path, monkeypatch):
+    _require_ued22()
+    from uedcli.serve import app as serve_app
+    from uedcli.tests.test_serve_scene import DEFAULTS, _ued22_index
+
+    root = tmp_path / "proj"
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local("ActorA")])
+    project = SimpleNamespace(root=str(root), maps=None)
+    monkeypatch.setattr(serve_app, "_scene_inputs", lambda p: ([], _ued22_index(), DEFAULTS))
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    token = app.state.claims.mint(sess.id)
+
+    c.post(f"/api/session/{sess.id}/stage", json={"actors": {"ActorA": [999, 888, 777]}},
+          headers={"X-Claim-Token": token})
+    resp = c.post(f"/api/session/{sess.id}/t3d", json={"actors": ["ActorA"]})
+    assert "Location=(X=999" in resp.json()["t3d"]

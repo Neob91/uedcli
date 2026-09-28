@@ -292,3 +292,12 @@ def emit_map(actors: list[Actor]) -> str:
     """Wrap actors in a Begin Map…End Map block for MAP IMPORTADD."""
     body = "\n".join(emit_actor(a) for a in actors)
     return f"Begin Map\n{body}\nEnd Map\n"
+
+
+def emit_map_with_carriers(actors: list[Actor]) -> str:
+    """`Begin Map…End Map`-wrapped T3D, one actor per `emit_actor_t3d` (folder/label carriers
+    included) — the GUI clipboard-copy's own writer. Distinct from `emit_map` (carrier-free, the
+    trunk body + editor-import map's writer): this feature's clipboard output is read by a human
+    (or pasted back into uedcli), not `MAP IMPORTADD`, so the carriers are wanted, not noise."""
+    body = "\n".join(emit_actor_t3d(a).rstrip("\n") for a in actors)
+    return f"Begin Map\n{body}\nEnd Map\n"

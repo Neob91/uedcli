@@ -34,6 +34,15 @@ export function PanIcon() {
   )
 }
 
+export function CopyIcon() {
+  return (
+    <svg {...STROKE_PROPS} aria-hidden="true">
+      <rect x="4" y="4" width="12" height="12" rx="1.5" />
+      <path d="M9 4 V2.5 A1 1 0 0 1 10 1.5 H19.5 A1 1 0 0 1 20.5 2.5 V16 A1 1 0 0 1 19.5 17 H16" />
+    </svg>
+  )
+}
+
 export function WireframeIcon() {
   return (
     <svg {...STROKE_PROPS} aria-hidden="true">

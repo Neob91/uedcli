@@ -39,6 +39,10 @@ export interface BuildSidebarPanelsArgs {
   // Optional so an atlas-less caller (this file's own tests) is unaffected.
   atlasManifest?: Record<string, AtlasRect>
   resolveClass: (fqcn: string) => ClassResolveResult
+  // Threaded straight to Inspector's own `sessionId` prop (board item
+  // gui-copy-selected-actors-as-t3d-to-clipboard) -- optional/defaulted there to `null`, so a
+  // sessionId-less caller (this file's own tests) is unaffected.
+  sessionId?: string | null
 }
 
 /** The launch registry (spec's Scope: Selection + Org/Search only, everything else is a later
@@ -56,6 +60,7 @@ export function buildSidebarPanels(args: BuildSidebarPanelsArgs): SidebarPanelDe
         selectedSurfaces: args.selectedSurfaces,
         atlasManifest: args.atlasManifest,
         resolveClass: args.resolveClass,
+        sessionId: args.sessionId,
       }),
     },
     {

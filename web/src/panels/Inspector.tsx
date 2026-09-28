@@ -9,9 +9,11 @@
 // a struct-of-structs or array-of-structs); `bool` renders a disabled (read-only) checkbox and
 // `enum` renders its resolved value as plain text -- the backend already canonicalizes it to the
 // tag's own name, so there's no ordinal to look up.
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { AtlasRect, EffectiveProp, ScenePoly, SceneActor } from '../api'
+import { postCopyT3d } from '../api'
 import type { ClassResolveResult } from '../scene/classResolver'
+import { CopyIcon } from '../scene/icons'
 import { surfaceKey } from '../scene/selectionSet'
 import { filterOverridesOnly, isExplicit, searchMatch, shownValue } from './effectiveProps'
 import { groupByCategory } from './groupByCategory'
@@ -55,6 +57,12 @@ export interface InspectorProps {
   // prop threads that same object down. Optional/defaulted to `{}` so an existing surface-less or
   // atlas-less call site (this file's own actor-only tests) is unaffected.
   atlasManifest?: Record<string, AtlasRect>
+  // The current session id, for the Copy button's `POST .../t3d` call (board item
+  // gui-copy-selected-actors-as-t3d-to-clipboard). `null` until App.tsx's own session resolve
+  // settles -- the button disables itself rather than requiring every call site (including this
+  // file's own actor-only/surface-only tests) to supply one. Optional/defaulted to `null` for the
+  // same reason `atlasManifest`/`resolveClass` above are.
+  sessionId?: string | null
 }
 
 /** The texture cell's text: the real texture group name from the atlas manifest, falling back to a
@@ -199,6 +207,55 @@ function PropRow({ prop, displayName, expandOnSearch = false }:
   )
 }
 
+/** Copies `names` to the clipboard as a `Begin Map...End Map` T3D snippet (board item
+ * gui-copy-selected-actors-as-t3d-to-clipboard) -- pasteable into a real running UnrealEd 2.2 via
+ * `EDIT PASTE`. Disabled while `sessionId` is `null` (the window between mount and the session
+ * resolve settling in App.tsx; unreachable once anything actually renders, since App.tsx's own
+ * "Loading..." guard covers that window, but this component stays correct on its own terms either
+ * way). The copied/failed feedback label reverts to "Copy" after 2s.
+ *
+ * Review finding: a selection change (A -> B, both single actors) does NOT unmount this component
+ * -- only its `names` prop changes -- so a slow in-flight request for A resolving after the switch
+ * would otherwise paint "Copied"/"Copy failed" onto B's button for a request B never made. `epochRef`
+ * closes that: it bumps whenever `names`/`sessionId` changes, `handleClick` captures it before
+ * awaiting, and a response is applied only if the epoch it captured is still current. The same effect
+ * resets any leftover feedback from the previous selection and clears its timer. */
+function CopyButton({ sessionId, names }: { sessionId: string | null; names: string[] }) {
+  const [state, setState] = useState<'idle' | 'copied' | 'error'>('idle')
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const epochRef = useRef(0)
+  const namesKey = names.join(' ')
+  useEffect(() => {
+    epochRef.current += 1
+    setState('idle')
+    if (timerRef.current) clearTimeout(timerRef.current)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- namesKey stands in for names by value
+  }, [namesKey, sessionId])
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+  const handleClick = async () => {
+    if (sessionId === null) return
+    const epoch = epochRef.current
+    try {
+      const { t3d } = await postCopyT3d(sessionId, names)
+      await navigator.clipboard.writeText(t3d)
+      if (epochRef.current === epoch) setState('copied')
+    } catch {
+      if (epochRef.current === epoch) setState('error')
+    } finally {
+      if (epochRef.current === epoch) timerRef.current = setTimeout(() => setState('idle'), 2000)
+    }
+  }
+  return (
+    <button type="button" className="inspector-copy-button" onClick={handleClick}
+            disabled={sessionId === null}>
+      <CopyIcon />
+      {state === 'idle' && 'Copy'}
+      {state === 'copied' && 'Copied'}
+      {state === 'error' && 'Copy failed'}
+    </button>
+  )
+}
+
 /** The actor half: one actor's full detail, or a name-list summary for 2+. Never called empty.
  * `search`/`showAll` are lifted into the parent `Inspector` (not local state here): `Inspector`
  * renders `ActorSection` at a DIFFERENT tree position depending on whether a surface selection
@@ -206,18 +263,20 @@ function PropRow({ prop, displayName, expandOnSearch = false }:
  * a component whose tree position changes, which used to silently wipe local search/show-all state
  * the instant a Ctrl+click added or removed a surface selection alongside an actor one. Lifting the
  * state up survives that remount since the parent (whose own position never moves) keeps holding it. */
-function ActorSection({ actors, search, onSearchChange, showAll, onShowAllChange, resolveClass }: {
+function ActorSection({ actors, search, onSearchChange, showAll, onShowAllChange, resolveClass, sessionId }: {
   actors: SceneActor[]
   search: string
   onSearchChange: (value: string) => void
   showAll: boolean
   onShowAllChange: (value: boolean) => void
   resolveClass: (fqcn: string) => ClassResolveResult
+  sessionId: string | null
 }) {
   if (actors.length > 1) {
     return (
       <div className="inspector inspector-multi" data-testid="inspector-multi">
         <h2>{actors.length} actors selected</h2>
+        <CopyButton sessionId={sessionId} names={actors.map((a) => a.name)} />
         <ul>
           {actors.map((a) => (
             <li key={a.name}>{a.name}</li>
@@ -250,6 +309,7 @@ function ActorSection({ actors, search, onSearchChange, showAll, onShowAllChange
   return (
     <div className="inspector" data-testid="inspector">
       <h2>{actor.name}</h2>
+      <CopyButton sessionId={sessionId} names={[actor.name]} />
       <dl>
         <dt>Class</dt>
         <dd>{actor.cls}</dd>
@@ -313,7 +373,7 @@ function ActorSection({ actors, search, onSearchChange, showAll, onShowAllChange
 }
 
 export function Inspector({ selected, selectedSurfaces = [], atlasManifest = {},
-    resolveClass = () => 'pending' }: InspectorProps) {
+    resolveClass = () => 'pending', sessionId = null }: InspectorProps) {
   // Lifted out of ActorSection (Inspector review finding): ActorSection renders at a different tree
   // position depending on whether a surface selection coexists (bare below vs. nested inside
   // .inspector-sections further down), and React remounts a component whose position moves -- state
@@ -334,7 +394,7 @@ export function Inspector({ selected, selectedSurfaces = [], atlasManifest = {},
   if (selectedSurfaces.length === 0) {
     return (
       <ActorSection actors={selected} search={search} onSearchChange={setSearch}
-        showAll={showAll} onShowAllChange={setShowAll} resolveClass={resolveClass} />
+        showAll={showAll} onShowAllChange={setShowAll} resolveClass={resolveClass} sessionId={sessionId} />
     )
   }
 
@@ -343,7 +403,7 @@ export function Inspector({ selected, selectedSurfaces = [], atlasManifest = {},
   return (
     <div className="inspector-sections" data-testid="inspector-sections">
       <ActorSection actors={selected} search={search} onSearchChange={setSearch}
-        showAll={showAll} onShowAllChange={setShowAll} resolveClass={resolveClass} />
+        showAll={showAll} onShowAllChange={setShowAll} resolveClass={resolveClass} sessionId={sessionId} />
       <SurfaceSection surfaces={selectedSurfaces} atlasManifest={atlasManifest} />
     </div>
   )

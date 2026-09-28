@@ -1,9 +1,15 @@
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { AtlasRect, ClassResolution, DefaultValue, EffectiveProp, ResolvedProp, ScalarKind, ScenePoly, SceneActor, TypeMember, TypeShape } from '../api'
+import { postCopyT3d } from '../api'
 import { Inspector } from './Inspector'
 import type { SurfaceSelection } from './Inspector'
+
+vi.mock('../api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../api')>()),
+  postCopyT3d: vi.fn(),
+}))
 
 /** Converts a hand-authored EffectiveProp[] fixture (this file's own existing convention) into a
  * matching {cr, sparse} pair -- a ClassResolution this test can hand to Inspector's resolveClass
@@ -615,5 +621,69 @@ describe('Inspector', () => {
     expect(details.open).toBe(false)
     fireEvent.change(screen.getByPlaceholderText('Search properties'), { target: { value: 'multiskins' } })
     expect(details.open).toBe(true)
+  })
+})
+
+describe('CopyButton', () => {
+  const actorA = fixtureActor({ name: 'ActorA' })
+  const actorB = fixtureActor({ name: 'ActorB' })
+
+  beforeEach(() => {
+    vi.mocked(postCopyT3d).mockReset()
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } })
+  })
+
+  it('renders next to the single-actor header', () => {
+    renderInspector({ selected: [actorA], sessionId: 's1' })
+    expect(screen.getByRole('button', { name: /copy/i })).toBeTruthy()
+  })
+
+  it('renders next to the multi-actor header', () => {
+    renderInspector({ selected: [actorA, actorB], sessionId: 's1' })
+    expect(screen.getByRole('button', { name: /copy/i })).toBeTruthy()
+  })
+
+  it('posts the current selection and writes the result to the clipboard', async () => {
+    vi.mocked(postCopyT3d).mockResolvedValue({ t3d: 'Begin Map\n...\nEnd Map\n' })
+    renderInspector({ selected: [actorA, actorB], sessionId: 's1' })
+    fireEvent.click(screen.getByRole('button', { name: /copy/i }))
+    await waitFor(() => expect(postCopyT3d).toHaveBeenCalledWith('s1', [actorA.name, actorB.name]))
+    await waitFor(() =>
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Begin Map\n...\nEnd Map\n'))
+    expect(await screen.findByText(/copied/i)).toBeTruthy()
+  })
+
+  it('shows an error state when the request fails', async () => {
+    vi.mocked(postCopyT3d).mockRejectedValue(new Error('boom'))
+    renderInspector({ selected: [actorA], sessionId: 's1' })
+    fireEvent.click(screen.getByRole('button', { name: /copy/i }))
+    expect(await screen.findByText(/failed/i)).toBeTruthy()
+  })
+
+  it('is disabled and does not call the endpoint when sessionId is null', () => {
+    renderInspector({ selected: [actorA], sessionId: null })
+    const button = screen.getByRole('button', { name: /copy/i }) as HTMLButtonElement
+    expect(button.disabled).toBe(true)
+    fireEvent.click(button)
+    expect(postCopyT3d).not.toHaveBeenCalled()
+  })
+
+  it('ignores a stale response after the selection changes before it resolves', async () => {
+    let resolveA: ((v: { t3d: string }) => void) | null = null
+    vi.mocked(postCopyT3d).mockReturnValueOnce(new Promise((resolve) => { resolveA = resolve }))
+    const { rerender } = renderInspector({ selected: [actorA], sessionId: 's1' })
+    fireEvent.click(screen.getByRole('button', { name: /copy/i }))
+    await waitFor(() => expect(postCopyT3d).toHaveBeenCalledWith('s1', [actorA.name]))
+
+    // Switch to actor B BEFORE A's request resolves -- same button instance, no remount.
+    rerender(<Inspector selected={[actorB]} sessionId="s1" resolveClass={() => 'pending'} />)
+
+    resolveA!({ t3d: 'Begin Map\n...\nEnd Map\n' })
+    await Promise.resolve()
+    await Promise.resolve()
+
+    // B's button must still read "Copy" -- A's stale resolution must not paint "Copied" onto it.
+    expect(screen.queryByText(/copied/i)).toBeNull()
+    expect(screen.getByRole('button', { name: /^copy$/i })).toBeTruthy()
   })
 })

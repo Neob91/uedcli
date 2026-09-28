@@ -21,10 +21,11 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 
-from .. import build_cache, config, packages, trunk
+from .. import build_cache, config, packages, query, trunk
 from ..classdefaults import ClassDefaults
 from ..cli import resources
 from ..cli.errors import CommandError
+from ..emit import emit_map_with_carriers
 from ..preview_native import build_scene
 from ..preview_native import resolve_actor_sprites, resolve_mesh_scene_polys, resolve_mover_scene_polys
 from . import build_pin, edits, package_raw, sessions
@@ -776,6 +777,29 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
             "manifest": manifest,
             "png_base64": base64.b64encode(png_bytes).decode("ascii"),
         }
+
+    @app.post("/api/session/{session_id}/t3d")
+    def session_t3d(session_id: str, body: dict) -> dict:
+        # GUI clipboard-copy (board item gui-copy-selected-actors-as-t3d-to-clipboard): the selected
+        # actors, in CSG order, as a Begin Map...End Map T3D snippet pasteable into real UnrealEd.
+        # Read-only -- no claim-token check, matching /scene, /atlas, /lightmap above (spec "API
+        # surface" "Deliberate departure from house convention": the only OTHER non-claim-checked
+        # route is create_session_route, which mints a session's first claim rather than checking
+        # one; this route checks none because it mutates nothing at all).
+        session = _require_session(session_id)
+        requested = body.get("actors") or []
+        if not requested:
+            raise CommandError("no actor names given")
+        search_files, index, defaults = _current_scene_inputs(session.level)
+        trunk_state = _get_trunk(session.level, search_files, index, defaults)
+        staged = _staging_store.read_staged(session_id)
+        level = edits.apply_staged_overlay(trunk_state.level, staged)
+        try:
+            resolved = set(query.resolve_actor_names(level, requested))
+        except KeyError as exc:
+            raise CommandError(str(exc.args[0])) from exc
+        ordered = [n for n in level.order if n in resolved]
+        return {"t3d": emit_map_with_carriers([level.actors[n] for n in ordered])}
 
     # Plan Task 3: thin HTTP adapters over `edits.py`'s stage/discard/save (Task 2) and
     # `StagingStore.read_staged` (Task 1) -- no business logic here, matching every route above.
