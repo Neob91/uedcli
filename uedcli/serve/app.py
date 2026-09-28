@@ -135,17 +135,36 @@ def _frontend_dist_dir() -> Path | None:
     return candidate if candidate.is_dir() else None
 
 
+_scene_inputs_cache: dict[str, tuple] = {}   # project.root -> (search_files, index, defaults)
+
+
 def _scene_inputs(project):
     """`(search_files, index, defaults)` — the same trio `level photo --native`'s `render_shots`
     call site assembles (`cli/commands/level.py` ~732-745): the composed package search path, the
     schema-aware class/mover resolver, and the class-defaults resolver `build_scene` needs to light
-    world BSP surfaces. Recomputed per request (cheap: no CSG solve here) rather than memoized on
-    the app, so a `--project`'s on-disk games config can change without a `serve` restart."""
+    world BSP surfaces. Memoized for the life of the `serve` process, keyed by `project.root` (owner
+    ruling 2026-09-28, board `gui-reload-rebuild-slow-memoize-scene`): building `index`/`defaults`
+    re-parses every referenced class's schema from scratch (measured ~3s on a real level's worth of
+    classes) with no memo surviving the call, so re-deriving them per `/load`/`/rebuild` request was
+    the dominant cost of both — not the CSG solve. A package file edited in place on disk during a
+    `serve` run is not picked up until the process restarts; a manual invalidation verb is future
+    work, not built here. Keyed by `project.root` (a plain string, present on both the real
+    `config.Project` and the `SimpleNamespace` stand-ins the test suite uses) rather than `id(project)`:
+    `id()` is only unique while the object is alive, so a `project` freed and a NEW one allocated at
+    the same address later would silently collide on a stale cache entry — `root` carries no such
+    reuse hazard, since it names the actual project and stays stable for as long as that project is
+    genuinely the same one. Also rather than the whole `project` object, since test fixtures widely
+    pass an unhashable `SimpleNamespace` for it."""
+    cached = _scene_inputs_cache.get(project.root)
+    if cached is not None:
+        return cached
     user_config = config.load_user_config()
     search_files = config.composed_search_files(project, user_config)
     index = resources.mover_index(None, "uedcli serve", project=project)
     defaults = ClassDefaults(packages.schema_resolver(project, user_config))
-    return search_files, index, defaults
+    result = (search_files, index, defaults)
+    _scene_inputs_cache[project.root] = result
+    return result
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -339,12 +358,14 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
 
     def _current_scene_inputs(level_name: str):
         """`(search_files, index, defaults)` for `/scene`/`/atlas`/`/lightmap` only -- reuses
-        whatever was built alongside the CURRENT `ctx.trunk_ref[0]` instead of rebuilding a fresh,
-        memo-less `ClassIndex`/`ClassDefaults` on every read (board
+        whatever was built alongside the CURRENT `ctx.trunk_ref[0]` instead of re-deriving
+        `search_files`/re-resolving `index`/`defaults` on every read (board
         `gui-serve-rebuilds-classindex-on-every-request`). `/load`/`/rebuild` never call this --
-        they call `_scene_inputs()` directly, unconditionally, since they genuinely need a fresh
-        `index`/`defaults` to re-derive real state where a stale one could silently produce a
-        different, wrong result -- not merely a slower-but-correct one.
+        they call `_scene_inputs()` directly instead, unconditionally, so a TRUNK change (the thing
+        they exist to pick up) is never missed; `_scene_inputs()` itself is now memoized by
+        `project.root` (board `gui-reload-rebuild-slow-memoize-scene`, owner ruling 2026-09-28), so
+        this is no longer a real cost difference between the two paths -- both end up reusing the
+        same `index`/`defaults` objects, just reached via a different route.
 
         Cold path (`ctx.trunk_ref[0]` still `None` -- nothing to pair with yet): builds fresh via
         `_scene_inputs()`, same cost as today; not a regression, since there is nothing to reuse

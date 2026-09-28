@@ -233,37 +233,41 @@ def test_scene_route_as_the_very_first_request_bootstraps_and_seeds_the_cache(tm
     assert len(calls) == 1   # reused what /scene's own bootstrap just stashed
 
 
-def test_rebuild_route_always_calls_scene_inputs_fresh_not_cached(tmp_path, monkeypatch):
-    """Guards the deliberate exclusion the spec calls for: unlike /scene/atlas/lightmap,
-    session-scoped Rebuild must keep calling `_scene_inputs()` fresh on every invocation -- it feeds
-    `index`/`defaults` straight into a real CSG/lighting solve (`build_scene`), where a stale schema
-    could silently produce a wrong result, not just a slow one. Ported to
-    `POST /api/session/{id}/rebuild` once the per-level `/rebuild` route was deleted outright
-    (final-review fix round, Finding 2) -- the property itself is unaffected by which route calls it."""
-    from uedcli.serve import sessions
-
-    _require_ued22()
-    index, defaults = _index_and_defaults()
+def test_scene_inputs_memoizes_for_the_life_of_the_process(monkeypatch):
+    """Owner ruling 2026-09-28 (board `gui-reload-rebuild-slow-memoize-scene`), superseding the
+    earlier "Rebuild must call `_scene_inputs()` fresh every time" property this test used to guard:
+    rebuilding `ClassIndex`/`ClassDefaults` from scratch was the dominant cost of both `/load` and
+    `/rebuild`, not the CSG solve (measured ~3s of class-schema re-parsing per call on a real
+    level). Already-loaded packages are never invalidated during a `serve` run -- a package file
+    edited in place on disk is picked up only on the next process restart; a manual reload verb is
+    future work, not built here. `_scene_inputs` now memoizes by `project.root` (not `id(project)`,
+    which would carry a GC-reuse hazard, and not the whole `project`, since it's often an unhashable
+    `SimpleNamespace` in tests): calling it twice with an equal `.root` does the real work
+    (`composed_search_files`/`mover_index`/`schema_resolver`/`ClassDefaults`) only once and returns
+    the SAME objects both times."""
     calls = []
 
-    def _counting_scene_inputs(project):
+    def _counting_composed_search_files(project, user_config):
         calls.append(1)
-        return [], index, defaults
+        return []
 
-    monkeypatch.setattr(serve_app, "_scene_inputs", _counting_scene_inputs)
+    monkeypatch.setattr(serve_app.config, "load_user_config", lambda: SimpleNamespace())
+    monkeypatch.setattr(serve_app.config, "composed_search_files", _counting_composed_search_files)
+    monkeypatch.setattr(serve_app.resources, "mover_index", lambda *a, **k: object())
+    monkeypatch.setattr(serve_app.packages, "schema_resolver", lambda *a, **k: object())
+    monkeypatch.setattr(serve_app, "ClassDefaults", lambda resolver: object())
 
-    root = tmp_path / "proj"
-    _write_fixture_trunk(root, "TestLevel", [cube_room()])
-    project = SimpleNamespace(root=str(root), maps=None)
-    app = serve_app.create_app(project, "TestLevel")
-    c = TestClient(app)
-    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
-    token = app.state.claims.mint(sess.id)
+    project = SimpleNamespace(root="/fake/project/for-this-test-only")
+    assert project.root not in serve_app._scene_inputs_cache   # a fresh root each test run
 
-    assert c.post(f"/api/session/{sess.id}/rebuild", headers={"X-Claim-Token": token}).status_code == 200
-    assert len(calls) == 1
-    assert c.post(f"/api/session/{sess.id}/rebuild", headers={"X-Claim-Token": token}).status_code == 200
-    assert len(calls) == 2   # a second Rebuild calls it again -- never reused
+    try:
+        first = serve_app._scene_inputs(project)
+        second = serve_app._scene_inputs(project)
+
+        assert len(calls) == 1        # the real work ran once, not twice
+        assert first is second        # the second call reused the cached tuple outright
+    finally:
+        serve_app._scene_inputs_cache.pop(project.root, None)   # don't leak into other tests
 
 
 def test_load_resolves_mesh_class_defaults_through_the_shared_memo(tmp_path, monkeypatch):
