@@ -230,6 +230,36 @@ def room_with_a_flush_mounted_prop() -> Scenario:
     ])
 
 
+def point_actor_pokes_through_two_walls_at_a_room_corner() -> Scenario:
+    """Trunk order: Room, Corner.
+
+    * `Room`   1024^3 Subtract at (0, 0, 0)        -- walls at x = +/-512, y = +/-512
+    * `Corner` a point actor at (500, 500, 0), bCollideActors + bBlockActors, R=16 H=16 --
+               its collision cylinder spans x in [484, 516] and y in [484, 516], so it pokes
+               4uu past BOTH the +X wall (x=512) and the +Y wall (y=512) at once. One actor,
+               two genuinely-crossed faces of the SAME target (`Room`) -- the dedup case
+               `crosses_facts_for`'s (src, dst)-keyed `record()` exists for. Every FALSE-POSITIVE
+               brush-sourced crossing in this suite is gone (this task's own fix); the only
+               genuine one left, Step 12's Semisolid fixture, crosses one face only, so a
+               collision extent is the only remaining source that can supply TWO for this dedup
+               test -- `_source_cells`' non-brush branch never filters it (unaffected by this fix).
+
+    Verified live against the current (pre-Step-4) code: `ctx.faces` for this fixture holds
+    exactly `Room`'s +X and +Y planes, and `penetration_depth` returns `4.0` for BOTH,
+    independently, from the same source cell -- two real `record("Corner", "Room", ...)` calls
+    for the one (src, dst) pair, collapsed by the dict-keyed dedup to the single
+    `CsgFact(src="Corner", dst="Room", relation="crosses")` `crosses_facts_for` actually returns.
+    Nothing about this path touches a brush or `_source_cells`' brush branch, so Step 4's fix
+    changes nothing about it.
+    """
+    coll = [("bCollideActors", "True"), ("bBlockActors", "True"),
+            ("CollisionRadius", "16"), ("CollisionHeight", "16")]
+    return _scenario([
+        brush("Room", (1024, 1024, 1024), (0, 0, 0), csg="subtract"),
+        point("Corner", (500, 500, 0), cls="DeusEx.Keypad1", props=coll),
+    ])
+
+
 # --------------------------------------------------------------------- Task 12's scenarios
 
 def pillar_in_room() -> Scenario:
@@ -267,27 +297,62 @@ def shelf_pokes_through_a_niche_wall() -> Scenario:
       leaving `Additive4`'s y in [0, 64) and (192, 256] surviving on either side, past
       `Subtract3`'s own y=64/y=192 caps.
 
-    `Additive4` crosses `Subtract3` -- the immediate boundary it pushes through -- and never
-    `Additive2`, however the nesting reads (the spec's strict-locality rule): depth 64uu, both ends
-    ((256-192) above and (64-0) below), verified against `crosses_facts_for` directly.
+    `Additive4` does NOT cross `Subtract3`. An earlier version of this fixture claimed it did, "64uu
+    deep on each end" -- that number was each surviving stub's own authored length past the cut
+    planes, not a real penetration, and is exactly the unfiltered-authored-cell bug this item fixes.
+    Filtered to resolved matter, each stub is bounded EXACTLY by `Subtract3`'s own y=64/y=192 planes
+    -- flush, not crossing -- so `crosses` goes silent for this pair; `touches` fires instead
+    (`Additive4`'s matter rests directly against a REAL carve boundary: `_is_carve_boundary`'s "the
+    carve must be real" condition holds, since `Subtract3` genuinely removed `Additive4`'s own
+    matter there). `Additive4` never touches or crosses `Additive2`, however the nesting reads (the
+    spec's strict-locality rule): its footprint sits entirely inside the hole `Subtract3` cut
+    through `Additive2`, well clear of `Additive2`'s own remaining ring.
 
     (Trunk order is the fix, not a dimension: with the naive order `..., Subtract3, Additive4`
     (`Additive4` authored AFTER the niche), `Additive4`'s own matter, wherever it overlaps
     `Additive2`'s already-solid ring `x,z` in [64, 128]/[-128, -64], gets folded into that solid by
     plain CSG_Add union (no internal face between two Adds); AND wherever `Additive4` fills what
     `Subtract3` carved to void, `Subtract3`'s own face there gets removed as now-interior. Both
-    effects erase exactly the face `Additive4` would need to overlap to register a crossing --
+    effects erase exactly the face `Additive4` would need to overlap to register ANY fact at all --
     verified directly: with that order, `Additive4`'s resolved footprint is clipped to `Subtract3`'s
-    own +-64 hole (nothing survives past it), and `crosses_facts_for` reports no `Additive4`-owned
-    fact at all. Authoring `Additive4` first means `Subtract3`'s later carve is what PRODUCES the
-    y=64/y=192 faces, as a real carve into `Additive4`'s own pre-existing matter, so they survive
-    intact and `Additive4`'s full authored y in [0, 256] genuinely overlaps them.)
+    own +-64 hole (nothing survives past it), and neither `crosses_facts_for` nor `touches_facts_for`
+    reports any `Additive4`-owned fact at all. Authoring `Additive4` first means `Subtract3`'s later
+    carve is what PRODUCES the y=64/y=192 faces, as a real carve into `Additive4`'s own pre-existing
+    matter, so they survive intact and `Additive4`'s stubs rest flush against them.)
     """
     return _scenario([
         brush("Subtract1", (1024, 1024, 1024), (0, 0, 0), csg="subtract"),
         brush("Additive2", (256, 64, 256), (0, 128, 0)),
         brush("Additive4", (32, 256, 32), (0, 128, 0)),
         brush("Subtract3", (128, 128, 128), (0, 128, 0), csg="subtract"),
+    ])
+
+
+def later_subtract_carves_an_add_that_encloses_a_semisolid() -> Scenario:
+    """The spec's own worked example (`19_Multiport`, `Brush190/196/269/184`), rebuilt as a minimal
+    fixture. Trunk order: Outer, Earlier, Middle, Later, Enclosed.
+
+    * `Outer`    2048^3 Subtract at (0, 0, 0)            — the void everything else lives in
+    * `Earlier`  512^3 Subtract at (600, 0, 0)           — precedes `Middle`; does not carve it
+      (x in [344, 856], well clear of `Middle`'s [-128, 128])
+    * `Middle`   256^3 Add at (0, 0, 0)                  — x,y,z in [-128, 128]
+    * `Later`    192^3 Subtract at (0, 0, 0)             — x,y,z in [-96, 96], carves `Middle`'s
+      matter from the region it shares with `Enclosed`, and fully encloses `Enclosed`
+    * `Enclosed` 64^3 Add, `poly_flags=PF_SEMISOLID`, at (0, 0, 0)  — x,y,z in [-32, 32], fully
+      inside `Later`'s void
+
+    Before the fix: `_source_cells(Middle)` feeds `penetration_depth` `Middle`'s AUTHORED cells, so
+    `Middle` (whose matter at `Enclosed`'s location was carved away by `Later`) still reports
+    `crosses(Enclosed)`. After the fix: `Middle` has no resolved matter left adjacent to `Enclosed`
+    (it was carved out by `Later`), so `crosses` is silent between them; raw still reports
+    `Middle encloses Enclosed` (Middle's AUTHORED volume, pre-CSG, does contain Enclosed).
+    """
+    return _scenario([
+        brush("Outer", (2048, 2048, 2048), (0, 0, 0), csg="subtract"),
+        brush("Earlier", (512, 512, 512), (600, 0, 0), csg="subtract"),
+        brush("Middle", (256, 256, 256), (0, 0, 0)),
+        brush("Later", (192, 192, 192), (0, 0, 0), csg="subtract"),
+        brush("Enclosed", (64, 64, 64), (0, 0, 0), poly_flags=PF_SEMISOLID),
     ])
 
 
@@ -845,6 +910,19 @@ def nested_niche_with_a_decoration() -> Scenario:
     ])
 
 
+def nonsolid_decoration_in_a_subtracts_void() -> Scenario:
+    """Trunk order: Room, Decal. `Room` 1024^3 Subtract at (0, 0, 0). `Decal` 32^3 Add with
+    `poly_flags=PF_NOTSOLID` at (0, 0, 0) -- wholly inside Room's void. A Nonsolid brush contributes
+    no matter (so the marginal test doesn't apply to it), but its authored SHAPE still lands inside
+    Room's carved region -- the "not left with zero csg facts" case the spec's `occupies` nonsolid
+    branch exists for."""
+    from uedcli.builders import PF_NOTSOLID
+    return _scenario([
+        brush("Room", (1024, 1024, 1024), (0, 0, 0), csg="subtract"),
+        brush("Decal", (32, 32, 32), (0, 0, 0), poly_flags=PF_NOTSOLID),
+    ])
+
+
 def two_equal_volume_subtracts() -> Scenario:
     """A genuine tie. Trunk order: Shell, EarlierRoom, LaterRoom, Item.
 
@@ -860,30 +938,6 @@ def two_equal_volume_subtracts() -> Scenario:
         brush("Shell", (2048, 2048, 2048), (0, 0, 0)),
         brush("EarlierRoom", (512, 512, 512), (0, 0, 0), csg="subtract"),
         brush("LaterRoom", (512, 512, 512), (0, 0, 0), csg="subtract"),
-        point("Item", (0, 0, 0)),
-    ])
-
-
-def mover_wrongly_tagged_as_subtract_competes_for_an_item() -> Scenario:
-    """`mover_wrongly_tagged_as_subtract`'s own trap, aimed at `contains`'s container gate instead of
-    `connects`'s: `Door` is a Mover carrying a stray `CsgOper=CSG_Subtract` prop, wholly inside
-    `Room`'s void, with a much SMALLER authored volume than `Room` (65536 vs 134217728). If the
-    container gate read the raw `CsgOper` prop instead of the actor's real kind, `Door` would wrongly
-    enter the volume competition and WIN it by size, stealing `Item` from `Room`.
-
-    Trunk order: Shell, Room, Door, Item.
-    * `Shell` 2048^3 Add at (0, 0, 0)
-    * `Room`  512^3 Subtract at (0, 0, 0)
-    * `Door`  64 x 8 x 128 `DeusEx.DeusExMover` at (0, 0, 0), stray `CsgOper=CSG_Subtract`
-    * `Item`  a point actor at (0, 0, 0) — inside both Room's and Door's own extents
-    """
-    door = make_brush_actor("Door", cube(64, 8, 128), location=_dec((0, 0, 0)),
-                            mover_class="DeusEx.DeusExMover")
-    door = dataclasses.replace(door, props=list(door.props) + [("CsgOper", "CSG_Subtract")])
-    return _scenario([
-        brush("Shell", (2048, 2048, 2048), (0, 0, 0)),
-        brush("Room", (512, 512, 512), (0, 0, 0), csg="subtract"),
-        door,
         point("Item", (0, 0, 0)),
     ])
 
@@ -904,6 +958,33 @@ def semisolid_pillar_straddled_by_a_subtract() -> Scenario:
         brush("Room", (1024, 1024, 1024), (0, 0, 0), csg="subtract"),
         brush("Pillar", (128, 128, 512), (0, 0, 0), poly_flags=PF_SEMISOLID),
         brush("Cutter", (256, 256, 256), (128, 0, 0), csg="subtract"),
+    ])
+
+
+def semisolid_partially_overlapping_an_add() -> Scenario:
+    """A genuine brush-sourced `crosses`, next to `semisolid_pillar_straddled_by_a_subtract` above as
+    the same later, separate CSG pass's other consequence: `csgRebuild`'s LOOP 2/LOOP 3
+    (`actor_survey.py:737-740`) makes a Semisolid immune to being carved (that fixture), but it also
+    never SPLITS the underlying Add's already-resolved face where a Semisolid's own volume overlaps
+    it -- unlike an ordinary Add/Add merge, which DOES consume the shared face
+    (`_matter_side`/`contact_planes`'s own docstring, `actor_survey.py:1466-1470`). So the Semisolid's
+    matter can genuinely straddle that face: real solid on one side (the Add's), real void on the
+    other (the Semisolid's own point just short of it).
+
+    Trunk order: B, Spike.
+    * `B`     200^3 Add at (0, 0, 0)                  -- x, y, z in [-100, 100]
+    * `Spike` 40 x 20 x 20 Semisolid at (110, 80, 80)  -- x in [90, 130], y, z in [70, 90], a corner
+      strip clear of B's +X face centroid, overlapping B by 10uu in x
+
+    Verified live: `crosses_facts_for` reports `Spike --crosses--> B`, with a measured penetration
+    depth of 30.0uu into B, from either survey direction, both before and after Task 3's fix (no
+    Subtract here for that fix's filter to touch). A same-geometry control with `Spike` as a plain
+    Add instead of Semisolid does NOT report this fact -- confirming the Semisolid's own separate
+    CSG pass, not the geometry, is what produces it.
+    """
+    return _scenario([
+        brush("B", (200, 200, 200), (0, 0, 0)),
+        brush("Spike", (40, 20, 20), (110, 80, 80), poly_flags=PF_SEMISOLID),
     ])
 
 
@@ -931,6 +1012,98 @@ def partial_and_total_carves() -> Scenario:
         brush("SecondCut", (256, 512, 512), (0, 0, 0), csg="subtract"),
         brush("Gone", (64, 64, 64), (700, 0, 0)),
         brush("Eraser", (128, 128, 128), (700, 0, 0), csg="subtract"),
+    ])
+
+
+def nonsolid_straddled_by_an_earlier_and_a_later_subtract() -> Scenario:
+    """Trunk order: EarlySubtract, Decal, LateSubtract -- all the same 128^3 (Decal: 64^3) box at
+    (0, 0, 0), so `EarlySubtract` and `LateSubtract` both fully overlap `Decal`'s Nonsolid volume.
+
+    Regression for `_victim_matter_just_before`/`_carves_volume` keying their trunk-order guard off
+    `ctx.csg_index` (which excludes Nonsolid entirely, so a Nonsolid victim's index was always -1,
+    "before everything"): `EarlySubtract` precedes `Decal` in trunk order and must NOT carve it;
+    `LateSubtract` follows it and must.
+    """
+    from uedcli.builders import PF_NOTSOLID
+    return _scenario([
+        brush("EarlySubtract", (128, 128, 128), (0, 0, 0), csg="subtract"),
+        brush("Decal", (64, 64, 64), (0, 0, 0), poly_flags=PF_NOTSOLID),
+        brush("LateSubtract", (128, 128, 128), (0, 0, 0), csg="subtract"),
+    ])
+
+
+def victim_matter_refilled_then_recut() -> Scenario:
+    """Trunk order: Shell, Room, Block, FirstCut, Refill, SecondCut.
+
+    * `Shell`     2048^3 Add at (0, 0, 0)
+    * `Room`      1024^3 Subtract at (0, 0, 0)
+    * `Block`     256^3 Add at (0, 0, 0)                  — the victim, x,y,z in [-128, 128]
+    * `FirstCut`  128 x 512 x 512 Subtract at (-64, 0, 0) — takes Block's -X half, x in [-128, 0]
+    * `Refill`    128 x 512 x 512 Add at (-64, 0, 0)      — a DIFFERENT actor re-adds matter over
+      the exact same region `FirstCut` just cut. Generic solidity reads True there again, but it is
+      `Refill`'s matter, never `Block`'s own.
+    * `SecondCut` 128 x 512 x 512 Subtract at (-64, 0, 0) — recarves the same region.
+
+    Pins the distinction `_victim_matter_just_before` exists for: at p=(-64,0,0),
+    `_was_solid_before(SecondCut, p)` (generic) reads True -- `Refill` is the last writer there and
+    it is an Add -- but `_victim_matter_just_before(Block, SecondCut, p)` must read False, because
+    `Block`'s OWN matter at p was already gone the moment `FirstCut` ran, long before `Refill` or
+    `SecondCut`. Counting this point toward `carves(SecondCut, Block)` would be exactly the
+    generic-solidity bug the spec's "restrict to victim's own matter" ruling warns about.
+    """
+    return _scenario([
+        brush("Shell", (2048, 2048, 2048), (0, 0, 0)),
+        brush("Room", (1024, 1024, 1024), (0, 0, 0), csg="subtract"),
+        brush("Block", (256, 256, 256), (0, 0, 0)),
+        brush("FirstCut", (128, 512, 512), (-64, 0, 0), csg="subtract"),
+        brush("Refill", (128, 512, 512), (-64, 0, 0)),
+        brush("SecondCut", (128, 512, 512), (-64, 0, 0), csg="subtract"),
+    ])
+
+
+def a_subtract_buried_inside_an_adds_interior() -> Scenario:
+    """Trunk order: Room, Block, InnerCut.
+
+    * `Room`     1024^3 Subtract at (0, 0, 0)
+    * `Block`    256^3 Add at (0, 0, 0)             — x,y,z in [-128, 128]
+    * `InnerCut` 64^3 Subtract at (0, 0, 0)          — x,y,z in [-32, 32], fully inside `Block`'s
+      interior; none of its six faces coincide with any of `Block`'s six, so `Block`'s own EXTERIOR
+      polys are untouched by the carve (an internal cavity, no exterior-face area lost).
+
+    Pins the spec's central `carves` case: the retired face-area `removed_by` would report NO carve
+    here (`Block`'s own surviving face area is unchanged), but a real internal cavity IS a carve by
+    the exact-volume measure -- `carves(InnerCut, Block)`'s volume is exactly `InnerCut`'s own
+    64^3 = 262144.
+    """
+    return _scenario([
+        brush("Room", (1024, 1024, 1024), (0, 0, 0), csg="subtract"),
+        brush("Block", (256, 256, 256), (0, 0, 0)),
+        brush("InnerCut", (64, 64, 64), (0, 0, 0), csg="subtract"),
+    ])
+
+
+def subtract_sealed_inside_a_block_sharing_the_outer_walls_plane() -> Scenario:
+    """Trunk order: OuterRoom, Block, InnerCut.
+
+    * `OuterRoom` 1024^3 Subtract at (0, 0, 0)         — walls at x = +/-512
+    * `Block`     256 x 1024 x 1024 Add at (-384, 0, 0) — x in [-512, -256], flush against
+      OuterRoom's own -X wall (x=-512) — an ordinary "shelf pushed back against the wall" idiom
+      (compare `an_add_inside_an_enclosing_subtract(clearance=0)`)
+    * `InnerCut`  64 x 512 x 512 Subtract at (-480, 0, 0) — x in [-512, -448], carved into `Block`
+      from the SAME x=-512 plane `Block` shares with `OuterRoom`'s own wall, but not reaching past
+      `Block`'s own +X extent (x=-256) — a bubble sealed inside `Block`'s solid, nowhere near
+      `OuterRoom`'s own big central void (which starts around x=-256 and runs to x=512)
+
+    `InnerCut` and `OuterRoom` share a real, coincident x=-512 plane (both author a wall there), so
+    `_planar_void_contact`'s candidate-plane test has something to test at all -- the question this
+    fixture is FOR is whether the voidness probe on that shared patch correctly tells "InnerCut's own
+    sealed pocket" apart from "OuterRoom's own reachable interior", or reports `connects` merely
+    because BOTH read void immediately off that one coincident plane.
+    """
+    return _scenario([
+        brush("OuterRoom", (1024, 1024, 1024), (0, 0, 0), csg="subtract"),
+        brush("Block", (256, 1024, 1024), (-384, 0, 0)),
+        brush("InnerCut", (64, 512, 512), (-480, 0, 0), csg="subtract"),
     ])
 
 

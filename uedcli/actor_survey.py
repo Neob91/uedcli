@@ -219,19 +219,6 @@ def in_world_csg(actor, class_index) -> bool:
                                             or is_builder_brush(actor))
 
 
-def seed_brush_name(level, class_index) -> str | None:
-    """The name of the level's FIRST world-CSG-contributing brush in trunk order, or None if it has
-    none.
-
-    NOT `level.order[0]` and NOT `neighborhood(...)[0]`: a Mover or the builder brush can sit ahead
-    of it and neither contributes, so the brush `bsp_brush_csg` actually seeds the world shell from
-    (`uedcli-native/src/bspcsg.rs`'s `first_add_seed`) is often at a later index. Anything that must
-    reason about "the first brush" -- `neighborhood`'s never-truncate clause, `removed_by`'s
-    never-drop guard -- has to mean THIS one, so it is named once here rather than re-derived from
-    an index at each site."""
-    return next((n for n in level.order if in_world_csg(level.actors[n], class_index)), None)
-
-
 def neighborhood(level, class_index, surveyed_actor, defaults) -> list:
     """Every BRUSH actor whose own world AABB meets the surveyed actor's region, in TRUNK ORDER --
     plus, always, the level's FIRST world-CSG brush.
@@ -262,7 +249,7 @@ def neighborhood(level, class_index, surveyed_actor, defaults) -> list:
 def near_brushes(level, class_index, surveyed_actor, defaults) -> list:
     """`neighborhood` minus the far first brush the seed clause forces in. The first brush is there
     for the SOLVE's correctness; it shares no geometry with the surveyed actor and must not be fed
-    to `classify_pair` or named in any fact. Same filter the spike harness applies before its own
+    to `raw_relation_for` or named in any fact. Same filter the spike harness applies before its own
     raw-tier timing (`bounded_cost.py`'s `near = [...]`)."""
     region = region_of(surveyed_actor, defaults)
     return [a for a in neighborhood(level, class_index, surveyed_actor, defaults)
@@ -303,16 +290,11 @@ def nearby_point_actors(level, surveyed_actor, defaults) -> list:
 
 @dataclass(frozen=True)
 class RawFact:
-    """One raw-tier line's worth of information, already in `actor survey`'s OWN presentation form.
-    A separate type from `actorgraph.Edge` for one reason: `level graph` spells the third relation
-    `carved_by` with the ADD leading, and this verb spells it `carves` with the SUBTRACT leading
-    (spec, Round 6). Keeping the rename in the type conversion rather than in the formatter means
-    nothing downstream can accidentally print the other spelling."""
+    """One raw-tier line's worth of information. `src`/`dst` are already in the spec's final
+    display direction (`raw_relation_for`'s own job) -- no separate flip step downstream."""
     src: str
     dst: str
     relation: str
-    matched_pair: tuple[int, int] | None
-    area_estimate: float | None
 
 
 @dataclass(frozen=True)
@@ -322,56 +304,16 @@ class RawFacts:
     skipped: list
 
 
-def _flip(fact: RawFact) -> RawFact:
-    """Swap a symmetric fact's two sides, carrying `matched_pair` with them. The pair is glued to
-    `(src, dst)` POSITIONALLY, so a rename-only flip would render a real face selector against the
-    wrong brush (spec, Output shape)."""
-    pair = None if fact.matched_pair is None else (fact.matched_pair[1], fact.matched_pair[0])
-    return RawFact(src=fact.dst, dst=fact.src, relation=fact.relation,
-                   matched_pair=pair, area_estimate=fact.area_estimate)
-
-
-def _from_edge(edge, surveyed: str) -> RawFact:
-    """One `actorgraph.Edge` in this verb's own presentation form.
-
-    The `_flip` branch below is what GUARANTEES a symmetric fact leads with the surveyed actor. It
-    happens not to fire through `raw_facts_for`, which always passes the surveyed actor as
-    `classify_pair`'s `name_a` -- but that is an invariant of the CALL ORDER, not of this function,
-    so the branch stays and is pinned directly by
-    `test_from_edge_flips_a_symmetric_fact_when_the_surveyed_actor_is_the_edges_dst`."""
-    if edge.relation == "carved_by":
-        # level graph: Edge(src=Add, dst=Subtract, relation="carved_by") -- the victim leads.
-        # actor survey: the agent leads, and the word is `carves`.
-        return RawFact(src=edge.dst, dst=edge.src, relation="carves",
-                       matched_pair=None, area_estimate=None)
-    fact = RawFact(src=edge.src, dst=edge.dst, relation=edge.relation,
-                   matched_pair=edge.matched_pair, area_estimate=edge.area_estimate)
-    if edge.relation == "touches" and fact.dst == surveyed:
-        return _flip(fact)                       # symmetric: the surveyed actor leads
-    return fact
-
-
 def raw_facts_for(level, class_index, name: str, defaults, *,
                   cells: dict | None = None) -> RawFacts:
-    """Every raw-tier fact about `name`, computed over the BOUNDED NEIGHBORHOOD.
-
-    Deliberately not `actorgraph`'s whole-level graph builder: that walks every brush pair in the
-    level, is `O(brushes^2)`, and the spike measured it at 12x a full CSG solve on a 208-brush level
-    and unfinishable above that (spike.md §4). This runs the SAME `classify_pair` over
-    `near_brushes(...)` instead -- a median 31 ms per survey in the same measurement.
-
-    Raises `ActorNotFoundError` for an unknown name, and `actorgraph.DegenerateBrushError` when the
-    SURVEYED actor's own brush cannot be decomposed -- unlike `level graph`, which skips a bad brush
-    and carries on over the rest of the level, a single-actor report has nothing left to say. A
-    degenerate NEIGHBOUR is skipped and recorded in `skipped`, exactly as the whole-level builder's
-    own per-brush skip does.
-    """
+    """Every raw-tier fact about `name` -- pure authored geometry, over the bounded neighborhood
+    (see the module docstring for why bounded). Raises `ActorNotFoundError` for an unknown name, and
+    `actorgraph.DegenerateBrushError` when the SURVEYED actor's own brush cannot be decomposed; a
+    degenerate NEIGHBOUR is skipped and recorded in `skipped`."""
     if name not in level.actors:
         raise ActorNotFoundError(name)
     cells = {} if cells is None else cells
     surveyed = level.actors[name]
-    order_index = {n: i for i, n in enumerate(level.order)
-                   if level.actors[n].brush is not None}
     nodes: dict = {name: actorgraph._node_tag(surveyed, class_index)}
     facts: list[RawFact] = []
     skipped: dict[str, str] = {}
@@ -387,22 +329,17 @@ def raw_facts_for(level, class_index, name: str, defaults, *,
             except actorgraph.DegenerateBrushError as e:
                 skipped[other.name] = str(e)
                 continue
-            for edge in actorgraph.classify_pair(name, surveyed, other.name, other,
-                                                  order_index=order_index,
-                                                  class_index=class_index, cache=cells):
-                facts.append(_from_edge(edge, name))
+            rel = raw_relation_for(name, surveyed, other.name, other, cells)
+            if rel is not None:
+                src, dst, relation = rel
+                facts.append(RawFact(src=src, dst=dst, relation=relation))
                 nodes[other.name] = actorgraph._node_tag(other, class_index)
-        # The same point-actor containment fan-out the whole-level graph builder does, scoped to the
-        # surveyed brush: every point actor whose Location falls inside its volume.
         for p in points:
             loc = tuple(float(c) for c in p.location)
             if actorgraph.point_in_brush(surveyed, loc, cache=cells):
-                facts.append(RawFact(src=name, dst=p.name, relation="contains",
-                                      matched_pair=None, area_estimate=None))
+                facts.append(RawFact(src=name, dst=p.name, relation="encloses"))
                 nodes[p.name] = actorgraph._node_tag(p, class_index)
     else:
-        # The surveyed actor IS a point: the same fan-out seen from the other side. `contains` is
-        # fixed-direction, so the containing brush still leads.
         if surveyed.location is not None:
             loc = tuple(float(c) for c in surveyed.location)
             for other in others:
@@ -412,25 +349,20 @@ def raw_facts_for(level, class_index, name: str, defaults, *,
                 except actorgraph.DegenerateBrushError as e:
                     skipped[other.name] = str(e)
                     continue
-                facts.append(RawFact(src=other.name, dst=name, relation="contains",
-                                      matched_pair=None, area_estimate=None))
+                facts.append(RawFact(src=other.name, dst=name, relation="encloses"))
                 nodes[other.name] = actorgraph._node_tag(other, class_index)
 
     return RawFacts(facts=facts, nodes=nodes, skipped=sorted(skipped.items()))
 
 
 def format_raw_line(fact: RawFact, nodes: dict) -> str:
-    """One `raw `-prefixed line, in `actorgraph.format_text`'s exact grammar. `:idx` and the area
-    annotation ride ONLY a `touches` fact that found a real matched face pair; `contains`/`carves`
-    print bare names with no annotation (spec, Output shape)."""
-    has_idx = fact.relation == "touches" and fact.matched_pair is not None
-    src = f"{fact.src}:{fact.matched_pair[0]}" if has_idx else fact.src
-    dst = f"{fact.dst}:{fact.matched_pair[1]}" if has_idx else fact.dst
-    rel = fact.relation
-    if fact.relation == "touches" and fact.area_estimate is not None:
-        rel = f"touches({fact.area_estimate:.4g}uu^2)"
-    return (f"raw {src} {actorgraph._node_bracket(nodes[fact.src])} --{rel}--> "
-            f"{dst} {actorgraph._node_bracket(nodes[fact.dst])}")
+    """One raw-tier line -- bare, no annotation of any kind, and NO tier-token prefix: the spec's
+    Output section drops the per-line `raw `/`csg ` prefix now that relation names are unique across
+    tiers ("each line self-identifies its tier by its verb"). The two printed GROUPS are marked by
+    fixed order alone, no new marker (owner ruling) -- that is `format_lines`'s concern (Task 12),
+    not this function's; this function only ever formats one already-tier-identified fact."""
+    return (f"{fact.src} {actorgraph._node_bracket(nodes[fact.src])} --{fact.relation}--> "
+            f"{fact.dst} {actorgraph._node_bracket(nodes[fact.dst])}")
 
 
 # The csg tier's coincidence tolerance, in world units: the engine's own THRESH_POINTS_ARE_NEAR
@@ -516,52 +448,100 @@ def _cell_bounds(cell) -> tuple:
             tuple(max(v[i] for v in verts) for i in range(3)))
 
 
-def _cell_intersection_volume(cell_a, cell_b) -> float:
-    """The volume of the convex intersection `cell_a INTERSECT cell_b`, both `actorgraph.ConvexCell`s.
+def _polytope_from_planes(planes: list[tuple[tuple[float, float, float], float]],
+                          bounds: tuple | None) -> "actorgraph.ConvexCell | None":
+    """The convex polytope `{p : n.p <= d for (n, d) in planes}`, via H-rep -> V-rep vertex
+    enumeration: every plane TRIPLE's intersection point (`actorgraph._intersect_three_planes`),
+    kept only when it also satisfies every other plane. `bounds` (`(lo, hi)`, already padded), when
+    given, additionally drops a candidate vertex outside it BEFORE the half-space check -- the
+    poisoned-unbounded-plane guard (board item `authored-volume-poisoned-by-unbounded-plane`): two
+    near-parallel planes intersect at a point whose distance from either blows up as they approach
+    parallel, and nothing else here catches a resulting vertex light-years from the real geometry.
+    None when fewer than 4 vertices survive (empty or degenerate).
 
-    Same H-rep -> V-rep -> tetrahedral-volume pipeline `decompose_convex`/`cell_volume` already use
-    (every vertex of the intersection is where 3 of the combined half-spaces meet, kept only when it
-    also satisfies every other one) -- but with one addition `actorgraph._cell_vertices` does NOT
-    have: a bounds sanity check on each candidate vertex BEFORE the half-space check runs. Board item
-    `authored-volume-poisoned-by-unbounded-plane` records why that matters: two
-    near-parallel planes intersect at a point whose distance from either plane blows up as they
-    approach parallel, and nothing in `_cell_vertices` catches a resulting vertex that lands light-
-    years from either actor's own geometry -- silently inflating a reported volume by many orders of
-    magnitude. `actorgraph.py` is foundational, shipped, widely-used code and is deliberately NOT
-    touched here; this is a fresh, LOCAL vertex search (reusing only the pure linear-algebra solver
-    `actorgraph._intersect_three_planes`, never the unguarded `_cell_vertices` loop), so the guard
-    lives where the new call site is.
-
-    The guard itself is not a new invented tolerance: any real point of `cell_a INTERSECT cell_b`
-    lies inside BOTH cells' own bounding boxes, by definition of intersection -- so a candidate
-    outside their combined box (padded by the module's own `CSG_TOLERANCE`, not a new constant) is
-    provably not a real vertex of this intersection and is dropped before it can reach anything.
-
-    Returns `0.0` for cells whose bounding boxes don't meet at all (the common case -- most cell
-    pairs in a survey don't overlap) and for a genuinely empty or degenerate intersection (fewer than
-    4 surviving vertices) -- both ordinary outcomes here, not errors."""
-    a_lo, a_hi = _cell_bounds(cell_a)
-    b_lo, b_hi = _cell_bounds(cell_b)
-    lo = tuple(max(a_lo[i], b_lo[i]) - CSG_TOLERANCE for i in range(3))
-    hi = tuple(min(a_hi[i], b_hi[i]) + CSG_TOLERANCE for i in range(3))
-    if any(lo[i] > hi[i] for i in range(3)):
-        return 0.0
-    planes = list(cell_a.half_spaces) + list(cell_b.half_spaces)
+    `planes` is deduped by `_same_plane` first: `_cell_intersection` concatenates both cells'
+    half-spaces with no dedup, so two cells sharing an exact (or near-exact, within
+    `CSG_TOLERANCE`) coincident plane -- e.g. two coincident boxes -- would otherwise carry that
+    plane twice into the returned cell's `half_spaces`, and `cell_volume` fans/sums a face
+    contribution per half-space entry, double-counting the shared face. Bug found live: two
+    identical 10x10x10 box cells' `_cell_intersection_volume` came back ~2x `cell_volume`."""
     eps = actorgraph._VERTEX_EPS
+    deduped: list = []
+    for n, d in planes:
+        if not any(_same_plane(n, d, p) for p in deduped):
+            deduped.append((n, d))
+    planes = deduped
     verts: list = []
     for i, j, k in itertools.combinations(range(len(planes)), 3):
         p = actorgraph._intersect_three_planes(planes[i], planes[j], planes[k])
         if p is None:
             continue
-        if any(p[m] < lo[m] or p[m] > hi[m] for m in range(3)):
-            continue        # cannot be a real vertex of cell_a INTERSECT cell_b -- see docstring
+        if bounds is not None:
+            lo, hi = bounds
+            if any(p[m] < lo[m] or p[m] > hi[m] for m in range(3)):
+                continue
         if not all(n[0] * p[0] + n[1] * p[1] + n[2] * p[2] <= d + eps for n, d in planes):
             continue
         if not any(math.dist(p, q) < eps for q in verts):
             verts.append(p)
     if len(verts) < 4:
-        return 0.0
-    return cell_volume(actorgraph.ConvexCell(vertices=verts, half_spaces=planes))
+        return None
+    return actorgraph.ConvexCell(vertices=verts, half_spaces=planes)
+
+
+def _cell_intersection(cell_a, cell_b) -> "actorgraph.ConvexCell | None":
+    """The convex intersection `cell_a INTERSECT cell_b` as its own polytope (not just its volume)
+    -- `_polytope_from_planes` over both cells' half-spaces, bounded by their combined bounding
+    boxes padded by `CSG_TOLERANCE` (any real point of the intersection lies inside both cells' own
+    boxes, so a candidate outside the padded combined box is provably not a real vertex here). None
+    for cells whose boxes don't meet, or a genuinely empty/degenerate intersection."""
+    a_lo, a_hi = _cell_bounds(cell_a)
+    b_lo, b_hi = _cell_bounds(cell_b)
+    lo = tuple(max(a_lo[i], b_lo[i]) - CSG_TOLERANCE for i in range(3))
+    hi = tuple(min(a_hi[i], b_hi[i]) + CSG_TOLERANCE for i in range(3))
+    if any(lo[i] > hi[i] for i in range(3)):
+        return None
+    return _polytope_from_planes(list(cell_a.half_spaces) + list(cell_b.half_spaces), (lo, hi))
+
+
+def _cell_intersection_volume(cell_a, cell_b) -> float:
+    """The volume of `cell_a INTERSECT cell_b`. Thin wrapper over `_cell_intersection` -- see that
+    function for the vertex-enumeration pipeline and the poisoned-unbounded-plane guard."""
+    cell = _cell_intersection(cell_a, cell_b)
+    return cell_volume(cell) if cell is not None else 0.0
+
+
+def _clip_cell(cell, normal, offset: float) -> "actorgraph.ConvexCell | None":
+    """`cell` intersected with the single half-space `normal . p <= offset` -- `_cell_intersection`
+    with one extra plane instead of a second full cell, bounded by `cell`'s OWN box padded by
+    `CSG_TOLERANCE` (no second cell to intersect against). None when the half-space excludes `cell`
+    entirely, or the result is degenerate."""
+    lo, hi = _cell_bounds(cell)
+    bounds = (tuple(c - CSG_TOLERANCE for c in lo), tuple(c + CSG_TOLERANCE for c in hi))
+    return _polytope_from_planes(list(cell.half_spaces) + [(normal, offset)], bounds)
+
+
+def _subtract_cell(piece, cutter) -> list:
+    """`piece` minus `cutter`'s convex volume, as a list of disjoint convex pieces (possibly empty).
+    Standard convex-polytope subtraction by sequential half-space clipping: for each of `cutter`'s
+    own half-spaces in turn, split off whatever of what's left lies STRICTLY OUTSIDE this one plane
+    (definitely not in `cutter`, since it fails this plane alone) into the output, and keep only the
+    inside-this-plane remainder to test against the next -- `piece` minus a convex region is the
+    union of at most `len(cutter.half_spaces)` such fragments. Reuses `_clip_cell`'s own vertex
+    enumeration and bounds guard; introduces no new tolerance."""
+    remaining = [piece]
+    outside: list = []
+    for normal, offset in cutter.half_spaces:
+        next_remaining = []
+        for p in remaining:
+            out_part = _clip_cell(p, tuple(-c for c in normal), -offset)
+            if out_part is not None:
+                outside.append(out_part)
+            keep_part = _clip_cell(p, normal, offset)
+            if keep_part is not None:
+                next_remaining.append(keep_part)
+        remaining = next_remaining
+    return outside
 
 
 def authored_shape_contains(container, target, cells: dict) -> bool:
@@ -580,8 +560,8 @@ def authored_shape_contains(container, target, cells: dict) -> bool:
     sits outside the container entirely. Review finding, Task 15 round 2 (critical).
 
     Strict full containment is still the deliberate rule (spec): a large Add or Mover that only
-    partially pokes out of a Subtract gets no csg `contains`, even though raw `contains` reports one,
-    and majority-of-extent was considered and rejected as its own source of ambiguity -- this upgrade
+    partially pokes out of a Subtract gets no `occupies`, even though `encloses` reports one, and
+    majority-of-extent was considered and rejected as its own source of ambiguity -- this upgrade
     changes HOW full containment is tested, not the strictness of the rule itself.
 
     The volume compare uses a plain relative tolerance (`1e-6`, this module's own bare
@@ -607,6 +587,81 @@ def authored_shape_contains(container, target, cells: dict) -> bool:
         if not math.isclose(covered, tc_volume, rel_tol=1e-6, abs_tol=1e-6):
             return False
     return True
+
+
+def raw_relation_for(name_a, actor_a, name_b, actor_b, cache: dict) -> "tuple[str, str, str] | None":
+    """The RCC (region-connection-calculus) relation between two BRUSH actors' own AUTHORED volumes
+    -- pure geometry, ignoring CsgOper, trunk order, and Mover-ness entirely (spec, raw tier). None
+    for disjoint volumes. Decision procedure (spec's own): mutual full containment -> `coincides`
+    (checked FIRST -- takes priority over `encloses`, since identical brushes satisfy
+    `authored_shape_contains` both ways); one-way full containment -> `encloses`; interiors
+    interpenetrate beyond `_TOUCH_EPS` -> `overlaps`; boundaries meet with no interior penetration ->
+    `meets`. Returns `(src, dst, relation)` already in display direction: `coincides`/`overlaps`/
+    `meets` are symmetric and lead with `name_a` (the caller's own convention -- always the surveyed
+    actor); `encloses` leads with whichever of the two is the container."""
+    b_in_a = authored_shape_contains(actor_a, actor_b, cache)
+    a_in_b = authored_shape_contains(actor_b, actor_a, cache)
+    if a_in_b and b_in_a:
+        return (name_a, name_b, "coincides")
+    if b_in_a:
+        return (name_a, name_b, "encloses")
+    if a_in_b:
+        return (name_b, name_a, "encloses")
+
+    cells_a = actorgraph.decompose_convex(actor_a, cache=cache)
+    cells_b = actorgraph.decompose_convex(actor_b, cache=cache)
+    best_depth, any_touch = None, False
+    for ca in cells_a:
+        for cb in cells_b:
+            depth = actorgraph.sat_interpenetration_depth(ca, cb)
+            if depth is not None:
+                any_touch = True
+                best_depth = depth if best_depth is None else max(best_depth, depth)
+    if best_depth is not None and best_depth > actorgraph._TOUCH_EPS:
+        return (name_a, name_b, "overlaps")
+    if any_touch:
+        return (name_a, name_b, "meets")
+    return None
+
+
+# The resolved tier's own volume floor -- derived from CSG_TOLERANCE the same way _MIN_CONTACT_AREA
+# derives an area floor from it (CSG_TOLERANCE ** 2): a cubic volume below CSG_TOLERANCE ** 3 is not
+# a real geometric distinction in a resolved model, any more than an area below CSG_TOLERANCE ** 2
+# is. Used both to drop float-dust pieces from `_partition_by_brushes` and as `carves`'s own `> eps`
+# volume threshold (spec: "a named volume tolerance for carves's > eps, resolved tier -- CARVE_AREA_EPS
+# was an area and does not transfer").
+CARVE_VOLUME_EPS = CSG_TOLERANCE ** 3
+
+
+def _piece_centroid(cell) -> tuple:
+    """A convex cell's vertex centroid -- always interior to the cell (a convex hull's centroid
+    always is), so it is a valid representative point for ANY per-point predicate that is constant
+    over the whole cell (see `_partition_by_brushes`)."""
+    n = len(cell.vertices)
+    return tuple(sum(v[i] for v in cell.vertices) / n for i in range(3))
+
+
+def _partition_by_brushes(query_cell, brush_actors, ctx: SurveyContext) -> list:
+    """`query_cell` split into convex sub-pieces, each fully INSIDE or fully OUTSIDE every one of
+    `brush_actors`' own decomposed cells -- an ARRANGEMENT over the query region, not an attribution
+    to any one brush. Every surviving piece's membership in every listed brush is therefore constant
+    across the whole piece, which is what lets a per-brush point-predicate be evaluated ONCE per
+    piece (at its centroid, `_piece_centroid`) and be exactly right for every point in it -- the
+    "split by the ordered earlier/later brushes' half-spaces into convex sub-pieces" the spec's
+    `occupies` section calls for. Order of `brush_actors` does not matter for the SPLIT itself (only
+    for how a caller later reads "last writer" off the pieces); pieces with volume at or below
+    `CARVE_VOLUME_EPS` are dropped as float dust, not real geometry."""
+    pieces = [query_cell]
+    for actor in brush_actors:
+        for cutter in actorgraph.decompose_convex(actor, cache=ctx.cells):
+            next_pieces = []
+            for p in pieces:
+                inside = _cell_intersection(p, cutter)
+                if inside is not None:
+                    next_pieces.append(inside)
+                next_pieces.extend(_subtract_cell(p, cutter))
+            pieces = next_pieces
+    return [p for p in pieces if cell_volume(p) > CARVE_VOLUME_EPS]
 
 
 @dataclass(frozen=True)
@@ -703,12 +758,12 @@ def csg_faces(probe, region) -> list:
 
 @dataclass(frozen=True)
 class CsgFact:
-    """One csg-tier line. `depth_uu` is set on `crosses` and on nothing else -- the spec gives that
-    one relation an annotation and leaves every other csg line bare."""
+    """One csg-tier line. Bare -- no relation in this tier carries a magnitude (spec, Output
+    shape); `crosses` becomes a boolean predicate, deciding existence off `penetration_depth`'s own
+    straddle+footprint logic without reporting the number."""
     src: str
     dst: str
     relation: str
-    depth_uu: float | None = None
 
 
 def kind_of(actor, class_index) -> str:
@@ -740,17 +795,16 @@ class SurveyContext:
     `detail_pass`). `resolved_matter_of` walks it, and `csg_index` is that list's name -> position
     map so it does not rebuild one per call.
 
-    `seed` is the NAME of the level's first world-CSG brush -- the one `bsp_brush_csg` turns into
-    the world shell instead of classifying. It is carried explicitly rather than read back as
-    `neighbors[0].name`, because `neighbors` is in trunk order and index 0 can perfectly well be a
-    Mover or the builder brush, neither of which contributes to world CSG. Anything that must not
-    disturb the seed (`removed_by`) compares against this.
-
     `aabbs` is `_brush_bounds`' memo: one float AABB per decomposed brush, the prefilter in front of
     every `point_in_brush` the contact search makes. `kinds` memoizes `kind_of` the same way --
     `movers.is_mover` walks the class ancestry on every call, and the contact search asks for a
     brush's kind thousands of times per survey (measured at 22% of the tier's whole runtime).
-    `planes` is `_own_planes`' memo, for the same reason."""
+    `planes` is `_own_planes`' memo, for the same reason.
+
+    `trunk_index` is `level.order`'s name -> position map -- the FULL trunk order, unlike
+    `csg_index` which only covers `_WORLD_PASS_KINDS`. A Nonsolid carve victim has no `csg_index`
+    entry at all; ordering checks that must work for it (`_victim_matter_just_before`,
+    `_carves_volume`) read `trunk_index` instead."""
     level: object
     class_index: object
     defaults: object
@@ -765,7 +819,7 @@ class SurveyContext:
     cells: dict
     csg_order: list
     csg_index: dict
-    seed: str | None
+    trunk_index: dict
     aabbs: dict
     kinds: dict
     planes: dict
@@ -796,7 +850,7 @@ def build_context(level, class_index, name: str, defaults, *, cells=None) -> Sur
         cells={} if cells is None else cells,
         csg_order=csg_order,
         csg_index={a.name: i for i, a in enumerate(csg_order)},
-        seed=seed_brush_name(level, class_index),
+        trunk_index={n: i for i, n in enumerate(level.order)},
         aabbs={},
         kinds=kinds,
         planes={},
@@ -969,12 +1023,29 @@ def _source_cells(ctx: SurveyContext, actor) -> list[list[tuple[float, float, fl
     own hull is its own true silhouette. No current fixture exercises a non-convex brush (every
     scenario brush here is a box, one cell), but `crosses` must stay correct for one regardless.
 
+    Filtered to the SURVIVING matter only: each authored cell is split into convex sub-pieces by
+    every Subtract LATER than `actor` in trunk order (`_partition_by_brushes`), and a piece is kept
+    only when `resolved_matter_of` still holds at its centroid -- a point-membership filter on the
+    straddle points, never a reshape of the convex cells into one (possibly non-convex) hull:
+    `resolved_matter_of` of an Add is "authored body minus later subtracts", possibly non-convex, and
+    `penetration_depth`'s own per-cell convex footprint (`_convex_hull_2d`) requires each group to
+    stay convex. A per-corner-vertex test cannot do this -- a carve interior to a cell, touching none
+    of its corners, is the ordinary case, not an edge case (see this function's own worked-example
+    regression). A cell with no surviving piece at all contributes nothing crossable.
+
     An actor with no `Location` contributes nothing rather than being placed at the origin: a
     substituted position would invent a fact (this is the same rule `collision_clearance.py`'s own
     candidate walk applies, skipping any actor whose `location is None`)."""
     if actor.brush is not None:
         cells = actorgraph.decompose_convex(actor, cache=ctx.cells)
-        return [[tuple(float(c) for c in v) for v in cell.vertices] for cell in cells]
+        later_subtracts = [a for a in ctx.csg_order[ctx.csg_index.get(actor.name, len(ctx.csg_order)) + 1:]
+                           if ctx.kinds[a.name] == "subtract"]
+        groups = []
+        for cell in cells:
+            for piece in _partition_by_brushes(cell, later_subtracts, ctx):
+                if resolved_matter_of(ctx, actor, _piece_centroid(piece)):
+                    groups.append([tuple(float(c) for c in v) for v in piece.vertices])
+        return groups or None
     ext = collision_extent(actor, ctx.defaults)
     if ext is None or actor.location is None:
         return None
@@ -1168,11 +1239,8 @@ def crosses_facts_for(ctx: SurveyContext) -> list[CsgFact]:
     if ctx.probe.solidity is None:
         return []
 
-    def record(src, dst, depth):
-        key = (src, dst)
-        prev = facts.get(key)
-        if prev is None or depth > prev.depth_uu:
-            facts[key] = CsgFact(src=src, dst=dst, relation="crosses", depth_uu=depth)
+    def record(src, dst):
+        facts[(src, dst)] = CsgFact(src=src, dst=dst, relation="crosses")
 
     # Direction 1: the surveyed actor intrudes.
     if crosses_source_eligible(ctx.surveyed, ctx.class_index, ctx.defaults):
@@ -1184,9 +1252,8 @@ def crosses_facts_for(ctx: SurveyContext) -> list[CsgFact]:
                 target = ctx.level.actors.get(face.owner)
                 if target is None or not crosses_target_eligible(target, ctx.class_index):
                     continue
-                depth = penetration_depth(ctx, cells, face)
-                if depth is not None:
-                    record(ctx.name, face.owner, depth)
+                if penetration_depth(ctx, cells, face) is not None:
+                    record(ctx.name, face.owner)
 
     # Direction 2: somebody else intrudes on the surveyed actor.
     if crosses_target_eligible(ctx.surveyed, ctx.class_index):
@@ -1199,9 +1266,8 @@ def crosses_facts_for(ctx: SurveyContext) -> list[CsgFact]:
                 if not cells:
                     continue
                 for face in own_faces:
-                    depth = penetration_depth(ctx, cells, face)
-                    if depth is not None:
-                        record(other.name, ctx.name, depth)
+                    if penetration_depth(ctx, cells, face) is not None:
+                        record(other.name, ctx.name)
             # Point actors too. This is why `nearby_point_actors` (Task 7) filters candidates by
             # their own extent-aware region: a collision cylinder can reach into the surveyed
             # brush from a `Location` outside it, and a bare-`Location` filter drops those --
@@ -1213,9 +1279,8 @@ def crosses_facts_for(ctx: SurveyContext) -> list[CsgFact]:
                 if not cells:
                     continue
                 for face in own_faces:
-                    depth = penetration_depth(ctx, cells, face)
-                    if depth is not None:
-                        record(p.name, ctx.name, depth)
+                    if penetration_depth(ctx, cells, face) is not None:
+                        record(p.name, ctx.name)
 
     return [facts[k] for k in sorted(facts)]
 
@@ -1560,6 +1625,51 @@ def _was_solid_before(ctx: SurveyContext, subtract, point) -> bool:
     return True
 
 
+def _last_writer_excluding(ctx: SurveyContext, point, *, exclude: str | None = None) -> str | None:
+    """The NAME of the LAST brush in `ctx.csg_order` (latest first) whose authored volume reaches
+    `point`, skipping `exclude` if given, or None when nothing in the order reaches it there.
+    Generalizes `_was_solid_before` (which only walks brushes earlier than one given Subtract, and
+    cannot exclude an arbitrary Add) and `resolved_matter_of` (which answers for one actor only) into
+    the full-order, exclusion-capable walk `occupies`'s condition (iii) needs."""
+    for a in reversed(ctx.csg_order):
+        if a.name == exclude:
+            continue
+        if _in_authored_volume(ctx, a, point):
+            return a.name
+    return None
+
+
+def _is_void_excluding(ctx: SurveyContext, point, *, exclude: str | None = None) -> bool:
+    """Is `point` VOID once the whole trunk (minus `exclude`, if given) has resolved? True only when
+    a real last-writer reaches the point AND it is a Subtract -- no writer at all is the `MAP NEW`
+    default-solid world (`_was_solid_before`'s own base case), which is NOT void."""
+    last = _last_writer_excluding(ctx, point, exclude=exclude)
+    return last is not None and ctx.kinds[last] == "subtract"
+
+
+def _victim_matter_just_before(ctx: SurveyContext, victim, subtract, point) -> bool:
+    """Was `point` still `victim`'s OWN surviving matter at the moment JUST BEFORE `subtract` ran --
+    in `victim`'s own authored volume, and not yet overwritten by any Subtract between `victim`'s own
+    position in trunk order and `subtract`'s? Deliberately narrower than `_was_solid_before`
+    (which would count ANY actor's matter as solid-before-`subtract`, wrongly crediting
+    `carves(subtract, victim)` for a point a DIFFERENT Add refilled after `victim` was cut and before
+    `subtract` ran) -- the victim-specific delta the retired `removed_by` got right via a
+    counterfactual solve; this is its exact, per-point equivalent.
+
+    Reads `ctx.trunk_index`, not `ctx.csg_index`: a Nonsolid victim (a valid `_CARVE_TARGET_KINDS`
+    member) has no `csg_index` entry, which would make it sort as "before everything" and defeat
+    this ordering guard entirely."""
+    if not _in_authored_volume(ctx, victim, point):
+        return False
+    v_i = ctx.trunk_index.get(victim.name, -1)
+    s_i = ctx.trunk_index.get(subtract.name, len(ctx.trunk_index))
+    if s_i <= v_i:
+        return False   # subtract does not follow victim in trunk order -- carves cannot apply
+    between = [a for a in ctx.csg_order if v_i < ctx.trunk_index.get(a.name, -1) < s_i]
+    return not any(ctx.kinds[a.name] == "subtract" and _in_authored_volume(ctx, a, point)
+                   for a in between)
+
+
 def _is_carve_boundary(ctx: SurveyContext, actor, inner, outer) -> bool:
     """Is this plane, here, the boundary of `actor`'s own carve -- a surface its Subtract really
     made?
@@ -1741,9 +1851,10 @@ def touches_facts_for(ctx: SurveyContext) -> list[CsgFact]:
     A pair `crosses` claims is never also reported here. The exclusion is per PAIR and direction-free
     -- `crosses` names the intruder and this relation names the surveyed actor, so comparing ordered
     pairs would let the same two actors be `crosses` one way and `touches` the other (round 4's
-    per-face gate did exactly that). Where `crosses` itself is wrong the suppression follows it:
-    board item `crosses-fires-on-a-subtract-s-carve-victim` records the one known case, a blind
-    pocket carved into a wall, with a strict `xfail` pinning the `touches` fact it costs."""
+    per-face gate did exactly that). Board item `crosses-fires-on-a-subtract-s-carve-victim` recorded
+    one case this broke -- a blind pocket carved into a wall, `crosses` wrongly claiming the pair and
+    suppressing the `touches` fact it should also carry -- fixed by using resolved matter for
+    `crosses` itself (`test_touches_fires_for_a_blind_pockets_carve_victim`)."""
     if ctx.probe.solidity is None:
         return []
     crossed = {frozenset((f.src, f.dst)) for f in crosses_facts_for(ctx)}
@@ -1832,8 +1943,13 @@ def _region_grid_probes(region: list, n: int = VOID_PROBE_GRID) -> list:
     return [(u, v) for u in axis(lo_u, hi_u) for v in axis(lo_v, hi_v) if inside(u, v)]
 
 
-def _planar_void_contact(ctx: SurveyContext, a, b) -> bool:
-    """Do `a` and `b` share a real (positive-AREA) patch of authored boundary that is VOID there?
+def _planar_void_contact(ctx: SurveyContext, a, b) -> tuple | None:
+    """Do `a` and `b` share a real (positive-AREA) patch of authored boundary that is VOID there --
+    and if so, at what point? Returns the first confirmed-void probe point, or `None` when no
+    candidate plane has one. `voids_meet` walks on from this point to check the void actually
+    continues into BOTH `a`'s and `b`'s own interior, rather than dead-ending in a sealed bubble on
+    either side (see `_void_reaches_interior`) -- this function only answers for the shared plane
+    itself.
 
     This is `pair_touches`'s own technique (Task 13, round 6 -- the fix that finally closed
     `touches`'s edge/corner and vanished-shared-face defects; `_self_consistent_plane`/
@@ -1908,8 +2024,49 @@ def _planar_void_contact(ctx: SurveyContext, a, b) -> bool:
                 for u, v in _region_grid_probes(region):
                     point = tuple(origin[i] + u * u_axis[i] + v * v_axis[i] for i in range(3))
                     if not ctx.probe.solidity.point_is_solid(point):
-                        return True
-    return False
+                        return point
+    return None
+
+
+def _actor_interior_sample_point(ctx: SurveyContext, actor) -> tuple:
+    """A point definitely inside `actor`'s own authored volume -- its largest decomposed cell's own
+    vertex centroid (`_piece_centroid`, always interior to a convex cell). The landmark
+    `_void_reaches_interior`'s reachability walk aims for."""
+    cells = actorgraph.decompose_convex(actor, cache=ctx.cells)
+    biggest = max(cells, key=cell_volume)
+    return _piece_centroid(biggest)
+
+
+# CSG_TOLERANCE-scaled like `_SIDE_PROBE_STEP` (0.05uu -- "comfortably clear of CSG_TOLERANCE...
+# far below the smallest real content feature"), but coarser: this walk only needs to find ANY
+# solid wall separating a contact patch from an actor's own interior, over a whole-actor span, not
+# resolve a boundary to sub-uu precision the way `_SIDE_PROBE_STEP`'s single off-face nudge does.
+_VOID_REACH_STEP = _SIDE_PROBE_STEP * 20
+
+
+def _void_reaches_interior(ctx: SurveyContext, start, actor) -> bool:
+    """Walking from `start` toward `actor`'s own interior sample point in `_VOID_REACH_STEP`
+    increments, is every step still void, all the way there (or past `actor`'s own authored bounds
+    on that side)? False the moment a step reads solid.
+
+    The reachability test `_planar_void_contact`'s own patch check cannot make: that check only asks
+    whether the SHARED PLANE is void, never whether that void continues into `actor`'s real interior
+    rather than dead-ending in a sealed bubble a different Subtract carved nearby -- the false
+    positive `subtract_sealed_inside_a_block_sharing_the_outer_walls_plane` pins."""
+    target = _actor_interior_sample_point(ctx, actor)
+    lo, hi = _brush_bounds(ctx, actor)
+    dist = math.dist(start, target)
+    if dist <= _VOID_REACH_STEP:
+        return not ctx.probe.solidity.point_is_solid(target)
+    direction = tuple((target[i] - start[i]) / dist for i in range(3))
+    steps = int(dist / _VOID_REACH_STEP)
+    for i in range(1, steps + 1):
+        p = tuple(start[a] + direction[a] * _VOID_REACH_STEP * i for a in range(3))
+        if any(p[a] < lo[a] - CSG_TOLERANCE or p[a] > hi[a] + CSG_TOLERANCE for a in range(3)):
+            return True   # exited actor's own bounds while still void -- nothing left of its box to hit
+        if ctx.probe.solidity.point_is_solid(p):
+            return False
+    return not ctx.probe.solidity.point_is_solid(target)
 
 
 # `voids_meet` decides continuity by LOCAL SOLIDITY only, never by the resolved model's zone
@@ -1928,12 +2085,23 @@ def voids_meet(ctx: SurveyContext, a, b) -> bool:
     on an edge/corner touch; a second review round found the fix's own replacement centroid-based
     volume test then missed the spec's "partial merge" case. Both are the same defect class `touches`
     needed six rounds to close, and both are closed here the way `touches` closed them: by testing
-    the real region, not guessing at it with a fixed grid or a single representative point."""
+    the real region, not guessing at it with a fixed grid or a single representative point.
+
+    A found contact point is not enough on its own: `_void_reaches_interior` walks on from it toward
+    each side's OWN interior, rejecting a patch that dead-ends in a sealed bubble a different
+    Subtract carved nearby rather than opening into that side's real void. `connects` is spec'd
+    symmetric (spec.md), so both directions must reach -- a one-directional check reports
+    `connects(OuterRoom, InnerCut)` from a sealed `InnerCut` bubble merely because `InnerCut`'s own
+    (trivially reachable, sealed) interior is reachable from the shared plane, even though the walk
+    the other way, toward `OuterRoom`'s interior, is blocked."""
     if ctx.probe.solidity is None:
         return False
     if shared_region(ctx, a, b) is None:
         return False
-    return _planar_void_contact(ctx, a, b)
+    point = _planar_void_contact(ctx, a, b)
+    if point is None:
+        return False
+    return _void_reaches_interior(ctx, point, a) and _void_reaches_interior(ctx, point, b)
 
 
 def connects_facts_for(ctx: SurveyContext) -> list[CsgFact]:
@@ -1971,104 +2139,114 @@ def connects_facts_for(ctx: SurveyContext) -> list[CsgFact]:
     return sorted(out, key=lambda f: f.dst)
 
 
-# Relative tolerance for the containment volume comparison. Named, not an inline literal, and
-# RELATIVE rather than absolute: a level's Subtract volumes span many orders of magnitude, so a
-# fixed epsilon would be meaningless at one end and dominant at the other. Matches `relation.py`'s
-# own `_close`-style convention for the same problem on areas (spec: a genuine tie must break on
-# trunk order, not on float noise).
-VOLUME_TOLERANCE_REL = 1e-6
+def _occupies_matter_exists(ctx: SurveyContext, x, s) -> bool:
+    """Does matter actor `x` (Add/Semisolid) `occupies` Subtract `s` -- the MARGINAL test (owner
+    ruling): a point p qualifies iff ALL of (i) `resolved_matter_of(x, p)` -- x's own matter
+    survives; (ii) `s` is the OPERATIVE carve at p -- the last writer reaching p once x is excluded
+    is `s` itself (`_last_writer_excluding(ctx, p, exclude=x.name) == s.name`); (iii)
+    `_is_void_excluding(p, exclude=x.name)` -- p is void when x is excluded (implied by (ii) here,
+    since s is always a Subtract, but kept as its own check to match the spec's three-condition
+    form).
 
+    (ii) was originally `_was_solid_before(s, p)`, which only asks "did *some* earlier brush leave p
+    solid" -- a tautology for whichever brush is FIRST in `csg_order` (`_was_solid_before`'s own
+    walk-backward base case returns True there with no reference to s's geometry at all), so it
+    could credit a Subtract with occupancy it never actually carved once a later brush had
+    re-carved the point for a different reason (`two_rooms_side_by_side`: `Outer` is first in trunk
+    order and gets falsely credited alongside the actual carving `RoomA`/`RoomB`, same class of bug
+    in `nested_niche_with_a_decoration`'s `Subtract1`). The operative-last-writer form only credits
+    the Subtract that is CURRENTLY the reason p is void, not any earlier writer of it.
 
-def volume_tolerance(a: float, b: float) -> float:
-    return VOLUME_TOLERANCE_REL * max(1.0, abs(a), abs(b))
-
-
-def volumes_tied(a: float, b: float) -> bool:
-    return abs(a - b) <= volume_tolerance(a, b)
-
-
-def containment_winner(ctx: SurveyContext, target, candidates) -> str | None:
-    """Which of `candidates` (Subtract actors) owns `target`, or None when none does.
-
-    The spec's rule: every candidate whose own AUTHORED shape fully contains `target` competes, and
-    the one with the SMALLEST authored volume wins; a genuine tie within the relative tolerance
-    breaks toward the LATER one in trunk order. A volume comparison, not a strict-subset/nesting
-    test -- it stays correct when a carve brush is deliberately oversized past what it carves into,
-    which is routine (to avoid coplanar faces) and which a subset rule silently gets wrong.
-
-    Gated by `_kind(ctx, c) == "subtract"`, never the raw `query.csg_is_subtract` -- the same trap
-    `connects_facts_for` already guards against (`test_connects_does_not_treat_a_mover_as_a_subtract`,
-    a critical review finding there): a Mover carrying a stray `CsgOper=CSG_Subtract` prop (never
-    emitted by any builder, but not forbidden on an imported actor block) would otherwise pass the
-    raw prop check and wrongly compete to be a container, even though a Mover is excluded from world
-    CSG entirely and authors no carve of its own. `connects_facts_for` gates the same way for the
-    same reason. `carves_facts_for` still gates on the raw `query.csg_is_subtract` prop, but is not
-    exposed to the same failure mode: its own answer comes from a counterfactual SOLVE
-    (`removed_by`), and dropping a Mover from that solve changes nothing (a Mover never
-    participates in world CSG), so a stray `CsgOper=CSG_Subtract` on one costs a wasted solve, never
-    a wrong fact."""
-    order = {n: i for i, n in enumerate(ctx.level.order)}
-    best_name, best_volume = None, None
-    for c in candidates:
-        if c.name == target.name or _kind(ctx, c) != "subtract":
-            continue
-        try:
-            if not authored_shape_contains(c, target, ctx.cells):
+    Restricted throughout to p WITHIN s's own authored volume (`_cell_intersection(x_cell, s_cell)`,
+    the same guard `_occupies_nonsolid_exists`/`_occupies_point_exists` already use). Partitions the
+    x-and-s overlap against every OTHER brush (any of them can still flip (i)/(ii)) and tests each
+    resulting piece's centroid once -- exact, not sampled."""
+    relevant = [a for a in ctx.csg_order if a.name != x.name]
+    for x_cell in actorgraph.decompose_convex(x, cache=ctx.cells):
+        for s_cell in actorgraph.decompose_convex(s, cache=ctx.cells):
+            overlap = _cell_intersection(x_cell, s_cell)
+            if overlap is None:
                 continue
-            volume = authored_volume(c, ctx.cells)
-        except actorgraph.DegenerateBrushError:
-            continue
-        if best_volume is None or volume < best_volume - volume_tolerance(volume, best_volume):
-            best_name, best_volume = c.name, volume
-        elif volumes_tied(volume, best_volume) and order[c.name] > order[best_name]:
-            best_name, best_volume = c.name, volume
-    return best_name
+            for piece in _partition_by_brushes(overlap, relevant, ctx):
+                p = _piece_centroid(piece)
+                if (resolved_matter_of(ctx, x, p)
+                        and _last_writer_excluding(ctx, p, exclude=x.name) == s.name
+                        and _is_void_excluding(ctx, p, exclude=x.name)):
+                    return True
+    return False
 
 
-def _containment_candidates(ctx: SurveyContext) -> list:
-    """Every Subtract that could own something here: the surveyed actor when it is one, plus every
-    Subtract in its neighborhood. Gated by `_kind`, not the raw `query.csg_is_subtract` -- see
-    `containment_winner`'s docstring. Intersect/Deintersect are excluded the same way (`_kind` never
-    reports either of them as `"subtract"`), which is also why they can never be a container."""
-    out = [a for a in ctx.near if a.brush is not None and _kind(ctx, a) == "subtract"]
-    if ctx.surveyed.brush is not None and _kind(ctx, ctx.surveyed) == "subtract":
-        out.append(ctx.surveyed)
-    return out
+def _brushes_before(ctx: SurveyContext, subtract) -> list:
+    """`ctx.csg_order` truncated to every brush strictly before `subtract` -- the only ones
+    `_was_solid_before(subtract, ...)` ever reads, and so the only ones needed to make it
+    piecewise-constant over a `_partition_by_brushes` split."""
+    return ctx.csg_order[:ctx.csg_index.get(subtract.name, len(ctx.csg_order))]
 
 
-def contains_facts_for(ctx: SurveyContext) -> list[CsgFact]:
-    """`contains`: the container (a Subtract) leads, whichever side is surveyed.
+def _occupies_nonsolid_exists(ctx: SurveyContext, x, s) -> bool:
+    """Does Nonsolid brush `x` `occupies` Subtract `s` BY SHAPE -- `nonsolid INTERSECT s INTERSECT
+    was-solid-before(s)`, non-empty? `x` contributes no matter, so the marginal test's conditions
+    (i)/(iii) make no sense for it; this is a pure authored-shape-in-carved-region test, exact via
+    the same partition machinery."""
+    earlier = _brushes_before(ctx, s)
+    for x_cell in actorgraph.decompose_convex(x, cache=ctx.cells):
+        for s_cell in actorgraph.decompose_convex(s, cache=ctx.cells):
+            overlap = _cell_intersection(x_cell, s_cell)
+            if overlap is None:
+                continue
+            for piece in _partition_by_brushes(overlap, earlier, ctx):
+                if _was_solid_before(ctx, s, _piece_centroid(piece)):
+                    return True
+    return False
 
-    Two directions, both computed:
-    * the surveyed actor as CONTAINER, when it is a Subtract: every brush, Mover and point actor in
-      its neighborhood whose full extent (or Location) its authored shape encloses, and which it
-      WINS against every other competing Subtract.
-    * the surveyed actor as CONTAINED, always: whichever Subtract in its neighborhood wins it.
 
-    Not narrower than the raw tier, which fans containment out both ways already -- `build_graph`
-    emits one edge per containing brush, and Task 8's raw tier reuses that shape."""
-    candidates = _containment_candidates(ctx)
+def _occupies_point_exists(ctx: SurveyContext, x, s) -> bool:
+    """Does non-matter/point actor `x` `occupies` Subtract `s`? `x`'s own `Location`, tested the
+    AUTHORED/relative way `resolved_matter_of` is (never the pooled `point_is_solid` oracle -- see
+    its own docstring), is in `s`'s carved region and still resolved-void there. A single point, not
+    a volume -- `x` has no cells to partition."""
+    if x.location is None:
+        return False
+    p = tuple(float(c) for c in x.location)
+    if not _in_authored_volume(ctx, s, p):
+        return False
+    if not _was_solid_before(ctx, s, p):
+        return False
+    return _is_void_excluding(ctx, p)
+
+
+def occupies_facts_for(ctx: SurveyContext) -> list[CsgFact]:
+    """`occupies`: the occupant leads, whichever side is surveyed. Two directions, both computed --
+    the surveyed actor as OCCUPANT (against every Subtract in its neighborhood) and as SUBTRACT
+    (against every occupant candidate in its neighborhood). NOT a competition: `occupies` fires
+    independently per `(occupant, subtract)` pair, unlike the retired `contains`'s single-winner
+    rule -- an occupant seated across two Subtracts' voids reports `occupies` against both (spec,
+    "composes where containment cannot")."""
     facts: list = []
 
-    if ctx.surveyed.brush is not None and _kind(ctx, ctx.surveyed) == "subtract":
-        targets = [a for a in ctx.near if a.name != ctx.name] + list(ctx.points)
-        for target in targets:
-            if containment_winner(ctx, target, candidates) == ctx.name:
-                facts.append(CsgFact(src=ctx.name, dst=target.name, relation="contains"))
+    def _occupies(occupant, subtract) -> bool:
+        if occupant.brush is None:
+            return _occupies_point_exists(ctx, occupant, subtract)
+        kind = _kind(ctx, occupant)
+        if kind in ("add", "semisolid"):
+            return _occupies_matter_exists(ctx, occupant, subtract)
+        if kind == "nonsolid":
+            return _occupies_nonsolid_exists(ctx, occupant, subtract)
+        return False   # subtract/intersect/deintersect/mover are never occupants
 
-    owner = containment_winner(ctx, ctx.surveyed, candidates)
-    if owner is not None and owner != ctx.name:
-        facts.append(CsgFact(src=owner, dst=ctx.name, relation="contains"))
+    if ctx.surveyed.brush is None or _kind(ctx, ctx.surveyed) != "subtract":
+        subtracts = [a for a in ctx.near if a.brush is not None and _kind(ctx, a) == "subtract"]
+        for s in subtracts:
+            if s.name != ctx.name and _occupies(ctx.surveyed, s):
+                facts.append(CsgFact(src=ctx.name, dst=s.name, relation="occupies"))
+    if ctx.surveyed.brush is not None and _kind(ctx, ctx.surveyed) == "subtract":
+        candidates = list(ctx.near) + list(ctx.points)
+        for occupant in candidates:
+            if occupant.name != ctx.name and _occupies(occupant, ctx.surveyed):
+                facts.append(CsgFact(src=occupant.name, dst=ctx.name, relation="occupies"))
 
     return sorted(facts, key=lambda f: (f.src, f.dst))
 
-
-# Below this many square world units, a surviving-area difference is not a claim. Well above the
-# boundary displacements the bounded-neighborhood truncation can introduce (eight of the spike's
-# nine measured area differences moved a boundary by <= 0.024 uu; the worst symmetric difference was
-# 224 uu^2, and that one was a known native `first_add_seed` defect on a 1-uu sliver, not truncation
-# noise -- spike.md §4).
-CARVE_AREA_EPS = 1.0
 
 # A Subtract can only have removed matter from a kind that HAS matter to remove and is applied
 # BEFORE it. Measured (spike.md §1, regression `test_csg_kind_facts.py`):
@@ -2088,78 +2266,49 @@ def poly_area(verts) -> float:
     return 0.5 * (n[0] ** 2 + n[1] ** 2 + n[2] ** 2) ** 0.5
 
 
-def authored_face_area(actor) -> float:
-    """The total world-space area of ACTOR's own authored brush faces, before any CSG."""
-    from . import polyalign
-    if actor.brush is None:
-        return 0.0
-    return sum(poly_area(polyalign._world_verts(actor, p)) for p in actor.brush.polys
-               if len(p.vertices) >= 3)
+def _carves_volume(ctx: SurveyContext, s, victim) -> float:
+    """The EXACT volume of `victim INTERSECT s INTERSECT {victim's own matter, just before s}` --
+    `carves`'s measurement basis (owner ruling), replacing the retired face-area `removed_by`. Same
+    exact evaluator as `occupies`: partition the shared `victim INTERSECT s` region by the Subtracts
+    strictly between `victim` and `s` in trunk order (the only brushes `_victim_matter_just_before`
+    reads), then sum the pieces whose centroid still passes it.
 
-
-def surviving_face_area(probe, owner: str) -> float:
-    """The total area of `owner`'s faces that survive in `probe`'s resolved world.
-
-    Area, never face COUNT and never poly identity: a different tree shape splits the same surface
-    into different polygons, so counts and indices are not comparable across two solves (spike.md §4
-    residual 1). Summing area is."""
-    return sum(poly_area(s.world_verts) for s in probe.world_surfaces
-               if s.actor is not None and s.actor.name == owner)
-
-
-def removed_by(ctx: SurveyContext, subtract, victim) -> bool:
-    """Did `subtract` genuinely remove part of `victim`'s originally-contributed matter?
-
-    Answered by a COUNTERFACTUAL SOLVE: re-solve the same neighborhood with `subtract` dropped and
-    compare `victim`'s surviving face area. More survives without it <=> it took some. This is the
-    same uncut-vs-cut comparison `kind_semantics.py` makes (`_solve([room, pillar])` against
-    `_solve([room, pillar, cutter])`, then the pillar's own area on each), and it is what
-    distinguishes the spec's two hard cases: a second Subtract carving EXACTLY an already-carved
-    region changes nothing and reports nothing, while one that only PARTIALLY overlaps really does
-    remove new matter and reports it.
-
-    Never drops the level's FIRST world-CSG brush: that would fire `bsp_brush_csg`'s leading-Add
-    world-shell shortcut on a different brush and change the whole tree (spike.md §4 residual 4).
-    When `subtract` IS that brush, this returns False rather than solving a world the bounded-cost
-    argument does not cover.
-
-    The guard compares against `ctx.seed`, NOT `ctx.neighbors[0].name`. `neighbors` is in trunk
-    order, so index 0 can be a Mover or the builder brush -- neither contributes to world CSG, so
-    neither is the brush the solver seeds from, and the real seed would then sit at a later index
-    and be droppable. `ctx.seed` is `seed_brush_name`'s answer: the first brush that actually
-    contributes."""
-    from .preview_native import solve_world_probe
-    if not ctx.neighbors or subtract.name == ctx.seed:
-        return False
-    without = [a for a in ctx.neighbors if a.name != subtract.name]
-    counterfactual = solve_world_probe(without, ctx.class_index)
-    gained = surviving_face_area(counterfactual, victim.name) - \
-        surviving_face_area(ctx.probe, victim.name)
-    return gained > CARVE_AREA_EPS
+    Ordered via `ctx.trunk_index`, not `ctx.csg_index` -- see `_victim_matter_just_before`'s
+    docstring for why a Nonsolid victim needs the full trunk-order position."""
+    v_i = ctx.trunk_index.get(victim.name, -1)
+    s_i = ctx.trunk_index.get(s.name, len(ctx.trunk_index))
+    between_subtracts = [a for a in ctx.csg_order
+                          if ctx.kinds[a.name] == "subtract" and v_i < ctx.trunk_index.get(a.name, -1) < s_i]
+    total = 0.0
+    for v_cell in actorgraph.decompose_convex(victim, cache=ctx.cells):
+        for s_cell in actorgraph.decompose_convex(s, cache=ctx.cells):
+            overlap = _cell_intersection(v_cell, s_cell)
+            if overlap is None:
+                continue
+            for piece in _partition_by_brushes(overlap, between_subtracts, ctx):
+                if _victim_matter_just_before(ctx, victim, s, _piece_centroid(piece)):
+                    total += cell_volume(piece)
+    return total
 
 
 def carves_facts_for(ctx: SurveyContext) -> list[CsgFact]:
-    """`carves`: a Subtract removed part of another actor's originally-contributed matter.
-
-    The agent leads, whichever side is surveyed -- so both directions are computed. "Part" means at
-    least part: an Add entirely consumed by a later Subtract still reports `carves`, and that is the
-    most valuable case of this fact, not an excluded one. Whatever of the victim still survives
-    elsewhere reports `touches` as normal; if nothing survives, no `touches` accompanies the
-    `carves`, which is correct -- there is nothing left to be flush against."""
+    """`carves`: a Subtract removed part of another actor's originally-contributed matter -- ANY
+    amount, including a fully-internal cavity (`_carves_volume` > `CARVE_VOLUME_EPS`). The agent
+    (the Subtract) leads, whichever side is surveyed, so both directions are computed."""
     facts: list = []
 
     if ctx.surveyed.brush is not None and query.csg_is_subtract(ctx.surveyed):
         for other in ctx.near:
             if kind_of(other, ctx.class_index) not in _CARVE_TARGET_KINDS:
                 continue
-            if removed_by(ctx, ctx.surveyed, other):
+            if _carves_volume(ctx, ctx.surveyed, other) > CARVE_VOLUME_EPS:
                 facts.append(CsgFact(src=ctx.name, dst=other.name, relation="carves"))
     elif ctx.surveyed.brush is not None and \
             kind_of(ctx.surveyed, ctx.class_index) in _CARVE_TARGET_KINDS:
         for other in ctx.near:
             if not query.csg_is_subtract(other):
                 continue
-            if removed_by(ctx, other, ctx.surveyed):
+            if _carves_volume(ctx, other, ctx.surveyed) > CARVE_VOLUME_EPS:
                 facts.append(CsgFact(src=other.name, dst=ctx.name, relation="carves"))
 
     return sorted(facts, key=lambda f: (f.src, f.dst))
@@ -2179,7 +2328,7 @@ def csg_facts_for(ctx: SurveyContext) -> list:
     stable between runs."""
     out: list = []
     for fn in (crosses_facts_for, touches_facts_for, connects_facts_for,
-               contains_facts_for, carves_facts_for):
+               occupies_facts_for, carves_facts_for):
         out.extend(fn(ctx))
     return out
 
@@ -2210,13 +2359,9 @@ def survey(level, class_index, name: str, defaults) -> SurveyResult:
 
 
 def format_csg_line(fact: CsgFact, nodes: dict) -> str:
-    """One `csg `-prefixed line. Every `*_facts_for` already assigned `src`/`dst` in the spec's
-    final direction, so this is pure formatting. No `:idx` at this tier, ever -- `crosses` alone
-    carries an annotation, the measured penetration depth."""
-    rel = fact.relation
-    if fact.relation == "crosses" and fact.depth_uu is not None:
-        rel = f"crosses({fact.depth_uu:.3g}uu)"
-    return (f"csg {fact.src} {actorgraph._node_bracket(nodes[fact.src])} --{rel}--> "
+    """One csg-tier line -- bare, no annotation of any kind, no tier-token prefix (see
+    `format_raw_line`'s docstring for why; same open question, `format_lines` owns the answer)."""
+    return (f"{fact.src} {actorgraph._node_bracket(nodes[fact.src])} --{fact.relation}--> "
             f"{fact.dst} {actorgraph._node_bracket(nodes[fact.dst])}")
 
 
@@ -2247,9 +2392,10 @@ def intersect_deintersect_warning(actor, class_index) -> str | None:
 
 
 def format_lines(result: SurveyResult) -> list:
-    """Every stdout line of a survey, in order: the raw block, a blank separator when both tiers
-    have something, then the csg block. A blank line is the ONLY line that does not start with a
-    tier token."""
+    """Every stdout line of a survey: the raw block, a blank separator when both tiers have
+    something, then the csg block. No per-line tier prefix (relation names are unique across
+    tiers, so each line self-identifies by its verb) and no other marker -- the two groups are
+    "authored" and "resolved" by fixed order alone."""
     lines = [format_raw_line(f, result.nodes) for f in result.raw]
     csg_lines = [format_csg_line(f, result.nodes) for f in result.csg]
     if lines and csg_lines:

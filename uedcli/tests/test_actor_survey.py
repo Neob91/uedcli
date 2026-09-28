@@ -5,6 +5,7 @@ a `Scenario` so no test ever unpacks a tuple by arity.
 """
 from __future__ import annotations
 
+import dataclasses
 from decimal import Decimal
 
 import pytest
@@ -43,24 +44,6 @@ def test_neighborhood_always_includes_the_levels_first_world_csg_brush():
                                                        sc.level.actors["FarRoom"], sc.defaults)]
     assert first == "Shell"
     assert "Shell" in names
-
-
-def test_seed_brush_name_skips_a_leading_mover_and_names_the_first_contributing_brush():
-    """`bsp_brush_csg` seeds the world shell from the first brush that actually CONTRIBUTES to the
-    world solve. A Mover is a brush and contributes nothing, so trunk index 0 is not the answer —
-    and any guard that says "the first brush" by INDEX would protect the wrong actor while the real
-    seed sat further down, droppable. Built inline rather than as a scenario: this is about trunk
-    order alone, no geometry."""
-    from uedcli.builders import cube, make_brush_actor
-    from uedcli.model import Level
-    from uedcli.tests.conftest import StubClassIndex
-    door = make_brush_actor("Door", cube(64, 8, 128), mover_class="Engine.Mover")
-    wall = make_brush_actor("Wall", cube(256, 64, 256), csg="add")
-    lvl = Level(actors={a.name: a for a in (door, wall)}, order=["Door", "Wall"])
-    index = StubClassIndex()
-    assert lvl.order[0] == "Door"
-    assert actor_survey.in_world_csg(door, index) is False
-    assert actor_survey.seed_brush_name(lvl, index) == "Wall"
 
 
 def test_neighborhood_preserves_trunk_order():
@@ -245,12 +228,6 @@ def test_pad_is_the_exact_selection_threshold():
 
 # ------------------------------------------------------------- review round: empty-case coverage
 
-def test_seed_brush_name_returns_none_for_a_brush_less_level():
-    from uedcli.model import Level
-    lvl = Level(actors={"Light": scen.point("Light", (0, 0, 0))}, order=["Light"])
-    assert actor_survey.seed_brush_name(lvl, scen.StubClassIndex()) is None
-
-
 def test_neighborhood_is_empty_for_a_level_with_no_brushes():
     from uedcli.model import Level
     lvl = Level(actors={"Light": scen.point("Light", (0, 0, 0))}, order=["Light"])
@@ -258,112 +235,101 @@ def test_neighborhood_is_empty_for_a_level_with_no_brushes():
     assert out == []
 
 
-# ------------------------------------------------------------- Task 8: the raw tier
+# ------------------------------------------------------------- Task 9: raw tier's pairwise relation
 
-def test_raw_tier_reports_touches_and_carves_for_the_surveyed_brush():
-    sc = scen.niche_carved_into_wall()
-    got = actor_survey.raw_facts_for(sc.level, sc.index, "Wall", sc.defaults)
-    rels = {(f.src, f.relation, f.dst) for f in got.facts}
-    assert ("Niche", "carves", "Wall") in rels
-    assert ("Wall", "touches", "Bystander") in rels
-
-
-def test_raw_tier_spells_it_carves_with_the_subtract_leading_not_carved_by():
-    """`level graph` prints `carved_by` with the ADD leading (`actorgraph.classify_pair`'s last
-    line). `actor survey` prints `carves` with the SUBTRACT leading, whichever side is surveyed --
-    the owner's 'one name per interaction, flip the sides to match' ruling (spec, Round 6). This is
-    a presentation choice in THIS verb only; `level graph` is untouched."""
-    sc = scen.niche_carved_into_wall()
-    for surveyed in ("Wall", "Niche"):
-        facts = actor_survey.raw_facts_for(sc.level, sc.index, surveyed, sc.defaults).facts
-        carve = next(f for f in facts if f.relation == "carves")
-        assert (carve.src, carve.dst) == ("Niche", "Wall")
-        assert not any(f.relation == "carved_by" for f in facts)
+def test_raw_relation_reports_coincides_for_identical_brushes():
+    s = scen.two_equal_volume_subtracts()
+    cache: dict = {}
+    rel = actor_survey.raw_relation_for("EarlierRoom", s.level.actors["EarlierRoom"],
+                                        "LaterRoom", s.level.actors["LaterRoom"], cache)
+    assert rel == ("EarlierRoom", "LaterRoom", "coincides")
 
 
-def test_raw_touches_puts_the_surveyed_actor_first_and_swaps_its_matched_pair_with_it():
-    """A symmetric relation leads with whoever you asked about. `Edge.matched_pair` is glued to
-    `(src, dst)` positionally, so flipping the names MUST flip the pair too -- a rename-only flip
-    renders a real face selector against the wrong brush (spec, Output shape)."""
-    sc = scen.niche_carved_into_wall()
-    a = next(f for f in actor_survey.raw_facts_for(sc.level, sc.index, "Wall", sc.defaults).facts
-             if f.relation == "touches" and f.dst == "Bystander")
-    b = next(f for f in actor_survey.raw_facts_for(sc.level, sc.index, "Bystander",
-                                                   sc.defaults).facts
-             if f.relation == "touches" and f.dst == "Wall")
-    assert (a.src, a.dst) == ("Wall", "Bystander")
-    assert (b.src, b.dst) == ("Bystander", "Wall")
-    assert a.matched_pair is not None
-    assert b.matched_pair == (a.matched_pair[1], a.matched_pair[0])
+def test_raw_relation_reports_encloses_with_the_container_leading():
+    s = scen.room_with_pillar_and_light()
+    cache: dict = {}
+    rel = actor_survey.raw_relation_for("Pillar", s.level.actors["Pillar"],
+                                        "Room", s.level.actors["Room"], cache)
+    assert rel == ("Room", "Pillar", "encloses")
 
 
-def test_from_edge_flips_a_symmetric_fact_when_the_surveyed_actor_is_the_edges_dst():
-    """`_from_edge`'s flip branch, exercised directly.
+def test_raw_relation_reports_overlaps_for_a_subtract_carving_its_add():
+    s = scen.niche_carved_into_wall()
+    cache: dict = {}
+    rel = actor_survey.raw_relation_for("Wall", s.level.actors["Wall"],
+                                        "Niche", s.level.actors["Niche"], cache)
+    assert rel == ("Wall", "Niche", "overlaps")
 
-    `raw_facts_for` always passes the surveyed actor as `classify_pair`'s `name_a`, so every edge it
-    hands `_from_edge` already leads with the surveyed name and the flip branch never fires through
-    that path. The branch is still the thing that GUARANTEES the orientation: without this test it
-    is unexercised code, and a later change to the call order would silently start emitting
-    `touches` facts led by the wrong actor with nothing going red. Constructed here as a bare
-    `actorgraph.Edge` rather than through a scenario, because no scenario can reach it.
-    """
+
+def test_raw_relation_reports_meets_for_a_flush_contact():
+    s = scen.two_adds_butted_face_to_face(offset=0.0)
+    cache: dict = {}
+    rel = actor_survey.raw_relation_for("BlockA", s.level.actors["BlockA"],
+                                        "BlockB", s.level.actors["BlockB"], cache)
+    assert rel == ("BlockA", "BlockB", "meets")
+
+
+def test_raw_relation_is_none_for_disjoint_brushes():
+    s = scen.far_apart_rooms()
+    cache: dict = {}
+    rel = actor_survey.raw_relation_for("FarRoom", s.level.actors["FarRoom"],
+                                        "Distant", s.level.actors["Distant"], cache)
+    assert rel is None
+
+
+# ------------------------------------------------------------- Task 10: raw tier's `raw_facts_for`
+
+def test_raw_tier_reports_encloses_for_a_subtract_around_an_add():
+    s = scen.room_with_pillar_and_light()
+    raw = actor_survey.raw_facts_for(s.level, s.index, "Room", s.defaults)
+    assert any(f.src == "Room" and f.dst == "Light" and f.relation == "encloses"
+               for f in raw.facts)
+
+
+def test_raw_tier_never_reports_carves():
+    s = scen.niche_carved_into_wall()
+    raw = actor_survey.raw_facts_for(s.level, s.index, "Wall", s.defaults)
+    assert not any(f.relation == "carves" for f in raw.facts)
+    assert any(f.relation == "overlaps" for f in raw.facts)
+
+
+def test_raw_tier_leads_symmetric_relations_with_the_surveyed_actor():
+    s = scen.two_adds_butted_face_to_face(offset=0.0)
+    raw = actor_survey.raw_facts_for(s.level, s.index, "BlockB", s.defaults)
+    fact = next(f for f in raw.facts if f.relation == "meets")
+    assert fact.src == "BlockB"
+
+
+def test_raw_tier_encloses_for_a_point_actor_names_the_container():
+    s = scen.room_with_pillar_and_light()
+    raw = actor_survey.raw_facts_for(s.level, s.index, "Light", s.defaults)
+    assert raw.facts == [actor_survey.RawFact(src="Room", dst="Light", relation="encloses")]
+
+
+def test_raw_facts_for_does_not_call_classify_pair(monkeypatch):
     from uedcli import actorgraph
-    edge = actorgraph.Edge(src="Other", dst="Wall", relation="touches", directed=False,
-                           matched_pair=(2, 5), area_estimate=64.0)
-    fact = actor_survey._from_edge(edge, "Wall")
-    assert (fact.src, fact.dst) == ("Wall", "Other")
-    assert fact.matched_pair == (5, 2)          # glued to (src, dst) positionally
-    assert fact.area_estimate == 64.0
+    called = []
+    monkeypatch.setattr(actorgraph, "classify_pair",
+                        lambda *a, **k: called.append(1) or [])
+    s = scen.niche_carved_into_wall()
+    actor_survey.raw_facts_for(s.level, s.index, "Wall", s.defaults)
+    assert not called
 
 
-def test_raw_tier_reports_contains_for_a_mover_inside_a_subtract():
-    sc = scen.room_contains_a_mover()
-    facts = actor_survey.raw_facts_for(sc.level, sc.index, "Room", sc.defaults).facts
-    assert ("Room", "contains", "Door") in {(f.src, f.relation, f.dst) for f in facts}
+# ------------------------------------------------------------- Task 11: raw tier verification-only
+
+def test_raw_line_shows_the_brush_kind_label():
+    s = scen.niche_carved_into_wall()
+    raw = actor_survey.raw_facts_for(s.level, s.index, "Wall", s.defaults)
+    lines = [actor_survey.format_raw_line(f, raw.nodes) for f in raw.facts]
+    assert any("[Engine.Brush Subtract]" in line for line in lines)
 
 
-def test_raw_tier_reports_contains_for_a_point_actor_inside_the_surveyed_brush():
-    sc = scen.room_with_pillar_and_light()
-    facts = actor_survey.raw_facts_for(sc.level, sc.index, "Room", sc.defaults).facts
-    assert ("Room", "contains", "Light") in {(f.src, f.relation, f.dst) for f in facts}
-
-
-def test_raw_tier_surveying_the_point_actor_shows_the_same_containment():
-    """`contains` is fixed-direction: the container leads whichever side you survey."""
-    sc = scen.room_with_pillar_and_light()
-    facts = actor_survey.raw_facts_for(sc.level, sc.index, "Light", sc.defaults).facts
-    assert ("Room", "contains", "Light") in {(f.src, f.relation, f.dst) for f in facts}
-
-
-def test_raw_tier_does_not_use_build_graph():
-    """`build_graph` is whole-level and O(brushes^2) -- the measured expensive half (spike.md §4).
-    The raw tier must run `classify_pair` over the bounded neighborhood instead."""
-    import inspect
-    src = inspect.getsource(actor_survey.raw_facts_for)
-    assert "build_graph" not in src
-    assert "classify_pair" in src
-
-
-def test_raw_line_format_matches_level_graphs_grammar_with_a_tier_prefix():
-    sc = scen.niche_carved_into_wall()
-    got = actor_survey.raw_facts_for(sc.level, sc.index, "Wall", sc.defaults)
-    touch = next(f for f in got.facts if f.relation == "touches")
-    line = actor_survey.format_raw_line(touch, got.nodes)
-    assert line.startswith("raw Wall:")
-    assert "[Engine.Brush Add] --touches(" in line
-    assert "uu^2)--> Bystander:" in line
-
-
-def test_raw_line_carries_no_idx_or_area_on_a_contains_line():
-    """`room_with_pillar_and_light` also yields a `Room contains Pillar` brush-pair fact (Pillar is a
-    later-order Add fully inside Room's Subtract void -- `classify_pair`'s own contains/carved_by
-    order heuristic, not this verb's concern) -- filtered out here since this test is about the
-    POINT-actor contains line's format, not which contains fact comes first."""
-    sc = scen.room_with_pillar_and_light()
-    got = actor_survey.raw_facts_for(sc.level, sc.index, "Room", sc.defaults)
-    fact = next(f for f in got.facts if f.relation == "contains" and f.dst == "Light")
-    line = actor_survey.format_raw_line(fact, got.nodes)
-    assert line == ("raw Room [Engine.Brush Subtract] --contains--> Light [Engine.Light]")
+def test_raw_tier_never_reports_overlaps_meets_or_coincides_for_a_point_actor():
+    s = scen.room_with_a_flush_mounted_prop()
+    raw = actor_survey.raw_facts_for(s.level, s.index, "Room", s.defaults)
+    point_relations = {f.relation for f in raw.facts if f.dst in ("Keypad", "Ghost", "Bracket")}
+    assert point_relations <= {"encloses"}
 
 
 def test_csg_faces_collapses_every_coplanar_fragment_of_one_owner_to_one_candidate():
@@ -597,37 +563,32 @@ def test_a_resolved_faces_solid_side_is_determined_by_the_solidity_probe_not_by_
         assert sign in (1.0, -1.0), "exactly one side of a solid-bounding face is solid"
 
 
-def test_crosses_fires_for_an_add_poking_through_a_niche_wall_and_names_only_the_immediate_owner():
-    """The spec's locality rule: `Additive4` crosses `Subtract3`, the boundary it actually pushes
-    through, and never `Additive2`, however deep the nesting.
+def test_touches_fires_for_a_carved_shelf_and_names_only_the_immediate_niche():
+    """The spec's locality rule, now for `touches`: `Additive4`'s two surviving stubs sit flush
+    against `Subtract3`'s own cut planes -- the immediate boundary that carved it -- and never
+    against `Additive2`, however deep the nesting. `crosses` is confirmed silent for this pair
+    entirely (the resolved-matter fix's own regression fixture, Step 2 above, already pins that);
+    this test is the locality half, for the relation that actually fires here.
 
     Surveying `Additive4` alone would pass this even by accident: region-clipping keeps `Additive2`'s
-    own faces out of `Additive4`'s survey region entirely, so `not any(f.dst == "Additive2")` proves
-    nothing about the both-sides straddle check on its own (verified: `ctx.faces` for this survey
-    carries no `Additive2`-owned entry at all). Surveying `Additive2` closes that gap: `Additive2`'s
-    own faces ARE in `ctx.near`/`ctx.faces` there (`Additive4`'s footprint sits well inside
-    `Additive2`'s own AABB), and `Additive4`'s matter genuinely lies entirely on the solid side of
-    every one of them (it never reaches below `Additive2`'s `y=96` or above its `y=160`, and its
-    `x,z` stay inside `Additive2`'s own `x,z` bounds too) -- so this is the case the both-sides check
-    (`penetration_depth`: some point past the plane AND some point on the void side) exists for, not
-    the region-clipping accident. Regression for the spec's own forbidden fact
-    (`actor-survey-and-actor-relation-csg-resolved/spec.md:315-319`): a prior version of this
-    algorithm reported `Additive4 --crosses--> Additive2` here."""
+    own faces out of `Additive4`'s survey region entirely. Surveying `Additive2` closes that gap:
+    `Additive2`'s own faces ARE in-region there, and `Additive4`'s stubs sit entirely inside the hole
+    `Subtract3` cut through `Additive2`, nowhere near `Additive2`'s own remaining ring -- so this is
+    the case the immediate-owner attribution exists for, not a region-clipping accident."""
     pytest.importorskip("uedcli_native")
     sc = scen.shelf_pokes_through_a_niche_wall()
 
     ctx = actor_survey.build_context(sc.level, sc.index, "Additive4", sc.defaults)
-    facts = actor_survey.crosses_facts_for(ctx)
+    assert actor_survey.crosses_facts_for(ctx) == []
+    facts = actor_survey.touches_facts_for(ctx)
     assert any(f.src == "Additive4" and f.dst == "Subtract3" for f in facts)
     assert not any(f.dst == "Additive2" for f in facts)
     assert not any(f.src == "Additive2" and f.dst == "Additive4" for f in facts)
-    assert all(f.relation == "crosses" and f.depth_uu is not None and f.depth_uu > 0
-               for f in facts)
 
     ctx2 = actor_survey.build_context(sc.level, sc.index, "Additive2", sc.defaults)
     assert any(f.owner == "Additive2" for f in ctx2.faces), \
         "the real case: Additive2's own faces must be in-region for this to test anything"
-    facts2 = actor_survey.crosses_facts_for(ctx2)
+    facts2 = actor_survey.touches_facts_for(ctx2)
     assert not any(f.src == "Additive4" and f.dst == "Additive2" for f in facts2)
 
 
@@ -641,23 +602,42 @@ def test_crosses_never_fires_from_a_subtract():
     assert actor_survey.crosses_facts_for(ctx) == []
 
 
-def test_crosses_fires_for_a_flush_mounted_collision_extent_with_a_measured_depth():
-    """Under the bBlockActors gate, ~12% of physically-blocking shipped actors really are inside
-    solid, by ~8 uu at the median. The fact is true and is reported, made readable by the depth
-    (spike.md §3).
+def test_crosses_uses_resolved_matter_not_authored_cells():
+    s = scen.later_subtract_carves_an_add_that_encloses_a_semisolid()
+    ctx = actor_survey.build_context(s.level, s.index, "Middle", s.defaults)
+    facts = actor_survey.crosses_facts_for(ctx)
+    assert not any(f.dst == "Enclosed" for f in facts), (
+        "Middle's matter at Enclosed's location was carved away by Later; it must not report "
+        "crosses against a carved-out void")
 
-    `Keypad` sits at x=504 with R=16, and the `+X` wall's face is at x=512. The wall's normal is
-    axis-aligned, so `cylinder_sample_points`' first ring point lands on the cylinder's extreme at
-    x = 504 + 16 = 520 exactly, and the measured depth is 8 uu -- the same number the old box sample
-    gave, because a box face centre and a cylinder ring point coincide on an axis-aligned normal.
-    That face only reaches `ctx.faces` because `region_of` covers the actor's real collision extent
-    (Task 7) -- a zero-size point box would leave it 7 uu outside the region."""
+
+def test_crosses_fires_for_a_semisolid_partially_overlapping_an_add():
+    """The suite's first genuine brush-sourced `crosses` -- a Semisolid's later, separate CSG pass
+    never splits the underlying Add's face it overlaps (fixture's own docstring), so its matter
+    genuinely pokes past it. Pinned so a future change to the semisolid CSG pass cannot silently
+    break it; unaffected by Task 3's own fix (no Subtract in this fixture)."""
+    pytest.importorskip("uedcli_native")
+    sc = scen.semisolid_partially_overlapping_an_add()
+    for surveyed in ("Spike", "B"):
+        ctx = actor_survey.build_context(sc.level, sc.index, surveyed, sc.defaults)
+        facts = actor_survey.crosses_facts_for(ctx)
+        fact = next((f for f in facts if f.src == "Spike" and f.dst == "B"), None)
+        assert fact is not None, f"surveying {surveyed}"
+
+
+def test_crosses_fires_for_a_flush_mounted_collision_extent():
+    """Under the bBlockActors gate, ~12% of physically-blocking shipped actors really are inside
+    solid. The fact is true and is reported.
+
+    `Keypad` sits at x=504 with R=16, and the `+X` wall's face is at x=512. That face only reaches
+    `ctx.faces` because `region_of` covers the actor's real collision extent (Task 7) -- a
+    zero-size point box would leave it 7 uu outside the region."""
     pytest.importorskip("uedcli_native")
     sc = scen.room_with_a_flush_mounted_prop()
     ctx = actor_survey.build_context(sc.level, sc.index, "Keypad", sc.defaults)
     facts = actor_survey.crosses_facts_for(ctx)
     assert any(f.src == "Keypad" and f.dst == "Room" for f in facts)
-    assert 4.0 < next(f for f in facts if f.dst == "Room").depth_uu < 12.0
+    assert any(f.src == "Keypad" and f.dst == "Room" and f.relation == "crosses" for f in facts)
 
 
 def test_crosses_fires_for_a_point_actor_whose_location_is_outside_the_surveyed_brush():
@@ -679,7 +659,6 @@ def test_crosses_fires_for_a_point_actor_whose_location_is_outside_the_surveyed_
     facts = actor_survey.crosses_facts_for(ctx)
     fact = next((f for f in facts if f.src == "Bracket" and f.dst == "Room"), None)
     assert fact is not None and fact.relation == "crosses"
-    assert 20.0 < fact.depth_uu < 28.0
 
 
 def test_crosses_does_not_fire_for_a_non_blocking_trigger_volume():
@@ -689,25 +668,18 @@ def test_crosses_does_not_fire_for_a_non_blocking_trigger_volume():
     assert actor_survey.crosses_facts_for(ctx) == []
 
 
-def test_crosses_reports_the_reverse_direction_when_the_surveyed_actor_is_the_target():
-    """`crosses` is fixed-direction: the intruder always leads. Surveying the actor that was crossed
-    INTO must still show the fact, with the intruder as src -- the spec's own worked example has
-    `Additive4 --crosses--> Subtract3`, and surveying `Subtract3` has to show it too."""
-    pytest.importorskip("uedcli_native")
-    sc = scen.shelf_pokes_through_a_niche_wall()
-    ctx = actor_survey.build_context(sc.level, sc.index, "Subtract3", sc.defaults)
-    facts = actor_survey.crosses_facts_for(ctx)
-    assert any(f.src == "Additive4" and f.dst == "Subtract3" for f in facts)
-
-
 def test_crosses_dedupes_to_one_fact_per_src_dst_pair():
-    """A wall is many BSP fragments and several planes. One relationship, one line."""
+    """One actor can genuinely cross TWO distinct faces of the same target at once (a room corner)
+    -- still one relationship, one line. `shelf_pokes_through_a_niche_wall`'s `Additive4` no longer
+    crosses `Subtract3` at all post-fix (Steps 9-11 above), so the dedup case is re-pinned here on a
+    fixture that is a genuine double-crossing instead of the retired false positive."""
     pytest.importorskip("uedcli_native")
-    sc = scen.shelf_pokes_through_a_niche_wall()
-    ctx = actor_survey.build_context(sc.level, sc.index, "Additive4", sc.defaults)
+    sc = scen.point_actor_pokes_through_two_walls_at_a_room_corner()
+    ctx = actor_survey.build_context(sc.level, sc.index, "Corner", sc.defaults)
     facts = actor_survey.crosses_facts_for(ctx)
     keys = [(f.src, f.dst, f.relation) for f in facts]
     assert len(keys) == len(set(keys))
+    assert keys == [("Corner", "Room", "crosses")]
 
 
 # --------------------------------------------------------------------- Task 13: touches
@@ -719,7 +691,6 @@ def test_touches_fires_between_the_surveyed_actor_and_a_face_it_is_flush_against
     facts = actor_survey.touches_facts_for(ctx)
     assert any(f.src == "Bystander" and f.dst == "Wall" and f.relation == "touches"
                for f in facts)
-    assert all(f.depth_uu is None for f in facts)
 
 
 def test_touches_is_reported_from_either_side_of_the_pair():
@@ -881,7 +852,6 @@ def test_a_far_seed_brush_does_not_disturb_a_touch():
     pytest.importorskip("uedcli_native")
     sc = scen.far_apart_rooms()
     ctx = actor_survey.build_context(sc.level, sc.index, "FarRoom", sc.defaults)
-    assert ctx.seed == "Shell"
     assert ctx.neighbors[0].name == "Shell"
     assert any(f.src == "FarRoom" and f.dst == "Touching"
                for f in actor_survey.touches_facts_for(ctx))
@@ -933,14 +903,6 @@ def test_touches_fires_for_a_subtracts_carve_victim():
         assert any(f.src == name and f.dst == other for f in facts), (name, facts)
 
 
-@pytest.mark.xfail(reason="blocked by a `crosses` false positive, not by `touches`: shipped "
-                          "`penetration_depth` reports `Wall --crosses--> Pocket` (224uu) for the "
-                          "wall a Subtract carved, and `touches_facts_for` reports nothing for a "
-                          "pair `crosses` claims. `pair_touches` itself accepts the pair (its own "
-                          "assertion below). The same `crosses` mechanism produces the "
-                          "spec-mandated `Additive4 --crosses--> Subtract3`, so it cannot be "
-                          "corrected for one without breaking the other. See board item "
-                          "`crosses-fires-on-a-subtract-s-carve-victim`.", strict=True)
 def test_touches_fires_for_a_blind_pockets_carve_victim():
     """The same carve-victim fact as above, on a fixture with none of `niche_carved_into_wall`'s
     quirks -- an ordinary solve and a carve that stops inside the wall."""
@@ -950,6 +912,46 @@ def test_touches_fires_for_a_blind_pockets_carve_victim():
     assert actor_survey.pair_touches(ctx, ctx.level.actors["Pocket"], ctx.level.actors["Wall"])
     facts = actor_survey.touches_facts_for(ctx)
     assert any(f.src == "Pocket" and f.dst == "Wall" for f in facts), facts
+
+
+def test_crosses_does_not_fire_for_a_room_carved_into_solid_rock():
+    """Board item `crosses-fires-on-a-subtract-s-carve-victim`: `Rock` wrongly reported `crosses`
+    against `RoomA`/`RoomB` (462uu/512uu) pre-fix -- the ordinary "solid rock, rooms carved into
+    it" case, not a genuine penetration."""
+    sc = scen.two_rooms_side_by_side()
+    ctx = actor_survey.build_context(sc.level, sc.index, "Rock", sc.defaults)
+    facts = actor_survey.crosses_facts_for(ctx)
+    assert not any(f.dst in ("RoomA", "RoomB") for f in facts)
+
+
+def test_touches_fires_both_directions_for_a_doorway_cut_through_a_wall_seam():
+    """Board item `crosses-fires-on-a-subtract-s-carve-victim`: `WallA` wrongly reported `crosses`
+    against `Doorway` (192uu) pre-fix, with `touches` suppressed both directions
+    (`pair_touches(WallA, Doorway)` was already `True`; only the `crosses`-claims-the-pair exclusion
+    blocked it). Post-fix, `crosses` is silent and `touches` fires both ways -- the doorway's carve
+    boundary is real on the wall it cuts through, seen from either side."""
+    sc = scen.a_doorway_through_a_wall_seam()
+    ctx_a = actor_survey.build_context(sc.level, sc.index, "WallA", sc.defaults)
+    assert not any(f.dst == "Doorway" for f in actor_survey.crosses_facts_for(ctx_a))
+    assert any(f.src == "WallA" and f.dst == "Doorway" for f in actor_survey.touches_facts_for(ctx_a))
+
+    ctx_doorway = actor_survey.build_context(sc.level, sc.index, "Doorway", sc.defaults)
+    assert any(f.src == "Doorway" and f.dst == "WallA"
+              for f in actor_survey.touches_facts_for(ctx_doorway))
+
+
+def test_crosses_does_not_fire_for_an_add_to_add_pair_whose_source_was_later_recarved():
+    """Board item `crosses-fires-on-a-subtract-s-carve-victim`'s own closing paragraph, the fourth
+    case (no fixture pinned it before this): `Rock --crosses(1.47e+03uu)--> Crate` pre-fix, an
+    Add-to-Add pair where `Room`/`Corridor` (Subtracts later than `Rock` in trunk order) carve away
+    the matter that would otherwise reach `Crate` -- the same `_source_cells`-sources-authored-cells
+    root cause as the other three rows, not a separate bug. Reuses the already-committed
+    `an_oversized_corridor_past_its_room` fixture (verified live, pre-fix: `crosses_facts_for(Rock)`
+    reports exactly `Rock --crosses(1472.0uu)--> Crate`, matching the board item's own cited figure);
+    no new fixture needed."""
+    sc = scen.an_oversized_corridor_past_its_room()
+    ctx = actor_survey.build_context(sc.level, sc.index, "Rock", sc.defaults)
+    assert not any(f.dst == "Crate" for f in actor_survey.crosses_facts_for(ctx))
 
 
 def test_resolved_matter_ignores_the_pooled_solidity_oracle():
@@ -983,8 +985,8 @@ def test_touches_and_crosses_are_mutually_exclusive_for_one_pair():
     """Within CSG_TOLERANCE of coincident is `touches`; clearly past it is `crosses`. A pair is
     never both."""
     pytest.importorskip("uedcli_native")
-    sc = scen.shelf_pokes_through_a_niche_wall()
-    ctx = actor_survey.build_context(sc.level, sc.index, "Additive4", sc.defaults)
+    sc = scen.room_with_a_flush_mounted_prop()
+    ctx = actor_survey.build_context(sc.level, sc.index, "Keypad", sc.defaults)
     crossed = {(f.src, f.dst) for f in actor_survey.crosses_facts_for(ctx)}
     touched = {(f.src, f.dst) for f in actor_survey.touches_facts_for(ctx)}
     assert crossed and crossed & touched == set()
@@ -1187,6 +1189,17 @@ def test_two_rotated_cubes_face_to_face_do_touch(degrees):
     assert actor_survey.pair_touches(ctx, a, b) is True
 
 
+def test_touches_leads_with_the_surveyed_actor():
+    # subtract_stops_flush_against_a_wall: Room (subtract) stops exactly at Wall's -X face --
+    # a real touches fact, Room leading.
+    pytest.importorskip("uedcli_native")
+    sc = scen.subtract_stops_flush_against_a_wall()
+    ctx = actor_survey.build_context(sc.level, sc.index, "Room", sc.defaults)
+    facts = actor_survey.touches_facts_for(ctx)
+    assert facts and all(f.src == "Room" for f in facts)
+    assert any(f.dst == "Wall" for f in facts)
+
+
 # --------------------------------------------------------------------- Task 14: connects
 
 def test_connects_fires_for_two_subtracts_sharing_a_plane_and_touches_does_not():
@@ -1229,6 +1242,16 @@ def test_connects_reads_no_zone_number():
     src = inspect.getsource(actor_survey.connects_facts_for) + \
         inspect.getsource(actor_survey.voids_meet)
     assert "zone" not in src.lower()
+
+
+def test_connects_leads_with_the_surveyed_actor():
+    # redundant_nested_subtract: Shell(add), OuterRoom(subtract), InnerCarve(subtract) entirely
+    # inside OuterRoom's already-void space -- surveying OuterRoom reports connects to InnerCarve.
+    pytest.importorskip("uedcli_native")
+    sc = scen.redundant_nested_subtract()
+    ctx = actor_survey.build_context(sc.level, sc.index, "OuterRoom", sc.defaults)
+    facts = actor_survey.connects_facts_for(ctx)
+    assert facts and all(f.src == "OuterRoom" for f in facts)
 
 
 def test_connects_fires_for_two_previously_tested_side_by_side_rooms():
@@ -1470,6 +1493,29 @@ def test_connects_still_rejects_an_edge_only_meeting_with_the_broader_candidate_
     assert actor_survey.connects_facts_for(ctx) == []
 
 
+def test_connects_does_not_fire_for_a_subtract_sealed_inside_a_solid_block():
+    s = scen.subtract_sealed_inside_a_block_sharing_the_outer_walls_plane()
+    ctx = actor_survey.build_context(s.level, s.index, "InnerCut", s.defaults)
+    facts = actor_survey.connects_facts_for(ctx)
+    assert not any(f.dst == "OuterRoom" for f in facts), (
+        "InnerCut's void is sealed inside Block's solid -- it must not report connects to "
+        "OuterRoom just because they share a coincident wall plane")
+
+
+def test_connects_does_not_fire_the_other_direction_either():
+    """`connects` is spec'd symmetric -- surveying the OTHER side of the same sealed bubble must
+    also report nothing. A one-directional reachability check (walking only toward the NEIGHBOUR's
+    interior) passes the `InnerCut`-survey direction above by accident: `InnerCut`'s own sealed
+    interior is trivially reachable from the shared plane, even though the walk from `OuterRoom`'s
+    side is blocked by `Block`'s solid."""
+    s = scen.subtract_sealed_inside_a_block_sharing_the_outer_walls_plane()
+    ctx = actor_survey.build_context(s.level, s.index, "OuterRoom", s.defaults)
+    facts = actor_survey.connects_facts_for(ctx)
+    assert not any(f.dst == "InnerCut" for f in facts), (
+        "OuterRoom must not report connects to InnerCut's sealed bubble either -- connects is "
+        "symmetric")
+
+
 # --------------------------------------------------------------------- Task 15: contains primitives
 
 def test_cell_volume_of_a_cube_is_exact():
@@ -1478,6 +1524,136 @@ def test_cell_volume_of_a_cube_is_exact():
     cells = actorgraph.decompose_convex(sc.level.actors["Adder"])
     assert len(cells) == 1
     assert actor_survey.cell_volume(cells[0]) == pytest.approx(64.0 ** 3, rel=1e-6)
+
+
+def _box_cell(lo, hi):
+    """A `ConvexCell` for the axis-aligned box `[lo, hi]`, for testing the splitting primitives
+    directly without a whole Actor/Level."""
+    from uedcli import actorgraph
+    x0, y0, z0 = lo
+    x1, y1, z1 = hi
+    half_spaces = [((1.0, 0.0, 0.0), x1), ((-1.0, 0.0, 0.0), -x0),
+                   ((0.0, 1.0, 0.0), y1), ((0.0, -1.0, 0.0), -y0),
+                   ((0.0, 0.0, 1.0), z1), ((0.0, 0.0, -1.0), -z0)]
+    verts = [(x, y, z) for x in (x0, x1) for y in (y0, y1) for z in (z0, z1)]
+    return actorgraph.ConvexCell(vertices=verts, half_spaces=half_spaces)
+
+
+def test_cell_intersection_returns_the_polytope_not_just_its_volume():
+    a = _box_cell((0, 0, 0), (10, 10, 10))
+    b = _box_cell((5, 5, 5), (15, 15, 15))
+    cell = actor_survey._cell_intersection(a, b)
+    assert cell is not None
+    assert actor_survey.cell_volume(cell) == pytest.approx(125.0)  # the shared 5^3 corner
+
+
+def test_cell_intersection_volume_still_matches_the_refactored_polytope():
+    a = _box_cell((0, 0, 0), (10, 10, 10))
+    b = _box_cell((5, 5, 5), (15, 15, 15))
+    assert actor_survey._cell_intersection_volume(a, b) == pytest.approx(125.0)
+
+
+def test_cell_intersection_of_two_coincident_cells_does_not_double_count_shared_faces():
+    """Bug found live: two independent cells sharing every plane (two coincident boxes) fed
+    `_polytope_from_planes` each plane TWICE (bare concatenation, `_cell_intersection`'s own
+    docstring), and `cell_volume` fans/sums a face contribution per `half_spaces` entry -- so the
+    shared faces were double-counted (`_cell_intersection_volume` came back ~2x `cell_volume`,
+    not equal to it). `_polytope_from_planes` now dedupes by `_same_plane` first."""
+    a = _box_cell((0, 0, 0), (10, 10, 10))
+    b = _box_cell((0, 0, 0), (10, 10, 10))
+    own_volume = actor_survey.cell_volume(a)
+    assert actor_survey._cell_intersection_volume(a, b) == pytest.approx(own_volume)
+
+
+def test_cell_intersection_is_none_for_disjoint_cells():
+    a = _box_cell((0, 0, 0), (10, 10, 10))
+    b = _box_cell((100, 100, 100), (110, 110, 110))
+    assert actor_survey._cell_intersection(a, b) is None
+
+
+def test_clip_cell_halves_a_cube():
+    cube = _box_cell((0, 0, 0), (10, 10, 10))
+    clipped = actor_survey._clip_cell(cube, (0.0, 0.0, 1.0), 5.0)   # z <= 5
+    assert clipped is not None
+    assert actor_survey.cell_volume(clipped) == pytest.approx(500.0)
+
+
+def test_clip_cell_is_none_when_the_half_space_misses_entirely():
+    cube = _box_cell((0, 0, 0), (10, 10, 10))
+    assert actor_survey._clip_cell(cube, (0.0, 0.0, 1.0), -5.0) is None   # z <= -5: misses [0,10]
+
+
+def test_subtract_cell_removes_a_smaller_cube_fully_inside():
+    outer = _box_cell((0, 0, 0), (10, 10, 10))
+    inner = _box_cell((3, 3, 3), (7, 7, 7))
+    pieces = actor_survey._subtract_cell(outer, inner)
+    assert sum(actor_survey.cell_volume(p) for p in pieces) == pytest.approx(1000.0 - 64.0)
+
+
+def test_subtract_cell_is_unchanged_when_the_cutter_misses_entirely():
+    outer = _box_cell((0, 0, 0), (10, 10, 10))
+    far = _box_cell((100, 100, 100), (110, 110, 110))
+    pieces = actor_survey._subtract_cell(outer, far)
+    assert sum(actor_survey.cell_volume(p) for p in pieces) == pytest.approx(1000.0)
+
+
+def test_partition_by_brushes_splits_a_cell_around_a_carving_subtract():
+    from uedcli import actorgraph
+    s = scen.pillar_in_room()   # Room(subtract), Pillar(add), Cutter(subtract, right half)
+    ctx = actor_survey.build_context(s.level, s.index, "Pillar", s.defaults)
+    pillar_cell = actorgraph.decompose_convex(s.level.actors["Pillar"], cache=ctx.cells)[0]
+    cutter = s.level.actors["Cutter"]
+    pieces = actor_survey._partition_by_brushes(pillar_cell, [cutter], ctx)
+    # Pillar is 128x128x512 = 8388608 total; Cutter takes its right half over part of its height.
+    assert sum(actor_survey.cell_volume(p) for p in pieces) == pytest.approx(
+        actor_survey.cell_volume(pillar_cell))
+
+
+def test_is_void_excluding_matches_the_native_solidity_oracle_with_no_exclusion():
+    """`_is_void_excluding(ctx, p)` with no exclusion asks "per the FULL trunk order, is p void" --
+    on `pillar_in_room` that must agree with the native solver's own pooled solidity oracle, since
+    the leading world-pass brush (`Room`) is a Subtract, not an Add: `resolved_matter_of`'s
+    "leading-Add shell inversion" caveat (its own docstring) only inverts the oracle when the FIRST
+    brush is an Add, which does not apply here.
+
+    (An earlier version of this test compared `_is_void_excluding` against `_was_solid_before`,
+    which asks a different question -- solid just BEFORE one given Subtract, not the fully resolved
+    state. They happen to agree at `(40, 0, 0)`, where `Cutter` -- the last actor in trunk order --
+    reaches a point `Pillar`'s matter already occupied, but not at `(100, 100, 0)`: also inside
+    `Cutter`'s carve region, but outside `Pillar`'s own box, so `Room` (a Subtract) is the nearest
+    earlier writer there and `_was_solid_before(Cutter, p)` is False, while `Cutter` is still the
+    last writer overall and `_is_void_excluding(p)` is True. Neither the original assertion nor its
+    un-negated form is a general law; this test checks the actual invariant instead.)
+    """
+    pytest.importorskip("uedcli_native")
+    s = scen.pillar_in_room()
+    ctx = actor_survey.build_context(s.level, s.index, "Pillar", s.defaults)
+    for p in [(40.0, 0.0, 0.0), (100.0, 100.0, 0.0), (-40.0, 0.0, 0.0)]:
+        assert actor_survey._is_void_excluding(ctx, p) == (
+            not ctx.probe.solidity.point_is_solid(p)), p
+
+
+def test_last_writer_excluding_skips_the_named_actor():
+    s = scen.nested_niche_with_a_decoration()
+    ctx = actor_survey.build_context(s.level, s.index, "Additive4", s.defaults)
+    p = (0.0, 128.0, 0.0)   # inside Additive4's own volume, inside Subtract3's carved region
+    excluding_self = actor_survey._last_writer_excluding(ctx, p, exclude="Additive4")
+    assert excluding_self != "Additive4"
+
+
+def test_victim_matter_just_before_excludes_matter_refilled_after_a_later_subtract():
+    # sub1 (FirstCut) carves victim (Block); a later Add (Refill) refills the SAME point; a
+    # still-later Subtract (SecondCut) is the one under test -- `_victim_matter_just_before(Block,
+    # SecondCut, p)` must be False, because it is Refill's matter there, not Block's own, just before
+    # SecondCut ran. Demonstrates the exact divergence from generic `_was_solid_before`, which DOES
+    # read solid there (Refill is its last writer) -- the bug the spec's "restrict to victim's own
+    # matter" ruling exists to prevent.
+    s = scen.victim_matter_refilled_then_recut()
+    ctx = actor_survey.build_context(s.level, s.index, "Block", s.defaults)
+    p = (-64.0, 0.0, 0.0)
+    block, second_cut = s.level.actors["Block"], s.level.actors["SecondCut"]
+    assert actor_survey._was_solid_before(ctx, second_cut, p) is True         # generic: Refill reads as solid
+    assert actor_survey._victim_matter_just_before(ctx, block, second_cut, p) is False   # victim-specific: correct
 
 
 def test_authored_volume_sums_every_cell_of_a_non_convex_brush():
@@ -1619,82 +1795,130 @@ def test_authored_shape_contains_rejects_a_beam_whose_corners_sit_in_an_l_shaped
     assert actor_survey.authored_shape_contains(container, target, {}) is False
 
 
-# ------------------------------------------------------------------ Task 16: contains
+def test_occupies_fires_for_an_add_seated_in_an_oversized_subtracts_void():
+    # nested_niche_with_a_decoration: Additive4 (Add) wholly inside Subtract3's void, Subtract3
+    # itself oversized past Additive2's own extent (routine carve idiom).
+    s = scen.nested_niche_with_a_decoration()
+    ctx = actor_survey.build_context(s.level, s.index, "Additive4", s.defaults)
+    assert actor_survey._occupies_matter_exists(
+        ctx, s.level.actors["Additive4"], s.level.actors["Subtract3"])
 
-def test_contains_is_uncontested_when_the_only_other_candidate_is_an_add():
-    """The pillar case: a later Add pillar inside a room never enters the competition -- it is not a
-    Subtract -- so the room wins uncontested and the light is contained regardless of the pillar."""
-    import pytest
+
+def test_occupies_does_not_credit_the_trunk_first_subtract_with_a_carve_it_did_not_make():
+    # Same bug class as test_occupies_facts_for_composes_across_two_subtracts's Outer, one tier
+    # down: nested_niche_with_a_decoration's Subtract1 is first in csg_order, so the old
+    # `_was_solid_before(Subtract1, p)` condition (ii) was tautologically True for it regardless of
+    # p -- Additive4 sits inside Subtract1's box too (Subtract1 is the outer room), so it would
+    # falsely occupy Subtract1 alongside the correct Subtract3. Subtract3 is the actual operative
+    # carve at Additive4's location (last writer excluding Additive4), not Subtract1.
+    s = scen.nested_niche_with_a_decoration()
+    ctx = actor_survey.build_context(s.level, s.index, "Additive4", s.defaults)
+    assert not actor_survey._occupies_matter_exists(
+        ctx, s.level.actors["Additive4"], s.level.actors["Subtract1"])
+
+
+def test_occupies_does_not_fire_for_the_carved_away_worked_example():
+    # Task 3's fixture: Middle's matter at Enclosed's own footprint was carved away by Later, so
+    # Middle does not occupy Later there (nothing of Middle's own matter survives to sit in it).
+    s = scen.later_subtract_carves_an_add_that_encloses_a_semisolid()
+    ctx = actor_survey.build_context(s.level, s.index, "Middle", s.defaults)
+    assert not actor_survey._occupies_matter_exists(
+        ctx, s.level.actors["Middle"], s.level.actors["Later"])
+
+
+def test_occupies_over_fires_without_the_own_matter_condition_pinned_by_construction():
+    # spec's own regression case: order sub1 -> A -> sub2, sub2 re-carving A. A point in
+    # A ∩ sub1 ∩ sub2 passes (ii)+(iii) though A has no surviving matter there. Pinned as a
+    # regression: A must NOT occupy sub2 at all (A's matter there was re-carved away).
+    s = scen.partial_and_total_carves()  # FirstCut then SecondCut both cut Block
+    ctx = actor_survey.build_context(s.level, s.index, "Block", s.defaults)
+    assert not actor_survey._occupies_matter_exists(
+        ctx, s.level.actors["Block"], s.level.actors["SecondCut"])
+
+
+def test_occupies_nonsolid_branch_fires_by_shape():
+    s = scen.nonsolid_decoration_in_a_subtracts_void()
+    ctx = actor_survey.build_context(s.level, s.index, "Decal", s.defaults)
+    assert actor_survey._occupies_nonsolid_exists(
+        ctx, s.level.actors["Decal"], s.level.actors["Room"])
+
+
+def test_occupies_point_actor_branch_fires_for_a_light_in_a_carved_room():
+    s = scen.room_with_pillar_and_light()   # Room(subtract), Pillar(add), Light(point)
+    ctx = actor_survey.build_context(s.level, s.index, "Light", s.defaults)
+    light = s.level.actors["Light"]
+    assert actor_survey._occupies_point_exists(ctx, light, s.level.actors["Room"])
+
+
+def test_occupies_point_actor_branch_is_silent_outside_the_room():
+    s = scen.far_apart_rooms()
+    ctx = actor_survey.build_context(s.level, s.index, "FarRoom", s.defaults)
+    ghost = scen.point("Ghost", (0, 0, 0))   # world origin, inside Shell's solid, not any Subtract's void
+    assert not actor_survey._occupies_point_exists(ctx, ghost, s.level.actors["FarRoom"])
+
+
+def test_occupies_facts_for_reports_the_matter_branch():
+    s = scen.nested_niche_with_a_decoration()
+    ctx = actor_survey.build_context(s.level, s.index, "Additive4", s.defaults)
+    facts = actor_survey.occupies_facts_for(ctx)
+    assert any(f.src == "Additive4" and f.dst == "Subtract3" and f.relation == "occupies"
+               for f in facts)
+
+
+def test_occupies_facts_for_composes_across_two_subtracts():
+    # spec's "composes where containment cannot": an Add seated across two Subtracts' voids reports
+    # occupies against BOTH, and crosses neither. `two_rooms_side_by_side`'s RoomA (x in [-200,-100])
+    # and RoomB (x in [-100,0]) share the x=-100 plane with nothing solid between their voids
+    # (`Rock` is carved straight through by both, both spanning the same y in [-100,100], z in
+    # [-50,50]) -- `Bridge` (40 x 200 x 100 at (-100,0,0), so x in [-120,-80]) straddles that shared
+    # plane, 20uu into each room's void, matching both rooms' y/z extents exactly (flush, never past
+    # them) and nowhere near either room's own outer wall (x=-200 / x=0).
+    s = scen.two_rooms_side_by_side()
+    outer_shared_add = scen.brush("Bridge", (40, 200, 100), (-100, 0, 0))
+    level = dataclasses.replace(s.level, actors={**s.level.actors, "Bridge": outer_shared_add},
+                                order=s.level.order + ["Bridge"])
+    ctx = actor_survey.build_context(level, s.index, "Bridge", s.defaults)
+    facts = actor_survey.occupies_facts_for(ctx)
+    dsts = {f.dst for f in facts if f.src == "Bridge" and f.relation == "occupies"}
+    # Equality, not a subset check: also pins that "Outer" (first in trunk order, so the old
+    # tautological condition (ii) falsely credited it too) does NOT appear alongside the two
+    # correct facts.
+    assert dsts == {"RoomA", "RoomB"}
+    assert not any(f.relation == "crosses" for f in actor_survey.crosses_facts_for(ctx))
+
+
+def test_containment_winner_and_contains_facts_for_are_gone():
+    """No back-compat cruft: the winner-take-all contains machinery must not exist any more."""
+    assert not hasattr(actor_survey, "containment_winner")
+    assert not hasattr(actor_survey, "contains_facts_for")
+    assert not hasattr(actor_survey, "_containment_candidates")
+
+
+def test_occupies_and_crosses_both_fire_for_a_point_actor_that_sits_in_a_void_and_pokes_through():
+    # spec: occupies+crosses both kept, they say genuinely different things. Keypad sits well
+    # inside Room's void (occupies) and its collision cylinder reaches 8uu into Room's own wall
+    # (crosses, already pinned by test_crosses_fires_for_a_flush_mounted_collision_extent) --
+    # an existing, unaffected fixture that genuinely demonstrates both at once.
     pytest.importorskip("uedcli_native")
-    sc = scen.room_with_pillar_and_light()
-    ctx = actor_survey.build_context(sc.level, sc.index, "Room", sc.defaults)
-    assert any(f.src == "Room" and f.dst == "Light" and f.relation == "contains"
-               for f in actor_survey.contains_facts_for(ctx))
+    s = scen.room_with_a_flush_mounted_prop()
+    ctx = actor_survey.build_context(s.level, s.index, "Keypad", s.defaults)
+    facts = actor_survey.csg_facts_for(ctx)
+    relations = {(f.src, f.dst, f.relation) for f in facts if f.src == "Keypad"}
+    assert any(r[2] == "crosses" for r in relations)
+    assert ("Keypad", "Room", "occupies") in relations
 
 
-def test_contains_picks_the_smallest_authored_volume_when_nested():
-    import pytest
+def test_occupies_and_touches_both_fire_for_an_add_flush_against_its_own_carved_walls():
+    # an_add_inside_an_enclosing_subtract(clearance=0): Shelf pushed flush against Room's own
+    # -X wall -- a real touches fact AND, once Shelf is excluded, Room is still the void's last
+    # writer there, so occupies fires too. Both facts are genuinely true of the same pair at once.
     pytest.importorskip("uedcli_native")
-    sc = scen.nested_niche_with_a_decoration()
-    inner = actor_survey.build_context(sc.level, sc.index, "Subtract3", sc.defaults)
-    outer = actor_survey.build_context(sc.level, sc.index, "Subtract1", sc.defaults)
-    assert any(f.src == "Subtract3" and f.dst == "Additive4"
-               for f in actor_survey.contains_facts_for(inner))
-    assert not any(f.dst == "Additive4" for f in actor_survey.contains_facts_for(outer))
-
-
-def test_contains_breaks_an_exact_volume_tie_toward_the_later_brush():
-    import pytest
-    pytest.importorskip("uedcli_native")
-    sc = scen.two_equal_volume_subtracts()
-    later = actor_survey.build_context(sc.level, sc.index, "LaterRoom", sc.defaults)
-    earlier = actor_survey.build_context(sc.level, sc.index, "EarlierRoom", sc.defaults)
-    assert any(f.src == "LaterRoom" and f.dst == "Item"
-               for f in actor_survey.contains_facts_for(later))
-    assert not any(f.dst == "Item" for f in actor_survey.contains_facts_for(earlier))
-
-
-def test_contains_shows_the_same_fact_when_the_contained_actor_is_surveyed():
-    """Fixed-direction: the container leads whichever side you ask about."""
-    import pytest
-    pytest.importorskip("uedcli_native")
-    sc = scen.room_with_pillar_and_light()
-    ctx = actor_survey.build_context(sc.level, sc.index, "Light", sc.defaults)
-    assert any(f.src == "Room" and f.dst == "Light"
-               for f in actor_survey.contains_facts_for(ctx))
-
-
-def test_contains_never_has_an_intersect_or_deintersect_as_the_container():
-    """They contribute nothing to the world at all, so they can never be the container side."""
-    import pytest
-    pytest.importorskip("uedcli_native")
-    sc = scen.kind_table_scenario()
-    ctx = actor_survey.build_context(sc.level, sc.index, "Lamp", sc.defaults)
-    assert not any(f.src in ("Inter", "Deinter")
-                   for f in actor_survey.contains_facts_for(ctx))
-
-
-def test_contains_does_not_treat_a_mover_as_a_subtract():
-    """The same trap `test_connects_does_not_treat_a_mover_as_a_subtract` already pins for `connects`
-    (critical review finding there): `query.csg_is_subtract` reads only the raw `CsgOper` prop, so a
-    Mover carrying a stray `CsgOper=CSG_Subtract` would wrongly enter the container competition.
-    `Door`'s authored volume here is far smaller than `Room`'s, so an ungated competition would have
-    `Door` (wrongly) steal `Item` from `Room` -- `containment_winner`'s gate must go through the
-    actor's real kind, not the raw prop, exactly like every other csg-tier eligibility gate in this
-    module."""
-    import pytest
-    pytest.importorskip("uedcli_native")
-    sc = scen.mover_wrongly_tagged_as_subtract_competes_for_an_item()
-    room_ctx = actor_survey.build_context(sc.level, sc.index, "Room", sc.defaults)
-    assert any(f.src == "Room" and f.dst == "Item" for f in actor_survey.contains_facts_for(room_ctx))
-    door_ctx = actor_survey.build_context(sc.level, sc.index, "Door", sc.defaults)
-    assert not any(f.src == "Door" for f in actor_survey.contains_facts_for(door_ctx))
-
-
-def test_volume_tolerance_is_a_named_constant_not_an_inline_literal():
-    import inspect
-    assert actor_survey.VOLUME_TOLERANCE_REL == 1e-6
-    assert "1e-6" not in inspect.getsource(actor_survey.containment_winner)
+    s = scen.an_add_inside_an_enclosing_subtract(clearance=0)
+    ctx = actor_survey.build_context(s.level, s.index, "Shelf", s.defaults)
+    facts = actor_survey.csg_facts_for(ctx)
+    relations = {(f.src, f.dst, f.relation) for f in facts if f.src == "Shelf"}
+    assert ("Shelf", "Room", "occupies") in relations
+    assert ("Shelf", "Room", "touches") in relations
 
 
 def test_carves_fires_when_a_subtract_removes_real_add_matter():
@@ -1707,8 +1931,9 @@ def test_carves_fires_when_a_subtract_removes_real_add_matter():
 
 
 def test_carves_is_absent_where_the_subtract_only_stopped_flush():
-    """The raw-vs-csg contrast the whole two-tier design exists for: the raw order heuristic calls
-    this pair `carves` (the Subtract is later in trunk order); the csg tier correctly reports
+    """The raw-vs-csg contrast the whole two-tier design exists for: raw has no `carves` relation at
+    all (Task 10 -- the raw tier reasons over pure authored geometry, never trunk order), and reports
+    `Room`/`Wall`'s authored boundaries as flush contact (`meets`); the csg tier correctly reports
     nothing against `Wall`, and reports `touches` instead. `Room` separately carves `Rock` (total
     removal, per spec) -- that fact is legitimate and out of scope for this test."""
     import pytest
@@ -1718,7 +1943,26 @@ def test_carves_is_absent_where_the_subtract_only_stopped_flush():
     assert not any(f.dst == "Wall" for f in actor_survey.carves_facts_for(ctx))
     assert any(f.dst == "Wall" for f in actor_survey.touches_facts_for(ctx))
     raw = actor_survey.raw_facts_for(sc.level, sc.index, "Room", sc.defaults).facts
-    assert any(f.relation == "carves" for f in raw), "raw's heuristic really does claim it"
+    assert not any(f.relation == "carves" for f in raw)
+    assert any(f.src == "Room" and f.dst == "Wall" and f.relation == "meets" for f in raw)
+
+
+def test_carves_never_fires_for_a_subtract_that_precedes_its_victim_in_trunk_order():
+    """spec's own duals rule: "S-before-A -> only occupies possible; S-after-A -> only carves
+    possible" -- mutual exclusivity, previously untested in either direction. `pillar_in_room`'s
+    `Room` (Subtract, trunk-first) fully encloses `Pillar` (Add, trunk-second): `Room` precedes
+    `Pillar`, so only `occupies` applies, never `carves`. Regression for a real bug:
+    `_victim_matter_just_before`'s `csg_order[v_i + 1:s_i]` slice was empty whenever `s_i <= v_i`
+    (Python does not raise or reverse on `start > stop`), so `not any([])` read vacuously True --
+    `carves(Room, Pillar)` fired even though `Room` ran before `Pillar` existed at all."""
+    import pytest
+    pytest.importorskip("uedcli_native")
+    s = scen.pillar_in_room()
+    ctx = actor_survey.build_context(s.level, s.index, "Pillar", s.defaults)
+    assert not any(f.src == "Room" and f.dst == "Pillar"
+                   for f in actor_survey.carves_facts_for(ctx))
+    assert any(f.src == "Pillar" and f.dst == "Room"
+               for f in actor_survey.occupies_facts_for(ctx))
 
 
 def test_carves_never_targets_a_semisolid():
@@ -1762,6 +2006,46 @@ def test_carves_shows_the_same_fact_when_the_carved_actor_is_surveyed():
                for f in actor_survey.carves_facts_for(ctx))
 
 
+def test_carves_volume_finds_a_fully_internal_cavity():
+    s = scen.a_subtract_buried_inside_an_adds_interior()
+    ctx = actor_survey.build_context(s.level, s.index, "Block", s.defaults)
+    volume = actor_survey._carves_volume(ctx, s.level.actors["InnerCut"], s.level.actors["Block"])
+    assert volume == pytest.approx(64.0 ** 3)
+
+
+def test_carves_volume_restricts_to_the_victims_own_matter():
+    # spec's own worked distinction: `removed_by`'s replacement must count only the VICTIM's own
+    # matter as solid-before-S, not any Add's -- pillar_in_room-style: Cutter only takes the right
+    # half of Pillar's height; the LEFT half of Pillar's volume must not be counted.
+    s = scen.pillar_in_room()
+    ctx = actor_survey.build_context(s.level, s.index, "Pillar", s.defaults)
+    volume = actor_survey._carves_volume(ctx, s.level.actors["Cutter"], s.level.actors["Pillar"])
+    pillar_volume = 128.0 * 128.0 * 512.0
+    assert 0 < volume < pillar_volume
+
+
+def test_carves_ordering_for_a_nonsolid_victim_uses_full_trunk_order():
+    """Regression for `ctx.csg_index.get(victim.name, -1)` always returning -1 for a Nonsolid
+    (`_WORLD_PASS_KINDS` excludes it), which made the `s_i <= v_i` ordering guard a no-op for any
+    Nonsolid victim: a preceding Subtract wrongly got `carves` credit, and -- when both an earlier
+    and a later Subtract overlapped the same Nonsolid -- the earlier (wrong) one got the credit
+    while the later (right) one was silently dropped."""
+    import pytest
+    pytest.importorskip("uedcli_native")
+    sc = scen.nonsolid_straddled_by_an_earlier_and_a_later_subtract()
+    ctx = actor_survey.build_context(sc.level, sc.index, "Decal", sc.defaults)
+    facts = actor_survey.carves_facts_for(ctx)
+    assert not any(f.src == "EarlySubtract" and f.dst == "Decal" for f in facts)
+    assert any(f.src == "LateSubtract" and f.dst == "Decal" for f in facts)
+
+
+def test_carves_volume_is_zero_where_the_subtract_only_stopped_flush():
+    s = scen.subtract_stops_flush_against_a_wall()
+    ctx = actor_survey.build_context(s.level, s.index, "Wall", s.defaults)
+    volume = actor_survey._carves_volume(ctx, s.level.actors["Room"], s.level.actors["Wall"])
+    assert volume == pytest.approx(0.0)
+
+
 # --------------------------------------------------------------------- Task 18: survey() orchestration
 
 def test_survey_returns_both_tiers_and_one_node_tag_per_named_actor():
@@ -1775,15 +2059,19 @@ def test_survey_returns_both_tiers_and_one_node_tag_per_named_actor():
     assert named <= set(got.nodes)
 
 
-def test_csg_line_carries_a_depth_on_crosses_and_nothing_on_the_others():
-    sc = scen.niche_carved_into_wall()
-    nodes = actor_survey.raw_facts_for(sc.level, sc.index, "Wall", sc.defaults).nodes
-    crossing = actor_survey.CsgFact(src="Wall", dst="Niche", relation="crosses", depth_uu=8.25)
-    touching = actor_survey.CsgFact(src="Wall", dst="Niche", relation="touches")
-    assert actor_survey.format_csg_line(crossing, nodes) == (
-        "csg Wall [Engine.Brush Add] --crosses(8.25uu)--> Niche [Engine.Brush Subtract]")
-    assert actor_survey.format_csg_line(touching, nodes) == (
-        "csg Wall [Engine.Brush Add] --touches--> Niche [Engine.Brush Subtract]")
+def test_csg_fact_carries_no_depth_field():
+    fact = actor_survey.CsgFact(src="A", dst="B", relation="crosses")
+    assert not hasattr(fact, "depth_uu")
+
+
+def test_csg_line_never_carries_a_depth_annotation():
+    pytest.importorskip("uedcli_native")
+    sc = scen.room_with_a_flush_mounted_prop()
+    ctx = actor_survey.build_context(sc.level, sc.index, "Keypad", sc.defaults)
+    facts = actor_survey.crosses_facts_for(ctx)
+    nodes = actor_survey.raw_facts_for(sc.level, sc.index, "Keypad", sc.defaults).nodes
+    lines = [actor_survey.format_csg_line(f, nodes) for f in facts]
+    assert not any("(" in line for line in lines)
 
 
 def test_no_csg_line_ever_carries_an_idx():

@@ -32,11 +32,16 @@ def _ns(proj, name, tree=None):
     return argparse.Namespace(cmd="actor", sub="survey", project=str(proj), tree=tree, name=name)
 
 
+_RAW_RELATIONS = ("encloses", "overlaps", "meets", "coincides")
+_CSG_RELATIONS = ("touches", "crosses", "occupies", "carves", "connects")
+
+
 def test_survey_prints_raw_lines_and_a_stderr_summary(tmp_path, monkeypatch, capsys):
     proj = _project(tmp_path, monkeypatch, scen.niche_carved_into_wall())
     assert dispatch.dispatch(_ns(proj, "Wall")) == 0
     out = capsys.readouterr()
-    raw = [ln for ln in out.out.splitlines() if ln.startswith("raw ")]
+    raw = [ln for ln in out.out.splitlines()
+           if any(f" --{r}--> " in ln for r in _RAW_RELATIONS)]
     assert raw
     assert "raw fact(s)" in out.err
 
@@ -61,21 +66,26 @@ def test_survey_prints_raw_block_then_csg_block_then_a_two_number_summary(
     assert dispatch.dispatch(_ns(proj, "Wall")) == 0
     out = capsys.readouterr()
     lines = out.out.splitlines()
-    raw = [i for i, ln in enumerate(lines) if ln.startswith("raw ")]
-    csg = [i for i, ln in enumerate(lines) if ln.startswith("csg ")]
+    raw = [i for i, ln in enumerate(lines) if any(f" --{r}--> " in ln for r in _RAW_RELATIONS)]
+    csg = [i for i, ln in enumerate(lines) if any(f" --{r}--> " in ln for r in _CSG_RELATIONS)]
     assert raw and csg
     assert min(csg) > max(raw)
     assert f"{len(raw)} raw fact(s), {len(csg)} resolved CSG fact(s) for Wall" in out.err
 
 
-def test_survey_every_line_starts_with_its_tier_token(tmp_path, monkeypatch, capsys):
-    """A tier token as the FIRST WORD, never a section header — so the guarantee survives grep,
-    truncation, or one line quoted mid-context into a later prompt (spec, Output shape)."""
+def test_survey_never_prints_a_raw_or_csg_line_prefix(tmp_path, monkeypatch, capsys):
+    """No new marker replaces the dropped tier prefix (owner ruling) -- fixed order (raw block,
+    then csg block) plus the blank separator is the only signal."""
     pytest.importorskip("uedcli_native")
     proj = _project(tmp_path, monkeypatch, scen.niche_carved_into_wall())
     assert dispatch.dispatch(_ns(proj, "Wall")) == 0
-    for line in capsys.readouterr().out.splitlines():
-        assert line == "" or line.split()[0] in ("raw", "csg")
+    lines = capsys.readouterr().out.splitlines()
+    assert not any(ln.startswith("raw ") or ln.startswith("csg ") for ln in lines)
+    raw = [i for i, ln in enumerate(lines) if any(f" --{r}--> " in ln for r in _RAW_RELATIONS)]
+    csg = [i for i, ln in enumerate(lines) if any(f" --{r}--> " in ln for r in _CSG_RELATIONS)]
+    assert raw and csg
+    assert min(csg) > max(raw)
+    assert lines[max(raw) + 1] == ""
 
 
 def test_survey_degenerate_surveyed_brush_exits_2_naming_it(tmp_path, monkeypatch, capsys):

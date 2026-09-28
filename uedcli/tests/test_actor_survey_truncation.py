@@ -27,8 +27,7 @@ pytest.importorskip("uedcli_native")
 def _whole_level_context(sc, name):
     """The same `SurveyContext`, but solved over EVERY brush in the level instead of the bounded
     neighborhood. `near`/`points` stay as they are — the truncation claim is about the SOLVE, not
-    about which actors a fact may name. `seed` carries over unchanged, correctly: it names the
-    LEVEL's first world-CSG brush, which is the same brush in both solves."""
+    about which actors a fact may name."""
     ctx = actor_survey.build_context(sc.level, sc.index, name, sc.defaults)
     everything = [sc.level.actors[n] for n in sc.level.order
                   if sc.level.actors[n].brush is not None]
@@ -127,7 +126,6 @@ def test_dropping_the_first_world_csg_brush_really_does_change_the_answer():
     """
     sc = scen.truncation_probe_level()
     ctx = actor_survey.build_context(sc.level, sc.index, "Probe", sc.defaults)
-    assert ctx.seed == "Shell"            # the first CONTRIBUTING brush, not trunk index 0
     without_shell = [a for a in ctx.neighbors if a.name != "Shell"]
     probe = solve_world_probe(without_shell, sc.index)
     seeded = {f.owner for f in actor_survey.csg_faces(ctx.probe, ctx.region)}

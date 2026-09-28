@@ -9,7 +9,7 @@ def add_survey_subparser(asub) -> None:
     p = asub.add_parser(
         "survey",
         help="every raw and CSG-resolved spatial fact about one actor (brush or not): what it "
-             "touches, contains, carves, connects to, and crosses into")
+             "touches, occupies, carves, connects to, and crosses into")
     p.add_argument(
         "name", metavar="NAME",
         help="the actor to survey — exactly one, never a set (both tiers are computed over a "

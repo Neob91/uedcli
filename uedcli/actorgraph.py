@@ -325,6 +325,30 @@ def cells_touch_or_overlap(cell_a: ConvexCell, cell_b: ConvexCell) -> bool:
     return True
 
 
+def sat_interpenetration_depth(cell_a: ConvexCell, cell_b: ConvexCell) -> float | None:
+    """The minimum positive-axis overlap across every SAT candidate axis (`_sat_axes`) -- how far
+    the two convex cells' interiors interpenetrate -- or None when some axis separates them by more
+    than `_TOUCH_EPS` (disjoint, or merely touching with zero real overlap). Generalizes
+    `cells_touch_or_overlap`'s own axis loop from a boolean reject to the minimum positive overlap
+    depth, so a caller can tell flush contact (depth <= `_TOUCH_EPS`) from real interpenetration
+    (depth > `_TOUCH_EPS`) -- the discriminator `actor survey`'s raw tier needs to split `overlaps`
+    from `meets` (`_TOUCH_EPS` alone cannot: `cells_touch_or_overlap` already lumps both cases into
+    one boolean)."""
+    a_lo, a_hi = _bbox(cell_a)
+    b_lo, b_hi = _bbox(cell_b)
+    if any(a_hi[i] < b_lo[i] - _TOUCH_EPS or b_hi[i] < a_lo[i] - _TOUCH_EPS for i in range(3)):
+        return None
+    min_overlap = None
+    for axis in _sat_axes(cell_a, cell_b):
+        a_vals = [_dot(axis, v) for v in cell_a.vertices]
+        b_vals = [_dot(axis, v) for v in cell_b.vertices]
+        overlap = min(max(a_vals), max(b_vals)) - max(min(a_vals), min(b_vals))
+        if overlap < -_TOUCH_EPS:
+            return None
+        min_overlap = overlap if min_overlap is None else min(min_overlap, overlap)
+    return min_overlap
+
+
 @dataclass(frozen=True)
 class BrushOverlap:
     touches: bool

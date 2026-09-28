@@ -131,6 +131,32 @@ def test_overlapping_cells_touch():
     assert actorgraph.cells_touch_or_overlap(ca, cb)
 
 
+def test_sat_interpenetration_depth_is_none_for_disjoint_cells():
+    a = _brush("A", cube(64, 64, 64), loc=(0, 0, 0))
+    b = _brush("B", cube(64, 64, 64), loc=(0, 0, 128))   # 32uu real gap
+    ca, = actorgraph.decompose_convex(a)
+    cb, = actorgraph.decompose_convex(b)
+    assert actorgraph.sat_interpenetration_depth(ca, cb) is None
+
+
+def test_sat_interpenetration_depth_is_small_for_a_flush_contact():
+    a = _brush("A", cube(64, 64, 64), loc=(0, 0, 0))
+    b = _brush("B", cube(64, 64, 64), loc=(0, 0, 64))    # shared face, zero gap
+    ca, = actorgraph.decompose_convex(a)
+    cb, = actorgraph.decompose_convex(b)
+    depth = actorgraph.sat_interpenetration_depth(ca, cb)
+    assert depth is not None and depth <= actorgraph._TOUCH_EPS
+
+
+def test_sat_interpenetration_depth_is_large_for_a_real_overlap():
+    a = _brush("A", cube(64, 64, 64), loc=(0, 0, 0))
+    b = _brush("B", cube(64, 64, 64), loc=(32, 0, 0))    # half-overlap in X
+    ca, = actorgraph.decompose_convex(a)
+    cb, = actorgraph.decompose_convex(b)
+    depth = actorgraph.sat_interpenetration_depth(ca, cb)
+    assert depth == pytest.approx(32.0)
+
+
 def _oblique_box(center, axes, half=(15.0, 1.0, 1.0)):
     """A thin rectangular rod: `half` extents along the orthonormal right-handed frame
     `axes = (long, thin1, thin2)` (`long x thin1 == thin2`), centred at `center`.
@@ -234,6 +260,59 @@ def test_edge_cross_axis_is_needed_for_two_rotated_convex_shapes():
         < min(actorgraph._dot(ax, v) for v in ca.vertices) - actorgraph._TOUCH_EPS
         for ax in face_normals)
     assert separated_by_a_face is False
+
+
+def test_sat_interpenetration_depth_is_exact_for_two_skew_rotated_rods():
+    # Same skew-rotated rod pair as `test_edge_cross_axis_is_needed_for_two_rotated_convex_shapes`
+    # (that test's own comment explains why a Z-only rotation can't exercise an edge-cross axis at
+    # all) -- but pushed together along the edge-cross axis `n` instead of apart, so the rods
+    # genuinely interpenetrate and `sat_interpenetration_depth` (not just the boolean
+    # `cells_touch_or_overlap`) is exercised.
+    #
+    # Ground truth, independent of `_sat_axes`' own enumeration: `n = cross(A.long, B.long)` is a
+    # fixed unit axis; translating B by `gap_along_n * n` moves B's projection onto `n` by exactly
+    # `gap_along_n` (a pure dot-product fact), so the projected overlap on `n` alone is `R -
+    # gap_along_n` for a constant `R` (the two rods' combined half-widths along `n`, fixed by their
+    # shape and rotation, not by the translation). Measured directly off the corner coordinates
+    # (independent of `actorgraph._sat_axes`/`sat_interpenetration_depth`): `R = 2.732050808`
+    # (`1 + sqrt(3)`), and separately, brute-forcing every face-normal and edge-cross axis at
+    # `gap_along_n = 1.0` finds `n` is the UNIQUE minimum (1.732050808 = `sqrt(3)`) -- every face
+    # normal of either rod gives a larger overlap (2.0 at best), so face-normal-only SAT would report
+    # the wrong (too-large) depth here.
+    import math
+    phi, rho, gap_along_n = math.radians(60.0), math.radians(30.0), 1.0
+
+    a_axes = ((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0))
+    long_b = (0.0, math.cos(phi), math.sin(phi))
+    q = (0.0, math.sin(phi), -math.cos(phi))
+    thin1 = tuple(math.cos(rho) * x + math.sin(rho) * qi
+                  for x, qi in zip((1.0, 0.0, 0.0), q))
+    thin2 = tuple(math.cos(rho) * qi - math.sin(rho) * x
+                  for x, qi in zip((1.0, 0.0, 0.0), q))
+    b_axes = (long_b, thin1, thin2)
+    n = actorgraph._norm(actorgraph._cross(a_axes[0], long_b))
+    b_center = tuple(gap_along_n * ni for ni in n)
+
+    a = _brush("A", _oblique_box((0.0, 0.0, 0.0), a_axes))
+    b = _brush("B", _oblique_box(b_center, b_axes))
+    ca, = actorgraph.decompose_convex(a)
+    cb, = actorgraph.decompose_convex(b)
+
+    depth = actorgraph.sat_interpenetration_depth(ca, cb)
+    assert depth == pytest.approx(math.sqrt(3.0), abs=1e-6)
+
+    # Confirm the face-normal-only depth really is a DIFFERENT, wrong number -- proving this
+    # fixture's depth genuinely depends on the edge-cross axis, not merely restating the SUT's own
+    # axis-enumeration logic.
+    face_normals = [nn for nn, _ in ca.half_spaces] + [nn for nn, _ in cb.half_spaces]
+    face_only_depth = min(
+        min(max(actorgraph._dot(ax, v) for v in ca.vertices),
+            max(actorgraph._dot(ax, v) for v in cb.vertices))
+        - max(min(actorgraph._dot(ax, v) for v in ca.vertices),
+              min(actorgraph._dot(ax, v) for v in cb.vertices))
+        for ax in face_normals)
+    assert face_only_depth == pytest.approx(2.0, abs=1e-6)
+    assert depth < face_only_depth
 
 
 def test_brush_overlap_touching_flat_face_gives_matched_pair_and_exact_area():

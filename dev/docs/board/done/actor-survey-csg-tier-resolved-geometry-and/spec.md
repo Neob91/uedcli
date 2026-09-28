@@ -64,9 +64,12 @@ kind/order logic.
 - **Display:** each raw line still shows the brush kind as a label (e.g.
   `Brush190 [Engine.Brush Subtract]`) for information — not used in the relation. (Owner ruling.)
 - **Removed:** raw `carves` (was defined only by trunk order); the Subtract/Mover branching and the
-  trunk-order "causality check" in `actorgraph.classify_pair` (`actorgraph.py:562-606`). All of it is
-  CSG reasoning that has no place in the authored tier. This replaces `classify_pair`'s branching
-  with pure geometry.
+  trunk-order "causality check" that `actorgraph.classify_pair` (`actorgraph.py:562-606`) used for the
+  raw tier. All of it is CSG reasoning that has no place in the authored tier. **Scope note (owner
+  ruling, 2026-09-27):** `classify_pair` itself is shared with `level graph`'s `build_graph`
+  (unmentioned in this item), so it is left untouched — this item adds a new, separate pure-geometry
+  classifier for the raw tier instead of rewriting `classify_pair` in place; `level graph`'s output is
+  unaffected.
 - Deliberately **not** split: tangential vs non-tangential enclosure (whether the enclosed brush
   touches the container wall or floats inside) — a finer RCC distinction with no authoring value.
 
@@ -107,13 +110,20 @@ kind/order logic.
     volume tolerance for `carves`'s `> eps`, resolved tier (`CARVE_AREA_EPS` is an area, does not
     transfer).
   - **matter brush (Add/Semisolid) — MARGINAL (owner ruling).** X `occupies` S at a point p iff ALL of:
-    **(i)** X's own matter survives at p (`resolved_matter_of(X, p)` True); **(ii)** S carved p
-    (`_was_solid_before(S, p)` True); **(iii)** p is void when X is excluded. Both sides matter — (i) is
-    the "closed with X included" half the earlier one-sided wording dropped. **Without (i) the test
-    over-fires the carved-away-Add bug itself:** for order `sub1 → A → sub2` with sub2 re-carving A, a point
-    in `A ∩ sub1 ∩ sub2` passes (ii)+(iii) though A has no surviving matter there (`resolved_matter_of(A,p)`
-    is False). (i) also restores `carves`/`occupies` mutual exclusivity for an S-after-X pair. Per-`S`
-    by construction (no `containment_winner`/authored-box fallback); catches a floating pillar.
+    **(i)** X's own matter survives at p (`resolved_matter_of(X, p)` True); **(ii)** S is still the
+    reason p is empty in the resolved level — the carve currently operative there, not a carve since
+    superseded by something else (a Subtract that once reached p at some earlier point in trunk
+    history but is no longer what makes it void today does not count); **(iii)** p is void when X is
+    excluded. Both sides matter — (i) is the "closed with X included" half the earlier one-sided
+    wording dropped. **Without (i) the test over-fires the carved-away-Add bug itself:** for order
+    `sub1 → A → sub2` with sub2 re-carving A, a point in `A ∩ sub1 ∩ sub2` passes (ii)+(iii) though A
+    has no surviving matter there (`resolved_matter_of(A,p)` is False). **Without the "currently
+    operative" reading of (ii), a Subtract earlier in trunk order can be wrongly credited too:** the
+    first brush a level's world CSG resolves against carries no earlier writer of its own, so a naive
+    "was p ever solid before S" test reads True for it unconditionally, regardless of whether S itself
+    reaches p at all — every subsequent carve or refill at p is invisible to that reading. (i) also
+    restores `carves`/`occupies` mutual exclusivity for an S-after-X pair. Per-`S` by construction (no
+    `containment_winner`/authored-box fallback); catches a floating pillar.
     **Accepted consequence:** two coincident/shadowed Adds → *neither* `occupies` (the excluded side
     stays solid); pin it in a test so it stays recorded, not quietly "fixed" later.
   - **nonsolid brush (owner ruling) — by SHAPE.** A Nonsolid brush has no matter to drop, so the
@@ -190,18 +200,20 @@ kind/order logic.
 - **Bare-topology lines.** No magnitudes anywhere, no poly indices. Drop `touches(<area>)`,
   `crosses(<depth>)`, and the raw `:idx` (`Brush184:5`) — a single poly index is a silent half-answer
   (implies one touching pair when several touch). Scientific notation is moot once the numbers go.
-- **`--json`** carries the relationship. Paired contact faces (which face meets which) are the natural
+- **`--json` deferred (owner ruling, 2026-09-27): not part of this item.** No JSON output for now —
+  plain-text lines only. If added later: paired contact faces (which face meets which) are the natural
   structured extra, but per YAGNI (`conventions.md`) defer them until something actually consumes them
-  — correct face-pairing is real output surface with no named consumer yet. If added: never two flat
-  index tuples per side (that loses the pairing).
+  — correct face-pairing is real output surface with no named consumer yet; never two flat index
+  tuples per side (that loses the pairing).
 - **Metrics are `actor relation`'s job.** The old `crosses`-depth rationale (telling ~6uu flush-mounts
   from ~60uu errors) was measured on **non-brush** fixtures and never applied to brushes (a flush
   brush contact is `touches`, not `crosses`); non-brush alignment precision belongs to `actor relation`.
   Extending survey with measurements later is possible but deferred (`someday/`).
 - non-brush `crosses`: survey still reports the bare relation; precise alignment via `actor relation`.
-- **`actor survey` is a diagnostic (human + `--json`), not a `find`-style name producer.** It prints
-  two labeled groups, not a clean one-name-per-line stream for piping into a mutating verb. Keep the
-  `--json` boundary crisp: face pairing = topology (survey); area/depth = metric (`actor relation`).
+- **`actor survey` is a diagnostic, not a `find`-style name producer.** It prints two labeled groups
+  (fixed order — raw then csg — is what marks them; no per-line or per-block token replaces the
+  dropped `raw `/`csg ` prefix, owner ruling 2026-09-27), not a clean one-name-per-line stream for
+  piping into a mutating verb.
 - Cross-relation de-duplication. `crosses`/`touches` are mutually de-duped (`actor_survey.py:1749-1755`).
   The other two co-firing pairs — `occupies`+`crosses` (an Add fills a void and pokes through the far
   wall) and `occupies`+`touches` (an Add fills a void and sits flush against its carved walls) — **both
