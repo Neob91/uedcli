@@ -525,12 +525,20 @@ measurement, stores it in typed fields, and bakes it (`brush apply-transform`) �
   game-compatible: the v68/v69 version gap is a red herring, the spawn failure was 100% the missing
   CSG. (Native BSP-node check: `umodel_parser.parse_model_serial` → `len(nodes)==0` is the offline
   tell that a build is solid/uncarved.)
-- `EDIT PASTE` drift: +32uu on all three axes (copy has no offset). uedcli pre-subtracts 32.
+- `EDIT PASTE` drift: +32uu on all three axes, on EVERY actor in the pasted clipboard — not
+  brush-specific. Confirmed live 2026-09-15 pasting a mixed point-actor + brush clipboard in one
+  `EDIT PASTE`: both drifted identically (copy has no offset). uedcli pre-subtracts 32 for its own
+  brush re-add (`writes._re_add`); this section's other rules only ever exercised the brush case,
+  which is why the drift was previously documented brush-only — point actors go via
+  `MAP IMPORTADD`, which does not drift, so `writes._re_add` never pastes one and never needed to.
   ⚠️ The compensation belongs to the paste, not to the geometry: a `(cx−32, …)` placement in
   editor-driving code is a cube that lands at `(cx, …)` in world space. Reading such an offset
   as authored geometry and reproducing it on a non-paste path (e.g. a native port, or
   `BRUSH IMPORT`, which does not drift) misplaces the brush by 32uu — this actually happened
-  to the intersect/deintersect spec.
+  to the intersect/deintersect spec. Any OTHER caller that hands a real UED22 a clipboard to paste
+  (e.g. a GUI-sourced copy) sees the same uniform +32uu on the whole selection and should NOT
+  pre-compensate — that would make it paste differently from any other UED22 paste, which is the
+  actual surprise (spike `dev/docs/spikes/2026-09-15-gui-copy-paste-ued22-parity/`).
 - Emit ordering (fixed bug): the actor's `Brush=Model'..'` reference must be emitted
   after the `Begin Brush…End Brush` block (the editor's own order). Before the block → the
   actor binds to an undefined model → unbound, unselectable brush. Omitting it entirely

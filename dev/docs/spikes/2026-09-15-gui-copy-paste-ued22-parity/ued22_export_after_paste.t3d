@@ -1,0 +1,108 @@
+Begin Map
+Begin Actor Class=LevelInfo Name=LevelInfo1
+     TimeSeconds=18.685253
+     AIProfile(0)=3649
+     Level=LevelInfo'MyLevel.LevelInfo1'
+     Tag="LevelInfo"
+     Region=(Zone=LevelInfo'MyLevel.LevelInfo1',iLeaf=-1)
+     Name="LevelInfo1"
+End Actor
+Begin Actor Class=Brush Name=Brush1
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Level=LevelInfo'MyLevel.LevelInfo1'
+     Tag="Brush"
+     Region=(Zone=LevelInfo'MyLevel.LevelInfo1',iLeaf=-1)
+    Begin Brush Name=Brush
+       Begin PolyList
+       End PolyList
+    End Brush
+     Brush=Model'MyLevel.Brush'
+     Name="Brush1"
+End Actor
+Begin Actor Class=Brush Name=VerifyRoom
+     CsgOper=CSG_Add
+     MainScale=(SheerAxis=SHEER_ZX)
+     PostScale=(SheerAxis=SHEER_ZX)
+     Level=LevelInfo'MyLevel.LevelInfo1'
+     Tag="Brush"
+     Region=(Zone=LevelInfo'MyLevel.LevelInfo1',iLeaf=-1)
+     Location=(X=532.000000,Y=332.000000,Z=232.000000)
+     bSelected=True
+    Begin Brush Name=Model_VerifyRoom
+       Begin PolyList
+          Begin Polygon Item=OUTSIDE Link=0
+             Origin   +00128.000000,+00000.000000,+00000.000000
+             Normal   +00001.000000,+00000.000000,+00000.000000
+             TextureU +00000.000000,+00001.000000,+00000.000000
+             TextureV +00000.000000,+00000.000000,+00001.000000
+             Vertex   +00128.000000,-00128.000000,-00064.000000
+             Vertex   +00128.000000,+00128.000000,-00064.000000
+             Vertex   +00128.000000,+00128.000000,+00064.000000
+             Vertex   +00128.000000,-00128.000000,+00064.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Link=1
+             Origin   -00128.000000,+00000.000000,+00000.000000
+             Normal   -00001.000000,+00000.000000,+00000.000000
+             TextureU +00000.000000,+00001.000000,+00000.000000
+             TextureV +00000.000000,+00000.000000,-00001.000000
+             Vertex   -00128.000000,+00128.000000,-00064.000000
+             Vertex   -00128.000000,-00128.000000,-00064.000000
+             Vertex   -00128.000000,-00128.000000,+00064.000000
+             Vertex   -00128.000000,+00128.000000,+00064.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Link=2
+             Origin   +00000.000000,+00128.000000,+00000.000000
+             Normal   +00000.000000,+00001.000000,+00000.000000
+             TextureU +00001.000000,+00000.000000,+00000.000000
+             TextureV +00000.000000,+00000.000000,-00001.000000
+             Vertex   +00128.000000,+00128.000000,-00064.000000
+             Vertex   -00128.000000,+00128.000000,-00064.000000
+             Vertex   -00128.000000,+00128.000000,+00064.000000
+             Vertex   +00128.000000,+00128.000000,+00064.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Link=3
+             Origin   +00000.000000,-00128.000000,+00000.000000
+             Normal   +00000.000000,-00001.000000,+00000.000000
+             TextureU +00001.000000,+00000.000000,+00000.000000
+             TextureV +00000.000000,+00000.000000,+00001.000000
+             Vertex   -00128.000000,-00128.000000,-00064.000000
+             Vertex   +00128.000000,-00128.000000,-00064.000000
+             Vertex   +00128.000000,-00128.000000,+00064.000000
+             Vertex   -00128.000000,-00128.000000,+00064.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Link=4
+             Origin   +00000.000000,+00000.000000,+00064.000000
+             Normal   +00000.000000,+00000.000000,+00001.000000
+             TextureU +00001.000000,+00000.000000,+00000.000000
+             TextureV +00000.000000,+00001.000000,+00000.000000
+             Vertex   -00128.000000,-00128.000000,+00064.000000
+             Vertex   +00128.000000,-00128.000000,+00064.000000
+             Vertex   +00128.000000,+00128.000000,+00064.000000
+             Vertex   -00128.000000,+00128.000000,+00064.000000
+          End Polygon
+          Begin Polygon Item=OUTSIDE Link=5
+             Origin   +00000.000000,+00000.000000,-00064.000000
+             Normal   +00000.000000,+00000.000000,-00001.000000
+             TextureU +00001.000000,+00000.000000,+00000.000000
+             TextureV +00000.000000,-00001.000000,+00000.000000
+             Vertex   -00128.000000,+00128.000000,-00064.000000
+             Vertex   +00128.000000,+00128.000000,-00064.000000
+             Vertex   +00128.000000,-00128.000000,-00064.000000
+             Vertex   -00128.000000,-00128.000000,-00064.000000
+          End Polygon
+       End PolyList
+    End Brush
+     Brush=Model'MyLevel.Model_VerifyRoom'
+     Name="VerifyRoom"
+End Actor
+Begin Actor Class=Light Name=VerifyLight
+     Level=LevelInfo'MyLevel.LevelInfo1'
+     Tag="VerifySpike"
+     Region=(Zone=LevelInfo'MyLevel.LevelInfo1',iLeaf=-1)
+     Location=(X=1032.000000,Y=2032.000000,Z=332.000000)
+     bSelected=True
+     LightBrightness=180
+     Name="VerifyLight"
+End Actor
+End Map

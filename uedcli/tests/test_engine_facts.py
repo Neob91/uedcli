@@ -1337,3 +1337,48 @@ def test_pf_fakebackdrop_lighting_and_showflags_facts():
         off = _rva_to_offset(unrealed, va - unrealed_base)
         got = unrealed[off:off + len(want) // 2].hex()
         assert got == want, f"unrealed.exe {va:#x} ({what}): want {want}, found {got}"
+
+
+# --------------------------------------------------------- GUI clipboard-copy paste drift
+# Spike `dev/docs/spikes/2026-09-15-gui-copy-paste-ued22-parity/` (live 2026-09-15): the
+# `EDIT PASTE +32uu drift` (`quirks.md` "How brushes enter the level") applies to EVERY actor in
+# the pasted clipboard, not only brushes -- generalizing that doc's brush-only wording, never
+# exercised on a point actor before since `writes._re_add` pastes only brushes (point actors go
+# via `MAP IMPORTADD`, which does not drift). Settles that a GUI clipboard-copy endpoint must NOT
+# pre-shift by -32uu the way `writes._shift_for_paste` does for uedcli's own automated re-add: a
+# real UED22 paste of a mixed selection drifts every actor by the same uniform amount, preserving
+# relative placement, and reproducing that (not masking it) is what "compatible with real UED22"
+# means for a human paste.
+
+_COPY_PASTE = Path(__file__).resolve().parents[2] / "dev" / "docs" / "spikes" / \
+    "2026-09-15-gui-copy-paste-ued22-parity"
+
+
+def test_edit_paste_drift_applies_to_every_actor_kind_not_just_brushes():
+    from decimal import Decimal
+
+    from uedcli.model import parse_t3d
+
+    fetched = parse_t3d((_COPY_PASTE / "fetched_from_endpoint.t3d").read_text())
+    exported = parse_t3d((_COPY_PASTE / "ued22_export_after_paste.t3d").read_text())
+
+    room_before = fetched.actors["VerifyRoom"]
+    room_after = exported.actors["VerifyRoom"]
+    light_before = fetched.actors["VerifyLight"]
+    light_after = exported.actors["VerifyLight"]
+
+    drift = Decimal(32)
+    for before, after, label in [(room_before, room_after, "VerifyRoom"),
+                                  (light_before, light_after, "VerifyLight")]:
+        for axis, (b, a) in enumerate(zip(before.location, after.location)):
+            assert a - b == drift, (
+                f"{label} axis {axis}: expected the uniform +32uu EDIT PASTE drift, "
+                f"got {b} -> {a}")
+
+    # Geometry and properties survive the round trip (only Location drifts).
+    assert len(room_after.brush.polys) == len(room_before.brush.polys) == 6
+    assert room_after.brush is not None
+    assert any(k == "CsgOper" and v == "CSG_Add" for k, v in room_after.props)
+    light_props = dict(light_after.props)
+    assert light_props["LightBrightness"] == "180"
+    assert light_props["Tag"] == "VerifySpike"
