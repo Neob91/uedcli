@@ -79,6 +79,22 @@ out as more machinery than a single feature needs — plain code reuse (the CLI 
 handler both call the same core function) solves the actual problem. Revisit only if the same
 duplication concern recurs across enough features to justify the fixed cost of a generic mechanism.
 
+## Testing strategy
+
+Two complementary methods, confirmed. Neither requires shipping Python in the final binary
+(test-time and runtime dependencies are separate):
+
+- **Differential testing (primary).** For each verb being ported, run both `old/`'s compiled binary
+  and the new Rust implementation against identical inputs and diff stdout/exit code/produced T3D
+  bytes. As a verb passes consistently, retire its `old/` implementation from the dispatch table.
+  Catches drift on arbitrary new inputs, not just recorded ones. Depends on `old/` staying a
+  trustworthy, unchanging oracle — see "`old/` stays frozen" above.
+- **Fixture extraction (complementary).** Extract the existing golden test input/expected-output
+  pairs (T3D golden files, byte-parity captures) into data fixtures once, then point `cargo test` at
+  the same fixtures — no live `old/` binary needed at test time, but only covers cases someone
+  already thought to test. This is what preserves coverage once `old/` is eventually retired and
+  there's nothing left to differential-test against.
+
 ## Bootstrap sequence (walking skeleton)
 
 1. **PR #0 — the `old/` move.** Move everything to `old/`. Run `bin/build-standalone` inside
@@ -86,19 +102,10 @@ duplication concern recurs across enough features to justify the fixed cost of a
 2. **PR #1 — bootstrap.** A minimal Rust `uedcli` binary that does nothing but subprocess-strangle:
    every verb proxies to `old/`'s compiled binary. Proven against a couple of real verbs that
    proxying is byte-identical to running `old/` directly — a sanity check on the plumbing itself,
-   not yet the broader per-verb validation method (see Open questions below).
+   distinct from the differential-testing methodology above, which applies once real porting starts.
 3. **PR #2 — first vertical slice.** Pick one small, self-contained, low-dependency verb — a single
    brush builder is a good candidate (pure function, no editor, no git-trunk I/O) — and port it end
-   to end for real. This validates the whole shape (arg parsing → model → emit → dispatch) before
-   scaling to more verbs. **How this port gets proven correct is the open question below** — decide
-   it before this PR, not during it.
-4. **Every PR after that**: one verb (or a tight cluster) at a time, same pattern — port, prove
-   correct (method per the open question below), retire that verb from `old/`'s dispatch table once
-   proven.
-
-## Open questions
-
-- `questions/testing-strategy.md` — how each *ported* verb (PR #2 onward) gets proven correct
-  against `old/` is proposed (differential testing + fixture extraction) but not yet confirmed. This
-  is distinct from PR #1's proxy-fidelity check above, which only confirms the dispatch plumbing
-  itself is lossless before any porting happens.
+   to end for real, proven via differential testing against `old/`. This validates the whole shape
+   (arg parsing → model → emit → dispatch) before scaling to more verbs.
+4. **Every PR after that**: one verb (or a tight cluster) at a time, same pattern — port,
+   differential-test against `old/`, retire that verb from `old/`'s dispatch table once proven.
