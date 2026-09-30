@@ -59,6 +59,16 @@ Same idea on the GUI side: the new backend's unported API routes proxy to `old/`
 name is set yet for the new GUI-backend component — whether it's a separate binary or a subcommand
 of `uedcli` is undecided.)
 
+## Rejected: embedded-interpreter strangler
+
+Considered as the alternative to subprocess-strangler: instead of shelling out to `old/`'s compiled
+binary, the new Rust binary would embed a CPython interpreter (the reverse of how `uedcli-native`
+was called from Python today) and call `old/`'s package in-process for unported verbs. Trade-off
+was single-binary-throughout vs. simplicity: embedding keeps one binary the whole migration but
+needs `libpython` present, complicates cross-compilation, and requires managing the GIL from Rust;
+subprocess needs two artifacts during the migration (the new binary + the `old/` build) but is far
+simpler to build and reason about. Owner picked subprocess strangler.
+
 ## Review discipline
 
 Every PR reviewed by the owner before merge — the Goal section's standing rule for this whole
