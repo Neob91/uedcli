@@ -1,7 +1,7 @@
 +++
 priority = "p?"
 kind = "implement"
-summary = "Full rewrite of uedcli (CLI + GUI backend) in Rust, strangler-fig migration from a frozen old/"
+summary = "Full rewrite of uedcli (CLI + GUI backend) in Rust plus a web/ refactor, strangler-fig migration from a frozen old/"
 +++
 
 # Rewrite uedcli in Rust

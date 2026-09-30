@@ -10,9 +10,10 @@ mechanical port — a from-scratch rebuild that the owner controls line by line.
 
 - Python is eliminated entirely: no interpreter, no venv, no PyO3 boundary. The CLI, its argument
   parsing, and the GUI's HTTP backend are all Rust.
-- `web/` (the TypeScript/React GUI frontend) is unaffected in language — it keeps calling the same
-  `/api/...` surface, just served by the new Rust backend instead of `uedcli/serve/`. Nothing about
-  the frontend's own code changes as part of this rewrite.
+- `web/` (the TypeScript/React GUI frontend) is unaffected in **language** — it stays TypeScript, no
+  Rust rewrite of it. Its code is still in scope for a refactor as part of this effort, and it keeps
+  calling the same `/api/...` surface, served by the new Rust backend instead of `uedcli/serve/`.
+  What that refactor covers and why: see `questions/web-refactor-scope.md`.
 - `uned/` (the Docker/Wine UnrealEd harness) is untouched. It stays until uedcli is feature-complete
   under the new implementation, then gets removed in a separate, later change.
 
@@ -20,10 +21,10 @@ mechanical port — a from-scratch rebuild that the owner controls line by line.
 
 In scope: everything under the current `uedcli/` package (CLI, dispatch, T3D/model logic, the
 editor driver, the offline package/schema decoders), including `uedcli/serve/` (the GUI's HTTP
-backend).
+backend). Also in scope: a refactor of `web/`'s own code — but as a TypeScript refactor, not a
+language rewrite; see `questions/web-refactor-scope.md` for what that covers.
 
-Out of scope for this rewrite: `web/`'s own code (TypeScript, unchanged), `uned/` (infra, untouched
-until later removal).
+Out of scope for this rewrite: `uned/` (infra, untouched until later removal).
 
 ## Repo restructure
 
