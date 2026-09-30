@@ -62,6 +62,14 @@ Every PR that lands code in the new tree is reviewed by the owner before merge. 
 uniformly — a freshly written verb and a verb ported near-verbatim from `old/` both go through
 review as their own PR. Nothing is grandfathered in.
 
+## `old/` stays frozen
+
+`old/` is never patched once PR #0 lands it, for the whole migration — no exceptions, even for a
+confirmed real bug found in its behavior. If a real bug turns up in `old/` during the migration, it
+is not fixed there; instead, a `TODO` comment describing the bug is added at the relevant point in
+the new Rust codebase, so it's tracked rather than silently inherited or forgotten, and gets fixed
+for real once that verb is properly ported (not papered over in the code being phased out).
+
 ## Rejected: a shared CLI/GUI registry
 
 Considered and dropped. The original ask was narrower than it first sounded: avoid duplicating
@@ -94,6 +102,3 @@ duplication concern recurs across enough features to justify the fixed cost of a
   against `old/` is proposed (differential testing + fixture extraction) but not yet confirmed. This
   is distinct from PR #1's proxy-fidelity check above, which only confirms the dispatch plumbing
   itself is lossless before any porting happens.
-- `questions/old-during-migration.md` — whether `old/` stays strictly frozen for the whole migration,
-  or can be patched if a real bug surfaces in it, is undecided. Matters because differential testing
-  only works if `old/` is trustworthy as an oracle.
