@@ -33,8 +33,8 @@
 # unless the caller passes their own `-n`/`--dist`.
 set -euo pipefail
 source "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/_venv.sh"
-ensure_venv
-ensure_native_ext                      # builds uedcli_native (abi3 wheel) in a container, into the venv
+check_venv                             # fails fast with "run old/bin/build first" if not provisioned
+check_native_ext
 cd "$UEDCLI_DIR"                       # pytest rootdir/testpaths resolve here
 
 rc=0

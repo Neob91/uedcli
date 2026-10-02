@@ -1,17 +1,24 @@
-# _venv.sh — HOST-NATIVE Python for uedcli dev, with the Rust extension built in a container.
+# _venv.sh — HOST-NATIVE Python for uedcli dev. Shared paths/constants plus two kinds of function:
+# `ensure_*` (provision — builds/downloads things, needs Docker) used ONLY by old/bin/build (and
+# the legacy bin/build-standalone); `check_*` (read-only — fails fast with "run old/bin/build
+# first" instead of provisioning) used by bin/uedcli + bin/test, so just running the CLI never
+# needs Docker or network, only what build already put on disk.
 #
-# uedcli (the CLI) and pytest run on the HOST in a Python 3.12 venv — Python 3 is on most hosts, and
-# host-native means native access to asset dirs, no dev-container path juggling, and the CLI reaches
-# the docker daemon directly to drive the editor/game runtime containers. What ISN'T on most hosts is
-# Rust, so the ONE thing that needs a container is building `uedcli_native`: `ensure_native_ext`
-# builds the abi3 wheel in a Docker image (Rust + libpython) and pip-installs it into the venv, and
-# `run_cargo_test` runs the goldens there. Requires `python3.12` on PATH and Docker with the
-# `buildx` plugin (bundled by default in Docker 23+/Desktop). The build goes through `docker
-# buildx build` (context upload + `RUN --mount=type=cache` + the local exporter, `dev-container/
-# build.Dockerfile`), never a bind mount — a bind mount needs the source path to exist on the
-# DAEMON's own filesystem, which a remote/sibling daemon (`DOCKER_HOST` pointing at a separate
-# container) has no way to see. Owner ruling 2026-08-06; `dev/docs/dev-runtime.md`. Sourced by
-# bin/uedcli + bin/test.
+# The venv's Python comes from `uv`'s managed Python (`python-build-standalone`) — statically
+# linked, no `libpython.so` dependency (confirmed via `ldd`: only base-system libs every Linux host
+# already has) — fetched inside a container (`ghcr.io/astral-sh/uv`), never needing host
+# python3.12. Rejected first: creating the venv inside a plain `python:3.12-slim` container — its
+# `python` either symlinks to a container-only path or (with `--copies`) copies a binary
+# dynamically linked against `libpython3.12.so.1.0` (also container-only) — neither runs on the
+# host afterward. `uv`'s managed builds avoid this; the ONE remaining wrinkle is that creating the
+# venv INSIDE a container still bakes in the CONTAINER's view of the bind-mounted path (`/io/...`)
+# into its symlinks, so `ensure_venv` rewrites them to the real host path afterward.
+#
+# uedcli (the CLI) and pytest run on the HOST in this venv — host-native means native access to
+# asset dirs wherever they are on the host (not just inside a project dir), and the CLI reaches the
+# docker daemon directly to drive the editor/game runtime containers. `uedcli_native` (Rust) is
+# built in a container too (unchanged, already Docker-only). Sourced by bin/uedcli + bin/test +
+# bin/build-standalone + old/bin/build.
 #   UEDCLI_VENV=<dir>       venv location (default .venv)
 #   UEDCLI_VENV_REBUILD=1   force a dep reinstall
 #   UEDCLI_SKIP_NATIVE=1    skip the Rust ext build + cargo test
@@ -22,18 +29,57 @@ VENV="${UEDCLI_VENV:-$UEDCLI_DIR/.venv}"
 PY="$VENV/bin/python"
 _DEPS_MARKER="$VENV/.uedcli-deps"
 _DEPS_SPEC="Pillow>=11 pytest>=8,<9 pytest-xdist>=3,<4 fastapi>=0.115 uvicorn>=0.32 watchfiles>=0.24 httpx>=0.27 websockets>=13"
+_UV_IMAGE="ghcr.io/astral-sh/uv:bookworm-slim"
+_UV_PYTHON_DIR="$UEDCLI_DIR/.cache/uv-python"
+_UV_CACHE_DIR="$UEDCLI_DIR/.cache/uv"
+
+# --- venv: check (fail-fast, no provisioning) vs. ensure (provision, needs Docker) ---------------
+
+check_venv() {
+  [ -x "$PY" ] && [ "$(cat "$_DEPS_MARKER" 2>/dev/null || true)" = "$_DEPS_SPEC" ] \
+    || { echo "uedcli: venv missing or stale — run old/bin/build first" >&2; exit 2; }
+}
 
 ensure_venv() {
   if [ -x "$PY" ] && [ "$(cat "$_DEPS_MARKER" 2>/dev/null || true)" = "$_DEPS_SPEC" ] \
      && [ -z "${UEDCLI_VENV_REBUILD:-}" ]; then
     return 0
   fi
-  command -v python3.12 >/dev/null 2>&1 \
-    || { echo "uedcli: python3.12 is required on PATH (e.g. via pyenv) but was not found." >&2; exit 1; }
-  [ -x "$PY" ] || python3.12 -m venv "$VENV" >&2
-  # shellcheck disable=SC2086
-  "$PY" -m pip install --quiet --disable-pip-version-check --upgrade pip $_DEPS_SPEC >&2 \
-    || { echo "uedcli: venv dependency install failed" >&2; exit 1; }
+  command -v docker >/dev/null 2>&1 \
+    || { echo "uedcli: docker is required to provision the venv." >&2; exit 1; }
+  mkdir -p "$_UV_PYTHON_DIR" "$_UV_CACHE_DIR"
+  rm -rf "$VENV"
+  local rel_venv="${VENV#"$UEDCLI_DIR"/}"
+  # Values go in via -e, never interpolated into the script text: $_DEPS_SPEC holds version specs
+  # like `Pillow>=11`, and interpolating it into a string that's then re-parsed as a NEW script
+  # would have `>=`/`<` read as real shell redirection operators. Expanding $UEDCLI_DEPS_SPEC as a
+  # variable INSIDE the container's own shell is safe — variable expansion is never re-tokenized
+  # for shell operators, only the self-contained SC2086 word-split pip needs.
+  docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+    -e UEDCLI_REL_VENV="$rel_venv" -e UEDCLI_DEPS_SPEC="$_DEPS_SPEC" \
+    -e UV_PYTHON_INSTALL_DIR=/io/.cache/uv-python -e UV_CACHE_DIR=/io/.cache/uv \
+    -v "$UEDCLI_DIR":/io -w /io \
+    "$_UV_IMAGE" sh -c '
+      set -eu
+      uv venv --managed-python --python 3.12 "$UEDCLI_REL_VENV"
+      # shellcheck disable=SC2086
+      uv pip install --python "$UEDCLI_REL_VENV"/bin/python --quiet --upgrade pip \
+        $UEDCLI_DEPS_SPEC
+    ' >&2 \
+    || { echo "uedcli: venv provisioning failed" >&2; exit 1; }
+  # The venv was created with the project dir mounted at /io, so uv baked /io/... into both the
+  # python/python3/python3.12 SYMLINKS and every console-script's SHEBANG line (pip, pytest, every
+  # future entry point an install adds) -- rewrite both to the real host path, or every one of
+  # them is unusable outside a container with that exact mount.
+  local f target
+  for f in "$VENV"/bin/*; do
+    [ -L "$f" ] && target="$(readlink "$f")" && case "$target" in
+      /io/*) ln -sf "$UEDCLI_DIR/${target#/io/}" "$f" ;;
+    esac
+    [ -f "$f" ] && [ ! -L "$f" ] && head -c2 "$f" 2>/dev/null | grep -q '^#!' \
+      && sed -i "1s|^#!/io/|#!$UEDCLI_DIR/|" "$f"
+  done
+  [ -x "$PY" ] || { echo "uedcli: venv python still not runnable after path fixup" >&2; exit 1; }
   printf '%s' "$_DEPS_SPEC" > "$_DEPS_MARKER"
 }
 
@@ -43,6 +89,26 @@ _NATIVE_MARKER="$VENV/.uedcli-native"
 _BUILD_IMAGE="uedcli-rust-build"
 _DOCKERFILE="$UEDCLI_DIR/dev-container/Dockerfile"
 _BUILD_DOCKERFILE="$UEDCLI_DIR/dev-container/build.Dockerfile"
+
+_native_ext_hash() {
+  find "$_NATIVE_DIR" -path "$_NATIVE_DIR/target" -prune -o \( -name '*.rs' -o -name 'Cargo.toml' \) -print \
+    | sort | xargs sha256sum | sha256sum | cut -d' ' -f1
+}
+
+# Read-only: sets UEDCLI_NATIVE_EXT_FRESH, never builds. Mirrors ensure_native_ext's own
+# "default to stale" semantics but with no Docker fallback — bin/uedcli must never trigger a
+# build itself. A stale/missing ext is NOT fatal here: every uedcli_native call site already
+# refuses to run on UEDCLI_NATIVE_EXT_FRESH=0 rather than use a stale build (owner ruling
+# 2026-09-11), so the CLI as a whole still starts; only the verbs that need it are blocked.
+check_native_ext() {
+  export UEDCLI_NATIVE_EXT_FRESH=0
+  [ -n "${UEDCLI_SKIP_NATIVE:-}" ] && return 0
+  [ -d "$_NATIVE_DIR" ] || return 0
+  [ "$(cat "$_NATIVE_MARKER" 2>/dev/null || true)" = "$(_native_ext_hash)" ] \
+    && "$PY" -c "import uedcli_native" >/dev/null 2>&1 \
+    && export UEDCLI_NATIVE_EXT_FRESH=1
+  return 0
+}
 
 _ensure_build_image() {
   command -v docker >/dev/null 2>&1 || return 1
@@ -55,16 +121,9 @@ _ensure_build_image() {
 }
 
 ensure_native_ext() {
-  # UEDCLI_NATIVE_EXT_FRESH gates `uedcli.native_ext.import_native()` (every `uedcli_native` call
-  # site) against running a STALE build with no signal at the point of use — owner ruling,
-  # 2026-09-11. Only an explicit "0" blocks; both early-return cases below (native ext
-  # deliberately skipped, or the source dir genuinely absent) leave it UNSET rather than "0", so
-  # they read as "no verdict" (today's behavior) rather than "confirmed stale".
   [ -n "${UEDCLI_SKIP_NATIVE:-}" ] && return 0
   [ -d "$_NATIVE_DIR" ] || return 0
-  local hash
-  hash="$(find "$_NATIVE_DIR" -path "$_NATIVE_DIR/target" -prune -o \( -name '*.rs' -o -name 'Cargo.toml' \) -print \
-    | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)"
+  local hash; hash="$(_native_ext_hash)"
   if [ "$(cat "$_NATIVE_MARKER" 2>/dev/null || true)" = "$hash" ] \
      && "$PY" -c "import uedcli_native" >/dev/null 2>&1; then
     export UEDCLI_NATIVE_EXT_FRESH=1
@@ -121,8 +180,8 @@ ensure_wasm_artifact() {
   # Past this point the existing artifact (if any) is confirmed STALE or MISSING. Remove the
   # marker FIRST, before attempting a rebuild -- this is the refuse-at-use signal spec §5 requires
   # (mirroring ensure_native_ext's own "default to stale, only flip to fresh on real success"
-  # pattern at `_venv.sh:72-75`): if the rebuild below fails for ANY reason, no later check can
-  # mistake the old bytes for current ones, because the marker they'd be compared against is gone.
+  # pattern): if the rebuild below fails for ANY reason, no later check can mistake the old bytes
+  # for current ones, because the marker they'd be compared against is gone.
   rm -f "$_WASM_MARKER"
   if ! _ensure_build_image; then
     echo "uedcli: docker not available -- WASM artifact missing/stale; npm test/build will fail" >&2
@@ -138,9 +197,9 @@ ensure_wasm_artifact() {
     -f "$_BUILD_DOCKERFILE" "$_NATIVE_DIR" >&2 \
     || { echo "uedcli: resolve-wasm build failed" >&2; return 1; }
   # A zero-exit `docker buildx build` doesn't guarantee the expected file landed (a renamed
-  # wasm-bindgen output, an empty export stage) -- mirror ensure_native_ext's own guard
-  # (`_venv.sh:99-100`, `[ -n "$whl" ] || { …; return 0; }`) rather than trusting the exit code
-  # alone; write the marker ONLY once the real file is confirmed present.
+  # wasm-bindgen output, an empty export stage) -- mirror ensure_native_ext's own guard rather
+  # than trusting the exit code alone; write the marker ONLY once the real file is confirmed
+  # present.
   [ -f "$_WASM_OUT/resolve_wasm_bg.wasm" ] \
     || { echo "uedcli: resolve-wasm build produced no artifact at $_WASM_OUT/resolve_wasm_bg.wasm" >&2; return 1; }
   printf '%s' "$hash" > "$_WASM_MARKER"

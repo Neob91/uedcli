@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# old/bin/build — provisions everything old/bin/uedcli + bin/test need to just work afterward with
+# NO further host dependency beyond what's on disk: the Python venv, the Rust native extension +
+# wasm artifact, the web frontend. Docker is the ONLY host tool required — the Python venv and the
+# web build both run inside containers too (not just the Rust build, which already did). Every
+# dependency and cache lives inside the project dir: .venv/, .cache/uv*/, .cache/npm/,
+# web/node_modules/, uedcli-native/target/ — nothing global.
+#   UEDCLI_SKIP_WEB=1   skip the web/ build
+set -euo pipefail
+UEDCLI_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+cd "$UEDCLI_DIR"
+
+command -v docker >/dev/null 2>&1 \
+  || { echo "old/bin/build: docker is required (it's the only host tool this needs)" >&2; exit 1; }
+
+# shellcheck source=bin/_venv.sh
+source "$UEDCLI_DIR/bin/_venv.sh"
+ensure_venv
+ensure_native_ext
+ensure_wasm_artifact
+
+if [ -z "${UEDCLI_SKIP_WEB:-}" ]; then
+  _NODE_IMAGE="node:22-slim"
+  _NPM_CACHE="$UEDCLI_DIR/.cache/npm"
+  mkdir -p "$_NPM_CACHE"
+  # --ignore-scripts on the build step: web/package.json's own `prebuild` hook shells out to
+  # bin/ensure_wasm.sh, which needs Docker -- unavailable from inside THIS container. Harmless to
+  # skip here because ensure_wasm_artifact (above) already refreshed the same artifact on the
+  # host, before this container ever starts.
+  docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
+    -v "$UEDCLI_DIR/web":/io -v "$_NPM_CACHE":/npmcache -w /io \
+    "$_NODE_IMAGE" sh -c '
+      set -eu
+      npm --cache /npmcache ci
+      npm --cache /npmcache run build --ignore-scripts
+    ' >&2 \
+    || { echo "old/bin/build: web build failed" >&2; exit 1; }
+fi
+
+echo "old/bin/build: done -- venv at .venv, native ext installed, web/dist built" >&2
