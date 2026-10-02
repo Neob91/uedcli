@@ -48,15 +48,17 @@ Always ask where to implement a change: a feature branch on a git worktree, the 
   is kept for backward compatibility. When you remove or rename a flag, verb, option value, output
   format, or code path, delete it outright in the change that adds the replacement. Never a
   deprecated alias, a no-op flag, a migration-error shim, dual-format support, or an "old way"
-  branch.
+  branch. (This is about the CLI's own external surface — it doesn't apply to the rewrite's
+  subprocess-strangler fallback to `old/`, which is migration scaffolding, not back-compat; see
+  @dev/epics/refactor.md.)
 - No fallbacks, and no silent half-answers, for any command or script, unless the owner explicitly
-  asked for or agreed to one. A command that can't fully satisfy a request exits with a clear error
-  naming the offending value — never a partial result plus a warning that scrolls away, never a
-  substituted default for something it couldn't resolve. Never switch behavior on the environment
-  either: a verb does the same thing on every host — same code path, same output — never branching
-  on CPU arch, OS, an env var, or a tool's presence/absence to pick a different implementation. When
-  an approach is specified (e.g. a dockerized setup), it is the only path: a missing host tool is a
-  broken host to fix, surfaced as a clear error, never a reason to silently keep a second code path.
+  asked for or agreed to one. A command that can't fully satisfy a request exits 2, naming the
+  offending value — never a partial result plus a warning that scrolls away, never a substituted
+  default for something it couldn't resolve. Never switch behavior on the environment either: a verb
+  does the same thing on every host — same code path, same output — never branching on CPU arch, OS,
+  an env var, or a tool's presence/absence to pick a different implementation. When an approach is
+  specified (e.g. a dockerized setup), it is the only path: a missing host tool is a broken host to
+  fix, surfaced as a clear error, never a reason to silently keep a second code path.
 - Never let a panic reach the user. A bad input exits non-zero with a clear message naming the
   offending value. Cover each path with a regression test.
 - Every command, flag, and argument needs a real help string that says what it does, so `--help` is
@@ -67,6 +69,8 @@ Always ask where to implement a change: a feature branch on a git worktree, the 
     go to stderr; add `--json` where a script needs structure rather than lines.
   - Mutating/consuming verbs read their target set from stdin via `-`, the sole names source
     (mutually exclusive with names as CLI args); empty stdin is a clean no-op (exit 0), not an error.
+  - Two stdin conventions, disambiguated by verb: a name list vs. a structured-content snippet.
+    Keep them distinct.
   - A verb over a set takes the set, and that is the operation — no flag that merely restates
     "operate on this set."
   - Prefer one stateless `find`/query verb feeding the others over per-verb `--only-*` filter flags.

@@ -17,10 +17,10 @@ being rewritten in Rust, one PR at a time, every PR reviewed by the owner before
 
 ## The `old/` move
 
-Everything that used to be at the repo root — the Python package, the existing `uedcli-native`
-Rust extension, `web/`, `uned/`, all the dev docs — moved into `old/` in one commit (git history
-keeps it all). The new root started genuinely empty: `uedcli-native` wasn't carried over or
-extended in place either — every line that lands in the new tree does so through a reviewed PR,
+Everything that used to be at the repo root — code, both doc trees (`docs/` and `dev/docs/`),
+`CLAUDE.md`, CI config, the lot — moved into `old/` in one commit (git history keeps it all). The
+new root started genuinely empty: the existing `uedcli-native` Rust extension wasn't carried over
+or extended in place either — every line that lands in the new tree does so through a reviewed PR,
 nothing grandfathered in.
 
 ## Migration technique: subprocess strangler
@@ -31,8 +31,18 @@ launcher — it provisions its own venv/native-ext on first use). Argv, stdin, s
 all pass through unchanged.
 
 Considered and rejected: embedding a CPython interpreter in the new binary instead (single binary
-throughout the migration, but needs `libpython` present and complicates cross-compilation) —
-shelling out is simpler to build and reason about.
+throughout the migration, but needs `libpython` present, complicates cross-compilation, and needs
+the Rust side to manage the GIL) — shelling out is simpler to build and reason about.
+
+Also considered and rejected: a Nuitka-compiled standalone binary for `old/` (verified working —
+zero Python/pip/node on the host), in favor of shelling out to `old/bin/uedcli` directly. The
+standalone compile is ~20-30 min and its cache doesn't survive across worktrees, so every fresh
+worktree needing it would pay that cost from scratch. Trade-off: the dev/migration toolchain now
+needs Python+venv+Docker on whoever's host runs it, not just at release time — acceptable, since
+`old/` and the whole strangler setup disappear before anything actually ships.
+
+No name is decided yet for the new GUI-backend component — whether it's a separate binary or a
+subcommand of `uedcli` is still open, same category as the `web/`-sequencing question above.
 
 ## `old/` stays frozen — behavior, not every byte
 
