@@ -21,16 +21,15 @@ fn find_old_uedcli() -> Option<PathBuf> {
 
 fn main() {
     let old_uedcli = find_old_uedcli().unwrap_or_else(|| {
-        eprintln!("uedcli: could not find old/bin/uedcli relative to this binary");
+        let exe = env::current_exe().unwrap_or_default();
+        eprintln!("uedcli: could not find old/bin/uedcli near {}", exe.display());
         std::process::exit(1);
     });
-
-    let args: Vec<_> = env::args_os().skip(1).collect();
 
     // Every verb is unported so far -- proxy everything to old/bin/uedcli. `exec` replaces this
     // process rather than spawning a child, so argv/stdin/stdout/stderr/exit code pass through
     // exactly as if old/bin/uedcli had been invoked directly; it only returns on failure.
-    let err = Command::new(&old_uedcli).args(&args).exec();
+    let err = Command::new(&old_uedcli).args(env::args_os().skip(1)).exec();
     eprintln!("uedcli: failed to exec {}: {err}", old_uedcli.display());
     std::process::exit(1);
 }
