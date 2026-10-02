@@ -38,9 +38,6 @@ def run(args) -> int:
     except actor_survey.ActorHasNoLocationError as e:
         print(f"actor survey: {e}", file=sys.stderr)
         return 2
-    except actor_survey.CollisionPropertyError as e:
-        print(f"actor survey: {e}", file=sys.stderr)
-        return 2
     except uprops.SchemaError as e:
         raise CommandError(
             f"actor survey: cannot resolve a class schema while surveying {args.name!r} — the "
@@ -54,6 +51,4 @@ def run(args) -> int:
         print(line)
     if result.warning:
         print(result.warning, file=sys.stderr)
-    print(f"actor survey: {len(result.raw)} raw fact(s), {len(result.csg)} resolved CSG fact(s) "
-          f"for {args.name}", file=sys.stderr)
     return 0

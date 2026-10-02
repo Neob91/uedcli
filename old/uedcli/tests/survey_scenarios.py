@@ -230,35 +230,6 @@ def room_with_a_flush_mounted_prop() -> Scenario:
     ])
 
 
-def point_actor_pokes_through_two_walls_at_a_room_corner() -> Scenario:
-    """Trunk order: Room, Corner.
-
-    * `Room`   1024^3 Subtract at (0, 0, 0)        -- walls at x = +/-512, y = +/-512
-    * `Corner` a point actor at (500, 500, 0), bCollideActors + bBlockActors, R=16 H=16 --
-               its collision cylinder spans x in [484, 516] and y in [484, 516], so it pokes
-               4uu past BOTH the +X wall (x=512) and the +Y wall (y=512) at once. One actor,
-               two genuinely-crossed faces of the SAME target (`Room`) -- the dedup case
-               `crosses_facts_for`'s (src, dst)-keyed `record()` exists for. Every FALSE-POSITIVE
-               brush-sourced crossing in this suite is gone (this task's own fix); the only
-               genuine one left, Step 12's Semisolid fixture, crosses one face only, so a
-               collision extent is the only remaining source that can supply TWO for this dedup
-               test -- `_source_cells`' non-brush branch never filters it (unaffected by this fix).
-
-    Verified live against the current (pre-Step-4) code: `ctx.faces` for this fixture holds
-    exactly `Room`'s +X and +Y planes, and `penetration_depth` returns `4.0` for BOTH,
-    independently, from the same source cell -- two real `record("Corner", "Room", ...)` calls
-    for the one (src, dst) pair, collapsed by the dict-keyed dedup to the single
-    `CsgFact(src="Corner", dst="Room", relation="crosses")` `crosses_facts_for` actually returns.
-    Nothing about this path touches a brush or `_source_cells`' brush branch, so Step 4's fix
-    changes nothing about it.
-    """
-    coll = [("bCollideActors", "True"), ("bBlockActors", "True"),
-            ("CollisionRadius", "16"), ("CollisionHeight", "16")]
-    return _scenario([
-        brush("Room", (1024, 1024, 1024), (0, 0, 0), csg="subtract"),
-        point("Corner", (500, 500, 0), cls="DeusEx.Keypad1", props=coll),
-    ])
-
 
 # --------------------------------------------------------------------- Task 12's scenarios
 
@@ -988,6 +959,28 @@ def semisolid_partially_overlapping_an_add() -> Scenario:
     ])
 
 
+def semisolid_authored_before_the_add_it_overlaps() -> Scenario:
+    """Same geometry as `semisolid_partially_overlapping_an_add`, trunk order reversed: `Spike`
+    (Semisolid) is authored FIRST in the file, `B` (Add) second. Real engine processing order is
+    unchanged by this -- every world-pass brush (Add/Subtract) still resolves in LOOP 2, every
+    Semisolid in LOOP 3 after it, regardless of file position (`actor_survey.py:737-740`) -- so
+    `Spike` must still cross `B`, never the reverse.
+
+    Pins the ordering bug this fixture was built to catch: an earlier implementation compared CSG
+    order by raw file position, which this exact trunk order inverts (`Spike`'s file index is 0,
+    `B`'s is 1 -- backwards from real LOOP order), and wrongly reported `B --crosses--> Spike`
+    instead.
+
+    Trunk order: Spike, B.
+    * `Spike` 40 x 20 x 20 Semisolid at (110, 80, 80)  -- x in [90, 130], y, z in [70, 90]
+    * `B`     200^3 Add at (0, 0, 0)                   -- x, y, z in [-100, 100]
+    """
+    return _scenario([
+        brush("Spike", (40, 20, 20), (110, 80, 80), poly_flags=PF_SEMISOLID),
+        brush("B", (200, 200, 200), (0, 0, 0)),
+    ])
+
+
 def partial_and_total_carves() -> Scenario:
     """Trunk order: Shell, Room, Block, FirstCut, SecondCut, Gone, Eraser.
 
@@ -1161,10 +1154,3 @@ def level_with_a_location_less_actor() -> Scenario:
     return _scenario([brush("Room", (256, 256, 256), (0, 0, 0)), ghost])
 
 
-def level_with_a_malformed_collision_neighbor() -> Scenario:
-    """Trunk order: Room, Bad. `Bad` is a point actor next to `Room` with a `CollisionRadius` that
-    parses but is out of domain (negative) -- surveying `Room` must raise `CollisionPropertyError`
-    naming `Bad`, not silently invert its AABB or crash on a bare comparison."""
-    bad = point("Bad", (100, 0, 0), props=[("bCollideActors", "True"), ("bBlockActors", "True"),
-                                            ("CollisionRadius", "-30")])
-    return _scenario([brush("Room", (256, 256, 256), (0, 0, 0)), bad])

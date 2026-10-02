@@ -85,48 +85,6 @@ def test_nearby_point_actors_finds_a_light_inside_the_surveyed_room():
     assert "Light" in names
 
 
-# ------------------------------------------------------------- review round: malformed collision values
-
-def test_collision_radius_nan_raises_named_error_not_a_bare_arithmetic_exception():
-    """`Decimal("NaN")` parses without error, so a naive numeric-format check lets it through --
-    and `aabb_intersects`'s comparisons then raise a bare `decimal.InvalidOperation`. The malformed
-    value must be caught and named before it ever reaches that comparison."""
-    actor = scen.point("Bad", (0, 0, 0),
-                        props=[("bCollideActors", "True"), ("bBlockActors", "True"),
-                               ("CollisionRadius", "NaN")])
-    with pytest.raises(actor_survey.CollisionPropertyError):
-        actor_survey.region_of(actor, scen.stub_defaults())
-
-
-def test_collision_radius_infinity_raises_instead_of_producing_an_unbounded_region():
-    """`Infinity` parses and compares fine, so left unguarded it would silently defeat the whole
-    bounded-cost guarantee this feature exists for."""
-    actor = scen.point("Bad", (0, 0, 0),
-                        props=[("bCollideActors", "True"), ("bBlockActors", "True"),
-                               ("CollisionRadius", "Infinity")])
-    with pytest.raises(actor_survey.CollisionPropertyError):
-        actor_survey.region_of(actor, scen.stub_defaults())
-
-
-def test_collision_radius_negative_raises_instead_of_inverting_the_aabb():
-    """A negative radius would silently build an inverted (lo > hi) box that `aabb_intersects`
-    still returns True for -- a corrupt fact reported as a normal one."""
-    actor = scen.point("Bad", (0, 0, 0),
-                        props=[("bCollideActors", "True"), ("bBlockActors", "True"),
-                               ("CollisionRadius", "-30")])
-    with pytest.raises(actor_survey.CollisionPropertyError):
-        actor_survey.region_of(actor, scen.stub_defaults())
-
-
-def test_collision_height_out_of_domain_is_also_guarded():
-    """Both extent() call sites in `_collision_half_extent` are guarded, not just the radius one."""
-    actor = scen.point("Bad", (0, 0, 0),
-                        props=[("bCollideActors", "True"), ("bBlockActors", "True"),
-                               ("CollisionRadius", "10"), ("CollisionHeight", "-5")])
-    with pytest.raises(actor_survey.CollisionPropertyError):
-        actor_survey.region_of(actor, scen.stub_defaults())
-
-
 # ------------------------------------------------------------- review round: surveyed actor with no Location
 
 def test_region_of_raises_for_a_non_brush_actor_with_no_location():
@@ -172,49 +130,6 @@ def test_region_of_ignores_collision_radius_without_bblockactors():
     assert hi[2] - lo[2] == Decimal("2")
 
 
-def test_region_of_grows_by_collision_extent_when_actor_blocks_movement():
-    """The same actor, with `bBlockActors` also `True`, DOES grow by its collision cylinder's
-    bounding box: 2 * CollisionRadius in X/Y, 2 * CollisionHeight in Z, plus the pad."""
-    blocker = scen.point("Blocker", (0, 0, 0),
-                          props=[("bCollideActors", "True"), ("bBlockActors", "True"),
-                                 ("CollisionRadius", "64"), ("CollisionHeight", "128")])
-    lo, hi = actor_survey.region_of(blocker, scen.stub_defaults())
-    assert hi[0] - lo[0] == Decimal("130")   # 2*64 + 2*1 pad
-    assert hi[2] - lo[2] == Decimal("258")   # 2*128 + 2*1 pad
-
-
-# ------------------------------------------------------------- review round: absent vs present-but-empty
-
-def test_blocks_movement_present_empty_value_is_not_replaced_by_the_class_default():
-    """An explicit, empty `bCollideActors` ("" -- present, not absent) must NOT be coalesced with a
-    truthy class default. `field_or`'s `is not None` test (mirroring
-    `serve/scene.py::_actor_radii`) is what keeps a present-but-empty value from silently reading
-    as absent."""
-    defaults = scen.defaults_with({"bCollideActors": "True", "bBlockActors": "True"})
-    actor = scen.point("Weird", (0, 0, 0), props=[("bCollideActors", "")])
-    assert actor_survey._blocks_movement(actor, defaults) is False
-
-
-def test_blocks_movement_falls_back_to_the_class_default_when_truly_absent():
-    """The mirror case: an actor that states NEITHER field at all takes both from the class
-    default -- proving the stub actually exercises the class-default branch, not just instance
-    props."""
-    defaults = scen.defaults_with({"bCollideActors": "True", "bBlockActors": "True"})
-    actor = scen.point("Default", (0, 0, 0))
-    assert actor_survey._blocks_movement(actor, defaults) is True
-
-
-# ------------------------------------------------------------- review round: SchemaError propagation
-
-def test_region_of_propagates_schema_error_for_an_unresolvable_class():
-    """`failing_defaults()` models a missing game package -- `region_of` must let `SchemaError`
-    propagate uncaught rather than guessing "does not collide"."""
-    from uedcli import uprops
-    actor = scen.point("Ghost", (0, 0, 0), cls="Unknown.Class")
-    with pytest.raises(uprops.SchemaError):
-        actor_survey.region_of(actor, scen.failing_defaults())
-
-
 # ------------------------------------------------------------- review round: NEIGHBORHOOD_PAD, behaviorally
 
 def test_pad_is_the_exact_selection_threshold():
@@ -254,20 +169,22 @@ def test_raw_relation_reports_encloses_with_the_container_leading():
     assert rel == ("Room", "Pillar", "encloses")
 
 
-def test_raw_relation_reports_overlaps_for_a_subtract_carving_its_add():
+def test_raw_relation_reports_crosses_for_a_subtract_carving_its_add():
+    """`raw:overlaps` renamed `raw:crosses` (spec) -- same mechanism, same fixture."""
     s = scen.niche_carved_into_wall()
     cache: dict = {}
     rel = actor_survey.raw_relation_for("Wall", s.level.actors["Wall"],
                                         "Niche", s.level.actors["Niche"], cache)
-    assert rel == ("Wall", "Niche", "overlaps")
+    assert rel == ("Wall", "Niche", "crosses")
 
 
-def test_raw_relation_reports_meets_for_a_flush_contact():
+def test_raw_relation_reports_touches_for_a_flush_contact():
+    """`raw:meets` renamed `raw:touches` (spec) -- same mechanism, same fixture."""
     s = scen.two_adds_butted_face_to_face(offset=0.0)
     cache: dict = {}
     rel = actor_survey.raw_relation_for("BlockA", s.level.actors["BlockA"],
                                         "BlockB", s.level.actors["BlockB"], cache)
-    assert rel == ("BlockA", "BlockB", "meets")
+    assert rel == ("BlockA", "BlockB", "touches")
 
 
 def test_raw_relation_is_none_for_disjoint_brushes():
@@ -291,13 +208,13 @@ def test_raw_tier_never_reports_carves():
     s = scen.niche_carved_into_wall()
     raw = actor_survey.raw_facts_for(s.level, s.index, "Wall", s.defaults)
     assert not any(f.relation == "carves" for f in raw.facts)
-    assert any(f.relation == "overlaps" for f in raw.facts)
+    assert any(f.relation == "crosses" for f in raw.facts)
 
 
 def test_raw_tier_leads_symmetric_relations_with_the_surveyed_actor():
     s = scen.two_adds_butted_face_to_face(offset=0.0)
     raw = actor_survey.raw_facts_for(s.level, s.index, "BlockB", s.defaults)
-    fact = next(f for f in raw.facts if f.relation == "meets")
+    fact = next(f for f in raw.facts if f.relation == "touches")
     assert fact.src == "BlockB"
 
 
@@ -417,107 +334,6 @@ def test_csg_faces_snaps_noisy_native_solve_output_before_deriving_the_face_plan
     assert all(v[2] == 576.0 for v in face.verts)       # the stored ring is snapped too
 
 
-def test_collision_extent_needs_both_collide_and_block():
-    """`bCollideActors` alone is not a claim about matter: a DataLinkTrigger (R=520), a FlagTrigger
-    (R=630), a Teleporter all set it so they can be touched, block nothing, and are routinely sized
-    to span rooms, walls included. Measured across 1522 collidable shipped actors, the non-blocking
-    ones are 471 of them and carry the entire deep tail — gating them out drops the worst by-design
-    overlap from 436 uu to 64 uu (spike.md §3)."""
-    sc = scen.room_with_a_flush_mounted_prop()
-    assert actor_survey.collision_extent(sc.level.actors["Keypad"], sc.defaults) == (16.0, 16.0)
-    assert actor_survey.collision_extent(sc.level.actors["Trigger"], sc.defaults) is None
-    assert actor_survey.collision_extent(sc.level.actors["Ghost"], sc.defaults) is None
-
-
-def test_region_of_a_point_actor_covers_its_real_collision_extent():
-    """A non-brush actor's shape is its collision cylinder, exactly as a brush's is its own
-    vertices. A cylinder of radius R and half-height H bounds to `Location +/- (R, R, H)` -- the
-    same box a box-shaped volume of those half-extents would -- and then the SAME `NEIGHBORHOOD_PAD`
-    goes on top. Without it `Keypad`'s region would be 2 uu across and the `+X` wall it is mounted
-    flush against (x=512) would fall outside it, so no face of that wall would ever reach
-    `ctx.faces`. `Ghost` has no collision volume, so the same formula gives it the bare padded point
-    box -- the degenerate case, not a special one.
-
-    `Trigger` shows the gate: it sets `bCollideActors` and `CollisionRadius=520` but blocks nothing,
-    so its cylinder is not matter and sizing a 1042-uu region (and solving the neighborhood that
-    selects) off it would buy nothing. Same gate `collision_extent` applies, so the two agree."""
-    from decimal import Decimal
-    sc = scen.room_with_a_flush_mounted_prop()
-    lo, hi = actor_survey.region_of(sc.level.actors["Keypad"], sc.defaults)
-    assert (lo[0], hi[0]) == (Decimal(487), Decimal(521))      # 504 -/+ 16, then -/+ 1 of pad
-    assert actor_survey.region_of(sc.level.actors["Ghost"], sc.defaults) == \
-        ((Decimal(503), Decimal(-1), Decimal(-1)), (Decimal(505), Decimal(1), Decimal(1)))
-    assert actor_survey.region_of(sc.level.actors["Trigger"], sc.defaults) == \
-        ((Decimal(503), Decimal(-1), Decimal(-1)), (Decimal(505), Decimal(1), Decimal(1)))
-
-
-def test_collision_extent_present_empty_value_is_not_replaced_by_the_class_default():
-    """`field(name) or default` would treat an explicitly-present empty `CollisionRadius` ("" --
-    present, not absent) as absent and substitute the class default -- a bug `serve/scene.py
-    ::_actor_radii` already found and fixed with an `is not None` test. Class default `64` would
-    read as a real 64uu radius if coalesced; the correct, uncoalesced read leaves `""` to
-    `_to_decimal` (which can't parse it, so it falls to `0`), so `collision_extent` sees a
-    zero-size radius and returns `None` -- the observable proof the empty value won as-is."""
-    defaults = scen.defaults_with({"bCollideActors": "True", "bBlockActors": "True",
-                                    "CollisionRadius": "64", "CollisionHeight": "64"})
-    actor = scen.point("Weird", (0, 0, 0), props=[("CollisionRadius", "")])
-    assert actor_survey.collision_extent(actor, defaults) is None
-
-
-def test_collision_extent_falls_back_to_the_class_default_when_truly_absent():
-    """The mirror case: an actor that states NEITHER collision field at all takes both from the
-    class default -- proving the stub actually exercises the class-default branch, not just
-    instance props (matching `_blocks_movement`'s own analogous pair, Task 7's review round)."""
-    defaults = scen.defaults_with({"bCollideActors": "True", "bBlockActors": "True",
-                                    "CollisionRadius": "64", "CollisionHeight": "64"})
-    actor = scen.point("Default", (0, 0, 0))
-    assert actor_survey.collision_extent(actor, defaults) == (64.0, 64.0)
-
-
-# --------------------------------------- review round: collision_extent's own malformed-value guard
-
-def test_collision_extent_nan_raises_rather_than_returning_a_nan_extent():
-    """`collision_extent` must reject a malformed `CollisionRadius` exactly as `region_of`'s
-    `_collision_half_extent` already does (the block above) -- both now go through the shared
-    `_validated_extent`. Before the fix, `collision_extent` used a bare float parse with no range
-    check and returned `(nan, 16.0)` here instead of raising, which would have fed NaN sample points
-    into `cylinder_sample_points` -> `any_point_solid`."""
-    actor = scen.point("Bad", (0, 0, 0),
-                        props=[("bCollideActors", "True"), ("bBlockActors", "True"),
-                               ("CollisionRadius", "NaN"), ("CollisionHeight", "16")])
-    with pytest.raises(actor_survey.CollisionPropertyError):
-        actor_survey.collision_extent(actor, scen.stub_defaults())
-
-
-def test_collision_extent_infinity_raises_rather_than_returning_an_infinite_extent():
-    actor = scen.point("Bad", (0, 0, 0),
-                        props=[("bCollideActors", "True"), ("bBlockActors", "True"),
-                               ("CollisionRadius", "Infinity"), ("CollisionHeight", "16")])
-    with pytest.raises(actor_survey.CollisionPropertyError):
-        actor_survey.collision_extent(actor, scen.stub_defaults())
-
-
-def test_collision_extent_negative_radius_raises_rather_than_reading_as_no_collision():
-    """Before the fix, a negative radius failed the `radius <= 0.0` check and returned `None` --
-    silently misclassifying a malformed actor as one with no collision volume at all, instead of
-    naming the bad value."""
-    actor = scen.point("Bad", (0, 0, 0),
-                        props=[("bCollideActors", "True"), ("bBlockActors", "True"),
-                               ("CollisionRadius", "-16"), ("CollisionHeight", "16")])
-    with pytest.raises(actor_survey.CollisionPropertyError):
-        actor_survey.collision_extent(actor, scen.stub_defaults())
-
-
-def test_collision_extent_propagates_a_schema_error_rather_than_guessing():
-    """An unresolvable class means the collision gate cannot be answered. Exit 2 is the caller's job
-    (Task 18); silently treating it as 'does not collide' would be a substituted default."""
-    import pytest
-    from uedcli import uprops
-    sc = scen.room_with_a_flush_mounted_prop()
-    with pytest.raises(uprops.SchemaError):
-        actor_survey.collision_extent(sc.level.actors["Keypad"], scen.failing_defaults())
-
-
 def test_crosses_source_eligibility_follows_the_specs_kind_table():
     sc = scen.kind_table_scenario()
     ci, d = sc.index, sc.defaults
@@ -534,31 +350,6 @@ def test_crosses_target_eligibility_follows_the_specs_kind_table():
           if actor_survey.crosses_target_eligible(sc.level.actors[n], ci)}
     assert {"Adder", "Semi", "Cutter"} <= ok              # Add, Semisolid, Subtract author faces
     assert ok.isdisjoint({"Nonsolid", "Inter", "Deinter", "Door", "Lamp"})
-
-
-def test_cylinder_sample_points_never_leaves_the_cylinder():
-    """The regression against reintroducing box sampling. The engine's collision volume is a
-    cylinder, so no sample may stand further than `radius` from the axis -- a box corner would stand
-    at `radius * sqrt(2)` = 22.6 uu for R=16 and invent penetration into a diagonal wall.
-
-    Hand-checked: 3 Z levels x (1 axis point + 8 ring points) = 27, the same count the box version
-    used. The first ring point is at +X exactly, so an axis-aligned face sees the cylinder's true
-    extreme; that is what keeps the flush-mount depths below exact."""
-    from math import hypot
-    pts = actor_survey.cylinder_sample_points((504.0, 0.0, 0.0), 16.0, 16.0)
-    assert len(pts) == 27
-    assert {round(p[2], 6) for p in pts} == {-16.0, 0.0, 16.0}
-    assert max(round(hypot(p[0] - 504.0, p[1]), 6) for p in pts) == 16.0
-    assert max(round(p[0], 6) for p in pts) == 520.0
-
-
-def test_extent_reaches_solid_is_true_for_a_flush_mounted_prop():
-    import pytest
-    pytest.importorskip("uedcli_native")
-    sc = scen.room_with_a_flush_mounted_prop()
-    ctx = actor_survey.build_context(sc.level, sc.index, "Keypad", sc.defaults)
-    assert actor_survey.extent_reaches_solid(ctx, (504.0, 0.0, 0.0), 16.0, 16.0) is True
-    assert actor_survey.extent_reaches_solid(ctx, (0.0, 0.0, 0.0), 16.0, 16.0) is False
 
 
 def test_build_context_solves_once_and_shares_the_decomposition_cache():
@@ -596,20 +387,35 @@ def test_a_resolved_faces_solid_side_is_determined_by_the_solidity_probe_not_by_
 def test_touches_fires_for_a_carved_shelf_and_names_only_the_immediate_niche():
     """The spec's locality rule, now for `touches`: `Additive4`'s two surviving stubs sit flush
     against `Subtract3`'s own cut planes -- the immediate boundary that carved it -- and never
-    against `Additive2`, however deep the nesting. `crosses` is confirmed silent for this pair
-    entirely (the resolved-matter fix's own regression fixture, Step 2 above, already pins that);
-    this test is the locality half, for the relation that actually fires here.
+    against `Additive2`, however deep the nesting.
 
-    Surveying `Additive4` alone would pass this even by accident: region-clipping keeps `Additive2`'s
-    own faces out of `Additive4`'s survey region entirely. Surveying `Additive2` closes that gap:
-    `Additive2`'s own faces ARE in-region there, and `Additive4`'s stubs sit entirely inside the hole
-    `Subtract3` cut through `Additive2`, nowhere near `Additive2`'s own remaining ring -- so this is
-    the case the immediate-owner attribution exists for, not a region-clipping accident."""
+    `crosses` is NOT silent for this pair anymore, and that's correct under the redesigned spec
+    (`dev/specs/commands/actor-survey.md`, csg:crosses): `Additive4` is authored BEFORE `Subtract3`,
+    so at the moment `Additive4` is inserted, `Additive2`'s "resolved up until right before B" state
+    is its own full, uncarved wall -- `Subtract3`'s niche doesn't exist yet. `Additive4` genuinely
+    pierces that still-intact wall at that instant, so `crosses(Additive4, Additive2)` fires. That
+    `Subtract3` immediately afterward erases both sides of the crossing (carving `Additive4`'s own
+    matter there too) doesn't retroactively erase the fact -- `crosses` is deliberately an
+    at-the-moment relation, not a final-resolved-world one (same tradeoff the spec accepts for
+    `csg:carves`, and distinct from `csg:connects`, which the spec leaves pre-B-snapshot too).
+
+    This test is the locality half, for `touches`: the relation that fires against the immediate
+    carving boundary, never against the deeper nesting.
+
+    Surveying `Additive4` alone would pass the touches-locality half even by accident:
+    region-clipping keeps `Additive2`'s own faces out of `Additive4`'s survey region entirely.
+    Surveying `Additive2` closes that gap: `Additive2`'s own faces ARE in-region there, and
+    `Additive4`'s stubs sit entirely inside the hole `Subtract3` cut through `Additive2`, nowhere
+    near `Additive2`'s own remaining ring -- so this is the case the immediate-owner attribution
+    exists for, not a region-clipping accident."""
     pytest.importorskip("uedcli_native")
     sc = scen.shelf_pokes_through_a_niche_wall()
 
     ctx = actor_survey.build_context(sc.level, sc.index, "Additive4", sc.defaults)
-    assert actor_survey.crosses_facts_for(ctx) == []
+    crosses = actor_survey.crosses_facts_for(ctx)
+    assert any(f.src == "Additive4" and f.dst == "Additive2" for f in crosses)
+    assert not any(f.dst == "Subtract3" for f in crosses), \
+        "Subtract3 is never an eligible crosses source (csg:crosses's B kind list excludes Subtractive)"
     facts = actor_survey.touches_facts_for(ctx)
     assert any(f.src == "Additive4" and f.dst == "Subtract3" for f in facts)
     assert not any(f.dst == "Additive2" for f in facts)
@@ -655,60 +461,19 @@ def test_crosses_fires_for_a_semisolid_partially_overlapping_an_add():
         assert fact is not None, f"surveying {surveyed}"
 
 
-def test_source_cells_snaps_a_noisy_point_actors_location():
-    """Fix 3: `actor.location` is exact Decimal parsed straight from T3D text -- never snapped on
-    read (`model.parse_t3d` is schema-free, architecture.md "Coords") -- so a point actor's Location
-    can carry the same class of authored float noise Bug 1 fixed for brush vertices (same T3D-export
-    provenance). `_source_cells`'s non-brush branch must snap it too, for consistency with the brush
-    path (`decompose_convex`/`csg_faces` both snap their own world verts). Built directly against
-    `_source_cells` (bypassing a full crosses survey, analogous to the existing collision-cylinder
-    `crosses` fixtures' own R=16 Keypad) so this pins the snap itself."""
-    coll = [("bCollideActors", "True"), ("bBlockActors", "True"),
-            ("CollisionRadius", "16"), ("CollisionHeight", "16")]
-    noisy = scen.point("Keypad", (504.000162, 0, 0), cls="DeusEx.Keypad1", props=coll)
-    ctx = SimpleNamespace(defaults=scen.stub_defaults())
-
-    groups = actor_survey._source_cells(ctx, noisy)
-
-    assert groups is not None
-    xs = {v[0] for v in groups[0].vertices}
-    assert max(xs) == 520.0     # snapped 504.0 + R=16, not the noisy 504.000162 + 16
-
-
-def test_crosses_fires_for_a_flush_mounted_collision_extent():
-    """Under the bBlockActors gate, ~12% of physically-blocking shipped actors really are inside
-    solid. The fact is true and is reported.
-
-    `Keypad` sits at x=504 with R=16, and the `+X` wall's face is at x=512. That face only reaches
-    `ctx.faces` because `region_of` covers the actor's real collision extent (Task 7) -- a
-    zero-size point box would leave it 7 uu outside the region."""
+def test_crosses_direction_follows_loop_order_not_file_order():
+    """A Semisolid authored BEFORE the Add it overlaps must still cross it, never the reverse --
+    CSG ordering is LOOP membership (every world-pass brush, then every semisolid), not raw trunk
+    position. Regression for exactly this: an earlier `_csg_order_position` compared raw file
+    position, which this fixture's trunk order (`Spike` first, `B` second) inverts relative to
+    real LOOP order, and wrongly produced `B --crosses--> Spike`."""
     pytest.importorskip("uedcli_native")
-    sc = scen.room_with_a_flush_mounted_prop()
-    ctx = actor_survey.build_context(sc.level, sc.index, "Keypad", sc.defaults)
-    facts = actor_survey.crosses_facts_for(ctx)
-    assert any(f.src == "Keypad" and f.dst == "Room" for f in facts)
-    assert any(f.src == "Keypad" and f.dst == "Room" and f.relation == "crosses" for f in facts)
-
-
-def test_crosses_fires_for_a_point_actor_whose_location_is_outside_the_surveyed_brush():
-    """Direction 2, and the regression for `nearby_point_actors`' extent-aware candidate test
-    (Task 7). `Bracket` sits at x=520, OUTSIDE `Room`'s own padded AABB (x = 513), so a candidate
-    filter reading the bare `Location` drops it from `ctx.points` and this fact disappears when you
-    survey `Room` while still appearing when you survey `Bracket` -- the one-sided pair
-    `crosses_facts_for` is written to rule out. Its collision cylinder spans x in [504, 536], which
-    does meet the region, so the extent-aware test keeps it, and its deepest sample point -- the
-    ring point at +X, at x = 520 + 16 = 536 -- is 24 uu past the `+X` wall's face at x=512.
-
-    `Keypad` is not the case under test here: its `Location` is inside `Room`'s AABB, so the
-    narrower filter would keep it and this direction would look fine."""
-    pytest.importorskip("uedcli_native")
-    sc = scen.room_with_a_flush_mounted_prop()
-    assert Decimal(520) > actor_survey.region_of(sc.level.actors["Room"], sc.defaults)[1][0]
-    ctx = actor_survey.build_context(sc.level, sc.index, "Room", sc.defaults)
-    assert "Bracket" in [a.name for a in ctx.points]
-    facts = actor_survey.crosses_facts_for(ctx)
-    fact = next((f for f in facts if f.src == "Bracket" and f.dst == "Room"), None)
-    assert fact is not None and fact.relation == "crosses"
+    sc = scen.semisolid_authored_before_the_add_it_overlaps()
+    for surveyed in ("Spike", "B"):
+        ctx = actor_survey.build_context(sc.level, sc.index, surveyed, sc.defaults)
+        facts = actor_survey.crosses_facts_for(ctx)
+        assert any(f.src == "Spike" and f.dst == "B" for f in facts), f"surveying {surveyed}"
+        assert not any(f.src == "B" and f.dst == "Spike" for f in facts), f"surveying {surveyed}"
 
 
 def test_crosses_does_not_fire_for_a_non_blocking_trigger_volume():
@@ -716,20 +481,6 @@ def test_crosses_does_not_fire_for_a_non_blocking_trigger_volume():
     sc = scen.room_with_a_flush_mounted_prop()
     ctx = actor_survey.build_context(sc.level, sc.index, "Trigger", sc.defaults)
     assert actor_survey.crosses_facts_for(ctx) == []
-
-
-def test_crosses_dedupes_to_one_fact_per_src_dst_pair():
-    """One actor can genuinely cross TWO distinct faces of the same target at once (a room corner)
-    -- still one relationship, one line. `shelf_pokes_through_a_niche_wall`'s `Additive4` no longer
-    crosses `Subtract3` at all post-fix (Steps 9-11 above), so the dedup case is re-pinned here on a
-    fixture that is a genuine double-crossing instead of the retired false positive."""
-    pytest.importorskip("uedcli_native")
-    sc = scen.point_actor_pokes_through_two_walls_at_a_room_corner()
-    ctx = actor_survey.build_context(sc.level, sc.index, "Corner", sc.defaults)
-    facts = actor_survey.crosses_facts_for(ctx)
-    keys = [(f.src, f.dst, f.relation) for f in facts]
-    assert len(keys) == len(set(keys))
-    assert keys == [("Corner", "Room", "crosses")]
 
 
 # --------------------------------------------------------------------- Task 13: touches
@@ -809,18 +560,21 @@ def test_touches_does_not_fire_at_any_partial_burial_depth(depth):
         assert not any(f.dst == other for f in facts), (depth, name, facts)
 
 
-@pytest.mark.parametrize("prop", ["Keypad", "Door"])
-def test_touches_fires_for_a_point_actor_or_a_mover_resting_on_a_wall(prop):
-    """Neither a point actor's collision cylinder nor a Mover's private model is in world CSG, so
-    neither is in `csg_order` and no last-writer rule over that list can ever name one.
-    `resolved_matter_of` asks the per-actor question instead, which is what lets a non-brush actor
-    lead a `touches` line at all -- the spec's "not source-restricted", and its "a Mover is treated
-    exactly like an Add"."""
+def test_touches_fires_for_a_mover_resting_on_a_wall():
+    """A Mover's private model is a real brush, just outside world CSG, so it's not in `csg_order`
+    and no last-writer rule over that list can ever name one. `resolved_matter_of` asks the
+    per-actor question instead, which is what lets a non-world-CSG brush lead a `touches` line at
+    all -- the spec's "a Mover is treated exactly like an Add".
+
+    `Keypad`, the point-actor half of this fixture's original pair, is out of scope under the
+    redesigned spec (brush-vs-brush only) and is no longer tested here -- point actors carry no
+    polygon for `touches`'s area-contact test now that `CollisionRadius`/`CollisionHeight` handling
+    is gone."""
     pytest.importorskip("uedcli_native")
     sc = scen.props_flush_against_a_room_wall()
-    ctx = actor_survey.build_context(sc.level, sc.index, prop, sc.defaults)
+    ctx = actor_survey.build_context(sc.level, sc.index, "Door", sc.defaults)
     facts = actor_survey.touches_facts_for(ctx)
-    assert any(f.src == prop and f.dst == "Room" for f in facts), facts
+    assert any(f.src == "Door" and f.dst == "Room" for f in facts), facts
     assert not actor_survey.crosses_facts_for(ctx)      # flush, not 1uu into the wall
 
 
@@ -836,17 +590,6 @@ def test_a_non_brush_actor_is_never_the_other_side_of_a_touches_line():
     sc = scen.props_flush_against_a_room_wall()
     ctx = actor_survey.build_context(sc.level, sc.index, "Room", sc.defaults)
     assert actor_survey.touches_facts_for(ctx) == []
-
-
-def test_touches_does_not_fire_for_a_prop_that_reaches_into_the_wall():
-    """The contrast fixture: `room_with_a_flush_mounted_prop`'s `Keypad` is 8uu INTO the solid, so
-    its cylinder claims both sides of the wall face. That is `crosses`, and never `touches`."""
-    pytest.importorskip("uedcli_native")
-    sc = scen.room_with_a_flush_mounted_prop()
-    ctx = actor_survey.build_context(sc.level, sc.index, "Keypad", sc.defaults)
-    assert actor_survey.touches_facts_for(ctx) == []
-    assert any(f.src == "Keypad" and f.dst == "Room"
-               for f in actor_survey.crosses_facts_for(ctx))
 
 
 def test_touches_does_not_fire_for_a_mover_floating_in_the_void():
@@ -1032,14 +775,15 @@ def test_resolved_matter_ignores_the_pooled_solidity_oracle():
 
 
 def test_touches_and_crosses_are_mutually_exclusive_for_one_pair():
-    """Within CSG_TOLERANCE of coincident is `touches`; clearly past it is `crosses`. A pair is
-    never both."""
+    """Within CSG_TOLERANCE of coincident is `touches`; clearly past it is `crosses`. No (src, dst)
+    pair is ever reported as both. `Additive4` is the live example: it crosses `Additive2` and
+    touches `Subtract3`, never the other relation for the other pair."""
     pytest.importorskip("uedcli_native")
-    sc = scen.room_with_a_flush_mounted_prop()
-    ctx = actor_survey.build_context(sc.level, sc.index, "Keypad", sc.defaults)
+    sc = scen.shelf_pokes_through_a_niche_wall()
+    ctx = actor_survey.build_context(sc.level, sc.index, "Additive4", sc.defaults)
     crossed = {(f.src, f.dst) for f in actor_survey.crosses_facts_for(ctx)}
     touched = {(f.src, f.dst) for f in actor_survey.touches_facts_for(ctx)}
-    assert crossed and crossed & touched == set()
+    assert crossed and touched and crossed & touched == set()
 
 
 def test_touches_never_names_a_nonsolid_or_an_intersect_as_the_other_side():
@@ -1994,20 +1738,6 @@ def test_containment_winner_and_contains_facts_for_are_gone():
     assert not hasattr(actor_survey, "_containment_candidates")
 
 
-def test_occupies_and_crosses_both_fire_for_a_point_actor_that_sits_in_a_void_and_pokes_through():
-    # spec: occupies+crosses both kept, they say genuinely different things. Keypad sits well
-    # inside Room's void (occupies) and its collision cylinder reaches 8uu into Room's own wall
-    # (crosses, already pinned by test_crosses_fires_for_a_flush_mounted_collision_extent) --
-    # an existing, unaffected fixture that genuinely demonstrates both at once.
-    pytest.importorskip("uedcli_native")
-    s = scen.room_with_a_flush_mounted_prop()
-    ctx = actor_survey.build_context(s.level, s.index, "Keypad", s.defaults)
-    facts = actor_survey.csg_facts_for(ctx)
-    relations = {(f.src, f.dst, f.relation) for f in facts if f.src == "Keypad"}
-    assert any(r[2] == "crosses" for r in relations)
-    assert ("Keypad", "Room", "occupies") in relations
-
-
 def test_occupies_and_touches_both_fire_for_an_add_flush_against_its_own_carved_walls():
     # an_add_inside_an_enclosing_subtract(clearance=0): Shelf pushed flush against Room's own
     # -X wall -- a real touches fact AND, once Shelf is excluded, Room is still the void's last
@@ -2044,7 +1774,7 @@ def test_carves_is_absent_where_the_subtract_only_stopped_flush():
     assert any(f.dst == "Wall" for f in actor_survey.touches_facts_for(ctx))
     raw = actor_survey.raw_facts_for(sc.level, sc.index, "Room", sc.defaults).facts
     assert not any(f.relation == "carves" for f in raw)
-    assert any(f.src == "Room" and f.dst == "Wall" and f.relation == "meets" for f in raw)
+    assert any(f.src == "Room" and f.dst == "Wall" and f.relation == "touches" for f in raw)
 
 
 def test_carves_never_fires_for_a_subtract_that_precedes_its_victim_in_trunk_order():

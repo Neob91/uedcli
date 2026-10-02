@@ -32,18 +32,18 @@ def _ns(proj, name, tree=None):
     return argparse.Namespace(cmd="actor", sub="survey", project=str(proj), tree=tree, name=name)
 
 
-_RAW_RELATIONS = ("encloses", "overlaps", "meets", "coincides")
+_RAW_RELATIONS = ("encloses", "crosses", "touches", "coincides")
 _CSG_RELATIONS = ("touches", "crosses", "occupies", "carves", "connects")
 
 
-def test_survey_prints_raw_lines_and_a_stderr_summary(tmp_path, monkeypatch, capsys):
+def test_survey_prints_raw_lines_tagged_raw(tmp_path, monkeypatch, capsys):
     proj = _project(tmp_path, monkeypatch, scen.niche_carved_into_wall())
     assert dispatch.dispatch(_ns(proj, "Wall")) == 0
     out = capsys.readouterr()
     raw = [ln for ln in out.out.splitlines()
-           if any(f" --{r}--> " in ln for r in _RAW_RELATIONS)]
+           if any(f" --raw:{r}--> " in ln for r in _RAW_RELATIONS)]
     assert raw
-    assert "raw fact(s)" in out.err
+    assert "fact(s)" not in out.err   # the trailing summary line is gone (spec)
 
 
 def test_survey_unknown_actor_exits_2_naming_it(tmp_path, monkeypatch, capsys):
@@ -59,30 +59,34 @@ def test_survey_subparser_exists_and_takes_a_name_and_tree():
     assert hasattr(ns, "tree")
 
 
-def test_survey_prints_raw_block_then_csg_block_then_a_two_number_summary(
+def test_survey_prints_raw_block_then_csg_block_with_no_trailing_summary(
         tmp_path, monkeypatch, capsys):
     pytest.importorskip("uedcli_native")
     proj = _project(tmp_path, monkeypatch, scen.niche_carved_into_wall())
     assert dispatch.dispatch(_ns(proj, "Wall")) == 0
     out = capsys.readouterr()
     lines = out.out.splitlines()
-    raw = [i for i, ln in enumerate(lines) if any(f" --{r}--> " in ln for r in _RAW_RELATIONS)]
-    csg = [i for i, ln in enumerate(lines) if any(f" --{r}--> " in ln for r in _CSG_RELATIONS)]
+    raw = [i for i, ln in enumerate(lines) if any(f" --raw:{r}--> " in ln for r in _RAW_RELATIONS)]
+    csg = [i for i, ln in enumerate(lines) if any(f" --csg:{r}--> " in ln for r in _CSG_RELATIONS)]
     assert raw and csg
     assert min(csg) > max(raw)
-    assert f"{len(raw)} raw fact(s), {len(csg)} resolved CSG fact(s) for Wall" in out.err
+    assert "fact(s)" not in out.err   # the trailing summary line is gone (spec)
 
 
-def test_survey_never_prints_a_raw_or_csg_line_prefix(tmp_path, monkeypatch, capsys):
-    """No new marker replaces the dropped tier prefix (owner ruling) -- fixed order (raw block,
-    then csg block) plus the blank separator is the only signal."""
+def test_survey_tags_every_relation_with_its_tier(tmp_path, monkeypatch, capsys):
+    """Every relation name is prefixed `raw:`/`csg:` (spec) -- replaces the old design's bare verb
+    plus block ordering as the only tier signal. Fixed order (raw block, then csg block) plus the
+    blank separator between them still holds too."""
     pytest.importorskip("uedcli_native")
     proj = _project(tmp_path, monkeypatch, scen.niche_carved_into_wall())
     assert dispatch.dispatch(_ns(proj, "Wall")) == 0
     lines = capsys.readouterr().out.splitlines()
     assert not any(ln.startswith("raw ") or ln.startswith("csg ") for ln in lines)
-    raw = [i for i, ln in enumerate(lines) if any(f" --{r}--> " in ln for r in _RAW_RELATIONS)]
-    csg = [i for i, ln in enumerate(lines) if any(f" --{r}--> " in ln for r in _CSG_RELATIONS)]
+    relation_lines = [ln for ln in lines if " --" in ln]
+    assert relation_lines
+    assert all(" --raw:" in ln or " --csg:" in ln for ln in relation_lines)
+    raw = [i for i, ln in enumerate(lines) if any(f" --raw:{r}--> " in ln for r in _RAW_RELATIONS)]
+    csg = [i for i, ln in enumerate(lines) if any(f" --csg:{r}--> " in ln for r in _CSG_RELATIONS)]
     assert raw and csg
     assert min(csg) > max(raw)
     assert lines[max(raw) + 1] == ""
@@ -103,26 +107,6 @@ def test_survey_location_less_actor_exits_2_naming_it_not_a_traceback(tmp_path, 
     assert "Ghost" in capsys.readouterr().err
 
 
-def test_survey_malformed_neighbor_collision_exits_2_naming_it_not_a_traceback(
-        tmp_path, monkeypatch, capsys):
-    """`actor_survey.CollisionPropertyError` on a NEIGHBOR (not the surveyed actor itself) must also
-    be mapped to exit 2 -- final-review finding, same missing `except` clause as
-    `ActorHasNoLocationError` above.
-
-    `Bad`'s class has no real schema in this lightweight CLI project (no `.u` binaries), so the
-    collision gate's own `defaults.for_class` call would raise `SchemaError` before ever reaching
-    the malformed `CollisionRadius` -- same reason `test_survey_unresolvable_class_exits_2_not_a_
-    traceback` above substitutes `ClassDefaults`. Using `scen.stub_defaults()` here instead of
-    `failing_defaults()` keeps class resolution trivially successful so the real target
-    (`CollisionPropertyError`) is what actually fires."""
-    pytest.importorskip("uedcli_native")
-    from uedcli.cli.commands.actor import survey as survey_cmd
-    proj = _project(tmp_path, monkeypatch, scen.level_with_a_malformed_collision_neighbor())
-    monkeypatch.setattr(survey_cmd, "ClassDefaults", lambda resolver: scen.stub_defaults())
-    assert dispatch.dispatch(_ns(proj, "Room")) == 2
-    assert "Bad" in capsys.readouterr().err
-
-
 def test_survey_warns_on_a_placed_intersect_and_still_exits_0(tmp_path, monkeypatch, capsys):
     pytest.importorskip("uedcli_native")
     proj = _project(tmp_path, monkeypatch, scen.level_with_a_placed_intersect())
@@ -131,20 +115,7 @@ def test_survey_warns_on_a_placed_intersect_and_still_exits_0(tmp_path, monkeypa
     assert "Inter" in err and "contributes nothing" in err
 
 
-def test_survey_unresolvable_class_exits_2_not_a_traceback(tmp_path, monkeypatch, capsys):
-    """A `uprops.SchemaError` from the collision gate must never reach the user — and must be THIS
-    handler's message, which names the surveyed actor, not `dispatch.py`'s generic
-    `except SchemaError` backstop, which does not.
-
-    The raise comes from `defaults.for_class(...)` inside `survey`, so the test substitutes a
-    class-defaults object whose `for_class` raises — `survey_scenarios.failing_defaults()`, the
-    same helper Task 11's unit test uses. Patching `resources.schema_resolver_for` would prove
-    nothing: it returns a resolver over an empty search path and cannot raise `SchemaError`."""
-    pytest.importorskip("uedcli_native")
-    from uedcli.cli.commands.actor import survey as survey_cmd
-    proj = _project(tmp_path, monkeypatch, scen.room_with_a_flush_mounted_prop())
-    monkeypatch.setattr(survey_cmd, "ClassDefaults", lambda resolver: scen.failing_defaults())
-    assert dispatch.dispatch(_ns(proj, "Keypad")) == 2
-    err = capsys.readouterr().err          # read ONCE: readouterr() drains the buffer
-    assert "Keypad" in err
-    assert "schema" in err
+## test_survey_unresolvable_class_exits_2_not_a_traceback removed: its premise (the collision
+## gate's `defaults.for_class` call) no longer exists -- `region_of`/`survey` never resolve class
+## schema now that CollisionRadius/CollisionHeight handling is gone (spec scope: brush-vs-brush
+## only). `grep -rn "for_class" old/uedcli/actor_survey.py` confirms zero remaining call sites.

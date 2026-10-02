@@ -13,7 +13,7 @@ import math
 from dataclasses import dataclass
 from decimal import Decimal
 
-from . import actorgraph, movers, query, relation
+from . import actorgraph, movers, polyalign, query, relation
 from .normalize import is_builder_brush
 from .texframe import newell
 from .writes import aabb_intersects, actor_bounds
@@ -50,165 +50,33 @@ class ActorHasNoLocationError(Exception):
         self.name = name
 
 
-class CollisionPropertyError(Exception):
-    """A collision extent property (`CollisionRadius`/`CollisionHeight`) resolved to a value the
-    engine could never use -- NaN, +/-Infinity, or negative -- once it was actually GIVEN (as
-    opposed to absent, which `_to_decimal` already treats as 0). `Decimal("NaN")`/`Decimal("Infinity")`
-    parse without error, so a bare numeric-format check let a malformed value either raise a bare
-    `decimal.InvalidOperation` out of `aabb_intersects`' NaN comparisons, silently build an unbounded
-    region (Infinity), or silently invert an AABB (a negative radius) -- three different wrong
-    outcomes from one ungated value. Raised naming the actor, the property, and the offending value
-    rather than guessing a substitute; the CLI maps it to exit 2 (Task 18), the same as
-    `uprops.SchemaError`."""
-
-    def __init__(self, actor_name: str, prop: str, value):
-        super().__init__(f"actor {actor_name!r}: {prop}={value!r} is not a valid non-negative, "
-                         f"finite number")
-        self.actor_name = actor_name
-        self.prop = prop
-        self.value = value
-
-
-def _to_decimal(text, default: Decimal = Decimal(0)) -> Decimal:
-    """`text` as a Decimal, or `default` when it is absent or not a number -- the Decimal twin of
-    the spike harness's `_to_float` (`collision_clearance.py:71`). It never raises on malformed
-    TEXT: a garbled property value must not put a traceback in front of the user (`CLAUDE.md`).
-
-    A value that PARSES but is NaN, +/-Infinity, or negative is a different failure -- those are
-    not malformed text, and a collision extent can never legitimately be any of them -- so this
-    function does not filter them; `_validated_extent` below does, naming the actor/property/value.
-    Silently defaulting an out-of-domain number here (rather than in the caller that knows which
-    property it was) would hide which property was malformed."""
-    try:
-        return Decimal(str(text).strip())
-    except (TypeError, ValueError, ArithmeticError):
-        return default
-
-
-def _validated_extent(actor_name: str, prop: str, raw) -> Decimal:
-    """`raw` as a non-negative, finite Decimal, or `CollisionPropertyError` naming `actor_name`/
-    `prop`/the offending value.
-
-    Shared by `_collision_half_extent` (region sizing) and `collision_extent` (Task 11's crossing
-    gate) so a malformed `CollisionRadius`/`CollisionHeight` -- NaN, +/-Infinity, negative -- cannot
-    resolve to two different answers depending on which caller asked: region sizing raising while
-    the crossing gate silently read it as "does not collide", or vice versa. Same one-gate discipline
-    `_blocks_movement` already applies to the collide/block boolean pair."""
-    value = _to_decimal(raw)
-    if not value.is_finite() or value < 0:
-        raise CollisionPropertyError(actor_name, prop, raw)
-    return value
-
-
-def _blocks_movement(actor, defaults) -> bool:
-    """Does `actor` carry a collision volume the engine treats as MATTER -- `bCollideActors` AND
-    `bBlockActors` both `True`?
-
-    Instance property else class default, the same resolution `serve/scene.py::_actor_radii` uses
-    for these fields -- including its `field`/`field_or` split, whose `is not None` test keeps a
-    present-but-EMPTY value from being read as "absent" and silently replaced by the class default.
-    These boolean gates are what need it.
-
-    `bCollideActors` alone is not a claim about matter: shipped triggers that block nothing
-    routinely carry a `CollisionRadius` of 520-630 uu so they can span a room. Ungated, surveying
-    one would build a region over 1000 uu across and solve whatever neighborhood that region selects
-    -- a cost the spike never measured (its 140 surveys ran on 1-uu-padded regions). Across 1522
-    collidable shipped actors, requiring `bBlockActors` too drops the worst by-design overlap from
-    436 uu to 64 uu (spike.md §3).
-
-    This is the ONLY place the gate is written. Its two callers answer in different shapes --
-    `_collision_half_extent` below in Decimal half-extents for region sizing, `collision_extent`
-    (Task 11) in floats-or-None for the crossing gate -- but they must agree on WHETHER an actor
-    collides at all. A second copy of the gate would let an edit to one drift from the other
-    silently.
-
-    `uprops.SchemaError` from an unresolvable class propagates -- guessing "does not collide" would
-    be a substituted default. The CLI maps it to exit 2 (Task 18)."""
-    instance = {k.casefold(): v for k, v in actor.props}
-    class_defaults = defaults.for_class(actor.cls).defaults
-
-    def field_or(name: str, default: str) -> str:
-        low = name.casefold()
-        value = instance[low] if low in instance else class_defaults.get((low, 0))
-        return value if value is not None else default
-
-    return (str(field_or("bCollideActors", "False")).strip() == "True"
-            and str(field_or("bBlockActors", "False")).strip() == "True")
-
-
-def _collision_half_extent(actor, defaults) -> tuple[Decimal, Decimal, Decimal]:
-    """`(CollisionRadius, CollisionRadius, CollisionHeight)` when `actor` has a real BLOCKING
-    collision volume (`_blocks_movement`), else `(0, 0, 0)`.
-
-    The engine's collision volume is a CYLINDER: a circle of radius `CollisionRadius` in the XY
-    plane, extruded in Z to half-height `CollisionHeight`. The project owner confirmed this
-    directly, from first-hand Unreal Engine 1 experience, and `collision_extent` (Task 11) carries
-    the disassembly that backs it. An earlier draft of this plan called it an axis-aligned box,
-    sourced from a comment in `uedcli-native/src/collision.rs` that was never checked against the
-    game binaries — do not reintroduce that claim or that citation.
-
-    This function still returns THREE half-extents because its one caller, `region_of`, wants a
-    bounding box and nothing else. A cylinder of radius R and half-height H has exactly the same
-    axis-aligned bounding box as a box of half-extents (R, R, H), so no change is needed here: the
-    region only has to be a conservative envelope for selecting candidate brushes and faces, never
-    the true collision shape. Where the true shape does matter — testing whether the actor's own
-    volume overlaps solid — the sampling is cylindrical (`cylinder_sample_points`, Task 11).
-
-    An actor with no blocking collision volume resolves to `(0, 0, 0)`, which makes `region_of` fall
-    back to the zero-size box at `Location`.
-
-    `uprops.SchemaError` from an unresolvable class propagates -- guessing zero would be a
-    substituted default. The CLI maps it to exit 2 (Task 18)."""
-    if not _blocks_movement(actor, defaults):
-        return Decimal(0), Decimal(0), Decimal(0)
-    instance = {k.casefold(): v for k, v in actor.props}
-    class_defaults = defaults.for_class(actor.cls).defaults
-
-    def field(name: str):
-        low = name.casefold()
-        return instance[low] if low in instance else class_defaults.get((low, 0))
-
-    def extent(name: str) -> Decimal:
-        return _validated_extent(actor.name, name, field(name))
-
-    radius = extent("CollisionRadius")
-    return radius, radius, extent("CollisionHeight")
-
-
 def region_of(actor, defaults, pad: Decimal = NEIGHBORHOOD_PAD):
     """`actor`'s REAL world AABB grown by `pad`, in Decimals.
 
     A brush's real shape is its own transformed vertices, which is what `writes.actor_bounds`
-    returns. A non-brush actor's real shape is its collision cylinder, whose bounding box is
-    `Location +/- (R, R, H)` from `_collision_half_extent` -- so that is added on top of the
-    zero-size box `actor_bounds` gives a point actor. `pad` is then the SAME uniform padding in both
-    cases; there is no separate point-actor padding. Without this a flush-mounted prop's region
-    would be 2 uu across whatever its collision cylinder measures, and the wall it is mounted
-    against would fall outside it.
+    returns. A non-brush actor is treated as its bare `Location` point -- no collision-cylinder
+    extent (`CollisionRadius`/`CollisionHeight` are ignored for point actors everywhere in this
+    module, by owner ruling) -- so `actor_bounds`' own zero-size box at `Location` is used as-is.
 
     Ported from the spike harness's `region_of`, which only ever ran on brushes. The Decimal is not
     incidental -- `writes.aabb_intersects` adds its own Decimal slack and raises TypeError against a
-    float bound, which is also why `_collision_half_extent` returns Decimals rather than floats.
+    float bound.
 
     Raises `ActorHasNoLocationError` for a non-brush actor with no `Location` -- a brush's position
     comes from its own vertices regardless of `Location`, but a non-brush actor's only position IS
     `Location`, and `actor_bounds` falling back to `(0,0,0)` there would fabricate a real position
     for an actor that has none, building a neighborhood around the world origin instead of
-    surfacing the real problem (see the exception's own docstring)."""
+    surfacing the real problem (see the exception's own docstring). `defaults` is accepted but
+    unused -- kept so every caller's call shape stays the same."""
     if actor.brush is None and actor.location is None:
         raise ActorHasNoLocationError(actor.name)
     lo, hi = actor_bounds(actor)
-    if actor.brush is None:
-        ext = _collision_half_extent(actor, defaults)
-        lo = tuple(c - e for c, e in zip(lo, ext))
-        hi = tuple(c + e for c, e in zip(hi, ext))
     return (tuple(c - pad for c in lo), tuple(c + pad for c in hi))
 
 
 def _meets(actor, region, defaults) -> bool:
     """Does `actor`'s own (unpadded, `pad=0`) region overlap `region`? Shared by `neighborhood`,
-    `near_brushes`, and `nearby_point_actors` so the near-test itself lives in one place -- matching
-    the one-shared-helper discipline `_blocks_movement` already applies to the collision gate."""
+    `near_brushes`, and `nearby_point_actors` so the near-test itself lives in one place."""
     return aabb_intersects(region_of(actor, defaults, Decimal(0)), region)
 
 
@@ -356,12 +224,10 @@ def raw_facts_for(level, class_index, name: str, defaults, *,
 
 
 def format_raw_line(fact: RawFact, nodes: dict) -> str:
-    """One raw-tier line -- bare, no annotation of any kind, and NO tier-token prefix: the spec's
-    Output section drops the per-line `raw `/`csg ` prefix now that relation names are unique across
-    tiers ("each line self-identifies its tier by its verb"). The two printed GROUPS are marked by
-    fixed order alone, no new marker (owner ruling) -- that is `format_lines`'s concern (Task 12),
-    not this function's; this function only ever formats one already-tier-identified fact."""
-    return (f"{fact.src} {actorgraph._node_bracket(nodes[fact.src])} --{fact.relation}--> "
+    """One raw-tier line, its verb prefixed `raw:` -- `touches`/`crosses`/`encloses` are now shared
+    names with the csg tier (spec, `dev/specs/commands/actor-survey.md`), so the prefix carries
+    tier identity; the verb no longer can on its own."""
+    return (f"{fact.src} {actorgraph._node_bracket(nodes[fact.src])} --raw:{fact.relation}--> "
             f"{fact.dst} {actorgraph._node_bracket(nodes[fact.dst])}")
 
 
@@ -608,20 +474,160 @@ def raw_relation_for(name_a, actor_a, name_b, actor_b, cache: dict) -> "tuple[st
     if a_in_b:
         return (name_b, name_a, "encloses")
 
-    cells_a = actorgraph.decompose_convex(actor_a, cache=cache)
-    cells_b = actorgraph.decompose_convex(actor_b, cache=cache)
-    best_depth, any_touch = None, False
-    for ca in cells_a:
-        for cb in cells_b:
-            depth = actorgraph.sat_interpenetration_depth(ca, cb)
-            if depth is not None:
-                any_touch = True
-                best_depth = depth if best_depth is None else max(best_depth, depth)
-    if best_depth is not None and best_depth > actorgraph._TOUCH_EPS:
-        return (name_a, name_b, "overlaps")
-    if any_touch:
-        return (name_a, name_b, "meets")
+    polys_a = _authored_polys_world(actor_a)
+    polys_b = _authored_polys_world(actor_b)
+    if _any_polygons_cross(polys_a, polys_b):
+        return (name_a, name_b, "crosses")
+    if any(_polygons_area_contact(pa, pb, require_opposite_normals=False)
+           for pa in polys_a for pb in polys_b):
+        return (name_a, name_b, "touches")
     return None
+
+
+def _plane_of(verts) -> tuple | None:
+    """`(unit normal, offset)` for a world-space ring via Newell's method, sign UNCANONICALIZED --
+    unlike `_canonical_plane`, which flips the sign to dedup two fragments of one plane and so
+    cannot be reused here: `_polygons_area_contact`'s opposite/same-facing distinction needs the
+    real facing direction, not an arbitrary canonical one. Returns None for a degenerate ring."""
+    n = newell([tuple(float(c) for c in v) for v in verts])
+    length = (n[0] ** 2 + n[1] ** 2 + n[2] ** 2) ** 0.5
+    if length < 1e-9:
+        return None
+    unit = tuple(c / length for c in n)
+    return unit, sum(unit[i] * float(verts[0][i]) for i in range(3))
+
+
+def _polygons_cross(verts_a, verts_b) -> bool:
+    """Do two planar polygons (world-space vertex rings) lie on non-coplanar planes with their
+    interiors (2D, each within its own plane) sharing a point?
+
+    This is `crosses [raw]`/`crosses [csg]`/`carves [csg]`'s shared geometric test (spec,
+    `dev/specs/commands/actor-survey.md`). The two planes' line of intersection is found once
+    (solved directly from the two plane equations in the `na, nb, d` basis, not by walking edges),
+    then clipped to each polygon's own 2D interior by intersecting it against every edge's inward
+    half-plane in turn (Cyrus-Beck style) -- exact for a convex polygon, which every polygon this
+    module hands in is (a brush face, or one convex cell's face). The two resulting sub-intervals of
+    the SAME line are compared directly; they must overlap with real (not edge-touching) length."""
+    pa, pb = _plane_of(verts_a), _plane_of(verts_b)
+    if pa is None or pb is None:
+        return False
+    na, oa = pa
+    nb, ob = pb
+    dot = sum(na[i] * nb[i] for i in range(3))
+    if abs(abs(dot) - 1.0) < 1e-6:
+        return False                          # coplanar (or parallel, never intersecting)
+    dx = na[1] * nb[2] - na[2] * nb[1]
+    dy = na[2] * nb[0] - na[0] * nb[2]
+    dz = na[0] * nb[1] - na[1] * nb[0]
+    dlen = (dx * dx + dy * dy + dz * dz) ** 0.5
+    d = (dx / dlen, dy / dlen, dz / dlen)
+    denom = 1.0 - dot * dot
+    a_coef = (oa - ob * dot) / denom
+    b_coef = (ob - oa * dot) / denom
+    p0 = tuple(a_coef * na[i] + b_coef * nb[i] for i in range(3))
+
+    def _clip(normal, verts):
+        u, v = relation._plane_basis(normal)
+        origin = verts[0]
+
+        def to_2d(p):
+            delta = tuple(p[i] - origin[i] for i in range(3))
+            return (sum(delta[i] * u[i] for i in range(3)), sum(delta[i] * v[i] for i in range(3)))
+
+        p0_2d = to_2d(p0)
+        d_2d = (sum(d[i] * u[i] for i in range(3)), sum(d[i] * v[i] for i in range(3)))
+        poly_2d = [to_2d(p) for p in verts]
+        t_lo, t_hi = -math.inf, math.inf
+        n = len(poly_2d)
+        for i in range(n):
+            ax, ay = poly_2d[i]
+            bx, by = poly_2d[(i + 1) % n]
+            edx, edy = bx - ax, by - ay
+            edge_len = (edx * edx + edy * edy) ** 0.5
+            if edge_len < 1e-9:
+                continue                       # degenerate edge, contributes no real constraint
+            nx, ny = -edy / edge_len, edx / edge_len   # UNIT inward normal (CCW rule), scale-free
+            edge_denom = nx * d_2d[0] + ny * d_2d[1]
+            numer = (nx * ax + ny * ay) - (nx * p0_2d[0] + ny * p0_2d[1])
+            if abs(edge_denom) < 1e-9:
+                if numer > CSG_TOLERANCE:
+                    return None                # parallel to this edge, strictly outside it
+                if numer > -CSG_TOLERANCE:
+                    return None                # parallel to this edge AND running along it -- the
+                                                # crossing line lies exactly on this boundary edge,
+                                                # not through the polygon's interior (the bug this
+                                                # fixed: `Brush698`'s wall meeting `Brush144`'s top
+                                                # exactly at the wall's own bottom edge was wrongly
+                                                # read as a crossing)
+                continue                       # parallel to this edge and well inside -- no bound
+            t = numer / edge_denom
+            if edge_denom > 0:
+                t_lo = max(t_lo, t)
+            else:
+                t_hi = min(t_hi, t)
+        if t_lo >= t_hi - 1e-9:
+            return None
+        return (t_lo, t_hi)
+
+    seg_a = _clip(na, verts_a)
+    if seg_a is None:
+        return False
+    seg_b = _clip(nb, verts_b)
+    if seg_b is None:
+        return False
+    lo, hi = max(seg_a[0], seg_b[0]), min(seg_a[1], seg_b[1])
+    return lo < hi - 1e-9
+
+
+def _polygons_area_contact(verts_a, verts_b, *, require_opposite_normals: bool) -> bool:
+    """Do two planar polygons share a real 2D area (not just a point or an edge) on a common
+    plane -- spec's "Area contact"? `require_opposite_normals` is `touches [csg]`/`connects`'s own
+    extra condition (same-facing coplanar overlap is `crosses`/`carves` territory there, since
+    which side has solid matter matters); `touches [raw]` passes `False` since raw draws no such
+    distinction (spec, `touches [raw]`'s own note)."""
+    pa, pb = _plane_of(verts_a), _plane_of(verts_b)
+    if pa is None or pb is None:
+        return False
+    na, oa = pa
+    nb, ob = pb
+    dot = sum(na[i] * nb[i] for i in range(3))
+    if abs(abs(dot) - 1.0) > 1e-6:
+        return False                          # not coplanar
+    # Same plane means oa == ob when the normals agree, but oa == -ob when they're opposite: a
+    # plane's offset is relative to ITS OWN normal direction, so flipping the normal flips the
+    # sign convention too. Comparing `oa - ob` unconditionally (an earlier version of this
+    # function did) rejected every genuine opposite-facing coplanar pair as "not coplanar" --
+    # confirmed live on `Brush698`/`Brush699`'s flush adjacency in `nyc_unatco_island`.
+    if abs(oa - (ob if dot > 0 else -ob)) > CSG_TOLERANCE:
+        return False                          # parallel but offset -- never touches
+    if require_opposite_normals and dot > 0:
+        return False
+    u, v = relation._plane_basis(na)
+    origin = verts_a[0]
+
+    def to_2d(p):
+        delta = tuple(p[i] - origin[i] for i in range(3))
+        return (sum(delta[i] * u[i] for i in range(3)), sum(delta[i] * v[i] for i in range(3)))
+
+    poly_a = relation._ensure_ccw([to_2d(p) for p in verts_a])
+    poly_b = relation._ensure_ccw([to_2d(p) for p in verts_b])
+    overlap = relation._clip_2d(poly_a, poly_b)
+    if len(overlap) < 3:
+        return False
+    return abs(relation._shoelace_area(overlap)) > _MIN_CONTACT_AREA
+
+
+def _authored_polys_world(actor) -> list:
+    """Every authored polygon of `actor`'s own brush, as a snapped world-space vertex ring --
+    `crosses [raw]`/`touches [raw]`'s and the resolved tier's source-side ("brush B") input, which
+    is always the brush's own full authored shape, never a resolved/decomposed one."""
+    return [[actorgraph._snap_coord(v) for v in polyalign._world_verts(actor, p)]
+            for p in actor.brush.polys]
+
+
+def _any_polygons_cross(polys_a: list, polys_b: list) -> bool:
+    return any(_polygons_cross(fa, fb) for fa in polys_a for fb in polys_b
+               if len(fa) >= 3 and len(fb) >= 3)
 
 
 # The resolved tier's own volume floor -- derived from CSG_TOLERANCE the same way _MIN_CONTACT_AREA
@@ -812,8 +818,21 @@ class SurveyContext:
 
     `trunk_index` is `level.order`'s name -> position map -- the FULL trunk order, unlike
     `csg_index` which only covers `_WORLD_PASS_KINDS`. A Nonsolid carve victim has no `csg_index`
-    entry at all; ordering checks that must work for it (`_victim_matter_just_before`,
-    `_carves_volume`) read `trunk_index` instead."""
+    entry at all; ordering checks that only ever compare within one loop (`_victim_matter_just_before`,
+    `_carves_volume` -- victim-vs-subtract, or subtract-vs-subtract, never semisolid-vs-world-pass)
+    read `trunk_index` instead, safely: trunk and LOOP order agree whenever a semisolid is never one
+    of the two actors being compared.
+
+    `crossing_index` is the one ordering `crosses [csg]`/`carves [csg]`/`occupies [csg]` need and
+    neither `csg_index` nor `trunk_index` gives correctly: both a world-pass kind (add/subtract)
+    AND Nonsolid in trunk order (Nonsolid is excluded from `_WORLD_PASS_KINDS` only because it
+    writes no solid, not because it processes at a different time -- a later Subtract can still
+    carve its faces, same as an Add's), THEN semisolids in their own trunk order. Unlike
+    `trunk_index`, comparing a semisolid against a world-pass actor through this map always agrees
+    with real LOOP 2/LOOP 3 order, regardless of which one happens to be authored first in the
+    file (confirmed against the counterexample that found this: a Semisolid authored before an
+    overlapping Add still correctly crosses AS THE TARGET, never the intruder, since it processes
+    after)."""
     level: object
     class_index: object
     defaults: object
@@ -829,6 +848,7 @@ class SurveyContext:
     csg_order: list
     csg_index: dict
     trunk_index: dict
+    crossing_index: dict
     aabbs: dict
     kinds: dict
     planes: dict
@@ -848,6 +868,9 @@ def build_context(level, class_index, name: str, defaults, *, cells=None) -> Sur
     kinds = {a.name: kind_of(a, class_index) for a in neighbors}
     csg_order = ([a for a in neighbors if kinds[a.name] in _WORLD_PASS_KINDS]
                  + [a for a in neighbors if kinds[a.name] == "semisolid"])
+    crossing_order = ([a for a in neighbors
+                        if kinds[a.name] in _WORLD_PASS_KINDS or kinds[a.name] == "nonsolid"]
+                       + [a for a in neighbors if kinds[a.name] == "semisolid"])
     return SurveyContext(
         level=level, class_index=class_index, defaults=defaults, name=name, surveyed=surveyed,
         region=region,
@@ -860,6 +883,7 @@ def build_context(level, class_index, name: str, defaults, *, cells=None) -> Sur
         csg_order=csg_order,
         csg_index={a.name: i for i, a in enumerate(csg_order)},
         trunk_index={n: i for i, n in enumerate(level.order)},
+        crossing_index={a.name: i for i, a in enumerate(crossing_order)},
         aabbs={},
         kinds=kinds,
         planes={},
@@ -881,10 +905,12 @@ _CROSSES_TARGET_KINDS = frozenset({"add", "semisolid", "subtract"})
 
 
 def crosses_source_eligible(actor, class_index, defaults) -> bool:
-    """Can this actor's own matter be the INTRUDER on a `crosses` line? A non-brush actor qualifies
-    only when it has a real blocking collision cylinder (see `collision_extent`)."""
+    """Can this actor's own matter be the INTRUDER on a `crosses` line? A non-brush actor never
+    does now -- point actors are treated as bare `Location` points, never a collision cylinder, so
+    they carry no matter of their own to cross with. `defaults` is accepted but unused -- kept so
+    every caller's call shape stays the same."""
     if actor.brush is None:
-        return collision_extent(actor, defaults) is not None
+        return False
     return kind_of(actor, class_index) in _CROSSES_SOURCE_KINDS
 
 
@@ -897,134 +923,14 @@ def crosses_target_eligible(actor, class_index) -> bool:
     return kind_of(actor, class_index) in _CROSSES_TARGET_KINDS
 
 
-def collision_extent(actor, defaults) -> tuple[float, float] | None:
-    """`(radius, height)` when `actor` has a real BLOCKING collision volume, else None.
-
-    The engine collides a CYLINDER: radius `CollisionRadius` in the XY plane, half-height
-    `CollisionHeight` in Z. The project owner confirmed this directly, from first-hand Unreal
-    Engine 1 experience. An earlier draft called it an axis-aligned box on the strength of a comment
-    in `uedcli-native/src/collision.rs` that was never checked against the game binaries -- do not
-    reintroduce that claim or that citation.
-
-    Confirmed since, statically, against this repo's own `uned/UED22/Engine.dll` (ImageBase
-    0x10000000). `AActor::SetCollisionSize` (RVA 0x12e8b0) stores its two float args to [this+0x190]
-    and [this+0x194], pinning CollisionRadius/CollisionHeight; `ULevel::FarMoveActor` (RVA 0x15ff80)
-    writes Location.X/Y/Z to [actor+0xd0/0xd4/0xd8]. `UPrimitive::PointCheck` (RVA 0x1935d0, reached
-    from `FCollisionHash::ActorPointCheck` at 0x125380 through vtable slot [eax+0x54]) then tests,
-    at VA 0x10193611-0x10193682:
-
-        (Extent.Z + CollisionHeight)^2 > dz^2                      -- Z alone
-        (Extent.X + CollisionRadius)^2 > dx*dx + dy*dy             -- XY as ONE circular sum
-
-    `AActor::IsOverlapping` (RVA 0x12d3d0) has the same shape for actor-vs-actor at 0x1012d457. Two
-    details recorded because they are not guessable: the comparisons are STRICT (`jbe` -> miss, so
-    exact contact is a miss), and `Extent.Y` is never read at all -- a query box is collapsed to a
-    cylinder using its X half-extent as the radius. The broad phase (`FCollisionHash`) is an AABB
-    grid, which is what a reader skimming the collision code can mistake for a box collision test.
-    This covers actor-primitive collision only; `UModel`/`UMesh` line and point checks were not
-    examined. RVA 0x1aeba0, the address `collision.rs` cites, is genuinely `UModel::PointCheck` --
-    BSP world geometry, not actor collision, so it was never evidence for this question either way.
-
-    The gate is `_blocks_movement` (Task 7) -- the SAME function `_collision_half_extent` calls, not
-    a second copy of it, so region sizing and the crossing gate cannot drift apart. It is TIGHTER
-    than `_actor_radii`'s, and deliberately so: that function gates on `bCollideActors` alone, which
-    is right for a GUI overlay but admits room-spanning trigger volumes. `_blocks_movement` also
-    requires `bBlockActors` -- the engine's own name for "this actor's extent occupies space others
-    cannot" -- which spike.md §3 measured as the gate that removes the entire deep tail (max
-    penetration 436 uu -> 64 uu, p90 52 uu -> 12.7 uu across 1522 shipped actors). It carries the
-    `is not None` split that keeps a present-but-EMPTY property from reading as absent.
-
-    A zero radius or height is not a volume -- `_blocks_movement` answers "claims to block", this
-    adds "and has a size" -- so those return `None` rather than `(0.0, ...)`. NaN, +/-Infinity, and
-    negative are a different failure and never reach that check: `_validated_extent` (shared with
-    `_collision_half_extent`, so the two functions cannot disagree about whether a value is usable)
-    raises `CollisionPropertyError` on them first.
-
-    Radius and height resolve instance-property-else-class-default, exactly as
-    `serve/scene.py::_actor_radii` does it.
-
-    `uprops.SchemaError` from an unresolvable class propagates: the gate cannot be answered, and
-    guessing "does not collide" would be a substituted default. The CLI maps it to exit 2."""
-    if not _blocks_movement(actor, defaults):
-        return None
-    instance = {k.casefold(): v for k, v in actor.props}
-    class_defaults = defaults.for_class(actor.cls).defaults
-
-    def field(name: str):
-        low = name.casefold()
-        return instance[low] if low in instance else class_defaults.get((low, 0))
-
-    radius = _validated_extent(actor.name, "CollisionRadius", field("CollisionRadius"))
-    height = _validated_extent(actor.name, "CollisionHeight", field("CollisionHeight"))
-    if radius == 0 or height == 0:
-        return None
-    return float(radius), float(height)
-
-
-# How many evenly spaced angles the collision cylinder's curved surface is sampled at, per Z level.
-RING_SAMPLES = 8
-
-
-def cylinder_sample_points(loc, radius: float, height: float) -> list:
-    """The 27 sample points of the collision cylinder centred at `loc`: at each of three Z levels
-    (`-height`, `0`, `+height`), the point on the axis plus `RING_SAMPLES` points evenly spaced
-    around the circle of radius `radius`, the first at +X and each 45 degrees on from the last.
-
-    This REPLACES the spike harness's `_sample_points` (`collision_clearance.py:40-47`), which laid
-    a 3x3x3 grid over an axis-aligned box -- a shape the engine does not collide with (see
-    `collision_extent`). The difference is not cosmetic: a box corner stands `radius * sqrt(2)` from
-    the axis, 41% further out than any part of the real cylinder, so box sampling reports the actor
-    inside a diagonal wall it never touches.
-
-    8 ring points and 3 Z levels are chosen to MATCH the box version's granularity, not to improve
-    on it. The box put 9 points on each of 3 Z levels (4 corners, 4 edge midpoints, 1 centre); this
-    puts 9 on each of the same 3 levels (8 ring points, 1 axis point). The total stays 27, so the
-    cost of the `any_point_solid` call below is unchanged. The 45-degree step also lands a sample
-    exactly on the cylinder's extreme point for any face whose normal is axis-aligned or a 45-degree
-    XY diagonal -- every face in this plan's fixtures, and the great majority in shipped levels.
-
-    Two limits, stated rather than smoothed away. The first is inherited from the box version: 27
-    points can miss a solid slab thinner than the sample spacing. The second is the ring's own
-    price: against a face whose XY normal falls BETWEEN two ring angles, the deepest sample sits
-    short of the cylinder's true extreme point by up to `radius * (1 - cos(pi / RING_SAMPLES))` =
-    `0.0761 * radius` -- 1.2 uu at the 16-uu radius the fixtures use -- so a depth can under-report
-    by that much. Under-reporting is the safe direction: the box's `sqrt(2)` corner OVER-reported,
-    inventing penetration, which is what made it wrong rather than merely coarse."""
-    out = []
-    for iz in (-1, 0, 1):
-        z = loc[2] + iz * height
-        out.append((loc[0], loc[1], z))
-        for k in range(RING_SAMPLES):
-            angle = 2.0 * math.pi * k / RING_SAMPLES
-            out.append((loc[0] + radius * math.cos(angle),
-                        loc[1] + radius * math.sin(angle), z))
-    return out
-
-
-def extent_reaches_solid(ctx: SurveyContext, loc, radius: float, height: float) -> bool:
-    """Does the collision cylinder at `loc` reach into RESOLVED SOLID matter? The spike's own
-    `_box_free` test (`collision_clearance.py:50`) at delta = 0, negated, with its box sample
-    swapped for `cylinder_sample_points`, run through the native query in one call.
-
-    This is the crossing GATE only. The spike's `signed_clearance` bisection around it is
-    deliberately NOT ported: its only extra output was an isotropic magnitude, and that magnitude
-    saturates at the shrink floor for a 'buried' actor -- which is exactly why the harness's own
-    `_stats` (line 194) excludes buried actors from every percentile. The spec measures a `crosses`
-    depth against the crossed face's own plane instead (Task 12), where there is nothing to
-    saturate."""
-    if ctx.probe.solidity is None:
-        return False                      # an empty world has no solid to reach
-    return ctx.probe.solidity.any_point_solid(cylinder_sample_points(loc, radius, height))
-
-
 def _source_cells(ctx: SurveyContext, actor) -> list["actorgraph.ConvexCell"] | None:
     """The convex PIECES that stand for `actor`'s own contributed matter, or None when it has none.
     A BRUSH (Mover included -- its private model is treated exactly like an Add's, owner ruling
     Round 8) contributes one `actorgraph.ConvexCell` per `decompose_convex` cell, kept SEPARATE
-    rather than flattened together; a NON-BRUSH actor contributes one group, the 27 sample points of
-    its collision cylinder wrapped in a `ConvexCell` with an EMPTY `half_spaces` -- there is no exact
-    half-space bound for a sampled circle, and `penetration_depth`'s own local-depth clip (see its
-    docstring) reads that emptiness as "no known bound, fall back to the plain per-point reach."
+    rather than flattened together; a NON-BRUSH actor contributes one group, its bare `Location`
+    point wrapped in a `ConvexCell` with an EMPTY `half_spaces` -- there is no half-space bound for
+    a single point, and `penetration_depth`'s own local-depth clip (see its docstring) reads that
+    emptiness as "no known bound, fall back to the plain per-point reach."
 
     Returning the real `ConvexCell` (not just its bare vertices, as before Task 12's own locality
     fix) is what lets `penetration_depth` clip a brush piece to the region that ACTUALLY overlaps a
@@ -1062,17 +968,14 @@ def _source_cells(ctx: SurveyContext, actor) -> list["actorgraph.ConvexCell"] | 
                 if resolved_matter_of(ctx, actor, _piece_centroid(piece)):
                     groups.append(piece)
         return groups or None
-    ext = collision_extent(actor, ctx.defaults)
-    if ext is None or actor.location is None:
+    if actor.location is None:
         return None
-    radius, height = ext
     # Snapped like a brush's own vertices (Bug 1): `actor.location` is exact Decimal parsed straight
     # from T3D text (`model.parse_t3d` is schema-free, architecture.md "Coords"), so it can carry the
     # same class of authored float noise a brush vertex can -- and an unsnapped near-integer Location
     # hits the same exact-zero-area footprint gate this whole fix targets.
     loc = actorgraph._snap_coord(tuple(float(c) for c in actor.location))
-    return [actorgraph.ConvexCell(vertices=cylinder_sample_points(loc, radius, height),
-                                  half_spaces=[])]
+    return [actorgraph.ConvexCell(vertices=[loc], half_spaces=[])]
 
 
 def _convex_hull_2d(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
@@ -1308,67 +1211,111 @@ def penetration_depth(ctx: SurveyContext, cells, face: CsgFace) -> float | None:
     return best
 
 
+# Kind sets for `crosses [csg]`/`carves [csg]`'s shared geometric test (spec,
+# `dev/specs/commands/actor-survey.md`) -- separate from `_CROSSES_SOURCE_KINDS`/
+# `_CROSSES_TARGET_KINDS` above, which `touches [csg]` still depends on unmodified. "A" is the
+# target (the one whose polygon gets crossed/carved), "B" is the intruder.
+_CROSSING_A_KINDS = frozenset({"add", "semisolid", "subtract", "nonsolid"})
+_CROSSING_B_KINDS = frozenset({"add", "semisolid", "nonsolid", "mover"})
+
+
+def _csg_order_position(ctx: SurveyContext, actor) -> float:
+    """`actor`'s CSG-order position, for the `crosses [csg]`/`carves [csg]`/`occupies [csg]`
+    ordering check only -- a Mover's position is defined as AFTER every real brush here (spec's
+    Mover note), never a change to `ctx.csg_order`/`ctx.csg_index`/`ctx.trunk_index`/
+    `ctx.crossing_index` themselves. Uses `ctx.crossing_index`, not `ctx.trunk_index`: a Semisolid
+    always processes after every world-pass brush (LOOP 2 then LOOP 3) regardless of which one it
+    was authored before in the file, and raw trunk position gets exactly that comparison backwards
+    whenever the two disagree. `crossing_index` is the one ordering that both covers Nonsolid
+    (absent from `csg_index`) and keeps semisolid-vs-world-pass comparisons correct."""
+    if ctx.kinds.get(actor.name) == "mover":
+        return math.inf
+    return ctx.crossing_index.get(actor.name, math.inf)
+
+
+def _resolved_prefix_fragments(ctx: SurveyContext, actor, before, *, probe_cache=None) -> list:
+    """Every surviving world-surface fragment `actor` owns, resolved using only the neighborhood
+    brushes strictly before `before` in CSG order -- "A resolved up until right before B" (spec).
+    Every fragment, UN-deduplicated by plane: `csg_faces`'s per-(owner, plane) dedup keeps only the
+    first fragment it meets and silently drops the rest, which is the exact bug this whole fix
+    chases (confirmed live on `Brush693`'s notched top face, `nyc_unatco_island`) -- a straddle
+    this relation needs can live in a fragment the dedup never kept.
+
+    `probe_cache`, when given, memoizes the expensive native solve by `before`'s CSG-order
+    position -- `crosses_facts_for`/`carves_facts_for` each hold `before` fixed (`ctx.surveyed`)
+    across an entire loop over candidate `actor`s, so without this the identical solve reran once
+    per candidate instead of once per call. Scoped to one caller's own dict, passed in explicitly
+    (never stored on `ctx`, which is reused across unrelated relation calls for the whole survey)."""
+    from .preview_native import solve_world_probe
+    limit = _csg_order_position(ctx, before)
+    if probe_cache is not None and limit in probe_cache:
+        probe = probe_cache[limit]
+    else:
+        prefix = [a for a in ctx.neighbors if _csg_order_position(ctx, a) < limit]
+        probe = solve_world_probe(prefix, ctx.class_index)
+        if probe_cache is not None:
+            probe_cache[limit] = probe
+    return [[actorgraph._snap_coord(v) for v in surf.world_verts]
+            for surf in probe.world_surfaces
+            if surf.actor is not None and surf.actor.name == actor.name]
+
+
+def _crosses_relation(ctx: SurveyContext, a, b, *, probe_cache=None) -> bool:
+    """Does B cross A -- `crosses [csg]`'s test: A before B in CSG order, and some polygon of A
+    (resolved up until right before B) is non-coplanar with, and interior-shares a point with,
+    some authored polygon of B."""
+    if _csg_order_position(ctx, a) >= _csg_order_position(ctx, b):
+        return False
+    frags_a = _resolved_prefix_fragments(ctx, a, b, probe_cache=probe_cache)
+    if not frags_a:
+        return False
+    return _any_polygons_cross(frags_a, _authored_polys_world(b))
+
+
+def _carves_relation(ctx: SurveyContext, victim, subtract, *, probe_cache=None) -> bool:
+    """Does `subtract` carve `victim` -- `_crosses_relation`'s test, PLUS total removal.
+
+    Not just `_crosses_relation`: a non-coplanar crossing pair can never exist when `subtract`
+    fully encloses `victim` (no boundary crossing is possible there -- the same topological
+    argument that makes `crosses` correctly SILENT on full enclosure, since it competes with
+    `occupies`). `carves` has no such competing relation, and total removal is legitimate,
+    already-tested behavior (`test_carves_fires_for_total_removal_with_no_accompanying_touches`),
+    so it needs its own clause: `victim`'s full AUTHORED shape entirely inside `subtract`'s full
+    authored shape, independent of resolution order -- reusing `authored_shape_contains`, the raw
+    tier's own full-containment test, rather than inventing a second one."""
+    if _crosses_relation(ctx, victim, subtract, probe_cache=probe_cache):
+        return True
+    if _csg_order_position(ctx, victim) >= _csg_order_position(ctx, subtract):
+        return False
+    return authored_shape_contains(subtract, victim, ctx.cells)
+
+
 def crosses_facts_for(ctx: SurveyContext) -> list[CsgFact]:
-    """`crosses`: a solid actor's own matter extends past a resolved surviving face belonging to
-    another actor, into space it does not itself claim.
-
-    Fixed-direction -- the intruder always leads -- so this computes BOTH directions:
-
-    * the surveyed actor as the INTRUDER, when it is source-eligible: test its own matter against
-      every eligible face in the neighborhood.
-    * the surveyed actor as the TARGET, always: scan the neighborhood for source-eligible actors
-      whose matter lands past one of the SURVEYED actor's own faces. A source-ineligible surveyed
-      actor (a Subtract, say) has no outgoing `crosses` at all, but can perfectly well be the `dst`
-      of someone else's -- the spec's own worked example is exactly that shape.
-
-    At most one fact per (src, dst): a wall is many fragments and several planes, and one
-    relationship is one line."""
+    """`crosses [csg]`: B's authored geometry non-coplanar-crosses A's geometry resolved up until
+    right before B, with A before B in CSG order (spec). Fixed-direction -- B (the intruder)
+    always leads -- computed both ways: the surveyed actor as B against every A-eligible neighbor,
+    and as A against every B-eligible neighbor. Brush-vs-brush only (spec scope); non-brush point
+    actors are not a source or target of this relation."""
     facts: dict = {}
-    if ctx.probe.solidity is None:
-        return []
+    probe_cache: dict = {}
 
     def record(src, dst):
         facts[(src, dst)] = CsgFact(src=src, dst=dst, relation="crosses")
 
-    # Direction 1: the surveyed actor intrudes.
-    if crosses_source_eligible(ctx.surveyed, ctx.class_index, ctx.defaults):
-        cells = _source_cells(ctx, ctx.surveyed)
-        if cells:
-            for face in ctx.faces:
-                if face.owner == ctx.name:
-                    continue
-                target = ctx.level.actors.get(face.owner)
-                if target is None or not crosses_target_eligible(target, ctx.class_index):
-                    continue
-                if penetration_depth(ctx, cells, face) is not None:
-                    record(ctx.name, face.owner)
+    def is_a(actor):
+        return actor.brush is not None and _kind(ctx, actor) in _CROSSING_A_KINDS
 
-    # Direction 2: somebody else intrudes on the surveyed actor.
-    if crosses_target_eligible(ctx.surveyed, ctx.class_index):
-        own_faces = [f for f in ctx.faces if f.owner == ctx.name]
-        if own_faces:
-            for other in ctx.near:
-                if not crosses_source_eligible(other, ctx.class_index, ctx.defaults):
-                    continue
-                cells = _source_cells(ctx, other)
-                if not cells:
-                    continue
-                for face in own_faces:
-                    if penetration_depth(ctx, cells, face) is not None:
-                        record(other.name, ctx.name)
-            # Point actors too. This is why `nearby_point_actors` (Task 7) filters candidates by
-            # their own extent-aware region: a collision cylinder can reach into the surveyed
-            # brush from a `Location` outside it, and a bare-`Location` filter drops those --
-            # making the fact visible from one side of the pair and not the other.
-            for p in ctx.points:
-                if not crosses_source_eligible(p, ctx.class_index, ctx.defaults):
-                    continue
-                cells = _source_cells(ctx, p)
-                if not cells:
-                    continue
-                for face in own_faces:
-                    if penetration_depth(ctx, cells, face) is not None:
-                        record(p.name, ctx.name)
+    def is_b(actor):
+        return actor.brush is not None and _kind(ctx, actor) in _CROSSING_B_KINDS
+
+    if is_b(ctx.surveyed):
+        for a in ctx.near:
+            if is_a(a) and _crosses_relation(ctx, a, ctx.surveyed, probe_cache=probe_cache):
+                record(ctx.name, a.name)
+    if is_a(ctx.surveyed):
+        for b in ctx.near:
+            if is_b(b) and _crosses_relation(ctx, ctx.surveyed, b, probe_cache=probe_cache):
+                record(b.name, ctx.name)
 
     return [facts[k] for k in sorted(facts)]
 
@@ -1436,10 +1383,13 @@ def resolved_matter_of(ctx: SurveyContext, actor, point) -> bool:
     `_is_carve_boundary`'s.
 
     A Mover is not in `csg_order`: it is excluded from world CSG, so no Subtract touches it and its
-    own authored body IS its matter. A non-brush actor's matter is its blocking collision cylinder --
-    radius in XY as one circular sum, half-height in Z, the shape `collision_extent`'s disassembly
-    pins -- and the comparison is STRICT there for the same reason `UPrimitive::PointCheck` is
-    (exact contact is a miss).
+    own authored body IS its matter. A non-brush actor's matter is its bare `Location` point --
+    `CollisionRadius`/`CollisionHeight` are ignored for point actors everywhere in this module, by
+    owner ruling -- compared at `CSG_TOLERANCE`, the same float-noise floor every other "is this
+    geometry here" check in this file uses, not an arbitrary tighter one: a caller probing near
+    (not exactly at) the actor's `Location` -- `_matter_side`'s `inner`/`outer` points, offset by
+    `CSG_TOLERANCE` off a candidate plane, are the actual live callers -- must still reach this
+    branch.
 
     Read from AUTHORED volumes, never from `ctx.probe.solidity`, and the reason is measured rather
     than stylistic. The resolved oracle answers "is this space solid" for the whole world at once --
@@ -1449,13 +1399,10 @@ def resolved_matter_of(ctx: SurveyContext, actor, point) -> bool:
     `Wall`'s interior as void and the space `Bystander` occupies as solid -- the exact inverse of the
     fact the relation is asking about (`test_resolved_matter_ignores_the_pooled_solidity_oracle`)."""
     if actor.brush is None:
-        ext = collision_extent(actor, ctx.defaults)
-        if ext is None or actor.location is None:
+        if actor.location is None:
             return False
-        radius, height = ext
         loc = tuple(float(c) for c in actor.location)
-        return ((point[0] - loc[0]) ** 2 + (point[1] - loc[1]) ** 2 < radius ** 2
-                and abs(point[2] - loc[2]) < height)
+        return all(abs(point[i] - loc[i]) < CSG_TOLERANCE for i in range(3))
     kind = _kind(ctx, actor)
     if kind not in _MATTER_KINDS:
         return False
@@ -1814,19 +1761,16 @@ def _contact_at(ctx: SurveyContext, a, b, inner, outer) -> bool:
 
 
 def _occupied_bounds(ctx: SurveyContext, actor) -> tuple:
-    """`actor`'s own world AABB as floats -- its decomposed volume for a brush, its collision
-    cylinder for a non-brush actor. `pair_touches`' first gate: two actors further apart than
-    `CSG_TOLERANCE` on any axis cannot be flush anywhere, and `near_brushes`' own 1 uu pad admits
-    plenty that are."""
+    """`actor`'s own world AABB as floats -- its decomposed volume for a brush, its bare `Location`
+    point for a non-brush actor (collision-cylinder extent is ignored for point actors everywhere
+    in this module). `pair_touches`' first gate: two actors further apart than `CSG_TOLERANCE` on
+    any axis cannot be flush anywhere, and `near_brushes`' own 1 uu pad admits plenty that are."""
     if actor.brush is not None:
         return _brush_bounds(ctx, actor)
-    ext = collision_extent(actor, ctx.defaults)
-    if ext is None or actor.location is None:
+    if actor.location is None:
         return ((1.0, 1.0, 1.0), (-1.0, -1.0, -1.0))       # empty box: meets nothing
-    radius, height = ext
     loc = tuple(float(c) for c in actor.location)
-    half = (radius, radius, height)
-    return (tuple(loc[i] - half[i] for i in range(3)), tuple(loc[i] + half[i] for i in range(3)))
+    return (loc, loc)
 
 
 # The smallest contact region that is a region rather than an edge. `CSG_TOLERANCE` is the finest
@@ -2316,11 +2260,15 @@ def occupies_facts_for(ctx: SurveyContext) -> list[CsgFact]:
         if occupant.brush is None:
             return _occupies_point_exists(ctx, occupant, subtract)
         kind = _kind(ctx, occupant)
-        if kind in ("add", "semisolid"):
+        if kind in ("add", "semisolid", "mover"):
+            # A Mover's position for `_last_writer_excluding`/`resolved_matter_of` purposes is
+            # already "after everything" in effect -- it is absent from `ctx.csg_order` entirely,
+            # and every lookup against that list already falls back to "at the end" for a name it
+            # doesn't contain, which is exactly the spec's Mover convention, for free.
             return _occupies_matter_exists(ctx, occupant, subtract)
         if kind == "nonsolid":
             return _occupies_nonsolid_exists(ctx, occupant, subtract)
-        return False   # subtract/intersect/deintersect/mover are never occupants
+        return False   # subtract/intersect/deintersect are never occupants
 
     if ctx.surveyed.brush is None or _kind(ctx, ctx.surveyed) != "subtract":
         subtracts = [a for a in ctx.near if a.brush is not None and _kind(ctx, a) == "subtract"]
@@ -2341,10 +2289,16 @@ def occupies_facts_for(ctx: SurveyContext) -> list[CsgFact]:
 #   add       carved, with real area loss                                  -> valid target
 #   nonsolid  contributes no solid, but its FACES are real world surfaces and a later Subtract
 #             removes them with exactly the same area loss as an Add's     -> valid target
-#   semisolid NEVER: the editor applies every Add/Subtract in LOOP 2 and only then, after the
-#             repartition, the semisolids in LOOP 3, so trunk order cannot make one carveable
+#   semisolid listed per spec, but structurally never actually fires: `_csg_order_position` orders
+#             via `ctx.crossing_index`, which always places every semisolid after every world-pass
+#             brush (LOOP 2 then LOOP 3) regardless of file position -- so "victim before subtract"
+#             can never hold when victim is a semisolid. Kept in this set (not excluded) because
+#             the order check already enforces the real constraint; excluding it here too would be
+#             a second, redundant enforcement of the same fact by a different mechanism, exactly
+#             the drift this spec's single ordering primitive is meant to prevent. Confirmed still
+#             silent against `test_carves_never_targets_a_semisolid`.
 #   subtract/intersect/deintersect/mover  contribute nothing a Subtract could take
-_CARVE_TARGET_KINDS = frozenset({"add", "nonsolid"})
+_CARVE_TARGET_KINDS = frozenset({"add", "semisolid", "nonsolid"})
 
 
 def poly_area(verts) -> float:
@@ -2380,23 +2334,29 @@ def _carves_volume(ctx: SurveyContext, s, victim) -> float:
 
 
 def carves_facts_for(ctx: SurveyContext) -> list[CsgFact]:
-    """`carves`: a Subtract removed part of another actor's originally-contributed matter -- ANY
-    amount, including a fully-internal cavity (`_carves_volume` > `CARVE_VOLUME_EPS`). The agent
-    (the Subtract) leads, whichever side is surveyed, so both directions are computed."""
+    """`carves [csg]`: B (Subtractive) carves A when A is before B in CSG order and B's authored
+    geometry non-coplanar-crosses A's geometry resolved up until right before B (spec) -- the same
+    test `crosses [csg]` uses, named for the specific case of a later void-cutting brush. The
+    Subtract (B) always leads, whichever side is surveyed, so both directions are computed.
+    Movers excluded entirely -- never carved, never carve (absent from both kind sets)."""
     facts: list = []
+    probe_cache: dict = {}
 
-    if ctx.surveyed.brush is not None and query.csg_is_subtract(ctx.surveyed):
+    def is_victim(actor):
+        return actor.brush is not None and _kind(ctx, actor) in _CARVE_TARGET_KINDS
+
+    def is_subtract(actor):
+        return actor.brush is not None and _kind(ctx, actor) == "subtract"
+
+    if is_subtract(ctx.surveyed):
         for other in ctx.near:
-            if kind_of(other, ctx.class_index) not in _CARVE_TARGET_KINDS:
-                continue
-            if _carves_volume(ctx, ctx.surveyed, other) > CARVE_VOLUME_EPS:
+            if is_victim(other) and _carves_relation(ctx, other, ctx.surveyed,
+                                                      probe_cache=probe_cache):
                 facts.append(CsgFact(src=ctx.name, dst=other.name, relation="carves"))
-    elif ctx.surveyed.brush is not None and \
-            kind_of(ctx.surveyed, ctx.class_index) in _CARVE_TARGET_KINDS:
+    elif is_victim(ctx.surveyed):
         for other in ctx.near:
-            if not query.csg_is_subtract(other):
-                continue
-            if _carves_volume(ctx, other, ctx.surveyed) > CARVE_VOLUME_EPS:
+            if is_subtract(other) and _carves_relation(ctx, ctx.surveyed, other,
+                                                        probe_cache=probe_cache):
                 facts.append(CsgFact(src=other.name, dst=ctx.name, relation="carves"))
 
     return sorted(facts, key=lambda f: (f.src, f.dst))
@@ -2426,11 +2386,8 @@ def survey(level, class_index, name: str, defaults) -> SurveyResult:
 
     Raises `ActorNotFoundError` (unknown name), `actorgraph.DegenerateBrushError` (the SURVEYED
     actor's own brush), `preview_native.NativePreviewError` (no native extension, or a failed
-    solve), `uprops.SchemaError` (an unresolvable class in the collision gate),
-    `ActorHasNoLocationError` (the surveyed actor is non-brush with no `Location`) and
-    `CollisionPropertyError` (a malformed `CollisionRadius`/`CollisionHeight` on the surveyed actor
-    or a neighbour). The CLI maps every one of them to exit 2 -- none may reach the user as a
-    traceback."""
+    solve), and `ActorHasNoLocationError` (the surveyed actor is non-brush with no `Location`). The
+    CLI maps every one of them to exit 2 -- none may reach the user as a traceback."""
     if name not in level.actors:
         raise ActorNotFoundError(name)
     cells: dict = {}
@@ -2447,9 +2404,10 @@ def survey(level, class_index, name: str, defaults) -> SurveyResult:
 
 
 def format_csg_line(fact: CsgFact, nodes: dict) -> str:
-    """One csg-tier line -- bare, no annotation of any kind, no tier-token prefix (see
-    `format_raw_line`'s docstring for why; same open question, `format_lines` owns the answer)."""
-    return (f"{fact.src} {actorgraph._node_bracket(nodes[fact.src])} --{fact.relation}--> "
+    """One csg-tier line, its verb prefixed `csg:` -- `touches`/`crosses`/`encloses` are now shared
+    names with the raw tier (spec, `dev/specs/commands/actor-survey.md`), so the prefix carries
+    tier identity; the verb no longer can."""
+    return (f"{fact.src} {actorgraph._node_bracket(nodes[fact.src])} --csg:{fact.relation}--> "
             f"{fact.dst} {actorgraph._node_bracket(nodes[fact.dst])}")
 
 
