@@ -85,13 +85,19 @@ effort, not just the Rust side. Applies uniformly: a freshly written verb, a ver
 near-verbatim from `old/`, and a `web/` refactor PR all go through review as their own PR. Nothing
 is grandfathered in.
 
-## `old/` stays frozen
+## `old/` stays frozen — behavior, not every byte
 
-`old/` is never patched once PR #0 lands it, for the whole migration — no exceptions, even for a
-confirmed real bug found in its behavior. If a real bug turns up in `old/` during the migration, it
-is not fixed there; instead, a `TODO` comment describing the bug is added at the relevant point in
-the new Rust codebase, so it's tracked rather than silently inherited or forgotten, and gets fixed
-for real once that verb is properly ported (not papered over in the code being phased out).
+Every verb's *behavior* (what it outputs for a given input) is never patched once PR #0 lands it,
+for the whole migration — no exceptions, even for a confirmed real bug. If a real bug turns up in
+`old/` during the migration, it is not fixed there; instead, a `TODO` comment describing the bug is
+added at the relevant point in the new Rust codebase, so it's tracked rather than silently
+inherited or forgotten, and gets fixed for real once that verb is properly ported (not papered over
+in the code being phased out). This is what keeps `old/` a trustworthy, unchanging
+differential-testing oracle.
+
+Tooling and dev-infra additions that don't change any verb's behavior — a build script, venv
+provisioning, anything of that shape — are fine to add directly to `old/`. They don't touch what
+the oracle relies on.
 
 ## Rejected: a shared CLI/GUI registry
 
