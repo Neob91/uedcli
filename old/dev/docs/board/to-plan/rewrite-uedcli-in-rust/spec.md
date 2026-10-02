@@ -46,14 +46,23 @@ way), matching what people already type.
 ## Migration technique: subprocess strangler
 
 The new `uedcli` binary has a per-verb dispatch table. A ported verb calls the new Rust
-implementation directly. An unported verb shells out to `old/`'s compiled binary
-(`old/dist/standalone/uedcli.dist/uedcli`, produced by the existing `bin/build-standalone` —
-already a single command that builds the Rust native extension, the web frontend, and a Nuitka
-standalone Python compile into one binary with no system Python/pip/node dependency; verified
-working end to end: moved to `/tmp`, run with a stripped `PATH`, booted the real GUI and served a
-legitimately-imported real level). Argv, stdin, stdout, and exit code pass through unchanged. This
-means the new tool never needs Python, a venv, or npm on the host — only the prebuilt `old/`
-artifact.
+implementation directly. An unported verb shells out to `old/bin/uedcli` (the existing dev-loop
+script — it bootstraps its own venv + native-extension build on first use, same as it already does
+for every other worktree on this repo). Argv, stdin, stdout, and exit code pass through unchanged.
+
+This replaces an earlier plan to shell out to a Nuitka-compiled standalone binary
+(`old/dist/standalone/uedcli.dist/uedcli`, via `bin/build-standalone`) — verified working (zero
+Python/pip/node on the host) during PR #0, but the standalone compile itself takes ~20-30 minutes
+per build and ccache can't help across worktrees (it keys on absolute paths, which differ per
+worktree — confirmed: two from-scratch builds in this repo both logged `'cache miss': 643` for every
+file). Every fresh worktree that needed the compiled binary would pay that cost from scratch, which
+is worse than what it's meant to solve. `old/bin/uedcli` has no compile step at all.
+
+Trade-off: the dev/migration toolchain now needs Python + venv (and Docker, for the native
+extension) on whoever's host runs it — the "zero host dependency" property moves from "true during
+the migration" to "true only for what actually ships." That's fine: `old/` and the whole strangler
+apparatus disappear before release, and dev machines already need Python/Docker for `old/bin/test`
+etc. regardless.
 
 Same idea on the GUI side: the new backend's unported API routes proxy to `old/`'s HTTP server. (No
 name is set yet for the new GUI-backend component — whether it's a separate binary or a subcommand
@@ -61,8 +70,8 @@ of `uedcli` is undecided.)
 
 ## Rejected: embedded-interpreter strangler
 
-Considered as the alternative to subprocess-strangler: instead of shelling out to `old/`'s compiled
-binary, the new Rust binary would embed a CPython interpreter (the reverse of how `uedcli-native`
+Considered as the alternative to subprocess-strangler: instead of shelling out to `old/`'s CLI,
+the new Rust binary would embed a CPython interpreter (the reverse of how `uedcli-native`
 was called from Python today) and call `old/`'s package in-process for unported verbs. Trade-off
 was single-binary-throughout vs. simplicity: embedding keeps one binary the whole migration but
 needs `libpython` present, complicates cross-compilation, and requires managing the GIL from Rust;
@@ -98,8 +107,8 @@ duplication concern recurs across enough features to justify the fixed cost of a
 Two complementary methods, confirmed. Neither requires shipping Python in the final binary
 (test-time and runtime dependencies are separate):
 
-- **Differential testing (primary).** For each verb being ported, run both `old/`'s compiled binary
-  and the new Rust implementation against identical inputs and diff stdout/exit code/produced T3D
+- **Differential testing (primary).** For each verb being ported, run both `old/bin/uedcli` and
+  the new Rust implementation against identical inputs and diff stdout/exit code/produced T3D
   bytes. As a verb passes consistently, retire its `old/` implementation from the dispatch table.
   Catches drift on arbitrary new inputs, not just recorded ones. Depends on `old/` staying a
   trustworthy, unchanging oracle — see "`old/` stays frozen" above.
@@ -111,12 +120,10 @@ Two complementary methods, confirmed. Neither requires shipping Python in the fi
 
 ## Bootstrap sequence (walking skeleton)
 
-1. **PR #0 — the `old/` move.** Move everything to `old/`. `bin/build-standalone` run inside
-   `old/` produces the compiled binary PR #1's skeleton shells out to — a local/CI build step, not
-   a committed artifact. Anyone working on the skeleton runs it themselves when they need it.
+1. **PR #0 — the `old/` move.** Move everything to `old/`. Done (`#1`, merged 2026-10-02).
 2. **PR #1 — bootstrap.** A minimal Rust `uedcli` binary that does nothing but subprocess-strangle:
-   every verb proxies to `old/`'s compiled binary. Proven against a couple of real verbs that
-   proxying is byte-identical to running `old/` directly — a sanity check on the plumbing itself,
+   every verb proxies to `old/bin/uedcli`. Proven against a couple of real verbs that proxying is
+   byte-identical to running `old/bin/uedcli` directly — a sanity check on the plumbing itself,
    distinct from the differential-testing methodology above, which applies once real porting starts.
 3. **PR #2 — first vertical slice.** Pick one small, self-contained, low-dependency verb — a single
    brush builder is a good candidate (pure function, no editor, no git-trunk I/O) — and port it end
