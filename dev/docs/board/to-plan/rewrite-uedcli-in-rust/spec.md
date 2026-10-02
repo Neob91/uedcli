@@ -111,8 +111,9 @@ Two complementary methods, confirmed. Neither requires shipping Python in the fi
 
 ## Bootstrap sequence (walking skeleton)
 
-1. **PR #0 — the `old/` move.** Move everything to `old/`. Run `bin/build-standalone` inside
-   `old/` to produce the compiled binary the new skeleton will shell out to.
+1. **PR #0 — the `old/` move.** Move everything to `old/`. `bin/build-standalone` run inside
+   `old/` produces the compiled binary PR #1's skeleton shells out to — a local/CI build step, not
+   a committed artifact. Anyone working on the skeleton runs it themselves when they need it.
 2. **PR #1 — bootstrap.** A minimal Rust `uedcli` binary that does nothing but subprocess-strangle:
    every verb proxies to `old/`'s compiled binary. Proven against a couple of real verbs that
    proxying is byte-identical to running `old/` directly — a sanity check on the plumbing itself,
