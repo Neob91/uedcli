@@ -90,20 +90,24 @@ ensure_venv() {
 _NATIVE_DIR="$UEDCLI_DIR/uedcli-native"
 _NATIVE_MARKER="$VENV/.uedcli-native"
 _BUILD_IMAGE="uedcli-rust-build"
+_DOCKERFILE="$UEDCLI_DIR/dev-container/Dockerfile"
 _BUILD_DOCKERFILE="$UEDCLI_DIR/dev-container/build.Dockerfile"
 
-# sha256sum of the files named on stdin (one relative-to-$UEDCLI_DIR path per line), run inside
-# the uv image rather than the host's own sha256sum/shasum -- macOS has no sha256sum by default,
-# and this project's "no fallbacks, one code path on every host" rule rules out a
-# command-v-sha256sum-else-shasum branch. Always the container, never the host tool, on either OS.
+# cksum, not sha256sum: macOS has no sha256sum by default, and this project's "no fallbacks, one
+# code path on every host" rule rules out a command-v-sha256sum-else-shasum branch. cksum's CRC
+# algorithm is specified BY POSIX itself, so GNU and BSD/macOS cksum emit byte-identical output
+# for identical input -- unlike sha256sum, md5sum, or shasum, which are vendor extensions, not
+# POSIX. This has to stay host-native, not deferred to a container: check_native_ext (below) calls
+# it on every `uedcli` invocation, and this file's own header promises that path never needs
+# Docker or network. Hashes the files named on stdin (one path per line); the double cksum (hash
+# each file, then hash the combined per-file hashes) gives one aggregate value for a whole tree.
 _hash_files() {
-  docker run --rm -i -v "$UEDCLI_DIR":/io:ro -w /io "$_UV_IMAGE" sh -c 'xargs sha256sum | sha256sum' \
-    | cut -d' ' -f1
+  xargs cksum | cksum | cut -d' ' -f1
 }
 
 _native_ext_hash() {
-  (cd "$UEDCLI_DIR" && find uedcli-native -path 'uedcli-native/target' -prune -o \( -name '*.rs' -o -name 'Cargo.toml' \) -print | sort) \
-    | _hash_files
+  find "$_NATIVE_DIR" -path "$_NATIVE_DIR/target" -prune -o \( -name '*.rs' -o -name 'Cargo.toml' \) -print \
+    | sort | _hash_files
 }
 
 # Read-only: sets UEDCLI_NATIVE_EXT_FRESH, never builds. Mirrors ensure_native_ext's own
@@ -128,7 +132,7 @@ _ensure_build_image() {
   # which suspends errexit for its ENTIRE body for the duration of that call (a bash gotcha, not
   # just for this function's own return) -- so a failing `_hash_files` here would otherwise pass
   # silently, leaving `want` empty and risking a build later labelled with a bogus empty hash.
-  want="$(printf '%s\n' dev-container/Dockerfile | _hash_files)" || return 1
+  want="$(printf '%s\n' "$_DOCKERFILE" | _hash_files)" || return 1
   [ -n "$want" ] || return 1
   have="$(docker image inspect "$_BUILD_IMAGE" --format '{{ index .Config.Labels "uedcli.dockerfile" }}' 2>/dev/null || true)"
   [ "$want" = "$have" ] && return 0
@@ -188,8 +192,8 @@ ensure_wasm_artifact() {
   [ -n "${UEDCLI_SKIP_NATIVE:-}" ] && return 0
   [ -d "$_NATIVE_DIR/resolve-wasm" ] || return 0
   local hash
-  hash="$( (cd "$UEDCLI_DIR" && find uedcli-native/resolve-core uedcli-native/resolve-wasm -path '*/target' -prune -o \
-    \( -name '*.rs' -o -name 'Cargo.toml' \) -print | sort) | _hash_files)"
+  hash="$(find "$_NATIVE_DIR/resolve-core" "$_NATIVE_DIR/resolve-wasm" -path '*/target' -prune -o \
+    \( -name '*.rs' -o -name 'Cargo.toml' \) -print | sort | _hash_files)"
   if [ "$(cat "$_WASM_MARKER" 2>/dev/null || true)" = "$hash" ] && [ -f "$_WASM_OUT/resolve_wasm_bg.wasm" ]; then
     return 0
   fi

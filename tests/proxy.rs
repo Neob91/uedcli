@@ -55,5 +55,6 @@ fn works_from_any_cwd() {
         .output()
         .unwrap();
     assert_eq!(new.stdout, old.stdout);
+    assert_eq!(new.stderr, old.stderr);
     assert_eq!(new.status.code(), old.status.code());
 }
