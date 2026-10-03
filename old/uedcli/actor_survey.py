@@ -314,6 +314,14 @@ def _cell_bounds(cell) -> tuple:
             tuple(max(v[i] for v in verts) for i in range(3)))
 
 
+def _same_plane(normal, offset: float, other) -> bool:
+    """Are `(normal, offset)` and `other` one plane? The same coincidence rule `csg_faces` dedupes
+    fragments by: normals aligned (both are already sign-canonical, so aligned means equal) and
+    offsets within `CSG_TOLERANCE`."""
+    return (abs(normal[0] * other[0][0] + normal[1] * other[0][1] + normal[2] * other[0][2] - 1.0)
+            <= 1e-6 and abs(offset - other[1]) <= CSG_TOLERANCE)
+
+
 def _polytope_from_planes(planes: list[tuple[tuple[float, float, float], float]],
                           bounds: tuple | None) -> "actorgraph.ConvexCell | None":
     """The convex polytope `{p : n.p <= d for (n, d) in planes}`, via H-rep -> V-rep vertex
@@ -577,6 +585,11 @@ def _polygons_cross(verts_a, verts_b) -> bool:
         return False
     lo, hi = max(seg_a[0], seg_b[0]), min(seg_a[1], seg_b[1])
     return lo < hi - 1e-9
+
+
+# The smallest contact region that is a region rather than an edge. `CSG_TOLERANCE` is the finest
+# distinction the resolved tier makes, so an overlap area below its square is not a real area.
+_MIN_CONTACT_AREA = CSG_TOLERANCE ** 2
 
 
 def _polygons_area_contact(verts_a, verts_b, *, require_opposite_normals: bool) -> bool:
@@ -1233,28 +1246,38 @@ def _csg_order_position(ctx: SurveyContext, actor) -> float:
     return ctx.crossing_index.get(actor.name, math.inf)
 
 
+def _resolved_prefix_probe(ctx: SurveyContext, before, *, probe_cache=None):
+    """The native CSG probe (surviving world surfaces + point-in-solid oracle), resolved using
+    only the neighborhood brushes strictly before `before` in CSG order -- "resolved up until
+    right before B" (spec), as one shared solve. `_resolved_prefix_fragments` reads its surfaces;
+    `occupies [csg]`'s void test reads its solidity oracle -- both must read the SAME solve, not
+    two separate ones that could disagree on where exactly the prefix cuts off.
+
+    `probe_cache`, when given, memoizes the expensive native solve by `before`'s CSG-order
+    position -- `crosses_facts_for`/`carves_facts_for`/`connects_facts_for`/`occupies_facts_for`
+    each hold `before` fixed across an entire loop over candidate actors, so without this the
+    identical solve reran once per candidate instead of once per call. Scoped to one caller's own
+    dict, passed in explicitly (never stored on `ctx`, which is reused across unrelated relation
+    calls for the whole survey)."""
+    from .preview_native import solve_world_probe
+    limit = _csg_order_position(ctx, before)
+    if probe_cache is not None and limit in probe_cache:
+        return probe_cache[limit]
+    prefix = [a for a in ctx.neighbors if _csg_order_position(ctx, a) < limit]
+    probe = solve_world_probe(prefix, ctx.class_index)
+    if probe_cache is not None:
+        probe_cache[limit] = probe
+    return probe
+
+
 def _resolved_prefix_fragments(ctx: SurveyContext, actor, before, *, probe_cache=None) -> list:
     """Every surviving world-surface fragment `actor` owns, resolved using only the neighborhood
     brushes strictly before `before` in CSG order -- "A resolved up until right before B" (spec).
     Every fragment, UN-deduplicated by plane: `csg_faces`'s per-(owner, plane) dedup keeps only the
     first fragment it meets and silently drops the rest, which is the exact bug this whole fix
     chases (confirmed live on `Brush693`'s notched top face, `nyc_unatco_island`) -- a straddle
-    this relation needs can live in a fragment the dedup never kept.
-
-    `probe_cache`, when given, memoizes the expensive native solve by `before`'s CSG-order
-    position -- `crosses_facts_for`/`carves_facts_for` each hold `before` fixed (`ctx.surveyed`)
-    across an entire loop over candidate `actor`s, so without this the identical solve reran once
-    per candidate instead of once per call. Scoped to one caller's own dict, passed in explicitly
-    (never stored on `ctx`, which is reused across unrelated relation calls for the whole survey)."""
-    from .preview_native import solve_world_probe
-    limit = _csg_order_position(ctx, before)
-    if probe_cache is not None and limit in probe_cache:
-        probe = probe_cache[limit]
-    else:
-        prefix = [a for a in ctx.neighbors if _csg_order_position(ctx, a) < limit]
-        probe = solve_world_probe(prefix, ctx.class_index)
-        if probe_cache is not None:
-            probe_cache[limit] = probe
+    this relation needs can live in a fragment the dedup never kept."""
+    probe = _resolved_prefix_probe(ctx, before, probe_cache=probe_cache)
     return [[actorgraph._snap_coord(v) for v in surf.world_verts]
             for surf in probe.world_surfaces
             if surf.actor is not None and surf.actor.name == actor.name]
@@ -1288,6 +1311,399 @@ def _carves_relation(ctx: SurveyContext, victim, subtract, *, probe_cache=None) 
     if _csg_order_position(ctx, victim) >= _csg_order_position(ctx, subtract):
         return False
     return authored_shape_contains(subtract, victim, ctx.cells)
+
+
+# Grid resolution for sampling a 2D overlap region -- enough to catch an ordinary doorway-sized
+# opening positioned anywhere within a much larger shared wall, not just at its centroid
+# (confirmed live: `test_connects_finds_a_real_opening_off_the_old_probe_cross`'s off-centre
+# doorway, missed by a centroid-only sample the same way the old mechanism's own fixed 5-point
+# fan missed it before `_region_grid_probes` widened it).
+_CONTACT_GRID_N = 6
+
+
+def _point_in_convex_2d(poly: list, p) -> bool:
+    """Is `p` inside (or on the boundary of) the convex 2D polygon `poly` -- every edge's cross
+    product with `p` must agree in sign (CCW winding, same convention `relation._ensure_ccw`
+    produces)."""
+    n = len(poly)
+    for i in range(n):
+        ax, ay = poly[i]
+        bx, by = poly[(i + 1) % n]
+        cross = (bx - ax) * (p[1] - ay) - (by - ay) * (p[0] - ax)
+        if cross < -1e-9:
+            return False
+    return True
+
+
+def _grid_samples_in_convex_2d(poly: list) -> list:
+    """A small grid of 2D points inside convex polygon `poly`, plus its centroid -- the centroid
+    alone can miss a real opening that doesn't happen to be centred in a much larger shared
+    region; see `_CONTACT_GRID_N`'s own note."""
+    n = len(poly)
+    cx = sum(p[0] for p in poly) / n
+    cy = sum(p[1] for p in poly) / n
+    lo_x = min(p[0] for p in poly)
+    hi_x = max(p[0] for p in poly)
+    lo_y = min(p[1] for p in poly)
+    hi_y = max(p[1] for p in poly)
+    samples = [(cx, cy)]
+    steps = _CONTACT_GRID_N
+    for i in range(steps):
+        for j in range(steps):
+            gx = lo_x + (i + 0.5) * (hi_x - lo_x) / steps
+            gy = lo_y + (j + 0.5) * (hi_y - lo_y) / steps
+            if _point_in_convex_2d(poly, (gx, gy)):
+                samples.append((gx, gy))
+    return samples
+
+
+def _polygon_overlap_points(verts_a, verts_b) -> list:
+    """`(world point, unit normal)` sites across the real 2D overlap area between two coplanar
+    polygons (a grid, see `_grid_samples_in_convex_2d`), or `[]` if they aren't coplanar or the
+    overlap isn't a real area (not just a point or edge) -- the probe sites `_matter_side`
+    straddles to DECIDE a `touches`/`connects` fact.
+
+    This replaces area-contact's own normal-direction heuristic for deciding the fact: which
+    facing convention means "touch" depends on WHICH side's polygon happens to have survived
+    (the matter side's, the carving Subtract's, or neither), not on the relation, and is not
+    knowable from the two polygons alone. Confirmed live on two shapes that broke it: two Adds
+    butted face-to-face lose BOTH owners' faces at the shared plane
+    (`two_adds_butted_face_to_face`), and a self-carved stub's cap belongs entirely to the
+    Subtract that cut it, never to the matter actor whose authored body never had a face there
+    (`shelf_pokes_through_a_niche_wall`). Finding the overlap is still pure polygon geometry --
+    cheap, no CSG solve -- only the yes/no decision moves to a matter-side probe."""
+    pa, pb = _plane_of(verts_a), _plane_of(verts_b)
+    if pa is None or pb is None:
+        return []
+    na, oa = pa
+    nb, ob = pb
+    dot = sum(na[i] * nb[i] for i in range(3))
+    if abs(abs(dot) - 1.0) > 1e-6:
+        return []                             # not coplanar
+    if abs(oa - (ob if dot > 0 else -ob)) > CSG_TOLERANCE:
+        return []                             # parallel but offset
+    u, v = relation._plane_basis(na)
+    origin = verts_a[0]
+
+    def to_2d(p):
+        delta = tuple(p[i] - origin[i] for i in range(3))
+        return (sum(delta[i] * u[i] for i in range(3)), sum(delta[i] * v[i] for i in range(3)))
+
+    poly_a = relation._ensure_ccw([to_2d(p) for p in verts_a])
+    poly_b = relation._ensure_ccw([to_2d(p) for p in verts_b])
+    overlap = relation._clip_2d(poly_a, poly_b)
+    if len(overlap) < 3 or abs(relation._shoelace_area(overlap)) <= _MIN_CONTACT_AREA:
+        return []
+    return [(tuple(origin[i] + cx * u[i] + cy * v[i] for i in range(3)), na)
+            for cx, cy in _grid_samples_in_convex_2d(overlap)]
+
+
+def _matter_side(ctx: SurveyContext, actor, point, normal) -> int | None:
+    """-1/+1 for the side of the plane through `point` (unit `normal`) `actor`'s resolved matter
+    is on, or None when it is on both sides (penetration, not flush contact) or neither (not at
+    this plane at all). The two probe points sit `CSG_TOLERANCE` off the plane -- that tolerance
+    is the only thing deciding flush-vs-penetrating, matching every other "is this geometry here"
+    check in this file."""
+    step = CSG_TOLERANCE * 2
+    inner = tuple(point[i] - normal[i] * step for i in range(3))
+    outer = tuple(point[i] + normal[i] * step for i in range(3))
+    at_inner = resolved_matter_of(ctx, actor, inner)
+    if at_inner == resolved_matter_of(ctx, actor, outer):
+        return None
+    return -1 if at_inner else 1
+
+
+def _was_solid_before(ctx: SurveyContext, subtract, point) -> bool:
+    """Was `point` solid at the moment `subtract` ran -- i.e. did its carve remove anything HERE?
+    Last writer among the brushes ahead of it in `ctx.csg_order`: an Add or Semisolid means
+    matter was there, a Subtract means the space was already void. Where NO earlier brush reaches
+    the point the answer is solid, because that is the world `MAP NEW` hands the first CSG brush
+    -- carving the default-solid world is what an ordinary level's leading Subtract does, and it
+    is a real carve."""
+    index = ctx.csg_index.get(subtract.name, len(ctx.csg_order))
+    for earlier in reversed(ctx.csg_order[:index]):
+        if _in_authored_volume(ctx, earlier, point):
+            return ctx.kinds[earlier.name] != "subtract"
+    return True
+
+
+def _at_own_boundary(ctx: SurveyContext, subtract, point, normal) -> bool:
+    """Is `point` actually AT `subtract`'s own authored surface -- not floating deep inside (or
+    well outside) its volume? `_in_authored_volume` must differ between the two probe points
+    straddling the plane; if it doesn't, both land on the same side and the plane is nowhere near
+    `subtract`'s real boundary (measured: an Add standing free in the middle of an enclosing
+    Subtract's void reads "inside that Subtract's volume" everywhere in the void, firing at
+    960uu of clearance on an earlier version of this check that skipped this half --
+    `test_touches_does_not_fire_for_an_add_standing_free_in_a_subtracts_void`)."""
+    step = CSG_TOLERANCE * 2
+    inner = tuple(point[i] - normal[i] * step for i in range(3))
+    outer = tuple(point[i] + normal[i] * step for i in range(3))
+    return _in_authored_volume(ctx, subtract, inner) != _in_authored_volume(ctx, subtract, outer)
+
+
+def _is_real_carve_boundary(ctx: SurveyContext, subtract, point, normal) -> bool:
+    """Is `point` ON `subtract`'s own exposed carve boundary, with a GENUINE removal there --
+    `_at_own_boundary` plus: on the side that IS inside `subtract`'s own volume, was it solid
+    before? A no-op Subtract (dropped in empty space, or nested inside an already-void region)
+    removes nothing even at its own boundary -- `touches` must reject that (there is no real
+    matter-against-removed-matter contact), but `connects` must NOT use this stricter test: two
+    Subtracts' voids are continuous whether or not either one's own carve was redundant
+    (`test_connects_fires_for_a_fully_nested_redundant_subtract` -- `InnerCarve` removes nothing,
+    already void from `OuterRoom`, and still connects to it). `connects` uses `_at_own_boundary`
+    alone."""
+    step = CSG_TOLERANCE * 2
+    inner = tuple(point[i] - normal[i] * step for i in range(3))
+    outer = tuple(point[i] + normal[i] * step for i in range(3))
+    in_inner = _in_authored_volume(ctx, subtract, inner)
+    in_outer = _in_authored_volume(ctx, subtract, outer)
+    if in_inner == in_outer:
+        return False
+    return _was_solid_before(ctx, subtract, inner if in_inner else outer)
+
+
+def _flush_contact(ctx: SurveyContext, a, b, point, normal, *, allow_void_boundary: bool) -> bool:
+    """Do `a` and `b` meet flush at `point` across the plane `normal` straddles?
+
+    Matter against matter: both survive here, and they must be on OPPOSITE sides -- the same side
+    is one buried in the other. Matter against a carve boundary (one side's `_matter_side` is
+    None because it contributes no matter at all, e.g. a Subtract): the OTHER side merely needs
+    matter on ONE side, AND the ambiguous side must be a Subtract that genuinely carved HERE
+    (`_is_real_carve_boundary`) -- `_matter_side` alone can't tell "this is a real carve boundary"
+    from "this actor simply isn't here at all" (a buried peg's far side, a free-standing shelf
+    nowhere near this Subtract's actual carve), since both read as the same unconditional None for
+    a Subtract and as the same both-sides-equal None for an absent matter actor.
+    `allow_void_boundary` gates this whole case (touches/connects allow it; neither side being
+    matter at all is two carve boundaries meeting with nothing solid between, which is
+    `connects`'s own territory, not `touches`)."""
+    side_a = _matter_side(ctx, a, point, normal)
+    side_b = _matter_side(ctx, b, point, normal)
+    if side_a is not None and side_b is not None:
+        return side_a != side_b
+    if not allow_void_boundary:
+        return False
+    if side_a is not None and side_b is None:
+        return _kind(ctx, b) == "subtract" and _is_real_carve_boundary(ctx, b, point, normal)
+    if side_b is not None and side_a is None:
+        return _kind(ctx, a) == "subtract" and _is_real_carve_boundary(ctx, a, point, normal)
+    return False
+
+
+def _contact_sites(ctx: SurveyContext, a, b) -> list:
+    """Every candidate `(point, normal)` site where `a` and `b` might meet -- every coplanar,
+    real-area-overlapping pair across BOTH actors' authored polygons, PLUS every one of either
+    actor's own authored faces clipped against the OTHER actor's own AABB footprint in that
+    face's plane. The second half is load-bearing, not a fallback for a rare case: a self-carved
+    stub's cap face belongs entirely to the Subtract that cut it (confirmed live,
+    `shelf_pokes_through_a_niche_wall`) -- the matter actor's own authored body, being an ordinary
+    uncut box at the time it was authored, NEVER had a face at that plane, carve or no carve, so
+    no polygon-to-polygon match can ever exist for that pair. The Subtract's own authored face
+    alone is the only candidate plane there IS; clipping it to the matter actor's AABB (rather
+    than sampling the Subtract's own, possibly much larger, full footprint) is what keeps the
+    probe site landing inside the matter actor's real extent instead of empty space beside it.
+    Pure authored geometry either way, no CSG solve -- only `_flush_contact`'s matter-side
+    decision needs to ask what's actually there."""
+    polys_a = _authored_polys_world(a)
+    polys_b = _authored_polys_world(b)
+    sites = []
+    for pa in polys_a:
+        if len(pa) < 3:
+            continue
+        for pb in polys_b:
+            if len(pb) < 3:
+                continue
+            sites.extend(_polygon_overlap_points(pa, pb))
+    sites.extend(_own_face_sites(ctx, polys_a, b))
+    sites.extend(_own_face_sites(ctx, polys_b, a))
+    return sites
+
+
+def _own_face_sites(ctx: SurveyContext, polys, other) -> list:
+    """Every polygon in `polys`, clipped to `other`'s own AABB footprint projected into that
+    polygon's plane, as a grid of `(point, normal)` sites across the clipped region (see
+    `_grid_samples_in_convex_2d`'s own note on why not just its centroid) -- the "no matching
+    polygon on the other side" half of `_contact_sites` (see its own docstring)."""
+    lo, hi = _brush_bounds(ctx, other)
+    sites = []
+    for poly in polys:
+        if len(poly) < 3:
+            continue
+        plane = _plane_of(poly)
+        if plane is None:
+            continue
+        normal, _offset = plane
+        u, v = relation._plane_basis(normal)
+        origin = poly[0]
+
+        def to_2d(p):
+            delta = tuple(p[i] - origin[i] for i in range(3))
+            return (sum(delta[i] * u[i] for i in range(3)), sum(delta[i] * v[i] for i in range(3)))
+
+        corners_3d = [(lo[0], lo[1], lo[2]), (hi[0], lo[1], lo[2]), (lo[0], hi[1], lo[2]),
+                      (hi[0], hi[1], lo[2]), (lo[0], lo[1], hi[2]), (hi[0], lo[1], hi[2]),
+                      (lo[0], hi[1], hi[2]), (hi[0], hi[1], hi[2])]
+        corners_2d = [to_2d(c) for c in corners_3d]
+        box_lo = (min(c[0] for c in corners_2d), min(c[1] for c in corners_2d))
+        box_hi = (max(c[0] for c in corners_2d), max(c[1] for c in corners_2d))
+        box_2d = [(box_lo[0], box_lo[1]), (box_hi[0], box_lo[1]),
+                  (box_hi[0], box_hi[1]), (box_lo[0], box_hi[1])]
+        poly_2d = relation._ensure_ccw([to_2d(p) for p in poly])
+        overlap = relation._clip_2d(poly_2d, relation._ensure_ccw(box_2d))
+        if len(overlap) < 3 or abs(relation._shoelace_area(overlap)) <= _MIN_CONTACT_AREA:
+            continue
+        for cx, cy in _grid_samples_in_convex_2d(overlap):
+            point = tuple(origin[i] + cx * u[i] + cy * v[i] for i in range(3))
+            sites.append((point, normal))
+    return sites
+
+
+def _touches_relation(ctx: SurveyContext, a, b) -> bool:
+    """Does B touch A -- `touches [csg]`'s test: some site where `a`'s and `b`'s authored
+    polygons coplanar-overlap has their resolved matter flush, one matter side against the
+    other's real carve boundary at worst (never two carve boundaries meeting with nothing solid
+    between -- that is `connects`, never this)."""
+    return any(_flush_contact(ctx, a, b, point, normal, allow_void_boundary=True)
+               for point, normal in _contact_sites(ctx, a, b))
+
+
+def _any_matter_at(ctx: SurveyContext, point, normal) -> bool:
+    """Is there solid matter at either probe point straddling `point`/`normal`, from ANY actor --
+    not "is this `a`'s or `b`'s own matter" (neither contributes any, by construction, everywhere
+    this is called: both are Subtracts with `_matter_side` already None), but "has some THIRD
+    actor refilled this exact spot" (`two_rooms_split_by_an_intact_wall`'s `Wall`, authored after
+    both rooms, sealing the gap between them -- two Subtracts both being void-contributors with
+    nothing of their own here says nothing about whether a later Add filled the space between
+    them). The pooled solidity oracle is the right tool for exactly this "is ANYTHING solid here"
+    question -- `resolved_matter_of`'s own docstring warns against it only for "is THIS actor's
+    matter here", a different question this never asks."""
+    if ctx.probe.solidity is None:
+        return False
+    step = CSG_TOLERANCE * 2
+    inner = tuple(point[i] - normal[i] * step for i in range(3))
+    outer = tuple(point[i] + normal[i] * step for i in range(3))
+    return ctx.probe.solidity.point_is_solid(inner) or ctx.probe.solidity.point_is_solid(outer)
+
+
+def _connects_relation(ctx: SurveyContext, a, b) -> bool:
+    """Does B connect with A -- `connects [csg]`'s test: some site where `a`'s and `b`'s authored
+    polygons coplanar-overlap, or non-coplanar-cross, has void on both sides with nothing solid
+    between -- the one shape `touches` must reject (two carve boundaries meeting) and `connects`
+    exists for."""
+    polys_a = _authored_polys_world(a)
+    polys_b = _authored_polys_world(b)
+    for pa in polys_a:
+        for pb in polys_b:
+            if len(pa) < 3 or len(pb) < 3:
+                continue
+            if _polygons_cross(pa, pb):
+                return True
+    for point, normal in _contact_sites(ctx, a, b):
+        if (_matter_side(ctx, a, point, normal) is None
+                and _matter_side(ctx, b, point, normal) is None
+                and _at_own_boundary(ctx, a, point, normal)
+                and _at_own_boundary(ctx, b, point, normal)
+                and not _any_matter_at(ctx, point, normal)):
+            return True
+    # A fully NESTED Subtract never shares a boundary POINT with its container at all (its own
+    # faces sit entirely inside the container's volume, nowhere near the container's own walls),
+    # so the loop above can never find a site for it -- yet its void is trivially continuous with
+    # the container's, redundant carve or not (`test_connects_fires_for_a_fully_nested_redundant_
+    # subtract`, `pillar_in_room`'s `Room`/`Cutter`). Reuses the raw tier's own full-containment
+    # test rather than inventing a second one (same reuse `_carves_relation` already does for its
+    # own full-enclosure case).
+    return authored_shape_contains(a, b, ctx.cells) or authored_shape_contains(b, a, ctx.cells)
+
+
+def _void_carved_by(ctx: SurveyContext, subtract, points: list, before, *, probe_cache=None) -> bool:
+    """Is ANY one of `points` void specifically BECAUSE OF `subtract` -- void in the world
+    resolved up until right before `before` (with `subtract` present), and solid in that same
+    world with `subtract` excluded? ANY, not EVERY: `points` are the centroids of the pieces
+    `_occupies_relation` partitioned the occupant/subtract overlap into, each independently
+    homogeneous -- requiring every piece to agree breaks the composability the spec and
+    `_occupies_relation`'s own docstring both call for (an occupant seated across two Subtracts'
+    voids reports `occupies` against both, independently). Confirmed live: `nyc_unatco_island`'s
+    `Brush698`/`Brush570` lost its `occupies` fact because one small sliver of their overlap was
+    also covered by `Brush693` (an unrelated floor slab) and genuinely solid there -- that ONE
+    piece failing the void check wrongly vetoed the other two pieces, which are real, uncontested
+    void `Brush570` carved.
+
+    Still distinguishes "`subtract` is the operative carve here" from "this point merely sits
+    inside `subtract`'s own authored volume and happens to be void for some other reason" -- the
+    distinction the spec's own "the void `subtract` CARVES" wording draws. Without THIS check, a
+    trunk-first, world-enclosing Subtract gets credited for a carve a nested, later Subtract
+    actually made, purely because the point sits inside the outer one's authored volume too and
+    is, incidentally, also void -- the exact historical bug class `occupies`'s old mechanism had
+    an explicit "operative last-writer" condition to prevent (confirmed live: `dx_lum`'s
+    `19_Multiport`, world-enclosing `Brush190` was wrongly credited alongside `Brush269`, the real
+    carver, for the same niche). That distinction is now evaluated PER POINT, not just per the
+    whole list -- a point only counts if `subtract` is its own operative carver, so a piece
+    genuinely carved by some OTHER, more local Subtract still can't borrow `subtract`'s credit
+    just by sharing the point list with a piece that legitimately can."""
+    if not points:
+        return True
+    probe = _resolved_prefix_probe(ctx, before, probe_cache=probe_cache)
+    void_points = [p for p in points
+                   if probe.solidity is None or not probe.solidity.point_is_solid(p)]
+    if not void_points:
+        return False
+    from .preview_native import solve_world_probe
+    limit = _csg_order_position(ctx, before)
+    without_subtract = [a for a in ctx.neighbors
+                         if _csg_order_position(ctx, a) < limit and a.name != subtract.name]
+    probe_without = solve_world_probe(without_subtract, ctx.class_index)
+    if probe_without.solidity is None:
+        # No world-CSG brush precedes `before` once `subtract` is excluded -- the empty world
+        # `MAP NEW` hands the first CSG brush, which is default-SOLID (`_was_solid_before`'s own
+        # base case), not "nothing is solid". `subtract` removing that default solid is exactly
+        # the ordinary leading-Subtract carve, and must still count.
+        return True
+    return any(probe_without.solidity.point_is_solid(p) for p in void_points)
+
+
+def _occupies_relation(ctx: SurveyContext, subtract, occupant, *, probe_cache=None) -> bool:
+    """Does `occupant` occupy `subtract` -- `occupies [csg]`'s test: `subtract` before `occupant`
+    in CSG order, and the void `subtract` carves (resolved up until right before `occupant`)
+    fully contains `occupant`'s geometry WITHIN THE OVERLAP between the two -- i.e. `subtract` is
+    the OPERATIVE carve there (`_void_carved_by`), not merely an enclosing Subtract the point also
+    happens to sit inside.
+
+    Deliberately an INTERSECTION test, not `authored_shape_contains`'s full containment: an
+    occupant seated across two Subtracts' voids (neither of which alone contains all of it) must
+    report `occupies` against BOTH, independently -- composing where full containment structurally
+    cannot (confirmed live: `test_occupies_facts_for_composes_across_two_subtracts`'s `Bridge`,
+    20uu into each of `RoomA`/`RoomB`, fully inside neither). The spec's own "fully contains"
+    wording needs correcting to say this -- flagged, not silently reworded here.
+
+    Brush occupant: `occupant`'s cells intersected with `subtract`'s own cells (no overlap at all
+    -> immediate reject), then each resulting piece partitioned against every OTHER prefix brush
+    (`_partition_by_brushes`) so the void test is evaluated once per piece, at its centroid, where
+    it is exact for the whole piece -- not sampled at the cell's own vertices, which could miss a
+    re-filling brush that cuts through a cell's middle without touching any corner.
+
+    Non-brush occupant: its own `Location`, the one point it has."""
+    if _csg_order_position(ctx, subtract) >= _csg_order_position(ctx, occupant):
+        return False
+    if occupant.brush is None:
+        if occupant.location is None:
+            return False
+        point = tuple(float(c) for c in occupant.location)
+        if not _in_authored_volume(ctx, subtract, point):
+            return False
+        return _void_carved_by(ctx, subtract, [point], occupant, probe_cache=probe_cache)
+    limit = _csg_order_position(ctx, occupant)
+    prefix = [a for a in ctx.neighbors if _csg_order_position(ctx, a) < limit]
+    points = []
+    found_overlap = False
+    for oc in actorgraph.decompose_convex(occupant, cache=ctx.cells):
+        for sc in actorgraph.decompose_convex(subtract, cache=ctx.cells):
+            overlap = _cell_intersection(oc, sc)
+            if overlap is None:
+                continue
+            found_overlap = True
+            points.extend(_piece_centroid(piece)
+                          for piece in _partition_by_brushes(overlap, prefix, ctx))
+    if not found_overlap:
+        return False
+    return _void_carved_by(ctx, subtract, points, occupant, probe_cache=probe_cache)
 
 
 def crosses_facts_for(ctx: SurveyContext) -> list[CsgFact]:
@@ -1415,870 +1831,84 @@ def resolved_matter_of(ctx: SurveyContext, actor, point) -> bool:
                    for a in after)
 
 
-def _plane_frame(normal, offset: float) -> tuple:
-    """`(origin, u_axis, v_axis)` for the plane `normal . p == offset`.
-
-    The origin is the foot of the world origin on the plane, so the frame is a function of the plane
-    ALONE. Every slice of every actor against this plane therefore lands in one comparable 2-D frame
-    -- the trap `relation.project_to_plane`'s own docstring records, where two independently
-    defaulted origins put two footprints in unrelated frames. The origin also only ever moves along
-    `normal`, which is perpendicular to both axes, so shifting it (see `_cell_slice`) leaves every
-    `(u, v)` coordinate unchanged."""
-    u_axis, v_axis = relation._plane_basis(relation._norm(normal))
-    return tuple(normal[i] * offset for i in range(3)), u_axis, v_axis
-
-
-def _clip_half_plane(poly: list, a: float, b: float, c: float) -> list:
-    """`poly` clipped to the half-plane `a*u + b*v <= c` -- Sutherland-Hodgman against one edge, the
-    2-D twin of `actorgraph._clip_polygon`'s single half-space step. Exact: every decision is the
-    sign of a linear form, with no tolerance."""
-    out: list = []
-    for i in range(len(poly)):
-        cur, prev = poly[i], poly[i - 1]
-        cur_d = a * cur[0] + b * cur[1] - c
-        prev_d = a * prev[0] + b * prev[1] - c
-        if (cur_d <= 0.0) != (prev_d <= 0.0):
-            t = prev_d / (prev_d - cur_d)
-            out.append((prev[0] + t * (cur[0] - prev[0]), prev[1] + t * (cur[1] - prev[1])))
-        if cur_d <= 0.0:
-            out.append(cur)
-    return out
-
-
-def _cell_slice(cell, normal, offset: float, u_axis, v_axis) -> list | None:
-    """The 2-D region of the plane `(normal, offset)` one convex cell covers, or None when the cell
-    does not reach within `CSG_TOLERANCE` of that plane.
-
-    This is the locality bound, and it is what every earlier round was missing. A contact is between
-    two actors that are BOTH at the plane, over a region with real area -- not between one actor's
-    shadow and a plane it is nowhere near. Round 5 bounded the source by its SILHOUETTE, a projection
-    that carries no distance at all, which is why an Add reported `touches` against the Subtract
-    enclosing it with 960 uu of clearance.
-
-    The cell's signed span along `normal` decides both questions at once. When the plane cuts the
-    cell (`lo <= 0 <= hi`) the region is the cell's exact cross-section there. When it does not, the
-    cell's own nearest extreme is `lo` or `hi`; the plane must be within `CSG_TOLERANCE` of that --
-    this single comparison IS the relation's contact tolerance, the only thing deciding a gap or an
-    overlap of `g` uu -- and the region is the cross-section at that extreme, i.e. the cell's own
-    face resting against the plane. Shifting the evaluation plane moves the frame origin along
-    `normal` only, so the `(u, v)` coordinates stay in the shared frame (`_plane_frame`).
-
-    A half-space parallel to the plane constrains nothing in 2-D: it is a scalar feasibility test,
-    already answered by the span, so it is skipped. `1e-9` is that test's numerical zero, the same
-    bare float-dust threshold `_canonical_plane` uses to decide whether a normal component is zero.
-
-    The seed rectangle is the cell's own projected bounding box grown by 1 uu, which strictly
-    contains every cross-section of that cell; the clip then carves the true region out of it. That
-    1 uu is a bounding box, not a tolerance -- any larger value gives the identical answer."""
-    nx, ny, nz = normal
-    heights = [nx * v[0] + ny * v[1] + nz * v[2] - offset for v in cell.vertices]
-    lo, hi = min(heights), max(heights)
-    delta = 0.0 if lo <= 0.0 <= hi else (lo if lo > 0.0 else hi)
-    if abs(delta) > CSG_TOLERANCE:
-        return None
-    ox, oy, oz = (nx * (offset + delta), ny * (offset + delta), nz * (offset + delta))
-    ux, uy, uz = u_axis
-    vx, vy, vz = v_axis
-    uv = [((v[0] - ox) * ux + (v[1] - oy) * uy + (v[2] - oz) * uz,
-           (v[0] - ox) * vx + (v[1] - oy) * vy + (v[2] - oz) * vz) for v in cell.vertices]
-    lo_u, hi_u = min(p[0] for p in uv), max(p[0] for p in uv)
-    lo_v, hi_v = min(p[1] for p in uv), max(p[1] for p in uv)
-    poly = [(lo_u - 1.0, lo_v - 1.0), (hi_u + 1.0, lo_v - 1.0),
-            (hi_u + 1.0, hi_v + 1.0), (lo_u - 1.0, hi_v + 1.0)]
-    for (hx, hy, hz), d_i in cell.half_spaces:
-        a = hx * ux + hy * uy + hz * uz
-        b = hx * vx + hy * vy + hz * vz
-        if abs(a) <= 1e-9 and abs(b) <= 1e-9:
-            continue
-        poly = _clip_half_plane(poly, a, b, d_i - (hx * ox + hy * oy + hz * oz))
-        if len(poly) < 3:
-            return None
-    return poly
-
-
-def plane_slices(ctx: SurveyContext, actor, normal, offset: float) -> list:
-    """Every 2-D region of the plane `(normal, offset)` that `actor`'s own volume reaches, one per
-    convex piece -- empty when it reaches none.
-
-    Pieces are kept SEPARATE for the reason `_source_cells` already records: the hull of an L- or
-    U-shaped brush's cells pooled together fills in the notch, inventing coverage the brush does not
-    have there.
-
-    A NON-BRUSH actor has no cells, so its region is the projected hull of its collision cylinder's
-    sample points -- a silhouette, wider than the cylinder's true cross-section at a tangent plane,
-    where that cross-section degenerates to a line and would report no contact at all. The distance
-    the silhouette drops is not lost: a non-brush actor is only ever a contact's MATTER side, and
-    `_matter_side` probes the cylinder itself at `CSG_TOLERANCE` off the plane, which is the same
-    question `_cell_slice`'s span test answers for a brush."""
-    u_axis, v_axis = relation._plane_basis(relation._norm(normal))
-    if actor.brush is None:
-        groups = _source_cells(ctx, actor)
-        if not groups:
-            return []
-        origin = tuple(normal[i] * offset for i in range(3))
-        out = []
-        for group in groups:
-            hull = _convex_hull_2d(relation.project_to_plane(group.vertices, normal, origin=origin))
-            if len(hull) >= 3:
-                out.append(hull)
-        return out
-    return [region for region in
-            (_cell_slice(cell, normal, offset, u_axis, v_axis)
-             for cell in actorgraph.decompose_convex(actor, cache=ctx.cells))
-            if region is not None]
-
-
-def _same_plane(normal, offset: float, other) -> bool:
-    """Are `(normal, offset)` and `other` one plane? The same coincidence rule `csg_faces` dedupes
-    fragments by: normals aligned (both are already sign-canonical, so aligned means equal) and
-    offsets within `CSG_TOLERANCE`."""
-    return (abs(normal[0] * other[0][0] + normal[1] * other[0][1] + normal[2] * other[0][2] - 1.0)
-            <= 1e-6 and abs(offset - other[1]) <= CSG_TOLERANCE)
-
-
-def _own_planes(ctx: SurveyContext, actor) -> list:
-    """The sign-canonical planes bounding `actor`'s own convex pieces, deduped, memoized on the
-    context -- one actor is compared against every near brush in turn, and recomputing its own
-    planes for each of them was 12% of the tier's runtime."""
-    cached = ctx.planes.get(actor.name)
-    if cached is not None:
-        return cached
-    out: list = []
-    for cell in actorgraph.decompose_convex(actor, cache=ctx.cells):
-        for n_i, d_i in cell.half_spaces:
-            length = (n_i[0] ** 2 + n_i[1] ** 2 + n_i[2] ** 2) ** 0.5
-            if length < 1e-9:
-                continue
-            normal = (n_i[0] / length, n_i[1] / length, n_i[2] / length)
-            offset = d_i / length
-            if next((c for c in normal if abs(c) > 1e-9), 0.0) < 0:
-                normal, offset = (-normal[0], -normal[1], -normal[2]), -offset
-            if not any(_same_plane(normal, offset, p) for p in out):
-                out.append((normal, offset))
-    ctx.planes[actor.name] = out
-    return out
-
-
-def contact_planes(ctx: SurveyContext, a, b) -> list:
-    """Every candidate contact plane for the pair: the planes bounding either actor's own convex
-    pieces, deduped by the same coincidence rule `csg_faces` uses.
-
-    Read from the actors' OWN geometry, never from the resolved snapshot, and that is what fixes the
-    case five rounds never tested: two Adds butted face to face with identical footprints consume
-    each other's face on the shared plane, so NEITHER owner has a surviving fragment there, and a
-    candidate list drawn from `ctx.faces` has nothing to offer the predicate at all. An authored
-    boundary is not consumed by anything.
-
-    A decomposition's internal split planes come along, since `ConvexCell` does not distinguish them
-    from real faces. They cost a rejected candidate and nothing else: at an internal split the
-    actor's own volume lies on both sides, so neither `_matter_side` nor `_is_carve_boundary` can
-    attribute a contact to it.
-
-    A non-brush actor contributes none -- a collision cylinder has no flat boundary to author a
-    contact plane with -- so a prop's contact is always found on the brush side of the pair."""
-    planes = list(_own_planes(ctx, a)) if a.brush is not None else []
-    if b.brush is not None:
-        planes += [p for p in _own_planes(ctx, b)
-                   if not any(_same_plane(p[0], p[1], q) for q in planes)]
-    return planes
-
-
-def _self_consistent_plane(ctx: SurveyContext, actor, normal, offset: float) -> tuple:
-    """`actor`'s OWN version of the plane closest to `(normal, offset)`, when it genuinely authors
-    one coincident with it, else `(normal, offset)` unchanged.
-
-    Fixes a real, shipped bug found by review: `contact_planes` dedupes two actors' own
-    independently-computed versions of one coincident plane (`_same_plane`'s own `1e-6`
-    normal-alignment tolerance) down to a SINGLE representative, then callers fed that one
-    candidate to `plane_slices` for BOTH actors. But `_cell_slice`'s near-parallel-face skip
-    (`abs(a) <= 1e-9 and abs(b) <= 1e-9`) is tuned for a plane truly self-consistent with the cell
-    it slices -- a face of the actor that DIDN'T own the chosen candidate can be almost, but not
-    exactly, parallel to it (rotation trig noise on the order of 1e-7 uu on this module's own
-    rotated fixtures, a full three orders of magnitude inside `_same_plane`'s 1e-6 tolerance but
-    six orders outside `_cell_slice`'s 1e-9 one), and that near-miss slips past the skip and clips
-    the whole cross-section away. Confirmed live: a real, ordinary 28000 uu^2 flush contact between
-    two differently-sized rotated Adds vanished at 17 deg / 30 deg (not 0 deg / 45 deg, where the
-    trig happens to cancel exactly) -- silently, with no error, no existing fixture catching it
-    because every prior rotated `touches` test pairs two IDENTICAL-size boxes.
-
-    The fix is this lookup, used at every `plane_slices` call site that might receive a candidate
-    plane belonging to the OTHER actor: always slice an actor on a plane that actor itself
-    authored, never a foreign one. `_reproject_uv` then puts two actors' own (very slightly
-    different) planes back into one shared frame afterward, by an exact change of basis rather
-    than by clipping -- immune to the precision trap above because it never asks `_cell_slice`
-    to judge near-parallel-but-not-quite against an unfamiliar plane."""
-    if actor.brush is None:
-        return normal, offset
-    for n, o in _own_planes(ctx, actor):
-        if _same_plane(n, o, (normal, offset)):
-            return n, o
-    return normal, offset
-
-
-def _reproject_uv(points_uv, from_frame, to_frame) -> list:
-    """`points_uv` (given in `from_frame`'s own (u, v) coordinates) re-expressed in `to_frame`'s --
-    a pure change of basis through the shared world-space point, never a half-space clip. See
-    `_self_consistent_plane` for why two actors' own versions of one coincident plane must each be
-    sliced on their own terms and only brought into a common frame AFTERWARD, by this function."""
-    o_from, u_from, v_from = from_frame
-    o_to, u_to, v_to = to_frame
-    out = []
-    for u, v in points_uv:
-        p = tuple(o_from[i] + u * u_from[i] + v * v_from[i] for i in range(3))
-        out.append((sum((p[i] - o_to[i]) * u_to[i] for i in range(3)),
-                    sum((p[i] - o_to[i]) * v_to[i] for i in range(3))))
-    return out
-
-
-def _matter_side(ctx: SurveyContext, actor, inner, outer) -> int | None:
-    """`-1`/`+1` for the side of the plane `actor`'s own surviving matter is on, or None when it is
-    on both sides or on neither.
-
-    "Both" is penetration -- the actor has pushed through the boundary, which is `crosses`, not
-    `touches`. "Neither" is an actor that is not at this plane at all. The two probe points sit
-    `CSG_TOLERANCE` off the plane, so the relation's own tolerance is the only thing deciding it:
-    matter within `CSG_TOLERANCE` of the plane is flush against it, matter beyond that penetrates.
-    There is no separate probe step, which is what let round 5's effective tolerance be
-    `_SIDE_PROBE_STEP` (0.05 uu) rather than the 0.015 uu the spec names."""
-    at_inner = resolved_matter_of(ctx, actor, inner)
-    if at_inner == resolved_matter_of(ctx, actor, outer):
-        return None
-    return -1 if at_inner else 1
-
-
-def _was_solid_before(ctx: SurveyContext, subtract, point) -> bool:
-    """Was `point` solid at the moment `subtract` ran -- i.e. did its carve remove anything HERE?
-
-    Last writer among the brushes ahead of it in `csg_order`: an Add or Semisolid means matter was
-    there, a Subtract means the space was already void. Where NO earlier brush reaches the point the
-    answer is solid, because that is the world `MAP NEW` hands the first CSG brush -- carving the
-    default-solid world is what an ordinary level's leading Subtract does, and it is a real carve."""
-    index = ctx.csg_index.get(subtract.name, len(ctx.csg_order))
-    for earlier in reversed(ctx.csg_order[:index]):
-        if _in_authored_volume(ctx, earlier, point):
-            return ctx.kinds[earlier.name] != "subtract"
-    return True
-
-
-def _last_writer_excluding(ctx: SurveyContext, point, *, exclude: str | None = None) -> str | None:
-    """The NAME of the LAST brush in `ctx.csg_order` (latest first) whose authored volume reaches
-    `point`, skipping `exclude` if given, or None when nothing in the order reaches it there.
-    Generalizes `_was_solid_before` (which only walks brushes earlier than one given Subtract, and
-    cannot exclude an arbitrary Add) and `resolved_matter_of` (which answers for one actor only) into
-    the full-order, exclusion-capable walk `occupies`'s condition (iii) needs."""
-    for a in reversed(ctx.csg_order):
-        if a.name == exclude:
-            continue
-        if _in_authored_volume(ctx, a, point):
-            return a.name
-    return None
-
-
-def _is_void_excluding(ctx: SurveyContext, point, *, exclude: str | None = None) -> bool:
-    """Is `point` VOID once the whole trunk (minus `exclude`, if given) has resolved? True only when
-    a real last-writer reaches the point AND it is a Subtract -- no writer at all is the `MAP NEW`
-    default-solid world (`_was_solid_before`'s own base case), which is NOT void."""
-    last = _last_writer_excluding(ctx, point, exclude=exclude)
-    return last is not None and ctx.kinds[last] == "subtract"
-
-
-def _victim_matter_just_before(ctx: SurveyContext, victim, subtract, point) -> bool:
-    """Was `point` still `victim`'s OWN surviving matter at the moment JUST BEFORE `subtract` ran --
-    in `victim`'s own authored volume, and not yet overwritten by any Subtract between `victim`'s own
-    position in trunk order and `subtract`'s? Deliberately narrower than `_was_solid_before`
-    (which would count ANY actor's matter as solid-before-`subtract`, wrongly crediting
-    `carves(subtract, victim)` for a point a DIFFERENT Add refilled after `victim` was cut and before
-    `subtract` ran) -- the victim-specific delta the retired `removed_by` got right via a
-    counterfactual solve; this is its exact, per-point equivalent.
-
-    Reads `ctx.trunk_index`, not `ctx.csg_index`: a Nonsolid victim (a valid `_CARVE_TARGET_KINDS`
-    member) has no `csg_index` entry, which would make it sort as "before everything" and defeat
-    this ordering guard entirely."""
-    if not _in_authored_volume(ctx, victim, point):
-        return False
-    v_i = ctx.trunk_index.get(victim.name, -1)
-    s_i = ctx.trunk_index.get(subtract.name, len(ctx.trunk_index))
-    if s_i <= v_i:
-        return False   # subtract does not follow victim in trunk order -- carves cannot apply
-    between = [a for a in ctx.csg_order if v_i < ctx.trunk_index.get(a.name, -1) < s_i]
-    return not any(ctx.kinds[a.name] == "subtract" and _in_authored_volume(ctx, a, point)
-                   for a in between)
-
-
-def _is_carve_boundary(ctx: SurveyContext, actor, inner, outer) -> bool:
-    """Is this plane, here, the boundary of `actor`'s own carve -- a surface its Subtract really
-    made?
-
-    A Subtract owns no matter, so it can never be a contact's matter side; what it authors is the
-    surface, and something resting against that surface is the fact the spec insists on ("a
-    Subtract's carve legitimately touches the resolved boundary it stopped at"). Two conditions,
-    and the second is as load-bearing as the first.
-
-    **Its authored volume must separate the two probe points** -- the plane bounds the carve here.
-    That is the whole answer to an Add floating inside an enclosing Subtract: the Add's faces are
-    adjacent to that Subtract's void at any distance, which is true and is not a contact, but they
-    are nowhere near the carve's own boundary, so the Subtract is never attributable there and the
-    pair produces nothing at 1 uu of clearance or at 960.
-
-    **And the carve must be REAL at this point** (`_was_solid_before`). An authored boundary in
-    space that was already void removed nothing and created no surface, so nothing can rest against
-    it. Without this, a Subtract that carves nothing at all is a `touches` target from all six of
-    its authored planes, and so is the far end of the spec's own routine idiom -- an oversized
-    corridor run deliberately past the room it opens into, to avoid a coplanar seam -- at any
-    distance from anything it actually removed. Both measured; both are now regression tests."""
-    if actor.brush is None or _kind(ctx, actor) != "subtract":
-        return False
-    at_inner = _in_authored_volume(ctx, actor, inner)
-    if at_inner == _in_authored_volume(ctx, actor, outer):
-        return False
-    return _was_solid_before(ctx, actor, inner if at_inner else outer)
-
-
-def _contact_at(ctx: SurveyContext, a, b, inner, outer) -> bool:
-    """Do `a` and `b` meet across the plane these two probe points straddle?
-
-    Three shapes, and every one of the spec's cases is one of them:
-
-    * **matter against matter** -- both actors survive here, and they must be on OPPOSITE sides. Two
-      actors' matter on the SAME side of a plane is one buried in the other, the case no depth or
-      distance measured at that plane can see: a peg 1 uu into a wall and a peg 100 uu into it both
-      have every point on the wall's inner side.
-    * **matter against a carve boundary** -- one actor's matter rests against the surface the other's
-      Subtract left. Either side of it, deliberately: a carve victim is on the outside of the hole,
-      and a Mover or a prop resting against a room's wall is on the inside of it.
-    * **anything else** -- no fact. Two carve boundaries meeting is two Subtracts sharing a plane
-      with nothing solid between them, which the spec rules `connects` and never `touches`; that
-      falls out of requiring one side to be real matter, rather than from a kind table."""
-    side_a = _matter_side(ctx, a, inner, outer)
-    side_b = _matter_side(ctx, b, inner, outer)
-    if side_a is not None and side_b is not None:
-        return side_a != side_b
-    if side_a is not None:
-        return _is_carve_boundary(ctx, b, inner, outer)
-    if side_b is not None:
-        return _is_carve_boundary(ctx, a, inner, outer)
-    return False
-
-
-def _occupied_bounds(ctx: SurveyContext, actor) -> tuple:
-    """`actor`'s own world AABB as floats -- its decomposed volume for a brush, its bare `Location`
-    point for a non-brush actor (collision-cylinder extent is ignored for point actors everywhere
-    in this module). `pair_touches`' first gate: two actors further apart than `CSG_TOLERANCE` on
-    any axis cannot be flush anywhere, and `near_brushes`' own 1 uu pad admits plenty that are."""
-    if actor.brush is not None:
-        return _brush_bounds(ctx, actor)
-    if actor.location is None:
-        return ((1.0, 1.0, 1.0), (-1.0, -1.0, -1.0))       # empty box: meets nothing
-    loc = tuple(float(c) for c in actor.location)
-    return (loc, loc)
-
-
-# The smallest contact region that is a region rather than an edge. `CSG_TOLERANCE` is the finest
-# distance the resolved model reproduces, so a patch of plane whose area is below that distance
-# SQUARED cannot be told from a line or a point -- and an edge-to-edge or corner-to-corner meeting is
-# not a touch. Derived from the one tolerance this relation has; not a second epsilon. The exact
-# `== 0` it replaces only cancelled on axis-aligned integer coordinates: two 45-degree prisms meeting
-# at exactly one edge left 1.9e-13 uu^2 of float dust behind and reported a contact, while the same
-# shape unrotated correctly reported none.
-_MIN_CONTACT_AREA = CSG_TOLERANCE ** 2
-
-
-def _region_probes(region: list) -> list:
-    """The `(u, v)` points a contact region is tested at: its centroid, plus the centroid of each
-    triangle in a fan from it.
-
-    One point is not enough, and the shape that proves it is the most ordinary wall in any level --
-    two butted Adds with a doorway carved through the shared seam. The contact region is the whole
-    seam, the doorway removes its middle, and the region's OWN centroid lands inside the doorway, so
-    a single probe finds no matter on either side and the wall reports no contact with the wall it
-    is built against (measured; now a regression test).
-
-    Every point is strictly interior to the region, which is convex, and each is put through the
-    same full contact test -- so more points can only find a contact that is really there.
-    `touches` asks whether the two actors meet SOMEWHERE on the region, not everywhere on it.
-
-    This is a sample, not a decomposition: a contact surviving only on a patch smaller than one fan
-    triangle can still be missed. Deciding the region exactly would mean clipping it by every other
-    brush's cross-section, which is a non-convex polygon subtraction this module has no need of
-    elsewhere. Missing a fact is the safe direction."""
-    n = len(region)
-    cu = sum(p[0] for p in region) / n
-    cv = sum(p[1] for p in region) / n
-    return [(cu, cv)] + [((cu + region[i][0] + region[(i + 1) % n][0]) / 3.0,
-                          (cv + region[i][1] + region[(i + 1) % n][1]) / 3.0) for i in range(n)]
-
-
-def pair_touches(ctx: SurveyContext, a, b) -> bool:
-    """Is there a plane where `a` and `b` meet flush, with no penetration?
-
-    Symmetric in its two actors by construction, which is what makes one loop in `touches_facts_for`
-    enough where every earlier round needed two survey directions to see a contact whose surviving
-    face sits on only one side.
-
-    For each candidate plane, each actor is sliced on ITS OWN self-consistent version of that plane
-    (`_self_consistent_plane`) -- never the other actor's, a precision trap `_cell_slice`'s
-    near-parallel-face skip can fall into (see that function's own docstring for the measured
-    case) -- and the two slices reprojected into one shared frame (`_reproject_uv`) before being
-    reduced to the region of that plane each actor's own volume actually reaches; the contact
-    region is the intersection of the two and must be bigger than `_MIN_CONTACT_AREA` -- two rooms
-    whose coplanar walls meet only along a shared edge produce a sliver and no fact. `_contact_at`
-    then names the two sides at each of `_region_probes`' points, and the relation holds if any of
-    them is a contact.
-
-    No CSG solve. Every question here is asked of authored geometry, which is why the cost is a few
-    polygon clips and a handful of point-in-brush probes per near actor rather than one truncated
-    solve per near actor (round 5: 562 ms of solves in a 638 ms survey, against a 46 ms worst-case
-    budget for the whole tier)."""
-    (a_lo, a_hi), (b_lo, b_hi) = _occupied_bounds(ctx, a), _occupied_bounds(ctx, b)
-    if any(a_lo[i] > b_hi[i] + CSG_TOLERANCE or b_lo[i] > a_hi[i] + CSG_TOLERANCE
-           for i in range(3)):
-        return False
-    for normal, offset in contact_planes(ctx, a, b):
-        na, oa = _self_consistent_plane(ctx, a, normal, offset)
-        slices_a = plane_slices(ctx, a, na, oa)
-        if not slices_a:
-            continue
-        nb, ob = _self_consistent_plane(ctx, b, normal, offset)
-        slices_b = plane_slices(ctx, b, nb, ob)
-        if not slices_b:
-            continue
-        frame_a = _plane_frame(na, oa)
-        origin, u_axis, v_axis = frame_a
-        frame_b = _plane_frame(nb, ob)
-        for poly_a in slices_a:
-            for poly_b_raw in slices_b:
-                poly_b = _reproject_uv(poly_b_raw, frame_b, frame_a)
-                region = relation._clip_2d(relation._ensure_ccw(poly_a),
-                                            relation._ensure_ccw(poly_b))
-                if len(region) < 3 or abs(relation._shoelace_area(region)) <= _MIN_CONTACT_AREA:
-                    continue
-                for u, v in _region_probes(region):
-                    point = tuple(origin[i] + u * u_axis[i] + v * v_axis[i] for i in range(3))
-                    inner = tuple(point[i] - na[i] * CSG_TOLERANCE for i in range(3))
-                    outer = tuple(point[i] + na[i] * CSG_TOLERANCE for i in range(3))
-                    if _contact_at(ctx, a, b, inner, outer):
-                        return True
-    return False
-
-
 def touches_facts_for(ctx: SurveyContext) -> list[CsgFact]:
-    """`touches`: the surveyed actor is flush against another actor's resolved boundary, with no
-    penetration.
+    """`touches [csg]`: the surveyed actor's authored geometry and a near brush's authored
+    geometry share a site whose resolved matter is flush (spec's intent -- the mechanism is a
+    matter-side probe, not polygon Area Contact; see `_touches_relation`'s own docstring for why).
+    Symmetric, so ONE pass over the near set suffices (`pair_touches`'s own discipline, restored)
+    -- the surveyed actor always leads, no depth annotated. Any brush kind on either side (spec:
+    "Given Brush A (ANY) and Brush B (ANY)"); brush-vs-brush only, matching `crosses`/`carves`'s
+    scope.
 
-    Symmetric, so the surveyed actor always leads (spec, Directionality) and no depth is annotated.
-    NOT source-restricted, unlike `crosses` -- a Subtract's carve legitimately stopping at the
-    resolved boundary it never cut is exactly the fact worth reporting. The OTHER side must still
-    author a resolved face, so `crosses_target_eligible` gates it: a Nonsolid bounds no solid, an
-    Intersect/Deintersect contributes nothing, and a non-brush actor's collision cylinder is not
-    world geometry. That gate is on the far side only, so a prop's contact is reported by the prop's
-    own survey and not by the room's -- an asymmetry in a symmetric relation, inherited and still the
-    owner's to settle.
+    Not de-duplicated against `crosses`/`carves` for the same pair: those are non-coplanar tests,
+    this is coplanar, so a shared actor pair can genuinely clear both (flush on one face, crossing
+    through another) -- two independent, both-true facts about different polygon pairs.
 
-    ONE pass over the near set, because `pair_touches` is symmetric in its two actors. Earlier rounds
-    needed two directions because they enumerated candidate faces from the resolved snapshot, where a
-    flush contact routinely leaves a surviving face on only one side -- and, when both sides consume
-    each other's face, on neither. Candidate planes now come from the actors' own authored geometry,
-    which nothing consumes.
-
-    A pair `crosses` claims is never also reported here. The exclusion is per PAIR and direction-free
-    -- `crosses` names the intruder and this relation names the surveyed actor, so comparing ordered
-    pairs would let the same two actors be `crosses` one way and `touches` the other (round 4's
-    per-face gate did exactly that). Board item `crosses-fires-on-a-subtract-s-carve-victim` recorded
-    one case this broke -- a blind pocket carved into a wall, `crosses` wrongly claiming the pair and
-    suppressing the `touches` fact it should also carry -- fixed by using resolved matter for
-    `crosses` itself (`test_touches_fires_for_a_blind_pockets_carve_victim`)."""
-    if ctx.probe.solidity is None:
+    The far side (`other`/`dst`) is gated by `crosses_target_eligible`, same as `crosses`: a
+    point actor's collision cylinder is not world geometry and a Mover authors no world face, so
+    neither can be NAMED as the far side of a `touches` line, even though both are legitimate
+    sources (`props_flush_against_a_room_wall`'s own framing -- flagged there as a real
+    asymmetry, not decided by this module)."""
+    if ctx.surveyed.brush is None:
         return []
-    crossed = {frozenset((f.src, f.dst)) for f in crosses_facts_for(ctx)}
     facts = []
     for other in ctx.near:
-        if not crosses_target_eligible(other, ctx.class_index):
+        if other.brush is None or not crosses_target_eligible(other, ctx.class_index):
             continue
-        if frozenset((ctx.name, other.name)) in crossed:
-            continue
-        if pair_touches(ctx, ctx.surveyed, other):
+        if _touches_relation(ctx, ctx.surveyed, other):
             facts.append(CsgFact(src=ctx.name, dst=other.name, relation="touches"))
-    return sorted(facts, key=lambda f: (f.src, f.dst))
-
-
-def shared_region(ctx: SurveyContext, a, b) -> tuple | None:
-    """The intersection of two actors' world AABBs, grown by `CSG_TOLERANCE`, or None when they do
-    not meet at all -- a cheap reject before either real geometric test below runs.
-
-    `_brush_bounds(ctx, actor)` (the module's own memoized, cells-agreeing AABB), not
-    `writes.actor_bounds` -- that function's own docstring already names this exact trap: it
-    "answers in Decimals over the actor's own polys", and this has to compare against float probe
-    points and agree with the cells `point_in_brush` itself tests. Floats throughout, in `ctx` for
-    the memo -- this is not `aabb_intersects`."""
-    a_lo, a_hi = _brush_bounds(ctx, a)
-    b_lo, b_hi = _brush_bounds(ctx, b)
-    lo = tuple(max(a_lo[i], b_lo[i]) - CSG_TOLERANCE for i in range(3))
-    hi = tuple(min(a_hi[i], b_hi[i]) + CSG_TOLERANCE for i in range(3))
-    if any(lo[i] > hi[i] for i in range(3)):
-        return None
-    return lo, hi
-
-
-# How finely a candidate contact region's own (already clipped, already real) 2-D extent is
-# sampled when testing for VOIDNESS -- never a second geometric tolerance, purely a resolution
-# choice, and NOT shared with `touches`' `_region_probes` (tuned for a different question and a
-# proven, six-round history this function does not disturb). Denser than a fixed 5-point fan, and
-# review found that matters: a real, ordinary-sized opening (a 200x200 uu doorway in a much larger
-# shared wall) can sit off every one of `_region_probes`' 5 fixed points and be missed even though
-# it is not narrow at all -- POSITION-dependent, not just size-dependent. `n` odd so the grid lands
-# on the region's own bounding-box centre, same reasoning as the old `CONNECT_GRID`.
-VOID_PROBE_GRID = 9
-
-
-def _region_grid_probes(region: list, n: int = VOID_PROBE_GRID) -> list:
-    """An `n x n` grid of `(u, v)` points over `region`'s own bounding box, filtered to the points
-    that actually fall inside the convex polygon `region` (CCW-wound, as every caller here already
-    produces via `relation._ensure_ccw`/`relation._clip_2d`).
-
-    Scoped to the REAL clipped region -- typically room-sized, not the whole level -- rather than a
-    world-space AABB, which is what made the original grid-sampling `voids_meet` too coarse to be
-    useful: sampling the entire shared bounding box at a fixed low count. Sampling the much smaller,
-    already-known-real region at equal or higher density is cheap (candidate regions surviving the
-    `_MIN_CONTACT_AREA` gate are few).
-
-    Every point is STRICTLY interior to `[lo, hi]` on each axis (`(k + 1) / (n + 1)`, never `k /
-    (n - 1)`) -- matching `_region_probes`' own discipline, and load-bearing, not cosmetic: a grid
-    that includes the exact box edge lands a sample exactly on a neighbouring actor's own boundary
-    (e.g. a wall whose extent exactly matches the region here), where the resolved solidity oracle's
-    boundary tie-break can read "not solid" for a point that is genuinely surrounded by solid
-    everywhere else -- measured live: `two_rooms_split_by_an_intact_wall`'s region corner sampled
-    exactly onto the Wall's own corner and read void, wrongly firing `connects` across an intact
-    wall. Staying strictly inside costs nothing a real opening needs, since an opening of any
-    reportable size has interior points too.
-
-    Honest limit, stated rather than claimed away: any FIXED grid can still miss an opening narrower
-    than its own spacing -- this cannot be solved by sampling alone, only by testing against the
-    opening's own geometry, which this function has no access to (only the resolved solidity
-    ORACLE, a point query, `probe.solidity.point_is_solid`)."""
-    lo_u = min(p[0] for p in region)
-    hi_u = max(p[0] for p in region)
-    lo_v = min(p[1] for p in region)
-    hi_v = max(p[1] for p in region)
-
-    def axis(lo, hi):
-        span = hi - lo
-        if span <= 0.0:
-            return [lo]
-        return [lo + span * (k + 1) / (n + 1) for k in range(n)]
-
-    def inside(u, v) -> bool:
-        m = len(region)
-        return all((region[(i + 1) % m][0] - region[i][0]) * (v - region[i][1]) -
-                   (region[(i + 1) % m][1] - region[i][1]) * (u - region[i][0]) >= -1e-9
-                   for i in range(m))
-
-    return [(u, v) for u in axis(lo_u, hi_u) for v in axis(lo_v, hi_v) if inside(u, v)]
-
-
-def _planar_void_contact(ctx: SurveyContext, a, b) -> tuple | None:
-    """Do `a` and `b` share a real (positive-AREA) patch of authored boundary that is VOID there --
-    and if so, at what point? Returns the first confirmed-void probe point, or `None` when no
-    candidate plane has one. `voids_meet` walks on from this point to check the void actually
-    continues into BOTH `a`'s and `b`'s own interior, rather than dead-ending in a sealed bubble on
-    either side (see `_void_reaches_interior`) -- this function only answers for the shared plane
-    itself.
-
-    This is `pair_touches`'s own technique (Task 13, round 6 -- the fix that finally closed
-    `touches`'s edge/corner and vanished-shared-face defects; `_self_consistent_plane`/
-    `_reproject_uv` -- shared with `pair_touches`, see their docstrings -- the fix that closed its
-    rotated-differently-sized-actor precision defect): every candidate plane from `contact_planes`
-    (either actor's own face, exactly `pair_touches`' own candidate set), each actor's own reach
-    onto that plane (`plane_slices`, on each actor's own self-consistent version of it), the two
-    reprojected into one shared frame and clipped together exactly (`relation._clip_2d`), and the
-    region rejected unless its area clears `_MIN_CONTACT_AREA` -- the same tolerance-derived
-    threshold, not a second epsilon. What differs from `pair_touches` is the question asked of the
-    surviving region: whether the shared patch itself is VOID, not which actor's matter is on which
-    side -- a coincident carved plane is exactly the case with no surviving solid to be flush
-    against (module docstring, `_contact_at`'s third bullet).
-
-    This is also what makes an edge- or corner-only meeting (`two_cubes_meeting_at_one_edge`) a
-    non-fact here even before any solidity probe runs: the two actors' own cross-sections at the
-    only candidate plane(s) touching that edge overlap in a zero-area sliver, so `_MIN_CONTACT_AREA`
-    rejects it exactly as it already does for `touches`.
-
-    **This single mechanism also covers full nesting and a general partial merge -- no separate
-    volume test is needed.** An earlier round of this function used `_own_planes(ctx,a)` x
-    `_own_planes(ctx,b)` filtered to MUTUALLY coincident planes only, plus a separate centroid-based
-    3-D containment test for the no-coincident-plane case (nesting). Review found that centroid test
-    regressed the spec's own "partial merge" case -- it only fires when the shared volume covers
-    roughly half of one actor's own extent, and a genuine, real 100x280x200 uu^3 overlap well under
-    that fraction (confirmed void on both sides by direct point checks) produced no fact at all.
-
-    The fix is to stop restricting candidates to MUTUALLY-owned planes and use `contact_planes`'
-    full set (either actor's own face, exactly as `pair_touches` already does) instead. This is
-    sound for a reason grounded in H-polytope geometry, not a heuristic: whenever two convex
-    volumes' intersection has positive measure (a shared 2-D patch on a coincident plane, OR a
-    genuine 3-D overlap), AT LEAST ONE of the two actors' own bounding half-space planes is a real
-    boundary facet of that intersection -- every facet of an intersection of half-spaces lies on one
-    of the ORIGINAL half-spaces, by construction. So testing every one of `a`'s and `b`'s own planes
-    (not just the ones they happen to share) is complete: a real overlap of ANY shape always shows
-    up as positive area on SOME candidate, and `plane_slices` genuinely reports an actor's own
-    INTERIOR cross-section (not just its boundary face) wherever the plane cuts through the middle
-    of its cell (`_cell_slice`'s own `lo <= 0 <= hi` branch) -- which is exactly how a nested or
-    partially-merged actor's full cross-section at another actor's own face plane is recovered
-    (verified: `redundant_nested_subtract`'s `InnerCarve` face at `plane_slices(ctx, OuterRoom,
-    *that_plane)` returns `OuterRoom`'s full local cross-section there, not an empty result). No
-    false positive risk either: a candidate plane one actor doesn't genuinely reach still fails
-    `plane_slices`' own span test (`_cell_slice`), so a hit here is always real evidence of a
-    positive-area shared, authored cross-section -- exactly the soundness argument `pair_touches`
-    already relies on for its own broader candidate set.
-
-    The voidness probe (`_region_grid_probes`, not `_region_probes`) is denser and scoped to the
-    real clipped region for the same review-found reason: a doorway carved through an otherwise
-    solid shared patch is a genuine opening of real size, and `_region_probes`' fixed 5-point fan
-    (tuned for `touches`' different question) can miss one that doesn't happen to sit under the
-    centroid or a corner-fan midpoint -- POSITION-dependent, not just size-dependent. See that
-    function's own docstring for what a grid can and cannot promise."""
-    for normal, offset in contact_planes(ctx, a, b):
-        na, oa = _self_consistent_plane(ctx, a, normal, offset)
-        slices_a = plane_slices(ctx, a, na, oa)
-        if not slices_a:
-            continue
-        nb, ob = _self_consistent_plane(ctx, b, normal, offset)
-        slices_b = plane_slices(ctx, b, nb, ob)
-        if not slices_b:
-            continue
-        frame_a = _plane_frame(na, oa)
-        origin, u_axis, v_axis = frame_a
-        frame_b = _plane_frame(nb, ob)
-        for poly_a in slices_a:
-            for poly_b_raw in slices_b:
-                poly_b = _reproject_uv(poly_b_raw, frame_b, frame_a)
-                region = relation._clip_2d(relation._ensure_ccw(poly_a),
-                                            relation._ensure_ccw(poly_b))
-                if len(region) < 3 or abs(relation._shoelace_area(region)) <= _MIN_CONTACT_AREA:
-                    continue
-                for u, v in _region_grid_probes(region):
-                    point = tuple(origin[i] + u * u_axis[i] + v * v_axis[i] for i in range(3))
-                    if not ctx.probe.solidity.point_is_solid(point):
-                        return point
-    return None
-
-
-def _actor_interior_sample_point(ctx: SurveyContext, actor) -> tuple:
-    """A point definitely inside `actor`'s own authored volume -- its largest decomposed cell's own
-    vertex centroid (`_piece_centroid`, always interior to a convex cell). The landmark
-    `_void_reaches_interior`'s reachability walk aims for."""
-    cells = actorgraph.decompose_convex(actor, cache=ctx.cells)
-    biggest = max(cells, key=cell_volume)
-    return _piece_centroid(biggest)
-
-
-# CSG_TOLERANCE-scaled like `_SIDE_PROBE_STEP` (0.05uu -- "comfortably clear of CSG_TOLERANCE...
-# far below the smallest real content feature"), but coarser: this walk only needs to find ANY
-# solid wall separating a contact patch from an actor's own interior, over a whole-actor span, not
-# resolve a boundary to sub-uu precision the way `_SIDE_PROBE_STEP`'s single off-face nudge does.
-_VOID_REACH_STEP = _SIDE_PROBE_STEP * 20
-
-
-def _void_reaches_interior(ctx: SurveyContext, start, actor) -> bool:
-    """Walking from `start` toward `actor`'s own interior sample point in `_VOID_REACH_STEP`
-    increments, is every step still void, all the way there (or past `actor`'s own authored bounds
-    on that side)? False the moment a step reads solid.
-
-    The reachability test `_planar_void_contact`'s own patch check cannot make: that check only asks
-    whether the SHARED PLANE is void, never whether that void continues into `actor`'s real interior
-    rather than dead-ending in a sealed bubble a different Subtract carved nearby -- the false
-    positive `subtract_sealed_inside_a_block_sharing_the_outer_walls_plane` pins."""
-    target = _actor_interior_sample_point(ctx, actor)
-    lo, hi = _brush_bounds(ctx, actor)
-    dist = math.dist(start, target)
-    if dist <= _VOID_REACH_STEP:
-        return not ctx.probe.solidity.point_is_solid(target)
-    direction = tuple((target[i] - start[i]) / dist for i in range(3))
-    steps = int(dist / _VOID_REACH_STEP)
-    for i in range(1, steps + 1):
-        p = tuple(start[a] + direction[a] * _VOID_REACH_STEP * i for a in range(3))
-        if any(p[a] < lo[a] - CSG_TOLERANCE or p[a] > hi[a] + CSG_TOLERANCE for a in range(3)):
-            return True   # exited actor's own bounds while still void -- nothing left of its box to hit
-        if ctx.probe.solidity.point_is_solid(p):
-            return False
-    return not ctx.probe.solidity.point_is_solid(target)
-
-
-# `voids_meet` decides continuity by LOCAL SOLIDITY only, never by the resolved model's zone
-# numbers: the zone flood is a whole-model pass, so zone numbers are not reproducible under the
-# bounded-neighborhood solve (spike.md §4 residual 3), and two rooms can share a zone without their
-# voids meeting at all. No survey relation may read one -- `test_connects_reads_no_zone_number`
-# pins this by grepping `voids_meet`'s and `connects_facts_for`'s own source, so the rationale lives
-# HERE, outside both function bodies, rather than in either docstring.
-def voids_meet(ctx: SurveyContext, a, b) -> bool:
-    """Are `a`'s and `b`'s void regions continuous -- no surviving solid between them?
-
-    `shared_region` is a fast reject only (disjoint AABBs can share nothing); the actual decision is
-    `_planar_void_contact`'s single real-geometric-intersection test -- never a sampled grid over
-    that box. A prior grid-sampling version of this function is what a live review caught missing a
-    rotated coincident seam entirely (0/125 grid samples on a real 15/15-point seam) and false-firing
-    on an edge/corner touch; a second review round found the fix's own replacement centroid-based
-    volume test then missed the spec's "partial merge" case. Both are the same defect class `touches`
-    needed six rounds to close, and both are closed here the way `touches` closed them: by testing
-    the real region, not guessing at it with a fixed grid or a single representative point.
-
-    A found contact point is not enough on its own: `_void_reaches_interior` walks on from it toward
-    each side's OWN interior, rejecting a patch that dead-ends in a sealed bubble a different
-    Subtract carved nearby rather than opening into that side's real void. `connects` is spec'd
-    symmetric (spec.md), so both directions must reach -- a one-directional check reports
-    `connects(OuterRoom, InnerCut)` from a sealed `InnerCut` bubble merely because `InnerCut`'s own
-    (trivially reachable, sealed) interior is reachable from the shared plane, even though the walk
-    the other way, toward `OuterRoom`'s interior, is blocked."""
-    if ctx.probe.solidity is None:
-        return False
-    if shared_region(ctx, a, b) is None:
-        return False
-    point = _planar_void_contact(ctx, a, b)
-    if point is None:
-        return False
-    return _void_reaches_interior(ctx, point, a) and _void_reaches_interior(ctx, point, b)
+    return sorted(facts, key=lambda f: f.dst)
 
 
 def connects_facts_for(ctx: SurveyContext) -> list[CsgFact]:
-    """`connects`: the surveyed Subtract's void is continuous with another Subtract's void.
-
-    Subtract-only on both sides, symmetric, so the surveyed actor leads. No depth and no `:idx` --
-    the fact is the absence of a face, and there is no face to name.
-
-    Gated by `_kind(ctx, actor) == "subtract"`, never the raw `query.csg_is_subtract` -- a Mover
-    carries no `CsgOper` at all and is excluded from world CSG entirely (`kind_of`'s own docstring),
-    so it has no void to be continuous with regardless of what its `CsgOper` prop (if any) happens to
-    spell; every other csg-tier eligibility gate in this module (`crosses_target_eligible`,
-    `_is_carve_boundary`) already goes through `_kind`/`kind_of` for exactly this reason.
-
-    The SURVEYED actor's own decomposition is forced up front, unguarded -- matching
-    `raw_facts_for`'s own rule that a degenerate SURVEYED brush propagates (a single-actor report has
-    nothing left to say) while only a degenerate NEIGHBOUR is skipped. A neighbour whose decomposition
-    fails inside `voids_meet` is silently dropped, not recorded: `CsgFact`/`connects_facts_for`
-    return a bare `list[CsgFact]`, and neither `crosses_facts_for` nor `touches_facts_for` tracks a
-    skipped csg-tier neighbour either (board item `csg-tier-raises-on-a-degenerate-neighbour-brush`
-    covers the cross-cutting gap for the csg tier as a whole) -- adding a `skipped` channel to this
-    one relation alone, ahead of that item, would be scope beyond what this task asked."""
+    """`connects [csg]`: the surveyed Subtract's void is continuous with another Subtract's void
+    -- void on both sides of a shared site, nothing solid between (see `_connects_relation`'s own
+    docstring). Symmetric, one pass, surveyed actor leads, both Subtractive."""
     if ctx.surveyed.brush is None or _kind(ctx, ctx.surveyed) != "subtract":
         return []
     actorgraph.decompose_convex(ctx.surveyed, cache=ctx.cells)   # propagates on a bad SURVEYED brush
-    out = []
+    facts = []
     for other in ctx.near:
-        if _kind(ctx, other) != "subtract":
+        if other.brush is None or _kind(ctx, other) != "subtract":
             continue
         try:
-            if voids_meet(ctx, ctx.surveyed, other):
-                out.append(CsgFact(src=ctx.name, dst=other.name, relation="connects"))
+            if _connects_relation(ctx, ctx.surveyed, other):
+                facts.append(CsgFact(src=ctx.name, dst=other.name, relation="connects"))
         except actorgraph.DegenerateBrushError:
             continue          # a bad neighbour is skipped, as it is in the raw tier
-    return sorted(out, key=lambda f: f.dst)
+    return sorted(facts, key=lambda f: f.dst)
 
 
-def _occupies_matter_exists(ctx: SurveyContext, x, s) -> bool:
-    """Does matter actor `x` (Add/Semisolid) `occupies` Subtract `s` -- the MARGINAL test (owner
-    ruling): a point p qualifies iff ALL of (i) `resolved_matter_of(x, p)` -- x's own matter
-    survives; (ii) `s` is the OPERATIVE carve at p -- the last writer reaching p once x is excluded
-    is `s` itself (`_last_writer_excluding(ctx, p, exclude=x.name) == s.name`); (iii)
-    `_is_void_excluding(p, exclude=x.name)` -- p is void when x is excluded (implied by (ii) here,
-    since s is always a Subtract, but kept as its own check to match the spec's three-condition
-    form).
-
-    (ii) was originally `_was_solid_before(s, p)`, which only asks "did *some* earlier brush leave p
-    solid" -- a tautology for whichever brush is FIRST in `csg_order` (`_was_solid_before`'s own
-    walk-backward base case returns True there with no reference to s's geometry at all), so it
-    could credit a Subtract with occupancy it never actually carved once a later brush had
-    re-carved the point for a different reason (`two_rooms_side_by_side`: `Outer` is first in trunk
-    order and gets falsely credited alongside the actual carving `RoomA`/`RoomB`, same class of bug
-    in `nested_niche_with_a_decoration`'s `Subtract1`). The operative-last-writer form only credits
-    the Subtract that is CURRENTLY the reason p is void, not any earlier writer of it.
-
-    Restricted throughout to p WITHIN s's own authored volume (`_cell_intersection(x_cell, s_cell)`,
-    the same guard `_occupies_nonsolid_exists`/`_occupies_point_exists` already use). Partitions the
-    x-and-s overlap against every OTHER brush (any of them can still flip (i)/(ii)) and tests each
-    resulting piece's centroid once -- exact, not sampled."""
-    relevant = [a for a in ctx.csg_order if a.name != x.name]
-    for x_cell in actorgraph.decompose_convex(x, cache=ctx.cells):
-        for s_cell in actorgraph.decompose_convex(s, cache=ctx.cells):
-            overlap = _cell_intersection(x_cell, s_cell)
-            if overlap is None:
-                continue
-            for piece in _partition_by_brushes(overlap, relevant, ctx):
-                p = _piece_centroid(piece)
-                if (resolved_matter_of(ctx, x, p)
-                        and _last_writer_excluding(ctx, p, exclude=x.name) == s.name
-                        and _is_void_excluding(ctx, p, exclude=x.name)):
-                    return True
-    return False
-
-
-def _brushes_before(ctx: SurveyContext, subtract) -> list:
-    """`ctx.csg_order` truncated to every brush strictly before `subtract` -- the only ones
-    `_was_solid_before(subtract, ...)` ever reads, and so the only ones needed to make it
-    piecewise-constant over a `_partition_by_brushes` split."""
-    return ctx.csg_order[:ctx.csg_index.get(subtract.name, len(ctx.csg_order))]
-
-
-def _occupies_nonsolid_exists(ctx: SurveyContext, x, s) -> bool:
-    """Does Nonsolid brush `x` `occupies` Subtract `s` BY SHAPE -- `nonsolid INTERSECT s INTERSECT
-    was-solid-before(s)`, non-empty? `x` contributes no matter, so the marginal test's conditions
-    (i)/(iii) make no sense for it; this is a pure authored-shape-in-carved-region test, exact via
-    the same partition machinery."""
-    earlier = _brushes_before(ctx, s)
-    for x_cell in actorgraph.decompose_convex(x, cache=ctx.cells):
-        for s_cell in actorgraph.decompose_convex(s, cache=ctx.cells):
-            overlap = _cell_intersection(x_cell, s_cell)
-            if overlap is None:
-                continue
-            for piece in _partition_by_brushes(overlap, earlier, ctx):
-                if _was_solid_before(ctx, s, _piece_centroid(piece)):
-                    return True
-    return False
-
-
-def _occupies_point_exists(ctx: SurveyContext, x, s) -> bool:
-    """Does non-matter/point actor `x` `occupies` Subtract `s`? `x`'s own `Location`, tested the
-    AUTHORED/relative way `resolved_matter_of` is (never the pooled `point_is_solid` oracle -- see
-    its own docstring), is in `s`'s carved region and still resolved-void there. A single point, not
-    a volume -- `x` has no cells to partition."""
-    if x.location is None:
-        return False
-    p = tuple(float(c) for c in x.location)
-    if not _in_authored_volume(ctx, s, p):
-        return False
-    if not _was_solid_before(ctx, s, p):
-        return False
-    return _is_void_excluding(ctx, p)
+# The occupant kinds `occupies [csg]` allows on brush B's side (spec: ADDITIVE/SEMISOLID/
+# NONSOLID/MOVER) -- a Subtract/Intersect/Deintersect contributes nothing a void could contain.
+_OCCUPIES_OCCUPANT_KINDS = frozenset({"add", "semisolid", "nonsolid", "mover"})
 
 
 def occupies_facts_for(ctx: SurveyContext) -> list[CsgFact]:
-    """`occupies`: the occupant leads, whichever side is surveyed. Two directions, both computed --
-    the surveyed actor as OCCUPANT (against every Subtract in its neighborhood) and as SUBTRACT
-    (against every occupant candidate in its neighborhood). NOT a competition: `occupies` fires
-    independently per `(occupant, subtract)` pair, unlike the retired `contains`'s single-winner
-    rule -- an occupant seated across two Subtracts' voids reports `occupies` against both (spec,
-    "composes where containment cannot")."""
+    """`occupies [csg]`: the occupant leads, whichever side is surveyed. Two directions, both
+    computed -- the surveyed actor as OCCUPANT (against every Subtract in its neighborhood) and
+    as SUBTRACT (against every occupant candidate in its neighborhood). NOT a competition:
+    `occupies` fires independently per `(occupant, subtract)` pair -- an occupant seated across
+    two Subtracts' voids reports `occupies` against both."""
     facts: list = []
+    probe_cache: dict = {}
 
-    def _occupies(occupant, subtract) -> bool:
-        if occupant.brush is None:
-            return _occupies_point_exists(ctx, occupant, subtract)
-        kind = _kind(ctx, occupant)
-        if kind in ("add", "semisolid", "mover"):
-            # A Mover's position for `_last_writer_excluding`/`resolved_matter_of` purposes is
-            # already "after everything" in effect -- it is absent from `ctx.csg_order` entirely,
-            # and every lookup against that list already falls back to "at the end" for a name it
-            # doesn't contain, which is exactly the spec's Mover convention, for free.
-            return _occupies_matter_exists(ctx, occupant, subtract)
-        if kind == "nonsolid":
-            return _occupies_nonsolid_exists(ctx, occupant, subtract)
-        return False   # subtract/intersect/deintersect are never occupants
+    def is_occupant(actor) -> bool:
+        if actor.brush is None:
+            return True
+        return _kind(ctx, actor) in _OCCUPIES_OCCUPANT_KINDS
 
     if ctx.surveyed.brush is None or _kind(ctx, ctx.surveyed) != "subtract":
-        subtracts = [a for a in ctx.near if a.brush is not None and _kind(ctx, a) == "subtract"]
-        for s in subtracts:
-            if s.name != ctx.name and _occupies(ctx.surveyed, s):
-                facts.append(CsgFact(src=ctx.name, dst=s.name, relation="occupies"))
+        if is_occupant(ctx.surveyed):
+            subtracts = [a for a in ctx.near if a.brush is not None and _kind(ctx, a) == "subtract"]
+            for s in subtracts:
+                if s.name != ctx.name and _occupies_relation(ctx, s, ctx.surveyed, probe_cache=probe_cache):
+                    facts.append(CsgFact(src=ctx.name, dst=s.name, relation="occupies"))
     if ctx.surveyed.brush is not None and _kind(ctx, ctx.surveyed) == "subtract":
         candidates = list(ctx.near) + list(ctx.points)
         for occupant in candidates:
-            if occupant.name != ctx.name and _occupies(occupant, ctx.surveyed):
+            if (occupant.name != ctx.name and is_occupant(occupant)
+                    and _occupies_relation(ctx, ctx.surveyed, occupant, probe_cache=probe_cache)):
                 facts.append(CsgFact(src=occupant.name, dst=ctx.name, relation="occupies"))
 
     return sorted(facts, key=lambda f: (f.src, f.dst))

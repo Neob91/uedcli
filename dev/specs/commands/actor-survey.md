@@ -14,19 +14,10 @@ earlier-in-CSG-order brush has acted on it, but before B itself is
 added. Raw-tier rules never use this — raw always reads each brush's
 full authored shape.
 
-**Area contact**: two polygons, lying on the same plane, facing away
-from each other (opposite-facing normals) — one's outline minus the
-other is where each is "outside" the other, so opposite-facing normals
-is what makes this a touch rather than an overlap — whose 2D outlines
-share more than a single point or a single edge: the overlap between
-them covers a real patch of area. A shared corner or a shared edge
-alone is *not* area contact, and is not any relation at all here — not
-`touches`, and not `crosses` either, since nothing's interior reaches
-into the other's. Two polygons on different (non-coplanar) planes can
-never be in area contact — their shared points, if any, form at most a
-line, never a patch — which is why `crosses` (the non-coplanar relation)
-is never required to clear this bar: a shared point there is already as
-much contact as the geometry allows.
+**Real area** (as opposed to a mere point or edge): two coplanar
+polygons' 2D outlines overlapping by more than a single point or a
+single edge — the overlap covers an actual patch. A shared corner or
+edge alone is not real area, and is not any relation at all here.
 
 ## raw:touches
 
@@ -42,10 +33,29 @@ coplanar overlap"; either one, by itself, is `raw:touches`.
 
 ## csg:touches
 
-Given Brush A (ANY) and Brush B (ANY), B touches A when:
-- Brush A is before brush B in CSG order
-- Some polygon of brush A (resolved up until right before brush B) and
-  some polygon of brush B are in area contact (see above)
+A point/volume question, not a polygon-area test — the same class as
+`csg:occupies`, not `csg:crosses`/`csg:carves`. Corrected from an
+earlier draft of this spec: a flush contact's surviving face routinely
+belongs to neither authored polygon at all (two Adds butted exactly
+face-to-face lose BOTH owners' faces at the shared plane; a self-carved
+stub's cap belongs entirely to the Subtract that cut it, never to the
+matter actor whose authored body never had a face there) — no
+polygon-to-polygon area test can see either shape, so the fact is
+decided by a matter-side probe instead.
+
+Given Brush A (ANY) and Brush B (ANY), B touches A when some site
+exists where:
+- Brush A's and brush B's own authored polygons coplanar-overlap by a
+  real area, OR (when no such matching polygon exists on one side) one
+  side's own authored polygon, clipped to the other actor's own extent,
+  still has a real area there
+- At that site, brush A's and brush B's resolved matter sit on opposite
+  sides of the site's plane (ordinary matter-against-matter contact) —
+  OR one side's resolved matter is on exactly one side AND the other
+  side is a Subtractive brush that genuinely carved real matter away
+  right there (matter resting against a real carve boundary — never a
+  no-op Subtract, and never a Subtract's boundary floating deep inside
+  the other actor's volume rather than at its own edge)
 
 ## raw:crosses
 
@@ -110,16 +120,31 @@ Movers excluded entirely — never carved, never carve.
 
 ## csg:connects
 
-Given Brush A (SUBTRACTIVE) and Brush B (SUBTRACTIVE), B connects with A
-when:
-- Brush A is before brush B in CSG order
-- Some polygon of brush A (resolved up until right before brush B) and
-  some polygon of brush B are either in area contact (see above) or
-  have interiors that share a point
+Same class of test as `csg:touches` (matter-side probe, not polygon
+area contact), with "void on both sides, nothing solid between"
+in place of "matter on opposite sides."
 
-Coplanar pairs included — unlike `crosses`/`carves`, there's no
-same-normal/opposite-normal ambiguity here: this is about void
-continuity, not which side has solid matter.
+Given Brush A (SUBTRACTIVE) and Brush B (SUBTRACTIVE), B connects with A
+when any of:
+- Some polygon of brush A and some polygon of brush B (full authored
+  shapes) lie on non-coplanar planes with interiors sharing a point
+  (same test `crosses`/`carves` use — a real intersection, not just a
+  shared boundary)
+- Some site exists (found the same way `touches` finds one) where
+  neither brush A's nor brush B's resolved matter is on either side
+  (both are genuinely void there, not merely "not present at all"),
+  both are at their own real authored boundary at that site, and no
+  OTHER actor's matter fills the gap between them either
+- Brush A's full authored shape fully contains brush B's, or vice versa
+  — a nested Subtract's void is trivially continuous with its
+  container's, redundant carve or not
+
+Known gap, not fixed: no reachability check across the whole level. A
+Subtract's void sealed off by an unrelated solid block can still
+report `connects` to a neighbor sharing a coincident wall plane, since
+this only checks void-ness locally at the shared site, never whether a
+void path actually threads all the way between the two Subtracts'
+interiors.
 
 ## csg:occupies
 
@@ -131,19 +156,23 @@ MOVER) or a non-brush point actor, B occupies A when:
 - Brush A is before brush B in CSG order (Mover convention from
   `csg:crosses` applies: a Mover's order position is after every real
   brush, so this always holds for a Mover B)
-- The void carved by brush A (resolved up until right before brush B)
-  fully contains brush B's raw (authored) geometry — or, for a
+- The void carved by brush A (resolved up until right before brush B),
+  restricted to where it OVERLAPS brush B's raw (authored) geometry —
+  not full containment: an occupant seated across two Subtracts' voids,
+  fully inside neither, must still report occupies against each one
+  independently (`Bridge`, 20uu into each of two Subtracts' voids,
+  composing where full containment structurally cannot) — or, for a
   non-brush point actor, contains its Location point
 
 ## Open, not yet resolved
 
 - Float-noise epsilon on the coplanarity and interior-crossing checks.
-- Whether raw tier's *existing* `overlaps`/`meets` implementation
-  (volume/cell-based, not polygon-based) already handles Nonsolid
-  brushes correctly, or needs the same polygon-based fix `csg:crosses`
-  got. Not assumed either way — needs checking before implementation.
-- Implementation must walk every surviving/authored polygon fragment —
-  never deduplicate to one fragment per (owner, plane); that dedup was
-  the root cause of the original bug.
+- `csg:crosses`/`csg:carves` must walk every surviving/authored polygon
+  fragment — never deduplicate to one fragment per (owner, plane); that
+  dedup was the root cause of the original bug. Not relevant to
+  `csg:touches`/`csg:connects`/`csg:occupies`, which test authored
+  polygons and resolved matter directly, not resolved face fragments.
+- `csg:connects`'s reachability gap (sealed voids) — see its own
+  section above.
 - Scope: brush-vs-brush only. Non-brush point-actor sources are
   untouched by this spec.
