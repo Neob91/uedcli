@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
-# bin/build -- builds the new Rust uedcli skeleton inside the uedcli-rust-build Docker image (the
-# same one old/bin/build already provisions, as a side effect of building old/'s native
-# extension) -- no host Rust needed.
+# bin/build -- builds the new Rust uedcli skeleton inside the uedcli-rust-build Docker image, then
+# refreshes old/'s own venv/native-ext/wasm (old/bin/build) best-effort -- every unported verb
+# still falls back to old/bin/uedcli, so skipping that refresh risks a stale fallback, but a
+# failure there (e.g. an unrelated npm/web issue) must not block this binary's own build.
 set -euo pipefail
 NEW_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 cd "$NEW_ROOT"
 
-# Reuse old/'s own image-freshness check (content-hash label, rebuilds on Dockerfile change)
-# rather than a bare existence check -- a stale image would otherwise build silently against an
-# outdated toolchain instead of being caught. Sourcing this also redefines UEDCLI_DIR to old/'s
-# own path (it's _venv.sh's own anchor) -- $NEW_ROOT is this script's separate name for the real
-# repo root, used below, so that redefinition doesn't break anything here.
 # shellcheck source=old/bin/_venv.sh
 source "$NEW_ROOT/old/bin/_venv.sh"
 _ensure_build_image \
@@ -25,3 +21,7 @@ docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e CARGO_HOME=/io/target
   || { echo "bin/build: cargo build failed" >&2; exit 1; }
 
 echo "bin/build: done -- binary at target/debug/uedcli" >&2
+
+"$NEW_ROOT/old/bin/build" \
+  || echo "bin/build: old/bin/build failed -- old/bin/uedcli's fallback may be stale, but the" \
+          "binary above is up to date" >&2
