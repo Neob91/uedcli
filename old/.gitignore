@@ -16,6 +16,16 @@ __pycache__/
 *.swp
 _scratch/
 
+# setuptools build metadata (pip install -e .) -- regenerated, never committed.
+/uedcli.egg-info/
+
+# A dev-local UEDCLI_HOME (schema/package decode cache + config.toml pointing at real game
+# assets) -- machine-local, never committed.
+/.uedcli-home/
+
+# A stray one-off review script left at the repo root -- not real content.
+/_scratch_review_t_quad3.py
+
 # bin/serve-gui-autoreload's own state dir (last-build marker + child-process logs).
 /.serve-gui-autoreload/
 
