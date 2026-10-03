@@ -26,6 +26,7 @@ import os
 import re
 import secrets
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
 from .model import Actor, Level, parse_t3d
@@ -255,9 +256,7 @@ def read_actor_tree(
     so it writes only what its process actually changed (direction/trunk-and-editor.md 2026-07-18 — trunk delta
     writes). The name→folder map is the folder half of that snapshot: a folder-ONLY change leaves
     body+rank byte-identical, so the delta diff MUST compare it too or the write is silently dropped.
-    An EMPTY `actor.t3d` is skipped like a missing one: it can only be a crashed pre-atomic-write
-    leftover, and admitting it would make every later read of the tree die parsing an empty body.
-    Each actor's `folder` is loaded into `actor.folder` (absent/empty file → None). Note: only
+    Which dirs are admitted, and how the sidecars are read, is `_read_actor_dir`. Note: only
     sub-DIRECTORIES of `actors/` are iterated, so a legacy flat `actors/<name>.t3d` FILE is ignored
     (stash_register/stashlib treat such a stale tree as absent).
 
@@ -281,32 +280,162 @@ def read_actor_tree(
     for entry in entries:
         if not entry.is_dir():
             continue
-        d = Path(entry.path)
-        try:
-            # Name -> "is this a regular FILE" (not just "does this name exist"): a sidecar path
-            # that's a directory instead (a real git-merge-conflict shape in this per-actor-file
-            # trunk layout, `dev/docs/architecture.md`) must degrade the same way an absent sidecar
-            # does, not crash `.read_text()` with IsADirectoryError (review finding).
-            children = {c.name: c.is_file() for c in os.scandir(entry.path)}
-        except (FileNotFoundError, NotADirectoryError):
-            continue                                  # dir vanished mid-scan (concurrent writer)
-        if not children.get("actor.t3d"):
+        read = _read_actor_dir(Path(entry.path), entry.name)
+        if read is None:
             continue
-        text = (d / "actor.t3d").read_text()
-        if not text.strip():                          # torn/crashed leftover — never a valid actor
+        actor, text, rank = read
+        level.actors[entry.name] = actor
+        bodies[entry.name] = text
+        folders[entry.name] = actor.folder
+        ranks[entry.name] = rank
+    level.order = sorted(level.actors, key=lambda n: (ranks.get(n, ""), n))
+    return level, ranks, bodies, folders
+
+
+def _read_actor_dir(d: Path, name: str) -> tuple[Actor, str, str] | None:
+    """One `actors/<name>/` dir → `(actor, raw body text, order_value)`, or None when it holds no
+    usable actor: no `actor.t3d` (not an actor dir, or a write whose rank landed but whose body
+    hasn't yet), an EMPTY `actor.t3d` (only ever a crashed pre-atomic-write leftover — admitting it
+    would make every later read die parsing an empty body), or a dir that vanished mid-scan under a
+    concurrent writer. `actor.folder`/`actor.labels` are filled from the sidecars."""
+    try:
+        # Name -> "is this a regular FILE" (not just "does this name exist"): a sidecar path
+        # that's a directory instead (a real git-merge-conflict shape in this per-actor-file
+        # trunk layout, `dev/docs/architecture.md`) must degrade the same way an absent sidecar
+        # does, not crash `.read_text()` with IsADirectoryError (review finding).
+        children = {c.name: c.is_file() for c in os.scandir(d)}
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    if not children.get("actor.t3d"):
+        return None
+    text = (d / "actor.t3d").read_text()
+    if not text.strip():
+        return None
+    actor = load_actor_body(text, name)
+    folder = (d / "folder").read_text().strip() if children.get("folder") else ""
+    actor.folder = folder or None                     # absent/empty → ungrouped
+    actor.labels = (frozenset(ln.strip() for ln in (d / "labels").read_text().splitlines() if ln.strip())
+                    if children.get("labels") else frozenset())  # absent/empty → no labels
+    return actor, text, ((d / "order_value").read_text().strip()
+                         if children.get("order_value") else "")
+
+
+@dataclass(frozen=True, kw_only=True)
+class ActorStamp:
+    """One actor dir's filesystem fingerprint — the staleness test `read_actor_tree_delta` uses to
+    decide whether it may reuse an already-parsed actor instead of re-reading its files.
+
+    `dir_mtime_ns` catches every write uedcli itself makes: each lands `actor.t3d` via tmp +
+    `os.replace` inside the dir (`write_actor_tree`), and creating/renaming/unlinking an entry
+    always moves the DIRECTORY's mtime. It also catches any other writer that replaces by rename —
+    git, `sed -i`, most editors. `body_mtime_ns`/`body_size` additionally catch an external writer
+    that truncates `actor.t3d` IN PLACE, which never touches the dir entry.
+
+    An in-place rewrite of the `folder`/`labels`/`order_value` sidecars is deliberately not
+    covered: those are uedcli-private files, and uedcli only ever writes them atomically. Owner
+    ruling 2026-10-03 — stat'ing all four files costs ~0.95s per 2745-actor Load against ~0.6s for
+    this pair, and the sidecars have no external writer to catch."""
+    dir_mtime_ns: int
+    body_mtime_ns: int
+    body_size: int
+
+
+@dataclass(frozen=True, kw_only=True)
+class TrunkRead:
+    """`read_actor_tree`'s four return values plus the `ActorStamp`s a later
+    `read_actor_tree_delta` diffs against. `level`/`ranks`/`bodies`/`folders` mean exactly what
+    they do there."""
+    level: Level
+    ranks: dict[str, str]
+    bodies: dict[str, str]
+    folders: dict[str, str | None]
+    stamps: dict[str, ActorStamp]
+
+
+@dataclass(frozen=True, kw_only=True)
+class TrunkDelta:
+    """What `read_actor_tree_delta` did. `read` is the COMPLETE current tree either way — the
+    delta is about what it had to re-read, not about what it returns. `reread` names the actors it
+    parsed from disk, added or stamp-changed; every other actor in `read` was reused verbatim, so a
+    caller holding per-actor derived data (render data, say) may keep it. There is no `removed`
+    counterpart: `read.level.actors` already names exactly what is there now."""
+    read: TrunkRead
+    reread: frozenset[str]
+
+
+def stamp_actor_tree(tree_dir: Path) -> dict[str, ActorStamp]:
+    """Every actor dir's `ActorStamp`, for the dirs `read_actor_tree` would admit (one holding an
+    `actor.t3d`). A missing/empty tree → `{}`.
+
+    Two syscalls per actor and no file reads: one `os.scandir` of `actors/` gives each dir's own
+    mtime via `DirEntry.stat()` (an `fstatat` against the dir fd scandir already holds — measured
+    ~0.03s for 2745 actors, against ~0.66s for the same number of absolute-path `os.stat` calls on
+    this storage), then one dir_fd-relative stat of each `actor.t3d`. Measured 0.6s at 2745 actors,
+    against 8.2s to read the same tree."""
+    adir = _actors_dir(tree_dir)
+    try:
+        fd = os.open(adir, os.O_RDONLY)
+    except (FileNotFoundError, NotADirectoryError):
+        return {}
+    try:
+        stamps: dict[str, ActorStamp] = {}
+        for entry in os.scandir(adir):
+            if not entry.is_dir():
+                continue
+            try:
+                dir_st = entry.stat()
+                body_st = os.stat(f"{entry.name}/actor.t3d", dir_fd=fd)
+            except (FileNotFoundError, NotADirectoryError):
+                continue        # no body, or vanished mid-scan — `_read_actor_dir` skips it too
+            stamps[entry.name] = ActorStamp(dir_mtime_ns=dir_st.st_mtime_ns,
+                                            body_mtime_ns=body_st.st_mtime_ns,
+                                            body_size=body_st.st_size)
+        return stamps
+    finally:
+        os.close(fd)
+
+
+def read_actor_tree_delta(tree_dir: Path, previous: TrunkRead | None) -> TrunkDelta:
+    """`read_actor_tree`, but reusing `previous`'s already-parsed actors wherever the on-disk
+    `ActorStamp` is unchanged — the read half of the trunk's delta-write pattern
+    (`dev/docs/architecture.md`). `previous=None` reads every actor, same as `read_actor_tree`
+    (plus the stamp pass, which only this entry point pays).
+
+    Stamps are taken BEFORE the reads, never after: a write landing between the two is then
+    recorded under its OLD stamp, so the next call sees a difference and re-reads it. Stamping
+    afterwards would record the new stamp against the old body and never pick that write up."""
+    stamps = stamp_actor_tree(tree_dir)
+    prev_stamps = previous.stamps if previous is not None else {}
+    adir = _actors_dir(tree_dir)
+    level = Level()
+    ranks: dict[str, str] = {}
+    bodies: dict[str, str] = {}
+    folders: dict[str, str | None] = {}
+    reread: set[str] = set()
+    gone: set[str] = set()                # stamped, then unreadable — drop from `stamps` as well
+    for name in sorted(stamps):           # same order `read_actor_tree`'s sorted scan produces
+        if stamps[name] == prev_stamps.get(name):
+            level.actors[name] = previous.level.actors[name]
+            ranks[name] = previous.ranks[name]
+            bodies[name] = previous.bodies[name]
+            folders[name] = previous.folders[name]
             continue
-        name = entry.name
-        actor = load_actor_body(text, name)
-        folder = (d / "folder").read_text().strip() if children.get("folder") else ""
-        actor.folder = folder or None                 # absent/empty → ungrouped
-        actor.labels = (frozenset(ln.strip() for ln in (d / "labels").read_text().splitlines() if ln.strip())
-                        if children.get("labels") else frozenset())  # absent/empty → no labels
+        read = _read_actor_dir(adir / name, name)
+        if read is None:
+            gone.add(name)
+            continue
+        actor, text, rank = read
         level.actors[name] = actor
         bodies[name] = text
         folders[name] = actor.folder
-        ranks[name] = (d / "order_value").read_text().strip() if children.get("order_value") else ""
+        ranks[name] = rank
+        reread.add(name)
+    for name in gone:
+        del stamps[name]
     level.order = sorted(level.actors, key=lambda n: (ranks.get(n, ""), n))
-    return level, ranks, bodies, folders
+    return TrunkDelta(
+        read=TrunkRead(level=level, ranks=ranks, bodies=bodies, folders=folders, stamps=stamps),
+        reread=frozenset(reread))
 
 
 # --- the beside-`actors/` sibling metadata (stash/prefab EXTRAS; the trunk has none) ---

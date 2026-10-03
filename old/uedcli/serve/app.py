@@ -21,14 +21,13 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 
-from .. import build_cache, config, packages, query, trunk
+from .. import build_cache, config, packages, query
 from ..classdefaults import ClassDefaults
 from ..cli import resources
 from ..cli.errors import CommandError
 from ..emit import emit_map_with_carriers
 from ..preview_native import build_scene
-from ..preview_native import resolve_actor_sprites, resolve_mesh_scene_polys, resolve_mover_scene_polys
-from . import build_pin, edits, package_raw, sessions
+from . import build_pin, edits, package_raw, sessions, trunk_load
 from .claims import ClaimRegistry
 from .errors import error_to_status
 from .levels import levels_payload
@@ -205,6 +204,11 @@ class LevelContext:
     # Scoped and reset identically to resolve_ctx_ref (same generation) -- resolve_ctx_ref's own
     # per-FQCN Rust-side cache doesn't cover the JSON serialize+parse round-trip repeated per actor.
     class_cache_ref: list     # [dict[str, dict]]
+    # Board `incremental-gui-reload-only-re-resolve-actors`: what the last Load of this level left
+    # behind — the parsed trunk + its per-actor filesystem stamps + each actor's resolved render
+    # data — so the next Load re-reads and re-resolves only the actors whose files moved. Level-
+    # shared like `trunk_ref` itself, and written under `trunk_lock` by both Load paths.
+    trunk_cache_ref: list     # [trunk_load.TrunkCache | None]
 
 
 def create_app(project, level: str | None = None, *, fault_route: bool = False) -> FastAPI:
@@ -352,7 +356,8 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
             ctx = LevelContext(level_name=level_name, trunk_ref=[None], generation=[0],
                                changes_available=[False], trunk_lock=threading.Lock(),
                                watcher=watcher, connections=set(), scene_inputs_ref=[None],
-                               resolve_ctx_ref=[None], class_cache_ref=[{}])
+                               resolve_ctx_ref=[None], class_cache_ref=[{}],
+                               trunk_cache_ref=[None])
             _level_contexts[level_name] = ctx
             return ctx
 
@@ -379,11 +384,9 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         return _scene_inputs(project)
 
     def _get_trunk(level_name: str, search_files, index, defaults) -> _LoadedTrunk:
-        # NOTE on parameters: `resolve_actor_sprites`'s real signature (`preview_native.py:380`) is
-        # `(level, search_files, class_defaults)` -- `defaults` (a `ClassDefaults`, with
-        # `.for_class`) is not interchangeable with `index` (a `ClassIndex`, no `.for_class`).
-        # `resolve_mesh_scene_polys`/`resolve_mover_scene_polys` (mesh-actor/Mover triangles, both
-        # Load-owned like sprites) need a `ClassIndex`, not a `ClassDefaults`.
+        # NOTE on parameters: `defaults` (a `ClassDefaults`, with `.for_class`) is not
+        # interchangeable with `index` (a `ClassIndex`, no `.for_class`) -- `trunk_load` hands the
+        # first to `resolve_actor_sprites` and the second to the mesh/Mover resolvers.
         ctx = _get_or_create_level_context(level_name)
         while True:
             cached = ctx.trunk_ref[0]
@@ -394,26 +397,12 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
                 if cached is not None:
                     return cached
                 gen_before = ctx.generation[0]
-                lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / level_name)
-                sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
-                # `mesh_groups` (4th return) is discarded -- `resolve_mesh_scene_polys` can only
-                # ever return an all-`None` list (a mesh actor's texture resolves via
-                # `index_for_decoded`, never a real export), so `_LoadedTrunk` carries no
-                # `mesh_groups` field; `/atlas` builds that segment inline instead (see
-                # `_LoadedTrunk`'s own docstring).
-                mesh_polys, mesh_owners, mesh_texture_table, _mesh_groups = resolve_mesh_scene_polys(
-                    lvl, index, search_files, defaults)
-                mover_polys, mover_owners, mover_texture_table, mover_groups = resolve_mover_scene_polys(
-                    lvl, index, search_files, defaults)
+                built, cache = trunk_load.load_trunk(
+                    maps_root / level_name, inputs=(search_files, index, defaults),
+                    previous=ctx.trunk_cache_ref[0])
                 if ctx.generation[0] != gen_before:
                     continue    # invalidated mid-build: discard, loop back and retry from the top
-                built = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
-                                     sprite_table=sprite_table, actor_sprites=actor_sprites,
-                                     mesh_polys=mesh_polys, mesh_owners=mesh_owners,
-                                     mesh_texture_table=mesh_texture_table,
-                                     mover_polys=mover_polys, mover_owners=mover_owners,
-                                     mover_texture_table=mover_texture_table,
-                                     mover_groups=mover_groups)
+                ctx.trunk_cache_ref[0] = cache
                 # Written BEFORE `ctx.trunk_ref[0]` (same reasoning `_current_scene_inputs` relies
                 # on): a lock-free reader must never observe the NEW trunk paired with the
                 # PREVIOUS `ctx.scene_inputs_ref[0]`/`ctx.resolve_ctx_ref[0]`.
@@ -885,21 +874,17 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
             ctx = _get_or_create_level_context(session.level)
             resolutions = (body or {}).get("resolutions") or {}
             search_files, index, defaults = _scene_inputs(project)
-            lvl, ranks, _bodies, folders = trunk.read_level_with_bodies(maps_root / session.level)
+            # Reuses this level's previous Load per unchanged actor (board
+            # `incremental-gui-reload-only-re-resolve-actors`). Under `ctx.trunk_lock` so a
+            # concurrent `_get_trunk` bootstrap can't resolve against the same cache entry at the
+            # same time and publish a half-updated one.
+            with ctx.trunk_lock:
+                loaded, cache = trunk_load.load_trunk(
+                    maps_root / session.level, inputs=(search_files, index, defaults),
+                    previous=ctx.trunk_cache_ref[0])
+                ctx.trunk_cache_ref[0] = cache
             conflicts = edits.check_load_conflicts(
-                session_id, lvl, store=_staging_store, resolutions=resolutions)
-            sprite_table, actor_sprites = resolve_actor_sprites(lvl, search_files, defaults)
-            # `mesh_groups` discarded -- see the matching call site in `_get_trunk` above.
-            mesh_polys, mesh_owners, mesh_texture_table, _mesh_groups = resolve_mesh_scene_polys(
-                lvl, index, search_files, defaults)
-            mover_polys, mover_owners, mover_texture_table, mover_groups = resolve_mover_scene_polys(
-                lvl, index, search_files, defaults)
-            loaded = _LoadedTrunk(level=lvl, ranks=ranks, folders=folders,
-                                  sprite_table=sprite_table, actor_sprites=actor_sprites,
-                                  mesh_polys=mesh_polys, mesh_owners=mesh_owners,
-                                  mesh_texture_table=mesh_texture_table,
-                                  mover_polys=mover_polys, mover_owners=mover_owners,
-                                  mover_texture_table=mover_texture_table, mover_groups=mover_groups)
+                session_id, loaded.level, store=_staging_store, resolutions=resolutions)
             # Written BEFORE `ctx.trunk_ref[0]` (same reasoning as `_get_trunk`'s bootstrap
             # branch): a concurrent `/scene`/`/atlas`/`/lightmap` must never observe the NEW trunk
             # paired with the PREVIOUS `ctx.scene_inputs_ref[0]`.
@@ -1000,8 +985,10 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
 
         # Pin promotion, sequenced AFTER the trunk write above: under `ctx.trunk_lock` -- the
         # existing per-level write serialization (unchanged in purpose), NOT the per-session claim
-        # lock, which is already released by the `with` block's exit above (the two locks are
-        # never held simultaneously). `SessionPointerCorruptError` here is the NORMAL "this session
+        # lock, which is already released by the `with` block's exit above. Lock ORDER, for anyone
+        # adding a third site: `session_load` does hold both at once, claim lock OUTSIDE
+        # `trunk_lock`, so that nesting is the only legal one -- never take the claim lock while
+        # holding `trunk_lock`. `SessionPointerCorruptError` here is the NORMAL "this session
         # never ran a Rebuild" case, not corruption -- skip promotion and leave the level's
         # existing pin (whatever it currently holds, if anything) untouched.
         ctx = _get_or_create_level_context(session.level)

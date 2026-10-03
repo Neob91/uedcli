@@ -307,3 +307,48 @@ def test_load_resolves_mesh_class_defaults_through_the_shared_memo(tmp_path, mon
     # wired at both call sites -- a TypeError there would 500, not 200, and the domain-error handler
     # would report it, not silently succeed.
     assert c.get(f"/api/session/{sess.id}/status").json()["build_status"] == "no_build"
+
+
+def test_load_rereads_only_the_actors_that_changed_on_disk(tmp_path, monkeypatch):
+    """Board `incremental-gui-reload-only-re-resolve-actors`: a Reload after a one-actor edit
+    re-reads that actor's files and nobody else's, and still serves the edit. Counted at
+    `_read_actor_dir`, the only place the trunk's per-actor files are opened — a Load that fell
+    back to a full read would show one call per actor instead of one."""
+    from uedcli import t3dtree
+    from uedcli.serve import sessions
+
+    _require_ued22()
+    index, defaults = _index_and_defaults()
+    monkeypatch.setattr(serve_app, "_scene_inputs", lambda p: ([], index, defaults))
+
+    root = tmp_path / "proj"
+    rooms = [cube_room(name=f"Room{i}") for i in range(4)]
+    _write_fixture_trunk(root, "TestLevel", rooms)
+    maps_dir = root / "maps" / "TestLevel"
+    project = SimpleNamespace(root=str(root), maps=None)
+    app = serve_app.create_app(project, "TestLevel")
+    c = TestClient(app)
+    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    token = app.state.claims.mint(sess.id)
+
+    assert c.post(f"/api/session/{sess.id}/load",
+                  headers={"X-Claim-Token": token}).status_code == 200
+
+    read_names = []
+    real = t3dtree._read_actor_dir
+
+    def spy(d, name):
+        read_names.append(name)
+        return real(d, name)
+
+    monkeypatch.setattr(t3dtree, "_read_actor_dir", spy)
+
+    moved = cube_room(name="Room2", size=256.0)
+    trunk.write_level(maps_dir, Level(actors={"Room2": moved}, order=["Room2"]),
+                      {"Room2": "n002"}, only={"Room2"})
+    assert c.post(f"/api/session/{sess.id}/load",
+                  headers={"X-Claim-Token": token}).status_code == 200
+
+    assert read_names == ["Room2"]
+    scene = c.get(f"/api/session/{sess.id}/scene").json()
+    assert {a["name"] for a in scene["actors"]} == {f"Room{i}" for i in range(4)}

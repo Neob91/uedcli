@@ -309,13 +309,13 @@ def test_get_trunk_second_call_is_a_cache_hit(tmp_path, monkeypatch):
     app = create_app(project, "TestLevel")
 
     calls = []
-    real = trunk_module.read_level_with_bodies
+    real = trunk_module.read_level_delta
 
     def spy(*a, **k):
         calls.append(1)
         return real(*a, **k)
 
-    monkeypatch.setattr(trunk_module, "read_level_with_bodies", spy)
+    monkeypatch.setattr(trunk_module, "read_level_delta", spy)
 
     index = _ued22_index()
     first = app.state.get_trunk("TestLevel", [], index, DEFAULTS)
@@ -401,13 +401,13 @@ def test_scene_and_atlas_share_one_trunk_read_even_cold(tmp_path, monkeypatch):
     monkeypatch.setattr(serve_app, "_scene_inputs", lambda p: ([], _ued22_index(), DEFAULTS))
 
     trunk_calls = []
-    real_trunk = trunk_module.read_level_with_bodies
+    real_trunk = trunk_module.read_level_delta
 
     def trunk_spy(*a, **k):
         trunk_calls.append(1)
         return real_trunk(*a, **k)
 
-    monkeypatch.setattr(trunk_module, "read_level_with_bodies", trunk_spy)
+    monkeypatch.setattr(trunk_module, "read_level_delta", trunk_spy)
     app = serve_app.create_app(project, "TestLevel")
     c = TestClient(app)
     sess = sessions.create_session(app.state.sessions_root, "TestLevel")
@@ -498,7 +498,7 @@ def test_scene_and_atlas_share_one_trunk_read_and_sprite_resolve(tmp_path, monke
     _require_ued22()
     from uedcli import trunk as trunk_module
     from uedcli.serve import app as serve_app
-    from uedcli.serve import sessions
+    from uedcli.serve import sessions, trunk_load
     from uedcli.tests.conftest import cube_room
     from uedcli.tests.test_serve_scene import DEFAULTS, _ued22_index
 
@@ -509,7 +509,8 @@ def test_scene_and_atlas_share_one_trunk_read_and_sprite_resolve(tmp_path, monke
     monkeypatch.setattr(serve_app, "_scene_inputs", lambda p: ([], _ued22_index(), DEFAULTS))
 
     trunk_calls, sprite_calls = [], []
-    real_trunk, real_sprites = trunk_module.read_level_with_bodies, serve_app.resolve_actor_sprites
+    real_trunk = trunk_module.read_level_delta
+    real_sprites = trunk_load.resolve_actor_sprites
 
     def trunk_spy(*a, **k):
         trunk_calls.append(1)
@@ -519,8 +520,8 @@ def test_scene_and_atlas_share_one_trunk_read_and_sprite_resolve(tmp_path, monke
         sprite_calls.append(1)
         return real_sprites(*a, **k)
 
-    monkeypatch.setattr(trunk_module, "read_level_with_bodies", trunk_spy)
-    monkeypatch.setattr(serve_app, "resolve_actor_sprites", sprite_spy)
+    monkeypatch.setattr(trunk_module, "read_level_delta", trunk_spy)
+    monkeypatch.setattr(trunk_load, "resolve_actor_sprites", sprite_spy)
 
     app = serve_app.create_app(project, "TestLevel")
     c = TestClient(app)
