@@ -5,6 +5,7 @@ from decimal import Decimal
 
 from ._arguments import (
     _nonempty,
+    _qualified_texture,
     parse_coord,
     parse_decimal,
     parse_factor_pair,
@@ -147,7 +148,10 @@ def register(sub) -> None:
                              "several). A uedcli-side sidecar (flat set), NEVER emitted to the built map; "
                              "rides the T3D as a `// uedcli-labels:` carrier `actor add` persists. "
                              "The engine Group is a regular prop: use --prop Group=<name>.")
-        bp.add_argument("--texture", help="texture for every face (default editor default)")
+        bp.add_argument("--texture", type=_qualified_texture, metavar="REF",
+                        help="qualified Package[.Group].Name for every face (e.g. "
+                             "DeusExDeco.Wood); omit the group unless given one "
+                             "explicitly. Default: the editor default texture")
         bp.add_argument("--mover-class", dest="mover_class", default=None,
                         help="make a Mover of this fully-qualified class (e.g. "
                              "DeusEx.ElevatorMover); base pose only — author keyframes with "

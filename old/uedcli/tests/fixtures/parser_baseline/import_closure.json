@@ -2,12 +2,15 @@
   "uedcli",
   "uedcli.emit",
   "uedcli.folderlib",
+  "uedcli.geometry",
   "uedcli.labellib",
   "uedcli.model",
   "uedcli.normalize",
   "uedcli.preview",
   "uedcli.query",
   "uedcli.rotation",
+  "uedcli.surface",
   "uedcli.texframe",
-  "uedcli.typedprops"
+  "uedcli.typedprops",
+  "uedcli.vertex"
 ]

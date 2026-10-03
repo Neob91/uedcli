@@ -849,3 +849,85 @@ def test_no_builder_face_exceeds_the_fpoly_16_vertex_bound():
         for b in (cylinder(64, 48, sides=sides), cone(64, 48, sides=sides)):
             validate_brush(b)
             assert max(len(p.vertices) for p in b.polys) <= 16, f"sides={sides}"
+
+
+# ---------------------------------------------------------------------------
+# `--texture` must be package-qualified on every verb that STORES it
+# ---------------------------------------------------------------------------
+# Why the rule sits at the parser: `_arguments._qualified_texture`.
+
+# Every subparser `_common_build_opts` puts `--texture` on, with a COMPLETE argv (so a parse
+# failure can only come from --texture, never from a missing required flag).
+_TEXTURE_VERB_ARGV = {
+    "cube": ["brush", "build", "cube", "--width", "64", "--breadth", "64", "--height", "64"],
+    "cylinder": ["brush", "build", "cylinder", "--height", "64", "--radius", "48"],
+    "cone": ["brush", "build", "cone", "--height", "64", "--radius", "48"],
+    "sheet": ["brush", "build", "sheet", "--width", "64", "--height", "64"],
+    "staircase": ["brush", "build", "staircase", "--steps", "3", "--depth", "32",
+                  "--rise", "16", "--breadth", "128"],
+    "spiral": ["brush", "build", "spiral", "--steps", "3", "--inner-radius", "48",
+               "--step-width", "32", "--rise", "16"],
+    "extrude": ["brush", "build", "extrude", "--depth", "64"],
+    "revolve": ["brush", "build", "revolve", "--angle", "90"],
+    # the merge verbs take a required source positional (`-` = stdin); nothing is read
+    # at parse time, so `-` keeps the argv complete without a pipe.
+    "intersect": ["brush", "intersect", "-"],
+    "deintersect": ["brush", "deintersect", "-"],
+}
+
+
+def _parse_stderr(argv) -> str:
+    """argv's parser error text. Asserts exit 2 (the CLI's clean-failure code)."""
+    import contextlib
+    import io
+    from uedcli.cli.main import build_parser
+    buf = io.StringIO()
+    with contextlib.redirect_stderr(buf), pytest.raises(SystemExit) as exc:
+        build_parser().parse_args(argv)
+    assert exc.value.code == 2
+    return buf.getvalue()
+
+
+@pytest.mark.parametrize("verb", sorted(_TEXTURE_VERB_ARGV))
+def test_a_bare_texture_is_rejected_by_the_parser(verb):
+    err = _parse_stderr(_TEXTURE_VERB_ARGV[verb] + ["--texture", "747_black"])
+    assert "747_black" in err                       # error messages name the offending value
+    assert "qualified" in err
+
+
+@pytest.mark.parametrize("verb", sorted(_TEXTURE_VERB_ARGV))
+def test_a_qualified_texture_still_parses(verb):
+    from uedcli.cli.main import build_parser
+    args = build_parser().parse_args(
+        _TEXTURE_VERB_ARGV[verb] + ["--texture", "Airfield.747_black"])
+    assert args.texture == "Airfield.747_black"
+
+
+def test_a_grouped_texture_still_parses():
+    """`Package.Group.Name` is accepted verbatim — `brush poly set` takes the 3-part form too."""
+    from uedcli.cli.main import build_parser
+    args = build_parser().parse_args(
+        _TEXTURE_VERB_ARGV["cube"] + ["--texture", "DeusExDeco.Textures.Wood"])
+    assert args.texture == "DeusExDeco.Textures.Wood"
+
+
+def test_a_mylevel_texture_is_rejected_by_the_parser():
+    """`MyLevel.*` can't survive materialize (`unrealed/t3d.md` "What T3D cannot carry"), and is
+    the other half of `surface.parse_texture_ref`'s rule. Case-sensitive, like `parse_texture_ref` —
+    `mylevel.Wood` passes here and is caught downstream by the ingest existence check."""
+    err = _parse_stderr(_TEXTURE_VERB_ARGV["cube"] + ["--texture", "MyLevel.Wood"])
+    assert "MyLevel.Wood" in err
+
+
+def test_a_qualified_texture_reaches_every_emitted_poly():
+    """The guard validates, it never rewrites: the ref lands on the faces verbatim."""
+    t3d = _cli_t3d(_TEXTURE_VERB_ARGV["cube"] + ["--texture", "Airfield.747_black"])
+    assert t3d.count("Texture=Airfield.747_black") == 6
+
+
+def test_poly_find_still_takes_a_bare_texture():
+    """`brush poly find --texture` is a SEARCH filter, not a stored value — it matches a bare
+    substring and is deliberately outside the guard. Pinned so it is not "finished" later."""
+    from uedcli.cli.main import build_parser
+    args = build_parser().parse_args(["brush", "poly", "find", "W1", "--texture", "wood"])
+    assert args.texture == "wood"

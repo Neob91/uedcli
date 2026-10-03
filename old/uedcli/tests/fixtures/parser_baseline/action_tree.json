@@ -4303,9 +4303,9 @@
                   "default": null,
                   "required": false,
                   "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "texture for every face (default editor default)",
+                  "metavar": "REF",
+                  "converter": "_qualified_texture",
+                  "help": "qualified Package[.Group].Name for every face (e.g. DeusExDeco.Wood); omit the group unless given one explicitly. Default: the editor default texture",
                   "mutex_group": null
                 },
                 {
@@ -4591,9 +4591,9 @@
                   "default": null,
                   "required": false,
                   "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "texture for every face (default editor default)",
+                  "metavar": "REF",
+                  "converter": "_qualified_texture",
+                  "help": "qualified Package[.Group].Name for every face (e.g. DeusExDeco.Wood); omit the group unless given one explicitly. Default: the editor default texture",
                   "mutex_group": null
                 },
                 {
@@ -4879,9 +4879,9 @@
                   "default": null,
                   "required": false,
                   "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "texture for every face (default editor default)",
+                  "metavar": "REF",
+                  "converter": "_qualified_texture",
+                  "help": "qualified Package[.Group].Name for every face (e.g. DeusExDeco.Wood); omit the group unless given one explicitly. Default: the editor default texture",
                   "mutex_group": null
                 },
                 {
@@ -5173,9 +5173,9 @@
                   "default": null,
                   "required": false,
                   "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "texture for every face (default editor default)",
+                  "metavar": "REF",
+                  "converter": "_qualified_texture",
+                  "help": "qualified Package[.Group].Name for every face (e.g. DeusExDeco.Wood); omit the group unless given one explicitly. Default: the editor default texture",
                   "mutex_group": null
                 },
                 {
@@ -5441,9 +5441,9 @@
                   "default": null,
                   "required": false,
                   "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "texture for every face (default editor default)",
+                  "metavar": "REF",
+                  "converter": "_qualified_texture",
+                  "help": "qualified Package[.Group].Name for every face (e.g. DeusExDeco.Wood); omit the group unless given one explicitly. Default: the editor default texture",
                   "mutex_group": null
                 },
                 {
@@ -5725,9 +5725,9 @@
                   "default": null,
                   "required": false,
                   "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "texture for every face (default editor default)",
+                  "metavar": "REF",
+                  "converter": "_qualified_texture",
+                  "help": "qualified Package[.Group].Name for every face (e.g. DeusExDeco.Wood); omit the group unless given one explicitly. Default: the editor default texture",
                   "mutex_group": null
                 },
                 {
@@ -5981,9 +5981,9 @@
                   "default": null,
                   "required": false,
                   "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "texture for every face (default editor default)",
+                  "metavar": "REF",
+                  "converter": "_qualified_texture",
+                  "help": "qualified Package[.Group].Name for every face (e.g. DeusExDeco.Wood); omit the group unless given one explicitly. Default: the editor default texture",
                   "mutex_group": null
                 },
                 {
@@ -6253,9 +6253,9 @@
                   "default": null,
                   "required": false,
                   "choices": null,
-                  "metavar": null,
-                  "converter": null,
-                  "help": "texture for every face (default editor default)",
+                  "metavar": "REF",
+                  "converter": "_qualified_texture",
+                  "help": "qualified Package[.Group].Name for every face (e.g. DeusExDeco.Wood); omit the group unless given one explicitly. Default: the editor default texture",
                   "mutex_group": null
                 },
                 {
@@ -6463,9 +6463,9 @@
               "default": null,
               "required": false,
               "choices": null,
-              "metavar": null,
-              "converter": null,
-              "help": "texture for every face (default editor default)",
+              "metavar": "REF",
+              "converter": "_qualified_texture",
+              "help": "qualified Package[.Group].Name for every face (e.g. DeusExDeco.Wood); omit the group unless given one explicitly. Default: the editor default texture",
               "mutex_group": null
             },
             {
@@ -6703,9 +6703,9 @@
               "default": null,
               "required": false,
               "choices": null,
-              "metavar": null,
-              "converter": null,
-              "help": "texture for every face (default editor default)",
+              "metavar": "REF",
+              "converter": "_qualified_texture",
+              "help": "qualified Package[.Group].Name for every face (e.g. DeusExDeco.Wood); omit the group unless given one explicitly. Default: the editor default texture",
               "mutex_group": null
             },
             {

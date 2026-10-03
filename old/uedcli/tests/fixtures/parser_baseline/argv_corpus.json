@@ -129,7 +129,7 @@
     "exit_code": 2,
     "namespace": null,
     "stdout": "",
-    "stderr": "usage: uedcli brush build cube [-h] --width WIDTH --breadth BREADTH --height\n                               HEIGHT [--at X,Y,Z] [--base-name BASE_NAME]\n                               [--csg {add,subtract}]\n                               [--solidity {solid,semisolid,nonsolid}]\n                               [--folder PATH] [--label L] [--texture TEXTURE]\n                               [--mover-class MOVER_CLASS]\n                               [--prop KEY[.PATH]=VALUE]\n                               [--rotate PITCH,YAW,ROLL]\nuedcli brush build cube: error: the following arguments are required: --width, --breadth, --height\n"
+    "stderr": "usage: uedcli brush build cube [-h] --width WIDTH --breadth BREADTH --height\n                               HEIGHT [--at X,Y,Z] [--base-name BASE_NAME]\n                               [--csg {add,subtract}]\n                               [--solidity {solid,semisolid,nonsolid}]\n                               [--folder PATH] [--label L] [--texture REF]\n                               [--mover-class MOVER_CLASS]\n                               [--prop KEY[.PATH]=VALUE]\n                               [--rotate PITCH,YAW,ROLL]\nuedcli brush build cube: error: the following arguments are required: --width, --breadth, --height\n"
   },
   {
     "argv": [

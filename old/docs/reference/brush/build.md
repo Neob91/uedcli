@@ -16,9 +16,14 @@ brush build revolve   --point U,V --point U,V --point U,V […] --angle UU [--se
 ```
 
 Common options on **every** shape: `--at X,Y,Z` (world Location; see Pivots), `--base-name`,
-`--csg add|subtract`, `--solidity solid|semisolid|nonsolid`, `--folder`, `--label`, `--texture`,
-`--rotate PITCH,YAW,ROLL`, `--prop KEY[.PATH]=VALUE`, `--mover-class Package.Name`. (There is no
-`--group` flag — the engine `Group` property is set with `--prop Group=<name>`.)
+`--csg add|subtract`, `--solidity solid|semisolid|nonsolid`, `--folder`, `--label`,
+`--texture REF`, `--rotate PITCH,YAW,ROLL`, `--prop KEY[.PATH]=VALUE`,
+`--mover-class Package.Name`. (There is no `--group` flag — the engine `Group` property is set
+with `--prop Group=<name>`.)
+
+`--texture` must be a qualified `Package[.Group].Name`, same as `brush poly set` — a bare name,
+or a `MyLevel.*` ref (not materializable), is rejected, exit 2. Omitted, the faces take the
+editor default texture.
 
 **Every dimension must be greater than zero.** A width, breadth, height, radius, depth, rise, inner
 radius or step width that is negative or zero is rejected up front — exit 2, naming the flag and

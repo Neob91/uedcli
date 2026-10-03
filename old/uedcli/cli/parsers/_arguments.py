@@ -10,6 +10,7 @@ from decimal import Decimal, InvalidOperation
 
 from ...model import Vec3
 from ...preview import DEFAULT_ANNOTATIONS
+from ...surface import parse_texture_ref
 
 
 # A bare token like "-32,-32,32" or "-128" starts with '-', so argparse would treat
@@ -46,6 +47,23 @@ def _nonempty_class(s: str) -> str:
             f"class must have no empty component (e.g. '.Foo', 'Foo.', or 'Foo..Bar' "
             f"are all invalid), got: {s!r}"
         )
+    return s
+
+
+def _qualified_texture(s: str) -> str:
+    """Require a `--texture` that the verb will STORE on a poly to be `Package[.Group].Name`.
+
+    The rule is `surface.parse_texture_ref`'s, the same one `brush poly set` applies; this only
+    re-raises it as a parser-tier error. It has to be enforced here because the shared ingest gate
+    (`cli.ingest.validate_ingest_actors`) checks EXISTENCE only, and
+    `utexture.TextureResolver.exists` accepts a bare name deliberately — so a bare ref would reach
+    the trunk, where `stashlib._package_of` yields no package for it and it drops out of the
+    `OBJ LOAD` manifest materialize builds, leaving the face's texture unloadable.
+    """
+    try:
+        parse_texture_ref(s)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e)) from None
     return s
 
 

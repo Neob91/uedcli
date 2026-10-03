@@ -46,9 +46,9 @@ intersect verbs.
 
 ## Output flags
 
-They accept the same output-shaping flags as `brush build` — `--csg`, `--solidity`, `--texture`,
-`--mover-class`, `--prop`, `--rotate`, `--base-name`, `--folder`, `--label` — with **two
-verb-specific defaults**:
+They accept the same output-shaping flags as `brush build` — `--csg`, `--solidity`,
+`--texture REF` (qualified, as in [build.md](build.md)), `--mover-class`, `--prop`, `--rotate`,
+`--base-name`, `--folder`, `--label` — with **two verb-specific defaults**:
 
 - **`--at` defaults to *keep the carved position*** (not the origin): omitted, the result stays
   where the set carved it.
