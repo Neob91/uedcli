@@ -1,6 +1,6 @@
 ## The refactor
 
-uedcli is being rewritten from Python into Rust, from an empty root, with the old codebase frozen
+uedcli is being rewritten from Python into Rust, from an empty root, with the old codebase moved
 under `old/`. @dev/epics/refactor.md has the plan — read it before any question about scope,
 sequencing, or why `old/` is shaped the way it is.
 
