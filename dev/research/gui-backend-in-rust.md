@@ -2,29 +2,27 @@
 
 **Date:** 2026-10-03 · **Status:** research only — no decisions taken, nothing implemented.
 **Question:** What does `old/uedcli/serve/` expose and touch, what Rust framework and proxy
-technique could carry it, and where is the strangler risky?
-
-Server-side companion to the frontend note; its findings are taken as given and corrected only
-where the server disagrees.
+technique could carry it, and where is the strangler risky? Server-side companion to the frontend
+note, whose findings are taken as given and corrected only where the server disagrees.
 
 ## Summary
 
-- `old/uedcli/serve/` is **16 modules, 3,250 LOC** product plus **5,415 LOC** of tests. `app.py`
-  carries **23 route decorators**: 19 `/api/*`, 1 test-gated `/api/_boom`, 2 SPA HTML routes, 1
-  `@app.websocket`, plus a `StaticFiles` mount.
+- `old/uedcli/serve/` is **16 modules, 3,250 LOC** product plus **5,415 LOC** of tests, and
+  `app.py` carries **23 route decorators**: 19 `/api/*`, 1 test-gated `/api/_boom`, 2 SPA HTML
+  routes, 1 `@app.websocket`, plus a `StaticFiles` mount.
 - **The GUI does write the trunk** — `POST /api/session/{id}/save` → `edits.save_staged` →
   `cli.level_sources.TrunkLevelSource.save`. "Never writes the trunk" was a **P1-era** claim P2
   superseded; `old/dev/docs/GUI.md:205` still asserts it. 1 of 19 routes is dangerous.
 - **Nothing streams; nothing invokes the editor or Docker.** Atlases ship as base64 PNG in JSON, and
   **every real route is a sync `def`** already in Starlette's threadpool — a clean `spawn_blocking`
-  mapping. **`cli`↔`serve` is circular**: 6 imports one way, 2 back, error classifier on GUI side.
+  mapping. **`cli`↔`serve` is circular** (6 imports one way, 2 back; classifier on the GUI side).
 - **CSG is not the dominant cost.** Reload ~4.7s at 487 actors, ~14.4s at 2,288, identical on a
   no-op repeat; Rebuild ~24s; class-schema re-derive was ~3s/request before `593a2fe4`.
 - **The WebSocket is strictly server→client** — the client never sends a frame. Three messages,
   three close codes. That makes WS upgrade proxying, the hard part of the strangler, **avoidable**.
   Supersession is polled at 100 ms; the code blames sync routes in a worker thread, true as a
   mechanism but `loop.call_soon_threadsafe` exists — a design choice, not a platform limit.
-  `watchfiles` being Rust/`notify`-backed is **confirmed** (it depends on `notify = "8.2.0"`).
+- `watchfiles` is **confirmed** Rust/`notify`-backed; Reload/Rebuild perf is the one `mvp.md` entry.
 
 ## What we have today
 
@@ -59,8 +57,7 @@ of the port is not here. Deps: `fastapi>=0.115`, `uvicorn>=0.32`, `watchfiles>=0
 | `GET /api/health`, `GET /api/levels` | nothing; maps dir listing | — | no | trivial | 1 |
 | `GET /session/{id}` (+ `…/`), mount `/` `StaticFiles(html=True)` | `web/dist`, `index.html` | — | no | trivial | 1 |
 | `GET /api/package/{name}/raw` | search path, `.u` bytes, ETag memo | — | no | 1-2 MB body | 2 |
-| `GET /api/sessions` | every `sessions/*/index.json` | — | no | small | 3 |
-| `POST /api/level/{lvl}/sessions` | new session dir, mint claim, inherit level pin | s,m | mints | small | 3 |
+| `GET /api/sessions`; `POST /api/level/{lvl}/sessions` | list `sessions/*/index.json`; new session dir + mint claim + inherit level pin | s,m | mints | small | 3 |
 | `GET /api/session/{id}` | **mints a fresh claim**, superseding the old | m | mints | small | 3 |
 | `POST /api/session/{id}/rename` | `index.json` | s | yes | small | 3 |
 | `DELETE /api/session/{id}` | `rmtree sessions/<sid>/`, `claims.forget` | s,m | yes | small | 3 |
@@ -102,15 +99,13 @@ adds `edits.apply_staged_overlay` on a *copy* of the level, then `build_scene(..
 False, include_movers=False)`, which self-stores into `build_cache`. `/scene` calls
 `build_scene_payload` (pin resolved) or `build_wireframe_payload`.
 
-| cache | scope | key | invalidation |
-|---|---|---|---|
-| `_scene_inputs_cache` | process | `project.root` | **never** (owner ruling 2026-09-28) |
-| `scene_inputs_ref`, `resolve_ctx_ref`, `class_cache_ref` | per level | FQCN inside the latter two | replaced with `trunk_ref` |
-| `trunk_ref` | per level | generation guard | `/load`, or generation bump mid-build |
-| `_BuildResultCache` | process | `(level, geom_hash, light_hash)` | LRU, 8 entries |
-| `build_cache` (disk) | project | content hashes | `evict_unreferenced` on rebuild |
-
-`593a2fe4` added the first row. Before it, `index`/`defaults` were re-derived per `/load` and
+Six caches sit under that. Process-wide: `_scene_inputs_cache`, keyed by `project.root` and
+**never** invalidated (owner ruling 2026-09-28), and `_BuildResultCache`, an 8-entry LRU keyed by
+`(level, geom_hash, light_hash)`. Per level inside `LevelContext`: `scene_inputs_ref`,
+`resolve_ctx_ref` and `class_cache_ref` (the latter two memoized per FQCN), all replaced alongside
+`trunk_ref`, which is itself generation-guarded and refreshed by `/load` or discarded on a
+generation bump mid-build. On disk: the project `build_cache`, pruned by `evict_unreferenced`.
+`593a2fe4` added the first of those. Before it, `index`/`defaults` were re-derived per `/load` and
 `/rebuild` — **~3s of class-schema re-parsing, the dominant cost of both, not the CSG solve**. The
 trade: already-loaded packages are never invalidated during a `serve` run, so a package edited on
 disk needs a restart. `4114bf6e` re-keyed it from `id(project)` (GC address-reuse hazard) to
@@ -121,8 +116,8 @@ disk needs a restart. `4114bf6e` re-keyed it from `id(project)` (GC address-reus
 ### Performance picture
 
 `old/dev/docs/epics/mvp.md` has exactly **one** entry, and it is this topic —
-`incremental-gui-reload-only-re-resolve-actors`: Reload should diff against the session's
-last-loaded snapshot and cost hundreds of ms instead of scaling with the level.
+`incremental-gui-reload-only-re-resolve-actors`: Reload should diff against the session's last-loaded
+snapshot and cost hundreds of ms instead of scaling with the level.
 
 | measurement | value | source |
 |---|---|---|
@@ -130,7 +125,6 @@ last-loaded snapshot and cost hundreds of ms instead of scaling with the level.
 | Reload, 2,288 actors | ~14.4s | same — **identical on a no-op repeat** |
 | Rebuild (CSG + lighting) | ~24s | `old/web/src/api.ts` `postRebuild` doc |
 | class-schema re-derive, per request | ~3s | `593a2fe4` |
-| `build_scene_payload`, 2,288 actors / 19 classes | ~1.8s/call → ~1.8s once then ~0.06s | `scene.py` |
 
 `c288842b` rescued two ideas from an abandoned worktree:
 `incremental-csg-checkpointing-for-gui-rebuild` (checkpoint the native CSG world-model per
@@ -143,32 +137,28 @@ incremental Reload shape the Rust types: `_LoadedTrunk`'s flat per-pass tables n
 name, and position-deduped texture indices need a content-keyed registry.
 
 ### Live reload, server-side
-
 `TrunkWatcher` watches **one level's trunk directory** with `watchfiles.awatch`, recursive, feeding
 every raw batch into `notify()` — a 0.4s restartable timer collapsing a burst into one `on_change`.
 The timer task holds only the sleep phase, so a `notify()` arriving mid-broadcast cancels a pending
 timer, never the broadcast (a prior review finding). `on_change` is `_on_trunk_settled`:
 `generation += 1`, `changes_available = True`, `_broadcast_changes_available` — which iterates a
 **snapshot** of `ctx.connections` (a concurrent connect/disconnect would otherwise drop the whole
-broadcast) and never takes `trunk_lock`. One
-watcher per `LevelContext`: the startup level's started by `_lifespan`, a lazily created level's by
-`ws_endpoint` on first connect (`start()` is not idempotent — twice leaks `_watch_task`).
-
+broadcast) and never takes `trunk_lock`. One watcher per `LevelContext`: the startup level's is
+started by `_lifespan`, a lazily created level's by `ws_endpoint` on first connect (`start()` is not
+idempotent, so calling it twice leaks `_watch_task`).
 Messages: `{"type":"changes_available","level":"<name>"}` on a debounced trunk change;
 `{"type":"superseded"}` from the connect check or the 100 ms poll when a newer claim is minted;
 `{"type":"closed"}` from the poll when the session directory is gone. Close codes **4001** (unknown
 session / missing claim — closed without `accept()`), **4003** (claimed elsewhere, after an
 `accept()` so the client can learn it), **4004** (session deleted).
-
-**Poll-vs-push, verified.** `changes_available` *is* pushed — its trigger is on the event loop. Only
+**Poll-vs-push, verified:** `changes_available` *is* pushed — its trigger is on the event loop. Only
 supersession and deletion are polled, because they originate in
 `claims.mint`/`sessions.delete_session`, called from sync `def` routes Starlette runs in the anyio
 threadpool. The code says there is "no cheap direct way for that thread to push into an already-open
 WS living on a different thread's loop without a real cross-thread-to-loop bridge, which doesn't
-exist anywhere in this codebase today" — accurate about the codebase, but not a Starlette
-limitation, since `asyncio.run_coroutine_threadsafe` is the standard bridge. In Rust a
-`tokio::sync::broadcast` is callable from any thread, so the 100 ms tick disappears.
-
+exist anywhere in this codebase today" — accurate about the codebase, but not a Starlette limitation,
+since `asyncio.run_coroutine_threadsafe` is the standard bridge. In Rust a `tokio::sync::broadcast`
+is callable from any thread, so the 100 ms tick disappears.
 **Known wart, already filed** (`inbox/gui-save-doesn-t-suppress-its-own-trunk-watcher`): the
 post-Save `/load` usually completes inside the 0.4s debounce, so the watcher re-sets the flag
 afterwards and the user sees "changes available" for their own save — "the default case, not a rare
@@ -176,7 +166,6 @@ race." Still true (`/load` calls `set_last_seen_generation`, `/save` does not): 
 code, not a fix in `old/`.
 
 ### Sessions: two different things, one word
-
 - **The deleted level session store.** The pre-2026-07 editor-centric model held the authoritative
   level in a live UnrealEd, every read a `MAP EXPORT`, with an interim on-disk session store, since
   deleted outright (`architecture.md`). `direction/trunk-and-editor.md`: "There is no session and no
@@ -188,7 +177,7 @@ code, not a fix in `old/`.
   `last_seen_generation`; survives refresh and restart; no auto-expiry. **No history, no merge
   authority**; a save funnels into the one model-side trunk write path.
 
-Mechanics: a session is created only by a real page load (`POST /api/level/{lvl}/sessions`) —
+A session is created only by a page load (`POST /api/level/{lvl}/sessions`) —
 `create_app(project, level=None)` starts with **zero** `LevelContext`s. Ownership is a `claim_token`;
 `GET /api/session/{id}` mints a fresh one every call, deliberately non-idempotent, so "whichever
 window last loaded always wins" (the sibling is right that this GET mutates, load-bearingly).
@@ -198,50 +187,46 @@ per-session lock, or a DELETE racing a request resurrects the directory via `ato
 unconditional `mkdir`. That interleaving is the subtlest thing here and the likeliest for a port to
 break. Storage: `.uedcli/sessions/<sid>/{index,staged,build}.json` plus shared
 `.uedcli/staging/blobs/`, via `atomic_io`. **Board-stage drift:** the item sits in `to-spec` with no
-`plan.md`, yet the code cites "plan Task 9/11/12/13/14/15" throughout and has shipped.
+`plan.md`, yet the code cites "plan Task 9/11/…/15" and has shipped.
 
 ### Doc drift the server confirms
-
-- `PUT /api/level`, `GET /api/level/{level}/status` and `POST /api/level/{level}/save` **do not
-  exist**. `GUI.md` still documents the level-switch flow around the first; `errors.py`'s
-  `JSONDecodeError` arm comments on "`PUT /api/level`'s `await request.json()`"; `api.ts` cites the
-  other two in doc comments.
-- `GUI.md:3` calls the API "read-mostly"; `GUI.md:205` says "this GUI is P1, read-only, no write
-  path". P2 shipped a trunk writer. `scene.py`'s `build_scene_payload` docstring credits the perf
-  fix to `app.py`'s `_payload_ref`/`_get_payload`; neither identifier exists any more.
-- The sessions spec says `GET /api/levels` "has no place in the new API surface"; it is still
-  mounted and called. `GET /api/health` is called from nowhere. `/api/package/{name}/raw` is fetched
-  from `scene/classResolver.ts:57`, **not** `api.ts`. Two board items in the brief are not
-  GUI-backend concerns at all: `level-preview-multi-preview-port-url-surfacing` (noVNC port for
-  `level photo`'s Docker editor) and `boot-time-floating-windows` (a `uned/` ini chore).
+`PUT /api/level`, `GET /api/level/{level}/status` and `POST /api/level/{level}/save` **do not
+exist**: `GUI.md` still documents the level-switch flow around the first, `errors.py`'s
+`JSONDecodeError` arm comments on "`PUT /api/level`'s `await request.json()`", and `api.ts` cites
+the other two. `GUI.md:3` calls the API "read-mostly" and `GUI.md:205` "P1, read-only, no write
+path", but P2 shipped a trunk writer; `scene.py`'s `build_scene_payload` docstring credits the perf
+fix to `_payload_ref`/`_get_payload`, neither of which exists any more. The sessions spec says
+`GET /api/levels` "has no place in the new API surface", yet it is mounted and called, while
+`GET /api/health` is called from nowhere and `/api/package/{name}/raw` is fetched from
+`scene/classResolver.ts:57`, **not** `api.ts`. Two board items in the brief are not GUI-backend
+concerns at all: `level-preview-multi-preview-port-url-surfacing` (noVNC for `level photo`'s Docker
+editor) and `boot-time-floating-windows` (a `uned/` ini chore).
 
 ### Reuse vs duplication, and crate layering
 
 `serve/` → `cli/` is 6 imports across 4 files (`cli.errors` ×3, `cli.level_sources` ×2,
 `cli.resources` ×1); `cli/` → `serve/` is 2 (`cli/dispatch.py` → `serve.errors`, 10 call sites;
-`cli/commands/serve.py` → `serve.app`, deferred). The sibling's "8 edges (`cli.errors`, `cli.resources`)" matches the total only if both directions
-are counted, and misses `cli.level_sources` — the important one, since `TrunkLevelSource` is *the*
-trunk write path. So `serve/` genuinely reuses: no second write mechanism or error classifier.
-
+`cli/commands/serve.py` → `serve.app`, deferred). The sibling's "8 edges (`cli.errors`,
+`cli.resources`)" matches that total only if both directions are counted, and misses
+`cli.level_sources` — the important one, since `TrunkLevelSource` is *the* trunk write path. So
+`serve/` genuinely reuses: no second write mechanism and no second error classifier.
 But the direction is wrong for a clean crate split. Three things are really **shared core**:
 `error_to_status` (in `serve/`, imported by the CLI dispatcher → the error crate);
 `level_sources`/`TrunkLevelSource` (in `cli/`, the model-side write path → the trunk crate);
-`resources.resolve_project`/`mover_index` (in `cli/`, used by both → a project/config crate). Moving
-those down a layer is exactly the spec's "plain code reuse (the CLI handler and the GUI handler both
-call the same core function)", and nothing here argues against its rejection of a generic CLI/GUI
-registry — the duplication that targeted (brush-builder definitions) does not exist in `serve/`
-yet. Watch `rationale/gui-editing.md`'s ruling: one generic property path mirroring `propedit`'s
-plan/apply, never a per-field endpoint — plus the debt it names, below.
+`resources.resolve_project`/`mover_index` (in `cli/`, used by both → a project/config crate).
+Moving those down a layer is exactly the spec's "plain code reuse", and nothing here argues against
+its rejection of a generic CLI/GUI registry — the duplication that targeted (brush-builder
+definitions) does not exist in `serve/` yet. Watch `rationale/gui-editing.md`'s ruling: one generic
+property path mirroring `propedit`'s plan/apply, never per-field endpoints.
 
 ### Does the GUI write the trunk?
-
 **Yes, through exactly one route.** `POST /api/session/{id}/save` → `edits.save_staged` →
 `TrunkLevelSource.save(verb="move", …)`, defended in depth: claim check plus session-existence
 re-check under `claims.lock_for(session_id)`; per-actor conflict detection against the stage-time
 baseline; an immediate pre-write re-read of every touched actor's trunk `Location` that reverts and
 re-flags anything that moved in the gap (narrowing, not closing, the TOCTOU window); then one load +
 one save for the batch through the same delete-then-readd-with-rollback path every CLI verb uses.
-Pin promotion is sequenced strictly after the write, under `trunk_lock`. So the danger is
+Pin promotion is sequenced strictly after the write, under `trunk_lock`. The danger is
 concentrated: 18 of 19 routes can at worst produce a wrong picture or a stale cache,
 differential-tested as "same JSON for the same trunk." `/save` can corrupt a level and needs the
 conflict/TOCTOU semantics ported exactly, with `direction/safety.md`'s flock +
@@ -259,10 +244,10 @@ refuse-same-actor rule intact — its own PR.
 
 `axum` is ~11× `actix-web` by downloads and the only one with a dominant middleware ecosystem, so
 everything this backend needs (compression to replace `GZipMiddleware`, `ServeDir`, tracing,
-timeouts, a reverse proxy) is one tower layer. `rocket` is dormant — 2.3 years since a release, last
-commit 2025-12-28. `poem`'s repo is busy under a new maintainer but has had **no crates.io release
-in 14 months**. `salvo` 1.0.0 is three weeks old with a thin ecosystem. `actix-web` is healthy and
-fast, but tower-incompatible, so you re-implement what `tower-http` gives free. Direct
+timeouts, a reverse proxy) is one tower layer. `rocket` is dormant (2.3 years since a release, last
+commit 2025-12-28); `poem`'s repo is busy under a new maintainer but has had **no crates.io release
+in 14 months**; `salvo` 1.0.0 is three weeks old with a thin ecosystem; `actix-web` is healthy and
+fast but tower-incompatible, so you re-implement what `tower-http` gives free. Direct
 normal-dependency counts (a weight proxy only — **no compile times measured**): `salvo` 17, `axum`
 33, `rocket` 31, `actix-web` 36.
 
@@ -276,7 +261,8 @@ normal-dependency counts (a weight proxy only — **no compile times measured**)
 during the handshake, so destructuring it rather than using it as an `AsyncRead` silently eats the
 first frame; `copy_bidirectional` returns only when both directions finish, leaking the task on a
 half-close; a frame-decoding proxy cannot relay `permessage-deflate` and must re-mask client→server
-frames; a naive bridge collapses every disconnect into 1006, destroying the close-code contract.
+frames; a naive bridge collapses every disconnect into 1006, destroying the close-code contract. The
+off-the-shelf options:
 
 | crate | version | last release | WS upgrade | status |
 |---|---|---|---|---|
@@ -290,9 +276,7 @@ frames; a naive bridge collapses every disconnect into 1006, destroying the clos
 → `Router`) claiming RFC 9110 §7.6.1 hop-by-hop stripping, `X-Forwarded-*`, and verbatim close-frame
 forwarding. It **strips `Sec-WebSocket-Extensions`** because it forwards frames, not bytes —
 harmless here, since three tiny JSON messages gain nothing from compression. `tower-http` has no
-forwarding layer at all. `pingora` is the wrong shape: a server framework, not something mounted
-inside `axum` while Rust owns individual routes.
-
+forwarding layer; `pingora` is the wrong shape (a server framework, not an `axum` layer).
 **Why it is avoidable.** The contract is three server→client JSON messages and three close codes,
 and the client **never sends a frame** (`api.ts`'s `openChangesAvailableSocket` only adds a
 `message` listener; `ws_endpoint` reads client text solely as a poll timer and discards it). So:
@@ -308,7 +292,6 @@ and the client **never sends a frame** (`api.ts`'s `openChangesAvailableSocket` 
    `axum::response::sse` with `KeepAlive` needs no upgrade handling and proxies as ordinary HTTP.
    Costs: close codes become in-band, and SSE counts against the HTTP/1.1 6-per-origin limit. A
    contract change, so the owner's call.
-
 **Plain-HTTP proxy gotchas** (unavoidable). The canonical reference is axum's own
 `examples/reverse-proxy`, using `hyper_util::client::legacy::Client<_, axum::body::Body>` — **not
 `reqwest`**, which forces `Bytes`/`Stream` adapters and loses trailers where axum's `Body` passes
@@ -325,64 +308,55 @@ pooled `Client` with `pool_idle_timeout` below uvicorn's 5s keep-alive. Client l
 backends are inotify, FSEvents, `ReadDirectoryChangesW`, with a `PollWatcher` fallback.
 `notify-debouncer-full` 0.7.0 adds per-path coalescing **plus rename stitching** (pairing
 `RenameMode::From`/`To`); `notify-debouncer-mini` 0.7.0 only time-dedups.
-
-**The `watchfiles` claim is confirmed.** `watchfiles` 1.3.0's `Cargo.toml` depends directly on
+**The `watchfiles` claim is confirmed:** `watchfiles` 1.3.0's `Cargo.toml` depends directly on
 `notify = "8.2.0"` with `pyo3 = "0.29.2"`, and uses **neither** debouncer crate — its own loop in
 `src/lib.rs` uses `RecommendedWatcher` (falling back to `PollWatcher` on `force_polling`/`ENOSYS`)
 with `step_ms`/`debounce_ms`/`timeout_ms` accumulating a change set until it stabilises (`awatch`
 defaults: `debounce=1600` ms window, `step=50` ms quiet period, `recursive=True`). So
 `TrunkWatcher.notify()`'s 0.4s timer sits on a 50 ms/1.6s batcher, and a Rust port using `notify`
 directly reaches the *same* library one layer lower — the lowest-risk module here.
-
 Pitfalls for a trunk of one subdirectory per actor: **inotify is non-recursive in the kernel**
 (`inotify(7)`), so `notify` adds one watch per directory — thousands of actors burn thousands of
-watches and seconds of startup (`fs.inotify.max_user_watches` is no longer a flat 8192 — the kernel
-computes ~1% of RAM clamped to `[8192, 1048576]` — but 8192 is still the floor on small machines).
+watches and seconds of startup (`fs.inotify.max_user_watches` is ~1% of RAM clamped to
+`[8192, 1048576]`, so 8192 is still the floor on small machines).
 **Atomic-rename saves do not produce `Modify(Data)`** — temp-write + rename yields
 `Modify(Name::From)`/`Remove` then `Modify(Name::To)`/`Create`, and pairing them is "inherently
 racy" per the man page, so a trigger keyed only on `Modify` misses vim/JetBrains/VS Code saves.
-**Event storms silently lose changes** — `max_queued_events` defaults to 16384, a `git checkout`
-can overflow it and emit `IN_Q_OVERFLOW`, and only a rescan recovers. `watchfiles` handles neither
-today, so both are improvements, not regressions.
+**Event storms silently lose changes** — `max_queued_events` defaults to 16384, a `git checkout` can
+overflow it and emit `IN_Q_OVERFLOW`, and only a rescan recovers. `watchfiles` handles neither.
 
 ### Typed contract, and the SPA
-
-| tool | version | last release | shape |
-|---|---|---|---|
-| `utoipa` (+ `utoipa-axum` 0.3.0) | 6.0.0 | 2026-09-22 | 16.5M 90d dl; `#[utoipa::path]`, `OpenApiRouter` + `routes!` + `split_for_parts()` |
-| `aide` | 0.15.1 | 2025-08-19 | 873k 90d dl; closure docs + `schemars`; 0.16 in alpha since 2025-11 |
-| `ts-rs` | 12.0.1 | 2026-01-31 | 6.9M 90d dl; `#[derive(TS)]`, export runs as a generated `cargo test` |
-| `specta` | 2.0.0-rc.25 | 2026-05-07 | RC since 2023; `specta-typescript` 0.0.12; mostly Tauri/`rspc` |
-
-`utoipa` + `ts-rs` is the conventional pick — stable semver on both, and `ts-rs`'s test-driven
-export fits CI. **OpenAPI cannot describe the WebSocket messages** (3.1 has no channel concept) and
-Rust AsyncAPI tooling is thin (`asyncapi-rust` 0.5.0 is the only live option; **no widely-adopted
-from-code generator could be verified**), so: define the push-message enum once in Rust, derive TS
-from it, document the channel and close codes in prose — better than today's hand-written TS
-interfaces and Python dicts.
-
+OpenAPI from `axum`: `utoipa` 6.0.0 (2026-09-22, 16.5M 90d dl; `#[utoipa::path]` +
+`utoipa-axum` 0.3.0's `OpenApiRouter`/`routes!`/`split_for_parts()`) versus `aide` 0.15.1
+(2025-08-19, 873k dl; closure-style docs + `schemars`, with 0.16 in alpha since 2025-11). Rust→TS:
+`ts-rs` 12.0.1 (2026-01-31, 6.9M dl; `#[derive(TS)]`, export runs as a generated `cargo test`)
+versus `specta` 2.0.0-rc.25 (RC since 2023, `specta-typescript` still 0.0.12, mostly Tauri/`rspc`).
+`utoipa` + `ts-rs` is the conventional pick — stable semver on both. **OpenAPI cannot describe the
+WebSocket messages** (3.1 has no channel concept) and Rust AsyncAPI tooling is thin
+(`asyncapi-rust` 0.5.0 is the only live option; **no widely-adopted from-code generator could be
+verified**), so define the push-message enum once in Rust and derive TS from it.
 The SPA mount (`StaticFiles(directory=web/dist, html=True)` at `/`, two explicit `/session/{id}`
 routes in front, a `WARNING` when `web/dist` is absent) becomes
 `ServeDir::new(dist).not_found_service(ServeFile::new("dist/index.html"))` (`tower-http` 0.7.1),
-which also serves prebuilt `.br`/`.gz`. For the shipped binary, `rust-embed` 8.12.0 beats
+which also serves prebuilt `.br`/`.gz`. For the shipped binary `rust-embed` 8.12.0 beats
 `include_dir` 0.7.4 (2024-06-17): it **reads from disk in debug builds** unless `debug-embed` is
-set, so a frontend edit needs no Rust rebuild; `include_dir` always embeds.
+set, so a frontend edit needs no Rust rebuild.
 
 ### Long-running compute in a request
+`tokio::task::spawn_blocking` runs on a pool capped by `max_blocking_threads` (default **512**),
+and such tasks **cannot be aborted**: "If you call `abort` on a `spawn_blocking` task, then this
+will not have any effect." Shutdown waits indefinitely for them unless `shutdown_timeout` is set,
+and the docs point at semaphores or rayon instead. The `rayon` bridge is ~20 lines —
+`rayon::spawn` with a `tokio::sync::oneshot` awaited in the handler (`tokio-rayon` wraps it, last
+release 2021-04-05 — copy it, don't depend on it).
 
-- `tokio::task::spawn_blocking` runs on a pool capped by `max_blocking_threads` (default **512**),
-  and such tasks **cannot be aborted**: "If you call `abort` on a `spawn_blocking` task, then this
-  will not have any effect." Shutdown waits indefinitely for them unless `shutdown_timeout` is set,
-  and the docs point at semaphores or rayon instead. The `rayon` bridge is ~20 lines —
-  `rayon::spawn(move || { let _ = tx.send(heavy()); })` plus a `tokio::sync::oneshot` awaited in the
-  handler (`tokio-rayon` wraps it, last release 2021-04-05 — copy it, don't depend on it).
-- **Cancellation on disconnect is a real trap.** axum/hyper *do* drop the handler future when the
-  client disconnects (tokio-rs/axum#2610). That drops the `oneshot` receiver, but the
-  `spawn_blocking`/`rayon` job keeps burning CPU to completion. A 24s CSG solve behind a closed tab
-  needs an explicit cooperative cancel (`CancellationToken` or an `AtomicBool` checked inside the
-  solve) plus a `Semaphore` bounding concurrent rebuilds — today's blocking `/rebuild` has the same
-  problem. Progress: SSE (`axum::response::sse` + `KeepAlive`) is cheapest, but the WebSocket
-  already exists; either way the blocker is upstream (no progress callback in `build_scene`).
+**Cancellation on disconnect is a real trap.** axum/hyper *do* drop the handler future when the
+client disconnects (tokio-rs/axum#2610). That drops the `oneshot` receiver, but the
+`spawn_blocking`/`rayon` job keeps burning CPU to completion. A 24s CSG solve behind a closed tab
+needs an explicit cooperative cancel (`CancellationToken` or an `AtomicBool` checked inside the
+solve) plus a `Semaphore` bounding concurrent rebuilds — today's blocking `/rebuild` has the same
+problem. Progress: SSE (`axum::response::sse` + `KeepAlive`) is cheapest, but the WebSocket already
+exists; either way the blocker is upstream (no progress callback in `build_scene`).
 
 ## Options
 
@@ -393,38 +367,37 @@ set, so a frontend edit needs no Rust rebuild; `include_dir` always embeds.
 | **C. Hand-rolled `hyper_util` proxy + `copy_bidirectional`** | ~60 lines, no dependency; relays `permessage-deflate` and close codes free | You own hop-by-hop hygiene, `X-Forwarded-*`, timeouts, pooling, the `read_buf` trap |
 | **D. Browser connects `/ws` straight to the old port** | Zero proxy code | Breaks one-origin; `Origin` plumbing both sides; a dead end once `/ws` is ported |
 | **E. Replace the WebSocket with SSE** | No upgrade handling anywhere, ever; auto-reconnect | A contract change the frontend must follow; close codes become in-band |
-| **F. `nginx`/`caddy` in front of both** | No Rust proxy code at all | Three processes; route ownership moves into config that must track the strangler's progress |
+| **F. `nginx`/`caddy` in front of both** | No Rust proxy code at all | Three processes; route ownership moves into config that must track the strangler |
 
 **Separate binary vs `uedcli serve` subcommand (explicitly open per the spec).** A subcommand keeps
-one artifact and one `--help`, shares the project/config resolution the verb already does, matches
-what users type today, and makes the `cli`↔`serve` circularity a non-issue by construction. A
-separate binary keeps `axum`/`tower`/`hyper`/`rust-embed` and the embedded `web/dist` out of every
-CLI invocation, and *forces* the three shared pieces into core crates. Decisive question: does CLI
-binary size and cold start matter? The code does not decide it.
+one artifact and one `--help`, shares the project/config resolution the verb already does, and makes
+the `cli`↔`serve` circularity a non-issue by construction. A separate binary keeps
+`axum`/`tower`/`hyper`/`rust-embed` and the embedded `web/dist` out of every CLI invocation, and
+*forces* the three shared pieces into core crates. Decisive question: does CLI binary size and cold
+start matter? The code does not decide it.
 
 ## Proposal (owner's call — not decided)
 
 `axum` 0.8.9 + `tower-http` 0.7.1, with **Option A**: port `/ws` plus the `TrunkWatcher` (`notify`
-8.2.0 + `notify-debouncer-full` 0.7.0) and the claim registry as the GUI backend's first PR, so the
-strangler proxy only ever forwards plain HTTP and this note's hardest external risk never
-materialises — keeping `axum-reverse-proxy` 2.2.0 in reserve if an unported route needs WS
-passthrough. Port the 19 `/api` routes in the waves tabled above, leaving `/save` and `/rebuild`
+8.2.0 + `notify-debouncer-full` 0.7.0) and the claim registry as the first PR, so the strangler proxy
+only ever forwards plain HTTP and this note's hardest external risk never materialises — keeping
+`axum-reverse-proxy` 2.2.0 in reserve if an unported route needs WS passthrough. Port the 19 `/api`
+routes in the waves tabled above, leaving `/save` and `/rebuild`
 their own PRs: one is the only route that can damage a level, the other the only one needing
-cancellation and concurrency bounding. Make supersession a `tokio::sync::broadcast` push, deleting
-the 100 ms poll; defer `utoipa`/`ts-rs` until the route set stops moving.
+cancellation and concurrency bounding. Make supersession a `tokio::sync::broadcast` push (deleting
+the 100 ms poll); defer `utoipa`/`ts-rs` until the route set stops moving.
 
 ## Open questions / what to verify next
 
 - Compile time and transitive weight were **not measured** for any framework — only direct
-  dependency counts, a weak proxy. Worth a `cargo build --timings` on a skeleton first.
-- `tower-proxy` 0.10.1's WebSocket support is **unverified**; `pingora`'s is in `proxy_h1.rs` but
-  absent from its docs. And: preserve the WebSocket contract exactly (A/B/C), or allow SSE (E)?
+  dependency counts, a weak proxy. Worth a `cargo build --timings` on a skeleton first. And
+  `tower-proxy` 0.10.1's WebSocket support is **unverified**; `pingora`'s is in `proxy_h1.rs` but
+  undocumented. Preserve the WebSocket contract exactly (A/B/C), or allow SSE (E)?
 - Should `/rebuild` keep blocking at all, given `rebuild-should-run-in-background-on-a-trunk-
-  snapshot`? Porting the blocking shape first and changing it later means porting it twice.
+  snapshot`? Porting the blocking shape and changing it later means porting it twice.
 - `SceneActor`'s `location`/`rotation` special-casing (`inbox/sceneactor-special-cases-location-
   rotation`, p1) and `StagingStore`'s `Location`-keyed baselines are debt the generic-prop ruling
-  forbids. Inherit for differential-test parity, or fix in flight? Likewise `GET /api/levels`, still
-  mounted and called though the sessions spec says it has no place in the new surface.
+  forbids. Inherit for differential-test parity, or fix in flight? Likewise `GET /api/levels`.
 
 ## Sources
 
@@ -434,8 +407,7 @@ the 100 ms poll; defer `utoipa`/`ts-rs` until the route set stops moving.
   board/to-spec/persistent-gui-editing-sessions/}`; commits `593a2fe4`, `4114bf6e`, `c288842b`;
   board inbox `incremental-gui-reload-only-re-resolve-actors`,
   `incremental-csg-checkpointing-for-gui-rebuild`, `gui-unlit-fast-rebuild-button`,
-  `rebuild-should-run-in-background-on-a-trunk-snapshot`,
-  `gui-save-doesn-t-suppress-its-own-trunk-watcher`.
+  `rebuild-should-run-in-background-on-a-trunk-snapshot`, `gui-save-doesn-t-suppress-its-own-trunk-watcher`.
 - crates.io API, 2026-10-03 — every version and release date in the external tables. axum:
   `docs.rs/axum/latest/axum/{extract/ws,response/sse}/`;
   `github.com/tokio-rs/axum/blob/main/examples/reverse-proxy/src/main.rs`; issue
@@ -443,8 +415,6 @@ the 100 ms poll; defer `utoipa`/`ts-rs` until the route set stops moving.
   `docs.rs/hyper/latest/hyper/upgrade/`; pingora's `pingora-proxy/src/proxy_h1.rs`.
 - Watching: `docs.rs/notify/latest/notify/`; `man7.org/linux/man-pages/man7/inotify.7.html`;
   `fs/notify/inotify/inotify_user.c`; `github.com/samuelcolvin/watchfiles` (`Cargo.toml`,
-  `src/lib.rs`); `watchfiles.helpmanual.io/api/watch/`. Other: `tower-http` `ServeDir`;
-  `docs.rs/tokio/.../spawn_blocking.html`; `docs.rs/rayon/.../spawn.html`; `docs.rs/rust-embed`;
-  `crates.io/crates/ts-rs`; `docs.rs/aide`.
-- **Unverified / reasoned only:** compile times and transitive weights; `tower-proxy` WS support;
-  the direct-WS-to-old-port and `nginx`/`caddy` trade-offs; Rust AsyncAPI generator adoption.
+  `src/lib.rs`); `watchfiles.helpmanual.io/api/watch/`. Also `tower-http` `ServeDir`,
+  `docs.rs/tokio/.../spawn_blocking.html`, `docs.rs/rayon`, `docs.rs/rust-embed`, `ts-rs`, `aide`.
+- **Unverified / reasoned only:** compile times; `tower-proxy` WS support; the direct-WS and proxy-in-front trade-offs; Rust AsyncAPI adoption.
