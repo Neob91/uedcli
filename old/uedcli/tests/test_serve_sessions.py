@@ -1,7 +1,7 @@
 import pytest
 from uedcli.serve.sessions import (
     create_session, get_session, list_sessions, delete_session, touch_session, set_name,
-    set_last_seen_generation, SessionIndexCorruptError,
+    set_last_loaded_digest, SessionIndexCorruptError,
 )
 
 
@@ -16,18 +16,24 @@ def test_create_session_writes_index_json_under_its_own_directory(tmp_path):
     assert (tmp_path / rec.id / "index.json").exists()
 
 
-def test_create_session_defaults_last_seen_generation_to_zero(tmp_path):
+def test_create_session_defaults_last_loaded_digest_to_none(tmp_path):
     rec = create_session(tmp_path, "unatco")
-    assert rec.last_seen_generation == 0
+    assert rec.last_loaded_digest is None
 
 
-def test_create_session_seeds_last_seen_generation_from_caller(tmp_path):
-    # The caller (app.py's create_session_route) passes the level's own current generation, so a
-    # fresh session on a level that's already changed since server startup doesn't immediately
-    # report `changes_available: True` for something it never had a chance to see.
-    rec = create_session(tmp_path, "unatco", last_seen_generation=5)
-    assert rec.last_seen_generation == 5
-    assert get_session(tmp_path, rec.id).last_seen_generation == 5
+def test_create_session_seeds_last_loaded_digest_from_caller(tmp_path):
+    # The caller (app.py's create_session_route) passes the digest of the trunk this session is
+    # about to be shown, so a fresh session doesn't immediately report `changes_available: True`
+    # for something it never had a chance to see.
+    rec = create_session(tmp_path, "unatco", last_loaded_digest="abc123")
+    assert rec.last_loaded_digest == "abc123"
+    assert get_session(tmp_path, rec.id).last_loaded_digest == "abc123"
+
+
+def test_set_last_loaded_digest_round_trips(tmp_path):
+    rec = create_session(tmp_path, "unatco", last_loaded_digest="before")
+    set_last_loaded_digest(tmp_path, rec.id, "after")
+    assert get_session(tmp_path, rec.id).last_loaded_digest == "after"
 
 
 def test_get_session_returns_the_created_record(tmp_path):
@@ -125,8 +131,8 @@ def test_touch_session_preserves_name(tmp_path):
     assert get_session(tmp_path, rec.id).name == "My Session"
 
 
-def test_set_last_seen_generation_preserves_name(tmp_path):
+def test_set_last_loaded_digest_preserves_name(tmp_path):
     rec = create_session(tmp_path, "unatco")
     set_name(tmp_path, rec.id, "My Session")
-    set_last_seen_generation(tmp_path, rec.id, 5)
+    set_last_loaded_digest(tmp_path, rec.id, "abc123")
     assert get_session(tmp_path, rec.id).name == "My Session"

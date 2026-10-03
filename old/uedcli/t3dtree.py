@@ -21,6 +21,7 @@ no session store.
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
 import re
@@ -344,7 +345,14 @@ class ActorStamp:
 class TrunkRead:
     """`read_actor_tree`'s four return values plus the `ActorStamp`s a later
     `read_actor_tree_delta` diffs against. `level`/`ranks`/`bodies`/`folders` mean exactly what
-    they do there."""
+    they do there.
+
+    `stamps` is `stamp_actor_tree`'s whole result, NOT narrowed to the actors that parsed: a dir
+    that stats but does not read (an empty `actor.t3d`, or one that is a directory) keeps its stamp
+    while contributing no actor. Deliberate and load-bearing -- `uedcli serve` digests this map to
+    decide whether a session's view is stale, and narrowing it here would leave that digest
+    permanently unequal to the one taken straight off the disk, so the GUI's "trunk changed" banner
+    would stay up with no Load able to clear it."""
     level: Level
     ranks: dict[str, str]
     bodies: dict[str, str]
@@ -395,6 +403,27 @@ def stamp_actor_tree(tree_dir: Path) -> dict[str, ActorStamp]:
         os.close(fd)
 
 
+def stamp_digest(stamps: dict[str, ActorStamp]) -> str:
+    """A stable digest of a whole `ActorStamp` map — the trunk's identity as far as staleness is
+    concerned. Two reads of the same tree with nothing written in between give the same string; any
+    actor added, removed, or written gives a different one.
+
+    This is what `uedcli serve` compares to answer "has the trunk moved since this session Loaded"
+    (`app.py`'s `/status`): it asks the DISK rather than counting watcher events, so the answer
+    survives a `serve` restart, a change that landed while the server was down, and a watcher that
+    started late — none of which an event counter can see. Measured ~0.003s over 2745 actors, on top
+    of `stamp_actor_tree`'s own ~0.08s warm.
+
+    Keyed on the name as well as the stamp so a rename is a change even in the (possible) case where
+    the new dir inherits identical mtimes and size."""
+    h = hashlib.sha256()
+    for name in sorted(stamps):
+        stamp = stamps[name]
+        h.update(f"{name}\0{stamp.dir_mtime_ns}\0{stamp.body_mtime_ns}\0{stamp.body_size}\n"
+                 .encode("utf-8"))
+    return h.hexdigest()
+
+
 def read_actor_tree_delta(tree_dir: Path, previous: TrunkRead | None) -> TrunkDelta:
     """`read_actor_tree`, but reusing `previous`'s already-parsed actors wherever the on-disk
     `ActorStamp` is unchanged — the read half of the trunk's delta-write pattern
@@ -412,9 +441,13 @@ def read_actor_tree_delta(tree_dir: Path, previous: TrunkRead | None) -> TrunkDe
     bodies: dict[str, str] = {}
     folders: dict[str, str | None] = {}
     reread: set[str] = set()
-    gone: set[str] = set()                # stamped, then unreadable — drop from `stamps` as well
     for name in sorted(stamps):           # same order `read_actor_tree`'s sorted scan produces
-        if stamps[name] == prev_stamps.get(name):
+        # Reuse only what the PREVIOUS read actually admitted. A dir can be stampable yet
+        # unreadable -- an empty `actor.t3d`, or one that is a directory where a file belongs (both
+        # rejected by `_read_actor_dir`) -- and such a dir keeps its stamp while contributing no
+        # actor, so an unchanged stamp is not on its own a licence to reuse. Re-reading it costs
+        # one dir and rejects it again; without this guard it would `KeyError`.
+        if stamps[name] == prev_stamps.get(name) and name in previous.level.actors:
             level.actors[name] = previous.level.actors[name]
             ranks[name] = previous.ranks[name]
             bodies[name] = previous.bodies[name]
@@ -422,16 +455,13 @@ def read_actor_tree_delta(tree_dir: Path, previous: TrunkRead | None) -> TrunkDe
             continue
         read = _read_actor_dir(adir / name, name)
         if read is None:
-            gone.add(name)
-            continue
+            continue                      # stamped but unreadable: no actor, and its stamp stays
         actor, text, rank = read
         level.actors[name] = actor
         bodies[name] = text
         folders[name] = actor.folder
         ranks[name] = rank
         reread.add(name)
-    for name in gone:
-        del stamps[name]
     level.order = sorted(level.actors, key=lambda n: (ranks.get(n, ""), n))
     return TrunkDelta(
         read=TrunkRead(level=level, ranks=ranks, bodies=bodies, folders=folders, stamps=stamps),

@@ -305,3 +305,39 @@ def test_load_without_a_search_path_is_empty_not_a_crash(tmp_path):
     assert loaded.sprite_table == [] and loaded.mesh_polys == [] and loaded.mover_polys == []
     assert set(cache.renders) == set(loaded.level.actors)
     _reload(d, inputs, cache)
+
+
+def test_an_unreadable_actor_dir_keeps_its_stamp_without_breaking_the_reload(tmp_path):
+    """`TrunkRead.stamps` deliberately keeps a dir that stats but does not read (board
+    `changes-available-banner-dies-after-a-serve`: narrowing it wedged the GUI's banner on), so
+    `set(stamps)` is no longer `set(level.actors)`. The incremental Load must be indifferent to
+    that: no `KeyError` from the per-actor render bookkeeping, the dir contributes no actor, and
+    the result still matches a cold Load's."""
+    d = _fixture_trunk(tmp_path)
+    inputs = _inputs()
+    first, cache = trunk_load.load_trunk(d, inputs=inputs, previous=None)
+
+    ghost = d / "actors" / "Ghost"
+    ghost.mkdir(parents=True)
+    (ghost / "actor.t3d").write_text("")           # stats fine, never parses
+    second, cache2 = _reload(d, inputs, cache)
+
+    assert "Ghost" in cache2.read.stamps            # stamped...
+    assert "Ghost" not in second.level.actors       # ...but never an actor
+    assert "Ghost" not in cache2.renders            # ...and never a render
+    assert set(cache2.renders) == set(second.level.actors)
+    assert list(second.level.actors) == list(first.level.actors)
+
+    # Still unreadable and unchanged: the reuse guard must fall through and re-reject it, not
+    # reuse a `level.actors` entry that was never there.
+    third, cache3 = _reload(d, inputs, cache2)
+    assert "Ghost" in cache3.read.stamps and "Ghost" not in third.level.actors
+    assert set(cache3.renders) == set(third.level.actors)
+
+    # Fixed on disk -> it becomes a real actor on the next Load.
+    trunk.remove_actor(d, "Ghost")
+    repaired = cube_room(name="Ghost")
+    _write_one(d, repaired, "n009")
+    fourth, cache4 = _reload(d, inputs, cache3)
+    assert "Ghost" in fourth.level.actors
+    assert set(cache4.renders) == set(fourth.level.actors)

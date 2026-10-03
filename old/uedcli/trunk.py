@@ -34,6 +34,7 @@ from .t3dtree import (  # noqa: F401 — the shared per-actor tree, re-exported 
     read_actor_tree as read_level_with_bodies,
     read_actor_tree_delta as read_level_delta,
     remove_actor,
+    stamp_digest,
     write_actor_tree as write_level,
 )
 

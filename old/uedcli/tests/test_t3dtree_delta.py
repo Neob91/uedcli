@@ -137,3 +137,40 @@ def test_stamp_actor_tree_skips_a_dir_without_a_body(tmp_path):
 def test_stamp_actor_tree_on_a_missing_tree_is_empty(tmp_path):
     assert t3dtree.stamp_actor_tree(tmp_path / "nope") == {}
     assert t3dtree.read_actor_tree_delta(tmp_path / "nope", None).read.level.actors == {}
+
+
+def test_an_unreadable_dir_keeps_its_stamp_and_is_retried_every_read(tmp_path):
+    """A dir that stats but does not read keeps its stamp while contributing no actor, so
+    `stamp_actor_tree`'s output and `TrunkRead.stamps` stay the same set — what `uedcli serve`
+    digests to decide staleness. The reuse branch must therefore NOT trust an unchanged stamp
+    alone: that name is absent from the previous read's `level.actors` and reusing it would
+    `KeyError`."""
+    d = tmp_path / "TestLevel"
+    _write(d, [cube_room()])
+    ghost = d / "actors" / "Ghost"
+    ghost.mkdir(parents=True)
+    (ghost / "actor.t3d").write_text("")
+
+    first = t3dtree.read_actor_tree_delta(d, None).read
+    assert set(first.stamps) == set(t3dtree.stamp_actor_tree(d)) == {"Room", "Ghost"}
+    assert set(first.level.actors) == {"Room"}
+
+    second = t3dtree.read_actor_tree_delta(d, first)        # must not raise
+    assert set(second.read.stamps) == {"Room", "Ghost"}
+    assert set(second.read.level.actors) == {"Room"}
+    assert second.reread == frozenset()                     # Room reused; Ghost never admitted
+    assert second.read.level.actors["Room"] is first.level.actors["Room"]
+
+
+def test_a_body_that_is_a_directory_is_stamped_but_never_an_actor(tmp_path):
+    """The other shape `_read_actor_dir` rejects -- a directory where the body file belongs --
+    handled the same way as an empty body."""
+    d = tmp_path / "TestLevel"
+    _write(d, [cube_room()])
+    (d / "actors" / "Conflict" / "actor.t3d").mkdir(parents=True)
+
+    delta = t3dtree.read_actor_tree_delta(d, None)
+    assert set(delta.read.stamps) == {"Room", "Conflict"}
+    assert set(delta.read.level.actors) == {"Room"}
+    assert t3dtree.stamp_digest(delta.read.stamps) == t3dtree.stamp_digest(
+        t3dtree.stamp_actor_tree(d))

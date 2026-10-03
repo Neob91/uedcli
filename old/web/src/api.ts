@@ -468,8 +468,9 @@ export interface StagedActorPayload {
   baseline_location: [number, number, number]
 }
 
-/** The explicit Load action (gui-explicit-rebuild spec §2): re-reads the trunk and clears this
- * session's `changes_available` flag. Does NOT solve geometry -- see `postRebuild`. `resolutions`
+/** The explicit Load action (gui-explicit-rebuild spec §2): re-reads the trunk and records the
+ * digest of what it read, which is what clears this session's "trunk changed" banner (`/status`
+ * compares that digest against the trunk on disk). Does NOT solve geometry -- see `postRebuild`. `resolutions`
  * answers a load-conflict entry ("accept-load" is the only verdict this direction supports) --
  * default `{}` matches the backend's own default (uedcli/serve/app.py `session_load`). Sends the
  * session's current `X-Claim-Token` (Task 17) -- required for the backend to actually write; a

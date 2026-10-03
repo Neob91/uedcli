@@ -448,16 +448,13 @@ function SessionEditor({ sessionId: routeSessionId }: { sessionId: string }) {
   // Save success (Important 5, final review fix wave): route through the SAME refresh path Load/
   // Rebuild already use, so the Inspector and every non-dragged pane pick up the newly-committed
   // trunk state instead of showing the pre-Save Location until the user manually clicks Load.
-  // Reusing an actual Load (not just `fetchLevelState`) matters: `serve`'s `_trunk_ref` is a
+  // Reusing an actual Load (not just `fetchLevelState`) matters: `serve`'s trunk slot is a
   // per-process cache that only Load/Rebuild ever invalidate, so a bare `fetchLevelState` after a
-  // Save would still read the STALE cached trunk -- only `POST /load` forces the re-read. This also
-  // re-clears the server's `changes_available` flag, which the Save's own trunk write would
-  // otherwise leave set (Save doesn't touch it) and show as a spurious "reload available" banner.
-  // KNOWN RESIDUAL (documented, not silently left out): `TrunkWatcher` debounces its own filesystem
-  // watch by ~0.4s, so if that debounced callback fires AFTER this auto-Load already re-cleared the
-  // flag, it can set `changes_available` back to true moments later, observing our own already-
-  // loaded write as if it were external -- closing that fully needs a backend change (e.g. the
-  // watcher suppressing its own write) that is out of scope for this fix wave.
+  // Save would still read the STALE cached trunk -- only `POST /load` forces the re-read. It also
+  // clears the "trunk changed" banner the Save's own write would otherwise raise: the Load records
+  // the digest of what it read, which is what `/status` compares the disk against. A late
+  // ~0.4s-debounced watcher callback can no longer undo that -- settling only drops the server's
+  // cached digest, and re-reading an unchanged trunk yields the digest the Load just recorded.
   const onSaved = useCallback(() => {
     setStagedNames(new Set())
     setStagedOffsets({})

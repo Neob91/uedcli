@@ -79,6 +79,10 @@ class TrunkCache:
     read: t3dtree.TrunkRead
     renders: dict[str, _ActorRender]
     inputs: tuple
+    # `t3dtree.stamp_digest(read.stamps)`, computed once here rather than per reader: `app.py`'s
+    # `/scene` and `/load` both record it as "the trunk this session has been shown", and `/status`
+    # compares the disk against it.
+    digest: str
 
 
 def _localize(polys: list[tuple], owners: list[tuple], table: list[_TexEntry],
@@ -215,4 +219,5 @@ def load_trunk(trunk_dir: Path, *, inputs: tuple,
                           mesh_texture_table=mesh_table,
                           mover_polys=mover_polys, mover_owners=mover_owners,
                           mover_texture_table=mover_table, mover_groups=mover_groups)
-    return loaded, TrunkCache(read=delta.read, renders=renders, inputs=inputs)
+    return loaded, TrunkCache(read=delta.read, renders=renders, inputs=inputs,
+                              digest=t3dtree.stamp_digest(delta.read.stamps))

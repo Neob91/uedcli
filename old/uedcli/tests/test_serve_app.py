@@ -119,6 +119,18 @@ def test_fault_route_renders_a_structured_error_not_a_traceback(tmp_path):
     assert r.json() == {"error": "Actor not found: Foo"}
 
 
+def _seeded_session(app, root, level: str):
+    """A session created the way `create_session_route` creates one: with `last_loaded_digest`
+    seeded to the trunk it is about to be shown. `sessions.create_session` on its own leaves that
+    `None`, which `/status` correctly reports as changes-available ("never Loaded"), so a test that
+    wants a session starting out CURRENT has to seed it exactly as the route does."""
+    from uedcli import t3dtree
+    from uedcli.serve import sessions
+
+    digest = t3dtree.stamp_digest(t3dtree.stamp_actor_tree(root / "maps" / level))
+    return sessions.create_session(app.state.sessions_root, level, last_loaded_digest=digest)
+
+
 def test_session_status_reports_no_build_right_after_create(tmp_path):
     """Task 14 / spec test #1's equivalent, re-keyed to sessions: a freshly-created session (no
     `build.json` yet -- no prior Rebuild) reports the cold state on its own `/status`."""
@@ -129,7 +141,7 @@ def test_session_status_reports_no_build_right_after_create(tmp_path):
     project = SimpleNamespace(root=str(root), maps=None)
     app = create_app(project, "TestLevel")
     c = TestClient(app)
-    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    sess = _seeded_session(app, root, "TestLevel")
 
     r = c.get(f"/api/session/{sess.id}/status")
     assert r.status_code == 200
@@ -160,8 +172,8 @@ def test_session_status_geometry_pinned_reflects_only_this_sessions_own_pin(tmp_
     app = serve_app.create_app(project, "TestLevel")
     c = TestClient(app)
 
-    sess_built = sessions.create_session(app.state.sessions_root, "TestLevel")
-    sess_cold = sessions.create_session(app.state.sessions_root, "TestLevel")
+    sess_built = _seeded_session(app, root, "TestLevel")
+    sess_cold = _seeded_session(app, root, "TestLevel")
     token = app.state.claims.mint(sess_built.id)
 
     r = c.post(f"/api/session/{sess_built.id}/rebuild", headers={"X-Claim-Token": token})
@@ -190,7 +202,7 @@ def test_session_status_reports_evicted_when_the_pinned_build_cache_entry_is_gon
     project = SimpleNamespace(root=str(root), maps=None)
     app = create_app(project, "TestLevel")
     c = TestClient(app)
-    sess = sessions.create_session(app.state.sessions_root, "TestLevel")
+    sess = _seeded_session(app, root, "TestLevel")
 
     build_pin.write_session_pointer(app.state.sessions_root, sess.id,
                                     "deadbeef1234", "cafebabe5678")
@@ -202,8 +214,8 @@ def test_session_status_reports_evicted_when_the_pinned_build_cache_entry_is_gon
 
 
 def test_session_status_changes_available_after_sibling_save_and_cleared_by_own_load(tmp_path, monkeypatch):
-    """`changes_available`'s new per-session formula (`ctx.generation[0] >
-    session.last_seen_generation`): False right after create; another session's Save on the same
+    """`changes_available`'s per-session formula (the level's current trunk digest vs. this
+    session's `last_loaded_digest`): False right after create; another session's Save on the same
     level settling the trunk flips it True for EVERY session on that level, including one that
     never touched Save itself; that session's own Load clears it back to False for itself only --
     its sibling, which never loaded, still sees it True."""
@@ -219,8 +231,8 @@ def test_session_status_changes_available_after_sibling_save_and_cleared_by_own_
     app = serve_app.create_app(project, "TestLevel")
     c = TestClient(app)
 
-    sess_a = sessions.create_session(app.state.sessions_root, "TestLevel")
-    sess_b = sessions.create_session(app.state.sessions_root, "TestLevel")
+    sess_a = _seeded_session(app, root, "TestLevel")
+    sess_b = _seeded_session(app, root, "TestLevel")
     token_b = app.state.claims.mint(sess_b.id)
 
     assert c.get(f"/api/session/{sess_a.id}/status").json()["changes_available"] is False
@@ -419,12 +431,14 @@ def test_scene_and_atlas_share_one_trunk_read_even_cold(tmp_path, monkeypatch):
     assert len(trunk_calls) == 1
 
 
-def test_on_trunk_settled_bumps_generation_sets_changes_available_leaves_trunk_untouched(
+def test_on_trunk_settled_bumps_generation_drops_the_digest_leaves_trunk_untouched(
         tmp_path, monkeypatch):
     """Task 3 (gui-explicit-rebuild spec Section 0/2), still true after Task 9's `LevelContext`
     split: the watcher's settle callback never clears the trunk slot -- Load owns it, and a mere
-    trunk change on disk must not silently discard it. It still bumps `_generation[0]` by exactly 1,
-    sets `_changes_available[0]`, and still broadcasts a `"changes_available"` message. (There is no
+    trunk change on disk must not silently discard it. It still bumps `generation[0]` by exactly 1
+    and broadcasts a `"changes_available"` message, and it now also drops the cached trunk digest
+    so the `/status` refetch the push triggers reads the disk instead of an answer cached just
+    before the change (board `changes-available-banner-dies-after-a-serve`). (There is no
     geometry slot left to assert on here any more -- Task 9 removes it outright; Task 11 restores
     it, per session, via disk.)"""
     _require_ued22()
@@ -438,7 +452,8 @@ def test_on_trunk_settled_bumps_generation_sets_changes_available_leaves_trunk_u
 
     index = _ued22_index()
     trunk_state = app.state.get_trunk("TestLevel", [], index, DEFAULTS)
-    assert app.state.changes_available[0] is False
+    ctx = app.state.get_or_create_level_context("TestLevel")
+    ctx.digest_ref[0] = ("a-cached-digest", 1e18)      # far-future read time: never TTL-expires
 
     class FakeWS:
         def __init__(self):
@@ -454,7 +469,7 @@ def test_on_trunk_settled_bumps_generation_sets_changes_available_leaves_trunk_u
     asyncio.run(app.state.on_trunk_settled())
 
     assert ws.sent == [{"type": "changes_available", "level": "TestLevel"}]
-    assert app.state.changes_available[0] is True
+    assert ctx.digest_ref[0] is None                   # dropped, so the next read hits the disk
     assert app.state.generation[0] == gen_before + 1
     assert app.state.get_trunk("TestLevel", [], index, DEFAULTS) is trunk_state    # untouched
 
@@ -550,7 +565,8 @@ def test_scene_and_atlas_share_one_trunk_read_and_sprite_resolve(tmp_path, monke
 
     assert len(trunk_calls) == 1
     assert len(sprite_calls) == 1
-    assert app.state.changes_available[0] is True                # ...but the banner signal fired
+    # ...but the banner signal fired, asserted where the user actually sees it: `/status`.
+    assert c.get(f"/api/session/{sess.id}/status").json()["changes_available"] is True
 
 
 def test_concurrent_first_scene_requests_never_see_a_torn_trunk_build(tmp_path, monkeypatch):
@@ -1007,29 +1023,37 @@ def test_create_session_unknown_level_is_a_clean_not_found(tmp_path):
 
 
 def test_create_session_on_a_level_that_already_changed_does_not_show_changes_available(tmp_path):
-    """Bug found post-merge: a fresh session used to always start at `last_seen_generation=0`, so a
-    level whose trunk had settled a change even once since server startup (common -- another
-    session's Save, an external edit, anything the `TrunkWatcher` notices) made every NEW session on
-    it immediately report `changes_available: True` for a change it never had a chance to see. Fixed
-    by seeding the new session's baseline from the level's own CURRENT generation at creation time."""
+    """Bug found post-merge: a fresh session used to start with no baseline at all, so a level whose
+    trunk had changed since server startup (common -- another session's Save, an external edit)
+    made every NEW session on it immediately report `changes_available: True` for a change it never
+    had a chance to see. Fixed by seeding the new session's baseline at creation time -- now with
+    the digest of the trunk it is about to be shown."""
+    from uedcli import trunk as trunk_module
+    from uedcli.model import Level
+
     root = tmp_path / "proj"
-    _make_level_dir(root, "TestLevel")
+    _write_fixture_trunk(root, "TestLevel", [_cube_room_local("Brush1")])
+    maps_dir = root / "maps" / "TestLevel"
     app = create_app(SimpleNamespace(root=str(root), maps=None))
     c = TestClient(app)
-    # Simulate a settled trunk change landing BEFORE this session ever existed -- the level's own
-    # generation counter is the one lower-level hook a test can legitimately bump directly (same
-    # `app.state.get_or_create_level_context` seam `test_on_trunk_settled_...` already uses).
-    ctx = app.state.get_or_create_level_context("TestLevel")
-    ctx.generation[0] = 3
+    # A real trunk change landing BEFORE this session ever existed. The signal is content-derived
+    # now, so this writes an actor rather than poking a counter -- which is also what actually
+    # happens in production (another session's Save, an external edit).
+    extra = _cube_room_local("Brush2")
+    trunk_module.write_level(maps_dir, Level(actors={extra.name: extra}, order=[extra.name]),
+                             {extra.name: "n001"}, only={extra.name})
 
     created = c.post("/api/level/TestLevel/sessions").json()
     status = c.get(f"/api/session/{created['id']}/status").json()
 
     assert status["changes_available"] is False
 
-    # The fix must not swallow a REAL subsequent change either -- a session correctly seeded at the
-    # level's generation-3 baseline still notices generation 4.
-    ctx.generation[0] = 4
+    # The seeding must not swallow a REAL subsequent change either.
+    third = _cube_room_local("Brush3")
+    trunk_module.write_level(maps_dir, Level(actors={third.name: third}, order=[third.name]),
+                             {third.name: "n002"}, only={third.name})
+    ctx = app.state.get_or_create_level_context("TestLevel")
+    ctx.digest_ref[0] = None          # the watcher would drop this; no event loop in this test
     status_after = c.get(f"/api/session/{created['id']}/status").json()
     assert status_after["changes_available"] is True
 
@@ -1506,10 +1530,11 @@ def test_load_is_session_scoped_gated_by_claim_token_and_old_path_is_gone(tmp_pa
     assert c.post("/api/level/TestLevel/load").status_code == 404
 
 
-def test_load_bumps_last_seen_generation(tmp_path, monkeypatch):
-    """Task 13's own plan text: Load bumps this session's `last_seen_generation` to the level's
-    current trunk generation counter -- `sessions.set_last_seen_generation` (Task 6) is unused
-    until now."""
+def test_load_records_the_digest_of_what_it_read(tmp_path, monkeypatch):
+    """Load records this session's `last_loaded_digest` as the digest of the stamps its own read
+    produced -- the value `/status` compares the current trunk against. Taken from the Load's own
+    result, not a fresh disk read, so a write landing between the two can never mark the session
+    current for content it was not shown."""
     _require_ued22()
     from uedcli.serve import app as serve_app
     from uedcli.serve import sessions
@@ -1524,15 +1549,16 @@ def test_load_bumps_last_seen_generation(tmp_path, monkeypatch):
     sess = sessions.create_session(app.state.sessions_root, "TestLevel")
     token = app.state.claims.mint(sess.id)
 
-    asyncio.run(app.state.on_trunk_settled())   # bumps this level's own generation counter
-    ctx = app.state.get_or_create_level_context("TestLevel")
-    assert ctx.generation[0] > 0
+    assert sessions.get_session(app.state.sessions_root, sess.id).last_loaded_digest is None
 
     r = c.post(f"/api/session/{sess.id}/load", headers={"X-Claim-Token": token})
     assert r.status_code == 200
 
+    from uedcli import t3dtree
+    on_disk = t3dtree.stamp_digest(t3dtree.stamp_actor_tree(root / "maps" / "TestLevel"))
     rec = sessions.get_session(app.state.sessions_root, sess.id)
-    assert rec.last_seen_generation == ctx.generation[0]
+    assert rec.last_loaded_digest == on_disk
+    assert c.get(f"/api/session/{sess.id}/status").json()["changes_available"] is False
 
 
 def test_stage_discard_save_staged_are_session_scoped_and_old_paths_are_gone(tmp_path):
@@ -1717,7 +1743,7 @@ def test_create_session_inherits_the_levels_pin(tmp_path):
     session -- so "Rebuild, Save, then open a new session on the same level" always showed the new
     session as un-built, even though a resolvable build already existed. `create_session_route`
     now seeds a fresh session's own pin from the level's current one at creation time, mirroring
-    the `last_seen_generation` inheritance fix above. No real Rebuild/UED22 needed here: the level
+    the `last_loaded_digest` inheritance fix above. No real Rebuild/UED22 needed here: the level
     pin is written directly, the same way `test_save_with_no_prior_rebuild_leaves_the_level_pin_
     untouched` sets up a pre-existing pin."""
     from uedcli.serve import build_pin, sessions

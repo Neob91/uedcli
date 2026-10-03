@@ -9,6 +9,7 @@ import functools
 import logging
 import os
 import threading
+import time
 from collections import OrderedDict
 from contextlib import asynccontextmanager
 from dataclasses import asdict, dataclass
@@ -21,7 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.requests import Request
 
-from .. import build_cache, config, packages, query
+from .. import build_cache, config, packages, query, t3dtree
 from ..classdefaults import ClassDefaults
 from ..cli import resources
 from ..cli.errors import CommandError
@@ -45,6 +46,13 @@ from .textures import build_atlas
 from .watch import TrunkWatcher
 
 logger = logging.getLogger(__name__)
+
+# How long `/status`'s trunk digest may be reused before the disk is re-read. The web client polls
+# `/status` every 3s per open window (`web/src/App.tsx`'s `STATUS_POLL_MS`), so this is what stops N
+# windows on one level from each paying a stamp pass; it also bounds how long a missed watcher event
+# can delay the banner. Well under the poll interval, so a single window still gets a fresh read
+# every poll.
+_DIGEST_TTL_S = 1.0
 
 # How often `ws_endpoint` re-checks its own claim token between client messages (Task 15). Short
 # enough that a superseded connection notices quickly and tests don't need to wait long; cheap
@@ -187,8 +195,11 @@ class LevelContext:
     docstring: a WanChai-scale request stayed ~28s even on a warm repeat before this cache existed)."""
     level_name: str
     trunk_ref: list           # [_LoadedTrunk | None], mutated by index, never reassigned
+    # Bumped once per settled trunk change. NOT the changes-available answer -- that is content-
+    # derived now (`_current_trunk_digest`, board `changes-available-banner-dies-after-a-serve`).
+    # Its one remaining job is `_get_trunk`'s mid-build invalidation guard: a build whose generation
+    # moved under it is discarded and retried.
     generation: list[int]
-    changes_available: list[bool]
     trunk_lock: threading.Lock
     watcher: TrunkWatcher
     connections: set
@@ -209,12 +220,23 @@ class LevelContext:
     # data — so the next Load re-reads and re-resolves only the actors whose files moved. Level-
     # shared like `trunk_ref` itself, and written under `trunk_lock` by both Load paths.
     trunk_cache_ref: list     # [trunk_load.TrunkCache | None]
+    # The level's CURRENT on-disk trunk digest, with the `time.monotonic()` at which it was read:
+    # `[(digest, read_at)] | [None]`. `/status` is polled every few seconds by every open window,
+    # and the digest costs a stamp pass (~0.08s warm at 2745 actors), so one read is shared across
+    # them for `_DIGEST_TTL_S`. A plain unlocked last-writer-wins cell: two racing readers both
+    # compute the same thing from the same disk, so a lock would only add contention.
+    digest_ref: list          # [tuple[str, float] | None]
+    # Session id -> the digest of the trunk `/scene` last served that session: what each window is
+    # actually displaying, which is what `/status` compares the disk against. Per-process on
+    # purpose (see `/scene`); `session.last_loaded_digest` on disk is the restart fallback. Holds
+    # one short string per session seen on this level, mutated in place like `class_cache_ref`.
+    served_ref: list          # [dict[str, str]]
 
 
 def create_app(project, level: str | None = None, *, fault_route: bool = False) -> FastAPI:
     """Build the app for one project. `level`, if given, is the STARTUP level: its `LevelContext`
     (and `TrunkWatcher`) is created eagerly and `app.state.connections`/`broadcast_changes_available`/
-    `on_trunk_settled`/`changes_available`/`generation` are bound to it, purely so pre-Task-12 tests
+    `on_trunk_settled`/`generation` are bound to it, purely so pre-Task-12 tests
     (and any other zero-argument caller) keep working unchanged. `level=None` (plan Task 12: session
     CRUD): the process starts with ZERO `LevelContext`s — no eager session/trunk-watcher creation at
     startup, per the spec's "a session is created only by a real page load, never automatically".
@@ -322,11 +344,17 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
 
     async def _on_trunk_settled(ctx: LevelContext) -> None:
         # gui-explicit-rebuild spec §0/§2: a mere trunk change settling on disk touches only the
-        # generation counter (guarding a build-in-flight, see `_get_trunk` below) and the
-        # `changes_available` banner flag -- never the trunk slot itself. Never takes
-        # `ctx.trunk_lock` (event-loop-freeze hazard, same reasoning as `_broadcast_changes_available`).
+        # generation counter (guarding a build-in-flight, see `_get_trunk` below) and the digest
+        # cache -- never the trunk slot itself. Never takes `ctx.trunk_lock` (event-loop-freeze
+        # hazard, same reasoning as `_broadcast_changes_available`).
+        #
+        # Dropping the cached digest makes the push that follows meaningful: the client answers it
+        # by refetching `/status`, which must then read the disk rather than return an answer
+        # cached microseconds before the change. Correctness does NOT depend on this event
+        # arriving -- `_DIGEST_TTL_S` expiry re-reads the disk regardless, which is the whole point
+        # of a content-derived signal.
         ctx.generation[0] += 1
-        ctx.changes_available[0] = True
+        ctx.digest_ref[0] = None
         await _broadcast_changes_available(ctx)
 
     _level_contexts: dict[str, LevelContext] = {}
@@ -354,12 +382,34 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
             watcher = TrunkWatcher(maps_root / level_name,
                                    lambda: _on_trunk_settled(_level_contexts[level_name]))
             ctx = LevelContext(level_name=level_name, trunk_ref=[None], generation=[0],
-                               changes_available=[False], trunk_lock=threading.Lock(),
+                               trunk_lock=threading.Lock(),
                                watcher=watcher, connections=set(), scene_inputs_ref=[None],
                                resolve_ctx_ref=[None], class_cache_ref=[{}],
-                               trunk_cache_ref=[None])
+                               trunk_cache_ref=[None], digest_ref=[None], served_ref=[{}])
             _level_contexts[level_name] = ctx
             return ctx
+
+    def _current_trunk_digest(ctx: LevelContext) -> str:
+        """This level's CURRENT on-disk trunk digest (`t3dtree.stamp_digest`), re-read from disk at
+        most once per `_DIGEST_TTL_S` and shared by every session and window on the level.
+
+        This is the changes-available signal's basis (board
+        `changes-available-banner-dies-after-a-serve`, owner ruling 2026-10-03): it asks the disk
+        what the trunk looks like NOW, so the answer is right across a `serve` restart, for a change
+        that landed while the server was down, and for a level whose watcher started late. The
+        counter it replaced could see none of those -- it lived in memory, restarted at 0, and was
+        compared against a mark persisted per session that only ever climbed.
+
+        The TTL is what keeps a 3s-per-window poll cheap (a stamp pass is ~0.08s warm at 2745
+        actors) AND what makes the signal self-healing: a watcher event that never arrives delays
+        the banner by at most the TTL instead of suppressing it forever."""
+        cached = ctx.digest_ref[0]
+        now = time.monotonic()
+        if cached is not None and now - cached[1] < _DIGEST_TTL_S:
+            return cached[0]
+        digest = t3dtree.stamp_digest(t3dtree.stamp_actor_tree(maps_root / ctx.level_name))
+        ctx.digest_ref[0] = (digest, now)
+        return digest
 
     def _current_scene_inputs(level_name: str):
         """`(search_files, index, defaults)` for `/scene`/`/atlas`/`/lightmap` only -- reuses
@@ -526,7 +576,6 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         app.state.connections = _startup_ctx.connections
         app.state.broadcast_changes_available = functools.partial(_broadcast_changes_available, _startup_ctx)
         app.state.on_trunk_settled = functools.partial(_on_trunk_settled, _startup_ctx)
-        app.state.changes_available = _startup_ctx.changes_available
         app.state.generation = _startup_ctx.generation
     app.state.get_trunk = _get_trunk
     app.state.get_or_create_level_context = _get_or_create_level_context
@@ -593,9 +642,12 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         # Task 14: replaces the old per-level `/status` (Task 9's deliberate cold-only placeholder)
         # -- both fields it deferred are per-session state now: `geometry_pinned`/`build_status`
         # come from this session's own `build.json` (Task 11's `build_pin`), and
-        # `changes_available` compares the level's trunk-generation counter against THIS session's
-        # own high-water mark (`last_seen_generation`, bumped only by this session's own Load,
-        # Task 13) instead of a level-wide flag every session shared.
+        # `changes_available` compares the level's CURRENT on-disk trunk digest against the digest
+        # of what THIS session last Loaded. Board `changes-available-banner-dies-after-a-serve`
+        # (owner ruling 2026-10-03) replaced the trunk-generation counter this used to compare: that
+        # counter was in-memory and restarted at 0 with the process, while the per-session mark it
+        # was compared against was persisted and only climbed, so a session reused across a `serve`
+        # restart saw no banner until the counter caught back up with its own history.
         session = _require_session(session_id)
         ctx = _get_or_create_level_context(session.level)
         try:
@@ -608,7 +660,13 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         else:
             build_status = "built" if resolved is not None else "evicted"
         return {
-            "changes_available": ctx.generation[0] > session.last_seen_generation,
+            # What this session has actually been SHOWN: the trunk `/scene` last handed it in this
+            # process, else -- after a restart, before any fetch -- the trunk its last Load read.
+            # A session that has never Loaded (`None`) is stale by definition; it cannot be showing
+            # the current trunk. `create_session_route` seeds the digest precisely so a
+            # freshly-opened window does not land there.
+            "changes_available": ctx.served_ref[0].get(
+                session_id, session.last_loaded_digest) != _current_trunk_digest(ctx),
             "geometry_pinned": build_status == "built",
             "build_status": build_status,
         }
@@ -714,6 +772,27 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         search_files, index, defaults = _current_scene_inputs(session.level)
         trunk_state = _get_trunk(session.level, search_files, index, defaults)
         ctx = _get_or_create_level_context(session.level)
+        # This response IS what the window renders, so this is where "the trunk this session has
+        # been shown" is settled -- not `/load` alone. Every session on a level is served the one
+        # shared `ctx.trunk_ref[0]` slot, and that slot also advances under `_get_trunk`'s own
+        # automatic initial Load, which belongs to no session. Recording only on `/load` left the
+        # banner up over content the window was already displaying: after a restart the first
+        # `/scene` bootstrap-loads the newer trunk and hands it over, while the session's own
+        # digest still named the older one (review finding).
+        #
+        # In MEMORY, deliberately: a GET must not write a session's `index.json`. That write would
+        # recreate the directory of a session deleted mid-request (`atomic_write_json` mkdirs its
+        # parent) and would clobber a concurrent rename, and guarding it the way the mutating
+        # routes do means taking `_claims.lock_for` -- which Save holds across a whole trunk write
+        # -- on the hot read path. Only `/load` persists; this is per-process, which is all it has
+        # to be, since what a window has rendered does not outlive the process either.
+        #
+        # `is`-matched against the trunk actually being served: a concurrent `/load` can swap the
+        # cells between `_get_trunk` returning and this read, and recording that newer digest
+        # against this older response would clear the banner over content never shown.
+        served = ctx.trunk_cache_ref[0]
+        if served is not None and served.read.level is trunk_state.level:
+            ctx.served_ref[0][session_id] = served.digest
         resolve_ctx = ctx.resolve_ctx_ref[0]
         class_cache = ctx.class_cache_ref[0]
         geometry = _resolve_session_geometry(session_id, session.level)
@@ -839,7 +918,7 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
 
     # Task 13: `load`/`stage`/`discard`/`save` all require the `X-Claim-Token` header, same as
     # Task 11's `rebuild` -- every one of them mutates this session's own state (`load` bumps
-    # `last_seen_generation`, `stage`/`discard` write `staged.json`, `save` writes the trunk plus
+    # `last_loaded_digest`, `stage`/`discard` write `staged.json`, `save` writes the trunk plus
     # the level pin), so a stale token gets the identical 409 `rebuild` already gives. Unlike
     # `rebuild` (which checks only AFTER its expensive CSG solve), none of these four has an
     # expensive precursor -- the claim check runs BEFORE any write, under
@@ -878,28 +957,38 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
             # `incremental-gui-reload-only-re-resolve-actors`). Under `ctx.trunk_lock` so a
             # concurrent `_get_trunk` bootstrap can't resolve against the same cache entry at the
             # same time and publish a half-updated one.
+            # Every cell is published inside ONE hold of `ctx.trunk_lock`, exactly as
+            # `_get_trunk`'s bootstrap branch does. Publishing `trunk_cache_ref` under the lock and
+            # `trunk_ref` after releasing it let two concurrent Loads interleave into a permanent
+            # mismatch -- B's cache paired with A's trunk -- which `/scene`'s `is`-match then reads
+            # as "this is not the trunk that cache describes" and stops recording for good, leaving
+            # every window's banner up over content it is already displaying (review finding).
             with ctx.trunk_lock:
                 loaded, cache = trunk_load.load_trunk(
                     maps_root / session.level, inputs=(search_files, index, defaults),
                     previous=ctx.trunk_cache_ref[0])
                 ctx.trunk_cache_ref[0] = cache
+                # Written BEFORE `ctx.trunk_ref[0]` (same reasoning as `_get_trunk`'s bootstrap
+                # branch): a lock-free `/scene`/`/atlas`/`/lightmap` must never observe the NEW
+                # trunk paired with the PREVIOUS `ctx.scene_inputs_ref[0]`.
+                ctx.scene_inputs_ref[0] = (search_files, index, defaults)   # seeds the read routes
+                from ..native_ext import import_native
+                # class_cache_ref before resolve_ctx_ref -- same lock-free-read ordering as
+                # _get_trunk's bootstrap branch above.
+                ctx.class_cache_ref[0] = {}
+                ctx.resolve_ctx_ref[0] = import_native().PyResolutionContext()
+                ctx.trunk_ref[0] = loaded
+                # This session asked for this trunk and got it, so it counts as shown -- see
+                # `/scene`, which records the same way for every window it serves.
+                ctx.served_ref[0][session_id] = cache.digest
             conflicts = edits.check_load_conflicts(
                 session_id, loaded.level, store=_staging_store, resolutions=resolutions)
-            # Written BEFORE `ctx.trunk_ref[0]` (same reasoning as `_get_trunk`'s bootstrap
-            # branch): a concurrent `/scene`/`/atlas`/`/lightmap` must never observe the NEW trunk
-            # paired with the PREVIOUS `ctx.scene_inputs_ref[0]`.
-            ctx.scene_inputs_ref[0] = (search_files, index, defaults)   # seeds /scene,/atlas,/lightmap
-            from ..native_ext import import_native
-            # class_cache_ref before resolve_ctx_ref -- same lock-free-read ordering as
-            # _get_trunk's bootstrap branch above.
-            ctx.class_cache_ref[0] = {}
-            ctx.resolve_ctx_ref[0] = import_native().PyResolutionContext()
-            ctx.trunk_ref[0] = loaded
-            ctx.changes_available[0] = False
-            # Task 13's own plan text: Load bumps this session's high-water mark of the trunk
-            # generation it has actually seen -- `sessions.py` (Task 6) already has this function,
-            # unused until now.
-            sessions.set_last_seen_generation(_sessions_root, session_id, ctx.generation[0])
+            # Record exactly WHAT this Load read, not when, so `/status` compares like with like.
+            # Taken from the Load's own result rather than a fresh disk read, which would race a
+            # write landing in between and mark this session current for content it was never
+            # shown. This is the half that must OUTLIVE the process -- `served_ref` above is
+            # per-process, so after a restart this is what the banner falls back to.
+            sessions.set_last_loaded_digest(_sessions_root, session_id, cache.digest)
             return {"status": "ok", "conflicts": _serialize_conflicts(conflicts)}
 
     @app.post("/api/session/{session_id}/stage")
@@ -1032,22 +1121,24 @@ def create_app(project, level: str | None = None, *, fault_route: bool = False) 
         # Creating a session establishes its own first claim -- nothing to supersede yet (spec's
         # claim-token note under "Session identity & lifecycle").
         _require_level(level_name)
-        # Bug found post-merge: a fresh session used to always start at last_seen_generation=0,
-        # so any level whose trunk had changed on disk even once since the server started (common,
-        # not exotic) immediately showed "changes available" for a change this session never had a
-        # chance to see. Seed it from the level's OWN current generation instead -- read as late as
-        # possible, right before the write, to minimize (not that it needs to be zero: see
-        # `create_session`'s own docstring for why any race here is safe-by-construction) the window
-        # between this read and the persisted write.
+        # Seed the new session's digest with the trunk it is about to be SHOWN, so a fresh window
+        # does not open with the banner already up for a change it never had a chance to miss (the
+        # same hazard the generation counter this replaced was seeded against). Prefer the digest of
+        # the already-loaded trunk when the level has one: `/scene` serves every session on a level
+        # out of the one shared `ctx.trunk_ref[0]` slot, so that -- not the current disk -- is what
+        # this window will render, and seeding from disk instead would mark it current for content
+        # it is not being shown. With the slot still empty, the first `/scene` triggers the
+        # automatic initial Load, which reads the disk as it is now.
         ctx = _get_or_create_level_context(level_name)
-        rec = sessions.create_session(_sessions_root, level_name,
-                                      last_seen_generation=ctx.generation[0])
+        loaded_cache = ctx.trunk_cache_ref[0]
+        seed = loaded_cache.digest if loaded_cache is not None else _current_trunk_digest(ctx)
+        rec = sessions.create_session(_sessions_root, level_name, last_loaded_digest=seed)
         # Bug found post-merge: a Save promotes a session's own build pin to the level (`build_pin.
         # write_level_pointer`, see the Save route), but no session-facing route ever read that
         # level pin back -- so "Rebuild, Save, then open a new session on the same level" always
         # showed the new session as un-built, even though a resolvable build already existed. Seed
         # the new session's own pin from the level's current one, same "inherit like everything
-        # else" pattern as `last_seen_generation` above: a plain copy of whatever `load_level_
+        # else" pattern as `last_loaded_digest` above: a plain copy of whatever `load_level_
         # pointer` returns right now, race-safe by the same monotonic-improvement argument -- a
         # concurrent Save promoting a newer pin during this creation means at worst the new session
         # inherits an older (or no) pin, never a wrong one, and never worse than today's universal

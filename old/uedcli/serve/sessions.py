@@ -1,5 +1,5 @@
 """Session lifecycle: sessions/<sid>/index.json (id, level, created_at, last_active_at,
-last_seen_generation). Corrupt-and-instruct on a bad read of an EXISTING session's own index.json --
+last_loaded_digest). Corrupt-and-instruct on a bad read of an EXISTING session's own index.json --
 this is a session's own record, closer to "work" than to a cache. A session id that was simply never
 created is a normal miss (returns None), not corruption."""
 from __future__ import annotations
@@ -29,7 +29,7 @@ class SessionRecord:
     level: str
     created_at: str
     last_active_at: str
-    last_seen_generation: int = 0
+    last_loaded_digest: str | None = None
     name: str | None = None
 
 
@@ -41,30 +41,28 @@ def _now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def create_session(sessions_root: Path, level: str, *, last_seen_generation: int = 0) -> SessionRecord:
-    """`last_seen_generation` should be the level's `LevelContext.generation[0]` at the moment of
-    creation (the caller, `app.py`'s `create_session_route`, reads it fresh and passes it through) --
-    NOT the dataclass default of 0. Otherwise a session created on a level whose generation counter
-    is already > 0 (any level whose trunk has changed on disk even once since the server started --
-    common, not exotic) would immediately report `changes_available: True` for a change that
-    happened before this session ever existed, which it never had a chance to "miss".
+def create_session(sessions_root: Path, level: str, *,
+                   last_loaded_digest: str | None = None) -> SessionRecord:
+    """`last_loaded_digest` should be the `t3dtree.stamp_digest` of the trunk this session is about
+    to be shown (the caller, `app.py`'s `create_session_route`, resolves it) -- NOT the default of
+    `None`. `None` means "has never Loaded", which `/status` reports as changes-available, so a
+    session seeded with it would raise the banner the moment it opened, for a change it never had a
+    chance to miss.
 
-    Race between the caller's read of the live generation and this write: safe by construction, not
-    by locking. `generation[0]` only ever increases (a monotonic counter, bumped once per settled
-    trunk change), so a plain read can only ever return the CURRENT value or a slightly-earlier one
-    -- never one from later. If a settle event lands in the gap between the caller's read and this
-    write, the session is seeded with a value that's a real, valid, merely-slightly-stale snapshot;
-    the ONLY possible effect is `changes_available` reporting `True` sooner than it strictly needed
-    to (a harmless, momentary "reload available" banner for a change this session's first Load would
-    pick up anyway) -- never `False` when a real change is being missed. That asymmetry is why no
-    lock is needed here: the race can only bias toward the safe (over-notify) side, never the unsafe
-    (silently-stale) one."""
+    Race between the caller resolving that digest and this write: safe by construction, not by
+    locking. If a trunk change lands in the gap, the session is seeded with a real, valid, merely
+    slightly-stale digest, and the only effect is `changes_available` reporting `True` sooner than
+    it strictly needed to -- a momentary "reload available" banner for a change this session's own
+    first Load would pick up anyway. It can never report `False` while a real change is missed,
+    since a stale digest cannot equal the newer trunk's. That asymmetry is why no lock is needed:
+    the race can only bias toward the safe (over-notify) side, never the unsafe (silently-stale)
+    one."""
     now = _now()
     rec = SessionRecord(id=uuid7(), level=level, created_at=now, last_active_at=now,
-                        last_seen_generation=last_seen_generation)
+                        last_loaded_digest=last_loaded_digest)
     atomic_write_json(_index_path(sessions_root, rec.id), {
         "id": rec.id, "level": rec.level, "created_at": rec.created_at,
-        "last_active_at": rec.last_active_at, "last_seen_generation": rec.last_seen_generation,
+        "last_active_at": rec.last_active_at, "last_loaded_digest": rec.last_loaded_digest,
     })
     return rec
 
@@ -78,7 +76,7 @@ def get_session(sessions_root: Path, session_id: str) -> SessionRecord | None:
         return SessionRecord(
             id=data["id"], level=data["level"], created_at=data["created_at"],
             last_active_at=data["last_active_at"],
-            last_seen_generation=data.get("last_seen_generation", 0),
+            last_loaded_digest=data.get("last_loaded_digest"),
             name=data.get("name"),
         )
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
@@ -121,18 +119,20 @@ def touch_session(sessions_root: Path, session_id: str) -> None:
         return
     atomic_write_json(_index_path(sessions_root, session_id), {
         "id": rec.id, "level": rec.level, "created_at": rec.created_at,
-        "last_active_at": _now(), "last_seen_generation": rec.last_seen_generation,
+        "last_active_at": _now(), "last_loaded_digest": rec.last_loaded_digest,
         "name": rec.name,
     })
 
 
-def set_last_seen_generation(sessions_root: Path, session_id: str, generation: int) -> None:
+def set_last_loaded_digest(sessions_root: Path, session_id: str, digest: str) -> None:
+    """Record the `t3dtree.stamp_digest` of the trunk this session just Loaded -- the value
+    `/status` compares the CURRENT trunk's digest against to decide whether the view is stale."""
     rec = get_session(sessions_root, session_id)
     if rec is None:
         return
     atomic_write_json(_index_path(sessions_root, session_id), {
         "id": rec.id, "level": rec.level, "created_at": rec.created_at,
-        "last_active_at": rec.last_active_at, "last_seen_generation": generation,
+        "last_active_at": rec.last_active_at, "last_loaded_digest": digest,
         "name": rec.name,
     })
 
@@ -145,6 +145,6 @@ def set_name(sessions_root: Path, session_id: str, name: str | None) -> None:
         return
     atomic_write_json(_index_path(sessions_root, session_id), {
         "id": rec.id, "level": rec.level, "created_at": rec.created_at,
-        "last_active_at": rec.last_active_at, "last_seen_generation": rec.last_seen_generation,
+        "last_active_at": rec.last_active_at, "last_loaded_digest": rec.last_loaded_digest,
         "name": name,
     })

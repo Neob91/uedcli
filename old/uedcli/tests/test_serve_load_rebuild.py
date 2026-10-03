@@ -74,7 +74,7 @@ def test_load_resets_changes_available_to_false(tmp_path, monkeypatch):
     set it beforehand. Unaffected by Task 9's geometry-pinning removal. Task 13: `/load` is
     session-scoped now, gated by a claim token. Task 14: `/status` is session-scoped too --
     `changes_available` now compares the level's trunk generation against THIS session's own
-    `last_seen_generation`, not a level-wide flag every session shared."""
+    `last_loaded_digest`, not a level-wide flag every session shared."""
     import asyncio
 
     from uedcli.serve import sessions
