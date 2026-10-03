@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# bin/uedcli -- convenience launcher for the built new-root binary (so you don't have to type
+# target/debug/uedcli by hand). Never builds it itself -- run bin/build first.
+set -euo pipefail
+UEDCLI_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+BIN="$UEDCLI_DIR/target/debug/uedcli"
+[ -x "$BIN" ] || { echo "uedcli: not built yet -- run bin/build first" >&2; exit 2; }
+exec "$BIN" "$@"

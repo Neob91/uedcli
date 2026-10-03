@@ -76,8 +76,12 @@ ensure_venv() {
     [ -L "$f" ] && target="$(readlink "$f")" && case "$target" in
       /io/*) ln -sf "$UEDCLI_DIR/${target#/io/}" "$f" ;;
     esac
+    # -i.bak (concatenated, no space), never bare -i: BSD/macOS sed requires the backup suffix as
+    # part of the -i flag itself and otherwise eats the next argument (the file to edit) as the
+    # sed SCRIPT, failing with "extra characters at the end of n command" -- GNU sed accepts the
+    # same -i.bak form identically, so this is one code path for both, not an OS branch.
     [ -f "$f" ] && [ ! -L "$f" ] && head -c2 "$f" 2>/dev/null | grep -q '^#!' \
-      && sed -i "1s|^#!/io/|#!$UEDCLI_DIR/|" "$f"
+      && sed -i.bak "1s|^#!/io/|#!$UEDCLI_DIR/|" "$f" && rm -f "$f.bak"
   done
   [ -x "$PY" ] || { echo "uedcli: venv python still not runnable after path fixup" >&2; exit 1; }
   printf '%s' "$_DEPS_SPEC" > "$_DEPS_MARKER"

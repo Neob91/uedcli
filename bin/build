@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# bin/build -- builds the new Rust uedcli skeleton inside the uedcli-rust-build Docker image (the
+# same one old/bin/build already provisions, as a side effect of building old/'s native
+# extension) -- no host Rust needed.
+set -euo pipefail
+UEDCLI_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+cd "$UEDCLI_DIR"
+
+command -v docker >/dev/null 2>&1 \
+  || { echo "bin/build: docker is required (it's the only host tool this needs)" >&2; exit 1; }
+docker image inspect uedcli-rust-build >/dev/null 2>&1 \
+  || { echo "bin/build: the uedcli-rust-build image doesn't exist yet -- run old/bin/build first" \
+            "(it provisions this image as a side effect)" >&2; exit 1; }
+
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e CARGO_HOME=/io/.cargo-home \
+  -v "$UEDCLI_DIR":/io -w /io \
+  uedcli-rust-build cargo build >&2 \
+  || { echo "bin/build: cargo build failed" >&2; exit 1; }
+
+echo "bin/build: done -- binary at target/debug/uedcli" >&2
