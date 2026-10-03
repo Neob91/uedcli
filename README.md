@@ -58,7 +58,7 @@ uedcli actor show Brush41 \
 
 **Render lit, in-game frames** by booting the real engine headless (`level photo --game`), or a
 fast offline draft (`level photo --native`). See
-[`docs/reference/level/photo.md`](docs/reference/level/photo.md).
+[`docs/reference/level/photo.md`](old/docs/reference/level/photo.md).
 
 ## Quickstart
 
@@ -77,17 +77,17 @@ bin/test                         # offline unit tests (committed fixtures, no ed
 The `brush`/`actor`/`level` commands above run inside a uedcli project. To create one — plus a
 level to edit and lit `--game` renders — you supply your own Deus Ex copy;
 `dev/scripts/setup-game-preview.sh` provisions everything (see
-[`dev/docs/deusex-assets-setup.md`](dev/docs/deusex-assets-setup.md)).
+[`dev/docs/deusex-assets-setup.md`](old/dev/docs/deusex-assets-setup.md)).
 
 ## Documentation
 
-- [`docs/`](docs/README.md) — user-facing: the CLI reference (`docs/reference/`) and
+- [`docs/`](old/docs/README.md) — user-facing: the CLI reference (`docs/reference/`) and
   task-oriented guides (`docs/usage/`).
-- [`dev/docs/architecture.md`](dev/docs/architecture.md) — layers, the write pattern,
+- [`dev/docs/architecture.md`](old/dev/docs/architecture.md) — layers, the write pattern,
   invariants, the T3D trunk, how to add a command.
-- [`dev/docs/unrealed/`](dev/docs/unrealed/README.md) — the verified UnrealEd knowledge base
+- [`dev/docs/unrealed/`](old/dev/docs/unrealed/README.md) — the verified UnrealEd knowledge base
   (console commands, quirks, rendering). Public docs on the engine are almost nonexistent.
-- [`dev/docs/board/`](dev/docs/board/README.md) — the roadmap, as a stage-queue of work items.
+- [`dev/docs/board/`](old/dev/docs/board/README.md) — the roadmap, as a stage-queue of work items.
 
 ## Project status
 
@@ -96,4 +96,4 @@ It is being built with AI, and will require a thorough polish pass once all of t
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — see [LICENSE](old/LICENSE).
