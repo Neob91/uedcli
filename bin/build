@@ -3,17 +3,24 @@
 # same one old/bin/build already provisions, as a side effect of building old/'s native
 # extension) -- no host Rust needed.
 set -euo pipefail
-UEDCLI_DIR="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
-cd "$UEDCLI_DIR"
+NEW_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
+cd "$NEW_ROOT"
 
-command -v docker >/dev/null 2>&1 \
-  || { echo "bin/build: docker is required (it's the only host tool this needs)" >&2; exit 1; }
-docker image inspect uedcli-rust-build >/dev/null 2>&1 \
-  || { echo "bin/build: the uedcli-rust-build image doesn't exist yet -- run old/bin/build first" \
-            "(it provisions this image as a side effect)" >&2; exit 1; }
+# Reuse old/'s own image-freshness check (content-hash label, rebuilds on Dockerfile change)
+# rather than a bare existence check -- a stale image would otherwise build silently against an
+# outdated toolchain instead of being caught. Sourcing this also redefines UEDCLI_DIR to old/'s
+# own path (it's _venv.sh's own anchor) -- $NEW_ROOT is this script's separate name for the real
+# repo root, used below, so that redefinition doesn't break anything here.
+# shellcheck source=old/bin/_venv.sh
+source "$NEW_ROOT/old/bin/_venv.sh"
+_ensure_build_image \
+  || { echo "bin/build: could not ensure the uedcli-rust-build image -- see the message above" >&2
+       exit 1; }
 
-docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e CARGO_HOME=/io/.cargo-home \
-  -v "$UEDCLI_DIR":/io -w /io \
+# CARGO_HOME nested under target/ (already gitignored) rather than a new top-level dir -- same
+# convention old/dev-container/build.Dockerfile uses for its own cargo registry cache.
+docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp -e CARGO_HOME=/io/target/.cargo-home \
+  -v "$NEW_ROOT":/io -w /io \
   uedcli-rust-build cargo build >&2 \
   || { echo "bin/build: cargo build failed" >&2; exit 1; }
 

@@ -76,12 +76,19 @@ ensure_venv() {
     [ -L "$f" ] && target="$(readlink "$f")" && case "$target" in
       /io/*) ln -sf "$UEDCLI_DIR/${target#/io/}" "$f" ;;
     esac
-    # -i.bak (concatenated, no space), never bare -i: BSD/macOS sed requires the backup suffix as
-    # part of the -i flag itself and otherwise eats the next argument (the file to edit) as the
-    # sed SCRIPT, failing with "extra characters at the end of n command" -- GNU sed accepts the
-    # same -i.bak form identically, so this is one code path for both, not an OS branch.
-    [ -f "$f" ] && [ ! -L "$f" ] && head -c2 "$f" 2>/dev/null | grep -q '^#!' \
-      && sed -i.bak "1s|^#!/io/|#!$UEDCLI_DIR/|" "$f" && rm -f "$f.bak"
+    if [ -f "$f" ] && [ ! -L "$f" ] && head -c2 "$f" 2>/dev/null | grep -q '^#!'; then
+      # -i.bak (concatenated, no space), never bare -i: BSD/macOS sed requires the backup suffix
+      # as part of the -i flag itself and otherwise eats the next argument (the file to edit) as
+      # the sed SCRIPT, failing with "extra characters at the end of n command" -- GNU sed accepts
+      # the same -i.bak form identically, so this is one code path for both, not an OS branch.
+      # sed and rm are separate statements, not `&&`-chained: under `set -e`, a failing command is
+      # exempt from aborting the script UNLESS it's the last in an AND-OR list -- chaining
+      # `&& rm -f "$f.bak"` after sed would make sed no longer last, silently swallowing a sed
+      # failure and leaving a broken shebang in place undetected (the exact "no silent half-
+      # answers" failure this project explicitly forbids).
+      sed -i.bak "1s|^#!/io/|#!$UEDCLI_DIR/|" "$f"
+      rm -f "$f.bak"
+    fi
   done
   [ -x "$PY" ] || { echo "uedcli: venv python still not runnable after path fixup" >&2; exit 1; }
   printf '%s' "$_DEPS_SPEC" > "$_DEPS_MARKER"
