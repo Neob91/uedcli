@@ -1,15 +1,26 @@
 #!/usr/bin/env bash
 # bin/build -- builds the new Rust uedcli skeleton inside the uedcli-rust-build Docker image. Runs
-# old/bin/build first, unconditionally, so old/'s own venv/native-ext/wasm (and the shared build
-# image, as a side effect of old/'s native-ext build) are never stale -- every unported verb still
-# falls back to old/bin/uedcli, so this binary is only as correct as whatever old/ currently has on
-# disk.
+# old/bin/build first, unconditionally, so old/'s own venv/native-ext/wasm are never stale -- every
+# unported verb still falls back to old/bin/uedcli, so this binary is only as correct as whatever
+# old/ currently has on disk.
 set -euo pipefail
 NEW_ROOT="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd)"
 cd "$NEW_ROOT"
 
 "$NEW_ROOT/old/bin/build" \
   || { echo "bin/build: old/bin/build failed -- see the message above" >&2; exit 1; }
+
+# old/bin/build's own image-freshness check (_ensure_build_image) only runs on its native-ext/wasm
+# rebuild path, not when their content-hash markers already match -- the common case on a repeat
+# run. Call it again here so a Dockerfile-only change (no Rust/wasm source change) still gets
+# caught before the cargo build below runs against a stale image. Sourcing this also redefines
+# UEDCLI_DIR to old/'s own path (it's _venv.sh's own anchor) -- $NEW_ROOT is this script's separate
+# name for the real repo root, used below, so that redefinition doesn't break anything here.
+# shellcheck source=old/bin/_venv.sh
+source "$NEW_ROOT/old/bin/_venv.sh"
+_ensure_build_image \
+  || { echo "bin/build: could not ensure the uedcli-rust-build image -- see the message above" >&2
+       exit 1; }
 
 # CARGO_HOME nested under target/ (already gitignored) rather than a new top-level dir -- same
 # convention old/dev-container/build.Dockerfile uses for its own cargo registry cache.
