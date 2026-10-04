@@ -363,10 +363,11 @@ export function fetchStatus(sessionId: string): Promise<StatusPayload> {
  * mirrors `level list --json`'s `{name, active}` shape (`uedcli/serve/levels.py`). `current` is the
  * server's own startup/default level (`app.state.default_level`) -- SessionContext's own bootstrap
  * fallback for "which level does a brand-new session with no `?session=` in the URL start on"
- * (persistent-GUI-editing-sessions plan, Task 16). */
+ * (persistent-GUI-editing-sessions plan, Task 16). `uedcli serve` no longer takes a startup level,
+ * so this is always `null` in practice; SessionPicker falls back to the first level in `levels`. */
 export interface LevelsPayload {
   levels: { name: string; active: boolean }[]
-  current: string
+  current: string | null
 }
 
 export function fetchLevels(): Promise<LevelsPayload> {
