@@ -15407,20 +15407,6 @@
         },
         {
           "class": "_StoreAction",
-          "option_strings": [],
-          "dest": "level",
-          "nargs": null,
-          "const": null,
-          "default": null,
-          "required": true,
-          "choices": null,
-          "metavar": null,
-          "converter": null,
-          "help": "the level to serve (a trunk under the project's maps dir)",
-          "mutex_group": null
-        },
-        {
-          "class": "_StoreAction",
           "option_strings": [
             "--host"
           ],
