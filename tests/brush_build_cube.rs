@@ -28,18 +28,34 @@ fn new_uedcli() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_uedcli"))
 }
 
-fn run(bin: &std::path::Path, args: &[&str], home: Option<&std::path::Path>) -> Output {
+/// `home`/`project` go in as env vars, never as a leading `--project` CLI token: try_build_cube
+/// requires `args[0] == "brush"`, so a leading `--project <path>` would make EVERY case fall
+/// through to the proxy instead of reaching the native path under test (a real bug this file had
+/// -- see the git history). `UEDCLI_PROJECT`/`UEDCLI_HOME` are always set (cleared when `None`),
+/// never inherited from the host, so a stray env var on the machine running this can't produce a
+/// false pass either way.
+fn run(
+    bin: &std::path::Path,
+    args: &[&str],
+    home: Option<&std::path::Path>,
+    project: Option<&std::path::Path>,
+) -> Output {
     let mut cmd = Command::new(bin);
     cmd.args(args).current_dir(repo_root());
+    cmd.env_remove("UEDCLI_HOME");
+    cmd.env_remove("UEDCLI_PROJECT");
     if let Some(h) = home {
         cmd.env("UEDCLI_HOME", h);
+    }
+    if let Some(p) = project {
+        cmd.env("UEDCLI_PROJECT", p);
     }
     cmd.output().unwrap_or_else(|e| panic!("failed to run {}: {e}", bin.display()))
 }
 
-fn assert_identical(args: &[&str], home: Option<&std::path::Path>) {
-    let old = run(&old_uedcli(), args, home);
-    let new = run(&new_uedcli(), args, home);
+fn assert_identical(args: &[&str], home: Option<&std::path::Path>, project: Option<&std::path::Path>) {
+    let old = run(&old_uedcli(), args, home, project);
+    let new = run(&new_uedcli(), args, home, project);
     assert_eq!(old.stdout, new.stdout, "stdout differs for {args:?}");
     assert_eq!(old.stderr, new.stderr, "stderr differs for {args:?}");
     assert_eq!(old.status.code(), new.status.code(), "exit code differs for {args:?}");
@@ -52,6 +68,7 @@ fn excluded_flag_texture_falls_back_identically() {
     assert_identical(
         &["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1", "--texture", "DeusExDeco.Wood"],
         None,
+        None,
     );
 }
 
@@ -60,12 +77,13 @@ fn excluded_flag_prop_falls_back_identically() {
     assert_identical(
         &["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1", "--prop", "Tag=foo"],
         None,
+        None,
     );
 }
 
 #[test]
 fn missing_required_flag_falls_back_identically() {
-    assert_identical(&["brush", "build", "cube", "--width", "1", "--breadth", "1"], None);
+    assert_identical(&["brush", "build", "cube", "--width", "1", "--breadth", "1"], None, None);
 }
 
 #[test]
@@ -73,12 +91,13 @@ fn unknown_flag_falls_back_identically() {
     assert_identical(
         &["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1", "--bogus", "5"],
         None,
+        None,
     );
 }
 
 #[test]
 fn help_falls_back_identically() {
-    assert_identical(&["brush", "build", "cube", "--help"], None);
+    assert_identical(&["brush", "build", "cube", "--help"], None, None);
 }
 
 #[test]
@@ -87,6 +106,7 @@ fn leading_project_flag_falls_back_identically() {
     // it proxies (and old/ handles --project fine on its own either way).
     assert_identical(
         &["--project", ".", "brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1"],
+        None,
         None,
     );
 }
@@ -113,14 +133,18 @@ fn find_substrate() -> Option<PathBuf> {
 }
 
 /// A scratch $UEDCLI_HOME (config.toml pointing at the substrate) + a minimal project, under
-/// target/ so it's already gitignored and left for `cargo clean` to reap.
+/// target/ so it's already gitignored and left for `cargo clean` to reap. One subdirectory PER
+/// TEST (keyed by name): cargo test runs tests in parallel threads by default, and every
+/// substrate_test! case used to share one `home`/`project` pair, racing writes to the same
+/// config.toml/uedcli.toml against concurrent reads from another test's old/new invocations
+/// (caught as a one-off spurious failure under `cargo test`'s default parallelism).
 struct Harness {
     home: PathBuf,
     project: PathBuf,
 }
 
-fn harness(substrate: &std::path::Path) -> Harness {
-    let base = repo_root().join("target/test-tmp/brush-build-cube");
+fn harness(substrate: &std::path::Path, test_name: &str) -> Harness {
+    let base = repo_root().join("target/test-tmp/brush-build-cube").join(test_name);
     let home = base.join("home");
     let project = base.join("project");
     fs::create_dir_all(home.as_path()).unwrap();
@@ -135,11 +159,10 @@ fn harness(substrate: &std::path::Path) -> Harness {
 }
 
 fn assert_identical_with_project(h: &Harness, extra_args: &[&str]) {
-    let mut args: Vec<&str> = vec!["--project"];
-    let project_str = h.project.to_str().unwrap();
-    args.push(project_str);
-    args.extend_from_slice(extra_args);
-    assert_identical(&args, Some(&h.home));
+    // UEDCLI_PROJECT, not a leading `--project` CLI token: try_build_cube requires
+    // args[0] == "brush", so a leading --project would make the new binary fall through to the
+    // proxy for every one of these cases, defeating the whole point of this test group.
+    assert_identical(extra_args, Some(&h.home), Some(&h.project));
 }
 
 macro_rules! substrate_test {
@@ -154,7 +177,7 @@ macro_rules! substrate_test {
                 );
                 return;
             };
-            let h = harness(&substrate);
+            let h = harness(&substrate, stringify!($name));
             assert_identical_with_project(&h, $args);
         }
     };
@@ -170,6 +193,12 @@ substrate_test!(cube_solidity_nonsolid, &["brush", "build", "cube", "--width", "
 substrate_test!(cube_fractional_dims, &["brush", "build", "cube", "--width", "7.5", "--breadth", "3.25", "--height", "11.125"]);
 substrate_test!(cube_binary_noise_dims, &["brush", "build", "cube", "--width", "0.1", "--breadth", "0.2", "--height", "0.3"]);
 substrate_test!(cube_near_integer_epsilon_snap, &["brush", "build", "cube", "--width", "9.9996", "--breadth", "10.0004", "--height", "10"]);
+// Regression: old/'s make_brush_actor pre-cleans vertices/location once, then fmt_vertex/fmt_loc
+// clean() them AGAIN at emit time -- not idempotent right at the CLEAN_EPS=0.001 boundary, since
+// quantize6's 6-dp rounding can move a value's distance-from-integer from just above 0.001 to
+// at-or-below it. 5.0010003 is >0.001 from 5 (no snap on a single clean), but quantize6 rounds it
+// to 5.001000 first, and a SECOND clean() then sees 0.001000 <= 0.001 and snaps to 5 exactly.
+substrate_test!(cube_at_clean_eps_boundary_double_clean, &["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1", "--at", "5.0010003,0,0"]);
 substrate_test!(
     cube_all_in_scope_flags_combined,
     &[
