@@ -111,6 +111,34 @@ fn leading_project_flag_falls_back_identically() {
     );
 }
 
+#[test]
+fn scientific_notation_at_value_falls_back_identically() {
+    // Regression: old/'s custom _CoordArgumentParser (cli/parsers/_arguments.py) treats a value
+    // matching _COORD_TOKEN (digits/dots/commas/signs only) as a value even though it starts
+    // with '-', specifically so `--at -32,-32,32` works -- but "-1e5,0,0" has a letter, doesn't
+    // match that pattern, and old/ refuses to consume it as --at's value at all ("expected one
+    // argument", exit 2). An earlier version of this port's own ambiguity check was too narrow
+    // (only rejected tokens starting with "--"), so it wrongly accepted this as a real value and
+    // emitted successfully (exit 0) where old/ errors -- a real exit-code divergence, not just a
+    // text mismatch.
+    assert_identical(
+        &["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1", "--at", "-1e5,0,0"],
+        None,
+        None,
+    );
+}
+
+#[test]
+fn base_name_single_dash_letter_falls_back_identically() {
+    // Same root cause as the scientific-notation case above: "-x" isn't _COORD_TOKEN-shaped
+    // (contains a letter), so old/ refuses to consume it as --base-name's value.
+    assert_identical(
+        &["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1", "--base-name", "-x"],
+        None,
+        None,
+    );
+}
+
 // ---- native-geometry cases: need a real substrate for old/'s own class-index check -------------
 
 /// Mirrors old/uedcli/tests/conftest.py's install_root()/UEDCLI_TEST_INSTALL: a real, gitignored
@@ -187,6 +215,10 @@ substrate_test!(cube_basic_dims, &["brush", "build", "cube", "--width", "10", "-
 substrate_test!(cube_defaults, &["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1"]);
 substrate_test!(cube_at, &["brush", "build", "cube", "--width", "4", "--breadth", "4", "--height", "4", "--at", "100,-50,25"]);
 substrate_test!(cube_base_name, &["brush", "build", "cube", "--width", "4", "--breadth", "4", "--height", "4", "--base-name", "MyBox"]);
+// A coord-token-shaped (digits-only, signed) value is still a legitimate base name to old/'s own
+// parser -- confirms looks_like_option's coord-token exception doesn't over-proxy the cases it's
+// specifically meant to keep native.
+substrate_test!(cube_base_name_negative_number_shaped, &["brush", "build", "cube", "--width", "4", "--breadth", "4", "--height", "4", "--base-name", "-5"]);
 substrate_test!(cube_csg_subtract, &["brush", "build", "cube", "--width", "4", "--breadth", "4", "--height", "4", "--csg", "subtract"]);
 substrate_test!(cube_solidity_semisolid, &["brush", "build", "cube", "--width", "4", "--breadth", "4", "--height", "4", "--solidity", "semisolid"]);
 substrate_test!(cube_solidity_nonsolid, &["brush", "build", "cube", "--width", "4", "--breadth", "4", "--height", "4", "--solidity", "nonsolid"]);

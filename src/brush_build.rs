@@ -392,6 +392,28 @@ fn parse_at(s: &str) -> Option<(Decimal, Decimal, Decimal)> {
     Some((d[0], d[1], d[2]))
 }
 
+/// Mirrors old/'s custom `_COORD_TOKEN` regex (`cli/parsers/_arguments.py`):
+/// `^[-+]?[0-9.]+(,[-+]?[0-9.]+)*$` -- a signed number, or several comma-joined, digits/dots
+/// only (not a "valid number" check: "1..2" matches this exactly as loosely as the Python regex
+/// does -- whether it's a REAL number is a separate, later question for parse_at/f64::parse).
+fn is_coord_token(s: &str) -> bool {
+    !s.is_empty()
+        && s.split(',').all(|part| {
+            let digits = part.strip_prefix(['-', '+']).unwrap_or(part);
+            !digits.is_empty() && digits.chars().all(|c| c.is_ascii_digit() || c == '.')
+        })
+}
+
+/// Whether old/'s custom parser would refuse to consume `token` as a flag's value (and instead
+/// error "expected one argument"). A `_COORD_TOKEN`-shaped token is ALWAYS a value, overriding
+/// the usual rule -- see `is_coord_token`'s doc and the call site's comment for why ("-10.5,20,0"
+/// must be accepted, "-1e5,0,0" and "-x" must not). Anything else starting with `-` is
+/// option-like, matching plain argparse's `_parse_optional` for every other case this parser's
+/// small flag set can produce (no abbreviation-matching edge cases to worry about here).
+fn looks_like_option(token: &str) -> bool {
+    !is_coord_token(token) && token.starts_with('-')
+}
+
 /// `None`: not our case (unrecognized flag, missing/invalid value, an excluded flag, --project,
 /// -h/--help) -- the caller must proxy to old/bin/uedcli, unchanged. `Some(Ok(t3d))`: emit to
 /// stdout, exit 0. `Some(Err(message))`: emit to stderr, exit 2 -- a real, in-scope failure
@@ -421,13 +443,23 @@ pub fn try_build_cube(args: &[String]) -> Option<Result<String, String>> {
         }
         i += 1;
         let val = rest.get(i)?.as_str(); // every supported flag takes a value; missing one -> proxy
-        // argparse refuses to consume a token that itself looks like a registered option as a
-        // flag's VALUE (`--base-name --prop` is "expected one argument", not base_name="--prop")
-        // -- mirror that here, not just rely on each flag's own value validation, since
-        // --base-name accepts any string and would otherwise silently accept one of the EXCLUDED
-        // flags' spellings as a literal base name instead of proxying to get argparse's real
-        // "expected one argument" error.
-        if val.starts_with("--") || val == "-h" {
+        // argparse refuses to consume a token that LOOKS LIKE an option as a flag's VALUE
+        // (`--base-name --prop` is "expected one argument", not base_name="--prop") -- mirror
+        // that here, not just rely on each flag's own value validation, since e.g. --base-name
+        // accepts any string and would otherwise silently accept one of the EXCLUDED flags'
+        // spellings as a literal base name instead of proxying to get argparse's real error.
+        //
+        // The real rule is NOT "starts with --": old/'s parser is a custom _CoordArgumentParser
+        // (cli/parsers/_arguments.py) whose _parse_optional override ALWAYS treats a token
+        // matching _COORD_TOKEN (`^[-+]?[0-9.]+(,[-+]?[0-9.]+)*$` -- a signed number or
+        // comma-joined coordinate, digits/dots only) as a VALUE, for every flag, specifically so
+        // `--at -32,-32,32` works without the awkward `--at=-32,-32,32` form. Anything else
+        // starting with `-` (a bare short flag, an unregistered long flag, a value containing a
+        // letter like scientific notation "-1e5") is option-like and gets the usual rejection.
+        // Verified against the real parser directly, not just its docstring: `--at -10.5,20,0`
+        // and `--base-name -5` ARE accepted by old/ (coord-token-shaped); `--at -1e5,0,0` and
+        // `--base-name -x` are NOT (not coord-token-shaped, so "expected one argument").
+        if looks_like_option(val) {
             return None;
         }
         match tok {
