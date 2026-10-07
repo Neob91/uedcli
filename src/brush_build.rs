@@ -1,0 +1,379 @@
+//! `brush build cube` -- the first ported verb (dev/epics/refactor.md's "first vertical slice").
+//! Mirrors old/uedcli/cli/commands/brush/build.py + old/uedcli/builders.py::cube +
+//! old/uedcli/emit.py for this ONE shape, at reduced scope (owner-approved, 2026-10-07):
+//!
+//! Handled: --width --breadth --height --at --base-name --csg --solidity.
+//!
+//! NOT handled -- any of these present falls back to the old/bin/uedcli proxy, unchanged:
+//!   TODO(port): --prop        schema-validated property editing (propedit.rs doesn't exist yet)
+//!   TODO(port): --texture     per-face texture ref + existence validation against the asset catalog
+//!   TODO(port): --mover-class Mover variant (no CsgOper, base pose only)
+//!   TODO(port): --rotate      absolute Rotation set + off-grid warning
+//!   TODO(port): --folder/--label   `// uedcli-folder:`/`// uedcli-labels:` org carriers
+//! TODO(port): old/'s run() ALSO unconditionally calls ingest.validate_ingest_actors, which
+//! resolves the project's class index and validates Engine.Brush exists there -- skipped
+//! entirely here. Engine.Brush always exists on every real substrate, so this only diverges from
+//! old/ on a malformed/missing project, which old/ would reject and this does not.
+//! Known formatting gap: error messages for a pathologically large/small dimension (>1e16 or
+//! <1e-4ish) may not byte-match old/'s Python repr (which switches to scientific notation at
+//! different thresholds than Rust's float Display) -- never hit by `quantize6`-accepted geometry,
+//! only possibly by the positive-dimension guard's own error text.
+
+use rust_decimal::prelude::*;
+use rust_decimal::Decimal;
+use std::str::FromStr;
+
+type Vec3 = (f64, f64, f64);
+
+// ---- vector algebra (mirrors builders.py's module-level helpers) ------------------------------
+
+fn dot(a: Vec3, b: Vec3) -> f64 {
+    a.0 * b.0 + a.1 * b.1 + a.2 * b.2
+}
+fn cross(a: Vec3, b: Vec3) -> Vec3 {
+    (a.1 * b.2 - a.2 * b.1, a.2 * b.0 - a.0 * b.2, a.0 * b.1 - a.1 * b.0)
+}
+fn sub(a: Vec3, b: Vec3) -> Vec3 {
+    (a.0 - b.0, a.1 - b.1, a.2 - b.2)
+}
+fn mul(a: Vec3, s: f64) -> Vec3 {
+    (a.0 * s, a.1 * s, a.2 * s)
+}
+fn vlen(a: Vec3) -> f64 {
+    dot(a, a).sqrt()
+}
+fn normalize(a: Vec3) -> Vec3 {
+    // builders.py's _normalize raises GeometryError on a zero-length input -- never reachable for
+    // cube's fixed axis-aligned outward vectors (always unit length already), so not replicated.
+    let n = vlen(a);
+    (a.0 / n, a.1 / n, a.2 / n)
+}
+fn centroid(ring: &[Vec3]) -> Vec3 {
+    let n = ring.len() as f64;
+    let sx: f64 = ring.iter().map(|p| p.0).sum();
+    let sy: f64 = ring.iter().map(|p| p.1).sum();
+    let sz: f64 = ring.iter().map(|p| p.2).sum();
+    (sx / n, sy / n, sz / n)
+}
+fn newell(ring: &[Vec3]) -> Vec3 {
+    let mut n = (0.0, 0.0, 0.0);
+    let m = ring.len();
+    for i in 0..m {
+        let a = ring[i];
+        let b = ring[(i + 1) % m];
+        n.0 += (a.1 - b.1) * (a.2 + b.2);
+        n.1 += (a.2 - b.2) * (a.0 + b.0);
+        n.2 += (a.0 - b.0) * (a.1 + b.1);
+    }
+    n
+}
+fn tex_basis(normal: Vec3) -> (Vec3, Vec3) {
+    // Ties resolve to the LOWEST axis index -- Rust's min_by, like Python's min(), returns the
+    // first minimal element on a tie (builders.py's _tex_basis docstring: this is load-bearing).
+    let comps = [normal.0, normal.1, normal.2];
+    let ax = (0..3).min_by(|&i, &j| comps[i].abs().partial_cmp(&comps[j].abs()).unwrap()).unwrap();
+    let mut seed = [0.0, 0.0, 0.0];
+    seed[ax] = 1.0;
+    let seed = (seed[0], seed[1], seed[2]);
+    let u = normalize(sub(seed, mul(normal, dot(seed, normal))));
+    let v = cross(normal, u);
+    (u, v)
+}
+
+struct Poly {
+    vertices: Vec<Vec3>,
+    origin: Vec3,
+    normal: Vec3,
+    texture_u: Vec3,
+    texture_v: Vec3,
+}
+
+fn face(ring: Vec<Vec3>, outward: Vec3) -> Poly {
+    // builders.py's _face also runs _dedup_ring and raises GeometryError on <3 distinct verts or
+    // a degenerate (zero-area) face -- never reachable for cube's 4 fixed, well-separated
+    // corners (guaranteed distinct whenever width/breadth/height > 0, already enforced by the
+    // positive-dimension guard before this runs), so not replicated.
+    let nw = newell(&ring);
+    let out = normalize(outward);
+    let ring = if dot(nw, out) < 0.0 {
+        let mut r = ring;
+        r.reverse();
+        r
+    } else {
+        ring
+    };
+    let (u, v) = tex_basis(out);
+    Poly { origin: centroid(&ring), normal: out, texture_u: u, texture_v: v, vertices: ring }
+}
+
+fn cube_faces(width: f64, breadth: f64, height: f64) -> Vec<Poly> {
+    let (hx, hy, hz) = (width / 2.0, breadth / 2.0, height / 2.0);
+    let c = |sx: f64, sy: f64, sz: f64| (sx * hx, sy * hy, sz * hz);
+    let faces: [([Vec3; 4], Vec3); 6] = [
+        ([c(1., -1., -1.), c(1., 1., -1.), c(1., 1., 1.), c(1., -1., 1.)], (1., 0., 0.)),
+        ([c(-1., 1., -1.), c(-1., -1., -1.), c(-1., -1., 1.), c(-1., 1., 1.)], (-1., 0., 0.)),
+        ([c(1., 1., -1.), c(-1., 1., -1.), c(-1., 1., 1.), c(1., 1., 1.)], (0., 1., 0.)),
+        ([c(-1., -1., -1.), c(1., -1., -1.), c(1., -1., 1.), c(-1., -1., 1.)], (0., -1., 0.)),
+        ([c(-1., -1., 1.), c(1., -1., 1.), c(1., 1., 1.), c(-1., 1., 1.)], (0., 0., 1.)),
+        ([c(-1., 1., -1.), c(1., 1., -1.), c(1., -1., -1.), c(-1., -1., -1.)], (0., 0., -1.)),
+    ];
+    faces.into_iter().map(|(ring, outward)| face(ring.to_vec(), outward)).collect()
+}
+
+// ---- Decimal finalize + T3D text formatting (mirrors emit.py) ---------------------------------
+
+const CLEAN_EPS: &str = "0.001";
+
+/// Mirrors Python's `str(float)` for an f-string substitution, which is what emit.py's error
+/// messages and `_check_positive_build_dims`'s message embed verbatim.
+fn py_float_repr(v: f64) -> String {
+    if v.is_nan() {
+        return "nan".to_string();
+    }
+    if v.is_infinite() {
+        return if v > 0.0 { "inf".to_string() } else { "-inf".to_string() };
+    }
+    let s = format!("{v}");
+    if s.contains('.') || s.contains('e') {
+        s
+    } else {
+        format!("{s}.0")
+    }
+}
+
+/// Mirrors emit.py's `_to_decimal` + `_guard` for a raw float input: `str(value)` first (so a
+/// float's binary tail never enters Decimal directly), then finite-checked.
+fn decimal_from_f64(value: f64) -> Result<Decimal, String> {
+    if !value.is_finite() {
+        return Err(format!("coordinate is not a finite number: {}", py_float_repr(value)));
+    }
+    Decimal::from_str(&py_float_repr(value))
+        .map_err(|_| format!("coordinate is not a finite number: {value}"))
+}
+
+/// Mirrors emit.py's `quantize6`.
+fn quantize6(d: Decimal) -> Result<Decimal, String> {
+    // TODO(port): doesn't replicate Python's InvalidOperation/28-significant-digit overflow
+    // check exactly -- rust_decimal's own ~28-29 digit mantissa limit means an out-of-range
+    // value here would most likely already have failed in decimal_from_f64's string round-trip,
+    // not here. Not expected to diverge for any realistic cube dimension.
+    Ok(d.round_dp_with_strategy(6, RoundingStrategy::MidpointAwayFromZero))
+}
+
+/// Mirrors emit.py's `clean`, operating on an already-Decimal value (the caller does the
+/// float->Decimal step via `decimal_from_f64` first, or passes an already-Decimal `--at`
+/// component straight through -- same as `_guard`'s `isinstance(value, Decimal)` fast path).
+fn clean(d: Decimal) -> Result<Decimal, String> {
+    let nearest = d.round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
+    let eps = Decimal::from_str(CLEAN_EPS).unwrap();
+    if (d - nearest).abs() <= eps {
+        return Ok(nearest);
+    }
+    quantize6(d)
+}
+
+/// Mirrors emit.py's `fmt_vertex`, taking the raw geometry float directly (clean() is
+/// idempotent, so skipping old/'s separate make_brush_actor pre-clean pass changes nothing
+/// observable).
+fn fmt_vertex(value: f64) -> Result<String, String> {
+    let d = clean(decimal_from_f64(value)?)?;
+    let sign = if d < Decimal::ZERO { "-" } else { "+" };
+    let q = quantize6(d.abs())?;
+    let int_part = q.trunc();
+    let frac = q - int_part;
+    let int_part_i: i64 = int_part
+        .to_i64()
+        .ok_or_else(|| format!("coordinate {value} is out of emittable range"))?;
+    let frac_str = frac.to_string(); // "0.XXXXXX" -- quantize6 fixed the scale to 6
+    let frac_digits = frac_str.split('.').nth(1).unwrap_or("");
+    let frac_digits = format!("{frac_digits:0<6}");
+    Ok(format!("{sign}{int_part_i:05}.{frac_digits}"))
+}
+
+/// Mirrors emit.py's `fmt_loc`, for the (already-Decimal) `--at` location.
+fn fmt_loc(value: Decimal) -> Result<String, String> {
+    let mut d = clean(value)?;
+    if d.is_zero() {
+        d = Decimal::ZERO;
+    }
+    Ok(format!("{d:.6}"))
+}
+
+fn vec_line(kind: &str, v: Vec3) -> Result<String, String> {
+    Ok(format!(
+        "         {kind:<8} {},{},{}",
+        fmt_vertex(v.0)?,
+        fmt_vertex(v.1)?,
+        fmt_vertex(v.2)?
+    ))
+}
+
+fn emit_polygon(p: &Poly) -> Result<String, String> {
+    // Every cube face carries Item=OUTSIDE (builders.py's cube() passes item="OUTSIDE" to every
+    // _face call), no Texture= (texture is always None in scope), no Flags= (flags always 0),
+    // no Pan line (cube faces never set one).
+    let mut out = vec!["         Begin Polygon Item=OUTSIDE".to_string()];
+    out.push(vec_line("Origin", p.origin)?);
+    out.push(vec_line("Normal", p.normal)?);
+    out.push(vec_line("TextureU", p.texture_u)?);
+    out.push(vec_line("TextureV", p.texture_v)?);
+    for v in &p.vertices {
+        out.push(vec_line("Vertex", *v)?);
+    }
+    out.push("         End Polygon".to_string());
+    Ok(out.join("\n"))
+}
+
+fn emit_brush(model_name: &str, polys: &[Poly]) -> Result<String, String> {
+    let mut out = vec![format!("    Begin Brush Name={model_name}"), "       Begin PolyList".to_string()];
+    for p in polys {
+        out.push(emit_polygon(p)?);
+    }
+    out.push("       End PolyList".to_string());
+    out.push("    End Brush".to_string());
+    Ok(out.join("\n"))
+}
+
+/// Mirrors builders.py's SOLIDITY_FLAGS/CSG_OPER and emit.py's emit_actor, for the one Actor
+/// shape make_brush_actor produces with mover_class=None and group=None (--mover-class and the
+/// --prop-only Group are both out of scope here).
+fn emit_actor_t3d(
+    name: &str,
+    model_name: &str,
+    csg_op: &str,
+    poly_flags: u32,
+    location: (Decimal, Decimal, Decimal),
+    polys: &[Poly],
+) -> Result<String, String> {
+    let mut out = vec![format!("Begin Actor Class=Engine.Brush Name={name}")];
+    out.push(format!("    CsgOper={csg_op}"));
+    if poly_flags != 0 {
+        out.push(format!("    PolyFlags={poly_flags}"));
+    }
+    out.push(format!(
+        "    Location=(X={},Y={},Z={})",
+        fmt_loc(location.0)?,
+        fmt_loc(location.1)?,
+        fmt_loc(location.2)?
+    ));
+    // MainScale/PostScale: transform.IDENTITY (unit scale, zero sheer rate, the editor's own
+    // default SheerAxis=SHEER_ZX) -- emit_fscale's output for that value is this fixed string;
+    // --mover-class, --rotate and --prop (the only things that could change it) are out of scope.
+    out.push("    MainScale=(SheerAxis=SHEER_ZX)".to_string());
+    out.push("    PostScale=(SheerAxis=SHEER_ZX)".to_string());
+    out.push(emit_brush(model_name, polys)?);
+    out.push(format!("    Brush=Model'MyLevel.{model_name}'"));
+    out.push(format!("    Name=\"{name}\""));
+    out.push("End Actor".to_string());
+    Ok(out.join("\n") + "\n")
+}
+
+fn check_positive(flag: &str, value: f64) -> Result<(), String> {
+    if !(value.is_finite() && value > 0.0) {
+        return Err(format!(
+            "brush build cube: {flag} must be greater than 0, got {}",
+            py_float_repr(value)
+        ));
+    }
+    Ok(())
+}
+
+fn build_cube(
+    width: f64,
+    breadth: f64,
+    height: f64,
+    at: Option<(Decimal, Decimal, Decimal)>,
+    base_name: Option<String>,
+    csg: Option<String>,
+    solidity: Option<String>,
+) -> Result<String, String> {
+    // _check_positive_build_dims checks in the table's declared order: width, breadth, height.
+    check_positive("--width", width)?;
+    check_positive("--breadth", breadth)?;
+    check_positive("--height", height)?;
+
+    let polys = cube_faces(width, breadth, height);
+
+    let name = base_name.unwrap_or_else(|| "Cube".to_string());
+    let model_name = format!("Model_{name}");
+    let csg_op = match csg.as_deref().unwrap_or("add") {
+        "add" => "CSG_Add",
+        "subtract" => "CSG_Subtract",
+        _ => unreachable!("validated at parse time"),
+    };
+    let poly_flags: u32 = match solidity.as_deref().unwrap_or("solid") {
+        "solid" => 0,
+        "semisolid" => 0x0000_0020,
+        "nonsolid" => 0x0000_0008,
+        _ => unreachable!("validated at parse time"),
+    };
+    let location = at.unwrap_or((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO));
+
+    emit_actor_t3d(&name, &model_name, csg_op, poly_flags, location, &polys)
+}
+
+// ---- argv parsing / dispatch entry point -------------------------------------------------------
+
+fn parse_at(s: &str) -> Option<(Decimal, Decimal, Decimal)> {
+    let parts: Vec<&str> = s.split(',').map(|p| p.trim()).collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let d: Vec<Decimal> = parts.iter().map(|p| Decimal::from_str(p).ok()).collect::<Option<_>>()?;
+    Some((d[0], d[1], d[2]))
+}
+
+/// `None`: not our case (unrecognized flag, missing/invalid value, an excluded flag, --project,
+/// -h/--help) -- the caller must proxy to old/bin/uedcli, unchanged. `Some(Ok(t3d))`: emit to
+/// stdout, exit 0. `Some(Err(message))`: emit to stderr, exit 2 -- a real, in-scope failure
+/// (the positive-dimension guard), not a parse ambiguity.
+pub fn try_build_cube(args: &[String]) -> Option<Result<String, String>> {
+    if args.len() < 3 || args[0] != "brush" || args[1] != "build" || args[2] != "cube" {
+        return None;
+    }
+    let rest = &args[3..];
+
+    const EXCLUDED: &[&str] =
+        &["--prop", "--texture", "--mover-class", "--rotate", "--folder", "--label"];
+
+    let mut width = None;
+    let mut breadth = None;
+    let mut height = None;
+    let mut at = None;
+    let mut base_name = None;
+    let mut csg = None;
+    let mut solidity = None;
+
+    let mut i = 0;
+    while i < rest.len() {
+        let tok = rest[i].as_str();
+        if tok == "--project" || tok == "-h" || tok == "--help" || EXCLUDED.contains(&tok) {
+            return None;
+        }
+        i += 1;
+        let val = rest.get(i)?.as_str(); // every supported flag takes a value; missing one -> proxy
+        match tok {
+            "--width" => width = Some(val.parse::<f64>().ok()?),
+            "--breadth" => breadth = Some(val.parse::<f64>().ok()?),
+            "--height" => height = Some(val.parse::<f64>().ok()?),
+            "--at" => at = Some(parse_at(val)?),
+            "--base-name" => base_name = Some(val.to_string()),
+            "--csg" => {
+                if val != "add" && val != "subtract" {
+                    return None;
+                }
+                csg = Some(val.to_string());
+            }
+            "--solidity" => {
+                if val != "solid" && val != "semisolid" && val != "nonsolid" {
+                    return None;
+                }
+                solidity = Some(val.to_string());
+            }
+            _ => return None, // unrecognized flag -- proxy, don't guess
+        }
+        i += 1;
+    }
+
+    Some(build_cube(width?, breadth?, height?, at, base_name, csg, solidity))
+}

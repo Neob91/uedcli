@@ -2,3 +2,9 @@
 name = "uedcli"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+# Fixed-point decimal matching old/'s Python `decimal.Decimal` finalization (emit.py's `clean`/
+# `quantize6`): both carry ~28-29 significant digits, which is what makes byte-identical T3D
+# emission possible without hand-rolling Decimal arithmetic.
+rust_decimal = "1.36"
