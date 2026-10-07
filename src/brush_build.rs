@@ -407,9 +407,18 @@ fn is_coord_token(s: &str) -> bool {
 /// Whether old/'s custom parser would refuse to consume `token` as a flag's value (and instead
 /// error "expected one argument"). A `_COORD_TOKEN`-shaped token is ALWAYS a value, overriding
 /// the usual rule -- see `is_coord_token`'s doc and the call site's comment for why ("-10.5,20,0"
-/// must be accepted, "-1e5,0,0" and "-x" must not). Anything else starting with `-` is
-/// option-like, matching plain argparse's `_parse_optional` for every other case this parser's
-/// small flag set can produce (no abbreviation-matching edge cases to worry about here).
+/// must be accepted, "-1e5,0,0" and "-x" must not).
+///
+/// Anything else starting with `-` is treated as option-like here, which is conservative rather
+/// than exactly equivalent to real argparse's `_parse_optional`: that function also treats a
+/// bare single-character token (just `"-"`) and any token containing a space as a value, neither
+/// of which this replicates. Both are safe to get "wrong" in this direction -- returning `true`
+/// (option-like) here only means `try_build_cube` returns `None` and the caller proxies to
+/// old/bin/uedcli, which reproduces old/'s real behavior byte-for-byte regardless of why the
+/// fallback triggered. The only direction that would be unsafe (returning `false` for something
+/// old/ actually rejects) can't happen: `is_coord_token` is a faithful match for `_COORD_TOKEN`,
+/// which is checked first and short-circuits real `_parse_optional` before any of the branches
+/// this function doesn't replicate ever run.
 fn looks_like_option(token: &str) -> bool {
     !is_coord_token(token) && token.starts_with('-')
 }

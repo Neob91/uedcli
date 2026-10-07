@@ -139,6 +139,49 @@ fn base_name_single_dash_letter_falls_back_identically() {
     );
 }
 
+#[test]
+fn base_name_bare_dash_falls_back_identically() {
+    // looks_like_option is conservative, not an exact replica of real argparse's
+    // _parse_optional: that function has a len(arg_string) == 1 carve-out treating a bare "-" as
+    // a value (confirmed directly against old/bin/uedcli -- it accepts this with no "expected
+    // one argument" error), but "-" isn't _COORD_TOKEN-shaped, so this port proxies instead of
+    // handling it natively. Safe either way (the proxy reproduces old/'s real behavior exactly),
+    // but worth pinning since it's the one case real argparse explicitly special-cases.
+    assert_identical(
+        &["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1", "--base-name", "-"],
+        None,
+        None,
+    );
+}
+
+#[test]
+fn base_name_dash_with_space_falls_back_identically() {
+    // Same conservative-proxy shape as the bare-dash case above: real argparse also treats any
+    // token containing a space as a value (another _parse_optional carve-out this port doesn't
+    // replicate), so this proxies rather than handling it natively -- still byte-identical either
+    // way, since old/bin/uedcli runs for real on the fallback path.
+    assert_identical(
+        &["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1", "--base-name", "-foo bar"],
+        None,
+        None,
+    );
+}
+
+#[test]
+fn csg_coord_token_shaped_invalid_value_falls_back_identically() {
+    // --csg's own validation (add/subtract only) runs AFTER looks_like_option -- confirms the
+    // ordering is safe: "-5" is _COORD_TOKEN-shaped, so it's consumed as --csg's value both by
+    // old/'s real parser and by this port, then rejected by the choices check either way (old/'s
+    // own argparse "invalid choice" error vs. this port's own validation triggering a proxy) --
+    // byte-identical regardless of which side actually rejects it, since any rejection here means
+    // try_build_cube returns None.
+    assert_identical(
+        &["brush", "build", "cube", "--width", "1", "--breadth", "1", "--height", "1", "--csg", "-5"],
+        None,
+        None,
+    );
+}
+
 // ---- native-geometry cases: need a real substrate for old/'s own class-index check -------------
 
 /// Mirrors old/uedcli/tests/conftest.py's install_root()/UEDCLI_TEST_INSTALL: a real, gitignored
