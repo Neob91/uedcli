@@ -4,6 +4,11 @@ uedcli is being rewritten from Python into Rust, from an empty root; the old cod
 `old/`. @dev/epics/refactor.md has the plan — read it before any question about scope, sequencing,
 or `old/`'s shape.
 
+This is a greenfield rewrite, not a byte-exact transliteration. Match old/'s behavior for the
+normal case (verified by differential tests, per @dev/epics/refactor.md) — but don't hand-replicate
+its exact quirky edge-case behavior (parser corner cases, Python-specific formatting) just to chase
+parity. Real improvements are the point.
+
 ## Working with the owner
 
 Every decision that's the owner's to make goes through the `AskUserQuestion` widget, not chat prose
@@ -47,6 +52,12 @@ Always ask where to implement a change: a feature branch on a git worktree, the 
   offending value, covered by a regression test.
 - Every command, flag, and argument needs a real help string — `--help` should explain what it does,
   not restate its own name.
+- Before putting a new type or function in a feature-specific module, check how broadly its old/
+  equivalent is actually used (grep `old/`) — broad usage means it belongs under `core::`, not the
+  feature that first needed it.
+- Keep argument parsing separate from logic: a `cli::<verb>` module parses args (a real library,
+  e.g. clap) and dispatches; the verb's own logic function takes typed parameters and knows
+  nothing about the CLI.
 - Names are explicit: no abbreviations (`texture`, not `tex`; `format`, not `fmt` — a loop counter
   like `i` or a generic `T` is fine), and function names are verbs (`build_polygon`, not `face`). A
   generic-sounding name belongs in a module that supplies the missing context (`vectors::subtract`,

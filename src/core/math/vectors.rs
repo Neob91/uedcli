@@ -1,7 +1,6 @@
-//! Pure vector math shared across every geometry-producing verb -- mirrors the module-level
-//! helpers in old/uedcli/builders.py. Named `vectors` (not just left at `math`'s own top level)
-//! so a generic-sounding name like `subtract`/`multiply` is unambiguous at every call site
-//! (`vectors::subtract(...)`) and can't collide with a future non-vector `math::subtract`.
+//! Pure vector math shared across every geometry-producing verb. Named `vectors` (not left at
+//! `math`'s own top level) so a generic name like `subtract`/`multiply` stays unambiguous at the
+//! call site (`vectors::subtract(...)`) and can't collide with a future non-vector `math::subtract`.
 
 use crate::core::model::Vector3D;
 
@@ -26,8 +25,8 @@ pub fn length(a: Vector3D) -> f64 {
 }
 
 pub fn normalize_vector(a: Vector3D) -> Vector3D {
-    // builders.py's _normalize raises GeometryError on a zero-length input -- never reachable for
-    // cube's fixed axis-aligned outward vectors (always unit length already), so not replicated.
+    // Zero-length input is unreachable from cube's fixed axis-aligned outward vectors (always
+    // unit length already); not guarded here.
     let n = length(a);
     Vector3D::new(a.x / n, a.y / n, a.z / n)
 }
@@ -56,9 +55,8 @@ pub fn compute_newell_normal(ring: &[Vector3D]) -> Vector3D {
 }
 
 /// Unit in-plane (TextureU, TextureV) basis for a face, given its normal. Ties resolve to the
-/// LOWEST axis index -- Rust's `min_by`, like Python's `min()`, returns the first minimal element
-/// on a tie (builders.py's `_tex_basis` docstring: this is load-bearing -- every axis-aligned
-/// face every builder emits depends on it).
+/// lowest axis index -- `min_by` returns the first minimal element on a tie, and every
+/// axis-aligned face depends on that exact tiebreak.
 pub fn compute_texture_basis(normal: Vector3D) -> (Vector3D, Vector3D) {
     let components = [normal.x, normal.y, normal.z];
     let axis = (0..3)
