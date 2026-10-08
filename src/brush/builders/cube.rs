@@ -21,38 +21,38 @@
 
 use rust_decimal::Decimal;
 
-use super::base::{self, FinalizedPolygon, Polygon};
+use super::base;
 use crate::core::emit::{clean, format_float_like_python};
-use crate::core::types::Vec3;
+use crate::core::model::{FinalizedPolygon, Polygon, Vector3D};
 
 fn build_cube_faces(width: f64, breadth: f64, height: f64) -> Vec<Polygon> {
     let (half_width, half_breadth, half_height) = (width / 2.0, breadth / 2.0, height / 2.0);
     let corner =
-        |sx: f64, sy: f64, sz: f64| Vec3::new(sx * half_width, sy * half_breadth, sz * half_height);
-    let faces: [([Vec3; 4], Vec3); 6] = [
+        |sx: f64, sy: f64, sz: f64| Vector3D::new(sx * half_width, sy * half_breadth, sz * half_height);
+    let faces: [([Vector3D; 4], Vector3D); 6] = [
         (
             [corner(1., -1., -1.), corner(1., 1., -1.), corner(1., 1., 1.), corner(1., -1., 1.)],
-            Vec3::new(1., 0., 0.),
+            Vector3D::new(1., 0., 0.),
         ),
         (
             [corner(-1., 1., -1.), corner(-1., -1., -1.), corner(-1., -1., 1.), corner(-1., 1., 1.)],
-            Vec3::new(-1., 0., 0.),
+            Vector3D::new(-1., 0., 0.),
         ),
         (
             [corner(1., 1., -1.), corner(-1., 1., -1.), corner(-1., 1., 1.), corner(1., 1., 1.)],
-            Vec3::new(0., 1., 0.),
+            Vector3D::new(0., 1., 0.),
         ),
         (
             [corner(-1., -1., -1.), corner(1., -1., -1.), corner(1., -1., 1.), corner(-1., -1., 1.)],
-            Vec3::new(0., -1., 0.),
+            Vector3D::new(0., -1., 0.),
         ),
         (
             [corner(-1., -1., 1.), corner(1., -1., 1.), corner(1., 1., 1.), corner(-1., 1., 1.)],
-            Vec3::new(0., 0., 1.),
+            Vector3D::new(0., 0., 1.),
         ),
         (
             [corner(-1., 1., -1.), corner(1., 1., -1.), corner(1., -1., -1.), corner(-1., -1., -1.)],
-            Vec3::new(0., 0., -1.),
+            Vector3D::new(0., 0., -1.),
         ),
     ];
     faces.into_iter().map(|(ring, outward)| base::build_polygon(ring.to_vec(), outward)).collect()

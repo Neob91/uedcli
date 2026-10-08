@@ -1,7 +1,7 @@
-//! Shared across every `brush build <shape>` -- a Polygon/FinalizedPolygon pair, the generic
-//! polygon-builder, T3D assembly for one brush Actor, and old/'s custom argv-value-ambiguity rule.
-//! Mirrors old/uedcli/builders.py's module-level `_face`/`make_brush_actor` and
-//! old/uedcli/cli/parsers/_arguments.py's `_CoordArgumentParser`.
+//! Shared across every `brush build <shape>` -- the generic polygon-builder, T3D assembly for one
+//! brush Actor, and old/'s custom argv-value-ambiguity rule. Mirrors old/uedcli/builders.py's
+//! module-level `_face`/`make_brush_actor` and old/uedcli/cli/parsers/_arguments.py's
+//! `_CoordArgumentParser`.
 
 use rust_decimal::Decimal;
 use std::str::FromStr;
@@ -10,36 +10,7 @@ use crate::core::emit::{
     clean, decimal_from_f64, format_location, format_vertex, format_vertex_from_f64,
 };
 use crate::core::math::vectors;
-use crate::core::types::Vec3;
-
-/// One face of a brush, in raw geometry floats -- the ring may carry sub-grid float noise;
-/// nothing here is Decimal-exact yet.
-pub struct Polygon {
-    pub vertices: Vec<Vec3>,
-    pub origin: Vec3,
-    /// Face normal -- advisory; the editor recomputes it from vertex winding on import.
-    pub normal: Vec3,
-    /// In-plane texture-U basis vector (not a texture reference -- this project's "core" scope
-    /// has no per-face texture yet; see cube.rs's module doc for what's deferred).
-    pub texture_u: Vec3,
-    /// In-plane texture-V basis vector, perpendicular to `texture_u` within the face's plane.
-    pub texture_v: Vec3,
-}
-
-/// A `Polygon` with its vertices pre-cleaned to Decimal exactly once -- mirrors
-/// builders.py's `make_brush_actor`, which pre-cleans ONLY `p.vertices` (not
-/// Origin/Normal/TextureU/TextureV) in its finalize pass. See `core::emit::format_vertex`'s doc
-/// comment for why this matters: `clean()` is NOT idempotent at its rounding-epsilon boundary, so
-/// applying it once (Origin/Normal/TextureU/TextureV) vs. twice (vertices: once here, again
-/// inside `format_vertex` at emit time, same as old/'s own double application) can produce
-/// different bytes for a value that lands in that narrow window.
-pub struct FinalizedPolygon {
-    pub vertices: Vec<(Decimal, Decimal, Decimal)>,
-    pub origin: Vec3,
-    pub normal: Vec3,
-    pub texture_u: Vec3,
-    pub texture_v: Vec3,
-}
+use crate::core::model::{FinalizedPolygon, Polygon, Vector3D};
 
 pub fn finalize_polygon(polygon: &Polygon) -> Result<FinalizedPolygon, String> {
     let mut vertices = Vec::with_capacity(polygon.vertices.len());
@@ -61,7 +32,7 @@ pub fn finalize_polygon(polygon: &Polygon) -> Result<FinalizedPolygon, String> {
 
 /// Builds a `Polygon` from a boundary vertex ring + a rough outward direction. Mirrors
 /// builders.py's `_face`.
-pub fn build_polygon(ring: Vec<Vec3>, outward: Vec3) -> Polygon {
+pub fn build_polygon(ring: Vec<Vector3D>, outward: Vector3D) -> Polygon {
     // builders.py's _face also runs _dedup_ring and raises GeometryError on <3 distinct verts or
     // a degenerate (zero-area) face -- never reachable for cube's 4 fixed, well-separated
     // corners (guaranteed distinct whenever width/breadth/height > 0, already enforced by the
@@ -89,7 +60,7 @@ pub fn build_polygon(ring: Vec<Vec3>, outward: Vec3) -> Polygon {
     }
 }
 
-fn format_vector_line_from_f64(kind: &str, vector: Vec3) -> Result<String, String> {
+fn format_vector_line_from_f64(kind: &str, vector: Vector3D) -> Result<String, String> {
     Ok(format!(
         "         {kind:<8} {},{},{}",
         format_vertex_from_f64(vector.x)?,
