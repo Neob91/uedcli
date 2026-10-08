@@ -8,3 +8,5 @@ edition = "2021"
 # `quantize6`): both carry ~28-29 significant digits, which is what makes byte-identical T3D
 # emission possible without hand-rolling Decimal arithmetic.
 rust_decimal = "1.36"
+# CLI argument parsing.
+clap = { version = "4", features = ["derive"] }

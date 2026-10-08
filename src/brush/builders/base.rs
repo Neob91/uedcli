@@ -9,6 +9,38 @@ use crate::core::emit::{clean, decimal_from_f64};
 use crate::core::math::vectors;
 use crate::core::model::{FinalizedPolygon, Polygon, Vector3D};
 
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum CsgOperation {
+    Add,
+    Subtract,
+}
+
+impl CsgOperation {
+    pub fn as_t3d(self) -> &'static str {
+        match self {
+            CsgOperation::Add => "CSG_Add",
+            CsgOperation::Subtract => "CSG_Subtract",
+        }
+    }
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+pub enum Solidity {
+    Solid,
+    Semisolid,
+    Nonsolid,
+}
+
+impl Solidity {
+    pub fn poly_flags(self) -> u32 {
+        match self {
+            Solidity::Solid => 0,
+            Solidity::Semisolid => 0x0000_0020,
+            Solidity::Nonsolid => 0x0000_0008,
+        }
+    }
+}
+
 pub fn finalize_polygon(polygon: &Polygon) -> Result<FinalizedPolygon, String> {
     let mut vertices = Vec::with_capacity(polygon.vertices.len());
     for vertex in &polygon.vertices {

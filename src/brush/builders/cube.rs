@@ -21,7 +21,7 @@
 
 use rust_decimal::Decimal;
 
-use super::base;
+use super::base::{self, CsgOperation, Solidity};
 use crate::core::emit::{clean, emit_actor_t3d, format_float_like_python};
 use crate::core::model::{FinalizedPolygon, Polygon, Vector3D};
 
@@ -72,10 +72,10 @@ fn build_cube(
     width: f64,
     breadth: f64,
     height: f64,
-    at: Option<(Decimal, Decimal, Decimal)>,
-    base_name: Option<String>,
-    csg: Option<String>,
-    solidity: Option<String>,
+    at: (Decimal, Decimal, Decimal),
+    base_name: String,
+    csg: CsgOperation,
+    solidity: Solidity,
 ) -> Result<String, String> {
     // _check_positive_build_dims checks in the table's declared order: width, breadth, height.
     check_positive("--width", width)?;
@@ -90,24 +90,10 @@ fn build_cube(
         .iter()
         .map(base::finalize_polygon)
         .collect::<Result<_, _>>()?;
-    let (at_x, at_y, at_z) = at.unwrap_or((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO));
-    let location = (clean(at_x)?, clean(at_y)?, clean(at_z)?);
+    let location = (clean(at.0)?, clean(at.1)?, clean(at.2)?);
 
-    let name = base_name.unwrap_or_else(|| "Cube".to_string());
-    let model_name = format!("Model_{name}");
-    let csg_op = match csg.as_deref().unwrap_or("add") {
-        "add" => "CSG_Add",
-        "subtract" => "CSG_Subtract",
-        _ => unreachable!("validated at parse time"),
-    };
-    let poly_flags: u32 = match solidity.as_deref().unwrap_or("solid") {
-        "solid" => 0,
-        "semisolid" => 0x0000_0020,
-        "nonsolid" => 0x0000_0008,
-        _ => unreachable!("validated at parse time"),
-    };
-
-    emit_actor_t3d(&name, &model_name, csg_op, poly_flags, location, &polygons)
+    let model_name = format!("Model_{base_name}");
+    emit_actor_t3d(&base_name, &model_name, csg.as_t3d(), solidity.poly_flags(), location, &polygons)
 }
 
 /// `None`: not our case (unrecognized flag, missing/invalid value, an excluded flag, --project,
@@ -156,21 +142,32 @@ pub fn try_build_cube(args: &[String]) -> Option<Result<String, String>> {
             "--at" => at = Some(base::parse_at(value)?),
             "--base-name" => base_name = Some(value.to_string()),
             "--csg" => {
-                if value != "add" && value != "subtract" {
-                    return None;
-                }
-                csg = Some(value.to_string());
+                csg = Some(match value {
+                    "add" => CsgOperation::Add,
+                    "subtract" => CsgOperation::Subtract,
+                    _ => return None,
+                });
             }
             "--solidity" => {
-                if value != "solid" && value != "semisolid" && value != "nonsolid" {
-                    return None;
-                }
-                solidity = Some(value.to_string());
+                solidity = Some(match value {
+                    "solid" => Solidity::Solid,
+                    "semisolid" => Solidity::Semisolid,
+                    "nonsolid" => Solidity::Nonsolid,
+                    _ => return None,
+                });
             }
             _ => return None, // unrecognized flag -- proxy, don't guess
         }
         i += 1;
     }
 
-    Some(build_cube(width?, breadth?, height?, at, base_name, csg, solidity))
+    Some(build_cube(
+        width?,
+        breadth?,
+        height?,
+        at.unwrap_or((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO)),
+        base_name.unwrap_or_else(|| "Cube".to_string()),
+        csg.unwrap_or(CsgOperation::Add),
+        solidity.unwrap_or(Solidity::Solid),
+    ))
 }
