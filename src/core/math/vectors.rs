@@ -72,3 +72,66 @@ pub fn compute_texture_basis(normal: Vector3D) -> (Vector3D, Vector3D) {
     let v = cross(normal, u);
     (u, v)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn v(x: i64, y: i64, z: i64) -> Vector3D {
+        Vector3D::new(Decimal::from(x), Decimal::from(y), Decimal::from(z))
+    }
+
+    #[test]
+    fn dot_sums_component_products() {
+        assert_eq!(dot(v(1, 2, 3), v(4, 5, 6)), Decimal::from(32));
+    }
+
+    #[test]
+    fn cross_of_x_and_y_axes_is_z() {
+        assert_eq!(cross(v(1, 0, 0), v(0, 1, 0)), v(0, 0, 1));
+    }
+
+    #[test]
+    fn subtract_is_component_wise() {
+        assert_eq!(subtract(v(5, 3, 1), v(2, 1, 1)), v(3, 2, 0));
+    }
+
+    #[test]
+    fn multiply_scales_every_component() {
+        assert_eq!(multiply(v(1, 2, 3), Decimal::from(2)), v(2, 4, 6));
+    }
+
+    #[test]
+    fn length_of_a_3_4_0_triangle_is_5() {
+        assert_eq!(length(v(3, 4, 0)), Decimal::from(5));
+    }
+
+    #[test]
+    fn normalize_vector_scales_to_unit_length() {
+        let expected = Vector3D::new(Decimal::from(3) / Decimal::from(5), Decimal::from(4) / Decimal::from(5), Decimal::ZERO);
+        assert_eq!(normalize_vector(v(3, 4, 0)), expected);
+    }
+
+    #[test]
+    fn compute_centroid_averages_the_ring() {
+        let ring = [v(0, 0, 0), v(2, 0, 0), v(2, 2, 0), v(0, 2, 0)];
+        assert_eq!(compute_centroid(&ring), v(1, 1, 0));
+    }
+
+    #[test]
+    fn compute_newell_normal_of_a_square_points_along_its_axis() {
+        // A square in the XY plane, wound CCW as seen from +Z -- Newell's method gives a normal
+        // along +Z scaled by twice the ring's area (2 * 4 = 8), not a unit vector.
+        let ring = [v(0, 0, 0), v(2, 0, 0), v(2, 2, 0), v(0, 2, 0)];
+        assert_eq!(compute_newell_normal(&ring), v(0, 0, 8));
+    }
+
+    #[test]
+    fn compute_texture_basis_picks_the_lowest_tied_axis() {
+        // normal=(1,0,0): components' absolute values are (1,0,0) -- Y and Z tie at 0, and the
+        // lowest index (Y) wins the seed axis.
+        let (u, v_basis) = compute_texture_basis(v(1, 0, 0));
+        assert_eq!(u, v(0, 1, 0));
+        assert_eq!(v_basis, v(0, 0, 1));
+    }
+}
