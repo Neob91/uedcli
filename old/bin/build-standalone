@@ -67,7 +67,11 @@ _ensure_nuitka_build_image() {
     || { echo "bin/build-standalone: docker is required (the Nuitka build is dockerized for a" \
               "consistent static-libpython-capable Python on every host)" >&2; return 1; }
   local want have
-  want="$(sha256sum "$_NUITKA_DOCKERFILE" | cut -d' ' -f1)"
+  # Via _hash_files (sourced from bin/_venv.sh above), not host sha256sum -- see its comment for
+  # why. Checked explicitly, not left to `set -e`: called as `_ensure_nuitka_build_image || {...}`
+  # below, which suspends errexit for this whole function body for the duration of that call.
+  want="$(printf '%s\n' "$_NUITKA_DOCKERFILE" | _hash_files)" || return 1
+  [ -n "$want" ] || return 1
   have="$(docker image inspect "$_NUITKA_IMAGE" --format '{{ index .Config.Labels "uedcli.dockerfile" }}' 2>/dev/null || true)"
   [ "$want" = "$have" ] && return 0
   echo "bin/build-standalone: building the Nuitka-build image $_NUITKA_IMAGE (one-time, compiles a" \

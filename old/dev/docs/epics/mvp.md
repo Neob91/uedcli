@@ -7,3 +7,4 @@ this only tracks which ones are the priority. Drop an entry once it lands.
 - board item `incremental-gui-reload-only-re-resolve-actors` — GUI Reload re-resolves every actor
   from scratch on every call; want it to diff against the session's last-loaded snapshot and only
   re-resolve actors that changed, targeting hundreds of ms instead of scaling with the whole level.
+- `actor-survey-aborts-on-sheet-brushes-in-scope` — `actor survey` aborts on any sheet brush in its neighborhood; unusable on 19_Multiport (fails even for distant targets).

@@ -342,9 +342,10 @@ A level's context can be dropped once none of its sessions have an open WS conne
 memory optimization; on-disk session state is unaffected either way — it's already durable).
 
 A fresh tab with no `?session=` in its URL needs a level to create a session against.
-`uedcli serve <level>` already takes a level argument at startup today — that stays the default level
-for a bare URL with no session id; picking a different level means using the session list/dropdown
-(which can also create a new session for a different level), not a `?level=` URL parameter.
+`uedcli serve` no longer takes a startup level argument -- the frontend falls back to the first level
+returned by `GET /api/levels` for a bare URL with no session id; picking a different level means
+using the session list/dropdown (which can also create a new session for a different level), not a
+`?level=` URL parameter.
 
 **Rebuild concurrency is deliberately unthrottled.** Once solving works on independent copies
 (`## Build cache & dedup`, below), nothing stops N sessions from Rebuilding at the same instant — no

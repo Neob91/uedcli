@@ -55,8 +55,13 @@ ensure_venv() {
   # would have `>=`/`<` read as real shell redirection operators. Expanding $UEDCLI_DEPS_SPEC as a
   # variable INSIDE the container's own shell is safe — variable expansion is never re-tokenized
   # for shell operators, only the self-contained SC2086 word-split pip needs.
+  # The path-fixup loop (below, inside the container) rewrites /io/... (this mount) to the real
+  # host path in both the python/python3/python3.12 SYMLINKS and every console-script's SHEBANG
+  # line uv just wrote -- it runs with THIS image's own GNU coreutils/sed, identical on every
+  # host, so there's no GNU/BSD sed -i divergence to worry about (macOS's sed needs `-i.bak`,
+  # never bare `-i`; doing the rewrite host-side at all was the wrong place for it).
   docker run --rm --user "$(id -u):$(id -g)" -e HOME=/tmp \
-    -e UEDCLI_REL_VENV="$rel_venv" -e UEDCLI_DEPS_SPEC="$_DEPS_SPEC" \
+    -e UEDCLI_REL_VENV="$rel_venv" -e UEDCLI_DEPS_SPEC="$_DEPS_SPEC" -e UEDCLI_HOST_DIR="$UEDCLI_DIR" \
     -e UV_PYTHON_INSTALL_DIR=/io/.cache/uv-python -e UV_CACHE_DIR=/io/.cache/uv \
     -v "$UEDCLI_DIR":/io -w /io \
     "$_UV_IMAGE" sh -c '
@@ -65,31 +70,18 @@ ensure_venv() {
       # shellcheck disable=SC2086
       uv pip install --python "$UEDCLI_REL_VENV"/bin/python --quiet --upgrade pip \
         $UEDCLI_DEPS_SPEC
+      for f in "$UEDCLI_REL_VENV"/bin/*; do
+        if [ -L "$f" ]; then
+          target="$(readlink "$f")"
+          case "$target" in
+            /io/*) ln -sf "$UEDCLI_HOST_DIR/${target#/io/}" "$f" ;;
+          esac
+        elif [ -f "$f" ] && head -c2 "$f" | grep -q "^#!"; then
+          sed -i "1s|^#!/io/|#!$UEDCLI_HOST_DIR/|" "$f"
+        fi
+      done
     ' >&2 \
     || { echo "uedcli: venv provisioning failed" >&2; exit 1; }
-  # The venv was created with the project dir mounted at /io, so uv baked /io/... into both the
-  # python/python3/python3.12 SYMLINKS and every console-script's SHEBANG line (pip, pytest, every
-  # future entry point an install adds) -- rewrite both to the real host path, or every one of
-  # them is unusable outside a container with that exact mount.
-  local f target
-  for f in "$VENV"/bin/*; do
-    [ -L "$f" ] && target="$(readlink "$f")" && case "$target" in
-      /io/*) ln -sf "$UEDCLI_DIR/${target#/io/}" "$f" ;;
-    esac
-    if [ -f "$f" ] && [ ! -L "$f" ] && head -c2 "$f" 2>/dev/null | grep -q '^#!'; then
-      # -i.bak (concatenated, no space), never bare -i: BSD/macOS sed requires the backup suffix
-      # as part of the -i flag itself and otherwise eats the next argument (the file to edit) as
-      # the sed SCRIPT, failing with "extra characters at the end of n command" -- GNU sed accepts
-      # the same -i.bak form identically, so this is one code path for both, not an OS branch.
-      # sed and rm are separate statements, not `&&`-chained: under `set -e`, a failing command is
-      # exempt from aborting the script UNLESS it's the last in an AND-OR list -- chaining
-      # `&& rm -f "$f.bak"` after sed would make sed no longer last, silently swallowing a sed
-      # failure and leaving a broken shebang in place undetected (the exact "no silent half-
-      # answers" failure this project explicitly forbids).
-      sed -i.bak "1s|^#!/io/|#!$UEDCLI_DIR/|" "$f"
-      rm -f "$f.bak"
-    fi
-  done
   [ -x "$PY" ] || { echo "uedcli: venv python still not runnable after path fixup" >&2; exit 1; }
   printf '%s' "$_DEPS_SPEC" > "$_DEPS_MARKER"
 }
@@ -101,9 +93,21 @@ _BUILD_IMAGE="uedcli-rust-build"
 _DOCKERFILE="$UEDCLI_DIR/dev-container/Dockerfile"
 _BUILD_DOCKERFILE="$UEDCLI_DIR/dev-container/build.Dockerfile"
 
+# cksum, not sha256sum: macOS has no sha256sum by default, and this project's "no fallbacks, one
+# code path on every host" rule rules out a command-v-sha256sum-else-shasum branch. cksum's CRC
+# algorithm is specified BY POSIX itself, so GNU and BSD/macOS cksum emit byte-identical output
+# for identical input -- unlike sha256sum, md5sum, or shasum, which are vendor extensions, not
+# POSIX. This has to stay host-native, not deferred to a container: check_native_ext (below) calls
+# it on every `uedcli` invocation, and this file's own header promises that path never needs
+# Docker or network. Hashes the files named on stdin (one path per line); the double cksum (hash
+# each file, then hash the combined per-file hashes) gives one aggregate value for a whole tree.
+_hash_files() {
+  xargs cksum | cksum | cut -d' ' -f1
+}
+
 _native_ext_hash() {
   find "$_NATIVE_DIR" -path "$_NATIVE_DIR/target" -prune -o \( -name '*.rs' -o -name 'Cargo.toml' \) -print \
-    | sort | xargs sha256sum | sha256sum | cut -d' ' -f1
+    | sort | _hash_files
 }
 
 # Read-only: sets UEDCLI_NATIVE_EXT_FRESH, never builds. Mirrors ensure_native_ext's own
@@ -124,7 +128,12 @@ check_native_ext() {
 _ensure_build_image() {
   command -v docker >/dev/null 2>&1 || return 1
   local want have
-  want="$(sha256sum "$_DOCKERFILE" | cut -d' ' -f1)"
+  # Checked explicitly, not left to `set -e`: every caller invokes this function via `||`/`if`,
+  # which suspends errexit for its ENTIRE body for the duration of that call (a bash gotcha, not
+  # just for this function's own return) -- so a failing `_hash_files` here would otherwise pass
+  # silently, leaving `want` empty and risking a build later labelled with a bogus empty hash.
+  want="$(printf '%s\n' "$_DOCKERFILE" | _hash_files)" || return 1
+  [ -n "$want" ] || return 1
   have="$(docker image inspect "$_BUILD_IMAGE" --format '{{ index .Config.Labels "uedcli.dockerfile" }}' 2>/dev/null || true)"
   [ "$want" = "$have" ] && return 0
   echo "uedcli: building the Rust-build image $_BUILD_IMAGE (one-time)" >&2
@@ -184,7 +193,7 @@ ensure_wasm_artifact() {
   [ -d "$_NATIVE_DIR/resolve-wasm" ] || return 0
   local hash
   hash="$(find "$_NATIVE_DIR/resolve-core" "$_NATIVE_DIR/resolve-wasm" -path '*/target' -prune -o \
-    \( -name '*.rs' -o -name 'Cargo.toml' \) -print | sort | xargs sha256sum | sha256sum | cut -d' ' -f1)"
+    \( -name '*.rs' -o -name 'Cargo.toml' \) -print | sort | _hash_files)"
   if [ "$(cat "$_WASM_MARKER" 2>/dev/null || true)" = "$hash" ] && [ -f "$_WASM_OUT/resolve_wasm_bg.wasm" ]; then
     return 0
   fi
