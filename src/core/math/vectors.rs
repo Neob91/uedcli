@@ -87,8 +87,32 @@ mod tests {
     }
 
     #[test]
+    fn dot_of_orthogonal_vectors_is_zero() {
+        assert_eq!(dot(v(1, 0, 0), v(0, 1, 0)), Decimal::ZERO);
+    }
+
+    #[test]
+    fn dot_with_negative_components() {
+        assert_eq!(dot(v(-1, 2, -3), v(4, -5, 6)), Decimal::from(-4 - 10 - 18));
+    }
+
+    #[test]
     fn cross_of_x_and_y_axes_is_z() {
         assert_eq!(cross(v(1, 0, 0), v(0, 1, 0)), v(0, 0, 1));
+    }
+
+    #[test]
+    fn cross_is_anticommutative() {
+        let a = v(1, 2, 3);
+        let b = v(4, -1, 2);
+        let ab = cross(a, b);
+        let ba = cross(b, a);
+        assert_eq!(ab, multiply(ba, Decimal::from(-1)));
+    }
+
+    #[test]
+    fn cross_of_parallel_vectors_is_zero() {
+        assert_eq!(cross(v(2, 4, 6), v(1, 2, 3)), v(0, 0, 0));
     }
 
     #[test]
@@ -97,13 +121,44 @@ mod tests {
     }
 
     #[test]
+    fn subtract_can_produce_negative_components() {
+        assert_eq!(subtract(v(1, 1, 1), v(5, 5, 5)), v(-4, -4, -4));
+    }
+
+    #[test]
+    fn subtract_from_self_is_zero() {
+        let a = v(7, -3, 2);
+        assert_eq!(subtract(a, a), v(0, 0, 0));
+    }
+
+    #[test]
     fn multiply_scales_every_component() {
         assert_eq!(multiply(v(1, 2, 3), Decimal::from(2)), v(2, 4, 6));
     }
 
     #[test]
+    fn multiply_by_negative_scalar_flips_sign() {
+        assert_eq!(multiply(v(1, 2, 3), Decimal::from(-2)), v(-2, -4, -6));
+    }
+
+    #[test]
+    fn multiply_by_zero_is_zero() {
+        assert_eq!(multiply(v(1, 2, 3), Decimal::ZERO), v(0, 0, 0));
+    }
+
+    #[test]
     fn length_of_a_3_4_0_triangle_is_5() {
         assert_eq!(length(v(3, 4, 0)), Decimal::from(5));
+    }
+
+    #[test]
+    fn length_of_a_unit_vector_is_1() {
+        assert_eq!(length(v(0, 1, 0)), Decimal::ONE);
+    }
+
+    #[test]
+    fn length_ignores_sign_of_components() {
+        assert_eq!(length(v(-3, -4, 0)), Decimal::from(5));
     }
 
     #[test]
@@ -113,9 +168,37 @@ mod tests {
     }
 
     #[test]
-    fn compute_centroid_averages_the_ring() {
+    fn normalize_vector_of_a_longer_vector_same_direction_matches() {
+        let expected = Vector3D::new(Decimal::from(3) / Decimal::from(5), Decimal::from(4) / Decimal::from(5), Decimal::ZERO);
+        assert_eq!(normalize_vector(v(6, 8, 0)), expected);
+    }
+
+    #[test]
+    fn normalize_vector_of_an_already_unit_vector_is_unchanged() {
+        assert_eq!(normalize_vector(v(0, 0, 1)), v(0, 0, 1));
+    }
+
+    #[test]
+    fn compute_centroid_of_a_square() {
         let ring = [v(0, 0, 0), v(2, 0, 0), v(2, 2, 0), v(0, 2, 0)];
         assert_eq!(compute_centroid(&ring), v(1, 1, 0));
+    }
+
+    #[test]
+    fn compute_centroid_of_a_single_point_is_that_point() {
+        let ring = [v(5, -3, 2)];
+        assert_eq!(compute_centroid(&ring), v(5, -3, 2));
+    }
+
+    #[test]
+    fn compute_centroid_of_a_triangle_divides_by_3_exactly_as_decimal_allows() {
+        // x sum = 2, y sum = 3 -- neither divides evenly by 3 in decimal (2/3, 1 are the exact
+        // answers for x and y respectively); the expected value is computed the same way
+        // (Decimal division) so this pins the function's actual behavior, not a hand-rounded
+        // guess.
+        let ring = [v(0, 0, 0), v(1, 0, 0), v(1, 3, 0)];
+        let expected = Vector3D::new(Decimal::from(2) / Decimal::from(3), Decimal::ONE, Decimal::ZERO);
+        assert_eq!(compute_centroid(&ring), expected);
     }
 
     #[test]
@@ -127,11 +210,43 @@ mod tests {
     }
 
     #[test]
-    fn compute_texture_basis_picks_the_lowest_tied_axis() {
+    fn compute_newell_normal_flips_sign_when_winding_reverses() {
+        let ring = [v(0, 0, 0), v(2, 0, 0), v(2, 2, 0), v(0, 2, 0)];
+        let mut reversed = ring.to_vec();
+        reversed.reverse();
+        assert_eq!(compute_newell_normal(&reversed), v(0, 0, -8));
+    }
+
+    #[test]
+    fn compute_newell_normal_generalizes_to_a_non_xy_plane() {
+        // Same square, in the XZ plane instead -- confirms the method isn't accidentally
+        // hardcoded to Z-axis-only math.
+        let ring = [v(0, 0, 0), v(2, 0, 0), v(2, 0, 2), v(0, 0, 2)];
+        assert_eq!(compute_newell_normal(&ring), v(0, -8, 0));
+    }
+
+    #[test]
+    fn compute_texture_basis_for_x_normal_picks_lowest_tied_axis() {
         // normal=(1,0,0): components' absolute values are (1,0,0) -- Y and Z tie at 0, and the
         // lowest index (Y) wins the seed axis.
         let (u, v_basis) = compute_texture_basis(v(1, 0, 0));
         assert_eq!(u, v(0, 1, 0));
         assert_eq!(v_basis, v(0, 0, 1));
+    }
+
+    #[test]
+    fn compute_texture_basis_for_y_normal_picks_lowest_tied_axis() {
+        // normal=(0,1,0): abs values (0,1,0) -- X and Z tie at 0, and the lowest index (X) wins.
+        let (u, v_basis) = compute_texture_basis(v(0, 1, 0));
+        assert_eq!(u, v(1, 0, 0));
+        assert_eq!(v_basis, v(0, 0, -1));
+    }
+
+    #[test]
+    fn compute_texture_basis_for_z_normal_picks_lowest_tied_axis() {
+        // normal=(0,0,1): abs values (0,0,1) -- X and Y tie at 0, and the lowest index (X) wins.
+        let (u, v_basis) = compute_texture_basis(v(0, 0, 1));
+        assert_eq!(u, v(1, 0, 0));
+        assert_eq!(v_basis, v(0, 1, 0));
     }
 }
