@@ -11,24 +11,29 @@ use std::str::FromStr;
 
 use crate::brush::builders::base::{CsgOperation, Solidity};
 use crate::brush::builders::cube::build_cube;
+use crate::core::model::Vector3D;
 
 #[derive(Parser)]
 #[command(disable_help_flag = true)]
 struct CubeArgs {
-    #[arg(long, allow_hyphen_values = true)]
-    width: f64,
-    #[arg(long, allow_hyphen_values = true)]
-    breadth: f64,
-    #[arg(long, allow_hyphen_values = true)]
-    height: f64,
+    #[arg(long, allow_hyphen_values = true, value_parser = parse_dimension)]
+    width: Decimal,
+    #[arg(long, allow_hyphen_values = true, value_parser = parse_dimension)]
+    breadth: Decimal,
+    #[arg(long, allow_hyphen_values = true, value_parser = parse_dimension)]
+    height: Decimal,
     #[arg(long, allow_hyphen_values = true, value_parser = parse_at)]
-    at: Option<(Decimal, Decimal, Decimal)>,
+    at: Option<Vector3D>,
     #[arg(long, value_parser = parse_base_name)]
     base_name: Option<String>,
     #[arg(long, value_enum)]
     csg: Option<CsgOperation>,
     #[arg(long, value_enum)]
     solidity: Option<Solidity>,
+}
+
+fn parse_dimension(text: &str) -> Result<Decimal, String> {
+    Decimal::from_str(text).map_err(|e| e.to_string())
 }
 
 // clap treats a bare "-" as a value, not a flag -- old/bin/uedcli's own argparse does too, but
@@ -44,7 +49,7 @@ fn parse_base_name(text: &str) -> Result<String, String> {
 // Rejects anything but digits/dot/sign per comma-separated part -- in particular scientific
 // notation ("-1e5,0,0"), which Decimal::from_str would otherwise happily accept as a number that
 // old/bin/uedcli's own parser refuses.
-fn parse_at(text: &str) -> Result<(Decimal, Decimal, Decimal), String> {
+fn parse_at(text: &str) -> Result<Vector3D, String> {
     let parts: Vec<&str> = text.split(',').map(str::trim).collect();
     if parts.len() != 3 {
         return Err(format!("expected 3 comma-separated numbers, got {text}"));
@@ -57,7 +62,7 @@ fn parse_at(text: &str) -> Result<(Decimal, Decimal, Decimal), String> {
         }
         values.push(Decimal::from_str(part).map_err(|_| format!("not a number: {part}"))?);
     }
-    Ok((values[0], values[1], values[2]))
+    Ok(Vector3D::new(values[0], values[1], values[2]))
 }
 
 pub fn try_build_cube(args: &[String]) -> Option<Result<String, String>> {
@@ -71,7 +76,7 @@ pub fn try_build_cube(args: &[String]) -> Option<Result<String, String>> {
         parsed.width,
         parsed.breadth,
         parsed.height,
-        parsed.at.unwrap_or((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO)),
+        parsed.at.unwrap_or(Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO)),
         parsed.base_name.unwrap_or_else(|| "Cube".to_string()),
         parsed.csg.unwrap_or(CsgOperation::Add),
         parsed.solidity.unwrap_or(Solidity::Solid),

@@ -9,36 +9,13 @@ use super::model::{Polygon, Vector3D};
 
 const CLEAN_EPS: &str = "0.001";
 
-pub fn format_float_for_error(v: f64) -> String {
-    if v.is_nan() {
-        return "nan".to_string();
-    }
-    if v.is_infinite() {
-        return if v > 0.0 { "inf".to_string() } else { "-inf".to_string() };
-    }
-    let s = format!("{v}");
-    if s.contains('.') || s.contains('e') {
-        s
-    } else {
-        format!("{s}.0")
-    }
-}
-
-pub fn decimal_from_f64(value: f64) -> Result<Decimal, String> {
-    if !value.is_finite() {
-        return Err(format!("coordinate is not a finite number: {}", format_float_for_error(value)));
-    }
-    Decimal::from_str(&format_float_for_error(value))
-        .map_err(|_| format!("coordinate is not a finite number: {value}"))
-}
-
 pub fn quantize6(d: Decimal) -> Result<Decimal, String> {
     Ok(d.round_dp_with_strategy(6, RoundingStrategy::MidpointAwayFromZero))
 }
 
 // A coordinate within CLEAN_EPS of an integer is float noise and snaps to it; anything further
 // is a genuine fraction, kept at 6dp (T3D's precision).
-pub fn clean(d: Decimal) -> Result<Decimal, String> {
+pub fn clean_decimal(d: Decimal) -> Result<Decimal, String> {
     let nearest = d.round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
     let eps = Decimal::from_str(CLEAN_EPS).unwrap();
     if (d - nearest).abs() <= eps {
@@ -47,15 +24,15 @@ pub fn clean(d: Decimal) -> Result<Decimal, String> {
     quantize6(d)
 }
 
-// clean() is NOT idempotent right at the CLEAN_EPS boundary: quantize6's rounding can move a
-// value's distance from the nearest integer from just above the threshold to at-or-below it, so
-// calling this once vs. twice on the same raw input can give different results. Vertices are
-// cleaned once by their caller before reaching here (see brush::builders::base::clean_polygon),
-// so this call is their SECOND application; Origin/Normal/TextureU/TextureV skip that pre-clean,
-// so this is their only application. Getting the count wrong is a real output difference, not a
-// style choice.
+// clean_decimal() is NOT idempotent right at the CLEAN_EPS boundary: quantize6's rounding can
+// move a value's distance from the nearest integer from just above the threshold to at-or-below
+// it, so calling this once vs. twice on the same raw input can give different results. Vertices
+// are cleaned once by their caller before reaching here (see
+// brush::builders::base::clean_polygon), so this call is their SECOND application;
+// Origin/Normal/TextureU/TextureV skip that pre-clean, so this is their only application. Getting
+// the count wrong is a real output difference, not a style choice.
 pub fn format_vertex(d: Decimal) -> Result<String, String> {
-    let d = clean(d)?;
+    let d = clean_decimal(d)?;
     let sign = if d < Decimal::ZERO { "-" } else { "+" };
     let quantized = quantize6(d.abs())?;
     let integer_part = quantized.trunc();
@@ -69,10 +46,10 @@ pub fn format_vertex(d: Decimal) -> Result<String, String> {
     Ok(format!("{sign}{integer_part_as_i64:05}.{fraction_digits}"))
 }
 
-/// The caller must pass an already-once-cleaned Decimal, so this function's own `clean()` call
-/// is the correct second application -- see `format_vertex`'s doc.
+/// The caller must pass an already-once-cleaned Decimal, so this function's own
+/// `clean_decimal()` call is the correct second application -- see `format_vertex`'s doc.
 pub fn format_location(value: Decimal) -> Result<String, String> {
-    let d = clean(value)?;
+    let d = clean_decimal(value)?;
     Ok(format!("{d:.6}"))
 }
 
