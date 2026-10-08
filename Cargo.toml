@@ -2,3 +2,8 @@
 name = "uedcli"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+# T3D vertices need exact decimal arithmetic, not binary float, to avoid representation drift --
+# rust_decimal's ~28-29 significant digits cover it without hand-rolling Decimal ourselves.
+rust_decimal = "1.36"
