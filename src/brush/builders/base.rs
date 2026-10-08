@@ -1,9 +1,11 @@
 //! Shared across every `brush build <shape>`: the generic polygon builder, and the CSG/solidity
 //! choices every brush actor takes.
 
-use crate::core::emit::{clean, decimal_from_f64};
+use rust_decimal::Decimal;
+
+use crate::core::emit::clean;
 use crate::core::math::vectors;
-use crate::core::model::{FinalizedPolygon, Polygon, Vector3D};
+use crate::core::model::{Polygon, Vector3D};
 
 #[derive(Clone, Copy, clap::ValueEnum)]
 pub enum CsgOperation {
@@ -37,16 +39,15 @@ impl Solidity {
     }
 }
 
-pub fn finalize_polygon(polygon: &Polygon) -> Result<FinalizedPolygon, String> {
+/// Pre-cleans a `Polygon`'s vertices exactly once -- not its Origin/Normal/TextureU/TextureV,
+/// which get their one and only clean() at emit time. See `core::emit::format_vertex`'s doc for
+/// why that distinction matters.
+pub fn clean_polygon(polygon: &Polygon) -> Result<Polygon, String> {
     let mut vertices = Vec::with_capacity(polygon.vertices.len());
     for vertex in &polygon.vertices {
-        vertices.push((
-            clean(decimal_from_f64(vertex.x)?)?,
-            clean(decimal_from_f64(vertex.y)?)?,
-            clean(decimal_from_f64(vertex.z)?)?,
-        ));
+        vertices.push(Vector3D::new(clean(vertex.x)?, clean(vertex.y)?, clean(vertex.z)?));
     }
-    Ok(FinalizedPolygon {
+    Ok(Polygon {
         vertices,
         origin: polygon.origin,
         normal: polygon.normal,
@@ -62,7 +63,7 @@ pub fn build_polygon(ring: Vec<Vector3D>, outward: Vector3D) -> Polygon {
     // cube's 6 hand-authored rings already wind to match their declared `outward`, so this branch
     // never triggers for cube -- untested by this shape. The next shape with only an approximate
     // outward vector (a cylinder/cone side quad) is this code's first real exercise.
-    let ring = if vectors::dot(newell_normal, outward_normalized) < 0.0 {
+    let ring = if vectors::dot(newell_normal, outward_normalized) < Decimal::ZERO {
         let mut reversed = ring;
         reversed.reverse();
         reversed
