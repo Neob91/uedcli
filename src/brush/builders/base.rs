@@ -3,7 +3,7 @@
 
 use rust_decimal::Decimal;
 
-use crate::core::emit::clean;
+use crate::core::emit::clean_decimal;
 use crate::core::math::vectors;
 use crate::core::model::{Polygon, Vector3D};
 
@@ -40,12 +40,16 @@ impl Solidity {
 }
 
 /// Pre-cleans a `Polygon`'s vertices exactly once -- not its Origin/Normal/TextureU/TextureV,
-/// which get their one and only clean() at emit time. See `core::emit::format_vertex`'s doc for
-/// why that distinction matters.
+/// which get their one and only clean_decimal() at emit time. See `core::emit::format_vertex`'s
+/// doc for why that distinction matters.
 pub fn clean_polygon(polygon: &Polygon) -> Result<Polygon, String> {
     let mut vertices = Vec::with_capacity(polygon.vertices.len());
     for vertex in &polygon.vertices {
-        vertices.push(Vector3D::new(clean(vertex.x)?, clean(vertex.y)?, clean(vertex.z)?));
+        vertices.push(Vector3D::new(
+            clean_decimal(vertex.x)?,
+            clean_decimal(vertex.y)?,
+            clean_decimal(vertex.z)?,
+        ));
     }
     Ok(Polygon {
         vertices,
