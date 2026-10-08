@@ -1,23 +1,5 @@
-//! `brush build cube` -- the first ported verb (dev/epics/refactor.md's "first vertical slice").
-//! Mirrors old/uedcli/cli/commands/brush/build.py + old/uedcli/builders.py::cube for this ONE
-//! shape, at reduced scope (owner-approved, 2026-10-07):
-//!
-//! Handled: --width --breadth --height --at --base-name --csg --solidity.
-//!
-//! NOT handled -- any of these present falls back to the old/bin/uedcli proxy, unchanged:
-//!   TODO(port): --prop        schema-validated property editing (propedit.rs doesn't exist yet)
-//!   TODO(port): --texture     per-face texture ref + existence validation against the asset catalog
-//!   TODO(port): --mover-class Mover variant (no CsgOper, base pose only)
-//!   TODO(port): --rotate      absolute Rotation set + off-grid warning
-//!   TODO(port): --folder/--label   `// uedcli-folder:`/`// uedcli-labels:` org carriers
-//! TODO(port): old/'s run() ALSO unconditionally calls ingest.validate_ingest_actors, which
-//! resolves the project's class index and validates Engine.Brush exists there -- skipped
-//! entirely here. Engine.Brush always exists on every real substrate, so this only diverges from
-//! old/ on a malformed/missing project, which old/ would reject and this does not.
-//! Known formatting gap: error messages for a pathologically large/small dimension (>1e16 or
-//! <1e-4ish) may not byte-match old/'s Python repr (which switches to scientific notation at
-//! different thresholds than Rust's float Display) -- never hit by `quantize6`-accepted geometry,
-//! only possibly by the positive-dimension guard's own error text.
+//! `brush build cube` geometry: builds a cube brush actor as T3D text. No CLI knowledge -- see
+//! `cli::cube` for argument parsing and scope (which flags are handled natively vs. proxied).
 
 use rust_decimal::Decimal;
 
@@ -68,7 +50,7 @@ fn check_positive(flag: &str, value: f64) -> Result<(), String> {
     Ok(())
 }
 
-fn build_cube(
+pub fn build_cube(
     width: f64,
     breadth: f64,
     height: f64,
@@ -94,80 +76,4 @@ fn build_cube(
 
     let model_name = format!("Model_{base_name}");
     emit_actor_t3d(&base_name, &model_name, csg.as_t3d(), solidity.poly_flags(), location, &polygons)
-}
-
-/// `None`: not our case (unrecognized flag, missing/invalid value, an excluded flag, --project,
-/// -h/--help) -- the caller must proxy to old/bin/uedcli, unchanged. `Some(Ok(t3d))`: emit to
-/// stdout, exit 0. `Some(Err(message))`: emit to stderr, exit 2 -- a real, in-scope failure
-/// (the positive-dimension guard), not a parse ambiguity.
-pub fn try_build_cube(args: &[String]) -> Option<Result<String, String>> {
-    if args.len() < 3 || args[0] != "brush" || args[1] != "build" || args[2] != "cube" {
-        return None;
-    }
-    let rest = &args[3..];
-
-    const EXCLUDED: &[&str] =
-        &["--prop", "--texture", "--mover-class", "--rotate", "--folder", "--label"];
-
-    let mut width = None;
-    let mut breadth = None;
-    let mut height = None;
-    let mut at = None;
-    let mut base_name = None;
-    let mut csg = None;
-    let mut solidity = None;
-
-    let mut i = 0;
-    while i < rest.len() {
-        let token = rest[i].as_str();
-        if token == "--project" || token == "-h" || token == "--help" || EXCLUDED.contains(&token) {
-            return None;
-        }
-        i += 1;
-        let value = rest.get(i)?.as_str(); // every supported flag takes a value; missing one -> proxy
-        // argparse refuses to consume a token that LOOKS LIKE an option as a flag's VALUE
-        // (`--base-name --prop` is "expected one argument", not base_name="--prop") -- mirror
-        // that here, not just rely on each flag's own value validation, since e.g. --base-name
-        // accepts any string and would otherwise silently accept one of the EXCLUDED flags'
-        // spellings as a literal base name instead of proxying to get argparse's real error. See
-        // base::looks_like_option's doc for the exact rule (old/'s custom coordinate-token
-        // exception) and why the remaining mismatch with real argparse is always safe.
-        if base::looks_like_option(value) {
-            return None;
-        }
-        match token {
-            "--width" => width = Some(value.parse::<f64>().ok()?),
-            "--breadth" => breadth = Some(value.parse::<f64>().ok()?),
-            "--height" => height = Some(value.parse::<f64>().ok()?),
-            "--at" => at = Some(base::parse_at(value)?),
-            "--base-name" => base_name = Some(value.to_string()),
-            "--csg" => {
-                csg = Some(match value {
-                    "add" => CsgOperation::Add,
-                    "subtract" => CsgOperation::Subtract,
-                    _ => return None,
-                });
-            }
-            "--solidity" => {
-                solidity = Some(match value {
-                    "solid" => Solidity::Solid,
-                    "semisolid" => Solidity::Semisolid,
-                    "nonsolid" => Solidity::Nonsolid,
-                    _ => return None,
-                });
-            }
-            _ => return None, // unrecognized flag -- proxy, don't guess
-        }
-        i += 1;
-    }
-
-    Some(build_cube(
-        width?,
-        breadth?,
-        height?,
-        at.unwrap_or((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO)),
-        base_name.unwrap_or_else(|| "Cube".to_string()),
-        csg.unwrap_or(CsgOperation::Add),
-        solidity.unwrap_or(Solidity::Solid),
-    ))
 }

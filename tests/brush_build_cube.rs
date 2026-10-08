@@ -1,10 +1,10 @@
-//! Differential tests for the ported `brush build cube` verb (src/brush/builders/cube.rs)
-//! against old/bin/uedcli -- the verification method dev/epics/refactor.md's "Testing strategy"
-//! prescribes.
+//! Differential tests for the ported `brush build cube` verb (src/cli/cube.rs's argument
+//! parsing, src/brush/builders/cube.rs's geometry) against old/bin/uedcli -- the verification
+//! method dev/epics/refactor.md's "Testing strategy" prescribes.
 //!
 //! Two groups:
 //! - Proxy-fallback cases need no real project/substrate: both sides defer to the identical
-//!   old/bin/uedcli invocation (cube.rs's try_build_cube returns None), so they're trivially
+//!   old/bin/uedcli invocation (cli::cube::try_build_cube returns None), so they're trivially
 //!   byte-identical by construction and always run.
 //! - Native-geometry cases need old/bin/uedcli's own run to succeed, which (unconditionally, even
 //!   for a plain cube with no --texture/--prop) resolves the project's class index to validate
