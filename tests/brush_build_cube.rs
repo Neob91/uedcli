@@ -269,8 +269,9 @@ substrate_test!(cube_solidity_nonsolid, &["brush", "build", "cube", "--width", "
 substrate_test!(cube_fractional_dims, &["brush", "build", "cube", "--width", "7.5", "--breadth", "3.25", "--height", "11.125"]);
 substrate_test!(cube_binary_noise_dims, &["brush", "build", "cube", "--width", "0.1", "--breadth", "0.2", "--height", "0.3"]);
 substrate_test!(cube_near_integer_epsilon_snap, &["brush", "build", "cube", "--width", "9.9996", "--breadth", "10.0004", "--height", "10"]);
-// Regression: old/'s make_brush_actor pre-cleans vertices/location once, then fmt_vertex/fmt_loc
-// clean() them AGAIN at emit time -- not idempotent right at the CLEAN_EPS=0.001 boundary, since
+// Regression: old/'s make_brush_actor pre-cleans vertices/location once, then
+// format_vertex/format_location clean() them AGAIN at emit time -- not idempotent right at the
+// CLEAN_EPS=0.001 boundary, since
 // quantize6's 6-dp rounding can move a value's distance-from-integer from just above 0.001 to
 // at-or-below it. 5.0010003 is >0.001 from 5 (no snap on a single clean), but quantize6 rounds it
 // to 5.001000 first, and a SECOND clean() then sees 0.001000 <= 0.001 and snaps to 5 exactly.

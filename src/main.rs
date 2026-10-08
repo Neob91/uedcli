@@ -29,19 +29,19 @@ fn main() {
     // invoked from any directory, not just the repo root. current_exe() on Linux reads
     // /proc/self/exe (always canonical, symlinks resolved); the binary lives at
     // <repo>/target/<profile>/uedcli, so the repo root is two parents up.
-    let exe = match env::current_exe() {
-        Ok(exe) => exe,
+    let executable_path = match env::current_exe() {
+        Ok(path) => path,
         Err(err) => {
             eprintln!("uedcli: could not resolve own executable path: {err}");
             std::process::exit(1);
         }
     };
-    let repo_root = match exe.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
+    let repo_root = match executable_path.parent().and_then(|p| p.parent()).and_then(|p| p.parent()) {
         Some(root) => root,
         None => {
             eprintln!(
                 "uedcli: could not resolve repo root from executable path {}",
-                exe.display()
+                executable_path.display()
             );
             std::process::exit(1);
         }

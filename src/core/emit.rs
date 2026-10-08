@@ -9,7 +9,7 @@ const CLEAN_EPS: &str = "0.001";
 
 /// Mirrors Python's `str(float)` for an f-string substitution, which is what emit.py's error
 /// messages embed verbatim.
-pub fn py_float_repr(v: f64) -> String {
+pub fn format_float_like_python(v: f64) -> String {
     if v.is_nan() {
         return "nan".to_string();
     }
@@ -35,16 +35,16 @@ pub fn py_float_repr(v: f64) -> String {
 /// reachable at magnitudes far beyond the real engine's +-32768 world.
 pub fn decimal_from_f64(value: f64) -> Result<Decimal, String> {
     if !value.is_finite() {
-        return Err(format!("coordinate is not a finite number: {}", py_float_repr(value)));
+        return Err(format!("coordinate is not a finite number: {}", format_float_like_python(value)));
     }
-    Decimal::from_str(&py_float_repr(value))
+    Decimal::from_str(&format_float_like_python(value))
         .map_err(|_| format!("coordinate is not a finite number: {value}"))
 }
 
 /// Mirrors emit.py's `quantize6`.
 ///
 /// TODO(port): doesn't replicate Python's InvalidOperation/28-significant-digit overflow check
-/// exactly, and `fmt_vertex`'s `to_i64()` below narrows the accepted range further still (i64
+/// exactly, and `format_vertex`'s `to_i64()` below narrows the accepted range further still (i64
 /// tops out around 9.2e18, well short of the ~1e22 wall quantize6's own digit limit allows) --
 /// so a value far beyond the real engine's +-32768 world that old/ would still (uselessly) emit,
 /// this rejects instead. Not expected to diverge for any realistic cube dimension.
@@ -70,31 +70,34 @@ pub fn clean(d: Decimal) -> Result<Decimal, String> {
 /// nearest integer from just above CLEAN_EPS to at-or-below it, so a SECOND clean() pass can snap
 /// a value the first pass left fractional. Callers that already pre-cleaned their input once
 /// (vertices, Location) get clean() applied TWICE overall by calling this; callers that never
-/// pre-clean (a face's Origin/Normal/TextureU/TextureV) get it ONCE via `fmt_vertex_f64`. Getting
-/// this distinction wrong is a real, byte-level divergence from old/ -- not just a style choice.
-pub fn fmt_vertex(d: Decimal) -> Result<String, String> {
+/// pre-clean (a face's Origin/Normal/TextureU/TextureV) get it ONCE via `format_vertex_from_f64`.
+/// Getting this distinction wrong is a real, byte-level divergence from old/ -- not just a style
+/// choice.
+pub fn format_vertex(d: Decimal) -> Result<String, String> {
     let d = clean(d)?;
     let sign = if d < Decimal::ZERO { "-" } else { "+" };
-    let q = quantize6(d.abs())?;
-    let int_part = q.trunc();
-    let frac = q - int_part;
-    let int_part_i: i64 =
-        int_part.to_i64().ok_or_else(|| format!("coordinate {d} is out of emittable range"))?;
-    let frac_str = frac.to_string(); // "0.XXXXXX" -- quantize6 fixed the scale to 6
-    let frac_digits = frac_str.split('.').nth(1).unwrap_or("");
-    let frac_digits = format!("{frac_digits:0<6}");
-    Ok(format!("{sign}{int_part_i:05}.{frac_digits}"))
+    let quantized = quantize6(d.abs())?;
+    let integer_part = quantized.trunc();
+    let fraction = quantized - integer_part;
+    let integer_part_as_i64: i64 = integer_part
+        .to_i64()
+        .ok_or_else(|| format!("coordinate {d} is out of emittable range"))?;
+    let fraction_text = fraction.to_string(); // "0.XXXXXX" -- quantize6 fixed the scale to 6
+    let fraction_digits = fraction_text.split('.').nth(1).unwrap_or("");
+    let fraction_digits = format!("{fraction_digits:0<6}");
+    Ok(format!("{sign}{integer_part_as_i64:05}.{fraction_digits}"))
 }
 
-/// A raw (never pre-cleaned) geometry float's ONE `clean()` application -- see `fmt_vertex`'s doc.
-pub fn fmt_vertex_f64(value: f64) -> Result<String, String> {
-    fmt_vertex(decimal_from_f64(value)?)
+/// A raw (never pre-cleaned) geometry float's ONE `clean()` application -- see
+/// `format_vertex`'s doc.
+pub fn format_vertex_from_f64(value: f64) -> Result<String, String> {
+    format_vertex(decimal_from_f64(value)?)
 }
 
 /// Mirrors emit.py's `fmt_loc`. The caller must pass an already-once-cleaned Decimal (mirroring
 /// old/'s own pre-clean pass over a Location) so this function's own `clean()` call is the
-/// correct SECOND application -- see `fmt_vertex`'s doc.
-pub fn fmt_loc(value: Decimal) -> Result<String, String> {
+/// correct SECOND application -- see `format_vertex`'s doc.
+pub fn format_location(value: Decimal) -> Result<String, String> {
     let mut d = clean(value)?;
     if d.is_zero() {
         d = Decimal::ZERO;

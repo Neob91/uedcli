@@ -22,28 +22,47 @@
 use rust_decimal::Decimal;
 
 use super::base::{self, FinalizedPolygon, Polygon};
-use crate::core::emit::{clean, py_float_repr};
+use crate::core::emit::{clean, format_float_like_python};
 use crate::core::types::Vec3;
 
-fn cube_faces(width: f64, breadth: f64, height: f64) -> Vec<Polygon> {
-    let (hx, hy, hz) = (width / 2.0, breadth / 2.0, height / 2.0);
-    let c = |sx: f64, sy: f64, sz: f64| Vec3::new(sx * hx, sy * hy, sz * hz);
+fn build_cube_faces(width: f64, breadth: f64, height: f64) -> Vec<Polygon> {
+    let (half_width, half_breadth, half_height) = (width / 2.0, breadth / 2.0, height / 2.0);
+    let corner =
+        |sx: f64, sy: f64, sz: f64| Vec3::new(sx * half_width, sy * half_breadth, sz * half_height);
     let faces: [([Vec3; 4], Vec3); 6] = [
-        ([c(1., -1., -1.), c(1., 1., -1.), c(1., 1., 1.), c(1., -1., 1.)], Vec3::new(1., 0., 0.)),
-        ([c(-1., 1., -1.), c(-1., -1., -1.), c(-1., -1., 1.), c(-1., 1., 1.)], Vec3::new(-1., 0., 0.)),
-        ([c(1., 1., -1.), c(-1., 1., -1.), c(-1., 1., 1.), c(1., 1., 1.)], Vec3::new(0., 1., 0.)),
-        ([c(-1., -1., -1.), c(1., -1., -1.), c(1., -1., 1.), c(-1., -1., 1.)], Vec3::new(0., -1., 0.)),
-        ([c(-1., -1., 1.), c(1., -1., 1.), c(1., 1., 1.), c(-1., 1., 1.)], Vec3::new(0., 0., 1.)),
-        ([c(-1., 1., -1.), c(1., 1., -1.), c(1., -1., -1.), c(-1., -1., -1.)], Vec3::new(0., 0., -1.)),
+        (
+            [corner(1., -1., -1.), corner(1., 1., -1.), corner(1., 1., 1.), corner(1., -1., 1.)],
+            Vec3::new(1., 0., 0.),
+        ),
+        (
+            [corner(-1., 1., -1.), corner(-1., -1., -1.), corner(-1., -1., 1.), corner(-1., 1., 1.)],
+            Vec3::new(-1., 0., 0.),
+        ),
+        (
+            [corner(1., 1., -1.), corner(-1., 1., -1.), corner(-1., 1., 1.), corner(1., 1., 1.)],
+            Vec3::new(0., 1., 0.),
+        ),
+        (
+            [corner(-1., -1., -1.), corner(1., -1., -1.), corner(1., -1., 1.), corner(-1., -1., 1.)],
+            Vec3::new(0., -1., 0.),
+        ),
+        (
+            [corner(-1., -1., 1.), corner(1., -1., 1.), corner(1., 1., 1.), corner(-1., 1., 1.)],
+            Vec3::new(0., 0., 1.),
+        ),
+        (
+            [corner(-1., 1., -1.), corner(1., 1., -1.), corner(1., -1., -1.), corner(-1., -1., -1.)],
+            Vec3::new(0., 0., -1.),
+        ),
     ];
-    faces.into_iter().map(|(ring, outward)| base::face(ring.to_vec(), outward)).collect()
+    faces.into_iter().map(|(ring, outward)| base::build_polygon(ring.to_vec(), outward)).collect()
 }
 
 fn check_positive(flag: &str, value: f64) -> Result<(), String> {
     if !(value.is_finite() && value > 0.0) {
         return Err(format!(
             "brush build cube: {flag} must be greater than 0, got {}",
-            py_float_repr(value)
+            format_float_like_python(value)
         ));
     }
     Ok(())
@@ -63,15 +82,16 @@ fn build_cube(
     check_positive("--breadth", breadth)?;
     check_positive("--height", height)?;
 
-    // Pre-clean once, mirroring make_brush_actor's own finalize pass (see core::emit::fmt_vertex's
-    // doc) -- emit_actor_t3d/fmt_loc/fmt_vertex apply their own clean() on top, giving the correct
-    // TWO total applications for vertices and Location.
-    let polygons: Vec<FinalizedPolygon> = cube_faces(width, breadth, height)
+    // Pre-clean once, mirroring make_brush_actor's own finalize pass (see
+    // core::emit::format_vertex's doc) -- emit_actor_t3d/format_location/format_vertex apply
+    // their own clean() on top, giving the correct TWO total applications for vertices and
+    // Location.
+    let polygons: Vec<FinalizedPolygon> = build_cube_faces(width, breadth, height)
         .iter()
         .map(base::finalize_polygon)
         .collect::<Result<_, _>>()?;
-    let (ax, ay, az) = at.unwrap_or((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO));
-    let location = (clean(ax)?, clean(ay)?, clean(az)?);
+    let (at_x, at_y, at_z) = at.unwrap_or((Decimal::ZERO, Decimal::ZERO, Decimal::ZERO));
+    let location = (clean(at_x)?, clean(at_y)?, clean(at_z)?);
 
     let name = base_name.unwrap_or_else(|| "Cube".to_string());
     let model_name = format!("Model_{name}");
@@ -113,12 +133,12 @@ pub fn try_build_cube(args: &[String]) -> Option<Result<String, String>> {
 
     let mut i = 0;
     while i < rest.len() {
-        let tok = rest[i].as_str();
-        if tok == "--project" || tok == "-h" || tok == "--help" || EXCLUDED.contains(&tok) {
+        let token = rest[i].as_str();
+        if token == "--project" || token == "-h" || token == "--help" || EXCLUDED.contains(&token) {
             return None;
         }
         i += 1;
-        let val = rest.get(i)?.as_str(); // every supported flag takes a value; missing one -> proxy
+        let value = rest.get(i)?.as_str(); // every supported flag takes a value; missing one -> proxy
         // argparse refuses to consume a token that LOOKS LIKE an option as a flag's VALUE
         // (`--base-name --prop` is "expected one argument", not base_name="--prop") -- mirror
         // that here, not just rely on each flag's own value validation, since e.g. --base-name
@@ -126,26 +146,26 @@ pub fn try_build_cube(args: &[String]) -> Option<Result<String, String>> {
         // spellings as a literal base name instead of proxying to get argparse's real error. See
         // base::looks_like_option's doc for the exact rule (old/'s custom coordinate-token
         // exception) and why the remaining mismatch with real argparse is always safe.
-        if base::looks_like_option(val) {
+        if base::looks_like_option(value) {
             return None;
         }
-        match tok {
-            "--width" => width = Some(val.parse::<f64>().ok()?),
-            "--breadth" => breadth = Some(val.parse::<f64>().ok()?),
-            "--height" => height = Some(val.parse::<f64>().ok()?),
-            "--at" => at = Some(base::parse_at(val)?),
-            "--base-name" => base_name = Some(val.to_string()),
+        match token {
+            "--width" => width = Some(value.parse::<f64>().ok()?),
+            "--breadth" => breadth = Some(value.parse::<f64>().ok()?),
+            "--height" => height = Some(value.parse::<f64>().ok()?),
+            "--at" => at = Some(base::parse_at(value)?),
+            "--base-name" => base_name = Some(value.to_string()),
             "--csg" => {
-                if val != "add" && val != "subtract" {
+                if value != "add" && value != "subtract" {
                     return None;
                 }
-                csg = Some(val.to_string());
+                csg = Some(value.to_string());
             }
             "--solidity" => {
-                if val != "solid" && val != "semisolid" && val != "nonsolid" {
+                if value != "solid" && value != "semisolid" && value != "nonsolid" {
                     return None;
                 }
-                solidity = Some(val.to_string());
+                solidity = Some(value.to_string());
             }
             _ => return None, // unrecognized flag -- proxy, don't guess
         }

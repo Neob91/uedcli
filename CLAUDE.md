@@ -63,8 +63,10 @@ Always ask where to implement a change: a feature branch on a git worktree, the 
   offending value. Cover each path with a regression test.
 - Every command, flag, and argument needs a real help string that says what it does, so `--help` is
   self-explanatory rather than a restatement of the flag's own name.
-- No abbreviations in names — spell words out (`texture_basis`, not `tex_basis`; `length`, not
-  `vlen`). A short loop counter (`i`, `n`) or a generic type parameter (`T`) is fine.
+- No abbreviations in names — spell words out (`texture`, not `tex`; `length`, not `vlen`;
+  `format`, not `fmt`). A short loop counter (`i`, `n`) or a generic type parameter (`T`) is fine.
+- Function names are verbs — what it does, not just the noun it returns (`build_polygon`, not
+  `face`; `compute_centroid`, not `centroid`).
 - Verbs compose — the core CLI philosophy. Small, single-purpose verbs that pipe together, not big
   verbs grown a bespoke flag at a time:
   - Producer/query verbs print their result to stdout, one item per line; human summaries and counts
