@@ -4,7 +4,7 @@
 use rust_decimal::Decimal;
 
 use super::base::{self, CsgOperation, Solidity};
-use crate::core::emit::{clean, decimal_from_f64, emit_actor_t3d, format_float_like_python};
+use crate::core::emit::{clean, decimal_from_f64, emit_brush_t3d, format_float_for_error};
 use crate::core::model::{Polygon, Vector3D};
 
 fn build_cube_faces(width: Decimal, breadth: Decimal, height: Decimal) -> Vec<Polygon> {
@@ -79,7 +79,7 @@ fn check_positive(flag: &str, value: f64) -> Result<(), String> {
     if !(value.is_finite() && value > 0.0) {
         return Err(format!(
             "brush build cube: {flag} must be greater than 0, got {}",
-            format_float_like_python(value)
+            format_float_for_error(value)
         ));
     }
     Ok(())
@@ -105,14 +105,14 @@ pub fn build_cube(
     let breadth = decimal_from_f64(breadth)?;
     let height = decimal_from_f64(height)?;
 
-    // Pre-clean vertices once (see core::emit::format_vertex's doc); emit_actor_t3d applies its
+    // Pre-clean vertices once (see core::emit::format_vertex's doc); emit_brush_t3d applies its
     // own clean() on top, giving the correct TWO total applications for vertices and Location.
     let polygons: Vec<Polygon> = build_cube_faces(width, breadth, height)
         .iter()
         .map(base::clean_polygon)
         .collect::<Result<_, _>>()?;
-    let location = (clean(at.0)?, clean(at.1)?, clean(at.2)?);
+    let location = Vector3D::new(clean(at.0)?, clean(at.1)?, clean(at.2)?);
 
     let model_name = format!("Model_{base_name}");
-    emit_actor_t3d(&base_name, &model_name, csg.as_t3d(), solidity.poly_flags(), location, &polygons)
+    emit_brush_t3d(&base_name, &model_name, csg.as_t3d(), solidity.poly_flags(), location, &polygons)
 }

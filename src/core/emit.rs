@@ -9,8 +9,7 @@ use super::model::{Polygon, Vector3D};
 
 const CLEAN_EPS: &str = "0.001";
 
-/// Formats a float for an error message: lowercase `nan`/`inf`, always a decimal point.
-pub fn format_float_like_python(v: f64) -> String {
+pub fn format_float_for_error(v: f64) -> String {
     if v.is_nan() {
         return "nan".to_string();
     }
@@ -25,13 +24,11 @@ pub fn format_float_like_python(v: f64) -> String {
     }
 }
 
-// str(value) first, so a float's binary tail never enters Decimal directly -- 0.1 as an f64
-// isn't exactly 0.1, and Decimal::from(0.1_f64) would carry that noise forever.
 pub fn decimal_from_f64(value: f64) -> Result<Decimal, String> {
     if !value.is_finite() {
-        return Err(format!("coordinate is not a finite number: {}", format_float_like_python(value)));
+        return Err(format!("coordinate is not a finite number: {}", format_float_for_error(value)));
     }
-    Decimal::from_str(&format_float_like_python(value))
+    Decimal::from_str(&format_float_for_error(value))
         .map_err(|_| format!("coordinate is not a finite number: {value}"))
 }
 
@@ -75,10 +72,7 @@ pub fn format_vertex(d: Decimal) -> Result<String, String> {
 /// The caller must pass an already-once-cleaned Decimal, so this function's own `clean()` call
 /// is the correct second application -- see `format_vertex`'s doc.
 pub fn format_location(value: Decimal) -> Result<String, String> {
-    let mut d = clean(value)?;
-    if d.is_zero() {
-        d = Decimal::ZERO;
-    }
+    let d = clean(value)?;
     Ok(format!("{d:.6}"))
 }
 
@@ -115,13 +109,17 @@ pub fn emit_brush(model_name: &str, polygons: &[Polygon]) -> Result<String, Stri
     Ok(out.join("\n"))
 }
 
+// TODO: CsgOper/PolyFlags/Location/MainScale/PostScale are hardcoded here instead of going
+// through a generic per-Actor property mechanism -- revisit once uedcli has one (see
+// dev/epics/refactor.md for where the architecture is headed).
+//
 // location must already be cleaned once by the caller -- see format_vertex's doc.
-pub fn emit_actor_t3d(
+pub fn emit_brush_t3d(
     name: &str,
     model_name: &str,
     csg_op: &str,
     poly_flags: u32,
-    location: (Decimal, Decimal, Decimal),
+    location: Vector3D,
     polygons: &[Polygon],
 ) -> Result<String, String> {
     let mut out = vec![format!("Begin Actor Class=Engine.Brush Name={name}")];
@@ -131,9 +129,9 @@ pub fn emit_actor_t3d(
     }
     out.push(format!(
         "    Location=(X={},Y={},Z={})",
-        format_location(location.0)?,
-        format_location(location.1)?,
-        format_location(location.2)?
+        format_location(location.x)?,
+        format_location(location.y)?,
+        format_location(location.z)?
     ));
     // Identity scale + the editor's own default shear axis.
     out.push("    MainScale=(SheerAxis=SHEER_ZX)".to_string());
