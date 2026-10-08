@@ -2,8 +2,7 @@
 
 use rust_decimal::Decimal;
 
-/// A 3D vector or point, matching UnrealEngine's X,Y,Z convention. Decimal, not float: every
-/// vector in this model is already exact, never binary-float noise waiting to be cleaned up.
+/// A 3D vector or point, matching UnrealEngine's X,Y,Z convention.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vector3D {
     pub x: Decimal,
