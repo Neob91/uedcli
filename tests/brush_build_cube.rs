@@ -1,10 +1,11 @@
-//! Differential tests for the ported `brush build cube` verb (src/brush_build.rs) against
-//! old/bin/uedcli -- the verification method dev/epics/refactor.md's "Testing strategy" prescribes.
+//! Differential tests for the ported `brush build cube` verb (src/brush/builders/cube.rs)
+//! against old/bin/uedcli -- the verification method dev/epics/refactor.md's "Testing strategy"
+//! prescribes.
 //!
 //! Two groups:
 //! - Proxy-fallback cases need no real project/substrate: both sides defer to the identical
-//!   old/bin/uedcli invocation (src/brush_build.rs's try_build_cube returns None), so they're
-//!   trivially byte-identical by construction and always run.
+//!   old/bin/uedcli invocation (cube.rs's try_build_cube returns None), so they're trivially
+//!   byte-identical by construction and always run.
 //! - Native-geometry cases need old/bin/uedcli's own run to succeed, which (unconditionally, even
 //!   for a plain cube with no --texture/--prop) resolves the project's class index to validate
 //!   Engine.Brush exists -- requiring a real game substrate. That substrate is gitignored/
