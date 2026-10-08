@@ -1,8 +1,8 @@
 //! T3D text emission: Decimal-exact number formatting, plus assembling a Polygon/Brush/Actor
 //! block. Shared across uedcli's Rust verbs, not brush-specific.
 
-use rust_decimal::prelude::*;
-use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::{Decimal, RoundingStrategy};
 use std::str::FromStr;
 
 use super::model::{FinalizedPolygon, Vector3D};
