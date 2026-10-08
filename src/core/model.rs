@@ -2,22 +2,22 @@
 
 use rust_decimal::Decimal;
 
-/// A 3D vector or point, matching UnrealEngine's X,Y,Z convention.
+/// A 3D vector or point, matching UnrealEngine's X,Y,Z convention. Decimal, not float: every
+/// vector in this model is already exact, never binary-float noise waiting to be cleaned up.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Vector3D {
-    pub x: f64,
-    pub y: f64,
-    pub z: f64,
+    pub x: Decimal,
+    pub y: Decimal,
+    pub z: Decimal,
 }
 
 impl Vector3D {
-    pub fn new(x: f64, y: f64, z: f64) -> Self {
+    pub fn new(x: Decimal, y: Decimal, z: Decimal) -> Self {
         Vector3D { x, y, z }
     }
 }
 
-/// One face of a brush, in raw geometry floats -- the ring may carry sub-grid float noise;
-/// nothing here is Decimal-exact yet.
+/// One face of a brush.
 pub struct Polygon {
     pub vertices: Vec<Vector3D>,
     pub origin: Vector3D,
@@ -26,16 +26,5 @@ pub struct Polygon {
     /// In-plane texture-U basis vector (not a texture reference -- no per-face texture yet).
     pub texture_u: Vector3D,
     /// In-plane texture-V basis vector, perpendicular to `texture_u` within the face's plane.
-    pub texture_v: Vector3D,
-}
-
-/// A `Polygon` with its vertices pre-cleaned to Decimal exactly once. See
-/// `core::emit::format_vertex`'s doc for why the exact number of `clean()` applications (once
-/// here, again at emit time) matters.
-pub struct FinalizedPolygon {
-    pub vertices: Vec<(Decimal, Decimal, Decimal)>,
-    pub origin: Vector3D,
-    pub normal: Vector3D,
-    pub texture_u: Vector3D,
     pub texture_v: Vector3D,
 }
