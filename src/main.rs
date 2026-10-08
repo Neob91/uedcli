@@ -1,4 +1,5 @@
 mod brush;
+mod cli;
 mod core;
 
 use std::env;
@@ -7,12 +8,11 @@ use std::os::unix::process::CommandExt;
 use std::process::Command;
 
 fn main() {
-    // Only a fully in-scope, successfully-parsed `brush build cube` is handled natively; any
-    // ambiguity at all (an unrecognized/excluded flag, --project, -h/--help, a missing or
-    // malformed value) returns None and falls through to the unconditional proxy below,
-    // unchanged -- see brush::builders::cube's module doc for exactly what's in scope and why.
+    // Only a fully in-scope, successfully-parsed `brush build cube` is handled natively; anything
+    // else returns None and falls through to the unconditional proxy below, unchanged -- see
+    // cli::cube's module doc for exactly what's in scope.
     let args: Vec<String> = env::args().skip(1).collect();
-    if let Some(result) = brush::builders::cube::try_build_cube(&args) {
+    if let Some(result) = cli::cube::try_build_cube(&args) {
         match result {
             Ok(t3d) => {
                 print!("{t3d}");

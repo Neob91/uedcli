@@ -4,7 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# Fixed-point decimal matching old/'s Python `decimal.Decimal` finalization (emit.py's `clean`/
-# `quantize6`): both carry ~28-29 significant digits, which is what makes byte-identical T3D
-# emission possible without hand-rolling Decimal arithmetic.
+# T3D vertices need exact decimal arithmetic, not binary float, to avoid representation drift --
+# rust_decimal's ~28-29 significant digits cover it without hand-rolling Decimal ourselves.
 rust_decimal = "1.36"
+# CLI argument parsing.
+clap = { version = "4", features = ["derive"] }
