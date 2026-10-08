@@ -9,7 +9,7 @@ use std::str::FromStr;
 use crate::core::emit::{
     clean, decimal_from_f64, format_location, format_vertex, format_vertex_from_f64,
 };
-use crate::core::math::{compute_centroid, compute_newell_normal, compute_texture_basis, dot, normalize_vector};
+use crate::core::math::vectors;
 use crate::core::types::Vec3;
 
 /// One face of a brush, in raw geometry floats -- the ring may carry sub-grid float noise;
@@ -66,22 +66,22 @@ pub fn build_polygon(ring: Vec<Vec3>, outward: Vec3) -> Polygon {
     // a degenerate (zero-area) face -- never reachable for cube's 4 fixed, well-separated
     // corners (guaranteed distinct whenever width/breadth/height > 0, already enforced by the
     // positive-dimension guard before this runs), so not replicated.
-    let newell_normal = compute_newell_normal(&ring);
-    let outward_normalized = normalize_vector(outward);
+    let newell_normal = vectors::compute_newell_normal(&ring);
+    let outward_normalized = vectors::normalize_vector(outward);
     // NOTE: cube's 6 hand-authored rings are already wound to match their declared `outward`, so
     // this branch never actually triggers for cube -- unverified by this shape's tests. The next
     // shape whose outward vector is only approximate (cylinder/cone's side quads) is this
     // translation's first real exercise; re-check against _face's Python original then.
-    let ring = if dot(newell_normal, outward_normalized) < 0.0 {
+    let ring = if vectors::dot(newell_normal, outward_normalized) < 0.0 {
         let mut reversed = ring;
         reversed.reverse();
         reversed
     } else {
         ring
     };
-    let (texture_u, texture_v) = compute_texture_basis(outward_normalized);
+    let (texture_u, texture_v) = vectors::compute_texture_basis(outward_normalized);
     Polygon {
-        origin: compute_centroid(&ring),
+        origin: vectors::compute_centroid(&ring),
         normal: outward_normalized,
         texture_u,
         texture_v,

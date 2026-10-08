@@ -1,7 +1,9 @@
 //! Pure vector math shared across every geometry-producing verb -- mirrors the module-level
-//! helpers in old/uedcli/builders.py.
+//! helpers in old/uedcli/builders.py. Named `vectors` (not just left at `math`'s own top level)
+//! so a generic-sounding name like `subtract`/`multiply` is unambiguous at every call site
+//! (`vectors::subtract(...)`) and can't collide with a future non-vector `math::subtract`.
 
-use super::types::Vec3;
+use crate::core::types::Vec3;
 
 pub fn dot(a: Vec3, b: Vec3) -> f64 {
     a.x * b.x + a.y * b.y + a.z * b.z
