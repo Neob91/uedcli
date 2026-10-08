@@ -4,7 +4,7 @@
 use rust_decimal::Decimal;
 
 use super::base::{self, CsgOperation, Solidity};
-use crate::core::emit::{clean, decimal_from_f64, emit_brush_t3d, format_float_for_error};
+use crate::core::emit::{clean_decimal, emit_brush_t3d};
 use crate::core::model::{Polygon, Vector3D};
 
 fn build_cube_faces(width: Decimal, breadth: Decimal, height: Decimal) -> Vec<Polygon> {
@@ -75,21 +75,22 @@ fn build_cube_faces(width: Decimal, breadth: Decimal, height: Decimal) -> Vec<Po
     faces.into_iter().map(|(ring, outward)| base::build_polygon(ring.to_vec(), outward)).collect()
 }
 
-fn check_positive(flag: &str, value: f64) -> Result<(), String> {
-    if !(value.is_finite() && value > 0.0) {
-        return Err(format!(
-            "brush build cube: {flag} must be greater than 0, got {}",
-            format_float_for_error(value)
-        ));
+// Decimal has no NaN/Infinity -- a value that failed to parse as one never reaches here (the
+// CLI layer's parse failure proxies instead), so only the sign needs checking.
+fn check_positive(param: &str, value: Decimal) -> Result<(), String> {
+    if value <= Decimal::ZERO {
+        let text = value.to_string();
+        let text = if text.contains('.') { text } else { format!("{text}.0") };
+        return Err(format!("brush build cube: {param} must be greater than 0, got {text}"));
     }
     Ok(())
 }
 
 pub fn build_cube(
-    width: f64,
-    breadth: f64,
-    height: f64,
-    at: (Decimal, Decimal, Decimal),
+    width: Decimal,
+    breadth: Decimal,
+    height: Decimal,
+    at: Vector3D,
     base_name: String,
     csg: CsgOperation,
     solidity: Solidity,
@@ -99,19 +100,14 @@ pub fn build_cube(
     check_positive("--breadth", breadth)?;
     check_positive("--height", height)?;
 
-    // Decimal from here on -- every Vector3D this builds is exact from construction, no float
-    // noise to clean up later.
-    let width = decimal_from_f64(width)?;
-    let breadth = decimal_from_f64(breadth)?;
-    let height = decimal_from_f64(height)?;
-
     // Pre-clean vertices once (see core::emit::format_vertex's doc); emit_brush_t3d applies its
-    // own clean() on top, giving the correct TWO total applications for vertices and Location.
+    // own clean_decimal() on top, giving the correct TWO total applications for vertices and
+    // Location.
     let polygons: Vec<Polygon> = build_cube_faces(width, breadth, height)
         .iter()
         .map(base::clean_polygon)
         .collect::<Result<_, _>>()?;
-    let location = Vector3D::new(clean(at.0)?, clean(at.1)?, clean(at.2)?);
+    let location = Vector3D::new(clean_decimal(at.x)?, clean_decimal(at.y)?, clean_decimal(at.z)?);
 
     let model_name = format!("Model_{base_name}");
     emit_brush_t3d(&base_name, &model_name, csg.as_t3d(), solidity.poly_flags(), location, &polygons)
