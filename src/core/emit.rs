@@ -5,7 +5,7 @@ use rust_decimal::prelude::ToPrimitive;
 use rust_decimal::{Decimal, RoundingStrategy};
 use std::str::FromStr;
 
-use super::model::{FinalizedPolygon, Vector3D};
+use super::model::{Polygon, Vector3D};
 
 const CLEAN_EPS: &str = "0.001";
 
@@ -27,11 +27,6 @@ pub fn format_float_like_python(v: f64) -> String {
 
 // str(value) first, so a float's binary tail never enters Decimal directly -- 0.1 as an f64
 // isn't exactly 0.1, and Decimal::from(0.1_f64) would carry that noise forever.
-//
-// TODO: at a pathologically tiny/huge finite magnitude, the decimal string can exceed
-// rust_decimal's ~28-29 digit capacity, failing for a value that IS actually finite -- reported
-// below as "not a finite number", which mislabels it as a precision/magnitude problem. Only
-// reachable far beyond the real engine's +-32768 world.
 pub fn decimal_from_f64(value: f64) -> Result<Decimal, String> {
     if !value.is_finite() {
         return Err(format!("coordinate is not a finite number: {}", format_float_like_python(value)));
@@ -40,9 +35,6 @@ pub fn decimal_from_f64(value: f64) -> Result<Decimal, String> {
         .map_err(|_| format!("coordinate is not a finite number: {value}"))
 }
 
-// TODO: format_vertex's to_i64() below narrows the accepted range further still (i64 tops out
-// around 9.2e18, well short of the ~1e22 digit limit this allows). Not expected to matter for any
-// realistic cube dimension.
 pub fn quantize6(d: Decimal) -> Result<Decimal, String> {
     Ok(d.round_dp_with_strategy(6, RoundingStrategy::MidpointAwayFromZero))
 }
@@ -60,11 +52,11 @@ pub fn clean(d: Decimal) -> Result<Decimal, String> {
 
 // clean() is NOT idempotent right at the CLEAN_EPS boundary: quantize6's rounding can move a
 // value's distance from the nearest integer from just above the threshold to at-or-below it, so
-// calling this once vs. twice on the same raw input can give different results. Vertices and
-// Location are cleaned once by their caller before reaching here, so this call is their SECOND
-// application; Origin/Normal/TextureU/TextureV skip that pre-clean, so `format_vertex_from_f64`
-// is their only application. Getting the count wrong is a real output difference, not a style
-// choice.
+// calling this once vs. twice on the same raw input can give different results. Vertices are
+// cleaned once by their caller before reaching here (see brush::builders::base::clean_polygon),
+// so this call is their SECOND application; Origin/Normal/TextureU/TextureV skip that pre-clean,
+// so this is their only application. Getting the count wrong is a real output difference, not a
+// style choice.
 pub fn format_vertex(d: Decimal) -> Result<String, String> {
     let d = clean(d)?;
     let sign = if d < Decimal::ZERO { "-" } else { "+" };
@@ -74,16 +66,10 @@ pub fn format_vertex(d: Decimal) -> Result<String, String> {
     let integer_part_as_i64: i64 = integer_part
         .to_i64()
         .ok_or_else(|| format!("coordinate {d} is out of emittable range"))?;
-    let fraction_text = fraction.to_string(); // "0.XXXXXX" -- quantize6 fixed the scale to 6
+    let fraction_text = fraction.to_string();
     let fraction_digits = fraction_text.split('.').nth(1).unwrap_or("");
     let fraction_digits = format!("{fraction_digits:0<6}");
     Ok(format!("{sign}{integer_part_as_i64:05}.{fraction_digits}"))
-}
-
-/// A raw (never pre-cleaned) geometry float's ONE `clean()` application -- see
-/// `format_vertex`'s doc.
-pub fn format_vertex_from_f64(value: f64) -> Result<String, String> {
-    format_vertex(decimal_from_f64(value)?)
 }
 
 /// The caller must pass an already-once-cleaned Decimal, so this function's own `clean()` call
@@ -96,41 +82,29 @@ pub fn format_location(value: Decimal) -> Result<String, String> {
     Ok(format!("{d:.6}"))
 }
 
-fn format_vector_line_from_f64(kind: &str, vector: Vector3D) -> Result<String, String> {
+fn format_vector_line(kind: &str, vector: Vector3D) -> Result<String, String> {
     Ok(format!(
         "         {kind:<8} {},{},{}",
-        format_vertex_from_f64(vector.x)?,
-        format_vertex_from_f64(vector.y)?,
-        format_vertex_from_f64(vector.z)?
+        format_vertex(vector.x)?,
+        format_vertex(vector.y)?,
+        format_vertex(vector.z)?
     ))
 }
 
-fn format_vector_line_from_decimal(
-    kind: &str,
-    vector: (Decimal, Decimal, Decimal),
-) -> Result<String, String> {
-    Ok(format!(
-        "         {kind:<8} {},{},{}",
-        format_vertex(vector.0)?,
-        format_vertex(vector.1)?,
-        format_vertex(vector.2)?
-    ))
-}
-
-pub fn emit_polygon(polygon: &FinalizedPolygon) -> Result<String, String> {
+pub fn emit_polygon(polygon: &Polygon) -> Result<String, String> {
     let mut out = vec!["         Begin Polygon Item=OUTSIDE".to_string()];
-    out.push(format_vector_line_from_f64("Origin", polygon.origin)?);
-    out.push(format_vector_line_from_f64("Normal", polygon.normal)?);
-    out.push(format_vector_line_from_f64("TextureU", polygon.texture_u)?);
-    out.push(format_vector_line_from_f64("TextureV", polygon.texture_v)?);
+    out.push(format_vector_line("Origin", polygon.origin)?);
+    out.push(format_vector_line("Normal", polygon.normal)?);
+    out.push(format_vector_line("TextureU", polygon.texture_u)?);
+    out.push(format_vector_line("TextureV", polygon.texture_v)?);
     for vertex in &polygon.vertices {
-        out.push(format_vector_line_from_decimal("Vertex", *vertex)?);
+        out.push(format_vector_line("Vertex", *vertex)?);
     }
     out.push("         End Polygon".to_string());
     Ok(out.join("\n"))
 }
 
-pub fn emit_brush(model_name: &str, polygons: &[FinalizedPolygon]) -> Result<String, String> {
+pub fn emit_brush(model_name: &str, polygons: &[Polygon]) -> Result<String, String> {
     let mut out =
         vec![format!("    Begin Brush Name={model_name}"), "       Begin PolyList".to_string()];
     for polygon in polygons {
@@ -148,7 +122,7 @@ pub fn emit_actor_t3d(
     csg_op: &str,
     poly_flags: u32,
     location: (Decimal, Decimal, Decimal),
-    polygons: &[FinalizedPolygon],
+    polygons: &[Polygon],
 ) -> Result<String, String> {
     let mut out = vec![format!("Begin Actor Class=Engine.Brush Name={name}")];
     out.push(format!("    CsgOper={csg_op}"));
