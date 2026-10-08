@@ -1,14 +1,11 @@
-//! Shared across every `brush build <shape>` -- the generic polygon-builder, T3D assembly for one
-//! brush Actor, and old/'s custom argv-value-ambiguity rule. Mirrors old/uedcli/builders.py's
-//! module-level `_face`/`make_brush_actor` and old/uedcli/cli/parsers/_arguments.py's
-//! `_CoordArgumentParser`.
+//! Shared across every `brush build <shape>` -- the generic polygon-builder and old/'s custom
+//! argv-value-ambiguity rule. Mirrors old/uedcli/builders.py's module-level `_face` and
+//! old/uedcli/cli/parsers/_arguments.py's `_CoordArgumentParser`.
 
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
-use crate::core::emit::{
-    clean, decimal_from_f64, format_location, format_vertex, format_vertex_from_f64,
-};
+use crate::core::emit::{clean, decimal_from_f64};
 use crate::core::math::vectors;
 use crate::core::model::{FinalizedPolygon, Polygon, Vector3D};
 
@@ -58,90 +55,6 @@ pub fn build_polygon(ring: Vec<Vector3D>, outward: Vector3D) -> Polygon {
         texture_v,
         vertices: ring,
     }
-}
-
-fn format_vector_line_from_f64(kind: &str, vector: Vector3D) -> Result<String, String> {
-    Ok(format!(
-        "         {kind:<8} {},{},{}",
-        format_vertex_from_f64(vector.x)?,
-        format_vertex_from_f64(vector.y)?,
-        format_vertex_from_f64(vector.z)?
-    ))
-}
-
-fn format_vector_line_from_decimal(
-    kind: &str,
-    vector: (Decimal, Decimal, Decimal),
-) -> Result<String, String> {
-    Ok(format!(
-        "         {kind:<8} {},{},{}",
-        format_vertex(vector.0)?,
-        format_vertex(vector.1)?,
-        format_vertex(vector.2)?
-    ))
-}
-
-pub fn emit_polygon(polygon: &FinalizedPolygon) -> Result<String, String> {
-    // Every cube face carries Item=OUTSIDE (builders.py's cube() passes item="OUTSIDE" to every
-    // _face call), no Texture= (texture is always None in scope), no Flags= (flags always 0),
-    // no Pan line (cube faces never set one).
-    let mut out = vec!["         Begin Polygon Item=OUTSIDE".to_string()];
-    out.push(format_vector_line_from_f64("Origin", polygon.origin)?);
-    out.push(format_vector_line_from_f64("Normal", polygon.normal)?);
-    out.push(format_vector_line_from_f64("TextureU", polygon.texture_u)?);
-    out.push(format_vector_line_from_f64("TextureV", polygon.texture_v)?);
-    for vertex in &polygon.vertices {
-        out.push(format_vector_line_from_decimal("Vertex", *vertex)?);
-    }
-    out.push("         End Polygon".to_string());
-    Ok(out.join("\n"))
-}
-
-pub fn emit_brush(model_name: &str, polygons: &[FinalizedPolygon]) -> Result<String, String> {
-    let mut out =
-        vec![format!("    Begin Brush Name={model_name}"), "       Begin PolyList".to_string()];
-    for polygon in polygons {
-        out.push(emit_polygon(polygon)?);
-    }
-    out.push("       End PolyList".to_string());
-    out.push("    End Brush".to_string());
-    Ok(out.join("\n"))
-}
-
-/// Mirrors builders.py's SOLIDITY_FLAGS/CSG_OPER and emit.py's emit_actor, for the one Actor
-/// shape make_brush_actor produces with mover_class=None and group=None (--mover-class and the
-/// --prop-only Group are both out of scope here). `location` must already be once-cleaned (see
-/// `core::emit::format_location`'s doc) -- callers pre-clean it the same way make_brush_actor
-/// does.
-pub fn emit_actor_t3d(
-    name: &str,
-    model_name: &str,
-    csg_op: &str,
-    poly_flags: u32,
-    location: (Decimal, Decimal, Decimal),
-    polygons: &[FinalizedPolygon],
-) -> Result<String, String> {
-    let mut out = vec![format!("Begin Actor Class=Engine.Brush Name={name}")];
-    out.push(format!("    CsgOper={csg_op}"));
-    if poly_flags != 0 {
-        out.push(format!("    PolyFlags={poly_flags}"));
-    }
-    out.push(format!(
-        "    Location=(X={},Y={},Z={})",
-        format_location(location.0)?,
-        format_location(location.1)?,
-        format_location(location.2)?
-    ));
-    // MainScale/PostScale: transform.IDENTITY (unit scale, zero sheer rate, the editor's own
-    // default SheerAxis=SHEER_ZX) -- emit_fscale's output for that value is this fixed string;
-    // --mover-class, --rotate and --prop (the only things that could change it) are out of scope.
-    out.push("    MainScale=(SheerAxis=SHEER_ZX)".to_string());
-    out.push("    PostScale=(SheerAxis=SHEER_ZX)".to_string());
-    out.push(emit_brush(model_name, polygons)?);
-    out.push(format!("    Brush=Model'MyLevel.{model_name}'"));
-    out.push(format!("    Name=\"{name}\""));
-    out.push("End Actor".to_string());
-    Ok(out.join("\n") + "\n")
 }
 
 pub fn parse_at(text: &str) -> Option<(Decimal, Decimal, Decimal)> {

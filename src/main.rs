@@ -1,3 +1,5 @@
+#![warn(clippy::wildcard_imports)]
+
 mod brush;
 mod core;
 

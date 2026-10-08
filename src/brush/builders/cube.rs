@@ -22,7 +22,7 @@
 use rust_decimal::Decimal;
 
 use super::base;
-use crate::core::emit::{clean, format_float_like_python};
+use crate::core::emit::{clean, emit_actor_t3d, format_float_like_python};
 use crate::core::model::{FinalizedPolygon, Polygon, Vector3D};
 
 fn build_cube_faces(width: f64, breadth: f64, height: f64) -> Vec<Polygon> {
@@ -107,7 +107,7 @@ fn build_cube(
         _ => unreachable!("validated at parse time"),
     };
 
-    base::emit_actor_t3d(&name, &model_name, csg_op, poly_flags, location, &polygons)
+    emit_actor_t3d(&name, &model_name, csg_op, poly_flags, location, &polygons)
 }
 
 /// `None`: not our case (unrecognized flag, missing/invalid value, an excluded flag, --project,
