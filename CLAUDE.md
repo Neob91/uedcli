@@ -94,9 +94,9 @@ possible without losing meaning, in plain language.
 
 ## Documentation
 
-- Write every doc for a reader unfamiliar with the implementation — define terms, spell out the
-  mechanism, don't lean on context they lack. An explanation that only makes sense if you already
-  know how it works is a bug.
+- Write every doc for a reader who doesn't know this project's internals, not one who doesn't know
+  programming — define this project's own terms and mechanisms, but don't re-explain common
+  knowledge. An explanation that only works if you've already read the relevant source is a bug.
 - Keep user-facing docs current with the CLI: whenever a change alters behavior a user can observe,
   update the matching doc in the same change.
 - Reverse-engineering evidence (engine/file-format facts) comes ONLY from this project's own
