@@ -7,6 +7,8 @@ edition = "2021"
 # T3D vertices need exact decimal arithmetic, not binary float, to avoid representation drift --
 # rust_decimal's ~28-29 significant digits cover it without hand-rolling Decimal ourselves.
 rust_decimal = { version = "1.36", features = ["maths"] }
+# CLI argument parsing.
+clap = { version = "4", features = ["derive"] }
 
 [dev-dependencies]
 # Parameterized test cases (#[rstest] + #[case(...)]). Default features off -- they pull in

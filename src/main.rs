@@ -1,3 +1,4 @@
+mod brush;
 mod core;
 
 use std::env;
