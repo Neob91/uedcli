@@ -74,7 +74,10 @@ Always ask where to implement a change: a feature branch on a git worktree, the 
   - `find` (exact query over current state) and `search` (fuzzy/ranked discovery) stay separate
     verbs, never merged.
 - YAGNI, not just for output formats — build only what's actually needed now; three similar lines
-  beat a premature abstraction.
+  beat a premature abstraction. When you consciously defer a generalization (a hardcoded special
+  case that should eventually go through a more general mechanism), flag it with a `TODO` naming
+  what's deferred, rather than building that mechanism speculatively or leaving the hardcoding
+  unflagged.
 
 ## Keep it short and plain
 
@@ -86,6 +89,8 @@ possible without losing meaning, in plain language.
 - Delete first: if removing a sentence, bullet, or example wouldn't change what a reader does,
   remove it. Add length only to explain, never to signal importance.
 - Leave a doc shorter than you found it, unless your edit added meaning.
+- Default to no code comment. Add one only to explain a genuinely non-obvious why (a race, an
+  ordering requirement, a correctness subtlety) — never to restate what the code already shows.
 
 ## Documentation
 
