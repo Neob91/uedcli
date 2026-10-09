@@ -79,88 +79,152 @@ mod tests {
 
     use super::*;
 
-    fn v(x: i64, y: i64, z: i64) -> Vector3D {
-        Vector3D::new(Decimal::from(x), Decimal::from(y), Decimal::from(z))
-    }
-
     #[rstest]
-    #[case::positive_components(v(1, 2, 3), v(4, 5, 6), Decimal::from(32))]
-    #[case::orthogonal_is_zero(v(1, 0, 0), v(0, 1, 0), Decimal::ZERO)]
-    #[case::negative_components(v(-1, 2, -3), v(4, -5, 6), Decimal::from(-4 - 10 - 18))]
-    #[case::zero_vector_is_zero(v(0, 0, 0), v(9, -9, 9), Decimal::ZERO)]
+    #[case::positive_components(
+        Vector3D::new(Decimal::from(1), Decimal::from(2), Decimal::from(3)),
+        Vector3D::new(Decimal::from(4), Decimal::from(5), Decimal::from(6)),
+        Decimal::from(32)
+    )]
+    #[case::orthogonal_is_zero(
+        Vector3D::new(Decimal::from(1), Decimal::from(0), Decimal::from(0)),
+        Vector3D::new(Decimal::from(0), Decimal::from(1), Decimal::from(0)),
+        Decimal::ZERO
+    )]
+    #[case::negative_components(
+        Vector3D::new(Decimal::from(-1), Decimal::from(2), Decimal::from(-3)),
+        Vector3D::new(Decimal::from(4), Decimal::from(-5), Decimal::from(6)),
+        Decimal::from(-4 - 10 - 18)
+    )]
+    #[case::zero_vector_is_zero(
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO),
+        Vector3D::new(Decimal::from(9), Decimal::from(-9), Decimal::from(9)),
+        Decimal::ZERO
+    )]
     fn dot_cases(#[case] a: Vector3D, #[case] b: Vector3D, #[case] expected: Decimal) {
         assert_eq!(dot(a, b), expected);
     }
 
     #[rstest]
-    #[case::x_cross_y_is_z(v(1, 0, 0), v(0, 1, 0), v(0, 0, 1))]
-    #[case::parallel_vectors_are_zero(v(2, 4, 6), v(1, 2, 3), v(0, 0, 0))]
+    #[case::x_cross_y_is_z(
+        Vector3D::new(Decimal::from(1), Decimal::from(0), Decimal::from(0)),
+        Vector3D::new(Decimal::from(0), Decimal::from(1), Decimal::from(0)),
+        Vector3D::new(Decimal::from(0), Decimal::from(0), Decimal::from(1))
+    )]
+    #[case::parallel_vectors_are_zero(
+        Vector3D::new(Decimal::from(2), Decimal::from(4), Decimal::from(6)),
+        Vector3D::new(Decimal::from(1), Decimal::from(2), Decimal::from(3)),
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO)
+    )]
     fn cross_cases(#[case] a: Vector3D, #[case] b: Vector3D, #[case] expected: Vector3D) {
         assert_eq!(cross(a, b), expected);
     }
 
     #[test]
     fn cross_is_anticommutative() {
-        let a = v(1, 2, 3);
-        let b = v(4, -1, 2);
+        let a = Vector3D::new(Decimal::from(1), Decimal::from(2), Decimal::from(3));
+        let b = Vector3D::new(Decimal::from(4), Decimal::from(-1), Decimal::from(2));
         let ab = cross(a, b);
         let ba = cross(b, a);
         assert_eq!(ab, multiply(ba, Decimal::from(-1)));
     }
 
     #[rstest]
-    #[case::component_wise(v(5, 3, 1), v(2, 1, 1), v(3, 2, 0))]
-    #[case::can_go_negative(v(1, 1, 1), v(5, 5, 5), v(-4, -4, -4))]
+    #[case::component_wise(
+        Vector3D::new(Decimal::from(5), Decimal::from(3), Decimal::from(1)),
+        Vector3D::new(Decimal::from(2), Decimal::from(1), Decimal::from(1)),
+        Vector3D::new(Decimal::from(3), Decimal::from(2), Decimal::ZERO)
+    )]
+    #[case::can_go_negative(
+        Vector3D::new(Decimal::from(1), Decimal::from(1), Decimal::from(1)),
+        Vector3D::new(Decimal::from(5), Decimal::from(5), Decimal::from(5)),
+        Vector3D::new(Decimal::from(-4), Decimal::from(-4), Decimal::from(-4))
+    )]
     fn subtract_cases(#[case] a: Vector3D, #[case] b: Vector3D, #[case] expected: Vector3D) {
         assert_eq!(subtract(a, b), expected);
     }
 
     #[rstest]
-    #[case::positive(v(7, -3, 2))]
-    #[case::zero(v(0, 0, 0))]
+    #[case::positive(Vector3D::new(Decimal::from(7), Decimal::from(-3), Decimal::from(2)))]
+    #[case::zero(Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO))]
     fn subtract_from_self_is_zero(#[case] a: Vector3D) {
-        assert_eq!(subtract(a, a), v(0, 0, 0));
+        assert_eq!(subtract(a, a), Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO));
     }
 
     #[rstest]
-    #[case::positive_scalar(v(1, 2, 3), Decimal::from(2), v(2, 4, 6))]
-    #[case::negative_scalar_flips_sign(v(1, 2, 3), Decimal::from(-2), v(-2, -4, -6))]
-    #[case::zero_scalar_is_zero(v(1, 2, 3), Decimal::ZERO, v(0, 0, 0))]
+    #[case::positive_scalar(
+        Vector3D::new(Decimal::from(1), Decimal::from(2), Decimal::from(3)),
+        Decimal::from(2),
+        Vector3D::new(Decimal::from(2), Decimal::from(4), Decimal::from(6))
+    )]
+    #[case::negative_scalar_flips_sign(
+        Vector3D::new(Decimal::from(1), Decimal::from(2), Decimal::from(3)),
+        Decimal::from(-2),
+        Vector3D::new(Decimal::from(-2), Decimal::from(-4), Decimal::from(-6))
+    )]
+    #[case::zero_scalar_is_zero(
+        Vector3D::new(Decimal::from(1), Decimal::from(2), Decimal::from(3)),
+        Decimal::ZERO,
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO)
+    )]
     fn multiply_cases(#[case] a: Vector3D, #[case] scalar: Decimal, #[case] expected: Vector3D) {
         assert_eq!(multiply(a, scalar), expected);
     }
 
     #[rstest]
-    #[case::three_four_five_triangle(v(3, 4, 0), Decimal::from(5))]
-    #[case::unit_vector(v(0, 1, 0), Decimal::ONE)]
-    #[case::ignores_sign(v(-3, -4, 0), Decimal::from(5))]
-    #[case::zero_vector(v(0, 0, 0), Decimal::ZERO)]
+    #[case::three_four_five_triangle(
+        Vector3D::new(Decimal::from(3), Decimal::from(4), Decimal::ZERO),
+        Decimal::from(5)
+    )]
+    #[case::unit_vector(Vector3D::new(Decimal::ZERO, Decimal::from(1), Decimal::ZERO), Decimal::ONE)]
+    #[case::ignores_sign(
+        Vector3D::new(Decimal::from(-3), Decimal::from(-4), Decimal::ZERO),
+        Decimal::from(5)
+    )]
+    #[case::zero_vector(Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO), Decimal::ZERO)]
     fn length_cases(#[case] a: Vector3D, #[case] expected: Decimal) {
         assert_eq!(length(a), expected);
     }
 
     #[rstest]
     #[case::three_four_zero(
-        v(3, 4, 0),
+        Vector3D::new(Decimal::from(3), Decimal::from(4), Decimal::ZERO),
         Vector3D::new(Decimal::from(3) / Decimal::from(5), Decimal::from(4) / Decimal::from(5), Decimal::ZERO)
     )]
     #[case::same_direction_scaled_up(
-        v(6, 8, 0),
+        Vector3D::new(Decimal::from(6), Decimal::from(8), Decimal::ZERO),
         Vector3D::new(Decimal::from(3) / Decimal::from(5), Decimal::from(4) / Decimal::from(5), Decimal::ZERO)
     )]
-    #[case::already_unit(v(0, 0, 1), v(0, 0, 1))]
+    #[case::already_unit(
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ONE),
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ONE)
+    )]
     fn normalize_vector_cases(#[case] a: Vector3D, #[case] expected: Vector3D) {
         assert_eq!(normalize_vector(a), expected);
     }
 
     #[rstest]
-    #[case::square(vec![v(0, 0, 0), v(2, 0, 0), v(2, 2, 0), v(0, 2, 0)], v(1, 1, 0))]
-    #[case::single_point_is_itself(vec![v(5, -3, 2)], v(5, -3, 2))]
+    #[case::square(
+        vec![
+            Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO),
+            Vector3D::new(Decimal::from(2), Decimal::ZERO, Decimal::ZERO),
+            Vector3D::new(Decimal::from(2), Decimal::from(2), Decimal::ZERO),
+            Vector3D::new(Decimal::ZERO, Decimal::from(2), Decimal::ZERO),
+        ],
+        Vector3D::new(Decimal::ONE, Decimal::ONE, Decimal::ZERO)
+    )]
+    #[case::single_point_is_itself(
+        vec![Vector3D::new(Decimal::from(5), Decimal::from(-3), Decimal::from(2))],
+        Vector3D::new(Decimal::from(5), Decimal::from(-3), Decimal::from(2))
+    )]
     // x sum = 2, y sum = 3 -- neither divides evenly by 3 in decimal; the expected value is
     // computed the same way (Decimal division) so this pins the function's actual behavior,
     // not a hand-rounded guess.
     #[case::triangle_divides_by_3_exactly_as_decimal_allows(
-        vec![v(0, 0, 0), v(1, 0, 0), v(1, 3, 0)],
+        vec![
+            Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO),
+            Vector3D::new(Decimal::ONE, Decimal::ZERO, Decimal::ZERO),
+            Vector3D::new(Decimal::ONE, Decimal::from(3), Decimal::ZERO),
+        ],
         Vector3D::new(Decimal::from(2) / Decimal::from(3), Decimal::ONE, Decimal::ZERO)
     )]
     fn compute_centroid_cases(#[case] ring: Vec<Vector3D>, #[case] expected: Vector3D) {
@@ -170,38 +234,86 @@ mod tests {
     #[rstest]
     // A square in the XY plane, wound CCW as seen from +Z -- Newell's method gives a normal
     // along +Z scaled by twice the ring's area (2 * 4 = 8), not a unit vector.
-    #[case::square_in_xy_plane(vec![v(0, 0, 0), v(2, 0, 0), v(2, 2, 0), v(0, 2, 0)], v(0, 0, 8))]
+    #[case::square_in_xy_plane(
+        vec![
+            Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO),
+            Vector3D::new(Decimal::from(2), Decimal::ZERO, Decimal::ZERO),
+            Vector3D::new(Decimal::from(2), Decimal::from(2), Decimal::ZERO),
+            Vector3D::new(Decimal::ZERO, Decimal::from(2), Decimal::ZERO),
+        ],
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::from(8))
+    )]
     // Same square, in the XZ plane instead -- confirms the method isn't accidentally hardcoded
     // to Z-axis-only math.
-    #[case::square_in_xz_plane(vec![v(0, 0, 0), v(2, 0, 0), v(2, 0, 2), v(0, 0, 2)], v(0, -8, 0))]
+    #[case::square_in_xz_plane(
+        vec![
+            Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO),
+            Vector3D::new(Decimal::from(2), Decimal::ZERO, Decimal::ZERO),
+            Vector3D::new(Decimal::from(2), Decimal::ZERO, Decimal::from(2)),
+            Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::from(2)),
+        ],
+        Vector3D::new(Decimal::ZERO, Decimal::from(-8), Decimal::ZERO)
+    )]
     fn compute_newell_normal_cases(#[case] ring: Vec<Vector3D>, #[case] expected: Vector3D) {
         assert_eq!(compute_newell_normal(&ring), expected);
     }
 
     #[test]
     fn compute_newell_normal_flips_sign_when_winding_reverses() {
-        let ring = [v(0, 0, 0), v(2, 0, 0), v(2, 2, 0), v(0, 2, 0)];
+        let ring = [
+            Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ZERO),
+            Vector3D::new(Decimal::from(2), Decimal::ZERO, Decimal::ZERO),
+            Vector3D::new(Decimal::from(2), Decimal::from(2), Decimal::ZERO),
+            Vector3D::new(Decimal::ZERO, Decimal::from(2), Decimal::ZERO),
+        ];
         let mut reversed = ring.to_vec();
         reversed.reverse();
-        assert_eq!(compute_newell_normal(&reversed), v(0, 0, -8));
+        assert_eq!(
+            compute_newell_normal(&reversed),
+            Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::from(-8))
+        );
     }
 
     // Every axis-aligned normal (both directions): abs components always have at least a two-way
     // tie at 0 between the other two axes, and the lowest index always wins the seed.
     #[rstest]
-    #[case::plus_x(v(1, 0, 0), v(0, 1, 0), v(0, 0, 1))]
-    #[case::minus_x(v(-1, 0, 0), v(0, 1, 0), v(0, 0, -1))]
-    #[case::plus_y(v(0, 1, 0), v(1, 0, 0), v(0, 0, -1))]
-    #[case::minus_y(v(0, -1, 0), v(1, 0, 0), v(0, 0, 1))]
-    #[case::plus_z(v(0, 0, 1), v(1, 0, 0), v(0, 1, 0))]
-    #[case::minus_z(v(0, 0, -1), v(1, 0, 0), v(0, -1, 0))]
+    #[case::plus_x(
+        Vector3D::new(Decimal::ONE, Decimal::ZERO, Decimal::ZERO),
+        Vector3D::new(Decimal::ZERO, Decimal::ONE, Decimal::ZERO),
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ONE)
+    )]
+    #[case::minus_x(
+        Vector3D::new(-Decimal::ONE, Decimal::ZERO, Decimal::ZERO),
+        Vector3D::new(Decimal::ZERO, Decimal::ONE, Decimal::ZERO),
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, -Decimal::ONE)
+    )]
+    #[case::plus_y(
+        Vector3D::new(Decimal::ZERO, Decimal::ONE, Decimal::ZERO),
+        Vector3D::new(Decimal::ONE, Decimal::ZERO, Decimal::ZERO),
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, -Decimal::ONE)
+    )]
+    #[case::minus_y(
+        Vector3D::new(Decimal::ZERO, -Decimal::ONE, Decimal::ZERO),
+        Vector3D::new(Decimal::ONE, Decimal::ZERO, Decimal::ZERO),
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ONE)
+    )]
+    #[case::plus_z(
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, Decimal::ONE),
+        Vector3D::new(Decimal::ONE, Decimal::ZERO, Decimal::ZERO),
+        Vector3D::new(Decimal::ZERO, Decimal::ONE, Decimal::ZERO)
+    )]
+    #[case::minus_z(
+        Vector3D::new(Decimal::ZERO, Decimal::ZERO, -Decimal::ONE),
+        Vector3D::new(Decimal::ONE, Decimal::ZERO, Decimal::ZERO),
+        Vector3D::new(Decimal::ZERO, -Decimal::ONE, Decimal::ZERO)
+    )]
     fn compute_texture_basis_cases(
         #[case] normal: Vector3D,
         #[case] expected_u: Vector3D,
         #[case] expected_v: Vector3D,
     ) {
-        let (u, v_basis) = compute_texture_basis(normal);
+        let (u, v) = compute_texture_basis(normal);
         assert_eq!(u, expected_u);
-        assert_eq!(v_basis, expected_v);
+        assert_eq!(v, expected_v);
     }
 }
