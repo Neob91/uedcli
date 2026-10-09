@@ -9,5 +9,6 @@ edition = "2021"
 rust_decimal = { version = "1.36", features = ["maths"] }
 
 [dev-dependencies]
-# Parameterized test cases (#[rstest] + #[case(...)]).
-rstest = "0.23"
+# Parameterized test cases (#[rstest] + #[case(...)]). Default features off -- they pull in
+# async-test machinery (futures, regex) nothing here needs.
+rstest = { version = "0.23", default-features = false }
