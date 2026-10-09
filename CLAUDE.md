@@ -1,41 +1,35 @@
 ## The refactor
 
-uedcli is being rewritten from Python into Rust, from an empty root, with the old codebase moved
-under `old/`. @dev/epics/refactor.md has the plan — read it before any question about scope,
-sequencing, or why `old/` is shaped the way it is.
+uedcli is being rewritten from Python into Rust, from an empty root; the old codebase lives under
+`old/`. @dev/epics/refactor.md has the plan — read it before any question about scope, sequencing,
+or `old/`'s shape.
+
+This is a greenfield rewrite, not a byte-exact transliteration. Match old/'s behavior for the
+normal case (verified by differential tests, per @dev/epics/refactor.md) — but don't hand-replicate
+its exact quirky edge-case behavior (parser corner cases, Python-specific formatting) just to chase
+parity. Real improvements are the point.
 
 ## Working with the owner
 
-Every decision that is the owner's to make goes through Claude Code's `AskUserQuestion` widget, not
-prose in the chat, where it gets skimmed, half-answered, or scrolls away. This covers design forks,
-sequencing calls, and anything a review escalates.
+Every decision that's the owner's to make goes through the `AskUserQuestion` widget, not chat prose
+(which gets skimmed, half-answered, or scrolls away) — design forks, sequencing calls, anything a
+review escalates. Never override the owner silently, and never downgrade a real question to avoid
+asking it.
 
-Never overrule the owner silently, and never downgrade a real question to avoid asking it. If a
-rule of theirs points one way and you judge otherwise, that is a question for the widget, not a
-deviation recorded in a commit message and moved past.
-
-### Speccing: finer details go through the owner too
-
-Not just top-level design forks. While turning an approved design into an exact spec — config key
-names, on-disk layouts, field names, API shapes — surface these as questions too, rather than
-silently deciding them or deferring them to later.
+This applies below the top level too: while turning an approved design into an exact spec (config
+keys, on-disk layouts, field names, API shapes), ask about those details rather than deciding or
+deferring them silently.
 
 ### A decision is implemented as given, never altered without an explicit yes
 
-Wherever the decision was made — a spec, chat, a one-line answer:
-
-- Implement the ruling as stated. Do not add a guard, filter, clamp, fallback, or special case that
-  changes what it does — not "in the spirit of" it, not to satisfy a different requirement they also
-  stated, not because measurement shows it wrong.
-- Finding a real flaw does not authorise a fix. Measure it, stop, report the evidence, propose the
-  change, and wait for the yes.
-- Telling them afterwards is not consent. Flagging an unrequested change in the report is the
-  violation, not the remedy.
-- An unanswered question is not an answer. Ask again; do not fill the gap with a default and call it
-  a judgement call.
-- Reverting works the same way: once told to drop an unapproved change, restore exactly what was
-  ruled, including its known costs, and pin those costs in a test or doc so they are recorded
-  rather than quietly re-fixed later.
+- Implement a ruling exactly as stated, wherever it was given (a spec, chat, a one-line answer) — no
+  added guard, clamp, or special case, even one that "fits the spirit" or fixes a flaw you found. A
+  flaw doesn't authorise a fix: report it and wait for a yes.
+- Telling the owner afterward isn't consent — flagging an unrequested change in the report is itself
+  the violation.
+- An unanswered question isn't an answer — ask again rather than filling the gap with a default.
+- Reverting follows the same rule: restore exactly what was ruled, including its known costs, and
+  pin those costs in a test or doc so they aren't silently re-fixed later.
 
 ## Workflow
 
@@ -44,65 +38,67 @@ Always ask where to implement a change: a feature branch on a git worktree, the 
 
 ## Code & CLI conventions
 
-- No back-compat cruft — uedcli is unreleased. No external users, no scripts in the wild, so nothing
-  is kept for backward compatibility. When you remove or rename a flag, verb, option value, output
-  format, or code path, delete it outright in the change that adds the replacement. Never a
-  deprecated alias, a no-op flag, a migration-error shim, dual-format support, or an "old way"
-  branch. (This is about the CLI's own external surface — it doesn't apply to the rewrite's
-  subprocess-strangler fallback to `old/`, which is migration scaffolding, not back-compat; see
-  @dev/epics/refactor.md.)
-- No fallbacks, and no silent half-answers, for any command or script, unless the owner explicitly
-  asked for or agreed to one. A command that can't fully satisfy a request exits 2, naming the
-  offending value — never a partial result plus a warning that scrolls away, never a substituted
-  default for something it couldn't resolve. Never switch behavior on the environment either: a verb
-  does the same thing on every host — same code path, same output — never branching on CPU arch, OS,
-  an env var, or a tool's presence/absence to pick a different implementation. When an approach is
-  specified (e.g. a dockerized setup), it is the only path: a missing host tool is a broken host to
-  fix, surfaced as a clear error, never a reason to silently keep a second code path.
+- No back-compat cruft — uedcli is unreleased, so nothing is kept for compatibility. Removing or
+  renaming a flag, verb, value, format, or code path means deleting it outright in the same change,
+  never a deprecated alias, no-op flag, migration shim, or dual-format support. (This is about the
+  CLI's own external surface, not the subprocess-strangler fallback to `old/`, which is migration
+  scaffolding — see @dev/epics/refactor.md.)
+- No fallbacks or silent half-answers, unless the owner agreed to one — a command that can't fully
+  satisfy a request exits 2 naming the offending value, never a partial result or a substituted
+  default. No branching on environment either: a verb behaves identically on every host. When an
+  approach is specified (e.g. a dockerized setup), it's the only path — a missing host tool is a
+  broken host to fix, not a reason to keep a second code path.
 - Never let a panic reach the user. A bad input exits non-zero with a clear message naming the
-  offending value. Cover each path with a regression test.
-- Every command, flag, and argument needs a real help string that says what it does, so `--help` is
-  self-explanatory rather than a restatement of the flag's own name.
-- Verbs compose — the core CLI philosophy. Small, single-purpose verbs that pipe together, not big
-  verbs grown a bespoke flag at a time:
-  - Producer/query verbs print their result to stdout, one item per line; human summaries and counts
-    go to stderr; add `--json` where a script needs structure rather than lines.
-  - Mutating/consuming verbs read their target set from stdin via `-`, the sole names source
-    (mutually exclusive with names as CLI args); empty stdin is a clean no-op (exit 0), not an error.
-  - Two stdin conventions, disambiguated by verb: a name list vs. a structured-content snippet.
-    Keep them distinct.
-  - A verb over a set takes the set, and that is the operation — no flag that merely restates
-    "operate on this set."
-  - Prefer one stateless `find`/query verb feeding the others over per-verb `--only-*` filter flags.
-  - `find` vs `search`, never merged: `find` is a deterministic query over concrete state, producing
-    an exact name/selector set to pipe onward; `search` is ranked/fuzzy discovery over a catalog or
-    corpus.
-- YAGNI, generally — not just output formats. Build only what the actual use case in front of you
-  needs; no speculative flags, modes, abstractions, or generality for a future that hasn't arrived.
-  Three similar lines beat a premature abstraction.
+  offending value, covered by a regression test.
+- Every command, flag, and argument needs a real help string — `--help` should explain what it does,
+  not restate its own name.
+- Before putting a new type or function in a feature-specific module, check how broadly its old/
+  equivalent is actually used (grep `old/`) — broad usage means it belongs under `core::`, not the
+  feature that first needed it.
+- Keep argument parsing separate from logic: a `cli::<verb>` module parses args (a real library,
+  e.g. clap) and dispatches; the verb's own logic function takes typed parameters and knows
+  nothing about the CLI.
+- Names are explicit: no abbreviations (`texture`, not `tex`; `format`, not `fmt` — a loop counter
+  like `i` or a generic `T` is fine), and function names are verbs (`build_polygon`, not `face`). A
+  generic-sounding name belongs in a module that supplies the missing context (`vectors::subtract`,
+  not bare `subtract`) and should be called through that qualified path, not a bare import.
+- Verbs compose — small, single-purpose verbs that pipe together, not one verb growing a flag at a
+  time:
+  - Query verbs print results to stdout, one per line; summaries and counts go to stderr. Add
+    `--json` only where a script needs structure.
+  - Mutating verbs take their target set from stdin via `-` (never mixed with names as CLI args);
+    empty stdin is a clean no-op.
+  - Two stdin conventions exist — a name list vs. a content snippet — and verbs must not blur them.
+  - A verb over a set just takes the set; no flag that merely restates "operate on this set."
+  - Prefer one stateless `find` feeding other verbs over per-verb `--only-*` filters.
+  - `find` (exact query over current state) and `search` (fuzzy/ranked discovery) stay separate
+    verbs, never merged.
+- YAGNI, not just for output formats — build only what's actually needed now; three similar lines
+  beat a premature abstraction. When you consciously defer a generalization (a hardcoded special
+  case that should eventually go through a more general mechanism), flag it with a `TODO` naming
+  what's deferred, rather than building that mechanism speculatively or leaving the hardcoding
+  unflagged.
 
 ## Keep it short and plain
 
-Each document, docstring, code comment, commit message — including this file — should be as short
-as possible without losing meaning, written in plain language.
+Every doc, docstring, comment, and commit message — including this file — should be as short as
+possible without losing meaning, in plain language.
 
-- Write plainly: direct, matter-of-fact sentences. Avoid ornate or dramatic phrasing, all-caps
-  emphasis, slogan headings, and repetition for effect.
-- Delete first. If text can be removed and a reader would still act the same way, remove it —
-  sentence, bullet, heading, or example.
-- Add length only to explain something a reader needs, not to signal importance or look thorough.
-- Cut padding, not explanation. Padding is restatement, hedging, and ceremony; explanation is the
-  mechanism.
-- Leave a doc you edit shorter than you found it, unless the edit added meaning.
+- Write plainly: direct sentences, no ornate phrasing, no all-caps emphasis, no repetition for
+  effect.
+- Delete first: if removing a sentence, bullet, or example wouldn't change what a reader does,
+  remove it. Add length only to explain, never to signal importance.
+- Leave a doc shorter than you found it, unless your edit added meaning.
+- Default to no code comment. Add one only to explain a genuinely non-obvious why (a race, an
+  ordering requirement, a correctness subtlety) — never to restate what the code already shows.
 
 ## Documentation
 
-- Write every doc for a reader with no familiarity with the implementation. Define terms before
-  using them, spell out the mechanism, and do not lean on context the reader lacks. An explanation
-  that only makes sense if you already know how it works is a bug — rewrite it.
+- Write every doc for a reader unfamiliar with the implementation — define terms, spell out the
+  mechanism, don't lean on context they lack. An explanation that only makes sense if you already
+  know how it works is a bug.
 - Keep user-facing docs current with the CLI: whenever a change alters behavior a user can observe,
   update the matching doc in the same change.
 - Reverse-engineering evidence (engine/file-format facts) comes ONLY from this project's own
-  binaries (disassembly, or a live capture against them running) — never a third-party source
-  claiming similar lineage, however plausible. A finding built on one is not RE and must not be
-  presented as one, at any confidence tier.
+  binaries — disassembly or a live capture — never a third-party source with similar lineage,
+  however plausible. A finding based on one isn't RE and must not be presented as one.
