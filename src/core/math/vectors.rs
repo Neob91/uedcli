@@ -75,30 +75,28 @@ pub fn compute_texture_basis(normal: Vector3D) -> (Vector3D, Vector3D) {
 
 #[cfg(test)]
 mod tests {
+    use rstest::rstest;
+
     use super::*;
 
     fn v(x: i64, y: i64, z: i64) -> Vector3D {
         Vector3D::new(Decimal::from(x), Decimal::from(y), Decimal::from(z))
     }
 
-    #[test]
-    fn dot_sums_component_products() {
-        assert_eq!(dot(v(1, 2, 3), v(4, 5, 6)), Decimal::from(32));
+    #[rstest]
+    #[case::positive_components(v(1, 2, 3), v(4, 5, 6), Decimal::from(32))]
+    #[case::orthogonal_is_zero(v(1, 0, 0), v(0, 1, 0), Decimal::ZERO)]
+    #[case::negative_components(v(-1, 2, -3), v(4, -5, 6), Decimal::from(-4 - 10 - 18))]
+    #[case::zero_vector_is_zero(v(0, 0, 0), v(9, -9, 9), Decimal::ZERO)]
+    fn dot_cases(#[case] a: Vector3D, #[case] b: Vector3D, #[case] expected: Decimal) {
+        assert_eq!(dot(a, b), expected);
     }
 
-    #[test]
-    fn dot_of_orthogonal_vectors_is_zero() {
-        assert_eq!(dot(v(1, 0, 0), v(0, 1, 0)), Decimal::ZERO);
-    }
-
-    #[test]
-    fn dot_with_negative_components() {
-        assert_eq!(dot(v(-1, 2, -3), v(4, -5, 6)), Decimal::from(-4 - 10 - 18));
-    }
-
-    #[test]
-    fn cross_of_x_and_y_axes_is_z() {
-        assert_eq!(cross(v(1, 0, 0), v(0, 1, 0)), v(0, 0, 1));
+    #[rstest]
+    #[case::x_cross_y_is_z(v(1, 0, 0), v(0, 1, 0), v(0, 0, 1))]
+    #[case::parallel_vectors_are_zero(v(2, 4, 6), v(1, 2, 3), v(0, 0, 0))]
+    fn cross_cases(#[case] a: Vector3D, #[case] b: Vector3D, #[case] expected: Vector3D) {
+        assert_eq!(cross(a, b), expected);
     }
 
     #[test]
@@ -110,103 +108,74 @@ mod tests {
         assert_eq!(ab, multiply(ba, Decimal::from(-1)));
     }
 
-    #[test]
-    fn cross_of_parallel_vectors_is_zero() {
-        assert_eq!(cross(v(2, 4, 6), v(1, 2, 3)), v(0, 0, 0));
+    #[rstest]
+    #[case::component_wise(v(5, 3, 1), v(2, 1, 1), v(3, 2, 0))]
+    #[case::can_go_negative(v(1, 1, 1), v(5, 5, 5), v(-4, -4, -4))]
+    fn subtract_cases(#[case] a: Vector3D, #[case] b: Vector3D, #[case] expected: Vector3D) {
+        assert_eq!(subtract(a, b), expected);
     }
 
-    #[test]
-    fn subtract_is_component_wise() {
-        assert_eq!(subtract(v(5, 3, 1), v(2, 1, 1)), v(3, 2, 0));
-    }
-
-    #[test]
-    fn subtract_can_produce_negative_components() {
-        assert_eq!(subtract(v(1, 1, 1), v(5, 5, 5)), v(-4, -4, -4));
-    }
-
-    #[test]
-    fn subtract_from_self_is_zero() {
-        let a = v(7, -3, 2);
+    #[rstest]
+    #[case::positive(v(7, -3, 2))]
+    #[case::zero(v(0, 0, 0))]
+    fn subtract_from_self_is_zero(#[case] a: Vector3D) {
         assert_eq!(subtract(a, a), v(0, 0, 0));
     }
 
-    #[test]
-    fn multiply_scales_every_component() {
-        assert_eq!(multiply(v(1, 2, 3), Decimal::from(2)), v(2, 4, 6));
+    #[rstest]
+    #[case::positive_scalar(v(1, 2, 3), Decimal::from(2), v(2, 4, 6))]
+    #[case::negative_scalar_flips_sign(v(1, 2, 3), Decimal::from(-2), v(-2, -4, -6))]
+    #[case::zero_scalar_is_zero(v(1, 2, 3), Decimal::ZERO, v(0, 0, 0))]
+    fn multiply_cases(#[case] a: Vector3D, #[case] scalar: Decimal, #[case] expected: Vector3D) {
+        assert_eq!(multiply(a, scalar), expected);
     }
 
-    #[test]
-    fn multiply_by_negative_scalar_flips_sign() {
-        assert_eq!(multiply(v(1, 2, 3), Decimal::from(-2)), v(-2, -4, -6));
+    #[rstest]
+    #[case::three_four_five_triangle(v(3, 4, 0), Decimal::from(5))]
+    #[case::unit_vector(v(0, 1, 0), Decimal::ONE)]
+    #[case::ignores_sign(v(-3, -4, 0), Decimal::from(5))]
+    #[case::zero_vector(v(0, 0, 0), Decimal::ZERO)]
+    fn length_cases(#[case] a: Vector3D, #[case] expected: Decimal) {
+        assert_eq!(length(a), expected);
     }
 
-    #[test]
-    fn multiply_by_zero_is_zero() {
-        assert_eq!(multiply(v(1, 2, 3), Decimal::ZERO), v(0, 0, 0));
+    #[rstest]
+    #[case::three_four_zero(
+        v(3, 4, 0),
+        Vector3D::new(Decimal::from(3) / Decimal::from(5), Decimal::from(4) / Decimal::from(5), Decimal::ZERO)
+    )]
+    #[case::same_direction_scaled_up(
+        v(6, 8, 0),
+        Vector3D::new(Decimal::from(3) / Decimal::from(5), Decimal::from(4) / Decimal::from(5), Decimal::ZERO)
+    )]
+    #[case::already_unit(v(0, 0, 1), v(0, 0, 1))]
+    fn normalize_vector_cases(#[case] a: Vector3D, #[case] expected: Vector3D) {
+        assert_eq!(normalize_vector(a), expected);
     }
 
-    #[test]
-    fn length_of_a_3_4_0_triangle_is_5() {
-        assert_eq!(length(v(3, 4, 0)), Decimal::from(5));
-    }
-
-    #[test]
-    fn length_of_a_unit_vector_is_1() {
-        assert_eq!(length(v(0, 1, 0)), Decimal::ONE);
-    }
-
-    #[test]
-    fn length_ignores_sign_of_components() {
-        assert_eq!(length(v(-3, -4, 0)), Decimal::from(5));
-    }
-
-    #[test]
-    fn normalize_vector_scales_to_unit_length() {
-        let expected = Vector3D::new(Decimal::from(3) / Decimal::from(5), Decimal::from(4) / Decimal::from(5), Decimal::ZERO);
-        assert_eq!(normalize_vector(v(3, 4, 0)), expected);
-    }
-
-    #[test]
-    fn normalize_vector_of_a_longer_vector_same_direction_matches() {
-        let expected = Vector3D::new(Decimal::from(3) / Decimal::from(5), Decimal::from(4) / Decimal::from(5), Decimal::ZERO);
-        assert_eq!(normalize_vector(v(6, 8, 0)), expected);
-    }
-
-    #[test]
-    fn normalize_vector_of_an_already_unit_vector_is_unchanged() {
-        assert_eq!(normalize_vector(v(0, 0, 1)), v(0, 0, 1));
-    }
-
-    #[test]
-    fn compute_centroid_of_a_square() {
-        let ring = [v(0, 0, 0), v(2, 0, 0), v(2, 2, 0), v(0, 2, 0)];
-        assert_eq!(compute_centroid(&ring), v(1, 1, 0));
-    }
-
-    #[test]
-    fn compute_centroid_of_a_single_point_is_that_point() {
-        let ring = [v(5, -3, 2)];
-        assert_eq!(compute_centroid(&ring), v(5, -3, 2));
-    }
-
-    #[test]
-    fn compute_centroid_of_a_triangle_divides_by_3_exactly_as_decimal_allows() {
-        // x sum = 2, y sum = 3 -- neither divides evenly by 3 in decimal (2/3, 1 are the exact
-        // answers for x and y respectively); the expected value is computed the same way
-        // (Decimal division) so this pins the function's actual behavior, not a hand-rounded
-        // guess.
-        let ring = [v(0, 0, 0), v(1, 0, 0), v(1, 3, 0)];
-        let expected = Vector3D::new(Decimal::from(2) / Decimal::from(3), Decimal::ONE, Decimal::ZERO);
+    #[rstest]
+    #[case::square(vec![v(0, 0, 0), v(2, 0, 0), v(2, 2, 0), v(0, 2, 0)], v(1, 1, 0))]
+    #[case::single_point_is_itself(vec![v(5, -3, 2)], v(5, -3, 2))]
+    // x sum = 2, y sum = 3 -- neither divides evenly by 3 in decimal; the expected value is
+    // computed the same way (Decimal division) so this pins the function's actual behavior,
+    // not a hand-rounded guess.
+    #[case::triangle_divides_by_3_exactly_as_decimal_allows(
+        vec![v(0, 0, 0), v(1, 0, 0), v(1, 3, 0)],
+        Vector3D::new(Decimal::from(2) / Decimal::from(3), Decimal::ONE, Decimal::ZERO)
+    )]
+    fn compute_centroid_cases(#[case] ring: Vec<Vector3D>, #[case] expected: Vector3D) {
         assert_eq!(compute_centroid(&ring), expected);
     }
 
-    #[test]
-    fn compute_newell_normal_of_a_square_points_along_its_axis() {
-        // A square in the XY plane, wound CCW as seen from +Z -- Newell's method gives a normal
-        // along +Z scaled by twice the ring's area (2 * 4 = 8), not a unit vector.
-        let ring = [v(0, 0, 0), v(2, 0, 0), v(2, 2, 0), v(0, 2, 0)];
-        assert_eq!(compute_newell_normal(&ring), v(0, 0, 8));
+    #[rstest]
+    // A square in the XY plane, wound CCW as seen from +Z -- Newell's method gives a normal
+    // along +Z scaled by twice the ring's area (2 * 4 = 8), not a unit vector.
+    #[case::square_in_xy_plane(vec![v(0, 0, 0), v(2, 0, 0), v(2, 2, 0), v(0, 2, 0)], v(0, 0, 8))]
+    // Same square, in the XZ plane instead -- confirms the method isn't accidentally hardcoded
+    // to Z-axis-only math.
+    #[case::square_in_xz_plane(vec![v(0, 0, 0), v(2, 0, 0), v(2, 0, 2), v(0, 0, 2)], v(0, -8, 0))]
+    fn compute_newell_normal_cases(#[case] ring: Vec<Vector3D>, #[case] expected: Vector3D) {
+        assert_eq!(compute_newell_normal(&ring), expected);
     }
 
     #[test]
@@ -217,36 +186,22 @@ mod tests {
         assert_eq!(compute_newell_normal(&reversed), v(0, 0, -8));
     }
 
-    #[test]
-    fn compute_newell_normal_generalizes_to_a_non_xy_plane() {
-        // Same square, in the XZ plane instead -- confirms the method isn't accidentally
-        // hardcoded to Z-axis-only math.
-        let ring = [v(0, 0, 0), v(2, 0, 0), v(2, 0, 2), v(0, 0, 2)];
-        assert_eq!(compute_newell_normal(&ring), v(0, -8, 0));
-    }
-
-    #[test]
-    fn compute_texture_basis_for_x_normal_picks_lowest_tied_axis() {
-        // normal=(1,0,0): components' absolute values are (1,0,0) -- Y and Z tie at 0, and the
-        // lowest index (Y) wins the seed axis.
-        let (u, v_basis) = compute_texture_basis(v(1, 0, 0));
-        assert_eq!(u, v(0, 1, 0));
-        assert_eq!(v_basis, v(0, 0, 1));
-    }
-
-    #[test]
-    fn compute_texture_basis_for_y_normal_picks_lowest_tied_axis() {
-        // normal=(0,1,0): abs values (0,1,0) -- X and Z tie at 0, and the lowest index (X) wins.
-        let (u, v_basis) = compute_texture_basis(v(0, 1, 0));
-        assert_eq!(u, v(1, 0, 0));
-        assert_eq!(v_basis, v(0, 0, -1));
-    }
-
-    #[test]
-    fn compute_texture_basis_for_z_normal_picks_lowest_tied_axis() {
-        // normal=(0,0,1): abs values (0,0,1) -- X and Y tie at 0, and the lowest index (X) wins.
-        let (u, v_basis) = compute_texture_basis(v(0, 0, 1));
-        assert_eq!(u, v(1, 0, 0));
-        assert_eq!(v_basis, v(0, 1, 0));
+    // Every axis-aligned normal (both directions): abs components always have at least a two-way
+    // tie at 0 between the other two axes, and the lowest index always wins the seed.
+    #[rstest]
+    #[case::plus_x(v(1, 0, 0), v(0, 1, 0), v(0, 0, 1))]
+    #[case::minus_x(v(-1, 0, 0), v(0, 1, 0), v(0, 0, -1))]
+    #[case::plus_y(v(0, 1, 0), v(1, 0, 0), v(0, 0, -1))]
+    #[case::minus_y(v(0, -1, 0), v(1, 0, 0), v(0, 0, 1))]
+    #[case::plus_z(v(0, 0, 1), v(1, 0, 0), v(0, 1, 0))]
+    #[case::minus_z(v(0, 0, -1), v(1, 0, 0), v(0, -1, 0))]
+    fn compute_texture_basis_cases(
+        #[case] normal: Vector3D,
+        #[case] expected_u: Vector3D,
+        #[case] expected_v: Vector3D,
+    ) {
+        let (u, v_basis) = compute_texture_basis(normal);
+        assert_eq!(u, expected_u);
+        assert_eq!(v_basis, expected_v);
     }
 }
