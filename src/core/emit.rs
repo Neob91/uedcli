@@ -7,14 +7,18 @@ use std::str::FromStr;
 
 use super::model::{Polygon, Vector3D};
 
+// A coordinate within CLEAN_EPS of an integer is editor/float noise and snaps to that integer;
+// anything further is a genuine fractional vertex, kept at 6dp. Brushes (typically semisolids)
+// can legitimately carry fractional vertices -- the editor itself emits them -- so this only
+// cleans sub-grid noise, never forces a real fraction onto the grid. 0.001 isn't a reverse-
+// engineered UnrealEd constant; it's old/'s own empirically-tuned threshold (old/uedcli/emit.py),
+// chosen to sit well above float noise and well below any real fraction this project has seen.
 const CLEAN_EPS: &str = "0.001";
 
 pub fn quantize6(d: Decimal) -> Result<Decimal, String> {
     Ok(d.round_dp_with_strategy(6, RoundingStrategy::MidpointAwayFromZero))
 }
 
-// A coordinate within CLEAN_EPS of an integer is float noise and snaps to it; anything further
-// is a genuine fraction, kept at 6dp (T3D's precision).
 pub fn clean_decimal(d: Decimal) -> Result<Decimal, String> {
     let nearest = d.round_dp_with_strategy(0, RoundingStrategy::MidpointAwayFromZero);
     let eps = Decimal::from_str(CLEAN_EPS).unwrap();
@@ -46,11 +50,20 @@ pub fn format_vertex(d: Decimal) -> Result<String, String> {
     Ok(format!("{sign}{integer_part_as_i64:05}.{fraction_digits}"))
 }
 
-/// The caller must pass an already-once-cleaned Decimal, so this function's own
-/// `clean_decimal()` call is the correct second application -- see `format_vertex`'s doc.
-pub fn format_location(value: Decimal) -> Result<String, String> {
+// Each component must already be once-cleaned by the caller, so this function's own
+// clean_decimal() call is the correct second application -- see format_vertex's doc.
+fn format_location_component(value: Decimal) -> Result<String, String> {
     let d = clean_decimal(value)?;
     Ok(format!("{d:.6}"))
+}
+
+pub fn format_location(location: Vector3D) -> Result<String, String> {
+    Ok(format!(
+        "    Location=(X={},Y={},Z={})",
+        format_location_component(location.x)?,
+        format_location_component(location.y)?,
+        format_location_component(location.z)?
+    ))
 }
 
 fn format_vector_line(kind: &str, vector: Vector3D) -> Result<String, String> {
@@ -104,12 +117,7 @@ pub fn emit_brush_t3d(
     if poly_flags != 0 {
         out.push(format!("    PolyFlags={poly_flags}"));
     }
-    out.push(format!(
-        "    Location=(X={},Y={},Z={})",
-        format_location(location.x)?,
-        format_location(location.y)?,
-        format_location(location.z)?
-    ));
+    out.push(format_location(location)?);
     // Identity scale + the editor's own default shear axis.
     out.push("    MainScale=(SheerAxis=SHEER_ZX)".to_string());
     out.push("    PostScale=(SheerAxis=SHEER_ZX)".to_string());
